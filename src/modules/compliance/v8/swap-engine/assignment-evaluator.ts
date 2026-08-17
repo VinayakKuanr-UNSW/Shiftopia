@@ -62,6 +62,11 @@ export interface AssignmentEvaluationInput {
         contracted_weekly_hours?: number;
         /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
         leave_days?: string[];
+        /** Raw per-contract employment statuses. Feeds V8_EMPLOYMENT_TARGET —
+         *  the app-layer half of the match `trg_shift_employment_target_2_enforce`
+         *  enforces on write. Absent ⇒ the rule stays silent and the trigger
+         *  remains the only guarantee. */
+        employment_statuses?: string[];
     };
 }
 
@@ -160,6 +165,7 @@ export class AssignmentEvaluator {
             contract_type: input.employee_context?.contract_type ?? null,
             contracted_weekly_hours: input.employee_context?.contracted_weekly_hours,
             leave_days: input.employee_context?.leave_days,
+            employment_statuses: input.employee_context?.employment_statuses,
         };
 
         const scenario: SwapScenario = {

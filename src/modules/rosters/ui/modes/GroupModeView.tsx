@@ -20,7 +20,9 @@ import {
   Lock,
   Wand2,
   Users,
+  Sparkles,
 } from 'lucide-react';
+import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import {
@@ -32,12 +34,14 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, startOfWeek, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes, parse } from 'date-fns';
+import { format, addDays, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes, parse } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import {
   ShiftContext,
 } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
+import { useAllTemplates } from '@/modules/templates/hooks/queries/useTemplateQueries';
 
 import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import {
@@ -46,7 +50,11 @@ import {
   DeleteSubGroupDialog
 } from '@/modules/rosters/ui/dialogs/SubGroupActionsDialogs';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
-import * as import_GroupSummaryCell from '@/modules/rosters/ui/components/GroupSummaryCell';
+// Named import, not `import * as`: react-refresh cannot reliably re-bind a
+// React.memo() const through a namespace object, so on hot update the member
+// read back as undefined and React threw "type is invalid ... got: undefined"
+// at the call site below.
+import { GroupSummaryCell } from '@/modules/rosters/ui/components/GroupSummaryCell';
 import { GroupStatsSummary } from '@/modules/rosters/ui/components/GroupStatsSummary';
 import { ShiftCardLegend } from '@/modules/rosters/ui/components/ShiftCardLegend';
 import {
@@ -422,6 +430,17 @@ interface GroupModeViewProps {
     estimatedCost: number;
     budget: number;
     remainingBudget: number;
+    /** Roster as planned — all live shifts in view, filled or not. */
+    scheduledCost: number;
+    /** What was actually worked. */
+    actualCost: number;
+    scheduledNetMinutes: number;
+    actualNetMinutes: number;
+    costedShifts: number;
+    /** Live shifts with no resolvable rate — they silently contribute $0. */
+    uncostedShifts: number;
+    /** Live shifts actually worked — denominator for actualCost. */
+    actualShifts: number;
   };
   /**
    * Show the Budget / Remaining stat blocks in the footer. Defaults to false:
@@ -570,6 +589,77 @@ const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
 /* ============================================================
    COVERAGE SIGNAL BAR — segmented LED strip for group headers
    ============================================================ */
+
+/** `420` → `7h 0m`; used as each cost panel's supporting hours figure. */
+const formatNetMinutes = (mins: number): string => {
+  const safe = Math.max(0, Math.round(mins));
+  return `${Math.floor(safe / 60)}h ${safe % 60}m`;
+};
+
+interface CostPanelProps {
+  label: string;
+  amount: number;
+  minutes: number;
+  /** Denominator line — what the amount is actually over. */
+  countLabel: string;
+  /** Amber tint: some shifts in scope resolved no rate, so the total is short. */
+  warn?: boolean;
+  /** Dim the amount when it is a structural zero rather than a real $0. */
+  muted?: boolean;
+  tone: 'planned' | 'actual';
+}
+
+/**
+ * One cost total for the CURRENT view, with its own denominator.
+ *
+ * The denominator is the point: a bare "$0.00" cannot distinguish "nothing has
+ * been worked yet" from "nothing could be priced" from "genuinely free". The
+ * previous single Est. Cost read $0.00 across a fully-costed 156-shift roster
+ * because it silently counted only ASSIGNED shifts.
+ */
+const CostPanel: React.FC<CostPanelProps> = ({
+  label, amount, minutes, countLabel, warn = false, muted = false, tone,
+}) => (
+  <div
+    className={cn(
+      'rounded-lg border px-3 py-1.5 min-w-[132px]',
+      tone === 'planned'
+        ? 'border-blue-400/25 bg-blue-400/[0.06]'
+        : 'border-emerald-400/25 bg-emerald-400/[0.06]',
+    )}
+  >
+    <div className="flex items-baseline justify-between gap-3">
+      <span
+        className={cn(
+          'text-[10px] font-bold uppercase tracking-wider',
+          tone === 'planned' ? 'text-blue-300/80' : 'text-emerald-300/80',
+        )}
+      >
+        {label}
+      </span>
+      <span className="text-[10px] text-muted-foreground/60 tabular-nums">
+        {formatNetMinutes(minutes)}
+      </span>
+    </div>
+    <div
+      className={cn(
+        'font-semibold tabular-nums leading-tight',
+        muted ? 'text-muted-foreground/50' : 'text-foreground',
+      )}
+    >
+      ${amount.toFixed(2)}
+    </div>
+    <div
+      className={cn(
+        'text-[10px] leading-tight',
+        warn ? 'text-amber-400' : 'text-muted-foreground/50',
+      )}
+      title={warn ? 'Some shifts in view have no resolvable pay rate and contribute $0 to this total.' : undefined}
+    >
+      {countLabel}
+    </div>
+  </div>
+);
 
 interface CoverageSignalBarProps {
   pct: number;      // 0-100
@@ -725,7 +815,6 @@ interface GroupSectionProps {
   isBulkMode: boolean;
   externalShifts: Shift[];
   isDateInTemplate: (date: Date) => boolean;
-  rosterStructures: RosterStructure[];
   shiftsByBucketKey: Map<string, Shift[]>;
   selectedV8ShiftIdsSet: Set<string>;
   onDeselectShiftIds?: (ids: string[]) => void;
@@ -747,6 +836,7 @@ interface GroupSectionProps {
   setIsRenameOpen: (open: boolean) => void;
   setIsCloneOpen: (open: boolean) => void;
   setIsDeleteOpen: (open: boolean) => void;
+  getSubGroupTemplateLabel: (subGroup: VisualSubGroup) => string | null;
 
   // Persisted collapse props
   isInitiallyCollapsed: boolean;
@@ -761,7 +851,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   isBulkMode,
   externalShifts,
   isDateInTemplate,
-  rosterStructures,
   shiftsByBucketKey,
   selectedV8ShiftIdsSet,
   onDeselectShiftIds,
@@ -778,6 +867,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   setIsRenameOpen,
   setIsCloneOpen,
   setIsDeleteOpen,
+  getSubGroupTemplateLabel,
   isInitiallyCollapsed,
   onToggleCollapse,
 }) => {
@@ -919,59 +1009,70 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                 const dateIsToday = isToday(date);
                 const dateIsPast = isSydneyPast(date);
                 const isGhost = !isDateInTemplate(date);
+                const holidayName = getPublicHolidayName(date);
 
                 return (
                   <div
                     role="columnheader"
                     key={idx}
                     className={cn(
-                      'px-3 py-3 text-center bg-muted/30 border-b',
+                      'px-3 py-2.5 text-center bg-muted/30 border-b transition-colors',
                       idx < dates.length - 1 && 'border-r border-border',
+                      // Public holiday highlight styling
+                      holidayName && 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30',
                       // Ghost cell styling
                       isGhost && 'bg-muted/40 border-dashed border-border opacity-50',
-                      // Today highlighting (only if not ghost)
-                      !isGhost && dateIsToday && 'bg-primary/5',
+                      // Today highlighting (only if not ghost and not holiday)
+                      !isGhost && dateIsToday && !holidayName && 'bg-primary/5',
                       // Past date styling (only if not ghost and not today)
                       !isGhost && dateIsPast && !dateIsToday && 'opacity-50'
                     )}
                   >
-                    <div className="flex flex-col items-center gap-1.5 pt-1">
+                    <div className="flex flex-col items-center gap-1 pt-0.5">
                       <div className={cn(
                         "text-[10px] font-bold uppercase tracking-[0.12em] font-mono leading-tight",
-                        isGhost
-                          ? 'text-muted-foreground/30'
-                          : dateIsToday
-                            ? 'text-primary'
-                            : 'text-muted-foreground'
+                        holidayName
+                          ? 'text-amber-400 dark:text-amber-300 font-extrabold'
+                          : isGhost
+                            ? 'text-muted-foreground/30'
+                            : dateIsToday
+                              ? 'text-primary'
+                              : 'text-muted-foreground'
                       )}>
                         {format(date, 'EEE')}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <div className={cn(
                           "text-sm font-mono tabular-nums font-medium leading-none",
-                          isGhost
-                            ? 'text-muted-foreground/30'
-                            : dateIsToday
-                              ? 'text-primary font-bold'
-                              : 'text-muted-foreground/50'
+                          holidayName
+                            ? 'text-amber-300 dark:text-amber-200 font-bold'
+                            : isGhost
+                              ? 'text-muted-foreground/30'
+                              : dateIsToday
+                                ? 'text-primary font-bold'
+                                : 'text-muted-foreground/50'
                         )}>
                           {format(date, 'MMM d')}
                         </div>
 
-                        {/* Roster Indicator (from DB status) - Robust matching */}
-                        {rosterStructures.some(r => {
-                          if (!r.startDate || !r.endDate) return false;
-                          const dateKey = format(date, 'yyyy-MM-dd');
-                          return dateKey >= r.startDate && dateKey <= r.endDate;
-                        }) && (
-                          <div
-                            className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/30 border border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:scale-125 transition-transform flex-shrink-0 cursor-help"
-                            title="Active Roster Found"
-                          >
-                            <Zap className="h-3 w-3 fill-emerald-400 text-emerald-400 drop-shadow-[0_0_4px_rgba(16,185,129,0.9)]" />
-                          </div>
-                        )}
+                        {/* The per-day "roster active" ⚡ badge lived here. Removed
+                            2026-08-05 with manual activation: a roster is now created
+                            the moment anything is scheduled on a day, so the badge lit
+                            up on every day that had ever been touched and distinguished
+                            nothing. The date column itself already carries the states
+                            that still matter — today, past, ghost, public holiday. */}
                       </div>
+
+                      {/* ANZ Public Holiday Name beneath Date, Day */}
+                      {holidayName && (
+                        <div
+                          className="mt-0.5 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 dark:text-amber-300 text-[9px] font-black uppercase tracking-wider truncate max-w-[240px] shadow-sm flex items-center justify-center gap-1"
+                          title={`ANZ Public Holiday: ${holidayName}`}
+                        >
+                          <Sparkles className="h-2.5 w-2.5 shrink-0 text-amber-400" />
+                          <span className="truncate">{holidayName}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1015,14 +1116,26 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                   ))
                   : null
               }
-              renderRow={(subGroup) => (
-                <>
-                  <div role="cell" className="sticky left-0 z-10 backdrop-blur-sm border-r border-border px-4 py-3 bg-card group-hover:bg-accent/30 transition-colors group">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors overflow-hidden text-ellipsis whitespace-nowrap">
-                        {subGroup.name}
-                      </span>
-                      <DropdownMenu>
+              renderRow={(subGroup) => {
+                const templateLabel = getSubGroupTemplateLabel(subGroup);
+                return (
+                  <>
+                    <div role="cell" className="sticky left-0 z-10 backdrop-blur-sm border-r border-border px-4 py-3 bg-card group-hover:bg-accent/30 transition-colors group">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors overflow-hidden text-ellipsis whitespace-nowrap">
+                            {subGroup.name}
+                          </span>
+                          {templateLabel && (
+                            <span
+                              className="text-[10px] font-normal italic text-muted-foreground/70 dark:text-slate-400/70 truncate max-w-[130px] leading-tight mt-0.5"
+                              title={`Source Template: ${templateLabel}`}
+                            >
+                              {templateLabel}
+                            </span>
+                          )}
+                        </div>
+                        <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-9 w-9 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
                             <MoreHorizontal className="h-4 w-4" />
@@ -1151,7 +1264,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                                 for all non-day views. DnD Mode swaps to the card grid. */}
                             {(!isDnDModeActive && summaryData) ? (
                               <div className="w-full h-full flex flex-col items-center justify-center min-h-[60px] p-1">
-                                <import_GroupSummaryCell.GroupSummaryCell
+                                <GroupSummaryCell
                                   date={date}
                                   groupName={subGroup.name}
                                   summary={summaryData.get(`${dateKey}::${group.type}::${subGroup.name}`)}
@@ -1243,7 +1356,8 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                     );
                   })}
                 </>
-              )}
+              );
+            }}
             />
           </div>
         </div>
@@ -1699,7 +1813,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         for (let i = 0; i < 3; i++) result.push(addDays(selectedDate, i));
         break;
       case 'week':
-        const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
+        const weekStart = startOfWeekAU(selectedDate);
         for (let i = 0; i < 7; i++) result.push(addDays(weekStart, i));
         break;
       case 'month': {
@@ -1756,6 +1870,50 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       console.error(`[GroupModeView] Roster fetch error:`, rosterError);
     }
   }, [rosterStructures, isRosterError, rosterError]);
+
+  // ==================== TEMPLATE RESOLUTION MAP ====================
+  const { data: allTemplates = [] } = useAllTemplates();
+  const templateMap = useMemo(() => {
+    const map = new Map<string, string>();
+    allTemplates.forEach((t) => {
+      map.set(String(t.id), t.name);
+    });
+    return map;
+  }, [allTemplates]);
+
+  const getSubGroupTemplateLabel = useCallback((subGroup: VisualSubGroup): string | null => {
+    const templateNames = new Set<string>();
+    let hasManual = false;
+
+    Object.values(subGroup.shifts).forEach(shiftList => {
+      shiftList.forEach(shiftDisplay => {
+        const raw = shiftDisplay.rawShift;
+        if (!raw) return;
+        const tId = raw.template_id;
+        const isFromT = raw.is_from_template || !!tId;
+
+        if (isFromT) {
+          const joinedName = (raw as any)?.templates?.name;
+          const cachedName = tId ? templateMap.get(String(tId)) : null;
+          const resolvedName = joinedName || cachedName || '[Deleted Template]';
+          templateNames.add(resolvedName);
+        } else {
+          hasManual = true;
+        }
+      });
+    });
+
+    if (templateNames.size === 0) {
+      return null;
+    }
+
+    const names = Array.from(templateNames).sort();
+    let result = names.join(', ');
+    if (hasManual && names.length > 0) {
+      result += ' (+ manual)';
+    }
+    return result;
+  }, [templateMap]);
 
   // Helper to get formatted group name
   const getGroupName = (externalId: string | null, name: string) => {
@@ -2208,17 +2366,12 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
     const dateKey = format(date, 'yyyy-MM-dd');
     const specificRoster = rosterStructures.find(r => dateKey >= r.startDate && dateKey <= r.endDate);
-    let specificRosterId = specificRoster?.rosterId || rosterId;
-
-    // Strict Policy: Blocking shift addition if roster is not activated
-    if (!specificRosterId) {
-      toast({
-        title: 'Roster Not Activated',
-        description: `The roster for ${format(date, 'd MMM')} must be activated before adding shifts.`,
-        variant: 'destructive',
-      });
-      return;
-    }
+    // May be undefined on a day nobody has scheduled yet. That is no longer a
+    // blocker: sm_create_shift resolves (and creates) the day's roster from
+    // org/dept/sub-dept + shift_date via sm_resolve_roster. Passing it when we DO
+    // know it keeps the explicit path, which stacks onto the roster the grid is
+    // already showing instead of re-deriving it.
+    const specificRosterId = specificRoster?.rosterId || rosterId;
 
     if (onAddShift) {
       onAddShift(group.name, subGroup.name, group.color, date, specificRosterId);
@@ -2686,11 +2839,37 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-6">
-                        <div>
-                          <span className="text-muted-foreground/60 font-medium">Est. Cost:</span>
-                          <span className="ml-2 font-semibold text-foreground">${footerStats.estimatedCost.toFixed(2)}</span>
-                        </div>
+                      <div className="flex items-center gap-4">
+                        {/* Two cost panels, both scoped to the CURRENT view (the
+                            stats RPC takes the same org/date/department filters
+                            as the grid). Scheduled = the plan; Actual = what was
+                            worked. Each carries its own denominator so a $0.00
+                            can't be mistaken for "free" when it means "nothing
+                            worked yet" or "nothing priced". */}
+                        <CostPanel
+                          label="Scheduled"
+                          amount={footerStats.scheduledCost}
+                          minutes={footerStats.scheduledNetMinutes}
+                          countLabel={
+                            footerStats.uncostedShifts > 0
+                              ? `${footerStats.costedShifts} of ${footerStats.totalShifts} priced`
+                              : `${footerStats.totalShifts} shift${footerStats.totalShifts === 1 ? '' : 's'}`
+                          }
+                          warn={footerStats.uncostedShifts > 0}
+                          tone="planned"
+                        />
+                        <CostPanel
+                          label="Actual"
+                          amount={footerStats.actualCost}
+                          minutes={footerStats.actualNetMinutes}
+                          countLabel={
+                            footerStats.actualShifts === 0
+                              ? 'none worked yet'
+                              : `${footerStats.actualShifts} of ${footerStats.totalShifts} worked`
+                          }
+                          muted={footerStats.actualShifts === 0}
+                          tone="actual"
+                        />
                         {/* Budget / Remaining hidden until a real budget source
                             (e.g. planning_periods) is wired — the current budget
                             is a hardcoded placeholder yielding a fake negative. */}
@@ -2733,7 +2912,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   isBulkMode={isBulkMode}
                   externalShifts={externalShifts}
                   isDateInTemplate={isDateInTemplate}
-                  rosterStructures={rosterStructures}
                   shiftsByBucketKey={shiftsByBucketKey}
                   selectedV8ShiftIdsSet={selectedV8ShiftIdsSet}
                   onDeselectShiftIds={onDeselectShiftIds}
@@ -2750,6 +2928,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   setIsRenameOpen={setIsRenameOpen}
                   setIsCloneOpen={setIsCloneOpen}
                   setIsDeleteOpen={setIsDeleteOpen}
+                  getSubGroupTemplateLabel={getSubGroupTemplateLabel}
                   isInitiallyCollapsed={effectiveCollapsed.has(group.id)}
                   onToggleCollapse={handleToggleGroupCollapse}
                 />

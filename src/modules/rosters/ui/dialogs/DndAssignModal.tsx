@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, User, Clock, Calendar, Briefcase, AlertTriangle } from 'lucide-react';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
+import { useAvailabilityMode } from '@/modules/availability/state/useAvailabilityMode';
 import {
   Dialog,
   DialogContent,
@@ -89,9 +90,14 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
     enabled: open && !!employeeId && !!shiftDate,
     staleTime: 30_000,
   });
+  // …and what an EMPTY slot list means for this person. FT/PT hold no slots by
+  // design, so without the mode every permanent would warn here.
+  const { mode: availMode } = useAvailabilityMode(employeeId, open);
   const availResult = useMemo(
-    () => evaluateShiftAvailabilityFromSlots(availSlots ?? [], shiftDate, shiftStartTime || '', shiftEndTime || ''),
-    [availSlots, shiftDate, shiftStartTime, shiftEndTime],
+    () => evaluateShiftAvailabilityFromSlots(
+      availSlots ?? [], shiftDate, shiftStartTime || '', shiftEndTime || '', availMode,
+    ),
+    [availSlots, shiftDate, shiftStartTime, shiftEndTime, availMode],
   );
 
   // Stable buildInputs — mirrors runFullCompliancePreCheck from assignShift.command.ts

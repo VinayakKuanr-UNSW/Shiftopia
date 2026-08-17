@@ -25,17 +25,31 @@ export type RosterSummaryCellDTO = z.infer<typeof RosterSummaryCellSchema>;
 const RosterSummaryResponseSchema = z.array(RosterSummaryCellSchema);
 
 // Single-row totals for the Roster Planner stats footer.
+// `numeric` columns arrive from PostgREST as STRINGS (they exceed JS number
+// precision in the general case), so every money/bigint field is coerced. The
+// pre-existing est_cost/budget_cost relied on that coercion happening upstream;
+// coercing here makes it explicit and keeps the new cost fields consistent.
+const numeric = z.coerce.number();
+
 export const RosterPlannerStatsSchema = z.object({
     total_shifts: z.number(),
     assigned_shifts: z.number(),
     open_shifts: z.number(),
     published_shifts: z.number(),
     cancelled_shifts: z.number(),
-    total_net_minutes: z.number(),
+    total_net_minutes: numeric,
     unique_employees: z.number(),
-    est_cost: z.number(),
+    est_cost: numeric,
     // Pro-rated department budget for the window; 0 when no budget overlaps.
-    budget_cost: z.number(),
+    budget_cost: numeric,
+    /** The roster AS PLANNED — every live shift, filled or not. */
+    scheduled_cost: numeric,
+    /** What was actually worked — only shifts with a real worked window. */
+    actual_cost: numeric,
+    actual_net_minutes: numeric,
+    costed_shifts: z.number(),
+    uncosted_shifts: z.number(),
+    actual_shifts: z.number(),
 });
 
 export type RosterPlannerStatsDTO = z.infer<typeof RosterPlannerStatsSchema>;
@@ -54,6 +68,12 @@ const EMPTY_PLANNER_STATS: RosterPlannerStatsDTO = {
     unique_employees: 0,
     est_cost: 0,
     budget_cost: 0,
+    scheduled_cost: 0,
+    actual_cost: 0,
+    actual_net_minutes: 0,
+    costed_shifts: 0,
+    uncosted_shifts: 0,
+    actual_shifts: 0,
 };
 
 // ── Queries ───────────────────────────────────────────────────────────────────

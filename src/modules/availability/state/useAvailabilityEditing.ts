@@ -36,6 +36,9 @@ export interface EditState {
   mode: EditMode;
   ruleBeingEdited: AvailabilityRule | null;
   isSubmitting: boolean;
+  /** Bumped on every startCreate/startEdit so listeners (e.g. the tab switch)
+   *  re-fire even when `mode` doesn't change value (re-clicking "+"). */
+  nonce: number;
 }
 
 export interface UseAvailabilityEditingResult {
@@ -68,39 +71,43 @@ export function useAvailabilityEditing(): UseAvailabilityEditingResult {
     mode: null,
     ruleBeingEdited: null,
     isSubmitting: false,
+    nonce: 0,
   });
 
   /**
    * Start creating a new rule
    */
   const startCreate = useCallback(() => {
-    setEditState({
+    setEditState((prev) => ({
       mode: 'create',
       ruleBeingEdited: null,
       isSubmitting: false,
-    });
+      nonce: prev.nonce + 1,
+    }));
   }, []);
 
   /**
    * Start editing an existing rule
    */
   const startEdit = useCallback((rule: AvailabilityRule) => {
-    setEditState({
+    setEditState((prev) => ({
       mode: 'edit',
       ruleBeingEdited: rule,
       isSubmitting: false,
-    });
+      nonce: prev.nonce + 1,
+    }));
   }, []);
 
   /**
    * Cancel editing (returns to null state)
    */
   const cancelEdit = useCallback(() => {
-    setEditState({
+    setEditState((prev) => ({
       mode: null,
       ruleBeingEdited: null,
       isSubmitting: false,
-    });
+      nonce: prev.nonce,
+    }));
   }, []);
 
   /**
@@ -140,11 +147,12 @@ export function useAvailabilityEditing(): UseAvailabilityEditingResult {
         }
 
         // Success - reset state
-        setEditState({
+        setEditState((prev) => ({
           mode: null,
           ruleBeingEdited: null,
           isSubmitting: false,
-        });
+          nonce: prev.nonce,
+        }));
 
         // FORCE REFETCH: Invalidate both rules and slots to ensure UI reflects changes immediately
         // Uses wildcard invalidation on 'availability' key to catch all profile/date/type variations

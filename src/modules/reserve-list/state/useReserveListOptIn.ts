@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import type { Json } from '@/platform/supabase/types';
 import { supabase } from '@/platform/supabase/client';
 import { requireUser } from '@/platform/supabase/rpc/client';
 
@@ -67,7 +68,10 @@ export function useReserveListOptIn() {
 
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ preferences: nextPreferences })
+        // `profiles.preferences` is jsonb, typed as `Json` by the generated
+        // client. ProfilePreferences is a structural subset of it; the cast is
+        // the narrowing the generated type can't express.
+        .update({ preferences: nextPreferences as unknown as Json })
         .eq('id', user.id);
       if (updateError) throw updateError;
     } catch (e) {

@@ -2,6 +2,45 @@ import { supabase } from '@/platform/supabase/client';
 import { AccessLevel, Role, User, UserContract, AccessCertificate, PermissionObject } from './types';
 import { mapRole } from './access.policy';
 
+/**
+ * Raised when the server actively rejected our credentials, as opposed to
+ * being unreachable or simply having no row to return.
+ *
+ * The distinction matters because the two need opposite handling. A failed
+ * request that is *not* a rejection may be transient, so the caller can leave
+ * the session alone and let the next attempt succeed. A rejected token is
+ * dead, and no amount of retrying will revive it — the session has to be torn
+ * down and the person told to sign in again.
+ *
+ * Collapsing both into `null` is what produced the silent failure this class
+ * exists to prevent: the provider skipped `setUser`, the stale Supabase
+ * session stayed in storage, and the app returned to the login screen with no
+ * message explaining why.
+ */
+export class AuthSessionError extends Error {
+    constructor(message: string, readonly status?: number) {
+        super(message);
+        this.name = 'AuthSessionError';
+    }
+}
+
+/**
+ * Only an explicit rejection counts.
+ *
+ * PGRST301 is PostgREST's "JWT expired"; 401/403 cover a revoked or malformed
+ * token, including the rotation conflict that arises when two clients refresh
+ * the same session concurrently.
+ *
+ * A dropped connection carries neither a status nor a PostgREST code, so it
+ * deliberately falls through as "not a rejection" — a wider test would sign
+ * people out on any network blip.
+ */
+function isRejectedCredential(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    const e = err as { status?: number; code?: string };
+    return e.status === 401 || e.status === 403 || e.code === 'PGRST301';
+}
+
 export const authService = {
     /**
      * Fetches full user profile including contracts and certificates
@@ -17,6 +56,12 @@ export const authService = {
 
             if (profileErr || !profile) {
                 console.error('[AuthService] Profile fetch failed:', profileErr);
+                if (isRejectedCredential(profileErr)) {
+                    throw new AuthSessionError(
+                        'Your session is no longer valid.',
+                        (profileErr as { status?: number } | null)?.status,
+                    );
+                }
                 throw new Error('Profile not found');
             }
 
@@ -133,6 +178,10 @@ export const authService = {
             };
         } catch (e: any) {
             console.error('[AuthService] getUserProfile EXCEPTION:', e.message);
+            // A rejected credential is not "no profile" — let it out so the
+            // caller can end the session, rather than silently returning null
+            // and leaving a dead session in storage.
+            if (e instanceof AuthSessionError) throw e;
             return null;
         }
     },
@@ -150,12 +199,19 @@ export const authService = {
 
             if (error) {
                 console.error('[AuthService] Permission fetch error:', error);
+                if (isRejectedCredential(error)) {
+                    throw new AuthSessionError(
+                        'Your session is no longer valid.',
+                        (error as { status?: number }).status,
+                    );
+                }
                 return null;
             }
 
             return (data as unknown) as PermissionObject;
         } catch (e: any) {
             console.error('[AuthService] fetchPermissions EXCEPTION:', e.message);
+            if (e instanceof AuthSessionError) throw e;
             return null;
         }
     }

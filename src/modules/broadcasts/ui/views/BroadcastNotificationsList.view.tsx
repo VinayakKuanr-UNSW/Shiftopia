@@ -7,6 +7,7 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { useBroadcastNotifications } from '../../state/useBroadcasts';
+import { PageState } from '@/modules/core/ui/components/PageState';
 
 export const BroadcastNotificationsList: React.FC = () => {
     const { user } = useAuth();
@@ -32,14 +33,19 @@ export const BroadcastNotificationsList: React.FC = () => {
     if (isLoading) {
         return (
             <Card>
-                <CardHeader>
-                    <Skeleton className="h-6 w-48" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <Skeleton className="h-20 w-full" />
-                    <Skeleton className="h-20 w-full" />
-                    <Skeleton className="h-20 w-full" />
-                </CardContent>
+                <PageState
+                    state="loading"
+                    scope="section"
+                    title="Loading broadcast notifications"
+                    skeleton={
+                        <div className="space-y-4" aria-hidden="true">
+                            <Skeleton className="h-6 w-48" />
+                            <Skeleton className="h-20 w-full" />
+                            <Skeleton className="h-20 w-full" />
+                            <Skeleton className="h-20 w-full" />
+                        </div>
+                    }
+                />
             </Card>
         );
     }
@@ -70,13 +76,13 @@ export const BroadcastNotificationsList: React.FC = () => {
             </CardHeader>
             <CardContent>
                 {notifications.length === 0 ? (
-                    <div className="text-center py-8">
-                        <BellOff className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                        <p className="text-muted-foreground">No notifications yet</p>
-                        <p className="text-sm text-muted-foreground">
-                            You'll receive notifications when broadcasts are sent to your groups
-                        </p>
-                    </div>
+                    <PageState
+                        state="empty"
+                        scope="inline"
+                        title="No notifications yet"
+                        description="You’ll receive notifications when broadcasts are sent to your groups."
+                        icon={BellOff}
+                    />
                 ) : (
                     <div className="space-y-3">
                         {notifications.map((notification) => (

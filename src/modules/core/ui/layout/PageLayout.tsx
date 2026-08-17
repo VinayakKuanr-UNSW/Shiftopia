@@ -48,13 +48,14 @@ const PageHeader: React.FC<PageHeaderProps> = ({ children, className }) => {
     <div className="flex-shrink-0">
       <div
         className={cn(
-          'rounded-[32px] p-4 lg:p-6 transition-all border',
+          'rounded-[32px] p-4 lg:p-6 transition-all border relative overflow-hidden',
           isDark
-            ? 'bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20'
+            ? 'bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20 backdrop-blur-xl'
             : 'bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50',
           className,
         )}
       >
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
         {children}
       </div>
     </div>

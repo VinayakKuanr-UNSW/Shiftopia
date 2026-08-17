@@ -52,58 +52,64 @@ export function TemplateGroupCard({
                     className
                 )}
             >
-                {/* Header */}
-                <CollapsibleTrigger asChild>
-                    <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-background/50">
+                {/* Header.
+                    The trigger used to be a `div role="button"` wrapping the whole
+                    row — which meant (a) Space never toggled it, because a div
+                    fires no synthetic click, and (b) the Add Subgroup button was
+                    nested INSIDE a control, invalid HTML held together by
+                    stopPropagation. Trigger and action are now siblings, and the
+                    trigger is a real <button>. */}
+                <div className="flex items-center gap-2 p-2 pl-3 sm:p-3 sm:pl-4">
+                    <CollapsibleTrigger asChild>
+                        <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            className="flex flex-1 min-w-0 items-center gap-3 rounded-lg p-2 min-h-[44px] text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                            {isExpanded ? (
+                                <ChevronDown className="h-5 w-5 shrink-0 text-slate-600 dark:text-slate-300" aria-hidden="true" />
+                            ) : (
+                                <ChevronRight className="h-5 w-5 shrink-0 text-slate-600 dark:text-slate-300" aria-hidden="true" />
+                            )}
+                            <div className="p-2 rounded-lg bg-background/60 shadow-sm border border-slate-200/50 dark:border-slate-800/50 shrink-0">
                                 {config.icon}
                             </div>
-                            <div>
-                                <h3 className="font-semibold text-foreground">{group.name}</h3>
-                                <p className="text-xs text-muted-foreground">
+                            <div className="min-w-0">
+                                <h3 className="font-bold text-base text-foreground tracking-tight truncate">{group.name}</h3>
+                                <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
                                     {group.subGroups.length} subgroups • {shiftCount} shifts
                                 </p>
                             </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {onAddSubgroup && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onAddSubgroup();
-                                    }}
-                                    className={cn('hover:bg-muted', config.badge)}
-                                >
-                                    <Plus className="h-4 w-4 mr-1" />
-                                    Subgroup
-                                </Button>
-                            )}
-                            {isExpanded ? (
-                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                            ) : (
-                                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                            )}
-                        </div>
-                    </div>
-                </CollapsibleTrigger>
+                        </button>
+                    </CollapsibleTrigger>
+
+                    {onAddSubgroup && (
+                        <Button
+                            variant="ghost"
+                            onClick={onAddSubgroup}
+                            aria-label={`Add subgroup to ${group.name}`}
+                            className={cn('shrink-0 hover:bg-muted font-semibold h-11 min-h-[44px] px-3', config.badge)}
+                        >
+                            <Plus className="h-4 w-4 sm:mr-1" aria-hidden="true" />
+                            <span className="hidden sm:inline">Subgroup</span>
+                        </Button>
+                    )}
+                </div>
 
                 {/* Content */}
                 <CollapsibleContent>
                     <div className="px-4 pb-4 space-y-3">
                         {group.subGroups.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">
-                                <p className="text-sm">No subgroups yet</p>
+                            <div className="text-center py-8 text-slate-600 dark:text-slate-300">
+                                <p className="text-sm font-medium">No subgroups yet</p>
                                 {onAddSubgroup && (
                                     <Button
-                                        variant="ghost"
-                                        size="sm"
+                                        variant="outline"
                                         onClick={onAddSubgroup}
-                                        className="mt-2"
+                                        aria-label={`Add first subgroup to ${group.name}`}
+                                        className="mt-3 font-semibold h-11 min-h-[44px] px-4 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                                     >
-                                        <Plus className="h-4 w-4 mr-1" />
+                                        <Plus className="h-4 w-4 mr-1.5" aria-hidden="true" />
                                         Add first subgroup
                                     </Button>
                                 )}

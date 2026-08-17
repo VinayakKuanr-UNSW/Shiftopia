@@ -6,7 +6,7 @@ import {
 } from '@/modules/core/ui/primitives/popover';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { CalendarIcon, ChevronDown } from 'lucide-react';
-import { Calendar } from '@/modules/core/ui/primitives/calendar';
+import { Calendar } from '@/modules/core/ui/calendar';
 import {
   Command,
   CommandEmpty,

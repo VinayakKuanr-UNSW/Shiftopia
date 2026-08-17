@@ -20,8 +20,9 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as prodSupabase } from '@/platform/supabase/client';
-import type { ExistingShiftRef, OptimizerEmployee } from '../types';
+import type { AvailabilityOverrideRef, ExistingShiftRef, OptimizerEmployee } from '../types';
 import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
+import { isFullTimeEmployee } from '@/modules/core/model/employment.types';
 
 // =============================================================================
 // SHARED UTILITIES — pure functions, no I/O
@@ -213,22 +214,49 @@ export class RosterFetcher {
         const result = new Map<string, AvailabilityResult>();
         if (shifts.length === 0 || employees.length === 0) return result;
 
+        // Partition: FT employees are available by contract obligation;
+        // unavailability is managed via Leave (`unavailable_dates`), so we
+        // neither query nor enforce availability slots for them.
+        //
+        // PT are deliberately NOT partitioned out even though they are also
+        // OPT_OUT. A part-timer's declaration is a real, per-date narrowing they
+        // are entitled to make; only FT has no declaration to read.
+        //
+        // `isFullTimeEmployee` rather than a local regex: the controller derives
+        // `availability_mode` from the same predicate, and an FT classified here
+        // but not there would be sent an empty slot list under OPT_IN and
+        // hard-filtered out of every shift. See that function's note.
+        const isFtEmp = (e: EmployeeMeta) =>
+            isFullTimeEmployee(e.employment_status, e.contract_type);
+
+        const nonFtEmployees = employees.filter(e => !isFtEmp(e));
+        const nonFtEmployeeIds = nonFtEmployees.map(e => e.id);
+
+        for (const emp of employees) {
+            if (isFtEmp(emp)) {
+                result.set(emp.id, { slots: [], hasAnyData: false });
+            }
+        }
+
+        if (nonFtEmployeeIds.length === 0) {
+            return result;
+        }
+
         const dates = shifts.map(s => s.shift_date).sort();
         const windowStart = dates[0];
         const windowEnd = dates[dates.length - 1];
-        const employeeIds = employees.map(e => e.id);
 
-        // Slots in the window
+        // Slots in the window for non-FT employees
         const { data: slotRows, error: slotErr } = await this.supabase
             .from('availability_slots')
             .select('profile_id,slot_date,start_time,end_time')
-            .in('profile_id', employeeIds)
+            .in('profile_id', nonFtEmployeeIds)
             .gte('slot_date', windowStart)
             .lte('slot_date', windowEnd);
 
         if (slotErr) {
             console.warn('[RosterFetcher] Availability slot fetch failed — treating all employees as universally available', slotErr);
-            for (const emp of employees) {
+            for (const emp of nonFtEmployees) {
                 result.set(emp.id, { slots: [], hasAnyData: false });
             }
             return result;
@@ -240,8 +268,8 @@ export class RosterFetcher {
         const { data: hasDataRows, error: hasErr } = await this.supabase
             .from('availability_rules')
             .select('profile_id')
-            .in('profile_id', employeeIds)
-            .limit(employeeIds.length);
+            .in('profile_id', nonFtEmployeeIds)
+            .limit(nonFtEmployeeIds.length);
 
         if (hasErr) {
             // Fall back to inferring from in-window slots: if the employee
@@ -266,7 +294,7 @@ export class RosterFetcher {
             slotsByEmp.set(r.profile_id, list);
         }
 
-        for (const emp of employees) {
+        for (const emp of nonFtEmployees) {
             const slots = slotsByEmp.get(emp.id) ?? [];
             const hasAnyData = hasErr
                 ? slots.length > 0
@@ -276,8 +304,8 @@ export class RosterFetcher {
 
         const enforced = Array.from(result.values()).filter(v => v.hasAnyData).length;
         console.info(
-            '[RosterFetcher] Availability: %d/%d employees have declared records (will be hard-filtered); %d treated as universally available',
-            enforced, employees.length, employees.length - enforced,
+            '[RosterFetcher] Availability: %d/%d non-FT employees have declared records (will be hard-filtered); %d FT employees are contract-available',
+            enforced, nonFtEmployees.length, employees.length - nonFtEmployees.length,
         );
 
         return result;
@@ -304,8 +332,40 @@ export class RosterFetcher {
         shifts: ShiftMeta[],
         employees: EmployeeMeta[],
     ): Promise<Map<string, string[]>> {
+        return (await this.fetchLeaveByStatus(shifts, employees, 'approved')).dates;
+    }
+
+    /**
+     * Each candidate's PENDING leave dates inside the window.
+     *
+     * WHY THIS EXISTS. Only approved leave was ever read, so a request sitting
+     * in someone's inbox was invisible to the solver: a manager runs autopilot
+     * on Monday, an employee has leave pending for next week, the solver
+     * rosters them into it, the leave is approved on Wednesday — and now there
+     * is a rostered shift inside approved leave, recoverable only through the
+     * manual post-approval unassign flow.
+     *
+     * It is NOT hard-excluded. Pending leave is a request, not a decision, and
+     * treating it as binding would let anyone remove themselves from the roster
+     * by asking. It becomes a SOFT `availability_overrides` entry instead —
+     * 5000c, so the solver routes around it when it cheaply can and still
+     * covers the shift when nobody else exists.
+     */
+    async fetchPendingLeave(
+        shifts: ShiftMeta[],
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, string[]>> {
+        return (await this.fetchLeaveByStatus(shifts, employees, 'pending')).dates;
+    }
+
+    /** Shared reader — the two statuses differ only in how the solver treats them. */
+    private async fetchLeaveByStatus(
+        shifts: ShiftMeta[],
+        employees: EmployeeMeta[],
+        status: 'approved' | 'pending',
+    ): Promise<{ dates: Map<string, string[]> }> {
         const result = new Map<string, string[]>();
-        if (shifts.length === 0 || employees.length === 0) return result;
+        if (shifts.length === 0 || employees.length === 0) return { dates: result };
 
         const dates = shifts.map(s => s.shift_date).sort();
         const windowStart = dates[0];
@@ -319,13 +379,16 @@ export class RosterFetcher {
             .from('leave_requests')
             .select('employee_id, start_date, end_date, status')
             .in('employee_id', employeeIds)
-            .eq('status', 'approved')
+            .eq('status', status)
             .lte('start_date', `${windowEnd}T23:59:59`)
             .gte('end_date', windowStart);
 
         if (error) {
-            console.warn('[RosterFetcher] Approved-leave fetch failed — solver will NOT exclude leave dates this run', error);
-            return result;
+            console.warn(
+                `[RosterFetcher] ${status}-leave fetch failed — solver will NOT account for it this run`,
+                error,
+            );
+            return { dates: result };
         }
 
         const toYmd = (v: string | null | undefined): string =>
@@ -349,7 +412,73 @@ export class RosterFetcher {
             result.set(emp, Array.from(new Set(days)).sort());
         }
         if (result.size > 0) {
-            console.info('[RosterFetcher] Approved leave: %d employee(s) have leave dates inside the window (hard-excluded)', result.size);
+            console.info(
+                '[RosterFetcher] %s leave: %d employee(s) have leave dates inside the window (%s)',
+                status, result.size,
+                status === 'approved' ? 'hard-excluded' : 'SOFT-penalised, still assignable',
+            );
+        }
+        return { dates: result };
+    }
+
+    /**
+     * Employee-declared availability EXCEPTIONS in the window — the producer
+     * for `availability_overrides`, which has been fully implemented in the
+     * solver since it was written and never had one.
+     *
+     * Subtractive by construction: an exception says "not during this", so
+     * unlike a declaration in `availability_rules` it can never accidentally
+     * un-roster someone by being too narrow.
+     *
+     * Fail-open: on a query error we log and return an empty map. An exception
+     * is a preference, and losing one for a run degrades the roster; blocking
+     * the run instead would be a worse trade.
+     */
+    async fetchAvailabilityExceptions(
+        shifts: ShiftMeta[],
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, AvailabilityOverrideRef[]>> {
+        const result = new Map<string, AvailabilityOverrideRef[]>();
+        if (shifts.length === 0 || employees.length === 0) return result;
+
+        const dates = shifts.map(s => s.shift_date).sort();
+        const windowStart = dates[0];
+        const windowEnd = dates[dates.length - 1];
+
+        // An undated exception applies on EVERY day, so it can never be
+        // filtered out by the window — hence the `is null` arm rather than a
+        // plain range predicate.
+        const { data, error } = await (this.supabase as any)
+            .from('availability_exceptions')
+            .select('profile_id,exception_date,start_time,end_time,severity')
+            .in('profile_id', employees.map(e => e.id))
+            .or(`exception_date.is.null,and(exception_date.gte.${windowStart},exception_date.lte.${windowEnd})`);
+
+        if (error) {
+            console.warn('[RosterFetcher] Availability-exception fetch failed — solver will not see them this run', error);
+            return result;
+        }
+
+        for (const row of (data ?? []) as any[]) {
+            const profileId = row.profile_id as string | null;
+            if (!profileId) continue;
+            const list = result.get(profileId) ?? [];
+            list.push({
+                start_time: normalizeTime(row.start_time),
+                end_time: normalizeTime(row.end_time),
+                severity: row.severity as AvailabilityOverrideRef['severity'],
+                // `undefined`, never `null` — an undated override means every
+                // day, and the solver distinguishes the two by absence.
+                date: row.exception_date ? String(row.exception_date).slice(0, 10) : undefined,
+            });
+            result.set(profileId, list);
+        }
+
+        if (result.size > 0) {
+            console.info(
+                '[RosterFetcher] Availability exceptions: %d employee(s) have declared windows in this run',
+                result.size,
+            );
         }
         return result;
     }
@@ -380,6 +509,90 @@ export class RosterFetcher {
      * contract has one of those flags set (mirroring the mutual exclusivity
      * `useContractForm.ts` already enforces at entry).
      */
+    /**
+     * Contract ordinary-hours envelopes for the pool (solver HC-5e).
+     *
+     * WHY THIS IS ITS OWN READ. The envelope columns landed in migration
+     * 20260817000000, and PostgREST rejects the ENTIRE select when any one column
+     * name is unknown — a 400, not a null column. Naming them inside
+     * `fetchEmployeeContractDetails`'s big select would therefore take out every
+     * classification field with it on any environment that had not migrated,
+     * silently reverting the whole pool to default pay rates. Isolated here, a
+     * pre-migration database costs exactly one warned-about failure and an
+     * unrestricted envelope — which is the correct answer there anyway, since
+     * nothing in it has a span.
+     *
+     * ONE CONTRACT PER PERSON, chosen to match `sm_materialize_contract_envelope`
+     * and `resolveComplianceBasis`: the largest weekly basis wins, then the later
+     * start. 30 of 103 people hold several Active contracts, so an arbitrary pick
+     * would make a person's rosterable span depend on row order.
+     */
+    async fetchOrdinaryHoursEnvelopes(
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, Pick<OptimizerEmployee, 'ordinary_span_start' | 'ordinary_span_end' | 'ordinary_days'>>> {
+        const result = new Map<string, Pick<OptimizerEmployee, 'ordinary_span_start' | 'ordinary_span_end' | 'ordinary_days'>>();
+        if (employees.length === 0) return result;
+
+        const { data, error } = await this.supabase
+            .from('user_contracts')
+            .select('user_id,ordinary_span_start,ordinary_span_end,ordinary_days,contracted_weekly_hours,start_date')
+            .in('user_id', employees.map(e => e.id))
+            .eq('status', 'Active');
+
+        if (error) {
+            // Unrestricted is the FAIL-OPEN direction, and the right one here: an
+            // envelope this read cannot see must not become a hard filter that
+            // excludes the whole pool from every shift.
+            console.warn('[RosterFetcher] Ordinary-hours envelope fetch failed — treating every contract as unrestricted this run', error);
+            return result;
+        }
+
+        type Row = {
+            user_id: string;
+            ordinary_span_start: string | null;
+            ordinary_span_end: string | null;
+            ordinary_days: number[] | null;
+            contracted_weekly_hours: number | string | null;
+            start_date: string | null;
+        };
+
+        const best = new Map<string, Row>();
+        for (const row of (data ?? []) as Row[]) {
+            const incumbent = best.get(row.user_id);
+            if (!incumbent) {
+                best.set(row.user_id, row);
+                continue;
+            }
+            const hours = (r: Row) => Number(r.contracted_weekly_hours ?? 0) || 0;
+            if (hours(row) > hours(incumbent)) { best.set(row.user_id, row); continue; }
+            if (hours(row) === hours(incumbent)
+                && (row.start_date ?? '') > (incumbent.start_date ?? '')) {
+                best.set(row.user_id, row);
+            }
+        }
+
+        for (const [userId, row] of best) {
+            // Both ends or neither — a half-configured span is unrestricted, not a
+            // bound with one open edge. Mirrors `toEnvelope` in
+            // availability/domain/contract-basis.ts and the DB's own
+            // `user_contracts_ordinary_span_valid` CHECK.
+            if (!row.ordinary_span_start || !row.ordinary_span_end) continue;
+            result.set(userId, {
+                ordinary_span_start: row.ordinary_span_start,
+                ordinary_span_end: row.ordinary_span_end,
+                ordinary_days: row.ordinary_days ?? [],
+            });
+        }
+
+        if (result.size > 0) {
+            console.info(
+                '[RosterFetcher] Ordinary-hours envelope binds for %d/%d employees (HC-5e)',
+                result.size, employees.length,
+            );
+        }
+        return result;
+    }
+
     async fetchEmployeeContractDetails(
         employees: EmployeeMeta[],
     ): Promise<Map<string, Partial<OptimizerEmployee>>> {

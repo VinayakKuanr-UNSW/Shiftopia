@@ -9,7 +9,13 @@ interface BroadcastFunctionBarProps {
   onSearchChange: (query: string) => void;
   searchQuery: string;
   onRefresh: () => void;
-  onCreateGroup: () => void;
+  onCreateGroup?: () => void;
+  /**
+   * Creating a group is a manager capability and only the Broadcasts Manager
+   * screen implements it. My Broadcasts is a member view, so it opts out
+   * rather than rendering a button with nothing behind it.
+   */
+  canCreateGroup?: boolean;
   isLoading?: boolean;
   className?: string;
 }
@@ -19,6 +25,7 @@ export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
   searchQuery,
   onRefresh,
   onCreateGroup,
+  canCreateGroup = true,
   isLoading,
   className,
 }) => {
@@ -34,7 +41,7 @@ export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className={cn(
-              "pl-10 h-10 lg:h-11 border-none bg-transparent font-medium text-sm placeholder:text-muted-foreground/40 focus-visible:ring-0",
+              "min-h-[44px] border-none bg-transparent pl-10 text-sm font-medium placeholder:text-muted-foreground/40 focus-visible:ring-0",
               isDark ? "bg-white/5" : "bg-slate-900/5"
             )}
           />
@@ -46,8 +53,9 @@ export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
           variant="outline"
           size="icon"
           onClick={onRefresh}
+          aria-label="Refresh broadcast groups"
           className={cn(
-            "h-10 lg:h-11 w-10 lg:w-11 rounded-xl transition-all border shadow-sm",
+            "h-[44px] w-[44px] rounded-xl border shadow-sm transition-all",
             isDark ? "bg-[#111827]/60 border-white/5" : "bg-slate-100 border-slate-200/50"
           )}
           disabled={isLoading}
@@ -55,13 +63,15 @@ export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
           <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
         </Button>
 
-        <Button
-          onClick={onCreateGroup}
-          className="h-10 lg:h-11 px-4 lg:px-6 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-[10px] tracking-wider rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
-        >
-          <Plus className="h-4 w-4" />
-          Create Group
-        </Button>
+        {canCreateGroup && (
+          <Button
+            onClick={onCreateGroup}
+            className="min-h-[44px] gap-2 rounded-xl bg-primary px-4 text-[10px] font-black uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98] lg:px-6"
+          >
+            <Plus className="h-4 w-4" />
+            Create Group
+          </Button>
+        )}
       </div>
     </div>
   );

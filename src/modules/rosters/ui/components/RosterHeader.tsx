@@ -3,8 +3,7 @@ import { Calendar, ChevronLeft, ChevronRight, Filter, PanelRight, Search, Users,
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { Calendar as CalendarComponent } from '@/modules/core/ui/primitives/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
+import { DatePicker } from '@/modules/core/ui/calendar';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
@@ -44,7 +43,6 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
   onToggleLock,
   hasUnsavedChanges = false
 }) => {
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Keyboard shortcuts
   useHotkeys('left', navigatePrevious, [navigatePrevious]);
@@ -198,29 +196,12 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
             </Tooltip>
           </TooltipProvider>
 
-          <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-            <PopoverTrigger asChild>
-              <Button className="flex items-center space-x-2 px-4 py-2 rounded-md bg-muted hover:bg-accent transition-all duration-200">
-                <Calendar className="h-5 w-5 text-primary" />
-                <span className="font-medium text-foreground">
-                  {getDateDisplay()}
-                </span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 bg-popover backdrop-blur-md border border-border">
-              <CalendarComponent
-                mode="single"
-                selected={selectedDate}
-                onSelect={(date) => {
-                  if (date) {
-                    onDateChange(date);
-                    setIsCalendarOpen(false);
-                  }
-                }}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
+          <DatePicker value={selectedDate} onChange={onDateChange} label="Date shown" align="center">
+            <Button className="flex items-center space-x-2 px-4 py-2 rounded-md bg-muted hover:bg-accent transition-all duration-200">
+              <Calendar className="h-5 w-5 text-primary" aria-hidden="true" />
+              <span className="font-medium text-foreground">{getDateDisplay()}</span>
+            </Button>
+          </DatePicker>
 
           <TooltipProvider>
             <Tooltip>

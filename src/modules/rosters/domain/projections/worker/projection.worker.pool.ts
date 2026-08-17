@@ -169,7 +169,10 @@ function mergePeople(partials: any[], rangeDays?: number): any {
           end_time: ps.endTime,
           unpaid_break_minutes: ps.unpaidBreakMinutes ?? 0,
         }));
-      if (mergedShifts.length > 0) fatigueScore = computePeakFatigue(mergedShifts);
+      // `[]` is deliberate and explicit (audit F-22) — the worker pool never
+      // receives the pre-window history; `useRosterProjections` refines this
+      // once the 7-day history query resolves. See people.projector.ts.
+      if (mergedShifts.length > 0) fatigueScore = computePeakFatigue(mergedShifts, []);
     }
 
     return {

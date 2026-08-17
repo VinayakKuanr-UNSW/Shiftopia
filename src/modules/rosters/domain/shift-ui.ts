@@ -400,8 +400,8 @@ export interface ShiftDotInput {
      * `*_source` carries full provenance (manual|snapped|null); the boolean
      * `*_is_manual` flags are an equivalent alternative — either works.
      */
-    adjusted_start_source?: 'manual' | 'snapped' | null;
-    adjusted_end_source?: 'manual' | 'snapped' | null;
+    adjusted_start_source?: 'manual' | 'snapped' | 'auto' | null;
+    adjusted_end_source?: 'manual' | 'snapped' | 'auto' | null;
     adjusted_start_is_manual?: boolean;
     adjusted_end_is_manual?: boolean;
 }
@@ -489,6 +489,28 @@ const AUTO_CLOCKOUT_MS = 12.5 * 60 * 60 * 1000;
 function resolveAutoClockoutAnchorMs(shift: ShiftDotInput, start: number): number {
     const ci = parseToMs(shift.actual_start, shift.shift_date);
     return ci !== null ? Math.max(ci, start) : start;
+}
+
+/**
+ * Was anyone ever rostered onto this shift?
+ *
+ * Attendance is a fact about a PERSON, not about a slot: nobody can be late for,
+ * or fail to show up to, a shift they were never given. An unfilled slot is a
+ * coverage gap, which the lifecycle/assignment badges already report.
+ *
+ * Precedence: an explicit `assignment_status` wins, then `assigned_employee_id`,
+ * and callers that supply NEITHER are treated as assigned so legacy surfaces
+ * (which pass only times) keep their badges.
+ *
+ * The `assigned_employee_id` check is `!== undefined`, NOT `!= null`: a shift row
+ * always carries the key, so an explicit `null` means "nobody is on this shift",
+ * which is exactly the case being detected. Only an ABSENT key means "this caller
+ * doesn't track assignment" and should fall through to the permissive default.
+ */
+export function isShiftAssigned(shift: ShiftDotInput): boolean {
+    if (shift.assignment_status != null) return shift.assignment_status === 'assigned';
+    if (shift.assigned_employee_id !== undefined) return !!shift.assigned_employee_id;
+    return true;
 }
 
 /**
@@ -629,6 +651,11 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     const { start, end } = resolveScheduleMs(shift);
     if (start === null) return empty;
 
+    // Nobody was rostered ⇒ there is no arrival to classify. Without this, every
+    // unfilled shift whose end time had passed reported "No Show" — blaming an
+    // employee who was never given the shift.
+    if (!isShiftAssigned(shift)) return empty;
+
     const now = Date.now();
 
     const ci = parseToMs(shift.actual_start, shift.shift_date);   // raw clock-in
@@ -702,6 +729,13 @@ export function getPayrollRuleBadges(shift: ShiftDotInput): PayrollRuleBadges {
     const empty: PayrollRuleBadges = { arrival: null, departure: null };
     const { start, end } = resolveScheduleMs(shift);
     if (start === null) return empty;
+
+    // An unfilled shift has no payroll: nobody worked it, so there is nothing to
+    // be early/late/missing for and nobody to have failed to show. Previously an
+    // unassigned shift past its end time hit the `isNoShowAttendance` branch
+    // below (no clock-in + no clock-out + finished + no billable window) and
+    // rendered a "NO SHOW" payroll badge over its SCHEDULED hours.
+    if (!isShiftAssigned(shift)) return empty;
 
     const bIn = parseToMs(shift.adjusted_start, shift.shift_date);   // billable in
     let bOut = parseToMs(shift.adjusted_end, shift.shift_date);      // billable out

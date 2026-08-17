@@ -44,6 +44,9 @@ export class V8SwapEngine {
             contracted_weekly_hours: scenario.partyA.contracted_weekly_hours ?? 38,
             leave_days: scenario.partyA.leave_days,
             is_security_role: scenario.partyA.is_security_role,
+            // V8_EMPLOYMENT_TARGET short-circuits on an empty list, so this was
+            // the last gap keeping the rule silent on every assign/bid/swap.
+            employment_statuses: scenario.partyA.employment_statuses,
         };
         const shiftsA: V8Shift[] = scenario.partyA.hypothetical_schedule.map(s => ({
             ...s,
@@ -72,6 +75,7 @@ export class V8SwapEngine {
                 contracted_weekly_hours: scenario.partyB.contracted_weekly_hours ?? 38,
                 leave_days: scenario.partyB.leave_days,
                 is_security_role: scenario.partyB.is_security_role,
+                employment_statuses: scenario.partyB.employment_statuses,
             };
             const shiftsB: V8Shift[] = scenario.partyB.hypothetical_schedule.map(s => ({
                 ...s,

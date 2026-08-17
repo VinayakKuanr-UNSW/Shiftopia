@@ -92,15 +92,15 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
             {/* Toggle Header */}
             <button
                 onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
             >
-                <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                        <HelpCircle className="h-4 w-4" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="p-1 rounded-md bg-primary/10 text-primary sm:p-1.5 sm:rounded-lg">
+                        <HelpCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </div>
                     <div className="flex flex-col items-start leading-tight">
                         <span className="text-[11px] font-black uppercase tracking-widest text-foreground">Badge Legend</span>
-                        <span className="text-[9px] font-medium text-muted-foreground/60 uppercase">Indicator & Status Reference</span>
+                        <span className="hidden text-[9px] font-medium text-slate-600 dark:text-slate-300 uppercase sm:block">Indicator & Status Reference</span>
                     </div>
                 </div>
                 {isCollapsed ? (

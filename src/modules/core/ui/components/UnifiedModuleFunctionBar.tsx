@@ -1,11 +1,12 @@
 import React from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { RefreshCcw, LayoutGrid, List, Search, Calendar, Settings, Layers, Filter, X } from 'lucide-react';
-import { CustomDateRangePicker } from './CustomDateRangePicker';
+import { DateRangePicker } from '@/modules/core/ui/calendar';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { startOfWeek, endOfWeek, addDays, differenceInCalendarDays, format } from 'date-fns';
-import { Calendar as RangeCalendar } from '@/modules/core/ui/primitives/calendar';
+import { addDays, differenceInCalendarDays, endOfMonth, format, startOfMonth } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { Calendar as RangeCalendar } from '@/modules/core/ui/calendar';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger, DrawerDescription } from '@/modules/core/ui/primitives/drawer';
 import {
@@ -153,7 +154,6 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                                     <RangeCalendar
                                         mode="range"
                                         numberOfMonths={2}
-                                        weekStartsOn={1}
                                         selected={{
                                             from: startDate,
                                             to: endDate
@@ -204,8 +204,8 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                                         variant="outline"
                                         className="flex-1 rounded-xl font-black uppercase text-[9px] tracking-widest h-10 border-none bg-accent/20 hover:bg-accent/40 transition-all active:scale-95"
                                         onClick={() => {
-                                            const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-                                            const end = endOfWeek(new Date(), { weekStartsOn: 1 });
+                                            const start = startOfWeekAU(new Date());
+                                            const end = endOfWeekAU(new Date());
                                             onDateChange!(start, end);
                                             setTimeout(() => setIsDateDrawerOpen(false), 200);
                                         }}
@@ -216,8 +216,8 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                                         variant="outline"
                                         className="flex-1 rounded-xl font-black uppercase text-[9px] tracking-widest h-10 border-none bg-accent/20 hover:bg-accent/40 transition-all active:scale-95"
                                         onClick={() => {
-                                            const start = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 7);
-                                            const end = addDays(endOfWeek(new Date(), { weekStartsOn: 1 }), 7);
+                                            const start = addDays(startOfWeekAU(new Date()), 7);
+                                            const end = addDays(endOfWeekAU(new Date()), 7);
                                             onDateChange!(start, end);
                                             setTimeout(() => setIsDateDrawerOpen(false), 200);
                                         }}
@@ -319,10 +319,22 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                 {/* 2. Date Range Picker (Start, End, Today) */}
                 {startDate && endDate && onDateChange && (
                     <div className="flex-shrink-0">
-                        <CustomDateRangePicker
-                            startDate={startDate}
-                            endDate={endDate}
-                            onDateChange={onDateChange}
+                        <DateRangePicker
+                            label="Date range"
+                            value={{ from: startDate, to: endDate }}
+                            onChange={(range) => {
+                                if (!range?.from) return;
+                                onDateChange(range.from, range.to ?? range.from);
+                            }}
+                            clearable={false}
+                            displayFormat="d MMM yy"
+                            presets={[
+                                { label: 'Today',     getRange: () => { const t = new Date(); return { from: t, to: t }; } },
+                                { label: 'This week', getRange: () => ({ from: startOfWeekAU(new Date()), to: endOfWeekAU(new Date()) }) },
+                                { label: 'Next week', getRange: () => ({ from: addDays(startOfWeekAU(new Date()), 7), to: addDays(endOfWeekAU(new Date()), 7) }) },
+                                { label: 'This month', getRange: () => { const n = new Date(); return { from: startOfMonth(n), to: endOfMonth(n) }; } },
+                            ]}
+                            triggerClassName="h-10 lg:h-11 rounded-xl font-black tabular-nums text-[10px] lg:text-xs"
                         />
                     </div>
                 )}

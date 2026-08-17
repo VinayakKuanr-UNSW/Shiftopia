@@ -210,7 +210,7 @@ export function ConfigurePane({
         <h2 className="text-lg font-semibold">
           {mode === 'edit' ? 'Edit Availability' : 'Configure Availability'}
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
           {mode === 'edit'
             ? 'Update your availability rule'
             : mode === 'create'
@@ -239,7 +239,7 @@ export function ConfigurePane({
 
           {/* Inactive State */}
           {!isFormActive && (
-            <div className="py-12 text-center text-muted-foreground">
+            <div className="py-12 text-center text-slate-600 dark:text-slate-300">
               <Calendar className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p>No rule selected for editing.</p>
               <p className="text-sm mt-1">
@@ -260,6 +260,7 @@ export function ConfigurePane({
                 <Input
                   id="start-date"
                   type="date"
+                  min={new Date().toLocaleDateString('en-CA')}
                   value={formState.startDate}
                   onChange={(e) =>
                     setFormState((prev) => ({
@@ -403,7 +404,7 @@ export function ConfigurePane({
                             repeatEndDate: e.target.value,
                           }))
                         }
-                        min={formState.startDate}
+                        min={formState.startDate || new Date().toLocaleDateString('en-CA')}
                         disabled={isDisabled}
                       />
                       {!formState.repeatEndDate && (

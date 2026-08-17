@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
+import { toast } from 'sonner';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { AuthProvider } from '@/platform/auth/AuthProvider';
 import { ScopeFilterProvider } from '@/platform/auth/ScopeFilterContext';
@@ -13,6 +14,9 @@ import { SidebarProvider } from '@/modules/core/ui/primitives/sidebar';
 import { Toaster } from '@/modules/core/ui/primitives/toaster';
 import { Toaster as Sonner } from '@/modules/core/ui/primitives/sonner';
 import { LocaleProvider } from './LocaleProvider';
+import { CapacitorBridge } from '@/platform/capacitor/CapacitorBridge';
+import { NotificationBridge } from '@/platform/notifications/NotificationBridge';
+import { OfflineBanner } from '@/modules/core/ui/components/OfflineBanner';
 
 /**
  * Smart retry: skip immediately on 4xx client errors (auth failures, validation,
@@ -41,6 +45,19 @@ const queryClient = new QueryClient({
       retry: false,
     },
   },
+  // When a write fails while offline, show one clear message instead of a raw
+  // network error. Writes still require a connection — there is no offline
+  // mutation queue, and this deliberately does not pretend otherwise.
+  mutationCache: new MutationCache({
+    onError: () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        toast.error("You're offline", {
+          description:
+            'This change needs an internet connection. Please reconnect and try again.',
+        });
+      }
+    },
+  }),
 });
 
 interface ProviderWrapperProps {
@@ -59,10 +76,17 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
                   <SearchProvider>
                     <SidebarProvider defaultOpen={true}>
                       <div className="h-full w-full overflow-hidden">
+                        <OfflineBanner />
                         <Toaster />
                         <Sonner />
                         <RosterUIProvider>
                            <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: false }}>
+                            {/* Both are null-rendering and no-op off-device;
+                                they sit inside the Router because they use
+                                useNavigate/useLocation (hardware back, and
+                                deep-linking from a tapped notification). */}
+                            <CapacitorBridge />
+                            <NotificationBridge />
                             {children}
                           </BrowserRouter>
                         </RosterUIProvider>

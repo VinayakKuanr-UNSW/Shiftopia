@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { format, startOfWeek, startOfMonth } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Clock, CheckCircle, XCircle, UserX, Shield, Bot, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 
@@ -346,7 +347,7 @@ export const TimesheetPage: React.FC = () => {
     const handleViewTypeChange = useCallback((view: ViewType) => {
         let newDate = selectedDate;
         if (view === 'week') {
-            newDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
+            newDate = startOfWeekAU(selectedDate);
         } else if (view === 'month') {
             newDate = startOfMonth(selectedDate);
         }

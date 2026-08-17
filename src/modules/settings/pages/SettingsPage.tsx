@@ -18,6 +18,9 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/platform/i18n';
 import { useAuth } from '@/platform/auth/useAuth';
 import { PayRatesSettings } from '@/modules/payroll/ui/rate-admin/PayRatesSettings';
+import { BiometricToggle } from '@/modules/settings/ui/components/BiometricToggle';
+import { NotificationToggle } from '@/modules/settings/ui/components/NotificationToggle';
+
 
 /* ============================================================
    HELPERS
@@ -457,6 +460,9 @@ const SecuritySettings: React.FC = () => {
         </div>
       </div>
 
+      {/* Native-only: renders nothing in a browser (see BiometricToggle). */}
+      <BiometricToggle />
+
       <div className="p-6 rounded-2xl bg-white/5 border border-white/10 opacity-50 cursor-not-allowed">
         <div className="flex items-center justify-between">
           <div>
@@ -469,6 +475,21 @@ const SecuritySettings: React.FC = () => {
     </div>
   );
 };
+
+const NotificationSettings: React.FC = () => (
+  <div className="space-y-8">
+    <div className="flex items-center gap-3">
+      <div className="p-2 rounded-xl bg-white/5 border border-white/10">
+        <Bell className="h-5 w-5 text-white/70" />
+      </div>
+      <div>
+        <h3 className="text-lg font-medium text-white">Notifications</h3>
+        <p className="text-sm text-blue-200/60">Choose how Shiftopia reaches you on this device.</p>
+      </div>
+    </div>
+    <NotificationToggle />
+  </div>
+);
 
 /* ============================================================
    MAIN SETTINGS PAGE
@@ -511,6 +532,7 @@ const SettingsPage: React.FC = () => {
             onSectionChange={handleSectionChange}
             transparent
             showPayRates={canManageRates}
+
           />
         </div>
       </div>
@@ -549,8 +571,12 @@ const SettingsPage: React.FC = () => {
               )}
             </TabsContent>
 
+            <TabsContent value="notifications">
+              <NotificationSettings />
+            </TabsContent>
+
             {/* Static placeholders for pending features */}
-            {['account', 'notifications', 'billing', 'integrations'].map(tab => (
+            {['account', 'billing', 'integrations'].map(tab => (
               <TabsContent key={tab} value={tab}>
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
                   <div className="p-4 rounded-full bg-white/5 border border-white/10">

@@ -43,6 +43,12 @@ import {
   BALANCE_TRACKED_TYPES,
 } from '../../domain/leave-policy';
 import {
+  resolveRequestedLeaveHours,
+  type LeaveHoursResult,
+  type LeaveHoursShift,
+} from '../../domain/leave-hours';
+import { useMyContractBasis } from '@/modules/availability/state/useMyContractBasis';
+import {
   getLeaveBalances,
   getLeaveRequests,
   getTeamLeaveRequests,
@@ -52,6 +58,7 @@ import {
   cancelLeaveRequest,
   unassignConflictingShifts,
   isFullTimeSecurityEmployee,
+  getLeaveShiftConflicts,
 } from '../../api/leave.api';
 import type { LeavePolicy } from '../../model/leave.types';
 import { formatLeaveConflictWarning } from '../../domain/leave-conflicts';
@@ -97,6 +104,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const [isFtSecurity, setIsFtSecurity] = useState(false);
   const policies = useMemo(() => getLeavePolicies(isFtSecurity), [isFtSecurity]);
   /**
+   * The employee's own contract, resolved by the same precedence the hours
+   * rules use. Drives how many hours a day of leave actually consumes — a flat
+   * 7.6h charged a 20h part-timer a full-timer's day.
+   */
+  const contractBasis = useMyContractBasis(user?.id);
+  /**
    * Post-approval roster-conflict state: the warning copy plus the shift IDs
    * still rostered inside the approved leave range, so the manager can unassign
    * them in one click. `null` = nothing to show.
@@ -116,6 +129,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const [formStart, setFormStart] = useState('');
   const [formEnd, setFormEnd] = useState('');
   const [formHours, setFormHours] = useState<number>(0);
+  /**
+   * True once the employee edits the hours by hand. The derivation then stops
+   * overwriting them — otherwise a manual correction is silently reverted the
+   * next time the roster query settles.
+   */
+  const [hoursOverridden, setHoursOverridden] = useState(false);
   const [formReason, setFormReason] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -156,23 +175,62 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
     !!employeeId,
   );
 
-  // Auto-calculate hours from date range (7.6h/day × working days)
+  /**
+   * Rostered shifts inside the selected range, or null while we have not
+   * looked. NULL and [] mean different things to `resolveRequestedLeaveHours`:
+   * [] is "looked, no roster published yet, use the contract estimate".
+   */
+  const [rosteredInRange, setRosteredInRange] = useState<LeaveHoursShift[] | null>(null);
+
   useEffect(() => {
-    if (formStart && formEnd) {
-      const start = new Date(formStart + 'T00:00:00');
-      const end = new Date(formEnd + 'T00:00:00');
-      if (start <= end) {
-        let days = 0;
-        const cur = new Date(start);
-        while (cur <= end) {
-          const dow = cur.getDay();
-          if (dow !== 0 && dow !== 6) days++;
-          cur.setDate(cur.getDate() + 1);
-        }
-        setFormHours(Math.round(days * 7.6 * 10) / 10);
-      }
+    if (!employeeId || !formStart || !formEnd || formStart > formEnd) {
+      setRosteredInRange(null);
+      return;
     }
-  }, [formStart, formEnd]);
+    let cancelled = false;
+    // Debounced: the date inputs fire on every keystroke while a year is being
+    // typed, and each change would otherwise be a query.
+    const timer = setTimeout(async () => {
+      const conflicts = await getLeaveShiftConflicts(employeeId, formStart, formEnd);
+      if (cancelled) return;
+      setRosteredInRange(conflicts.map((c) => ({
+        shiftDate: c.shiftDate,
+        startTime: c.startTime,
+        endTime: c.endTime,
+        // `getLeaveShiftConflicts` does not select the break, so the estimate
+        // treats these as unbroken. It therefore over-states slightly rather
+        // than under-stating, which is the safe direction for a balance the
+        // employee can still see and correct before submitting.
+        unpaidBreakMinutes: 0,
+      })));
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [employeeId, formStart, formEnd]);
+
+  /**
+   * The hours this request consumes.
+   *
+   * REPLACES a flat "weekdays x 7.6h". That rule charged a 20h part-timer a
+   * full-timer's 7.6h day, consumed leave on public holidays, ignored the
+   * roster entirely, and quoted casuals a balance they do not accrue. It is
+   * the number `createLeaveRequest` checks against the balance and the DB
+   * trigger deducts, so being wrong here draws down a statutory entitlement by
+   * the wrong amount.
+   */
+  const derivedHours: LeaveHoursResult = useMemo(() => resolveRequestedLeaveHours({
+    leaveType: formType,
+    startDate: formStart,
+    endDate: formEnd,
+    contractedWeeklyHours: contractBasis.basis.contractedWeeklyHours,
+    ordinaryDays: contractBasis.basis.envelope.days,
+    rosteredShifts: rosteredInRange ?? undefined,
+  }), [formType, formStart, formEnd, contractBasis.basis, rosteredInRange]);
+
+  // Follow the derivation unless the employee has deliberately overridden it.
+  useEffect(() => {
+    if (hoursOverridden) return;
+    setFormHours(derivedHours.hours);
+  }, [derivedHours.hours, hoursOverridden]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,6 +254,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
       setFormStart('');
       setFormEnd('');
       setFormHours(0);
+      setHoursOverridden(false);
       setFormReason('');
       loadData();
     }
@@ -332,6 +391,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
                 setFormEnd={setFormEnd}
                 formHours={formHours}
                 setFormHours={setFormHours}
+                derivedHours={derivedHours}
+                hoursOverridden={hoursOverridden}
+                setHoursOverridden={setHoursOverridden}
+                onResetHours={() => { setHoursOverridden(false); setFormHours(derivedHours.hours); }}
                 formReason={formReason}
                 setFormReason={setFormReason}
                 formError={formError}
@@ -506,6 +569,11 @@ const NewRequestForm: React.FC<{
   setFormEnd: (s: string) => void;
   formHours: number;
   setFormHours: (h: number) => void;
+  /** The computed value + its plain-language basis. See `resolveRequestedLeaveHours`. */
+  derivedHours: LeaveHoursResult;
+  hoursOverridden: boolean;
+  setHoursOverridden: (v: boolean) => void;
+  onResetHours: () => void;
   formReason: string;
   setFormReason: (r: string) => void;
   formError: string | null;
@@ -519,6 +587,7 @@ const NewRequestForm: React.FC<{
   formStart, setFormStart,
   formEnd, setFormEnd,
   formHours, setFormHours,
+  derivedHours, hoursOverridden, setHoursOverridden, onResetHours,
   formReason, setFormReason,
   formError, formSuccess, formSubmitting,
   onSubmit, balances, policies,
@@ -581,22 +650,38 @@ const NewRequestForm: React.FC<{
         </div>
       </div>
 
-      {/* Hours (auto-calculated, editable) */}
+      {/* Hours — derived from the contract and the roster, editable */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">
-          Hours
-        </label>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Hours
+          </label>
+          {hoursOverridden && (
+            <button
+              type="button"
+              onClick={onResetHours}
+              className="text-[11px] font-medium text-sky-600 hover:underline dark:text-sky-400"
+            >
+              Reset to {derivedHours.hours}h
+            </button>
+          )}
+        </div>
         <input
           type="number"
           value={formHours}
-          onChange={(e) => setFormHours(Number(e.target.value))}
+          onChange={(e) => { setHoursOverridden(true); setFormHours(Number(e.target.value)); }}
           min={0}
           step={0.1}
           required
           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-white"
         />
+        {/* The derivation states its own basis rather than asserting a fixed
+            "7.6h/day" — that caption was wrong for every part-timer and every
+            casual, and for any range containing a public holiday. */}
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-          Auto-calculated from weekdays (7.6h/day). Adjust if needed.
+          {hoursOverridden
+            ? `Manually set. Calculated value was ${derivedHours.hours}h — ${derivedHours.explanation}`
+            : derivedHours.explanation}
         </p>
       </div>
 

@@ -38,36 +38,85 @@ export interface FairnessLedgerUpsertRow {
 
 // ─── Queries ────────────────────────────────────────────────────────────────────
 
+/** A row from `get_fairness_debts_latest` — no `id`/`organization_id`, and the
+ *  `window_end` is whatever the latest available window was, not necessarily
+ *  the as-of date the caller asked for. */
+export type FairnessLedgerLatestRow = Pick<
+    FairnessLedgerRow,
+    'employee_id' | 'metric' | 'window_start' | 'window_end' | 'rolling_value' | 'team_average' | 'debt'
+>;
+
 export const fairnessLedgerQueries = {
     /**
-     * Fetch current debts for a set of employees in an organization.
-     * Returns the most recent window_end rows per (employee, metric).
+     * Most recent debt row per (employee, metric) with `window_end <= asOf`.
+     *
+     * Audit F-04: every read used to require an EXACT `window_end = today`,
+     * which matched nothing on any day without a recompute — so the ledger read
+     * empty and every consumer silently behaved as though all debts were zero.
+     * The RPC does the per-group "latest" in one index-ordered pass; doing it
+     * here would mean pulling every historical window (one row per
+     * employee/metric/DAY) and de-duplicating in the browser.
+     *
+     * `employeeIds` empty/omitted → every employee in the org.
      */
-    async getDebts(
+    async getLatestDebts(
         organizationId: string,
-        employeeIds: string[],
-        windowEnd: string,
-    ): Promise<FairnessLedgerRow[]> {
-        if (employeeIds.length === 0) return [];
+        employeeIds: string[] | null,
+        asOf: string,
+    ): Promise<FairnessLedgerLatestRow[]> {
+        if (employeeIds !== null && employeeIds.length === 0) return [];
 
-        const { data, error } = await (supabase as any)
-            .from('fairness_ledger')
-            .select('*')
-            .eq('organization_id', organizationId)
-            .eq('window_end', windowEnd)
-            .in('employee_id', employeeIds);
+        const { data, error } = await (supabase.rpc as any)('get_fairness_debts_latest', {
+            p_org_id: organizationId,
+            p_employee_ids: employeeIds,
+            p_as_of: asOf,
+        });
 
         if (error) {
-            console.error('[FairnessLedger] getDebts failed:', error.message);
+            console.error('[FairnessLedger] getLatestDebts failed:', error.message);
             return [];
         }
 
-        return (data ?? []) as FairnessLedgerRow[];
+        return (data ?? []) as FairnessLedgerLatestRow[];
     },
 
     /**
-     * Fetch all ledger rows for an organization at a given window end.
-     * Used by recompute to check existing state.
+     * Trigger the AUTHORITATIVE server-side rebuild for one org.
+     *
+     * `request_fairness_ledger_recompute` authorises the caller against the same
+     * predicate as the `fairness_ledger_org_scoped` RLS policy, then delegates
+     * to the definer-owned `recompute_fairness_ledger`. Returns the number of
+     * ledger rows written.
+     *
+     * Audit F-04: the rebuild used to run in the browser — fetch every shift in
+     * the 91-day window, classify, aggregate and upsert client-side. That made
+     * it un-schedulable (it could only fire when someone clicked Publish) and,
+     * had the SQL version been added alongside it, would have left two copies of
+     * the debt maths to drift apart.
+     */
+    async requestRecompute(
+        organizationId: string,
+        asOf: string,
+    ): Promise<number> {
+        const { data, error } = await (supabase.rpc as any)('request_fairness_ledger_recompute', {
+            p_org_id: organizationId,
+            p_as_of: asOf,
+        });
+
+        if (error) {
+            console.error('[FairnessLedger] requestRecompute failed:', error.message);
+            throw new Error(`fairnessLedger.requestRecompute failed: ${error.message}`);
+        }
+
+        return Number(data ?? 0);
+    },
+
+    /**
+     * Fetch ledger rows for an EXACT window_end.
+     *
+     * Retained for the write path only: `updateAfterCommit` reads the rows it is
+     * about to increment, and must never blend two different windows into one
+     * upsert. Read-only consumers want `getLatestDebts` instead.
      */
     async getAllForWindow(
         organizationId: string,

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subDays } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { DatePreset } from '../model/metric.types';
 
 function toISO(d: Date): string {
@@ -11,8 +12,8 @@ function rangeForPreset(preset: DatePreset): { startDate: string; endDate: strin
     switch (preset) {
         case 'THIS_WEEK':
             return {
-                startDate: toISO(startOfWeek(today, { weekStartsOn: 1 })),
-                endDate:   toISO(endOfWeek(today,   { weekStartsOn: 1 })),
+                startDate: toISO(startOfWeekAU(today)),
+                endDate:   toISO(endOfWeekAU(today)),
             };
         case 'THIS_MONTH':
             return {
@@ -31,8 +32,8 @@ function rangeForPreset(preset: DatePreset): { startDate: string; endDate: strin
             };
         default:
             return {
-                startDate: toISO(startOfWeek(today, { weekStartsOn: 1 })),
-                endDate:   toISO(endOfWeek(today,   { weekStartsOn: 1 })),
+                startDate: toISO(startOfWeekAU(today)),
+                endDate:   toISO(endOfWeekAU(today)),
             };
     }
 }

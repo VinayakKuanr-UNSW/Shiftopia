@@ -41,6 +41,10 @@ export type ShiftOpCode =
     | 'ILLEGAL_TRANSITION'
     | 'GONE'
     | 'FORBIDDEN'
+    // AutoPilot has atomically taken ownership of this swap/bid (it is resolving
+    // it in the current overnight drain); a manual manager action is locked out
+    // until it resolves or ownership is returned. Nothing changed — refresh.
+    | 'AUTO_OWNER_ACTIVE'
     | 'ERROR';
 
 /**
@@ -74,7 +78,7 @@ export interface ShiftOpResult {
  * consistent across every call site.
  */
 export interface ShiftOpUx {
-    kind: 'success' | 'rejected' | 'conflict' | 'illegal' | 'gone' | 'forbidden' | 'error';
+    kind: 'success' | 'rejected' | 'conflict' | 'illegal' | 'gone' | 'forbidden' | 'auto_owned' | 'error';
     /** Toast copy to surface, if any. `undefined` ⇒ no toast (silent success). */
     toast?: string;
     /** Caller should re-fetch the shift / roster slice. */
@@ -136,6 +140,13 @@ export function mapShiftOpResultToUx(r: ShiftOpResult): ShiftOpUx {
 
         case 'FORBIDDEN':
             return { kind: 'forbidden', toast: 'Not authorized.' };
+
+        case 'AUTO_OWNER_ACTIVE':
+            return {
+                kind: 'auto_owned',
+                toast: 'AutoPilot is resolving this — try again shortly.',
+                refresh: true,
+            };
 
         case 'ERROR':
         default:

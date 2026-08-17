@@ -6,12 +6,14 @@
   ],
   "Constraints": [
     "allow_partial",
+    "enforce_availability",
     "enforce_role_match",
     "enforce_skill_match",
     "min_rest_minutes",
     "relax_constraints"
   ],
   "Employee": [
+    "availability_mode",
     "availability_overrides",
     "availability_slots",
     "contract_weekly_minutes",
@@ -22,6 +24,7 @@
     "has_availability_data",
     "hourly_rate",
     "id",
+    "initial_effective_minutes",
     "is_flexible",
     "is_student",
     "level",
@@ -29,6 +32,9 @@
     "max_weekly_minutes",
     "min_contract_minutes",
     "name",
+    "ordinary_days",
+    "ordinary_span_end",
+    "ordinary_span_start",
     "preferred_shift_ids",
     "role_id",
     "skill_ids",
@@ -48,6 +54,7 @@
     "end_time",
     "id",
     "is_public_holiday",
+    "is_saturday",
     "is_sunday",
     "is_training",
     "level",
@@ -59,10 +66,12 @@
     "shift_type",
     "start_time",
     "target_employment_type",
+    "target_requires_flexible",
     "unpaid_break_minutes"
   ],
   "SolverParams": [
     "compute_alternatives",
+    "decompose_by_week",
     "enable_greedy_hint",
     "log_search",
     "max_time_seconds",

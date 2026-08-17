@@ -197,16 +197,17 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
         size="sm"
         onClick={handleClick}
         disabled={disabled || isLoading}
+        aria-label="Publish roster — send offers, open bidding, remove dead shifts"
         className={cn(
-          'h-8 gap-1.5 rounded-lg px-3 text-xs font-semibold shadow-sm',
-          'bg-emerald-600 hover:bg-emerald-700 text-white',
+          'h-10 min-h-[44px] sm:min-h-[36px] sm:h-9 gap-2 rounded-xl px-4 text-xs font-extrabold uppercase tracking-wider shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950',
+          'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95',
         )}
         title="Publish roster — send offers, open bidding, remove dead shifts"
       >
         {isLoading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
         ) : (
-          <Send className="h-3.5 w-3.5" />
+          <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
         )}
         Publish
       </Button>

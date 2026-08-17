@@ -23,6 +23,7 @@ import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDate
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
+import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useCreateShift } from '@/modules/rosters/state/useRosterShifts';
@@ -461,20 +462,26 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                   {/* Date Column Headers */}
                   {dates.map((date, idx) => {
                     const dateIsToday = format(date, 'yyyy-MM-dd') === todayISO();
+                    const holidayName = getPublicHolidayName(date);
                     return (
                       <div
                         role="columnheader"
                         key={idx}
                         className={cn(
-                          'sticky top-0 z-20 bg-zinc-900 border-b border-border px-3 py-3 text-center',
+                          'sticky top-0 z-20 bg-zinc-900 border-b border-border px-3 py-2.5 text-center transition-colors',
                           idx < dates.length - 1 && 'border-r',
-                          dateIsToday && 'bg-primary/5'
+                          holidayName ? 'bg-amber-500/10 border-amber-500/30' : dateIsToday && 'bg-primary/5'
                         )}
                       >
-                        <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", dateIsToday ? "text-primary" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
-                        <div className={cn("text-sm font-mono tabular-nums mt-0.5", dateIsToday ? "text-primary font-bold" : "text-muted-foreground/50 font-medium")}>
+                        <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", holidayName ? "text-amber-400 font-extrabold" : dateIsToday ? "text-primary" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
+                        <div className={cn("text-sm font-mono tabular-nums mt-0.5", holidayName ? "text-amber-300 font-bold" : dateIsToday ? "text-primary font-bold" : "text-muted-foreground/50 font-medium")}>
                           {format(date, 'MMM d')}
                         </div>
+                        {holidayName && (
+                          <div className="mt-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[9px] font-black uppercase tracking-wider truncate max-w-full shadow-sm" title={`ANZ Public Holiday: ${holidayName}`}>
+                            {holidayName}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

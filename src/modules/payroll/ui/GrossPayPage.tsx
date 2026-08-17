@@ -14,7 +14,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { Wallet } from 'lucide-react';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import type { PeriodBounds } from '../domain/aggregatePeriodGrossPay';
@@ -37,8 +38,8 @@ export interface GrossPayPageProps {
 function currentWeekBounds(): PeriodBounds {
   const now = new Date();
   return {
-    periodStart: format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
-    periodEnd: format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    periodStart: format(startOfWeekAU(now), 'yyyy-MM-dd'),
+    periodEnd: format(endOfWeekAU(now), 'yyyy-MM-dd'),
   };
 }
 

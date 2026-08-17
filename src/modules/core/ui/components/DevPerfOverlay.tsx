@@ -1,8 +1,9 @@
 /**
  * DevPerfOverlay — Mission Control observability panel
  *
- * Only mounted when import.meta.env.DEV is true. Production builds
- * tree-shake this entire component.
+ * Only mounted when import.meta.env.MODE is 'development'. Shipped builds
+ * tree-shake this entire component. See DevPerfOverlayGate for why the check
+ * is on MODE and not DEV.
  *
  * Design direction: NASA Mission Control telemetry feed
  *   - Monospaced font throughout (reading numbers, not prose)
@@ -199,7 +200,7 @@ export function DevPerfOverlay() {
                 <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#2dd4bf', letterSpacing: '0.1em' }}>
                     PERF
                 </span>
-                <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748b' }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#94a3b8' }}>
                     {total}q · {avgMs || '—'}ms
                 </span>
             </button>
@@ -330,10 +331,17 @@ export function DevPerfOverlay() {
 }
 
 /**
- * Drop-in gate: renders nothing in production, renders the overlay in dev.
+ * Drop-in gate: renders nothing in a shipped build, renders the overlay in dev.
  * Import this instead of DevPerfOverlay directly to avoid any production cost.
+ *
+ * Gated on MODE rather than DEV. Vite derives `import.meta.env.DEV` from
+ * `mode !== 'production'`, and the Android bundle is built with
+ * `vite build --mode android` — so DEV was true there and this panel shipped
+ * inside the APK. It sits at z-index 9999, fixed to the bottom-right, which is
+ * where dialogs put their confirm button: it covered "Create Period" and, being
+ * a <button> itself, swallowed the tap.
  */
 export function DevPerfOverlayGate() {
-    if (!import.meta.env.DEV) return null;
+    if (import.meta.env.MODE !== 'development') return null;
     return <DevPerfOverlay />;
 }

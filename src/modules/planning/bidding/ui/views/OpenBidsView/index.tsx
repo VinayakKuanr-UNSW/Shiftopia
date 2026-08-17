@@ -1,9 +1,11 @@
 // src/modules/planning/bidding/ui/views/OpenBidsView/index.tsx
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, addDays, subDays } from 'date-fns';
-import { formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { formatCalendarDate, formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
@@ -11,13 +13,17 @@ import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
-import { Drawer, DrawerContent } from '@/modules/core/ui/primitives/drawer';
+import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from '@/modules/core/ui/primitives/drawer';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/modules/core/ui/primitives/dialog';
 import {
   Search, Flame, Clock, CheckCircle, CircleSlash, Loader2, Inbox,
   Users, Zap, ShieldCheck, ShieldAlert, Shield,
-  CircleCheck, CircleX, TriangleAlert, ChevronDown, ChevronRight, ChevronLeft,
-  Sparkles, UserCheck as LucideUserCheck, History,
+  CircleCheck, CircleX, XCircle, TriangleAlert, ChevronDown, ChevronRight, ChevronLeft,
+  Sparkles, UserCheck as LucideUserCheck, History, ArrowUpDown, ArrowUp, ArrowDown, BarChart2,
+  Layers,
 } from 'lucide-react';
+import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
+import { groupOpenBids } from './open-bids-grouping';
 import {
   Tooltip,
   TooltipContent,
@@ -47,13 +53,18 @@ import { calculateTimeRemaining, formatTimeRemaining } from './utils';
 import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts } from './types';
 import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
-import { AutoPilotDecisionChip, type AutoPilotDecision } from '@/modules/core/autopilot';
-import { createBidAutoPilotAdapter, BID_AUTOPILOT_COPY } from '../../../api/bidAutoPilot.api';
+
+import { ShiftCard } from './ShiftCard';
+import { BidsBentoStats } from './BidsBentoStats';
 import { useTimeTicker } from './useTimeTicker';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { classifyBuckets, getBucketSummary } from '@/modules/compliance/ui/bucket-map';
 import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modules/compliance/ui/useCompliancePanel';
+import { calculateFatigueWithRecovery, getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
+import { projectFairnessImpact, classifyShift, aggregateShiftsToEntries, type EmployeeLedgerEntry, type FairnessMetric } from '@/modules/rosters/domain/fairness-ledger';
+import { fairnessLedgerQueries } from '@/modules/rosters/api/fairnessLedger.queries';
+import { BidLedgerImpact, type BidLedgerImpactData } from './BidLedgerImpact';
 
 // =============================================================================
 // GROUP COLOR SYSTEM — venue-inherited theming
@@ -155,11 +166,12 @@ function useBidsCompliancePanel(
   selectedBid: EmployeeBid | null,
   expandedShift: ReturnType<typeof useManagerBidShifts>['shifts'][number] | null,
   toastFn: ReturnType<typeof useToast>['toast'],
-): UseCompliancePanelReturn {
+): UseCompliancePanelReturn & { ledgerImpact: BidLedgerImpactData | null } {
   const [status, setStatus]   = useState<PanelStatus>('idle');
   const [result, setResult]   = useState<PanelResult | null>(null);
   const [error,  setError]    = useState<string | null>(null);
   const [warningsAcknowledged, setWarningsAcknowledged] = useState(false);
+  const [ledgerImpact, setLedgerImpact] = useState<BidLedgerImpactData | null>(null);
   const runningRef = useRef(false);
 
   // Reset when selection changes
@@ -168,6 +180,7 @@ function useBidsCompliancePanel(
     setResult(null);
     setError(null);
     setWarningsAcknowledged(false);
+    setLedgerImpact(null);
   }, [selectedBid?.id, expandedShift?.id]);
 
   const run = useCallback(async () => {
@@ -335,6 +348,77 @@ function useBidsCompliancePanel(
       const buckets = classifyBuckets(allHits);
       const summary  = getBucketSummary(buckets);
 
+      // ── Ledger impact (fairness + fatigue what-if) — best-effort, never blocks compliance ──
+      let ledger: BidLedgerImpactData | null = null;
+      try {
+        const candidate = {
+          start_time: expandedShift.startTime,
+          end_time: expandedShift.endTime,
+          unpaid_break_minutes: expandedShift.unpaidBreak || 0,
+        };
+        // Fatigue — reuse the bidder shifts already fetched above (7-day window applied inside).
+        const fatigueShifts = (existingRaw || [])
+          .filter((s: any) => s.id !== expandedShift.id)
+          .map((s: any) => ({
+            shift_date:           s.shift_date,
+            start_time:           s.start_time,
+            end_time:             s.end_time,
+            unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+          }));
+        const fat = calculateFatigueWithRecovery(fatigueShifts, expandedShift.date, candidate);
+        const fatigue = { current: fat.current, projected: fat.projected, band: getFatigueBand(fat.projected) };
+
+        // Fairness — current team entries: persisted ledger first, else recompute from assigned shifts.
+        const orgId = expandedShift.organizationId;
+        let entries: EmployeeLedgerEntry[] = [];
+        if (orgId) {
+          // Latest window at or before today, NOT an exact `window_end = today`
+          // match (audit F-04) — the exact match found nothing on any day
+          // without a recompute, silently pushing this preview onto the
+          // department-scoped fallback below, whose team average disagrees with
+          // the org-scoped ledger the solver actually uses (audit F-14).
+          const rows = await fairnessLedgerQueries.getLatestDebts(orgId, null, format(new Date(), 'yyyy-MM-dd'));
+          if (rows.length > 0) {
+            const byEmp = new Map<string, Record<FairnessMetric, number>>();
+            for (const r of rows) {
+              const v = byEmp.get(r.employee_id) ?? { saturday_shifts: 0, sunday_shifts: 0, night_shifts: 0, public_holiday_shifts: 0, overtime_minutes: 0, total_hours: 0, denial_rate: 0 };
+              (v as Record<FairnessMetric, number>)[r.metric] = r.rolling_value;
+              byEmp.set(r.employee_id, v);
+            }
+            entries = [...byEmp].map(([employeeId, values]) => ({ employeeId, values }));
+          } else {
+            // ORG-WIDE, deliberately (audit F-14). This fallback used to pass
+            // `expandedShift.departmentId`, so when the ledger was empty the
+            // preview silently switched to a department-scoped team average
+            // while the solver kept using the org-wide one — the same employee
+            // showed a different debt depending on whether a recompute had run,
+            // with nothing on screen saying which basis was in play.
+            const raw = await fairnessLedgerQueries.fetchAssignedShifts(
+              orgId,
+              format(subDays(new Date(), 90), 'yyyy-MM-dd'),
+              format(new Date(), 'yyyy-MM-dd'),
+              undefined,
+            );
+            const classified = raw.map(s => ({
+              id: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time,
+              employeeId: s.assigned_employee_id, unpaidBreakMinutes: s.unpaid_break_minutes,
+              flags: classifyShift(s.shift_date, s.start_time, s.end_time),
+            }));
+            entries = aggregateShiftsToEntries(classified);
+          }
+        }
+        const fairness = entries.length > 0
+          ? projectFairnessImpact(entries, selectedBid.employeeId, {
+              shiftDate: expandedShift.date, startTime: expandedShift.startTime,
+              endTime: expandedShift.endTime, unpaidBreakMinutes: expandedShift.unpaidBreak || 0,
+            })
+          : null;
+        ledger = { fatigue, fairness };
+      } catch (impactErr) {
+        console.warn('[useBidsCompliancePanel] ledger impact failed', impactErr);
+      }
+      setLedgerImpact(ledger);
+
       setResult({
         buckets,
         summary,
@@ -364,10 +448,11 @@ function useBidsCompliancePanel(
     error,
     warningsAcknowledged,
     canProceed,
+    ledgerImpact,
     run,
     acknowledgeWarnings: setWarningsAcknowledged,
     markStale: () => setStatus(prev => prev === 'results' ? 'stale' : prev),
-    reset: () => { setStatus('idle'); setResult(null); setError(null); setWarningsAcknowledged(false); },
+    reset: () => { setStatus('idle'); setResult(null); setError(null); setWarningsAcknowledged(false); setLedgerImpact(null); },
   };
 }
 
@@ -387,6 +472,22 @@ interface BidderRowProps {
 const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner, groupVariant, onSelect }) => {
   const theme = GROUP_THEME[groupVariant];
 
+  const formattedTime = useMemo(() => {
+    if (!bid.submittedAt) return '';
+    try {
+      const d = new Date(bid.submittedAt);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }, [bid.submittedAt]);
+
+  const sssColorCls = bid.sss >= 85
+    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+    : bid.sss >= 70
+    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+    : 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+
   return (
     <motion.button
       initial={{ opacity: 0, x: -8 }}
@@ -394,7 +495,7 @@ const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner,
       transition={{ duration: 0.2, delay: index * 0.04, ease: [0.23, 1, 0.32, 1] }}
       onClick={onSelect}
       className={cn(
-        'w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl transition-colors text-left group/bid relative overflow-hidden',
+        'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl transition-colors text-left group/bid relative overflow-hidden',
         isSelected
           ? `bg-white/[0.06] ring-1 ${theme.ring}`
           : 'hover:bg-white/[0.03]',
@@ -427,18 +528,77 @@ const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner,
       {/* Name + meta */}
       <div className="flex-1 min-w-0">
         <span className={cn(
-          'text-[12px] font-semibold leading-none block truncate transition-colors',
-          isSelected ? 'text-white' : 'text-white/55'
+          'text-[11px] font-semibold leading-tight block truncate transition-colors',
+          isSelected ? 'text-white' : 'text-white/70'
         )}>
           {bid.employeeName}
         </span>
-        <div className="flex items-center gap-1.5 mt-1">
-          <span className="text-[9px] font-mono text-white/20 uppercase tracking-wider">{bid.employmentType}</span>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[9px] font-mono text-white/30 uppercase tracking-wider">{bid.employmentType}</span>
+          {formattedTime && (
+            <>
+              <span className="text-white/10 text-[8px]">•</span>
+              <span className="text-[8px] font-mono text-white/30">{formattedTime}</span>
+            </>
+          )}
           {bid.fatigueRisk === 'high' && (
             <span className="text-[8px] font-black text-rose-500/70 bg-rose-500/10 px-1 rounded leading-none py-0.5">FATIGUE</span>
           )}
         </div>
       </div>
+
+      {/* SSS Score Badge with breakdown Tooltip */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={cn(
+            'px-1.5 py-0.5 rounded-md border text-[9px] font-mono font-bold shrink-0 flex items-center gap-1 transition-all hover:scale-105',
+            sssColorCls
+          )}>
+            <span className="opacity-70 text-[8px]">SSS</span>
+            <span className="font-extrabold">{bid.sss}</span>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="bg-slate-900 border-slate-700 p-2.5 max-w-[200px] text-xs text-slate-200 shadow-xl">
+          <div className="font-semibold border-b border-slate-700/60 pb-1 mb-1.5 flex justify-between items-center text-[10px] text-slate-300 uppercase tracking-wider">
+            <span>Shift Suitability</span>
+            <span className="font-mono text-cyan-400 font-bold">{bid.sss}/100</span>
+          </div>
+          {bid.sssBreakdown ? (
+            <div className="space-y-1 text-[9px]">
+              <div className="flex justify-between text-slate-300">
+                <span>Reliability:</span>
+                <span className="font-mono font-bold">{bid.sssBreakdown.reliability}%</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>Attendance:</span>
+                <span className="font-mono font-bold">{bid.sssBreakdown.attendance}%</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>Acceptance:</span>
+                <span className="font-mono font-bold">{bid.sssBreakdown.acceptance}%</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span>Skill Match:</span>
+                <span className="font-mono font-bold">{bid.sssBreakdown.skillMatch}%</span>
+              </div>
+              {bid.sssBreakdown.penalty < 100 && (
+                <div className="flex justify-between text-rose-400">
+                  <span>No-show / cancel:</span>
+                  <span className="font-mono font-bold">-{100 - bid.sssBreakdown.penalty}%</span>
+                </div>
+              )}
+              {bid.sssFlag === 'INSUFFICIENT_DATA' && (
+                <div className="pt-1 mt-1 border-t border-slate-700/60 text-amber-400/90 text-[8px]">New bidder — ranked on skill match only.</div>
+              )}
+              {bid.sssFlag === 'LIMITED' && (
+                <div className="pt-1 mt-1 border-t border-slate-700/60 text-amber-400/80 text-[8px]">Limited history — score may be provisional.</div>
+              )}
+            </div>
+          ) : (
+            <div className="text-[9px] text-slate-400">Suitability score derived from performance metrics & skill match.</div>
+          )}
+        </TooltipContent>
+      </Tooltip>
 
       {/* Right badge */}
       {isWinner ? (
@@ -447,7 +607,7 @@ const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner,
         <motion.div
           animate={{ scale: [1, 1.4, 1] }}
           transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-          className={cn('h-1.5 w-1.5 rounded-full', theme.dot)}
+          className={cn('h-1.5 w-1.5 rounded-full shrink-0', theme.dot)}
         />
       ) : null}
     </motion.button>
@@ -462,11 +622,13 @@ interface RoleCardProps {
   shift: ManagerBidShift;
   isSelected: boolean;
   onSelect: () => void;
-  autoDecision?: AutoPilotDecision;
+
 }
 
+
+
 const RoleCard: React.FC<RoleCardProps> = ({
-  shift, isSelected, onSelect, autoDecision,
+  shift, isSelected, onSelect,
 }) => {
   const groupVariant = getGroupVariant(shift.groupType, shift.department);
   const theme = GROUP_THEME[groupVariant];
@@ -474,6 +636,8 @@ const RoleCard: React.FC<RoleCardProps> = ({
   const isExpired = shift.toggle === 'expired';
 
   useTimeTicker(1000);
+
+
 
   const netLength = (() => {
     const toMin = (t: string) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + (m || 0); };
@@ -546,9 +710,6 @@ const RoleCard: React.FC<RoleCardProps> = ({
 
       {/* Right side: Bids & Status */}
       <div className="flex items-center gap-2 shrink-0">
-        {autoDecision && (
-          <AutoPilotDecisionChip decision={autoDecision} copy={BID_AUTOPILOT_COPY} />
-        )}
         <div className={cn(
           "flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums transition-all",
           isSelected
@@ -596,6 +757,47 @@ const PaneHeader: React.FC<{ title: string; subtitle?: string; icon?: React.Reac
   </div>
 );
 
+const BiddersSortBar: React.FC<{
+  sortField: 'timestamp' | 'sss';
+  sortDirection: 'asc' | 'desc';
+  onSortChange: (field: 'timestamp' | 'sss') => void;
+}> = ({ sortField, sortDirection, onSortChange }) => (
+  <div className="px-3 py-2 bg-muted/15 border-b border-border/40 flex items-center justify-between text-[10px] shrink-0 backdrop-blur-sm">
+    <span className="text-muted-foreground/50 font-bold uppercase tracking-wider text-[9px]">Sort Bidders:</span>
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onSortChange('sss')}
+        className={cn(
+          'px-2 py-1 rounded-md font-bold text-[9px] flex items-center gap-1 transition-all',
+          sortField === 'sss'
+            ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
+            : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/30 border border-transparent'
+        )}
+      >
+        <span>SSS Score</span>
+        {sortField === 'sss' && (
+          sortDirection === 'desc' ? <ArrowDown className="h-2.5 w-2.5" /> : <ArrowUp className="h-2.5 w-2.5" />
+        )}
+      </button>
+      <button
+        onClick={() => onSortChange('timestamp')}
+        className={cn(
+          'px-2 py-1 rounded-md font-bold text-[9px] flex items-center gap-1 transition-all',
+          sortField === 'timestamp'
+            ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
+            : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/30 border border-transparent'
+        )}
+      >
+        <span>Timestamp</span>
+        {sortField === 'timestamp' && (
+          sortDirection === 'desc' ? <ArrowDown className="h-2.5 w-2.5" /> : <ArrowUp className="h-2.5 w-2.5" />
+        )}
+      </button>
+    </div>
+  </div>
+);
+
+
 // Toggle Chip Helper
 
 interface ToggleChipProps {
@@ -638,6 +840,7 @@ interface OpenBidsViewProps {
   subDepartmentId?: string | null;
   externalSearchQuery?: string;
   viewMode?: 'card' | 'table';
+  groupBy?: RowGroupBy;
   /**
    * Controlled filter state. When provided, parent owns the toggle and the
    * view's internal toolbar is hidden — parent must render the filter UI
@@ -659,6 +862,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   subDepartmentId,
   externalSearchQuery,
   viewMode,
+  groupBy = 'none',
   activeToggle: controlledToggle,
   onToggleChange,
   onCountsChange,
@@ -689,6 +893,21 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   const [selectedBid, setSelectedBid] = useState<EmployeeBid | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+  const cancelAutoAssignRef = useRef<boolean>(false);
+  const [autoAssignProgress, setAutoAssignProgress] = useState<{
+    total: number;
+    current: number;
+    currentRoleName?: string;
+    assigned: number;
+    skipped: number;
+    failed: number;
+    isCancelling: boolean;
+  } | null>(null);
+
+  const handleCancelAutoAssign = useCallback(() => {
+    cancelAutoAssignRef.current = true;
+    setAutoAssignProgress(prev => prev ? { ...prev, isCancelling: true } : null);
+  }, []);
 
   // ── Mobile State ───────────────────────────────────────────────────────────
   const [mobileStep, setMobileStep] = useState<'roles' | 'bidders'>('roles');
@@ -705,6 +924,33 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
   const { bids, isLoading: isLoadingBids } = useShiftBids(expandedV8ShiftId);
 
+  // ── Bid Sorting State & Derived ───────────────────────────────────────────
+  const [bidSortField, setBidSortField] = useState<'timestamp' | 'sss'>('sss');
+  const [bidSortDirection, setBidSortDirection] = useState<'desc' | 'asc'>('desc');
+
+  const handleBidSortChange = useCallback((field: 'timestamp' | 'sss') => {
+    if (bidSortField === field) {
+      setBidSortDirection(d => (d === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setBidSortField(field);
+      setBidSortDirection('desc');
+    }
+  }, [bidSortField]);
+
+  const sortedBids = useMemo(() => {
+    return [...bids].sort((a, b) => {
+      if (bidSortField === 'sss') {
+        const diff = (b.sss ?? 0) - (a.sss ?? 0);
+        return bidSortDirection === 'desc' ? diff : -diff;
+      } else {
+        const timeA = new Date(a.submittedAt).getTime();
+        const timeB = new Date(b.submittedAt).getTime();
+        const diff = timeB - timeA;
+        return bidSortDirection === 'desc' ? diff : -diff;
+      }
+    });
+  }, [bids, bidSortField, bidSortDirection]);
+
   // ── Derived ────────────────────────────────────────────────────────────────
   const expandedShift = useMemo(
     () => shifts.find(s => s.id === expandedV8ShiftId) ?? null,
@@ -718,8 +964,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     expired:  shifts.filter(s => s.toggle === 'expired').length,
   }), [shifts]);
 
-  // ── AutoPilot bot decisions static empty fallback reference ─────────────────
-  const EMPTY_DECISIONS_MAP = useMemo(() => new Map<string, AutoPilotDecision>(), []);
+
 
   // Report counts up to controlling parent (GoldStandardHeader filter chips).
   const countsKey = `${counts.standard}-${counts.urgent}-${counts.resolved}-${counts.expired}`;
@@ -742,6 +987,11 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     return result;
   }, [shifts, activeToggle, activeSearchQuery]);
 
+  const groupedShifts = useMemo(
+    () => groupOpenBids(filteredShifts, groupBy),
+    [filteredShifts, groupBy],
+  );
+
   // If the expanded shift is no longer visible under the active toggle/search
   // (toggle switched, search narrowed, or it moved to "Resolved" after being
   // assigned), clear the expansion + candidate selection so the Bidders /
@@ -754,28 +1004,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     }
   }, [filteredShifts, expandedV8ShiftId]);
 
-  // ── AutoPilot bot decisions, keyed by shift id — per-row RoleCard chip. ──
-  const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(EMPTY_DECISIONS_MAP);
-  const bidAutoPilotAdapter = useMemo(
-    () => (organizationId ? createBidAutoPilotAdapter({ organizationId }) : null),
-    [organizationId],
-  );
-  useEffect(() => {
-    if (!bidAutoPilotAdapter?.getDecisionsForEntities || filteredShifts.length === 0) {
-      setAutoDecisions(EMPTY_DECISIONS_MAP);
-      return;
-    }
-    let cancelled = false;
-    bidAutoPilotAdapter
-      .getDecisionsForEntities(filteredShifts.map(s => s.id))
-      .then(m => {
-        if (!cancelled) setAutoDecisions(m.size === 0 ? EMPTY_DECISIONS_MAP : m);
-      })
-      .catch(() => {
-        if (!cancelled) setAutoDecisions(EMPTY_DECISIONS_MAP);
-      });
-    return () => { cancelled = true; };
-  }, [bidAutoPilotAdapter, filteredShifts, EMPTY_DECISIONS_MAP]);
+
 
   // ── Compliance Panel ───────────────────────────────────────────────────────
   const bidsPanel = useBidsCompliancePanel(selectedBid, expandedShift, toast);
@@ -854,8 +1083,20 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       return;
     }
 
+    cancelAutoAssignRef.current = false;
     setIsAutoAssigning(true);
+    setAutoAssignProgress({
+      total: urgentShifts.length,
+      current: 0,
+      currentRoleName: urgentShifts[0]?.role || 'Open Shift',
+      assigned: 0,
+      skipped: 0,
+      failed: 0,
+      isCancelling: false,
+    });
+
     let assigned = 0, skipped = 0, failed = 0;
+    let wasCancelled = false;
     // Per-reason breakdown for shifts the hardened RPC rejected (returns a row,
     // not a thrown error): SHIFT_TIME_LOCKED / WINNER_NOT_PENDING / ILLEGAL_STATE /
     // SHIFT_GONE / … . These are skipped-with-reason, NOT generic failures.
@@ -906,7 +1147,22 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       return entry;
     };
 
-    for (const shift of urgentShifts) {
+    for (let i = 0; i < urgentShifts.length; i++) {
+      if (cancelAutoAssignRef.current) {
+        wasCancelled = true;
+        break;
+      }
+      const shift = urgentShifts[i];
+      setAutoAssignProgress({
+        total: urgentShifts.length,
+        current: i + 1,
+        currentRoleName: shift.role || 'Open Shift',
+        assigned,
+        skipped,
+        failed,
+        isCancelling: cancelAutoAssignRef.current,
+      });
+
       try {
         // Fetch ALL pending bids in FIFO order; try each until one passes compliance
         const { data: allBids } = await supabase
@@ -930,9 +1186,13 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               organizationId,
               allBids.map(b => b.employee_id),
             );
+            // Highest denial RATE first — the share of their own bids this
+            // employee loses, relative to the org. Was a raw denial count,
+            // which ranked whoever bid most rather than whoever loses most
+            // (stakeholder decision Q5).
             const owed = new Map<string, number>();
             for (const d of debts) {
-              if (d.metric === 'denied_preferences') owed.set(d.employeeId, d.debt);
+              if (d.metric === 'denial_rate') owed.set(d.employeeId, d.debt);
             }
             if (owed.size > 0) {
               orderedBids = [...allBids].sort(
@@ -961,6 +1221,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
         const candidateQuals = await getShiftQuals(shift.id, shift.roleId || '');
 
         for (const bid of orderedBids) {
+          if (cancelAutoAssignRef.current) {
+            wasCancelled = true;
+            break;
+          }
           const { data: existingRaw } = await supabase
             .from('shifts')
             .select('id, start_time, end_time, shift_date, unpaid_break_minutes, role_id, required_skills, required_licenses')
@@ -1062,6 +1326,11 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
           }
         }
 
+        if (cancelAutoAssignRef.current) {
+          wasCancelled = true;
+          break;
+        }
+
         if (!winnerBid) { skipped++; continue; }
 
         // Assign the compliance-clear winner.
@@ -1092,7 +1361,17 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     }
 
     setIsAutoAssigning(false);
+    setAutoAssignProgress(null);
     queryClient.invalidateQueries({ queryKey: shiftKeys.managerBidShiftsRoot });
+
+    if (wasCancelled) {
+      toast({
+        title:       'Auto-Assign Cancelled Midway',
+        description: `${assigned} assigned · ${skipped} skipped · ${failed} failed before cancellation.`,
+      });
+      return;
+    }
+
     // Human-readable breakdown of guarded RPC rejections, appended to the toast.
     const REJECTION_LABELS: Record<string, string> = {
       SHIFT_TIME_LOCKED:  'time-locked',
@@ -1197,6 +1476,15 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
         )
       )}
 
+      {/* ── BENTO STATISTICS CARDS BAR ── */}
+      <BidsBentoStats
+        shifts={shifts}
+        activeToggle={activeToggle}
+        onToggleChange={setActiveToggle}
+        onRunBatch={handleAutoAssign}
+        isBatchRunning={isAutoAssigning}
+      />
+
       {/* ─── MOBILE LAYOUT ────────────────────────────────────────────── */}
       {isMobile ? (
         <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -1227,15 +1515,31 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           <p className="text-[10px] uppercase tracking-widest font-semibold">No roles</p>
                         </motion.div>
                       ) : (
-                        <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
-                          {filteredShifts.map((s) => (
-                            <RoleCard
-                              key={s.id}
-                              shift={s}
-                              isSelected={expandedV8ShiftId === s.id}
-                              onSelect={() => handleExpand(s.id)}
-                              autoDecision={autoDecisions.get(s.id)}
-                            />
+                        <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                          {groupedShifts.map((group) => (
+                            <div key={group.key} className="space-y-2">
+                              {groupBy !== 'none' && group.label && (
+                                <div className="sticky top-0 z-10 px-2.5 py-1.5 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-muted-foreground/80 rounded-xl shadow-sm">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <Layers className="h-3 w-3 text-primary/70 shrink-0" />
+                                    <span className="truncate">{group.label}</span>
+                                  </div>
+                                  <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[9px] font-extrabold">
+                                    {group.items.length}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="space-y-2">
+                                {group.items.map((s) => (
+                                  <RoleCard
+                                    key={s.id}
+                                    shift={s}
+                                    isSelected={expandedV8ShiftId === s.id}
+                                    onSelect={() => handleExpand(s.id)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
                           ))}
                         </motion.div>
                       )}
@@ -1268,6 +1572,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   {expandedShift?.role ?? 'Roles'}
                 </button>
 
+                {bids.length > 0 && (
+                  <BiddersSortBar
+                    sortField={bidSortField}
+                    sortDirection={bidSortDirection}
+                    onSortChange={handleBidSortChange}
+                  />
+                )}
+
                 <ScrollArea className="flex-1">
                   <div className="p-4 space-y-1">
                     <AnimatePresence mode="wait">
@@ -1275,14 +1587,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex justify-center text-muted-foreground/20">
                           <Loader2 className="h-5 w-5 animate-spin" />
                         </motion.div>
-                      ) : bids.length === 0 ? (
+                      ) : sortedBids.length === 0 ? (
                         <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
                           <Users className="h-5 w-5" />
                           <p className="text-[10px] uppercase tracking-widest font-semibold">No bids yet</p>
                         </motion.div>
                       ) : (
                         <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
-                          {bids.map((bid, i) => (
+                          {sortedBids.map((bid, i) => (
                             <BidderRow
                               key={bid.id}
                               bid={bid}
@@ -1318,7 +1630,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               }
             }}
           >
-            <DrawerContent className="h-[85dvh] flex flex-col">
+            <DrawerContent className="h-[85dvh] flex flex-col" aria-describedby={undefined}>
+              <DrawerTitle className="sr-only">Bid Review</DrawerTitle>
               <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Drawer header */}
                 <div className="shrink-0 px-5 pt-2 pb-4 border-b border-border/40">
@@ -1384,6 +1697,9 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                                 </div>
                               </div>
                             )}
+                            {bidsPanel.ledgerImpact && (
+                              <BidLedgerImpact impact={bidsPanel.ledgerImpact} />
+                            )}
                           </div>
                         )}
 
@@ -1438,9 +1754,298 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
           </Drawer>
 
         </div>
-      ) : (
+      ) : viewMode === 'card' ? (
 
-      /* ─── 4-PANE SYSTEM (desktop only) ───────────────────────────── */
+      /* ─── MY BIDS CARD-BASED STRATEGY GRID (desktop default) ──────────── */
+      <div className="flex-1 flex flex-col overflow-hidden bg-background">
+        <ScrollArea className="flex-1">
+          <div className="p-4 lg:p-6 space-y-6">
+            <AnimatePresence mode="wait">
+              {isLoading ? (
+                <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground/30">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="text-xs font-black uppercase tracking-widest">Loading shifts…</span>
+                </motion.div>
+              ) : filteredShifts.length === 0 ? (
+                <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground/30">
+                  <Inbox className="h-8 w-8" />
+                  <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
+                  <p className="text-xs text-muted-foreground/40 font-mono">Try adjusting your date range or filters.</p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={`card-grid-${groupBy}-${activeToggle}`}
+                  className="space-y-6"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  {groupedShifts.map((group) => (
+                    <div key={group.key} className="space-y-3">
+                      {groupBy !== 'none' && group.label && (
+                        <div className="sticky top-0 z-10 px-3 py-2 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-xs font-black uppercase tracking-wider text-muted-foreground/80 rounded-2xl shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <Layers className="h-4 w-4 text-primary/70 shrink-0" />
+                            <span>{group.label}</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-xs font-extrabold">
+                            {group.items.length} {group.items.length === 1 ? 'shift' : 'shifts'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                        {group.items.map((s) => (
+                          <ShiftCard
+                            key={s.id}
+                            shift={s}
+                            isSelected={expandedV8ShiftId === s.id}
+                            onClick={() => handleExpand(s.id)}
+                            timeRemaining={calculateTimeRemaining(s.biddingDeadline)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </ScrollArea>
+
+        {/* ── Desktop Bid Review Central Modal (Card Mode) ── */}
+        <Dialog
+          open={!!expandedV8ShiftId && viewMode === 'card'}
+          onOpenChange={(open) => {
+            if (!open) {
+              setExpandedV8ShiftId(null);
+              setSelectedBid(null);
+            }
+          }}
+        >
+          <DialogContent aria-describedby={undefined} className="sm:max-w-5xl w-[92vw] h-[85vh] max-h-[800px] p-0 gap-0 border border-border/60 bg-card/95 backdrop-blur-2xl rounded-[32px] overflow-hidden shadow-2xl flex flex-col">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Shift Bid Review</DialogTitle>
+              <DialogDescription>Review candidate bidders and compliance intelligence for this open shift.</DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="shrink-0 px-6 py-4 border-b border-border/40 bg-card/40 backdrop-blur-md flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Shift Bid Review</p>
+                  <p className="text-base font-black text-foreground mt-0.5">
+                    {expandedShift?.role ?? 'Role Bid Review'}
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 font-mono mt-0.5">
+                    {expandedShift ? `${expandedShift.department} · ${expandedShift.dayLabel} (${expandedShift.startTime}–${expandedShift.endTime})` : ''}
+                  </p>
+                </div>
+                {expandedShift && (
+                  <div className="flex items-center gap-3 mr-6">
+                    <Badge variant="outline" className="font-mono text-xs font-bold px-3 py-1 bg-primary/10 text-primary border-primary/20">
+                      {bids.length} {bids.length === 1 ? 'Bid' : 'Bids'}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Body: Split View (Left: Bidders, Right: Intelligence & Actions) */}
+              <div className="flex-1 flex overflow-hidden divide-x divide-border/40">
+                {/* Left: Bidders Column */}
+                <div className="w-[320px] shrink-0 flex flex-col bg-card/10">
+                  <PaneHeader
+                    title="Bidders"
+                    subtitle={`${bids.length} candidates`}
+                    icon={<Users className="h-3.5 w-3.5" />}
+                    count={bids.length}
+                  />
+                  {bids.length > 0 && (
+                    <BiddersSortBar
+                      sortField={bidSortField}
+                      sortDirection={bidSortDirection}
+                      onSortChange={handleBidSortChange}
+                    />
+                  )}
+                  <ScrollArea className="flex-1 p-3">
+                    {isLoadingBids ? (
+                      <div className="py-20 flex justify-center text-muted-foreground/20">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      </div>
+                    ) : sortedBids.length === 0 ? (
+                      <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
+                        <Users className="h-5 w-5" />
+                        <p className="text-[10px] uppercase tracking-widest font-semibold">No bids placed</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {sortedBids.map((bid, i) => (
+                          <BidderRow
+                            key={bid.id}
+                            bid={bid}
+                            index={i}
+                            isSelected={selectedBid?.id === bid.id}
+                            isWinner={expandedShift ? (expandedShift.assignedEmployeeId === bid.employeeId || (!expandedShift.assignedEmployeeId && bid.isWinner)) : false}
+                            groupVariant={getGroupVariant(expandedShift?.groupType, expandedShift?.department)}
+                            onSelect={() => handleSelectBid(bid)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
+
+                {/* Right: Intelligence & Compliance */}
+                <div className="flex-1 flex flex-col bg-card/20 min-w-0">
+                  <PaneHeader
+                    title="Intelligence"
+                    subtitle="Compliance & assignment"
+                    icon={<Sparkles className="h-3.5 w-3.5" />}
+                    accentClass="text-violet-400/50"
+                  />
+                  <ScrollArea className="flex-1 p-5">
+                    {!selectedBid ? (
+                      <div className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground/20">
+                        <Zap className="h-6 w-6" />
+                        <p className="text-xs uppercase tracking-widest font-bold text-center">Select a candidate bidder<br/>to run compliance analysis</p>
+                      </div>
+                    ) : bidsPanel.status === 'idle' || bidsPanel.status === 'running' ? (
+                      <div className="space-y-4 pt-2">
+                        <div className="rounded-2xl border border-border/50 bg-muted/10 overflow-hidden">
+                          <div className="px-4 py-3 border-b border-border/40">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Selected Candidate</p>
+                          </div>
+                          <div className="p-4 space-y-3">
+                            {[
+                              ['Employee', selectedBid.employeeName],
+                              ['Role', expandedShift?.role ?? '—'],
+                              ['Shift Timings', expandedShift ? `${expandedShift.startTime} – ${expandedShift.endTime}` : '—'],
+                              ['Date', expandedShift?.dayLabel ?? '—'],
+                              ['Shift Suitability (SSS)', `${selectedBid.sss} pts`],
+                            ].map(([k, v]) => (
+                              <div key={k} className="flex justify-between items-baseline gap-2">
+                                <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider shrink-0">{k}</span>
+                                <span className="text-xs font-black text-foreground truncate text-right">{v}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : bidsPanel.status === 'error' ? (
+                      <div className="py-20 flex flex-col items-center gap-3 text-rose-500/50">
+                        <CircleX className="h-6 w-6" />
+                        <p className="text-xs uppercase tracking-widest font-bold text-center">Compliance Engine Error</p>
+                        <p className="text-xs font-mono text-center max-w-[240px] break-words">{bidsPanel.error}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/50 px-0.5">
+                          {(blockingIssues.length + warningIssues.length) > 0
+                            ? `${blockingIssues.length} blocker${blockingIssues.length !== 1 ? 's' : ''} · ${warningIssues.length} warning${warningIssues.length !== 1 ? 's' : ''}`
+                            : 'All compliance checks passed'}
+                        </p>
+
+                        {blockingIssues.map((hit, i) => (
+                          <div key={`b-${i}`} className="rounded-2xl border overflow-hidden border-rose-500/20 bg-rose-500/[0.04]">
+                            <div className="px-4 py-2.5 border-b border-white/[0.04] flex items-center gap-2">
+                              <CircleX className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                              <span className="text-xs font-bold text-rose-400">{hit.rule_name || hit.rule_id.replace(/_/g, ' ')}</span>
+                            </div>
+                            <div className="px-4 py-3">
+                              <p className="text-xs text-muted-foreground/60 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                              {(hit.details || (hit as any).resolution_hint) && (
+                                <p className="text-xs text-foreground/60 leading-relaxed mt-2 border-t border-white/[0.04] pt-2">
+                                  {hit.details || (hit as any).resolution_hint}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        {warningIssues.map((hit, i) => (
+                          <div key={`w-${i}`} className="rounded-2xl border overflow-hidden border-amber-500/20 bg-amber-500/[0.04]">
+                            <div className="px-4 py-2.5 border-b border-white/[0.04] flex items-center gap-2">
+                              <TriangleAlert className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                              <span className="text-xs font-bold text-amber-400">{hit.rule_name || hit.rule_id.replace(/_/g, ' ')}</span>
+                            </div>
+                            <div className="px-4 py-3">
+                              <p className="text-xs text-muted-foreground/60 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                              {(hit.details || (hit as any).resolution_hint) && (
+                                <p className="text-xs text-foreground/60 leading-relaxed mt-2 border-t border-white/[0.04] pt-2">
+                                  {hit.details || (hit as any).resolution_hint}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+
+                        {blockingIssues.length === 0 && warningIssues.length === 0 && (
+                          <div className="py-10 flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04]">
+                            <ShieldCheck className="h-8 w-8 text-emerald-400/60" />
+                            <div className="text-center">
+                              <p className="text-xs font-black uppercase tracking-wider text-emerald-400/80">All Clear</p>
+                              <p className="text-[10px] text-muted-foreground/40 mt-1 font-mono">
+                                {bidsPanel.result?.summary.passed ?? 0} compliance checks passed
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </ScrollArea>
+
+                  {/* Action Footer */}
+                  <div className="shrink-0 p-5 border-t border-border/40 bg-card/40 backdrop-blur-md">
+                    {!selectedBid ? (
+                      <div className="h-11 flex items-center justify-center rounded-xl border border-dashed border-border/40 bg-muted/10">
+                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/30">Select a candidate bidder</span>
+                      </div>
+                    ) : bidsPanel.status === 'idle' || bidsPanel.status === 'error' ? (
+                      <Button
+                        onClick={bidsPanel.run}
+                        className="w-full h-11 text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/10"
+                      >
+                        <ShieldCheck className="h-4 w-4 mr-2" />
+                        Run Compliance Check
+                      </Button>
+                    ) : bidsPanel.status === 'running' ? (
+                      <Button disabled className="w-full h-11 rounded-xl text-xs font-bold uppercase tracking-wider bg-muted/40">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Running compliance engine…
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleAssign}
+                        disabled={isAssigning || hardBlocked}
+                        className={cn(
+                          'w-full h-11 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all duration-300',
+                          hardBlocked
+                            ? 'bg-muted/50 text-muted-foreground/40 cursor-not-allowed shadow-none border border-border/40'
+                            : warningIssues.length > 0
+                            ? 'bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-amber-500/20'
+                            : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20',
+                        )}
+                      >
+                        {isAssigning ? (
+                          <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Assigning…</>
+                        ) : (
+                          <><LucideUserCheck className="h-4 w-4 mr-2" /></>
+                        )}
+                        {hardBlocked
+                          ? 'Blocked by Compliance'
+                          : warningIssues.length > 0
+                          ? 'Override & Assign Role'
+                          : 'Finalize Assignment'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    ) : (
+
+      /* ─── 4-PANE SYSTEM (desktop table/pane mode option) ───────────────────────────── */
       <div className="flex-1 flex overflow-hidden divide-x divide-border/40">
 
         {/* ── Pane 1: Open Roles ─────────────────────────────────────── */}
@@ -1465,15 +2070,31 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     <p className="text-[10px] uppercase tracking-widest font-semibold">No roles</p>
                   </motion.div>
                 ) : (
-                  <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
-                    {filteredShifts.map((s) => (
-                      <RoleCard
-                        key={s.id}
-                        shift={s}
-                        isSelected={expandedV8ShiftId === s.id}
-                        onSelect={() => handleExpand(s.id)}
-                        autoDecision={autoDecisions.get(s.id)}
-                      />
+                  <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
+                    {groupedShifts.map((group) => (
+                      <div key={group.key} className="space-y-2">
+                        {groupBy !== 'none' && group.label && (
+                          <div className="sticky top-0 z-10 px-2.5 py-1.5 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-muted-foreground/80 rounded-xl shadow-sm">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <Layers className="h-3 w-3 text-primary/70 shrink-0" />
+                              <span className="truncate">{group.label}</span>
+                            </div>
+                            <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[9px] font-extrabold">
+                              {group.items.length}
+                            </span>
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          {group.items.map((s) => (
+                            <RoleCard
+                              key={s.id}
+                              shift={s}
+                              isSelected={expandedV8ShiftId === s.id}
+                              onSelect={() => handleExpand(s.id)}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </motion.div>
                 )}
@@ -1490,6 +2111,13 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
             icon={<Users className="h-3.5 w-3.5" />}
             count={expandedShift ? bids.length : undefined}
           />
+          {expandedShift && bids.length > 0 && (
+            <BiddersSortBar
+              sortField={bidSortField}
+              sortDirection={bidSortDirection}
+              onSortChange={handleBidSortChange}
+            />
+          )}
           <ScrollArea className="flex-1">
             <div className="p-3 space-y-1">
               <AnimatePresence mode="wait">
@@ -1502,14 +2130,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex justify-center text-muted-foreground/20">
                     <Loader2 className="h-5 w-5 animate-spin" />
                   </motion.div>
-                ) : bids.length === 0 ? (
+                ) : sortedBids.length === 0 ? (
                   <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
                     <Users className="h-5 w-5" />
                     <p className="text-[10px] uppercase tracking-widest font-semibold">No bids yet</p>
                   </motion.div>
                 ) : (
                   <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
-                    {bids.map((bid, i) => (
+                    {sortedBids.map((bid, i) => (
                       <BidderRow
                         key={bid.id}
                         bid={bid}
@@ -1718,6 +2346,87 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       </div>
 
       )} {/* end isMobile ternary */}
+
+      {/* ── BATCH EXECUTION BACKDROP BLUR OVERLAY (PORTAL TO DOCUMENT BODY) ──────────────── */}
+      {typeof document !== 'undefined' && isAutoAssigning && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 backdrop-blur-2xl bg-background/85 transition-all duration-300 animate-in fade-in select-none">
+          <div className="w-full max-w-lg bg-card/95 border border-border/80 rounded-3xl shadow-2xl p-6 flex flex-col gap-6 backdrop-blur-3xl ring-1 ring-white/10">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border/50 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0 shadow-inner">
+                  <Zap className="h-6 w-6 animate-pulse text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-foreground">Running Batch Assignment</h3>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {autoAssignProgress?.isCancelling ? 'Stopping batch operations safely…' : 'Processing candidate bids sequentially…'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Current Shift Info & Progress Bar */}
+            <div className="space-y-2.5 bg-muted/30 p-4 rounded-2xl border border-border/40">
+              <div className="flex justify-between items-center text-xs font-mono">
+                <span className="font-semibold text-foreground/80 truncate max-w-[240px]">
+                  {autoAssignProgress?.currentRoleName || 'Evaluating shifts…'}
+                </span>
+                <span className="font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full text-[11px]">
+                  {autoAssignProgress?.current ?? 0} / {autoAssignProgress?.total ?? 1} ({Math.round(((autoAssignProgress?.current ?? 0) / Math.max(1, autoAssignProgress?.total ?? 1)) * 100)}%)
+                </span>
+              </div>
+              <div className="h-3 w-full bg-muted/80 rounded-full overflow-hidden p-0.5 border border-border/30">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 via-primary to-emerald-500 transition-all duration-300 rounded-full shadow-sm"
+                  style={{ width: `${((autoAssignProgress?.current ?? 0) / Math.max(1, autoAssignProgress?.total ?? 1)) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Counters Grid */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 text-center shadow-sm">
+                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">{autoAssignProgress?.assigned ?? 0}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">Assigned</div>
+              </div>
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-center shadow-sm">
+                <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">{autoAssignProgress?.skipped ?? 0}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-amber-600/80 dark:text-amber-400/80 mt-0.5">Skipped</div>
+              </div>
+              <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-3.5 text-center shadow-sm">
+                <div className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">{autoAssignProgress?.failed ?? 0}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-rose-600/80 dark:text-rose-400/80 mt-0.5">Failed</div>
+              </div>
+            </div>
+
+            {/* Cancel Button */}
+            <div className="pt-1 flex flex-col gap-2">
+              <Button
+                variant="destructive"
+                size="lg"
+                onClick={handleCancelAutoAssign}
+                disabled={autoAssignProgress?.isCancelling}
+                className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-[0.18em] shadow-xl shadow-rose-500/20 flex items-center justify-center gap-2 hover:bg-rose-600 active:scale-[0.98] transition-all"
+              >
+                {autoAssignProgress?.isCancelling ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Stopping Batch Operations…
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-4 w-4" /> Cancel Batch Midway
+                  </>
+                )}
+              </Button>
+              <p className="text-[10px] text-center text-muted-foreground/60 font-mono">
+                Cancelling will safely halt execution after the current shift finishes.
+              </p>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   </TooltipProvider>

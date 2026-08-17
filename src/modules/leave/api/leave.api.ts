@@ -15,6 +15,7 @@ import type {
   LeaveTypeCode,
 } from '../model/leave.types';
 import { LEAVE_POLICIES } from '../domain/leave-policy';
+import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
 
 // ── Balances ─────────────────────────────────────────────────────────────────
 
@@ -63,26 +64,30 @@ async function isCasualEmployee(employeeId: string): Promise<boolean> {
  * falling back to the general 152h/76h rates (audit H-9).
  */
 export async function isFullTimeSecurityEmployee(employeeId: string): Promise<boolean> {
-  const { data: contract, error: contractErr } = await (supabase as any)
-    .from('user_contracts')
-    .select('employment_status, role_id')
-    .eq('user_id', employeeId)
-    .eq('status', 'Active')
-    .not('role_id', 'is', null)
-    .maybeSingle();
-  if (contractErr || !contract?.role_id) return false;
+  // BUG THIS FIXES: the contract lookup used `.maybeSingle()`, which ERRORS
+  // (PGRST116) as soon as a second Active row exists — and 30 of 103 people in
+  // production hold more than one Active contract. Every one of them resolved
+  // to `false` and was shown the general 152h/76h accrual instead of Schedule
+  // 3's 210h/84h, with no error surfaced anywhere.
+  //
+  // Resolution now goes through the shared basis reader, so "which of this
+  // person's contracts counts" is answered the same way here as it is for the
+  // hours rules and the availability page.
+  const basis = await fetchContractBasis(employeeId);
+  if (basis.isError || basis.contractType !== 'FT' || basis.roleIds.length === 0) return false;
 
-  const employmentStatus = String(contract.employment_status ?? '').toLowerCase();
-  if (!employmentStatus.includes('full')) return false;
-
-  const { data: role, error: roleErr } = await (supabase as any)
+  const { data: roles, error: roleErr } = await (supabase as any)
     .from('roles')
     .select('name')
-    .eq('id', contract.role_id)
-    .maybeSingle();
-  if (roleErr || !role?.name) return false;
+    .in('id', basis.roleIds);
+  if (roleErr || !roles?.length) return false;
 
-  return String(role.name).toLowerCase().includes('security');
+  // Any Security role across their Active contracts qualifies — the DB's
+  // `accrue_leave_balances()` joins contract to role without deduplicating, so
+  // a person holding one Security and one non-Security contract accrues at the
+  // Schedule 3 rate there too.
+  return roles.some((r: { name?: string | null }) =>
+    String(r?.name ?? '').toLowerCase().includes('security'));
 }
 
 function mapBalanceRow(row: any): LeaveBalance {

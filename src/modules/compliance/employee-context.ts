@@ -83,7 +83,7 @@ export async function fetchV8EmployeeContext(
             .single(),
         supabase
             .from('user_contracts')
-            .select('organization_id, department_id, sub_department_id, role_id, contracted_weekly_hours')
+            .select('organization_id, department_id, sub_department_id, role_id, contracted_weekly_hours, employment_status')
             .eq('user_id', employeeId)
             .eq('status', 'Active'),
         supabase
@@ -161,6 +161,21 @@ export async function fetchV8EmployeeContext(
     // Derive assigned_role_ids from contracts for backward compat.
     const assigned_role_ids = [...new Set(contracts.map(c => c.role_id))];
 
+    // Raw per-contract employment statuses, for V8_EMPLOYMENT_TARGET.
+    //
+    // These are kept SEPARATE from `contract_type` below, which is unusable for
+    // target matching: it comes from the global `profiles.employment_type`
+    // rather than the per-sub-department contract, and the student-visa branch
+    // overwrites it with 'STUDENT_VISA', erasing FT/PT/Casual. Reading the
+    // contract rows directly keeps this layer agreeing with the assignment pool
+    // and with trg_shift_employment_target_2_enforce, which both read
+    // user_contracts.employment_status.
+    const employment_statuses = [...new Set(
+        rawContracts
+            .map((c: any) => c.employment_status as string | null)
+            .filter((s): s is string => !!s),
+    )];
+
     // audit H-5 — Schedule 3 §3: does this employee hold a Security role on
     // any of their Active contracts? (The FULL_TIME gate that actually
     // switches the hours structure lives in the V8 rule itself, not here —
@@ -220,6 +235,7 @@ export async function fetchV8EmployeeContext(
         qualifications,
         leave_days,
         is_security_role,
+        employment_statuses,
     };
 
     // Cache the result

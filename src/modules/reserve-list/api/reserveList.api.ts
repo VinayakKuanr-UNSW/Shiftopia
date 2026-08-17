@@ -13,7 +13,16 @@
  *   - check_shift_overlap RPC                     → cheap overlap pre-filter.
  *   - evaluateShiftAvailabilityFromSlots()         → declared-availability read.
  *   - validateCompliance() / evaluate-compliance   → the real, live V8 compliance
- *     engine (fatigue, EBA, visa, leave, overlap, qualifications) — the same
+ *     engine (EBA, visa, leave, overlap, qualifications) — the same
+ *
+ *     NOTE (audit F-25): this deliberately no longer claims a FATIGUE check.
+ *     The v8 engine has no fatigue rule — a repo-wide grep for `fatigue` under
+ *     `compliance/v8/` returns nothing. Fatigue lives only in the projections
+ *     layer (display) and the solver's SC-7 objective, neither of which this
+ *     path invokes. Whether emergency reserve-list fills — the highest
+ *     fatigue-risk assignments in the system — SHOULD carry a fatigue gate is
+ *     an open product question, not something the comments should imply is
+ *     already handled.
  *     call real shift assignment already makes.
  *   - sm_apply_shift_op ('assign' then 'publish')  → the existing version-CAS +
  *     row-locked + FSM-guarded + audited mutation gateway, hardened in
@@ -32,6 +41,7 @@ import { ApplyShiftOpResponseSchema, OverlapCheckSchema } from '@/modules/roster
 import { EligibilityService } from '@/modules/rosters/services/eligibility.service';
 import { validateCompliance } from '@/modules/rosters/services/compliance.service';
 import {
+  availabilityModeForEmploymentStatus,
   evaluateShiftAvailabilityFromSlots,
   type DeclaredSlot,
 } from '@/modules/rosters/domain/availability-check';
@@ -57,7 +67,7 @@ function isEmploymentEligible(p: ReserveListProfileRow, shiftDate: string): bool
  * Run a fresh Reserve List candidate search for a shift. Never cache the
  * result — call this again on every "Refresh" press (per the spec: the
  * pool must reflect the latest compliance, availability, assignments,
- * fatigue, version, qualifications, and leave every time).
+ * version, qualifications, and leave every time).
  */
 export async function getReserveListCandidates(shiftId: string): Promise<ReserveListCandidate[]> {
   if (!isValidUuid(shiftId)) return [];
@@ -142,7 +152,7 @@ export async function getReserveListCandidates(shiftId: string): Promise<Reserve
   if (overlapFreeIds.length === 0) return [];
 
   // 5. Full compliance run per remaining candidate. The spec requires the
-  //    search to ONLY return employees who pass compliance/fatigue/EBA/visa —
+  //    search to ONLY return employees who pass compliance/EBA/visa —
   //    not just structurally-eligible ones — so this runs at search time, not
   //    only on-demand per row.
   const netMinutes =
@@ -170,11 +180,16 @@ export async function getReserveListCandidates(shiftId: string): Promise<Reserve
 
     const profile = profileById.get(id);
     const eligibleInfo = eligibleById.get(id);
+    // Mode from the contract already in hand — an FT/PT holds no slots by
+    // design, so without it every permanent in the reserve pool would come back
+    // flagged "no declared availability" and the panel's advisory column would
+    // be noise on exactly the staff most likely to be called in.
     const availability = evaluateShiftAvailabilityFromSlots(
       slotsByProfile.get(id) ?? null,
       shift.shift_date,
       shift.start_time,
       shift.end_time,
+      availabilityModeForEmploymentStatus(eligibleInfo?.contract_type),
     );
 
     candidates.push({

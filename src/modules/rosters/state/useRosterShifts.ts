@@ -392,14 +392,12 @@ export function useRostersLookup(
   });
 }
 
-export function usePlanningPeriods(organizationId?: string, departmentId?: string) {
-  return useQuery({
-    queryKey: ['planning-periods', organizationId, departmentId],
-    queryFn: () => shiftsQueries.getPlanningPeriods(organizationId!, departmentId),
-    enabled: !!organizationId,
-    staleTime: 5 * 60_000,
-  });
-}
+// `usePlanningPeriods` was removed on 2026-08-05 along with its only consumer,
+// PlanRosterPeriodDialog. `planning_periods` rows were never surfaced anywhere —
+// the dialog read them solely to warn that you had already created one. Nothing
+// writes the table any more either (see useEnsureRosters in useRosterMutations).
+// The table and `shiftsQueries.getPlanningPeriods` are left in place so the 99
+// rosters already carrying a `planning_period_id` keep their reference.
 
 export function useRosterStructure(rosterId?: string) {
   return useQuery({
@@ -682,6 +680,13 @@ export function useApplyShiftOp() {
       op: ShiftOp;
       payload?: Record<string, unknown>;
     }) => runGatewayOp(args),
+
+    onError: (_err, variables) => {
+      // Invalidate queries immediately on CAS mismatch or error to lock out stale mutations
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
+    },
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });

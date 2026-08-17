@@ -85,13 +85,13 @@ const BUCKET_CONFIG = {
 
 /** Display codes matching rule numbers — all active rules registered in the engine */
 const DISPLAY_CODE: Record<string, string> = {
+    // R02 (min engagement) and R08 (meal break) are no longer V8 rules — they
+    // moved to the shape layer and are surfaced by the shift form itself.
     'V8_NO_OVERLAP':            'R01',
-    'V8_MIN_ENGAGEMENT':        'R02',
     'V8_MAX_DAILY_HOURS':       'R03',
     'V8_STUDENT_VISA_LIMIT':    'R05',
     'V8_ORD_HOURS_AVG':         'R06',
     'V8_MIN_REST_GAP':          'R07',
-    'V8_MEAL_BREAK':            'R08',
     'V8_MAX_CONSECUTIVE_DAYS':  'R09',
     'V8_QUALIFICATIONS':        'R11',
     'V8_AVAILABILITY_CONFLICT': 'AV',
@@ -225,11 +225,11 @@ function HeaderBanner({
 
     return (
         <div className={bannerCls}>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                 {/* Icon + title */}
-                <div className="flex items-center gap-4">
+                <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                     <div className={cn(
-                        'h-12 w-12 rounded-2xl flex items-center justify-center border transition-all duration-300 shrink-0',
+                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all duration-300 sm:h-12 sm:w-12 sm:rounded-2xl',
                         hasResults && canProceed && !isStale
                             ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
                             : hasResults && hasBlockers
@@ -248,9 +248,9 @@ function HeaderBanner({
                                         ? <AlertTriangle className="h-6 w-6" />
                                         : <Circle className="h-6 w-6" />}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h3 className={cn(
-                            'text-base font-black tracking-tight uppercase',
+                            'text-sm font-black uppercase tracking-tight sm:text-base',
                             hasResults && canProceed && !isStale ? 'text-emerald-700 dark:text-emerald-400'
                                 : hasResults && hasBlockers       ? 'text-red-700 dark:text-rose-400'
                                 : hasResults && warnings > 0      ? 'text-amber-700 dark:text-amber-400'
@@ -287,7 +287,7 @@ function HeaderBanner({
                         onClick={onRun}
                         disabled={disabled}
                         className={cn(
-                            'h-9 px-5 font-black uppercase tracking-widest text-[10px] shadow-lg transition-all active:scale-95 shrink-0',
+                            'h-10 w-full shrink-0 px-4 text-[10px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 sm:h-9 sm:w-auto sm:px-5',
                             isIdle
                                 ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
                                 : canProceed && !isStale

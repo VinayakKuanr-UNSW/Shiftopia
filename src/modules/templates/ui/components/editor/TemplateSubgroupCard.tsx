@@ -97,76 +97,89 @@ export function TemplateSubgroupCard({
                     className
                 )}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between px-3 py-2">
-                    <CollapsibleTrigger asChild>
-                        <div className="flex items-center gap-2 cursor-pointer flex-1">
-                            {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 text-gray-400" />
-                            ) : (
-                                <ChevronRight className="h-4 w-4 text-gray-400" />
-                            )}
+                {/* Header. Rename is rendered INSTEAD of the trigger, not inside
+                    it: a text input nested in a control cannot be typed into
+                    reliably (every keystroke is also a trigger activation), and
+                    the old stopPropagation only masked that for mouse clicks. */}
+                <div className="flex items-center justify-between gap-1 px-2 py-2 sm:px-3">
+                    {isEditing ? (
+                        <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onBlur={handleSaveName}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveName();
+                                if (e.key === 'Escape') setIsEditing(false);
+                            }}
+                            autoFocus
+                            aria-label={`Rename subgroup ${subgroup.name}`}
+                            className="h-11 min-h-[44px] flex-1 text-base sm:text-sm font-semibold"
+                        />
+                    ) : (
+                        <CollapsibleTrigger asChild>
+                            <button
+                                type="button"
+                                aria-expanded={isExpanded}
+                                className="flex flex-1 min-w-0 items-center gap-2 rounded-lg px-1.5 py-1 min-h-[44px] text-left transition-colors hover:bg-black/5 dark:hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            >
+                                {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" aria-hidden="true" />
+                                ) : (
+                                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" aria-hidden="true" />
+                                )}
 
-                            {isEditing ? (
-                                <Input
-                                    value={editName}
-                                    onChange={(e) => setEditName(e.target.value)}
-                                    onBlur={handleSaveName}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') handleSaveName();
-                                        if (e.key === 'Escape') setIsEditing(false);
-                                    }}
-                                    autoFocus
-                                    className="h-7 text-sm w-48"
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            ) : (
-                                <span className={cn('font-medium text-sm', colors.text)}>
+                                <span className={cn('font-bold text-sm tracking-tight truncate', colors.text)}>
                                     {subgroup.name}
                                 </span>
-                            )}
 
-                            <span className="text-xs text-gray-500">
-                                ({subgroup.shifts.length} shifts)
-                            </span>
-                        </div>
-                    </CollapsibleTrigger>
+                                <span className="shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                    ({subgroup.shifts.length} shifts)
+                                </span>
+                            </button>
+                        </CollapsibleTrigger>
+                    )}
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-0.5">
                         {onAddShift && (
                             <Button
                                 variant="ghost"
-                                size="sm"
                                 onClick={onAddShift}
-                                className="h-7 px-2"
+                                aria-label={`Add shift to ${subgroup.name}`}
+                                className="h-11 w-11 min-h-[44px] min-w-[44px] p-0 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                             >
-                                <Plus className="h-3.5 w-3.5" />
+                                <Plus className="h-5 w-5" aria-hidden="true" />
                             </Button>
                         )}
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                    <MoreHorizontal className="h-4 w-4" />
+                                <Button
+                                    variant="ghost"
+                                    aria-label={`Actions for subgroup ${subgroup.name}`}
+                                    className="h-11 w-11 min-h-[44px] min-w-[44px] p-0 text-slate-700 dark:text-slate-300"
+                                >
+                                    <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                                    <Edit2 className="h-4 w-4 mr-2" />
+                                {/* Seed from the current name, not whatever it was at
+                                    mount — `editName` initialises once. */}
+                                <DropdownMenuItem onClick={() => { setEditName(subgroup.name); setIsEditing(true); }}>
+                                    <Edit2 className="h-4 w-4 mr-2" aria-hidden="true" />
                                     Rename
                                 </DropdownMenuItem>
                                 {onClone && (
                                     <DropdownMenuItem onClick={onClone}>
-                                        <Copy className="h-4 w-4 mr-2" />
+                                        <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
                                         Duplicate
                                     </DropdownMenuItem>
                                 )}
                                 {onDelete && (
                                     <DropdownMenuItem
                                         onClick={onDelete}
-                                        className="text-red-400 focus:text-red-400"
+                                        className="text-rose-600 dark:text-rose-400 focus:text-rose-600"
                                     >
-                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
                                         Delete
                                     </DropdownMenuItem>
                                 )}
@@ -179,16 +192,16 @@ export function TemplateSubgroupCard({
                 <CollapsibleContent>
                     <div className="px-3 pb-3">
                         {subgroup.shifts.length === 0 ? (
-                            <div className="text-center py-4 text-gray-500 text-sm">
-                                <p>No shifts yet</p>
+                            <div className="text-center py-4 text-slate-600 dark:text-slate-300 text-sm">
+                                <p className="font-medium">No shifts yet</p>
                                 {onAddShift && (
                                     <Button
-                                        variant="ghost"
-                                        size="sm"
+                                        variant="outline"
                                         onClick={onAddShift}
-                                        className="mt-1"
+                                        aria-label={`Add first shift to ${subgroup.name}`}
+                                        className="mt-2 font-semibold border-slate-300 dark:border-slate-700 h-11 min-h-[44px] px-4"
                                     >
-                                        <Plus className="h-3 w-3 mr-1" />
+                                        <Plus className="h-4 w-4 mr-1.5" aria-hidden="true" />
                                         Add shift
                                     </Button>
                                 )}

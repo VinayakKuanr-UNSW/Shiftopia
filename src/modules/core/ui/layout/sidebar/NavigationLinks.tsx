@@ -21,6 +21,7 @@ import {
   Activity,
   Palmtree,
   Wallet,
+
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -196,6 +197,16 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
             label={t('nav.swap_requests')}
             path="/management/swaps"
             active={isRouteActive('/management/swaps')}
+            indent
+            sectionColor="green"
+          />
+
+
+          <NavItem
+            icon={<CalendarDays className="h-5 w-5" />}
+            label={t('nav.team_availability', 'Team Availability')}
+            path="/team-availability"
+            active={isRouteActive('/team-availability') || isRouteActive('/availability-manager') || isRouteActive('/availibility-manger')}
             indent
             sectionColor="green"
           />

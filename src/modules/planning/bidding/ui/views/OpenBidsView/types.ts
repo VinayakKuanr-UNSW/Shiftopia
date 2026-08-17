@@ -61,6 +61,13 @@ export interface ManagerBidShift {
   lifecycleStatus?: string;
 }
 
+// Real SSS breakdown (sourced from get_quarterly_performance_report + skill match).
+// See utils/sss.ts for the composition + weights.
+export type { SssBreakdown as SSSBreakdown, SssFlag } from '../../utils/sss';
+
+/** Per-shift qualification/eligibility of a bidder. */
+export type BidEligibility = 'pass' | 'warning' | 'blocked';
+
 export interface EmployeeBid {
   id: string;
   shiftId: string;
@@ -72,7 +79,22 @@ export interface EmployeeBid {
   isWinner: boolean;
   fatigueRisk?: 'low' | 'medium' | 'high';
   isBestMatch?: boolean;
+  sss: number;
+  sssBreakdown?: import('../../utils/sss').SssBreakdown;
+  /** data-quality flag: OK | LIMITED | INSUFFICIENT_DATA (new/low-history bidder) */
+  sssFlag?: import('../../utils/sss').SssFlag;
+  /** per-shift skill/qualification eligibility (batched qual check) */
+  eligibility?: BidEligibility;
 }
+
+export type BidSortField = 'timestamp' | 'sss';
+export type BidSortDirection = 'asc' | 'desc';
+
+export interface BidSortOption {
+  field: BidSortField;
+  direction: BidSortDirection;
+}
+
 
 
 

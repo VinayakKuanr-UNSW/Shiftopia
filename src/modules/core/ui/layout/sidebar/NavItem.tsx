@@ -35,11 +35,13 @@ const NavItem: React.FC<NavItemProps> = ({
         <TooltipTrigger asChild>
           <Link
             to={path}
+            aria-label={label}
+            aria-current={active ? 'page' : undefined}
             className={cn(
-              "group relative flex items-center gap-3 px-3 py-2 my-1 rounded-lg transition-all duration-200",
+              "group relative flex items-center gap-3 px-3 py-2.5 my-1 rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900",
               active 
-                ? "bg-primary/10 font-medium" 
-                : "text-foreground hover:bg-muted/50",
+                ? "bg-primary/15 font-bold shadow-sm" 
+                : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white font-medium",
               indent && !isCollapsed ? "ml-6" : ""
             )}
           >
@@ -47,7 +49,7 @@ const NavItem: React.FC<NavItemProps> = ({
             {active && (
               <div
                 className={cn(
-                  "absolute left-0 top-0 h-full w-1 rounded-l-lg",
+                  "absolute left-0 top-0 h-full w-1 rounded-l-xl",
                   sectionColor === "primary"
                     ? "bg-primary"
                     : `bg-${sectionColor}-500`
@@ -57,11 +59,12 @@ const NavItem: React.FC<NavItemProps> = ({
             
             {/* Icon */}
             <span
+              aria-hidden="true"
               className={cn(
-                "transition-transform duration-200",
+                "transition-transform duration-200 shrink-0",
                 active
                   ? colorClasses[sectionColor]
-                  : "text-muted-foreground group-hover:text-foreground"
+                  : "text-slate-500 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white"
               )}
             >
               {icon}
@@ -71,8 +74,8 @@ const NavItem: React.FC<NavItemProps> = ({
             {!isCollapsed && (
               <span
                 className={cn(
-                  "text-sm transition-all",
-                  active ? colorClasses[sectionColor] : ""
+                  "text-sm tracking-tight transition-all",
+                  active ? colorClasses[sectionColor] : "text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white font-semibold"
                 )}
               >
                 {label}

@@ -126,5 +126,5 @@ Observations:
   modes don't show them, so there is no cross-mode number to disagree with.
 - The **Grid (Insights) view** computes its own compliance against
   `contracted_weekly_hours` with a different fallback and a 2-week window
-  ([insights/model/grid-compliance.ts](../../src/modules/insights/model/grid-compliance.ts));
+  ([availability/domain/hours-compliance.ts](../../src/modules/availability/domain/hours-compliance.ts), moved there from `insights/model/grid-compliance.ts`);
   it is a separate lineage and should not be assumed equal to People-Mode UTL.

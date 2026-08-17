@@ -3,17 +3,27 @@ import { shiftDurationMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Maximum Daily Hours
- * 
+ *
  * Prevents employees from working more than 12 hours in a single calendar day.
+ *
+ * Measured on NET minutes — gross span minus the unpaid meal break (locked
+ * 2026-08-15). This rule previously counted gross, so an employee could be
+ * blocked at 12h of which 30 minutes were an unpaid break they were not being
+ * paid for and not working through. Net is now the universal measure across the
+ * shape layer and this engine; the two must agree or a shift can pass one and
+ * breach the other.
  */
 export const maxDailyHoursRule: V8RuleEvaluator = (ctx) => {
     const { shifts, config } = ctx;
-    
+
     const dailyMinutes = new Map<string, number>();
-    
+
     for (const s of shifts) {
         const date = s.date || s.shift_date || '';
-        const totalMins = shiftDurationMinutes(s.start_time, s.end_time);
+        const totalMins = Math.max(
+            0,
+            shiftDurationMinutes(s.start_time, s.end_time) - (s.unpaid_break_minutes || 0),
+        );
         dailyMinutes.set(date, (dailyMinutes.get(date) || 0) + totalMins);
     }
     

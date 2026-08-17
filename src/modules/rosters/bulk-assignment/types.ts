@@ -12,6 +12,7 @@
  */
 
 import type { ContractRecordV2 } from '@/modules/compliance/v8/types';
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 export type { ContractRecordV2 };
 
 // =============================================================================
@@ -41,6 +42,16 @@ export interface CandidateShift {
     /** Canonical time columns for past-shift validation. */
     start_at?: string | null;
     end_at?: string | null;
+    /**
+     * The employment type this shift is for (`shifts.target_employment_type`,
+     * NOT NULL in the DB). Feeds V8_EMPLOYMENT_TARGET, the app-layer half of
+     * the match that `trg_shift_employment_target_2_enforce` enforces on write.
+     * Optional here only because callers may not have hydrated it — in which
+     * case the rule stays silent and the trigger remains the guarantee.
+     */
+    target_employment_type?: TargetEmploymentType | null;
+    /** Narrows a 'PT' target to Flexible Part-Time staff only. */
+    target_requires_flexible?: boolean;
 }
 
 // =============================================================================
@@ -101,7 +112,8 @@ export type ViolationType =
     | 'SPREAD_OF_HOURS'
     | 'MEAL_BREAK'
     | 'STUDENT_VISA'
-    | 'APPROVED_LEAVE';
+    | 'APPROVED_LEAVE'
+    | 'EMPLOYMENT_TARGET';
 
 /**
  * A single violation on a candidate shift.
@@ -196,6 +208,15 @@ export interface EmployeeInfo {
      * exclusion still guards auto-scheduling).
      */
     leave_days?: string[];
+    /**
+     * Raw per-contract `employment_status` values ('Full-Time', 'Casual',
+     * 'Flexible Part-Time', …) — the source `trg_shift_employment_target_2_enforce`
+     * matches against, and what V8_EMPLOYMENT_TARGET needs. Deliberately NOT
+     * derived from `contract_type`, which comes from the global profile and
+     * collapses 'Flexible Part-Time' onto 'PT'. Undefined ⇒ the rule stays
+     * silent (fail-open) and the DB trigger remains the guarantee.
+     */
+    employment_statuses?: string[];
 }
 
 // =============================================================================

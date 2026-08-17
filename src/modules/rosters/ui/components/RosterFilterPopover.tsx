@@ -44,8 +44,9 @@ export const RosterFilterPopover: React.FC = () => {
                 <Button
                     variant={hasActiveFilters ? "secondary" : "outline"}
                     size="icon"
+                    aria-label={`Roster filters${activeCount > 0 ? `, ${activeCount} active` : ''}`}
                     className={cn(
-                        "h-8 w-8 transition-all",
+                        "h-[32px] w-[32px] transition-all",
                         hasActiveFilters && "bg-primary/20 text-primary hover:bg-primary/30 border-primary/50"
                     )}
                 >

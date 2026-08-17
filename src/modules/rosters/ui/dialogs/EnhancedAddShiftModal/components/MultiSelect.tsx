@@ -91,7 +91,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                     type="button"
                 >
                     <div className="flex flex-col items-start gap-0.5">
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/30 leading-none">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
                             {label}
                         </span>
                         <span className="truncate text-xs sm:text-sm font-semibold">

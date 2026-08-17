@@ -49,6 +49,9 @@ export interface V8EmployeeContext {
     leave_days?:              string[];
     /** EBA Schedule 3 — see V8Employee.is_security_role (audit H-5). */
     is_security_role?:        boolean;
+    /** Raw per-contract employment statuses — see V8Employee.employment_statuses.
+     *  Feeds V8_EMPLOYMENT_TARGET; NOT derivable from `contract_type`. */
+    employment_statuses?:     string[];
 }
 
 export interface V8OrchestratorInput {

@@ -41,6 +41,7 @@ const SHIFT_DETAIL_SELECT = `
   roles(id, name),
   remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
+  templates:roster_templates!template_id(id, name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
   timesheets(status, start_time, end_time)
 ` as const;
@@ -54,6 +55,13 @@ const SHIFT_DETAIL_SELECT = `
  * recurrence fields — cutting payload by ~60% at 5k+ shifts.
  *
  * The JOINs are kept since the worker mapper reads role/level/profile data.
+ *
+ * NOTE: this string is sent to PostgREST verbatim — keep it free of comments,
+ * and every name in it must exist. One bad name rejects the ENTIRE select with
+ * a 400, which surfaces as "no shifts" rather than as an error. The template
+ * embed is `roster_templates` (shifts.template_id -> roster_templates.id);
+ * there is no `public.templates` relation. The `templates:` alias is retained
+ * so consumers reading `shift.templates` are unaffected.
  */
 const SHIFT_SELECT = `
   id,
@@ -123,12 +131,14 @@ const SHIFT_SELECT = `
   deleted_at,
   last_modified_by,
   target_employment_type,
+  target_requires_flexible,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
   roles(id, name),
   remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
+  templates:roster_templates!template_id(id, name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
   timesheets(status, start_time, end_time)
 ` as const;
@@ -136,9 +146,10 @@ const SHIFT_SELECT = `
 // ── Pagination ────────────────────────────────────────────────────────────────
 // Supabase caps a single response at 1000 rows; for large date-range queries
 // (week/month over 5k+ shifts) we page through until a short page arrives.
-// `count: 'planned'` skips the COUNT(*) cost (100–500 ms at 1M rows) — planner
-// estimates can be off by ~10–20%, so we keep paginating until a page is
-// shorter than PAGE_SIZE rather than trusting the estimate strictly.
+// We do not ask for a count at all. The stop condition is a short page, so the
+// estimate was never read — and requesting it (`count: 'planned'`) made
+// PostgREST run an `EXPLAIN (FORMAT JSON)` probe before every query, spending
+// database time to produce a number nothing consumed.
 const PAGE_SIZE = 1000;
 // Lowered from 100 → 25: the hard page-count ceiling (25 × 1000 = 25k rows).
 // INTERACTIVE_ROW_CAP is the primary interactive guardrail; MAX_PAGES is the
@@ -370,7 +381,7 @@ export const shiftsQueries = {
         const buildQuery = () => {
             let q = supabase
                 .from('shifts')
-                .select(SHIFT_SELECT, { count: 'planned', head: false })
+                .select(SHIFT_SELECT)
                 .eq('organization_id', organizationId)
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
@@ -396,9 +407,10 @@ export const shiftsQueries = {
         };
 
         try {
-            // Page through until a short page arrives. `count: 'planned'` is
-            // cheap but only an estimate (±10–20%), so we trust the actual
-            // page length, not the count, as the stop condition.
+            // Page through until a short page arrives. The actual page length
+            // is the stop condition, which is why no count is requested — the
+            // estimate was never read, and asking for it made PostgREST run an
+            // `EXPLAIN (FORMAT JSON)` probe before every single query.
             const all: any[] = [];
             let page = 0;
             // Primary stop: INTERACTIVE_ROW_CAP (see module-scope constant).

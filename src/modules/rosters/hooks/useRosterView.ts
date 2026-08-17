@@ -1,4 +1,5 @@
-import { addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useRosterUIOptional, CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
 import { useState, useCallback, useMemo } from 'react';
 
@@ -41,8 +42,8 @@ export const useRosterView = () => {
             case '3day':
                 return { from: selectedDate, to: addDays(selectedDate, 2) };
             case 'week':
-                const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 }); // Start from Monday
-                const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 }); // End on Sunday
+                const weekStart = startOfWeekAU(selectedDate); // Start from Monday
+                const weekEnd = endOfWeekAU(selectedDate); // End on Sunday
                 return { from: weekStart, to: weekEnd };
             case 'month':
                 return { from: startOfMonth(selectedDate), to: endOfMonth(selectedDate) };

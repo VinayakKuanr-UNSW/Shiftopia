@@ -32,7 +32,6 @@ import {
   Fingerprint,
   Palmtree,
   Wallet,
-  Grid3x3,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -485,6 +484,15 @@ const AppSidebar: React.FC = () => {
             />
 
             <NavigationItem
+              to="/team-availability"
+              icon={CalendarDays}
+              iconColor={iconColorMap.availabilities}
+              label={t('nav.team_availability', 'Team Availability')}
+              isActive={isRouteActive('/team-availability') || isRouteActive('/availability-manager') || isRouteActive('/availibility-manger')}
+              description="Team availability schedule"
+            />
+
+            <NavigationItem
               to="/management/leave"
               icon={Palmtree}
               iconColor={iconColorMap.leaveApprovals}
@@ -548,14 +556,19 @@ const AppSidebar: React.FC = () => {
             color={iconColorMap.sectionManagement}
             defaultOpen={true}
           >
-            {hasPermission('insights') && (
+            {/* The Annual Shift Grid used to live here. It is now the hours and
+                compliance half of the Availability Manager, which managers
+                already reach from the Management section above — so this renders
+                only for analysts who hold `insights` WITHOUT `management`, who
+                would otherwise have no way in. */}
+            {hasPermission('insights') && !hasPermission('management') && (
               <NavigationItem
-                to="/grid"
-                icon={Grid3x3}
+                to="/team-availability"
+                icon={CalendarDays}
                 iconColor={iconColorMap.insights}
-                label={t('nav.grid')}
-                isActive={isRouteActive('/grid')}
-                description="Annual Shift Grid"
+                label={t('nav.team_availability', 'Team Availability')}
+                isActive={isRouteActive('/team-availability') || isRouteActive('/grid')}
+                description="Hours, compliance & availability"
               />
             )}
 

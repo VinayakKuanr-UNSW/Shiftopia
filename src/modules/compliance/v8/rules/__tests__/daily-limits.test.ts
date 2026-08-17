@@ -27,6 +27,29 @@ describe('maxDailyHoursRule', () => {
     expect(hits[0].status).toBe('BLOCKING');
   });
 
+  // Net measurement (locked 2026-08-15) — the cap is on hours actually worked,
+  // so the unpaid meal break must come off before the comparison. Previously
+  // measured gross, which disagreed with the shape layer's 12h maximum.
+  it('subtracts the unpaid break before applying the cap', () => {
+    const ctx = buildContext({
+      shifts: [buildShift({
+        date: '2026-06-01', start_time: '08:00', end_time: '20:30', unpaid_break_minutes: 30,
+      })],
+    });
+    expect(maxDailyHoursRule(ctx)).toEqual([]);
+  });
+
+  it('still blocks when net exceeds 12h despite a break', () => {
+    const ctx = buildContext({
+      shifts: [buildShift({
+        date: '2026-06-01', start_time: '08:00', end_time: '20:45', unpaid_break_minutes: 30,
+      })],
+    });
+    const hits = maxDailyHoursRule(ctx);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].calculation?.total_minutes).toBe(735);
+  });
+
   it('aggregates across multiple shifts on the same day', () => {
     resetIdCounter();
     // 6h + 6h = 12h total — at the limit but not over

@@ -12,6 +12,7 @@
  */
 
 import type { AssignmentProposal, OptimizeResponse } from '../types';
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 // =============================================================================
 // SHIFT METADATA (minimal — enough for compliance evaluation)
@@ -26,7 +27,9 @@ export interface ShiftMeta {
     roleName?: string;
     unpaid_break_minutes?: number;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
-    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
+    target_employment_type?: TargetEmploymentType | null;
+    /** Narrows a 'PT' target to Flexible Part-Time staff only. */
+    target_requires_flexible?: boolean;
     level?: number;
     is_training?: boolean;
 }
@@ -35,6 +38,16 @@ export interface EmployeeMeta {
     id: string;
     name: string;
     contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    /**
+     * The RAW `user_contracts.employment_status` for the in-scope
+     * sub-department contract ('Full-Time' | 'Part-Time' | 'Casual' |
+     * 'Flexible Part-Time'). This — not `contract_type` — is what
+     * `trg_shift_employment_target_2_enforce` matches a shift's target
+     * against, so it is the only value that can keep the solver's
+     * eligibility in step with what the database will actually accept.
+     * `contract_type` additionally collapses 'Flexible Part-Time' onto 'PT'.
+     */
+    employment_status?: string | null;
     contracted_role_ids?: string[];
     contracted_weekly_hours?: number;
     remuneration_rate?: number;
@@ -61,6 +74,12 @@ export interface EnrichedProposal {
     roleName?: string;
     roleId?: string | null;
     unpaidBreakMinutes?: number;
+    /** Carried from ShiftMeta so the compliance re-validation can rebuild a
+     *  candidate shift that still knows its employment target. Without these,
+     *  V8_EMPLOYMENT_TARGET falls through its `if (!target) continue` guard and
+     *  the preview cannot see what the DB trigger will reject. */
+    targetEmploymentType?: TargetEmploymentType | null;
+    targetRequiresFlexible?: boolean;
 }
 
 // =============================================================================
@@ -121,6 +140,8 @@ export class SolutionParser {
                 roleName: shift.roleName,
                 roleId: shift.role_id,
                 unpaidBreakMinutes: shift.unpaid_break_minutes,
+                targetEmploymentType: shift.target_employment_type ?? null,
+                targetRequiresFlexible: shift.target_requires_flexible ?? false,
             });
         }
 

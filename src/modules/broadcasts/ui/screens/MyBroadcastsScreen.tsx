@@ -18,12 +18,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Radio,
   ChevronLeft,
   Hash,
-  AlertTriangle,
-  RefreshCw,
-  Loader2,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
@@ -31,11 +27,13 @@ import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from '@/modules/core/ui/primitives/sheet';
 import { cn } from '@/modules/core/lib/utils';
+import { PageState } from '@/modules/core/ui/components/PageState';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { motion } from 'framer-motion';
@@ -179,36 +177,28 @@ export function MyBroadcastsScreen({
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen w-full">
-        <div className="flex flex-col items-center gap-4 md:gap-6 p-6 md:p-8 rounded-2xl md:rounded-3xl bg-card border border-border backdrop-blur-3xl shadow-sm">
-          <Loader2 className="h-12 w-12 md:h-16 md:w-16 text-primary animate-spin" />
-          <div className="text-center">
-            <h3 className="text-lg md:text-xl font-bold text-foreground mb-1">Loading System</h3>
-            <p className="text-muted-foreground text-sm md:text-base">Retrieving broadcast frequencies...</p>
-          </div>
-        </div>
-      </div>
+      <PageState
+        state="loading"
+        scope="section"
+        title="Loading broadcasts"
+        description="Retrieving your broadcast groups."
+        className="h-full"
+      />
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen w-full p-4">
-        <div className="flex flex-col items-center gap-4 md:gap-6 p-6 md:p-8 max-w-md text-center rounded-2xl md:rounded-3xl bg-red-500/10 border border-red-500/20 backdrop-blur-3xl">
-          <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-red-500/20 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.3)]">
-            <AlertTriangle className="h-8 w-8 md:h-10 md:w-10 text-red-500" />
-          </div>
-          <div>
-            <h3 className="text-lg md:text-xl font-bold text-foreground mb-2">Connection Error</h3>
-            <p className="text-red-700 dark:text-red-300 mb-4 md:mb-6 text-sm md:text-base">{error.message}</p>
-            <Button onClick={() => refetch()} className="gap-2 bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20">
-              <RefreshCw className="h-4 w-4" />
-              Retry Connection
-            </Button>
-          </div>
-        </div>
-      </div>
+      <PageState
+        state="error"
+        scope="section"
+        title="Couldn’t load broadcasts"
+        description={error.message}
+        onRetry={() => refetch()}
+        retryLabel="Retry connection"
+        className="h-full"
+      />
     );
   }
 
@@ -425,6 +415,7 @@ export function MyBroadcastsScreen({
             <SheetContent side="bottom" className="bg-card border-border h-[60vh]">
               <SheetHeader>
                 <SheetTitle className="text-foreground">Select Channel</SheetTitle>
+                <SheetDescription>Choose a broadcast channel to view messages</SheetDescription>
               </SheetHeader>
               <ScrollArea className="h-full py-4">
                 <div className="space-y-1">

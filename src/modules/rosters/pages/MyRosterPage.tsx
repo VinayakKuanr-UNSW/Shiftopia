@@ -12,10 +12,10 @@ import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHea
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { format, startOfWeek, startOfMonth } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { ChevronLeft, ChevronRight, Calendar, RefreshCcw } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
-import { Calendar as CalendarPrimitive } from '@/modules/core/ui/primitives/calendar';
+import { DatePicker } from '@/modules/core/ui/calendar';
 import { 
   computeRange, 
   navigateDate, 
@@ -33,7 +33,6 @@ const MyRosterNavigator: React.FC<{
     onDateChange: (d: Date) => void;
 }> = ({ view, onViewChange, selectedDate, onDateChange }) => {
     const { isDark } = useTheme();
-    const [isPickerOpen, setIsPickerOpen] = useState(false);
 
     const range = computeRange(selectedDate, view);
     const label = formatRangeLabel(range, view);
@@ -42,14 +41,12 @@ const MyRosterNavigator: React.FC<{
     const handleNext = () => onDateChange(navigateDate(selectedDate, view, 1));
     const handleToday = () => onDateChange(new Date());
 
-    const handleDateSelect = (date: Date | undefined) => {
-        if (date) {
-            let snapped = date;
-            if (view === 'week') snapped = startOfWeek(date, { weekStartsOn: 1 });
-            if (view === 'month') snapped = startOfMonth(date);
-            onDateChange(snapped);
-            setIsPickerOpen(false);
-        }
+    // The picker closes itself; this only snaps the pick to the view's period.
+    const handleDateSelect = (date: Date) => {
+        let snapped = date;
+        if (view === 'week') snapped = startOfWeekAU(date);
+        if (view === 'month') snapped = startOfMonth(date);
+        onDateChange(snapped);
     };
 
     const buttonBaseCls = cn(
@@ -101,22 +98,12 @@ const MyRosterNavigator: React.FC<{
                     <ChevronLeft className="w-4 h-4" />
                 </button>
 
-                <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
-                    <PopoverTrigger asChild>
-                        <button className={buttonBaseCls}>
-                            <Calendar className="w-3.5 h-3.5 opacity-50" />
-                            <span className="tracking-tight">{label}</span>
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="center">
-                        <CalendarPrimitive
-                            mode="single"
-                            selected={selectedDate}
-                            onSelect={handleDateSelect}
-                            initialFocus
-                        />
-                    </PopoverContent>
-                </Popover>
+                <DatePicker value={selectedDate} onChange={handleDateSelect} label="Date shown" align="center">
+                    <button className={buttonBaseCls}>
+                        <Calendar className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
+                        <span className="tracking-tight">{label}</span>
+                    </button>
+                </DatePicker>
 
                 <button onClick={handleNext} className={cn(buttonBaseCls, "px-2 lg:px-2")}>
                     <ChevronRight className="w-4 h-4" />

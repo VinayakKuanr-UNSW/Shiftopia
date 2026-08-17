@@ -681,7 +681,11 @@ describe('audit L-1 — first-aid allowance prices off FLOORED (paid) ordinary h
         start_time: '09:00', end_time: '10:00', allowances: { meal: false },
       }),
     );
-    const firstAidCost = withFirstAid.allowanceCost - withoutFirstAid.allowanceCost;
+    // `allowanceCost` is optional on the breakdown; assert it is present rather
+    // than subtracting possibly-undefined values into NaN.
+    expect(withFirstAid.allowanceCost).toBeDefined();
+    expect(withoutFirstAid.allowanceCost).toBeDefined();
+    const firstAidCost = (withFirstAid.allowanceCost ?? 0) - (withoutFirstAid.allowanceCost ?? 0);
     expect(firstAidCost).toBeCloseTo(3 * 0.56, 5); // 3h floor × $0.56/h (pre-FY26/27 rate)
   });
 });

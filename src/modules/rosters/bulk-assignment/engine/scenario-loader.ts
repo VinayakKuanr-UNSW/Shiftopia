@@ -67,7 +67,10 @@ export class ScenarioLoader {
 
         const { data, error } = await (supabase as any)
             .from('shifts')
-            .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, organization_id, department_id, sub_department_id, unpaid_break_minutes, required_skills, required_licenses, start_at, end_at')
+            // target_employment_type / target_requires_flexible feed
+            // V8_EMPLOYMENT_TARGET; without them the rule cannot fire and this
+            // path validates assignments the DB trigger will reject.
+            .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, organization_id, department_id, sub_department_id, unpaid_break_minutes, required_skills, required_licenses, start_at, end_at, target_employment_type, target_requires_flexible')
             .in('id', shiftIds)
             .is('deleted_at', null);
 
@@ -222,6 +225,10 @@ export class ScenarioLoader {
             contracted_weekly_hours: ctx.contracted_weekly_hours || undefined,
             // contracts → source of truth for R10 role/hierarchy match
             contracts:           ctx.contracts,
+            // Raw per-contract statuses for V8_EMPLOYMENT_TARGET. fetchV8EmployeeContext
+            // already derives these from the contract rows; they were simply not
+            // forwarded, leaving the rule with an empty list and no verdict.
+            employment_statuses: ctx.employment_statuses,
             qualifications:      (ctx.qualifications ?? []).map(q => ({
                 qualification_id: q.qualification_id,
                 expires_at:       q.expires_at,

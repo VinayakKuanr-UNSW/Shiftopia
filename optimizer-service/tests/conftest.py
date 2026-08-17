@@ -83,6 +83,12 @@ def make_employee(
     existing_shifts: list[ExistingShiftInput] | None = None,
     availability_slots: list[AvailabilitySlotInput] | None = None,
     has_availability_data: bool = False,
+    availability_mode: str = "OPT_IN",
+    availability_overrides: list | None = None,
+    unavailable_dates: list[str] | None = None,
+    ordinary_span_start: str | None = None,
+    ordinary_span_end: str | None = None,
+    ordinary_days: list[int] | None = None,
 ) -> EmployeeInput:
     return EmployeeInput(
         id=eid, name=f"Emp-{eid}",
@@ -95,6 +101,16 @@ def make_employee(
         existing_shifts=existing_shifts or [],
         availability_slots=availability_slots or [],
         has_availability_data=has_availability_data,
+        availability_mode=availability_mode,
+        # Pass these through the CONSTRUCTOR, not by assigning the field after
+        # the fact: `__post_init__` is what coerces a legacy `(start, end,
+        # severity)` tuple into an AvailabilityOverrideInput, and a
+        # post-construction assignment skips it.
+        availability_overrides=availability_overrides or [],
+        unavailable_dates=unavailable_dates or [],
+        ordinary_span_start=ordinary_span_start,
+        ordinary_span_end=ordinary_span_end,
+        ordinary_days=ordinary_days or [],
     )
 
 

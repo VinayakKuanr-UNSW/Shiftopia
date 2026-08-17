@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay.
+
+  The optimizer and ML services are plain http during development — the
+  optimizer runs at http://10.0.2.2:5005 from the emulator's point of view, and
+  Android has blocked cleartext by default since API 28, so the WebView refuses
+  the call before it leaves the device. Port reachability is not the issue; the
+  platform is.
+
+  Scoped to the debug variant on purpose. Release builds never merge this file,
+  so a distributed APK keeps cleartext blocked. That matters here: the same
+  attribute applied to the main manifest would ship in every build.
+
+  Note that Capacitor also writes usesCleartextTraffic into the Cordova plugins
+  manifest when capacitor.config.ts sets server.cleartext, but that only applies
+  while CAP_SERVER_URL is set for live reload. This covers the normal
+  bundled-assets build talking to local services.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>

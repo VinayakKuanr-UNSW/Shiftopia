@@ -1,7 +1,6 @@
 import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { RosterSummaryCellDTO } from '../../api/rosterSummary.queries';
 import { AlertCircle, Maximize2, Plus } from 'lucide-react';
 
@@ -9,7 +8,7 @@ interface GroupSummaryCellProps {
   date: Date;
   groupName: string;
   summary: RosterSummaryCellDTO | undefined;
-  accent: string; // 'blue' | 'emerald' | 'red' | 'gray'
+  accent: string; // 'blue' | 'emerald' | 'red' | 'gray' | 'amber'
   onClick: () => void;
   isBulkMode?: boolean;
   selectionState?: 'all' | 'some' | 'none';
@@ -21,8 +20,9 @@ interface GroupSummaryCellProps {
   isLoading?: boolean;
 }
 
-export const GroupSummaryCell: React.FC<GroupSummaryCellProps> = ({
+const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   date,
+  groupName,
   summary,
   accent,
   onClick,
@@ -41,14 +41,18 @@ export const GroupSummaryCell: React.FC<GroupSummaryCellProps> = ({
   };
 
   const colors = colorMap[accent] || colorMap.gray;
+  // Without this the cell announces as an unnamed "button" — the visible content
+  // is icons and abbreviations, none of which identifies the group or the date it belongs to.
+  const dateLabel = format(date, 'd MMMM yyyy');
 
   if (!summary || summary.total_shifts === 0) {
     const Component = isBulkMode ? 'div' : 'button';
     return (
       <Component
         onClick={isBulkMode ? undefined : onClick}
+        aria-label={`Open ${groupName} roster details for ${dateLabel}: no shifts`}
         className={cn(
-          "w-full h-[60px] rounded border border-dashed border-border/50 bg-muted/20 flex flex-col items-center justify-center transition-colors group",
+          "w-full h-[68px] rounded-xl border border-dashed border-border/50 bg-muted/20 flex flex-col items-center justify-center transition-colors group",
           !isBulkMode && "hover:bg-muted/40 hover:border-border/80 cursor-pointer"
         )}
       >
@@ -74,8 +78,9 @@ export const GroupSummaryCell: React.FC<GroupSummaryCellProps> = ({
   return (
     <Component
       onClick={handleCellClick}
+      aria-label={`Open ${groupName} roster details for ${dateLabel}: ${total_shifts} shift${total_shifts === 1 ? '' : 's'}`}
       className={cn(
-        "w-full rounded-md border p-2 flex flex-col gap-2 transition-all group relative text-left",
+        "w-full rounded-xl border p-3 flex flex-col gap-2.5 transition-all group relative text-left",
         colors.bg,
         colors.border,
         !isBulkMode && colors.hover,
@@ -86,7 +91,8 @@ export const GroupSummaryCell: React.FC<GroupSummaryCellProps> = ({
         isBulkMode && selectionState !== 'none' && "ring-2 ring-primary border-transparent"
       )}
     >
-      <div className="absolute top-2 right-2">
+      {/* Top Right: Selection or Maximize icon */}
+      <div className="absolute top-2.5 right-2.5">
         {isBulkMode ? (
           isLoading ? (
             <div className="w-4 h-4 rounded border border-muted-foreground/30 bg-muted/30 animate-pulse" title="Loading shifts…" />
@@ -121,40 +127,94 @@ export const GroupSummaryCell: React.FC<GroupSummaryCellProps> = ({
       </div>
 
       {/* Row 1: Badges */}
-      <div className="flex items-start justify-between">
-        <div className="flex gap-1.5 flex-wrap max-w-[calc(100%-1.25rem)]">
-          <Badge variant="outline" className={cn("px-1.5 py-0 text-[10px] font-mono h-5 bg-background/50", colors.text)}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200/80 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200">
             {total_shifts} shift{total_shifts !== 1 ? 's' : ''}
-          </Badge>
+          </span>
           
           {open_shifts > 0 && (
-            <Badge variant="destructive" className="px-1.5 py-0 text-[10px] h-5 gap-1 font-mono">
-              <AlertCircle className="w-2.5 h-2.5" />
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-600 dark:text-red-400" />
               {open_shifts} open
-            </Badge>
+            </span>
           )}
         </div>
       </div>
 
-      {/* Row 2: Coverage Bar */}
-      <div className="space-y-1 w-full">
-        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-mono">
-          <span className={cn("font-medium", colors.text)}>Coverage</span>
-          <span className="text-muted-foreground">{coveragePct}%</span>
+      {/* Row 2: Coverage & Bar */}
+      <div className="space-y-1.5 w-full">
+        <div className="flex items-baseline justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+            COVERAGE
+          </span>
+          <span className={cn(
+            "text-2xl sm:text-3xl font-black tracking-tight",
+            coveragePct === 0
+              ? "text-red-600 dark:text-red-400"
+              : coveragePct < 50
+              ? "text-rose-600 dark:text-rose-400"
+              : coveragePct < 80
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-emerald-600 dark:text-emerald-400"
+          )}>
+            {coveragePct}%
+          </span>
         </div>
-        <div className="h-1.5 w-full bg-background/50 rounded-full overflow-hidden">
+        <div className="h-1.5 sm:h-2 w-full bg-slate-200/60 dark:bg-slate-800/80 rounded-full overflow-hidden">
           <div 
-            className={cn("h-full rounded-full transition-all duration-500", colors.bar)} 
+            className={cn(
+              "h-full rounded-full transition-all duration-500",
+              coveragePct === 0
+                ? "bg-transparent"
+                : coveragePct < 50
+                ? "bg-rose-500"
+                : coveragePct < 80
+                ? "bg-amber-500"
+                : "bg-emerald-500"
+            )} 
             style={{ width: `${coveragePct}%` }}
           />
         </div>
       </div>
 
       {/* Row 3: Meta */}
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono mt-0.5">
-        <span>{published_shifts}/{total_shifts} pub</span>
-        <span>{(total_net_minutes / 60).toFixed(1)}h</span>
+      <div className="flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-300 pt-0.5">
+        <span>Published {published_shifts}/{total_shifts}</span>
+        <span className="font-semibold text-slate-700 dark:text-slate-200">Total {(total_net_minutes / 60).toFixed(1)}h</span>
       </div>
     </Component>
   );
 };
+
+/**
+ * A month-view grid renders this several hundred times, and GroupModeView builds
+ * both callbacks *inside* the cell loop — so every parent render handed each
+ * cell fresh `onClick`/`onToggleSelect` identities and the whole grid
+ * re-reconciled. Measured at 400 cells: ~24 ms per parent render, on every
+ * state change, entirely wasted when nothing about a cell had changed.
+ *
+ * The comparator therefore ignores the two callback identities on purpose.
+ * That is only safe because everything they close over is itself compared:
+ *   - onClick        → dateKey / group type / subgroup name, fixed per cell and
+ *                      covered by `date` + `groupName`
+ *   - onToggleSelect → the cell's eligible ids and the selection set, both of
+ *                      which are reflected in `selectionState` + `selectableCount`
+ * So whenever a stale closure would matter, one of the compared props has
+ * already changed and the cell re-renders anyway.
+ *
+ * If a future prop is added, add it here too — a silent omission shows up as a
+ * cell that will not update.
+ */
+export const GroupSummaryCell = React.memo(GroupSummaryCellImpl, (prev, next) => {
+  return (
+    prev.date.getTime() === next.date.getTime() &&
+    prev.groupName === next.groupName &&
+    prev.summary === next.summary &&
+    prev.accent === next.accent &&
+    prev.isBulkMode === next.isBulkMode &&
+    prev.selectionState === next.selectionState &&
+    prev.selectableCount === next.selectableCount &&
+    prev.isLoading === next.isLoading
+  );
+});

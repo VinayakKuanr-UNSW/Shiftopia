@@ -50,7 +50,14 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
 
   const assignedEmployeeName =
     (shift as any).employeeName ||
-    (shift.employees ? `${shift.employees.first_name || ''} ${shift.employees.last_name || ''}`.trim() : null) ||
+    // `assigned_profiles` is the relation the query actually selects
+    // (`profiles!assigned_employee_id`). This read `shift.employees`, which no
+    // query has ever returned — a dead branch that always fell through to the
+    // `user` fallback, so a manager viewing someone else's shift saw their OWN
+    // name. Surfaced once the type-check gate was made real.
+    (shift.assigned_profiles
+      ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim()
+      : null) ||
     user?.fullName ||
     user?.name ||
     undefined;

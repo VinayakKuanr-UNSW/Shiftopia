@@ -33,6 +33,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { pageVariants, itemVariants, listItemSpring } from '@/modules/core/ui/motion/presets';
+import { normalizeNotificationEventType } from '@/platform/notifications/notificationPolicy';
 
 /* ── Badge color helper ─────────────────────────────────────── */
 type BadgeTone = 'info' | 'urgent' | 'warning' | 'success' | 'neutral';
@@ -63,6 +64,8 @@ const TYPE_META: Record<string, TypeMeta> = {
   emergency_assignment: { label: 'Emergency',        icon: BellRing,      color: 'bg-rose-600',    group: 'Shifts',     accent: 'bg-rose-600',    tone: 'urgent' },
   bid_accepted:         { label: 'Bid Accepted',     icon: BadgeCheck,    color: 'bg-green-500',   group: 'Bids',       accent: 'bg-green-500',   tone: 'success' },
   bid_rejected:         { label: 'Bid Rejected',     icon: BadgeCheck,    color: 'bg-red-500',     group: 'Bids',       accent: 'bg-red-500',     tone: 'urgent' },
+  bid_submitted:        { label: 'Bid Submitted',    icon: BadgeCheck,    color: 'bg-blue-500',    group: 'Bids',       accent: 'bg-blue-500',    tone: 'info' },
+  shift_bidding_open:   { label: 'Bidding Open',     icon: BadgeCheck,    color: 'bg-blue-500',    group: 'Bids',       accent: 'bg-blue-500',    tone: 'info' },
   bid_no_winner:        { label: 'No Winner',        icon: BadgeCheck,    color: 'bg-rose-500',    group: 'Bids',       accent: 'bg-rose-500',    tone: 'urgent' },
   offer_expired:        { label: 'Offer Expired',    icon: Calendar,      color: 'bg-rose-500',    group: 'Shifts',     accent: 'bg-rose-500',    tone: 'warning' },
   swap_request:         { label: 'Swap Request',     icon: RefreshCw,     color: 'bg-orange-500',  group: 'Swaps',      accent: 'bg-orange-500',  tone: 'warning' },
@@ -76,7 +79,16 @@ const TYPE_META: Record<string, TypeMeta> = {
 };
 
 function getMeta(type: string): TypeMeta {
-  return TYPE_META[type] ?? { label: 'Notice', icon: Bell, color: 'bg-slate-400', group: 'General', accent: 'bg-slate-400', tone: 'neutral' };
+  const key = type.toLowerCase();
+  const canonicalKey = normalizeNotificationEventType(type).toLowerCase();
+  return TYPE_META[key] ?? TYPE_META[canonicalKey] ?? inferMeta(canonicalKey);
+}
+
+function inferMeta(type: string): TypeMeta {
+  if (type.includes('swap')) return { label: 'Swap', icon: RefreshCw, color: 'bg-orange-500', group: 'Swaps', accent: 'bg-orange-500', tone: 'warning' };
+  if (type.includes('bid') || type.includes('marketplace')) return { label: 'Bid', icon: BadgeCheck, color: 'bg-blue-500', group: 'Bids', accent: 'bg-blue-500', tone: 'info' };
+  if (type.includes('shift') || type.includes('offer')) return { label: 'Shift', icon: Calendar, color: 'bg-cyan-500', group: 'Shifts', accent: 'bg-cyan-500', tone: 'info' };
+  return { label: 'Notice', icon: Bell, color: 'bg-slate-400', group: 'General', accent: 'bg-slate-400', tone: 'neutral' };
 }
 
 const MyNotificationsPage: React.FC = () => {
@@ -162,7 +174,7 @@ const MyNotificationsPage: React.FC = () => {
               <button
                 onClick={() => setActiveTab('all')}
                 className={cn(
-                  "flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 h-10 lg:h-11 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  "flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg px-6 text-[10px] font-black uppercase tracking-widest transition-all lg:flex-none",
                   activeTab === 'all'
                     ? "bg-primary text-white shadow-lg shadow-primary/20"
                     : "text-muted-foreground hover:text-foreground"
@@ -173,7 +185,7 @@ const MyNotificationsPage: React.FC = () => {
               <button
                 onClick={() => setActiveTab('unread')}
                 className={cn(
-                  "flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 h-10 lg:h-11 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  "flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg px-6 text-[10px] font-black uppercase tracking-widest transition-all lg:flex-none",
                   activeTab === 'unread'
                     ? "bg-primary text-white shadow-lg shadow-primary/20"
                     : "text-muted-foreground hover:text-foreground"
@@ -194,14 +206,14 @@ const MyNotificationsPage: React.FC = () => {
                 placeholder="SEARCH NOTIFICATIONS..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent border-0 shadow-none focus:ring-0 text-[11px] font-black uppercase tracking-widest h-10 lg:h-11"
+                className="min-h-[44px] flex-1 border-0 bg-transparent text-[11px] font-black uppercase tracking-widest shadow-none focus:ring-0"
               />
             </div>
 
             <Button
               variant="outline"
               className={cn(
-                "h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border-0",
+                "min-h-[44px] w-full justify-center rounded-xl border-0 px-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all lg:w-auto",
                 isDark ? "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white" : "bg-white/60 text-slate-900/40 hover:bg-white hover:text-slate-900 border border-slate-200/50"
               )}
             >

@@ -102,16 +102,14 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
     };
 
     return (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 flex items-center justify-between">
+        <div className="bg-card border border-border/30 rounded-2xl overflow-hidden flex flex-col h-[420px] shadow-xs">
+            {/* Header */}
+            <div className="px-5 py-3.5 border-b border-border/20 bg-card flex items-center justify-between shrink-0">
                 <div className="space-y-0.5">
-                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-slate-500" />
+                    <h3 className="text-sm font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-primary" aria-hidden="true" />
                         Work Rights
                     </h3>
-                    <p className="text-[10px] text-slate-400 font-medium pl-6 uppercase tracking-wider">
-                        Visa status and employment eligibility
-                    </p>
                 </div>
                 {!workRight && (
                     <AddLicenseDialog
@@ -122,44 +120,48 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                     />
                 )}
             </div>
-            <div className="p-5 flex-1">
+
+            {/* Scrollable Content Body */}
+            <div className="p-4 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
                 {isLoading ? (
-                    <div className="flex items-center justify-center h-full py-8">
-                        <p className="text-slate-400 text-sm animate-pulse">Loading work rights...</p>
+                    <div className="flex items-center justify-center h-full">
+                        <p className="text-muted-foreground text-xs font-medium animate-pulse">Loading work rights...</p>
                     </div>
                 ) : !workRight ? (
-                    <div className="flex flex-col items-center justify-center h-full py-8 text-center text-slate-400">
-                        <Shield className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                        <p className="text-sm font-medium">No work rights recorded</p>
+                    <div className="flex flex-col items-center justify-center h-full py-8 text-center text-muted-foreground">
+                        <Shield className="w-8 h-8 mx-auto mb-2 opacity-20" aria-hidden="true" />
+                        <p className="text-xs font-bold">No work rights recorded</p>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm transition-all group p-4">
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex-1">
-                                    <h4 className="font-semibold text-sm text-slate-900 dark:text-slate-100">{workRight.license?.name || 'Work Rights'}</h4>
+                    <div className="space-y-3">
+                        <div className="bg-muted/30 hover:bg-muted/60 rounded-xl border border-border/20 p-3.5 transition-colors group">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="min-w-0 flex-1">
+                                    <h4 className="font-bold text-xs text-foreground truncate">{workRight.license?.name || 'Work Rights'}</h4>
                                     {workRight.license?.description && (
-                                        <p className="text-[11px] text-slate-500 mt-1">{workRight.license.description}</p>
+                                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">{workRight.license.description}</p>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-1.5 shrink-0">
                                     <Badge className={
                                         workRight.status === 'Active'
-                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                            : 'bg-destructive/10 text-destructive border border-destructive/20'
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-[9px] uppercase shadow-none'
+                                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-[9px] uppercase shadow-none'
                                     }>
                                         {workRight.status}
                                     </Badge>
                                     <button
+                                        type="button"
                                         onClick={handleDelete}
-                                        className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-all p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                        aria-label="Remove Work Rights"
+                                        className="text-muted-foreground/60 hover:text-red-500 p-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
                                         title="Remove Work Rights"
                                     >
-                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                     </button>
                                 </div>
                             </div>
-                            <div className="flex gap-4 text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-3">
+                            <div className="flex flex-wrap gap-3 text-[9px] font-semibold text-muted-foreground mt-2">
                                 {workRight.issue_date && (
                                     <span>Issued: {format(parseISO(workRight.issue_date), 'MMM d, yyyy')}</span>
                                 )}
@@ -167,26 +169,26 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                                     <span>Expires: {format(parseISO(workRight.expiration_date), 'MMM d, yyyy')}</span>
                                 )}
                             </div>
-                            <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div className="pt-2.5 mt-2.5 border-t border-border/20 flex items-center justify-between">
                                 {getVerificationBadge()}
                             </div>
                         </div>
 
                         {/* Student Visa Restrictions Toggle */}
                         {isStudentVisa && (
-                            <div className="bg-amber-500/5 p-4 rounded-lg border border-amber-500/20">
-                                <div className="flex items-center justify-between mb-2">
+                            <div className="bg-amber-500/10 p-3.5 rounded-xl border border-amber-500/30 space-y-2">
+                                <div className="flex items-center justify-between gap-2">
                                     <div className="space-y-0.5">
-                                        <Label className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-2">
-                                            <AlertOctagon className="w-4 h-4" />
-                                            Student Visa Restrictions (Subclass 500)
+                                        <Label className="text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center gap-1.5">
+                                            <AlertOctagon className="w-3.5 h-3.5" aria-hidden="true" />
+                                            Student Visa (Subclass 500)
                                         </Label>
-                                        <p className="text-xs text-amber-600/80 dark:text-amber-400/80">
-                                            Limit work hours during study sessions
+                                        <p className="text-[10px] text-amber-600/90 dark:text-amber-400/90 font-medium">
+                                            Fortnightly work hours limit
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {isToggling && <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-400" />}
+                                        {isToggling && <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-400" aria-hidden="true" />}
                                         <Switch
                                             checked={workRight.has_restricted_work_limit || false}
                                             onCheckedChange={handleToggleWorkLimit}
@@ -197,8 +199,8 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                                 </div>
 
                                 {workRight.has_restricted_work_limit && (
-                                    <div className="mt-3 p-3 bg-amber-500/10 rounded border border-amber-500/20 text-amber-700 dark:text-amber-300 text-sm">
-                                        <strong>Restriction Active:</strong> Cannot work more than 48 hours a fortnight when course of study or training is in session.
+                                    <div className="p-2.5 bg-amber-500/15 rounded-lg border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-medium">
+                                        <strong>Restriction Active:</strong> Limited to 48 hours per fortnight while study session is active.
                                     </div>
                                 )}
                             </div>

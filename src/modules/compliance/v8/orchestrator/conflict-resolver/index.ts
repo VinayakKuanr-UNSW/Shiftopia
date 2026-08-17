@@ -128,7 +128,8 @@ export function resolveConflicts(input: ConflictResolverInput): ConflictResolver
         employee_catalog,
         existing_shifts_map,
         config,
-        input.base_state.employee_hours_28d,    // optional fairness data
+        input.base_state.employee_hours_28d,    // 28-day load
+        input.base_state.fairness_debts,        // F1 ledger debts (audit F-09)
     );
 
     // ── 3. Build conflict graph ───────────────────────────────────────────────

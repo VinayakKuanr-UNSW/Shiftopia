@@ -4,6 +4,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { cn } from '@/modules/core/lib/utils';
+import { PageState } from '@/modules/core/ui/components/PageState';
 import { useEmployeeBroadcasts } from '../../state/useBroadcasts';
 import { MessageItem } from '../components/MessageItem';
 import { EmptyMessages } from '../components/EmptyStates';
@@ -49,12 +50,13 @@ export const ChannelView: React.FC<ChannelViewProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 md:h-12 md:w-12 text-primary animate-spin" />
-          <p className="text-blue-200/60 font-medium animate-pulse text-sm md:text-base">Loading messages...</p>
-        </div>
-      </div>
+      <PageState
+        state="loading"
+        scope="section"
+        title="Loading messages"
+        description="Retrieving this channel’s broadcasts."
+        className="h-full"
+      />
     );
   }
 

@@ -1,6 +1,8 @@
 // src/types/templates.ts
 // Complete TypeScript types for Templates module - Production Ready
 
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
+
 /* ============================================================
    BASE TYPES
    ============================================================ */
@@ -79,7 +81,11 @@ export interface DbTemplateShift {
   assigned_employee_name: string | null;
   created_at: string;
   updated_at: string;
-  day_of_week: number;
+  /** 0 = Sunday .. 6 = Saturday. NULL is the "any day" wildcard. */
+  day_of_week: number | null;
+  /** NOT NULL: 'FT' | 'PT' | 'Casual'. No default — an insert must supply it. */
+  target_employment_type: TargetEmploymentType;
+  target_requires_flexible: boolean;
 }
 
 export interface DbTemplateSnapshot {
@@ -120,7 +126,26 @@ export interface TemplateShift {
   // Employee assignment
   assignedEmployeeId?: string | null;
   assignedEmployeeName?: string | null;
-  dayOfWeek?: number;
+  /**
+   * 0 = Sunday .. 6 = Saturday; null means "any day".
+   *
+   * apply_template_to_date_range_v2 stamps a shift when
+   * `day_of_week IS NULL OR day_of_week = <the day>`, so null and 0 are
+   * distinct states — never coerce one into the other.
+   */
+  dayOfWeek?: number | null;
+  /**
+   * Which employment type this shift is for. NOT NULL in the database with no
+   * default, so a shift saved without it is rejected outright — see
+   * `template_shifts_target_employment_type_check` ('FT' | 'PT' | 'Casual').
+   *
+   * The shift modal has always collected this (it is a required field there);
+   * the template editor dropped it while building its payload, which made every
+   * new template shift unsaveable once the column became mandatory.
+   */
+  targetEmploymentType?: TargetEmploymentType | null;
+  /** Narrows a 'PT' target to Flexible Part-Time only. Invalid on FT/Casual. */
+  targetRequiresFlexible?: boolean;
 }
 
 export interface SubGroup {
@@ -334,7 +359,11 @@ export function dbShiftToFrontend(dbShift: any): TemplateShift {
     // Employee assignment
     assignedEmployeeId: dbShift.assignedEmployeeId || dbShift.assigned_employee_id || null,
     assignedEmployeeName: dbShift.assignedEmployeeName || dbShift.assigned_employee_name || null,
-    dayOfWeek: dbShift.dayOfWeek ?? dbShift.day_of_week ?? 0,
+    // `?? null`, never `?? 0` — 0 is Sunday, not "unset". Coercing here made
+    // every weekday-less shift claim to be a Sunday shift.
+    dayOfWeek: dbShift.dayOfWeek ?? dbShift.day_of_week ?? null,
+    targetEmploymentType: dbShift.targetEmploymentType ?? dbShift.target_employment_type ?? null,
+    targetRequiresFlexible: dbShift.targetRequiresFlexible ?? dbShift.target_requires_flexible ?? false,
   };
 }
 
@@ -437,6 +466,17 @@ export function frontendToDbGroups(groups: Group[]): any[] {
         siteTags: sh.siteTags || [],
         eventTags: sh.eventTags || [],
         notes: sh.notes || null,
+        // save_template_full reads (v_shift->>'dayOfWeek')::integer. Omitting
+        // the key sent NULL for every shift, and NULL is the "any day" wildcard
+        // apply_template_to_date_range_v2 checks first — so a single save in the
+        // editor silently turned a Tue/Wed/Thu template into an every-day one.
+        dayOfWeek: sh.dayOfWeek ?? null,
+        // NOT NULL in the database with no default. Sent explicitly rather than
+        // defaulted here: guessing an employment target is how shifts ended up
+        // priced off an `|| 'Casual'` fallback. If it is missing the save should
+        // fail loudly, which is what the column's NOT NULL is for.
+        targetEmploymentType: sh.targetEmploymentType ?? null,
+        targetRequiresFlexible: sh.targetRequiresFlexible ?? false,
         sortOrder: shIdx,
         // Employee assignment
         assignedEmployeeId: sh.assignedEmployeeId || null,

@@ -82,17 +82,19 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
             return;
         }
 
-        const selectedLicense = licenses.find(l => l.id === formData.license_id);
-        if (selectedLicense?.requires_expiration && !formData.expiration_date) {
-            toast({ title: 'Error', description: 'Expiration date is required for this license', variant: 'destructive' });
+        if (!formData.issue_date) {
+            toast({ title: 'Validation Error', description: 'Issue date is mandatory', variant: 'destructive' });
             return;
         }
 
-        if (formData.issue_date && formData.expiration_date) {
-            if (new Date(formData.issue_date) > new Date(formData.expiration_date)) {
-                toast({ title: 'Validation Error', description: 'Issue date cannot be after expiration date', variant: 'destructive' });
-                return;
-            }
+        if (!formData.expiration_date) {
+            toast({ title: 'Validation Error', description: 'Expiry date is mandatory', variant: 'destructive' });
+            return;
+        }
+
+        if (new Date(formData.issue_date) > new Date(formData.expiration_date)) {
+            toast({ title: 'Validation Error', description: 'Issue date cannot be after expiration date', variant: 'destructive' });
+            return;
         }
 
         setIsSubmitting(true);
@@ -179,10 +181,11 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                     {/* Dates Grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label className="text-muted-foreground">Issue Date</Label>
+                            <Label className="text-muted-foreground">Issue Date <span className="text-red-500">*</span></Label>
                             <div className="relative">
                                 <Input
                                     type="date"
+                                    required
                                     className="bg-muted/30 border-border"
                                     value={formData.issue_date}
                                     onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
@@ -190,13 +193,11 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-muted-foreground">
-                                Expiry Date
-                                {selectedLicense?.requires_expiration && <span className="text-red-400 ml-1">*</span>}
-                            </Label>
+                            <Label className="text-muted-foreground">Expiry Date <span className="text-red-500">*</span></Label>
                             <div className="relative">
                                 <Input
                                     type="date"
+                                    required
                                     className="bg-muted/30 border-border"
                                     value={formData.expiration_date}
                                     onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}

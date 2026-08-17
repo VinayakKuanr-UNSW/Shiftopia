@@ -24,11 +24,15 @@ export const V8_RULE_METADATA: Record<string, V8RuleMeta> = {
         category: 'TIME',
         description: 'No two shifts may overlap in time.'
     },
-    V8_MIN_ENGAGEMENT: {
-        id: 'V8_MIN_ENGAGEMENT',
-        name: 'Minimum Engagement',
+    // Minimum engagement and the full-time 7.6h ordinary-day floor are no longer
+    // V8 rules — they depend only on the shift, so they moved to
+    // `@/modules/compliance/shape` (SHAPE_MIN_ENGAGEMENT / SHAPE_FT_MIN_DAY) and
+    // run at shift creation rather than at assignment. See v8/engine.ts.
+    V8_FT_DAYS_OFF: {
+        id: 'V8_FT_DAYS_OFF',
+        name: 'Full-Time Paired Days Off',
         category: 'TIME',
-        description: 'Shift must meet the minimum engagement (2h training · 3h weekday · 4h Sunday/PH).'
+        description: 'Full-time employees must have, on average, two consecutive days off each week during the work cycle (cl 35.1(e)). Waivable by mutual agreement, so advisory.'
     },
     V8_MAX_DAILY_HOURS: {
         id: 'V8_MAX_DAILY_HOURS',
@@ -60,18 +64,20 @@ export const V8_RULE_METADATA: Record<string, V8RuleMeta> = {
         category: 'CONTRACT',
         description: 'Average ordinary hours over 4 weeks must not exceed contracted weekly rate.'
     },
+    V8_EMPLOYMENT_TARGET: {
+        id: 'V8_EMPLOYMENT_TARGET',
+        name: 'Employment Target',
+        category: 'CONTRACT',
+        description: 'Only staff whose contract matches the shift\'s target employment type may be assigned.'
+    },
     V8_STUDENT_VISA_LIMIT: {
         id: 'V8_STUDENT_VISA_LIMIT',
         name: 'Student Visa 48h Limit',
         category: 'LEGAL',
         description: 'Student visa holders must not exceed 48 hours per fortnight.'
     },
-    V8_MEAL_BREAK: {
-        id: 'V8_MEAL_BREAK',
-        name: 'Meal Break',
-        category: 'TIME',
-        description: 'Mandatory meal break required for shifts over 5 hours.'
-    },
+    // Meal break and rest pauses likewise moved to the shape layer
+    // (SHAPE_MEAL_BREAK / SHAPE_MEAL_BREAK_CEILING / SHAPE_REST_PAUSE_1 / _2).
     V8_QUALIFICATIONS: {
         id: 'V8_QUALIFICATIONS',
         name: 'Qualifications',

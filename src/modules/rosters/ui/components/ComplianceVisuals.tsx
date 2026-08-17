@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { AlertTriangle, Calendar, Clock } from 'lucide-react';
-import { format, parseISO, startOfWeek, addDays, getISOWeek, differenceInDays } from 'date-fns';
+import { format, parseISO, addDays, getISOWeek, differenceInDays } from 'date-fns';
 
 // =============================================================================
 // STUDENT VISA VIZ (Weekly Bars)

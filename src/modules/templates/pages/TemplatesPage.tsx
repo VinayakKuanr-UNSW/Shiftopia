@@ -1,16 +1,14 @@
 // src/pages/TemplatesPage.tsx
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useAuth } from '@/platform/auth/useAuth';
 import { useTemplates } from '../state/useTemplates';
 import { TemplateConflict } from '../model/templates.types';
 
 // Components
-import TemplatesSidebar from '../ui/components/TemplatesSidebar';
+import TemplateExplorer, { ExplorerTemplate } from '../ui/components/TemplateExplorer';
 import TemplateEditor from '../ui/components/TemplateEditor';
 import CreateTemplateDialog from '../ui/dialogs/CreateTemplateDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Sheet, SheetContent } from '@/modules/core/ui/primitives/sheet';
-import { Loader2, AlertTriangle, FileText, Menu } from 'lucide-react';
+import { Loader2, AlertTriangle, FileText } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,7 +61,7 @@ const TemplatesPage: React.FC = () => {
   } = useTemplates();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const [unsavedChangesDialog, setUnsavedChangesDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -73,6 +71,12 @@ const TemplatesPage: React.FC = () => {
     currentVersion: number;
     serverVersion: number;
   } | null>(null);
+
+  const [statusFilter, setStatusFilter] = useState<'published' | 'draft' | 'archived'>('published');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<string>('updated-desc');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const { isDark } = useTheme();
 
   const organizationId = scope.org_ids[0] ?? '';
   const departmentId = scope.dept_ids[0] || '';
@@ -92,9 +96,7 @@ const TemplatesPage: React.FC = () => {
   useEffect(() => {
     if (currentTemplate) {
       const isCorrectOrg = currentTemplate.organizationId === organizationId;
-      // If department is selected, template must match it. If not, any template in the org is fine.
       const isCorrectDept = !departmentId || currentTemplate.departmentId === departmentId;
-      // If sub-department is selected, template must match it.
       const isCorrectSubDept = !subDepartmentId || currentTemplate.subDepartmentId === subDepartmentId;
 
       if (!isCorrectOrg || !isCorrectDept || !isCorrectSubDept) {
@@ -103,6 +105,17 @@ const TemplatesPage: React.FC = () => {
       }
     }
   }, [organizationId, departmentId, subDepartmentId, currentTemplate, setCurrentTemplate]);
+
+  // Auto-switch to Draft filter if there are no published templates available
+  useEffect(() => {
+    if (templates.length > 0) {
+      const hasPublished = templates.some((t) => t.status === 'published');
+      const hasDraft = templates.some((t) => t.status === 'draft');
+      if (!hasPublished && hasDraft && statusFilter === 'published' && !currentTemplate) {
+        setStatusFilter('draft');
+      }
+    }
+  }, [templates, statusFilter, currentTemplate]);
 
   const confirmAction = useCallback(
     (action: () => void) => {
@@ -122,11 +135,20 @@ const TemplatesPage: React.FC = () => {
     setUnsavedChangesDialog(false);
   }, [pendingAction]);
 
-  const handleSelectTemplate = useCallback(
+  // Single click row selection in the explorer
+  const handleSelectTemplate = useCallback((id: string) => {
+    setSelectedTemplateId(id);
+  }, []);
+
+  // Double click / Enter / Open button: Loads template and opens full-width editor
+  const handleOpenTemplate = useCallback(
     async (id: number | string) => {
       const action = async () => {
+        setSelectedTemplateId(String(id));
         const template = await fetchTemplate(String(id));
-        if (template) setCurrentTemplate(template);
+        if (template) {
+          setCurrentTemplate(template);
+        }
       };
       confirmAction(action);
     },
@@ -149,12 +171,14 @@ const TemplatesPage: React.FC = () => {
         subDepartmentId: input.subDepartmentId,
       });
 
-      if (result) setCreateDialogOpen(false);
+      if (result) {
+        setCreateDialogOpen(false);
+        setSelectedTemplateId(String(result.id));
+      }
     },
     [createTemplate]
   );
 
-  // ✅ FIXED: Always return boolean
   const handleSaveChanges = useCallback(async (): Promise<boolean> => {
     const versionCheck = await checkVersion();
 
@@ -181,13 +205,26 @@ const TemplatesPage: React.FC = () => {
     setVersionConflictInfo(null);
   }, [currentTemplate, fetchTemplate, setCurrentTemplate]);
 
+  // Back button in the editor: returns to the file explorer
   const handleBack = useCallback(() => {
-    confirmAction(() => setCurrentTemplate(null));
+    confirmAction(() => {
+      setCurrentTemplate(null);
+    });
   }, [setCurrentTemplate, confirmAction]);
 
   const handleArchiveTemplate = useCallback(
     async (id: string) => {
       await updateTemplateStatus(id, 'archived');
+      if (currentTemplate?.id && String(currentTemplate.id) === id) {
+        setCurrentTemplate(null);
+      }
+    },
+    [updateTemplateStatus, currentTemplate?.id, setCurrentTemplate]
+  );
+
+  const handleRestoreTemplate = useCallback(
+    async (id: string) => {
+      await updateTemplateStatus(id, 'draft');
     },
     [updateTemplateStatus]
   );
@@ -199,35 +236,36 @@ const TemplatesPage: React.FC = () => {
     [updateTemplateStatus]
   );
 
-  const sidebarTemplates = templates.map((t) => ({
-    id: String(t.id),
-    name: t.name,
-    description: t.description,
-    status: t.status,
-    version: t.version,
-    startDate: t.startDate ?? null,
-    endDate: t.endDate ?? null,
-    updatedAt: t.updatedAt,
-    publishedAt: t.publishedAt ?? null,
-    organizationName: t.organizationName,
-    departmentName: t.departmentName,
-    subDepartmentName: t.subDepartmentName,
-    groupCount: t.groups?.length ?? 0,
-    subgroupCount:
-      t.groups?.reduce((a, g) => a + (g.subGroups?.length ?? 0), 0) ?? 0,
-    shiftCount:
-      t.groups?.reduce(
-        (a, g) =>
-          a +
-          (g.subGroups?.reduce((sa, sg) => sa + (sg.shifts?.length ?? 0), 0) ??
-            0),
-        0
-      ) ?? 0,
-  }));
-
-  const [statusFilter, setStatusFilter] = useState<'published' | 'draft' | 'archived'>('published');
-  const [searchQuery, setSearchQuery] = useState('');
-  const { isDark } = useTheme();
+  const explorerTemplates: ExplorerTemplate[] = useMemo(
+    () =>
+      templates.map((t) => ({
+        id: String(t.id),
+        name: t.name,
+        description: t.description,
+        status: t.status,
+        version: t.version,
+        startDate: t.startDate ?? null,
+        endDate: t.endDate ?? null,
+        updatedAt: t.updatedAt,
+        createdAt: (t as any).createdAt,
+        publishedAt: t.publishedAt ?? null,
+        organizationName: t.organizationName,
+        departmentName: t.departmentName,
+        subDepartmentName: t.subDepartmentName,
+        groupCount: t.groups?.length ?? 0,
+        subgroupCount:
+          t.groups?.reduce((a, g) => a + (g.subGroups?.length ?? 0), 0) ?? 0,
+        shiftCount:
+          t.groups?.reduce(
+            (a, g) =>
+              a +
+              (g.subGroups?.reduce((sa, sg) => sa + (sg.shifts?.length ?? 0), 0) ??
+                0),
+            0
+          ) ?? 0,
+      })),
+    [templates]
+  );
 
   const counts = useMemo(
     () => ({
@@ -238,24 +276,10 @@ const TemplatesPage: React.FC = () => {
     [templates]
   );
 
-  const sidebarProps = {
-    templates: sidebarTemplates,
-    selectedTemplateId: currentTemplate?.id ? String(currentTemplate.id) : null,
-    isLoading: isLoading,
-    onSelectTemplate: handleSelectTemplate,
-    onCreateTemplate: () => setCreateDialogOpen(true),
-    onDeleteTemplate: deleteTemplate,
-    onDuplicateTemplate: duplicateTemplate,
-    onRenameTemplate: renameTemplate,
-    onArchiveTemplate: handleArchiveTemplate,
-    statusFilter,
-    searchQuery,
-  };
-
   return (
     <div className="h-full flex flex-col overflow-hidden px-4 md:px-8 pb-24 md:pb-0 space-y-4">
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+      <div className="sticky top-0 z-30 pt-4 pb-2 lg:pb-4">
         <div className={cn(
           "rounded-[32px] p-4 lg:p-6 transition-all border",
           isDark 
@@ -273,96 +297,97 @@ const TemplatesPage: React.FC = () => {
           />
 
           {/* Row 3: Function Bar */}
-          <div className="mt-4 lg:mt-6">
-            <TemplateFunctionBar
-              transparent
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              searchQuery={searchQuery}
-              onSearchQueryChange={setSearchQuery}
-              onCreateTemplate={() => setCreateDialogOpen(true)}
-              counts={counts}
-            />
-          </div>
+          {!localTemplate && (
+            <div className="mt-4 lg:mt-6">
+              <TemplateFunctionBar
+                transparent
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                onCreateTemplate={() => setCreateDialogOpen(true)}
+                counts={counts}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── Main Content Area ─────────────────────────── */}
+      {/* ── Main Content Area (Full-Width Explorer or Editor) ─────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
-          "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col md:flex-row",
+          "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
           isDark 
             ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
             : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
         )}>
           {error && !isLoading && templates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full w-full">
-              <AlertTriangle className="h-10 w-10 text-red-500 mb-4" />
-              <p>{error}</p>
+            <div className="flex flex-col items-center justify-center h-full w-full px-6 text-center" role="alert">
+              <AlertTriangle className="h-10 w-10 text-red-500 mb-4" aria-hidden="true" />
+              <p className="text-foreground">{error}</p>
               <Button onClick={() => fetchTemplates({
                 organizationId,
                 departmentId: departmentId || undefined,
                 subDepartmentId: subDepartmentId || undefined,
-              })} className="mt-4">Retry</Button>
+              })} className="mt-4 h-11 min-h-[44px] px-5 font-bold">Retry</Button>
             </div>
           ) : (isLoading || isScopeLoading) && templates.length === 0 ? (
-            <div className="flex items-center justify-center h-full w-full">
-              <Loader2 className="h-8 w-8 animate-spin" />
+            <div className="flex items-center justify-center h-full w-full" role="status">
+              <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
+              <span className="sr-only">Loading templates…</span>
+            </div>
+          ) : localTemplate ? (
+            /* ── Full-Width Template Editor ───────────────────────────── */
+            <div className="flex-1 overflow-hidden flex flex-col h-full animate-in fade-in-50 duration-200">
+              <TemplateEditor
+                template={localTemplate}
+                isSaving={isSaving}
+                hasUnsavedChanges={hasUnsavedChanges}
+                onBack={handleBack}
+                onUpdateGroup={updateLocalGroup}
+                onAddSubgroup={addLocalSubgroup}
+                onUpdateSubgroup={updateLocalSubgroup}
+                onDeleteSubgroup={deleteLocalSubgroup}
+                onCloneSubgroup={cloneLocalSubgroup}
+                onAddShift={addLocalShift}
+                onUpdateShift={updateLocalShift}
+                onDeleteShift={deleteLocalShift}
+                onSaveChanges={handleSaveChanges}
+                onUpdateStatus={handleUpdateStatus}
+                onDiscardChanges={discardChanges}
+              />
             </div>
           ) : (
-            <>
-              {/* Mobile sidebar drawer */}
-              <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-                <SheetContent side="left" className="p-0 w-[320px]">
-                  <TemplatesSidebar {...sidebarProps} onSelectTemplate={(id) => { handleSelectTemplate(id); setMobileSidebarOpen(false); }} />
-                </SheetContent>
-              </Sheet>
-
-              {/* Desktop sidebar — always visible */}
-              <div className="hidden md:flex border-r border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-black/10">
-                <TemplatesSidebar {...sidebarProps} />
-              </div>
-
-              <div className="flex-1 overflow-hidden flex flex-col">
-                {/* Mobile hamburger to open sidebar */}
-                <div className="md:hidden flex items-center px-4 pt-3">
-                  <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => setMobileSidebarOpen(true)}>
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </div>
-                {localTemplate ? (
-                  <TemplateEditor
-                    template={localTemplate}
-                    isSaving={isSaving}
-                    hasUnsavedChanges={hasUnsavedChanges}
-                    onBack={handleBack}
-                    onUpdateGroup={updateLocalGroup}
-                    onAddSubgroup={addLocalSubgroup}
-                    onUpdateSubgroup={updateLocalSubgroup}
-                    onDeleteSubgroup={deleteLocalSubgroup}
-                    onCloneSubgroup={cloneLocalSubgroup}
-                    onAddShift={addLocalShift}
-                    onUpdateShift={updateLocalShift}
-                    onDeleteShift={deleteLocalShift}
-                    onSaveChanges={handleSaveChanges}
-                    onUpdateStatus={handleUpdateStatus}
-                    onDiscardChanges={discardChanges}
-                  />
-                ) : (
-                  <div className="flex flex-col flex-1 items-center justify-center h-full text-muted-foreground bg-muted/5">
-                    <FileText className="h-16 w-16 mb-4 opacity-50" />
-                    <p className="text-lg font-medium">Select a template to view details</p>
-                    <p className="text-sm opacity-60">
-                      Or create a new one from the functional bar
-                    </p>
-                  </div>
-                )}
-              </div>
-            </>
+            /* ── File Explorer Template List ──────────────────────────── */
+            <div className="flex-1 overflow-hidden flex flex-col h-full animate-in fade-in-50 duration-200">
+              <TemplateExplorer
+                templates={explorerTemplates}
+                selectedTemplateId={selectedTemplateId}
+                onSelectTemplate={handleSelectTemplate}
+                onOpenTemplate={handleOpenTemplate}
+                onCreateTemplate={() => setCreateDialogOpen(true)}
+                onDuplicateTemplate={duplicateTemplate}
+                onDeleteTemplate={deleteTemplate}
+                onRenameTemplate={renameTemplate}
+                onArchiveTemplate={handleArchiveTemplate}
+                onRestoreTemplate={handleRestoreTemplate}
+                isLoading={isLoading}
+                statusFilter={statusFilter}
+                searchQuery={searchQuery}
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                onSwitchToDraft={() => setStatusFilter('draft')}
+              />
+            </div>
           )}
         </div>
       </div>
 
+      {/* ── Dialogs ─────────────────────────────────────────────────── */}
       <CreateTemplateDialog
         isOpen={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
@@ -375,13 +400,13 @@ const TemplatesPage: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
             <AlertDialogDescription>
-              Discard your changes?
+              You have unsaved changes in this template. Are you sure you want to discard them and return to the templates list?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={executePendingAction}>
-              Discard
+              Discard Changes
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -392,13 +417,13 @@ const TemplatesPage: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Version conflict</AlertDialogTitle>
             <AlertDialogDescription>
-              Server version is newer.
+              Another user or process has updated this template (Server v{versionConflictInfo?.serverVersion}, Local v{versionConflictInfo?.currentVersion}). Please refresh to load the latest version.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleVersionConflictRefresh}>
-              Refresh
+              Refresh &amp; Load Latest
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

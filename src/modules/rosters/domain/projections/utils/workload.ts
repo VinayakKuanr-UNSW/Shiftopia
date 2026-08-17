@@ -84,10 +84,15 @@ type FatigueShift = {
  * otherwise be starved of prior-week shifts and under-count fatigue), but it is
  * never itself a reference date — we only report the peak on days actually shown.
  * The mapped array is built once (not per reference date) to avoid O(D×N) allocs.
+ *
+ * `history` is REQUIRED (audit F-22): it defaulted to `[]`, and two of the three
+ * call sites silently took that default despite the paragraph above explaining
+ * why they must not. Pass `[]` explicitly when you genuinely have no history —
+ * that way it is a decision, not an omission.
  */
 export function computePeakFatigue(
   shifts: FatigueShift[],
-  history: FatigueShift[] = [],
+  history: FatigueShift[],
 ): number {
   if (shifts.length === 0) return 0;
   const referenceDates = Array.from(new Set(shifts.map((s) => s.shift_date)));
@@ -102,8 +107,13 @@ export function computePeakFatigue(
     : shifts.map(normalize);
   let peak = 0;
   for (const referenceDate of referenceDates) {
-    const { current } = calculateFatigueWithRecovery(mapped, referenceDate);
-    if (current > peak) peak = current;
+    // `peak`, not `current`: this metric is "how bad does this roster get for
+    // this person", so it must read the maximum reached on each day, NOT the
+    // value after resting to midnight. `current` now decays to the reference
+    // instant (audit F-03) and is the right reading for "as of now" — they are
+    // deliberately different numbers.
+    const { peak: dayPeak } = calculateFatigueWithRecovery(mapped, referenceDate);
+    if (dayPeak > peak) peak = dayPeak;
   }
   return peak;
 }

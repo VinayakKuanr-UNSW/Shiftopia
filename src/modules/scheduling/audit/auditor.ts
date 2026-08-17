@@ -55,6 +55,75 @@ const REASON_DESCRIPTIONS: Record<string, string> = {
     SHIFT_TOO_SHORT: 'Shift duration is below the minimum-engagement floor.',
     HARD_AVAILABILITY_BLOCK: 'Shift falls inside a hard availability block.',
     OUTSIDE_DECLARED_AVAILABILITY: "Shift falls outside the employee's declared availability.",
+    OUTSIDE_CONTRACT_ORDINARY_HOURS: "Shift falls outside the employee's contracted ordinary-hours span.",
+    EMPLOYMENT_TARGET: 'Shift is for a different employment type (see the shift target).',
+    EMPLOYMENT_TARGET_FLEXIBLE: 'Shift requires Flexible Part-Time staff.',
+    CAPACITY_CONFLICT: 'Employee is already on another shift at this time.',
+    INSUFFICIENT_CAPACITY: 'Not enough available people-hours on this day.',
+    OPTIMIZER_TRADEOFF: 'Eligible, but the solver used this person elsewhere.',
+};
+
+/** Short, sortable labels for the report's aggregated blocker table, plus the
+ *  action that would actually unlock the staff behind each one. A blocker with
+ *  no fix listed is one the roster author cannot change from this screen. */
+export const BLOCKER_LABELS: Record<string, { label: string; fix: string }> = {
+    OUTSIDE_DECLARED_AVAILABILITY: {
+        label: 'Outside declared availability',
+        fix: 'Ask these staff to widen their availability, or move the shift inside it.',
+    },
+    // Deliberately a SEPARATE blocker from the one above, because the fix is not
+    // the same: an employee can widen a declaration, but nobody can widen a
+    // contract from this screen. Telling a manager to "ask them to widen their
+    // availability" for a full-timer who holds no availability at all is the kind
+    // of dead-end advice this table exists to avoid.
+    OUTSIDE_CONTRACT_ORDINARY_HOURS: {
+        label: 'Outside contracted hours',
+        fix: 'Move the shift inside their contracted ordinary-hours span, or roster staff whose contract covers it.',
+    },
+    EMPLOYMENT_TARGET: {
+        label: 'Wrong employment type',
+        fix: "Change the shift's target employment type, or roster staff on a matching contract.",
+    },
+    EMPLOYMENT_TARGET_FLEXIBLE: {
+        label: 'Not Flexible Part-Time',
+        fix: "Clear the shift's 'requires flexible' flag, or use Flexible PT staff.",
+    },
+    ROLE_MISMATCH: {
+        label: 'Role not contracted',
+        fix: 'Add the role to their contract, or retarget the shift to a role they hold.',
+    },
+    QUALIFICATION_MISSING: {
+        label: 'Missing qualification',
+        fix: 'Record the missing skill/licence, or relax the shift requirement.',
+    },
+    REST_GAP: {
+        label: 'Rest gap too short',
+        fix: 'Free up an adjacent shift, or move this one later in the day.',
+    },
+    CAPACITY_CONFLICT: {
+        label: 'Already on a shift then',
+        fix: 'Nothing to fix — they are already working this slot.',
+    },
+    UNAVAILABLE_DATE: {
+        label: 'Marked unavailable / on leave',
+        fix: 'Nothing to fix — the date is blocked off.',
+    },
+    HARD_AVAILABILITY_BLOCK: {
+        label: 'Hard availability block',
+        fix: 'Remove the block, or move the shift outside it.',
+    },
+    SHIFT_TOO_SHORT: {
+        label: 'Below minimum engagement',
+        fix: 'Lengthen the shift past the minimum-engagement floor.',
+    },
+    INSUFFICIENT_CAPACITY: {
+        label: 'Not enough people-hours that day',
+        fix: 'Add staff availability on this date.',
+    },
+    OPTIMIZER_TRADEOFF: {
+        label: 'Used elsewhere by the solver',
+        fix: 'Eligible staff existed — re-run, or add capacity so both shifts can be filled.',
+    },
 };
 
 // =============================================================================
@@ -230,10 +299,17 @@ export class Auditor {
                     allEmployeesPass = false;
                 } else if (outsideAvailability) {
                     status = 'FAIL';
-                    violations.push({
-                        type: 'OUTSIDE_DECLARED_AVAILABILITY',
-                        description: `Shift falls outside the employee's declared availability for ${s.shift_date}.`,
-                    });
+                    // The server audit reports this same reason. Push the
+                    // client-side mirror ONLY when the server did not already
+                    // say it, or every row reads "…declared availability.;
+                    // …declared availability for 2026-08-20." — the same fact
+                    // twice, which is most of the width of the detail table.
+                    if (!violations.some(v => v.type === 'OUTSIDE_DECLARED_AVAILABILITY')) {
+                        violations.push({
+                            type: 'OUTSIDE_DECLARED_AVAILABILITY',
+                            description: `Shift falls outside the employee's declared availability for ${s.shift_date}.`,
+                        });
+                    }
                     summary['OUTSIDE_DECLARED_AVAILABILITY'] = (summary['OUTSIDE_DECLARED_AVAILABILITY'] ?? 0) + 1;
                     allEmployeesPass = false;
                 } else if (res && !res.passing) {

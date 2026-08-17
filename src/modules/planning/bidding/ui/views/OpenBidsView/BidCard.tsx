@@ -1,7 +1,7 @@
 // src/modules/planning/bidding/ui/views/OpenBidsView/BidCard.tsx
 
 import React from 'react';
-import { CheckCircle2, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
@@ -37,6 +37,14 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
 
   const risk = riskConfig[bid.fatigueRisk as keyof typeof riskConfig] || riskConfig.low;
 
+  const eligibilityConfig = {
+    pass:    { label: 'Eligible', icon: <ShieldCheck className="h-3.5 w-3.5" />, cls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
+    warning: { label: 'Warning',  icon: <AlertTriangle className="h-3.5 w-3.5" />, cls: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400' },
+    blocked: { label: 'Blocked',  icon: <ShieldAlert className="h-3.5 w-3.5" />, cls: 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400' },
+  } as const;
+  const eligibility = bid.eligibility ? eligibilityConfig[bid.eligibility] : null;
+  const sssHint = bid.sssFlag === 'INSUFFICIENT_DATA' ? 'NEW' : bid.sssFlag === 'LIMITED' ? '~' : null;
+
   return (
     <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-5 hover:bg-muted/30 hover:shadow-xl transition-all duration-300 group shadow-sm">
       {/* Avatar */}
@@ -64,6 +72,30 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
           <span className="text-primary/20">•</span>
           <span>Submitted {new Date(bid.submittedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</span>
         </div>
+      </div>
+
+      {/* Eligibility (per-shift skill/qualification match) */}
+      {eligibility && (
+        <div
+          className={cn(
+            'px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0 shadow-sm',
+            eligibility.cls,
+          )}
+          title="Whether the bidder holds this shift's required skills & licenses"
+        >
+          {eligibility.icon}
+          {eligibility.label}
+        </div>
+      )}
+
+      {/* SSS Score */}
+      <div
+        className="px-2.5 py-1.5 rounded-xl border border-primary/20 bg-primary/10 text-primary text-[10px] font-mono font-bold shrink-0 flex items-center gap-1 shadow-sm"
+        title={sssHint === 'NEW' ? 'New bidder — ranked on skill match only' : sssHint === '~' ? 'Limited history — score may be provisional' : 'Shift Suitability Score'}
+      >
+        <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-black">SSS</span>
+        <span className="font-black text-xs">{bid.sss}</span>
+        {sssHint && <span className="text-[8px] font-black text-amber-500">{sssHint}</span>}
       </div>
 
       {/* Fatigue Risk */}

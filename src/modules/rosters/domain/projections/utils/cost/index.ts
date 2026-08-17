@@ -68,6 +68,57 @@ export function extractLevel(roleName?: string | null): string | undefined {
   return undefined;
 }
 
+/**
+ * Resolve a shift's Schedule 1 classification.
+ *
+ * PREFERS the stored `remuneration_level`, which is real data, over
+ * `extractLevel(role_name)`, which keyword-matches a free-text string and
+ * returns undefined for anything it doesn't recognise ("Team Member" among
+ * them) — silently pricing at the default Level 1 casual rate. The level only
+ * became reliable once 20260806120100 made template-generated shifts inherit
+ * `remuneration_level` from their template row; before that it was always NULL,
+ * which is why the name-guess was the only signal available.
+ */
+function resolveClassificationLevel(
+  remunerationLevel: unknown,
+  roleName?: string | null,
+): string | undefined {
+  const lvl = Number(remunerationLevel);
+  if (Number.isInteger(lvl) && lvl >= 1 && lvl <= 7) return `LEVEL_${lvl}`;
+  return extractLevel(roleName);
+}
+
+/** Roles already warned about a missing employment target (once per process). */
+const warnedMissingTarget = new Set<string>();
+
+/**
+ * Normalise a shift's employment target into the engine's vocabulary.
+ *
+ * `shifts.target_employment_type` is NOT NULL as of 20260806120100, so a missing
+ * value here means a synthetic/preview object, never a persisted shift. It used
+ * to default to `'Casual'`, which silently priced 156 of 156 prod shifts at the
+ * loaded casual rate on nothing more than an absent field. That assumption is
+ * gone: an unknown target is reported and left undefined, so the engine prices
+ * it as permanent rather than inventing a 25% loading.
+ */
+function resolveEmploymentType(empType?: string | null): string | undefined {
+  if (empType === 'FT' || /full/i.test(empType || '')) return 'Full-Time';
+  if (empType === 'PT' || /part/i.test(empType || '')) return 'Part-Time';
+  if (empType) return empType;
+
+  const key = 'missing-target';
+  if (!warnedMissingTarget.has(key)) {
+    warnedMissingTarget.add(key);
+    console.warn(
+      '[cost/resolveEmploymentType] A shift reached the cost engine with no ' +
+      'target_employment_type. Every persisted shift must declare one ' +
+      '(shifts.target_employment_type is NOT NULL) — pricing must not be guessed. ' +
+      'Pass the shift\'s target, or the assigned employee\'s employment type.',
+    );
+  }
+  return undefined;
+}
+
 export function estimateDetailedShiftCost(
   options: CostCalculatorOptions & { isSecurityRole?: boolean },
   ctx?: AwardContext,
@@ -109,9 +160,13 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,
     previousWage: shift.previousWage,
+    // cl 36.1 — the engine's start/end fallback can only net out the unpaid meal
+    // break if it is told about it. Omitting this key silently PAID the break on
+    // every caller that relies on that fallback.
+    unpaid_break_minutes: shift.unpaid_break_minutes,
     employmentType: shift.target_employment_type,
     isSecurityRole: shift.roles?.name?.toLowerCase().includes('security'),
-    classificationLevel: extractLevel(shift.roles?.name),
+    classificationLevel: resolveClassificationLevel(shift.remuneration_level, shift.roles?.name),
     // cl 42 weekly OT is cross-shift context this single-shift wrapper can't
     // derive; pass it through only if a caller has already computed it. Undefined
     // ⇒ no weekly OT (unchanged legacy behaviour).
@@ -153,9 +208,11 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,
     previousWage: shift.previousWage,
-    employmentType: (empType === 'FT' || /full/i.test(empType)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType)) ? 'Part-Time' : (empType || 'Casual'),
+    // See estimateCostFromShift — without this the unpaid meal break is paid.
+    unpaid_break_minutes: shift.unpaid_break_minutes,
+    employmentType: resolveEmploymentType(empType),
     isSecurityRole: roleName?.toLowerCase().includes('security'),
-    classificationLevel: extractLevel(roleName),
+    classificationLevel: resolveClassificationLevel(shift.remuneration_level, roleName),
     // See estimateCostFromShift — cross-shift weekly-OT context is only forwarded
     // when a caller has already computed it; undefined leaves weekly OT off.
     priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,

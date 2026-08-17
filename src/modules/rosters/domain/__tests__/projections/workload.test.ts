@@ -88,13 +88,13 @@ describe('isOverContractedHours', () => {
 
 describe('computePeakFatigue', () => {
   it('empty roster → 0', () => {
-    expect(computePeakFatigue([])).toBe(0);
+    expect(computePeakFatigue([], [])).toBe(0);
   });
 
   it('a single 09:00–17:00 day shift yields the formula value (~14.3), not 0', () => {
     const peak = computePeakFatigue([
       { shift_date: '2025-03-15', start_time: '09:00', end_time: '17:00', unpaid_break_minutes: 0 },
-    ]);
+    ], []);
     // Derived from the fatigue model: -76*ln(1 - 6.50/38) ≈ 14.3.
     expect(peak).toBeCloseTo(14.3, 1);
     expect(peak).toBeGreaterThan(0);
@@ -104,7 +104,7 @@ describe('computePeakFatigue', () => {
     // Anchored 5 years in the future — the old "today" anchor read 0 here.
     const peak = computePeakFatigue([
       { shift_date: '2030-12-25', start_time: '09:00', end_time: '17:00', unpaid_break_minutes: 0 },
-    ]);
+    ], []);
     expect(peak).toBeGreaterThan(0);
     expect(peak).toBeCloseTo(14.3, 1);
   });
@@ -112,7 +112,7 @@ describe('computePeakFatigue', () => {
   // ── 7-day history lookback (view-independent FTG) ──────────────────────────
   it('empty history is identical to no history', () => {
     const visible = [{ shift_date: '2026-07-08', start_time: '07:00', end_time: '15:00', unpaid_break_minutes: 0 }];
-    expect(computePeakFatigue(visible, [])).toBe(computePeakFatigue(visible));
+    expect(computePeakFatigue(visible, [])).toBe(computePeakFatigue(visible, []));
   });
 
   it('recent prior-day history INCREASES the peak (Day view no longer under-counts)', () => {
@@ -123,7 +123,7 @@ describe('computePeakFatigue', () => {
     const visible = [{ shift_date: '2026-07-08', start_time: '07:00', end_time: '15:00', unpaid_break_minutes: 0 }];
     const history = [{ shift_date: '2026-07-07', start_time: '22:00', end_time: '06:00', unpaid_break_minutes: 0 }];
     const withHistory = computePeakFatigue(visible, history);
-    const withoutHistory = computePeakFatigue(visible);
+    const withoutHistory = computePeakFatigue(visible, []);
     expect(withHistory).toBeGreaterThan(withoutHistory);
   });
 
@@ -131,6 +131,6 @@ describe('computePeakFatigue', () => {
     const visible = [{ shift_date: '2026-07-08', start_time: '07:00', end_time: '15:00', unpaid_break_minutes: 0 }];
     // ~5 weeks before the visible day → outside every reference date's 7-day window.
     const staleHistory = [{ shift_date: '2026-06-01', start_time: '22:00', end_time: '06:00', unpaid_break_minutes: 0 }];
-    expect(computePeakFatigue(visible, staleHistory)).toBe(computePeakFatigue(visible));
+    expect(computePeakFatigue(visible, staleHistory)).toBe(computePeakFatigue(visible, []));
   });
 });

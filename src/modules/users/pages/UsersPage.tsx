@@ -65,16 +65,16 @@ const UsersPage: React.FC = () => {
     const selectedUser = profiles?.find(p => p.id === selectedUserId);
 
     return (
-        <div className="h-full flex flex-col overflow-hidden space-y-4">
-            {/* ── Unified Header ────────────────────────────────────────────── */}
-            <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+        <div className="h-full flex flex-col overflow-hidden space-y-4 text-foreground">
+            {/* ── Header Landmark ────────────────────────────────────────────── */}
+            <header role="banner" className="sticky top-0 z-30 pt-2 pb-2 lg:pb-4 shrink-0">
                 <div className={cn(
-                    "rounded-[32px] p-4 lg:p-6 transition-all border",
+                    "rounded-[28px] p-4 lg:p-6 transition-all border",
                     isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                        ? "bg-[#1c2333]/70 border-white/10 shadow-2xl shadow-black/20" 
+                        : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
                 )}>
-                    {/* Row 1 & 2: Identity & Scope Filter */}
+                    {/* Identity & Scope Filter */}
                     <PersonalPageHeader
                         title="User Management"
                         Icon={Users}
@@ -82,7 +82,7 @@ const UsersPage: React.FC = () => {
                         className="mb-4 lg:mb-6"
                     />
 
-                    {/* Row 3: User Management Function Bar */}
+                    {/* User Management Function Bar */}
                     <UserManagementFunctionBar
                         profiles={profiles}
                         selectedUserId={selectedUserId}
@@ -91,15 +91,15 @@ const UsersPage: React.FC = () => {
                         transparent
                     />
                 </div>
-            </div>
+            </header>
 
-            {/* ── Main Content Area ─────────────────────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            {/* ── Main Content Landmark ─────────────────────────────────────────── */}
+            <main role="main" aria-label="User Management Profile Details" className="flex-1 min-h-0 overflow-hidden">
                 <div className={cn(
-                    "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10 scrollbar-none",
+                    "h-full rounded-[28px] overflow-auto transition-all border p-6 lg:p-10 scrollbar-none",
                     isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                        ? "bg-[#1c2333]/50 border-white/10 shadow-2xl shadow-black/20" 
+                        : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
                 )}>
                     {!selectedUserId && !isLoading && (
                         <motion.div
@@ -107,12 +107,14 @@ const UsersPage: React.FC = () => {
                             animate={{ opacity: 1 }}
                             className="flex flex-col items-center justify-center py-24 text-center space-y-4"
                         >
-                            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center shadow-inner">
-                                <User className="w-10 h-10 text-primary/40" />
+                            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center shadow-inner border border-primary/20">
+                                <User className="w-10 h-10 text-primary" aria-hidden="true" />
                             </div>
-                            <div className="space-y-1">
-                                <h3 className="text-xl font-black uppercase tracking-widest text-foreground/80">No Employee Selected</h3>
-                                <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                            <div className="space-y-1 max-w-sm mx-auto">
+                                <h2 className="text-xl font-black uppercase tracking-widest text-foreground">
+                                    No Employee Selected
+                                </h2>
+                                <p className="text-muted-foreground text-sm font-medium">
                                     Select an employee from the dropdown above to view their profile, compliance, and performance metrics.
                                 </p>
                             </div>
@@ -120,19 +122,24 @@ const UsersPage: React.FC = () => {
                     )}
 
                     {selectedUserId && (
-                        <motion.div
+                        <motion.section
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5, ease: "easeOut" }}
-                            className="space-y-10"
+                            transition={{ duration: 0.4, ease: "easeOut" }}
+                            aria-labelledby="selected-user-heading"
+                            className="space-y-8"
                         >
                             {/* Summary Action Header for Selected User */}
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-border/10">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-border/20">
                                 <div>
-                                    <h2 className="text-3xl font-black uppercase tracking-tight text-foreground">{selectedUser?.full_name}</h2>
-                                    <p className="text-muted-foreground text-sm font-medium">{selectedUser?.email}</p>
+                                    <h2 id="selected-user-heading" className="text-2xl md:text-3xl font-black uppercase tracking-tight text-foreground">
+                                        {selectedUser?.full_name}
+                                    </h2>
+                                    <p className="text-muted-foreground text-sm font-semibold mt-0.5">
+                                        {selectedUser?.email}
+                                    </p>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Employee profile actions">
                                     {isAuthorizedAdmin && selectedUser && (
                                         <DeleteUserDialog 
                                             userId={selectedUserId}
@@ -143,20 +150,24 @@ const UsersPage: React.FC = () => {
                                             }}
                                         />
                                     )}
-                                    <Button variant="outline" className="rounded-xl h-11 px-6 font-black uppercase tracking-widest text-[10px]">
+                                    <Button
+                                        variant="outline"
+                                        aria-label={`Edit profile for ${selectedUser?.full_name}`}
+                                        className="rounded-xl h-10 px-5 font-black uppercase tracking-widest text-[10px] focus-visible:ring-2 focus-visible:ring-primary"
+                                    >
                                         Edit Profile
                                     </Button>
                                 </div>
                             </div>
 
                             {/* Sectioned Content */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" aria-label="Employee compliance sections">
                                 <SkillsSection employeeId={selectedUserId} />
                                 <LicensesSection employeeId={selectedUserId} />
                                 <WorkRightsSection employeeId={selectedUserId} />
                             </div>
 
-                            <div className="space-y-8">
+                            <div className="space-y-8" aria-label="Employee contracts and certificates">
                                 <UserContractsSection
                                     employeeId={selectedUserId}
                                     employeeName={selectedUser?.full_name || ''}
@@ -166,10 +177,10 @@ const UsersPage: React.FC = () => {
                                     employeeName={selectedUser?.full_name || ''}
                                 />
                             </div>
-                        </motion.div>
+                        </motion.section>
                     )}
                 </div>
-            </div>
+            </main>
         </div>
     );
 };

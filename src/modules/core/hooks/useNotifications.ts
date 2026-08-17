@@ -1,6 +1,20 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/platform/supabase/client';
 import { useAuth } from '@/platform/auth/useAuth';
+import { resolveNotificationLink } from '@/platform/notifications/deepLink';
+import {
+  dismissLocalDemoNotification,
+  isLocalDemoNotificationId,
+  markAllLocalDemoNotificationsRead,
+  markLocalDemoNotificationRead,
+  readLocalDemoNotifications,
+  subscribeToLocalDemoNotifications,
+  type LocalDemoNotification,
+} from '@/platform/notifications/localDemoNotifications';
+
+// Re-exported so existing UI consumers keep their import path while the
+// type→route map lives in one place (see platform/notifications/deepLink).
+export { resolveNotificationLink };
 
 export type AppNotification = {
   id: string;
@@ -12,36 +26,15 @@ export type AppNotification = {
   entity_type: string | null;
   read_at: string | null;
   created_at: string;
+  source?: 'local-demo';
 };
-
-const DEEP_LINK_MAP: Record<string, string> = {
-  shift_assigned:          '/my-roster',
-  shift_cancelled:         '/my-roster',
-  shift_updated:           '/my-roster',
-  shift_dropped:           '/management/bids',
-  emergency_assignment:    '/my-roster',
-  bid_accepted:            '/my-bids',
-  bid_rejected:            '/my-bids',
-  bid_no_winner:           '/management/bids',
-  offer_expired:           '/my-roster',
-  swap_request:            '/my-swaps',
-  swap_approved:           '/my-swaps',
-  swap_rejected:           '/my-swaps',
-  swap_expired:            '/my-swaps',
-  broadcast:               '/my-broadcasts',
-  timesheet_approved:      '/timesheet',
-  timesheet_rejected:      '/timesheet',
-};
-
-export function resolveNotificationLink(n: AppNotification): string {
-  return n.link ?? DEEP_LINK_MAP[n.type] ?? '/my-roster';
-}
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function useNotifications() {
   const { user } = useAuth();
   const [rawNotifications, setRawNotifications] = useState<AppNotification[]>([]);
+  const [localDemoNotifications, setLocalDemoNotifications] = useState<LocalDemoNotification[]>([]);
   const [loading, setLoading] = useState(true);
   // Local-only "seen" state — no DB round-trip needed
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
@@ -61,6 +54,15 @@ export function useNotifications() {
         setRawNotifications((data as AppNotification[]) ?? []);
         setLoading(false);
       });
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setLocalDemoNotifications([]);
+      return;
+    }
+    setLocalDemoNotifications(readLocalDemoNotifications(user.id));
+    return subscribeToLocalDemoNotifications(user.id, setLocalDemoNotifications);
   }, [user?.id]);
 
   // Realtime subscription
@@ -114,10 +116,10 @@ export function useNotifications() {
   // Auto-clean: hide read notifications older than 7 days from the displayed list
   const notifications = useMemo(() => {
     const cutoff = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
-    return rawNotifications.filter(
-      (n) => !n.read_at || n.created_at >= cutoff
-    );
-  }, [rawNotifications]);
+    return [...localDemoNotifications, ...rawNotifications]
+      .filter((notification) => !notification.read_at || notification.created_at >= cutoff)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }, [localDemoNotifications, rawNotifications]);
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.read_at).length,
@@ -135,16 +137,21 @@ export function useNotifications() {
   }, []);
 
   const markRead = useCallback(async (id: string) => {
+    if (user?.id && isLocalDemoNotificationId(id)) {
+      setLocalDemoNotifications(markLocalDemoNotificationRead(user.id, id));
+      return;
+    }
     const now = new Date().toISOString();
     await supabase.from('notifications').update({ read_at: now }).eq('id', id);
     setRawNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read_at: now } : n))
     );
-  }, []);
+  }, [user?.id]);
 
   const markAllRead = useCallback(async () => {
     if (!user?.id) return;
     const now = new Date().toISOString();
+    setLocalDemoNotifications(markAllLocalDemoNotificationsRead(user.id));
     await supabase
       .from('notifications')
       .update({ read_at: now })
@@ -154,12 +161,16 @@ export function useNotifications() {
   }, [user?.id]);
 
   const dismiss = useCallback(async (id: string) => {
+    if (user?.id && isLocalDemoNotificationId(id)) {
+      setLocalDemoNotifications(dismissLocalDemoNotification(user.id, id));
+      return;
+    }
     await supabase
       .from('notifications')
       .update({ dismissed_at: new Date().toISOString() })
       .eq('id', id);
     setRawNotifications((prev) => prev.filter((n) => n.id !== id));
-  }, []);
+  }, [user?.id]);
 
   return {
     notifications,

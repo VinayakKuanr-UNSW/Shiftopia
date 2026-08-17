@@ -45,6 +45,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -495,6 +496,9 @@ const TemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Rename Template</DialogTitle>
+              <DialogDescription>
+                Enter a new name for this template.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 py-4">
               <Label htmlFor="rn">New name</Label>

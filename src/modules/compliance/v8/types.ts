@@ -5,6 +5,8 @@
  * Replaces all V1/V2/Solver types.
  */
 
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
+
 export type ComplianceCheckInput = any; // Legacy alias
 export type ComplianceResult = any;     // Legacy alias
 
@@ -25,11 +27,20 @@ export interface V8Shift {
     end_time:              string;    // HH:mm
     is_ordinary_hours:     boolean;
     unpaid_break_minutes?: number;
+    paid_break_minutes?:   number;
     role_id?:              V8RoleId;
     is_training?:          boolean;
     is_sunday?:            boolean;
     is_public_holiday?:    boolean;
     shift_type?:           'NORMAL' | 'MULTI_HIRE';
+    /**
+     * Which employment type this shift is for. MANDATORY on the shifts table;
+     * `undefined` here only means the caller did not hydrate it, in which case
+     * V8_EMPLOYMENT_TARGET stays silent (the DB trigger remains the guarantee).
+     */
+    target_employment_type?: TargetEmploymentType | null;
+    /** Narrows a 'PT' target to Flexible Part-Time staff only. */
+    target_requires_flexible?: boolean;
     /**
      * True when this shift is being added/changed by the current operation,
      * false when it is a pre-existing (committed) shift pulled in only for
@@ -61,6 +72,19 @@ export interface V8Employee {
      * exclusion still applies to auto-scheduling).
      */
     leave_days?:             string[];
+    /**
+     * RAW `employment_status` from every Active contract this employee holds.
+     *
+     * Deliberately separate from `contract_type`, which cannot answer the
+     * employment-target question for two reasons: it is derived from the GLOBAL
+     * `profiles.employment_type` rather than the per-sub-department contract, and
+     * a student-visa holder has it overwritten with 'STUDENT_VISA'
+     * (employee-context.ts), erasing whether they are FT, PT or Casual.
+     *
+     * Absent/empty ⇒ V8_EMPLOYMENT_TARGET is silent, matching how `leave_days`
+     * tolerates callers that don't hydrate it.
+     */
+    employment_statuses?:    string[];
     /**
      * True when the employee's role is Security (EBA Schedule 3). Combined
      * with `contract_type === 'FULL_TIME'`, this switches
@@ -109,9 +133,9 @@ export interface V8Config {
     
     /** Legal / Visa */
     student_visa_fortnightly_limit: number; // default 48
-    
-    /** Thresholds */
-    meal_break_threshold_minutes: number;   // default 300 (5h)
+
+    /** cl 35.1(e) — paired days off. WARNING-only, opt-in. */
+    enforce_ft_days_off: boolean;           // default false
 }
 
 export const DEFAULT_V8_CONFIG: V8Config = {
@@ -123,7 +147,7 @@ export const DEFAULT_V8_CONFIG: V8Config = {
     min_rest_gap_minutes:   600,
     max_consecutive_days:   6,
     student_visa_fortnightly_limit: 48,
-    meal_break_threshold_minutes: 300,
+    enforce_ft_days_off:      false,
 };
 
 /** A violation detected by a V8 rule */

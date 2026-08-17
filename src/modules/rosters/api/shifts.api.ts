@@ -36,6 +36,7 @@ const SHIFT_OP_CODES: readonly ShiftOpCode[] = [
     'ILLEGAL_TRANSITION',
     'GONE',
     'FORBIDDEN',
+    'AUTO_OWNER_ACTIVE',
     'ERROR',
 ] as const;
 

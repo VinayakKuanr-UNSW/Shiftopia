@@ -34,6 +34,7 @@ import {
     getTimeRule,
     getLiveRuleBadges,
     getPayrollRuleBadges,
+    isShiftAssigned,
     resolveGroupVariant,
 } from '@/modules/rosters/domain/shift-ui';
 import { ShiftRuleHeader } from '@/modules/rosters/ui/components/ShiftRuleHeader';
@@ -547,12 +548,20 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     const showPayrollSection = React.useMemo(() => {
         if (hidePayrollSection) return false;
         if (isTimecard) return true;
+        // An unfilled shift has no payroll — nobody worked it. `isShiftFinished`
+        // below is true for ANY shift past its end time, which is what used to
+        // render a Payroll panel (over the SCHEDULED hours) on unassigned slots.
+        // A real billable window still wins, so a shift unassigned after the fact
+        // keeps showing what was already paid.
+        const hasBillableWindow = !!(adjustedStart || adjustedEnd
+            || shiftData?.adjusted_start || shiftData?.adjusted_end);
+        if (hasBillableWindow) return true;
+        if (!isShiftAssigned(resolvedShiftData)) return false;
         if (showPayrollRules) return true;
-        if (adjustedStart || adjustedEnd || shiftData?.adjusted_start || shiftData?.adjusted_end) return true;
         if (isShiftFinished) return true;
         if (payrollBadges.arrival || payrollBadges.departure) return true;
         return false;
-    }, [hidePayrollSection, isTimecard, showPayrollRules, adjustedStart, adjustedEnd, shiftData, isShiftFinished, payrollBadges]);
+    }, [hidePayrollSection, isTimecard, showPayrollRules, adjustedStart, adjustedEnd, shiftData, isShiftFinished, payrollBadges, resolvedShiftData]);
 
     const isCardPast = isPast || isExpired;
 
@@ -604,6 +613,19 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {!moveTopContentToBottom && topContent}
                 </div>
+
+                {/* COUNTDOWN */}
+                {timerText && (
+                    <div className={cn(
+                        "mb-4 px-3 py-2 rounded-xl text-[11px] font-black font-mono flex items-center justify-center gap-2 tracking-widest transition-colors border",
+                        isExpired 
+                            ? "bg-rose-500/10 text-rose-500 border-rose-500/20" 
+                            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                    )}>
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="uppercase">{isExpired ? 'CLOSED' : timerText}</span>
+                    </div>
+                )}
 
                 {/* Segmented Top Selector Box: DATES | ROLE | STATUS */}
                 {!hideSegmentedBox && (

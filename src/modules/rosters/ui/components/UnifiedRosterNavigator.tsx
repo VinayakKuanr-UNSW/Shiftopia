@@ -10,7 +10,7 @@
  *
  * Two visual variants:
  *   compact (default) — pill buttons + text label (MyRoster, Attendance)
- *   full              — ToggleGroup + CalendarRangePicker (RosterFunctionBar)
+ *   full              — ToggleGroup + date picker (RosterFunctionBar)
  *
  * Navigation rules:
  *   Day   → ± 1 day
@@ -29,14 +29,15 @@ import {
   format,
   addDays, subDays,
   addMonths, subMonths,
-  startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
+  isWithinInterval, startOfDay,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
-import { CalendarRangePicker } from './CalendarRangePicker';
+import { DatePicker } from '@/modules/core/ui/calendar';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,10 +61,7 @@ export function computeRange(date: Date, viewType: ViewType): DateRange {
     case '3day':
       return { start: date, end: addDays(date, 2) };
     case 'week':
-      return {
-        start: startOfWeek(date, { weekStartsOn: 1 }),
-        end: endOfWeek(date, { weekStartsOn: 1 }),
-      };
+      return { start: startOfWeekAU(date), end: endOfWeekAU(date) };
     case 'month':
       return { start: startOfMonth(date), end: endOfMonth(date) };
   }
@@ -120,7 +118,7 @@ export interface UnifiedRosterNavigatorProps {
   /** Show a "Today" button that resets navigation to today. Default: false */
   showToday?: boolean;
   /**
-   * Embed CalendarRangePicker on the date label so users can jump to any date.
+   * Embed a date picker on the date label so users can jump to any date.
    * When false the label is plain text.  Default: false
    */
   showPicker?: boolean;
@@ -130,7 +128,7 @@ export interface UnifiedRosterNavigatorProps {
   maxDate?: Date;
   /**
    * compact (default) — pill buttons for view type, plain label (suits mobile-first pages)
-   * full              — ToggleGroup + CalendarRangePicker (suits desktop manager bar)
+   * full              — ToggleGroup + date picker (suits desktop manager bar)
    */
   variant?: 'compact' | 'full';
   className?: string;
@@ -168,10 +166,51 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
   // When picking from the calendar, snap to the correct period start
   const fireFromPicker = (picked: Date) => {
     let snapped = picked;
-    if (viewType === 'week')  snapped = startOfWeek(picked, { weekStartsOn: 1 });
+    if (viewType === 'week')  snapped = startOfWeekAU(picked);
     if (viewType === 'month') snapped = startOfMonth(picked);
     fire(snapped);
   };
+
+  /**
+   * Shade the days the current view already covers, so the popover shows *what
+   * a pick means* rather than a single highlighted date. This is the one
+   * behaviour worth keeping from the hand-rolled `CalendarRangePicker`; it now
+   * rides on the shared engine as a modifier instead of a bespoke 42-cell grid.
+   */
+  const rangeModifiers = useMemo(
+    () => ({
+      inCurrentRange: (day: Date) =>
+        isWithinInterval(startOfDay(day), { start: startOfDay(range.start), end: startOfDay(range.end) }),
+    }),
+    [range.start, range.end],
+  );
+
+  const picker = (
+    <DatePicker
+      value={date}
+      onChange={fireFromPicker}
+      label={`${VIEW_OPTIONS.find((v) => v.value === viewType)?.label ?? 'Date'} shown`}
+      fromDate={minDate}
+      toDate={maxDate}
+      align="center"
+      modifiers={rangeModifiers}
+      modifiersClassNames={{
+        inCurrentRange: 'bg-primary/15 text-foreground rounded-none aria-selected:bg-primary',
+      }}
+    >
+      {/* Custom trigger: the navigator's prev / label / next cluster keeps its
+          shape, so the label itself is the button. */}
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label={`Change date. Currently showing ${label}`}
+        className="h-8 gap-2 whitespace-nowrap px-2 font-mono text-xs font-bold text-foreground"
+      >
+        <CalendarIcon className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+        {label}
+      </Button>
+    </DatePicker>
+  );
 
   const handlePrev  = () => fire(navigateDate(date, viewType, -1));
   const handleNext  = () => fire(navigateDate(date, viewType,  1));
@@ -213,30 +252,25 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         </div>
 
         {/* Date navigation */}
-        <div className="flex-shrink-0 flex items-center gap-0.5 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
+        <div className="flex-shrink-0 flex items-center gap-1 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
           <button
             onClick={handlePrev}
             disabled={prevDisabled}
-            className="h-6 w-6 flex items-center justify-center rounded-md transition-all text-slate-400 dark:text-white/40 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Previous date period"
+            className="h-8 w-8 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg transition-all text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
 
-          <CalendarRangePicker
-            selectedDate={date}
-            viewType={viewType}
-            minDate={minDate}
-            maxDate={maxDate}
-            onRangeSelect={fireFromPicker}
-            displayLabel={label}
-          />
+          {picker}
 
           <button
             onClick={handleNext}
             disabled={nextDisabled}
-            className="h-6 w-6 flex items-center justify-center rounded-md transition-all text-slate-400 dark:text-white/40 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label="Next date period"
+            className="h-8 w-8 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg transition-all text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -289,14 +323,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         </Button>
 
         {showPicker ? (
-          <CalendarRangePicker
-            selectedDate={date}
-            viewType={viewType}
-            minDate={minDate}
-            maxDate={maxDate}
-            onRangeSelect={fireFromPicker}
-            displayLabel={label}
-          />
+          picker
         ) : (
           <span className="text-xs font-bold text-foreground font-mono whitespace-nowrap min-w-[130px] text-center">
             {label}

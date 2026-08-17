@@ -4,13 +4,16 @@ import { OpenBidsView } from '../views/OpenBidsView';
 import type { BidToggle, ToggleCounts } from '../views/OpenBidsView/types';
 import { useAuth } from '@/platform/auth/useAuth';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { GroupBySelector } from '@/modules/core/ui/components/GroupBySelector';
+import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
+import { OPEN_BIDS_GROUP_BY_OPTIONS } from '../views/OpenBidsView/open-bids-grouping';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Gavel, Flame, Clock, CheckCircle, CircleSlash, Zap, Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
+import { Gavel, Flame, Clock, CheckCircle, CircleSlash, Zap, Loader2, Filter, ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { AutoPilotControl } from '@/modules/core/autopilot';
-import { createBidAutoPilotAdapter } from '../../api/bidAutoPilot.api';
+
 
 const BID_TOGGLE_TABS: { id: BidToggle; label: string; icon: typeof Flame; accent: string }[] = [
     { id: 'standard', label: 'Standard', icon: Clock,       accent: 'amber' },
@@ -31,14 +34,10 @@ export const ManagerBidsPage: React.FC = () => {
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const { isDark } = useTheme();
 
-    const bidOrgId = scope.org_ids[0] ?? null;
-    const autoPilotAdapter = useMemo(
-        () => (bidOrgId ? createBidAutoPilotAdapter({ organizationId: bidOrgId, userId: user?.id }) : null),
-        [bidOrgId, user?.id],
-    );
 
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [searchQuery, setSearchQuery] = useState('');
+    const [groupBy, setGroupBy] = useState<RowGroupBy>('none');
     const [activeToggle, setActiveToggle] = useState<BidToggle>('urgent');
     const [counts, setCounts] = useState<ToggleCounts>({ standard: 0, urgent: 0, resolved: 0, expired: 0 });
     const [autoAssign, setAutoAssign] = useState<{ run: () => void; isRunning: boolean }>({ run: () => {}, isRunning: false });
@@ -67,42 +66,83 @@ export const ManagerBidsPage: React.FC = () => {
         );
     }
 
-    const toggleChips = (
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide">
-            {BID_TOGGLE_TABS.map(tab => {
-                const isActive = activeToggle === tab.id;
-                const colors = bidAccentMap[tab.accent];
-                const TabIcon = tab.icon;
-                return (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveToggle(tab.id)}
-                        className={cn(
-                            'relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300',
-                            isActive
-                                ? `${colors.bg} ${colors.text} shadow-sm`
-                                : 'text-muted-foreground/50 hover:text-foreground hover:bg-muted/50'
-                        )}
-                    >
-                        <TabIcon className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">{tab.label}</span>
-                        <span className={cn(
-                            'min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1',
-                            isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : 'bg-muted text-muted-foreground/40'
-                        )}>
-                            {counts[tab.id]}
-                        </span>
-                        {isActive && (
-                            <motion.div
-                                layoutId="activeBidTab"
-                                className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
-                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                            />
-                        )}
-                    </button>
-                );
-            })}
-        </div>
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const activeTabInfo = BID_TOGGLE_TABS.find(t => t.id === activeToggle) || BID_TOGGLE_TABS[0];
+    const ActiveTabIcon = activeTabInfo.icon;
+    const activeColors = bidAccentMap[activeTabInfo.accent];
+
+    const statusFilterDropdown = (
+        <Popover open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    aria-label={`Filter by status: ${activeTabInfo.label}`}
+                    className={cn(
+                        'relative flex items-center gap-2 h-9 px-3 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all duration-200 shrink-0',
+                        activeColors.bg, activeColors.text, activeColors.ring,
+                        isDark ? 'hover:bg-white/10' : 'hover:bg-slate-100'
+                    )}
+                >
+                    <Filter className="h-3.5 w-3.5 shrink-0" />
+                    <span className="hidden sm:inline">Status: {activeTabInfo.label}</span>
+                    <span className="sm:hidden">{activeTabInfo.label}</span>
+                    <span className={cn(
+                        'min-w-[18px] h-[18px] rounded-full text-[9px] font-mono font-bold flex items-center justify-center px-1',
+                        'bg-primary/20 text-inherit'
+                    )}>
+                        {counts[activeToggle]}
+                    </span>
+                    <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-2 bg-popover border-border rounded-2xl shadow-2xl" align="end">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/60 px-2 pt-1 pb-2">
+                    Filter by Status
+                </p>
+                <div className="flex flex-col gap-1" role="radiogroup">
+                    {BID_TOGGLE_TABS.map(tab => {
+                        const isSelected = activeToggle === tab.id;
+                        const TabIcon = tab.icon;
+                        const colors = bidAccentMap[tab.accent];
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={isSelected}
+                                onClick={() => {
+                                    setActiveToggle(tab.id);
+                                    setIsFilterOpen(false);
+                                }}
+                                className={cn(
+                                    'flex items-center justify-between h-9 px-2.5 rounded-xl text-[12px] font-bold transition-all text-left',
+                                    isSelected
+                                        ? `${colors.bg} ${colors.text}`
+                                        : 'text-foreground/80 hover:bg-muted/60'
+                                )}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className={cn(
+                                        'flex h-4 w-4 items-center justify-center rounded-full border shrink-0',
+                                        isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+                                    )}>
+                                        {isSelected && <Check className="h-2.5 w-2.5" />}
+                                    </span>
+                                    <TabIcon className="h-3.5 w-3.5" />
+                                    <span>{tab.label}</span>
+                                </div>
+                                <span className={cn(
+                                    'px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold',
+                                    isSelected ? `${colors.bg} ${colors.text}` : 'bg-muted text-muted-foreground/50'
+                                )}>
+                                    {counts[tab.id]}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </PopoverContent>
+        </Popover>
     );
 
     const autoAssignButton = (
@@ -136,6 +176,7 @@ export const ManagerBidsPage: React.FC = () => {
                 onViewModeChange={setViewMode}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                leftContent={<GroupBySelector value={groupBy} onChange={setGroupBy} options={OPEN_BIDS_GROUP_BY_OPTIONS} />}
                 startDate={startDate}
                 endDate={endDate}
                 onDateChange={(start: Date, end: Date) => {
@@ -144,9 +185,9 @@ export const ManagerBidsPage: React.FC = () => {
                 }}
                 functionBarChildren={
                     <div className="flex items-center gap-2 flex-shrink-0">
-                        {autoPilotAdapter && <AutoPilotControl adapter={autoPilotAdapter} />}
+
                         {autoAssignButton}
-                        {toggleChips}
+                        {statusFilterDropdown}
                     </div>
                 }
             />
@@ -165,6 +206,7 @@ export const ManagerBidsPage: React.FC = () => {
                         subDepartmentId={scope.subdept_ids[0] ?? null}
                         externalSearchQuery={searchQuery}
                         viewMode={viewMode}
+                        groupBy={groupBy}
                         activeToggle={activeToggle}
                         onToggleChange={setActiveToggle}
                         onCountsChange={setCounts}

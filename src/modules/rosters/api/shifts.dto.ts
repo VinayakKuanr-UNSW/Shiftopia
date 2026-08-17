@@ -1,4 +1,5 @@
 import { TemplateGroupType } from '../domain/shift.entity';
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 export interface CreateShiftData {
     roster_id: string;
@@ -39,7 +40,9 @@ export interface CreateShiftData {
     is_training?: boolean;
     synthesis_run_id?: string | null;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
-    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
+    target_employment_type?: TargetEmploymentType | null;
+    /** Narrows a 'PT' target to Flexible Part-Time staff only. */
+    target_requires_flexible?: boolean;
     demand_group_id?: string | null;
 }
 

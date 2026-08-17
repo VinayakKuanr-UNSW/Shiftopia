@@ -4,42 +4,121 @@
  * Orchestrates the domain logic and DB queries to maintain the ledger.
  *
  * Exposes:
- *   - getEmployeeDebts: fetch current debts for the optimizer.
+ *   - getEmployeeDebtsWithStatus: current debts + an explicit freshness verdict.
+ *   - getEmployeeDebts: debts only (thin wrapper over the above).
  *   - recomputeLedger: full rebuild from shift history (expensive, authoritative).
  *   - updateAfterCommit: fast incremental update when new shifts are assigned.
  */
 
-import { addDays, subDays, format } from 'date-fns';
-import { fairnessLedgerQueries, type FairnessLedgerUpsertRow } from '../api/fairnessLedger.queries';
+import { format, parseISO, differenceInCalendarDays } from 'date-fns';
+import { fairnessLedgerQueries } from '../api/fairnessLedger.queries';
 import {
-    classifyShift,
-    computeDebts,
-    aggregateShiftsToEntries,
     DEFAULT_WINDOW_DAYS,
     type FairnessDebt,
     type ShiftForFairness,
-    type FairnessMetric,
 } from '../domain/fairness-ledger';
 
-// TODO: In a production app, fetch from employees table.
-// For now, we mock a flat 38h contract for everyone to enable OT calculation.
-async function fetchContractedHours(orgId: string, employeeIds: string[]): Promise<Map<string, number>> {
-    const map = new Map<string, number>();
-    for (const id of employeeIds) {
-        map.set(id, 38);
-    }
-    return map;
+/**
+ * How old the newest ledger window may be before a read is reported as `stale`.
+ *
+ * The ledger is a 91-day rolling window, so a few days of drift barely moves a
+ * debt. A week is the point where "the roster changed and the ledger hasn't
+ * noticed" becomes the likelier explanation — and where an operator should be
+ * told rather than left to infer it.
+ */
+export const LEDGER_STALE_AFTER_DAYS = 7;
+
+/**
+ * - `ok`          — data found, fresh enough to act on.
+ * - `stale`       — data found but older than LEDGER_STALE_AFTER_DAYS. Still
+ *                   applied (stale debts beat no debts), but surfaced.
+ * - `unavailable` — no rows at all. Longitudinal fairness is NOT being applied.
+ */
+export type FairnessLedgerStatus = 'ok' | 'stale' | 'unavailable';
+
+export interface FairnessLedgerRead {
+    debts: FairnessDebt[];
+    status: FairnessLedgerStatus;
+    /** `window_end` of the freshest row used, or null when unavailable. */
+    windowEnd: string | null;
+    /** Calendar days between `windowEnd` and the as-of date, or null. */
+    ageDays: number | null;
 }
 
 export const fairnessLedgerService = {
     /**
-     * Fetch the current fairness debts for a set of employees.
-     * Used by the auto-scheduler to inject `fairness_debts` into `OptimizerEmployee`.
+     * Fetch the current fairness debts for a set of employees, together with an
+     * explicit freshness verdict.
+     *
+     * Audit F-04: this used to return a bare `FairnessDebt[]` read at an EXACT
+     * `window_end = today`. On any day without a recompute that matched nothing,
+     * so the caller got `[]` — indistinguishable from "everyone's debt is
+     * genuinely zero" — and longitudinal fairness silently switched itself off.
+     * Fairness quality became a function of publishing cadence rather than
+     * policy, with no signal anywhere that it had happened.
+     *
+     * Now: read the most recent window at or before `asOfDate` and report how
+     * old it is, so a degraded ledger is VISIBLE rather than inferred.
      *
      * @param organizationId  The org ID.
      * @param employeeIds     The employees to fetch.
      * @param windowDays      Length of the rolling window (default 91).
      * @param asOfDate        The date to consider "today" (defaults to current date).
+     */
+    async getEmployeeDebtsWithStatus(
+        organizationId: string,
+        employeeIds: string[],
+        windowDays = DEFAULT_WINDOW_DAYS,
+        asOfDate = new Date(),
+    ): Promise<FairnessLedgerRead> {
+        if (employeeIds.length === 0) {
+            return { debts: [], status: 'ok', windowEnd: null, ageDays: null };
+        }
+
+        const asOfStr = format(asOfDate, 'yyyy-MM-dd');
+        const rows = await fairnessLedgerQueries.getLatestDebts(organizationId, employeeIds, asOfStr);
+
+        if (rows.length === 0) {
+            console.warn(
+                '[FairnessLedger] No ledger data for org %s at or before %s — longitudinal ' +
+                'fairness will NOT be applied to this run.',
+                organizationId, asOfStr,
+            );
+            return { debts: [], status: 'unavailable', windowEnd: null, ageDays: null };
+        }
+
+        // Rows can straddle windows (an employee whose last recompute predates
+        // another's). The freshest window is the ledger's effective age.
+        const windowEnd = rows.reduce((max, r) => (r.window_end > max ? r.window_end : max), rows[0].window_end);
+        const ageDays = differenceInCalendarDays(asOfDate, parseISO(windowEnd));
+        const status: FairnessLedgerStatus = ageDays > LEDGER_STALE_AFTER_DAYS ? 'stale' : 'ok';
+
+        if (status === 'stale') {
+            console.warn(
+                '[FairnessLedger] Ledger is %d days old (window_end=%s). Debts are being applied ' +
+                'but reflect stale history — schedule a recompute.',
+                ageDays, windowEnd,
+            );
+        }
+
+        return {
+            debts: rows.map(r => ({
+                employeeId: r.employee_id,
+                metric: r.metric,
+                rollingValue: r.rolling_value,
+                teamAverage: r.team_average,
+                debt: r.debt,
+            })),
+            status,
+            windowEnd,
+            ageDays,
+        };
+    },
+
+    /**
+     * Debts only. Thin wrapper over `getEmployeeDebtsWithStatus` for callers that
+     * genuinely cannot act on the freshness verdict (e.g. pure ordering hints).
+     * Prefer the `WithStatus` form anywhere the result is user-visible.
      */
     async getEmployeeDebts(
         organizationId: string,
@@ -47,31 +126,41 @@ export const fairnessLedgerService = {
         windowDays = DEFAULT_WINDOW_DAYS,
         asOfDate = new Date(),
     ): Promise<FairnessDebt[]> {
-        if (employeeIds.length === 0) return [];
-
-        const windowEndStr = format(asOfDate, 'yyyy-MM-dd');
-        const rows = await fairnessLedgerQueries.getDebts(organizationId, employeeIds, windowEndStr);
-
-        // If no rows exist for this window (e.g. feature just turned on or new day),
-        // we should ideally trigger a background rebuild. For now, we return zero debts.
-        // We do NOT block the optimizer to do a synchronous full rebuild.
-        return rows.map(r => ({
-            employeeId: r.employee_id,
-            metric: r.metric,
-            rollingValue: r.rolling_value,
-            teamAverage: r.team_average,
-            debt: r.debt,
-        }));
+        const { debts } = await this.getEmployeeDebtsWithStatus(
+            organizationId, employeeIds, windowDays, asOfDate,
+        );
+        return debts;
     },
 
     /**
-     * Recompute the entire ledger for a given window.
-     * Authoritative but expensive. Scans all shifts in the window.
+     * Recompute the entire ledger for a window — the AUTHORITATIVE rebuild.
+     *
+     * Delegates to the `recompute_fairness_ledger` SQL function. Audit F-04
+     * moved this server-side for two reasons:
+     *
+     *   1. It can now be SCHEDULED. The browser-side version could only run
+     *      when a human clicked Publish, so the ledger was as fresh as the last
+     *      publish and on a quiet week went stale or was never built at all.
+     *      `nightly_fairness_recompute` (pg_cron) now runs it daily per org.
+     *   2. It stays ONE implementation. Porting the maths to SQL *alongside*
+     *      the TS version would have created the exact drift the coefficient
+     *      tables already suffer from (audit F-13), so the TS write path is
+     *      gone rather than duplicated. Classification parity between the SQL
+     *      function and `domain/fairness-ledger.ts` — which still owns the
+     *      read-only what-if preview — is pinned by test.
+     *
+     * The RPC authorises the caller against the same predicate as the
+     * `fairness_ledger_org_scoped` RLS policy before delegating, so a manager
+     * cannot rebuild another org's ledger by passing its uuid.
      *
      * @param organizationId  The org ID.
      * @param windowEnd       End date of the rolling window.
-     * @param departmentId    Optional scope filter.
-     * @param windowDays      Length of the rolling window (default 91).
+     * @param departmentId    Unused — the ledger is org-scoped so the team
+     *                        average matches the solver's org-wide read (see
+     *                        audit F-14). Kept for call-site compatibility.
+     * @param windowDays      Unused here; the window length is the SQL
+     *                        function's own default (91) so both paths cannot
+     *                        disagree about the window.
      */
     async recomputeLedger(
         organizationId: string,
@@ -79,187 +168,53 @@ export const fairnessLedgerService = {
         departmentId?: string,
         windowDays = DEFAULT_WINDOW_DAYS,
     ): Promise<void> {
-        const windowStart = subDays(windowEnd, windowDays - 1);
-        const windowStartStr = format(windowStart, 'yyyy-MM-dd');
+        void departmentId;
+        void windowDays;
         const windowEndStr = format(windowEnd, 'yyyy-MM-dd');
-
-        console.debug('[FairnessLedger] Recomputing for window:', windowStartStr, 'to', windowEndStr);
-
-        // 1. Fetch all assigned shifts in the window
-        const rawShifts = await fairnessLedgerQueries.fetchAssignedShifts(
-            organizationId,
-            windowStartStr,
-            windowEndStr,
-            departmentId,
-        );
-
-        if (rawShifts.length === 0) {
-            console.debug('[FairnessLedger] No shifts found; clearing ledger.');
-            await fairnessLedgerQueries.deleteForWindow(organizationId, windowEndStr);
-            return;
-        }
-
-        // 2. Classify shifts
-        const classified = rawShifts.map(s => {
-            const shiftForFairness: ShiftForFairness = {
-                id: s.id,
-                shiftDate: s.shift_date,
-                startTime: s.start_time,
-                endTime: s.end_time,
-                employeeId: s.assigned_employee_id,
-                unpaidBreakMinutes: s.unpaid_break_minutes,
-            };
-            return {
-                ...shiftForFairness,
-                flags: classifyShift(s.shift_date, s.start_time, s.end_time),
-            };
-        });
-
-        // 2.5 Fetch denied preferences for the window
-        const deniedPrefsList = await fairnessLedgerQueries.fetchDeniedPreferences(
-            organizationId,
-            windowStartStr,
-            windowEndStr,
-        );
-        const deniedPrefsCount = new Map<string, number>();
-        for (const dp of deniedPrefsList) {
-            deniedPrefsCount.set(dp.employee_id, (deniedPrefsCount.get(dp.employee_id) ?? 0) + 1);
-        }
-
-        // 3. Aggregate into employee entries
-        const employeeIds = Array.from(new Set([
-            ...classified.map(s => s.employeeId),
-            ...deniedPrefsCount.keys()
-        ]));
-        const contractedMap = await fetchContractedHours(organizationId, employeeIds);
-        const entries = aggregateShiftsToEntries(classified, contractedMap, windowDays / 7, deniedPrefsCount);
-
-        // 4. Compute debts
-        const debts = computeDebts(entries);
-
-        // 5. Upsert to DB
-        const upsertRows: FairnessLedgerUpsertRow[] = debts.map(d => ({
-            organization_id: organizationId,
-            employee_id: d.employeeId,
-            metric: d.metric,
-            window_start: windowStartStr,
-            window_end: windowEndStr,
-            rolling_value: d.rollingValue,
-            team_average: d.teamAverage,
-            debt: d.debt,
-            updated_by_run: null, // explicit recompute
-        }));
-
-        await fairnessLedgerQueries.upsertBatch(upsertRows);
-        console.info(`[FairnessLedger] Recomputed ${upsertRows.length} rows for ${employeeIds.length} employees.`);
+        const rows = await fairnessLedgerQueries.requestRecompute(organizationId, windowEndStr);
+        console.info('[FairnessLedger] Recomputed %d rows for org %s (window_end=%s).',
+            rows, organizationId, windowEndStr);
     },
 
     /**
-     * Fast incremental update after shifts are committed.
-     * Takes the just-committed shifts, classifies them, and updates the existing ledger.
+     * Record that shifts were just committed.
+     *
+     * Now a straight re-run of the authoritative recompute. The previous
+     * implementation was a client-side read-modify-write — fetch the whole
+     * team's rows, add per-shift deltas in memory, upsert everything back — and
+     * it carried three defects at once:
+     *
+     *   - **F-02** it aggregated the delta with `windowWeeks = 0`, which zeroed
+     *     the contracted threshold and booked 100% of every committed minute as
+     *     overtime.
+     *   - **F-06** it added FUTURE shifts to a TRAILING 91-day window, so the
+     *     next authoritative recompute (which only sees `[today-90, today]`)
+     *     silently discarded them. It also only ever ADDED: cancelling,
+     *     unassigning or swapping a shift away never decremented anything.
+     *   - **F-20** read-modify-write with no version check or transaction, so
+     *     two concurrent commits both read the same baseline and the second
+     *     silently overwrote the first. On a monotonic accumulator a lost
+     *     update never self-corrects.
+     *
+     * Deleting it fixes all three, and leaves exactly ONE write path. The
+     * recompute is a single idempotent SQL statement, so re-running it per
+     * commit is cheap and safe to retry.
+     *
+     * Semantics this settles: the ledger measures **worked** load over a
+     * trailing window, not rostered load. A future shift starts counting when
+     * its date arrives, not when it is assigned — so an employee is never in
+     * debt for work they have not yet done and might never do.
      *
      * @param organizationId  The org ID.
-     * @param committedShifts The shifts that were just assigned.
+     * @param committedShifts Only used to skip the call when nothing committed.
      * @param asOfDate        The date to consider "today" (defaults to current date).
-     * @param runId           Optional ID of the process that triggered this.
      */
     async updateAfterCommit(
         organizationId: string,
         committedShifts: ShiftForFairness[],
         asOfDate = new Date(),
-        runId?: string,
     ): Promise<void> {
         if (committedShifts.length === 0) return;
-
-        const windowEndStr = format(asOfDate, 'yyyy-MM-dd');
-        const employeeIds = Array.from(new Set(committedShifts.map(s => s.employeeId)));
-
-        // 1. Fetch current ledger state for the whole team
-        // (We need the whole team to recompute the team average accurately)
-        const currentLedger = await fairnessLedgerQueries.getAllForWindow(organizationId, windowEndStr);
-
-        // If the ledger is completely empty for this window, we MUST do a full recompute.
-        // Incremental updates on an empty ledger would mean only the newly-assigned shifts
-        // are tracked, which is wrong.
-        if (currentLedger.length === 0) {
-            console.warn('[FairnessLedger] Ledger empty for current window; falling back to full recompute.');
-            await this.recomputeLedger(organizationId, asOfDate);
-            return;
-        }
-
-        // 2. Classify and aggregate the newly committed shifts
-        const classifiedNew = committedShifts.map(s => ({
-            ...s,
-            flags: classifyShift(s.shiftDate, s.startTime, s.endTime),
-        }));
-        
-        // We pass 0 for windowWeeks because we are ONLY aggregating the delta,
-        // not re-evaluating the whole 13-week OT threshold.
-        // Actually, incremental OT is tricky. For Phase 1, we just add the raw hours
-        // and let the next full recompute fix the OT threshold boundary.
-        // 2.5 Fetch any denied preferences that occurred as a result of these shifts
-        // For an incremental update, we just fetch denied preferences specifically for the committed shifts.
-        // Wait, the DB status might not be updated to 'rejected' yet if this hook runs concurrently.
-        // But assuming sm_select_bid_winner runs before this, they will be 'rejected'.
-        // Let's just fetch rejected bids for these specific shifts.
-        const committedShiftIds = committedShifts.map(s => s.id).filter(Boolean) as string[];
-        const deniedPrefsCount = new Map<string, number>();
-        
-        if (committedShiftIds.length > 0) {
-            const dps = await fairnessLedgerQueries.fetchDeniedPreferences(
-                organizationId,
-                format(subDays(asOfDate, 365), 'yyyy-MM-dd'), // wide window, we filter by shift_id below
-                format(addDays(asOfDate, 365), 'yyyy-MM-dd')
-            );
-            
-            // Filter to just the shifts we are committing now
-            const relevantDps = (dps ?? []).filter(dp => committedShiftIds.includes(dp.shift_id));
-            for (const dp of relevantDps) {
-                deniedPrefsCount.set(dp.employee_id, (deniedPrefsCount.get(dp.employee_id) ?? 0) + 1);
-            }
-        }
-
-        const deltaEntries = aggregateShiftsToEntries(classifiedNew, new Map(), 0, deniedPrefsCount);
-
-        // 3. Apply deltas to current state
-        const stateByEmp = new Map<string, Record<string, number>>();
-        for (const row of currentLedger) {
-            const cur = stateByEmp.get(row.employee_id) ?? {};
-            cur[row.metric] = row.rolling_value;
-            stateByEmp.set(row.employee_id, cur);
-        }
-
-        for (const delta of deltaEntries) {
-            const cur = stateByEmp.get(delta.employeeId) ?? {};
-            for (const [metric, val] of Object.entries(delta.values)) {
-                cur[metric] = (cur[metric] ?? 0) + val;
-            }
-            stateByEmp.set(delta.employeeId, cur);
-        }
-
-        // 4. Re-shape into EmployeeLedgerEntry and re-run computeDebts
-        const updatedEntries = Array.from(stateByEmp.entries()).map(([employeeId, values]) => ({
-            employeeId,
-            values: values as Record<FairnessMetric, number>,
-        }));
-
-        const newDebts = computeDebts(updatedEntries);
-
-        // 5. Upsert ALL employees (because team_average changed for everyone)
-        const windowStartStr = currentLedger[0].window_start; // preserve existing window start
-        const upsertRows: FairnessLedgerUpsertRow[] = newDebts.map(d => ({
-            organization_id: organizationId,
-            employee_id: d.employeeId,
-            metric: d.metric,
-            window_start: windowStartStr,
-            window_end: windowEndStr,
-            rolling_value: d.rollingValue,
-            team_average: d.teamAverage,
-            debt: d.debt,
-            updated_by_run: runId,
-        }));
-
-        await fairnessLedgerQueries.upsertBatch(upsertRows);
-        console.debug(`[FairnessLedger] Incremental update applied for ${committedShifts.length} shifts.`);
+        await this.recomputeLedger(organizationId, asOfDate);
     },
 };

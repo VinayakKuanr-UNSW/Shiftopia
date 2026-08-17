@@ -9,7 +9,7 @@
  *     2. AVAILABLE (green) — covered by a declared availability slot
  *     3. PARTIAL (yellow) — some declared slots, not full day
  *     4. UNSET  (gray)  — no slot, no assignment
- * - Show tooltips on locked cells (role, time, department)
+ * - Surface locked-cell detail (role, time, department)
  * - Display legend with all four states
  *
  * MUST NOT:
@@ -17,23 +17,19 @@
  * - Trigger editing actions
  * - Read from availability_rules
  * - Perform date math or recurrence expansion
+ *
+ * RENDERING. The month grid comes from the shared `MonthGrid`
+ * (`core/ui/calendar`), so this pane no longer generates its own 42-cell grid.
+ * It contributes the four day states as `react-day-picker` modifiers and the
+ * cell content; Monday-start weeks, NSW public holidays, keyboard navigation
+ * and grid semantics come from the shared engine.
  */
 
 import React, { useMemo } from 'react';
-import {
-  format,
-  eachDayOfInterval,
-  startOfMonth,
-  endOfMonth,
-  isToday,
-  isSameMonth,
-  startOfWeek,
-  endOfWeek,
-} from 'date-fns';
-import { Lock } from 'lucide-react';
+import { format } from 'date-fns';
 import { motion } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
-import { isPublicHoliday, getPublicHolidayName } from '@/modules/core/lib/holidays';
+import { MonthGrid, type MonthGridDayContext } from '@/modules/core/ui/calendar';
 import { AvailabilitySlot } from '../../model/availability.types';
 import { AssignedShiftInterval } from '../../api/availability-view.api';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
@@ -53,9 +49,6 @@ export interface CalendarPaneProps {
 
 /** Priority-ordered cell state */
 type DayState = 'locked' | 'available' | 'partial' | 'unset';
-
-// backward-compat alias (unused internally after refactor, kept for type safety)
-type DayStatus = 'available' | 'unavailable' | 'partial' | 'unset';
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -121,39 +114,65 @@ const computeDayState = (
   return 'partial';
 };
 
-/**
- * Get background/border color classes per cell state
- */
-const getStateClasses = (state: DayState): string => {
-  switch (state) {
-    case 'locked':
-      return 'bg-purple-50 border-purple-300 dark:bg-purple-900/40 dark:border-purple-600';
-    case 'available':
-      return 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700';
-    case 'partial':
-      return 'bg-amber-50 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700';
-    case 'unset':
-    default:
-      return 'bg-muted/30 border-border';
-  }
-};
-
 /** Format time for display (remove seconds) */
 const formatTimeForDisplay = (time: string): string => time.substring(0, 5);
 
 /**
- * Build hover tooltip text for locked cells.
- * Shows "Blocked due to assigned shift" then each shift's role, time, dept.
+ * Spoken summary of a cell.
+ *
+ * This is what a screen-reader user hears instead of the colour. It replaces
+ * the old native `title`, which never appeared on keyboard focus or on touch —
+ * so the locked-shift detail was previously mouse-only.
  */
-const buildLockTooltip = (shifts: AssignedShiftInterval[]): string =>
-  [
-    'Blocked due to assigned shift',
-    ...shifts.map(s => {
-      const role = s.role_name ?? 'Unknown role';
-      const dept = s.department_name ? ` · ${s.department_name}` : '';
-      return `  ${role}${dept}  ${formatTimeForDisplay(s.start_time)}–${formatTimeForDisplay(s.end_time)}`;
-    }),
-  ].join('\n');
+const buildDayLabel = (
+  ctx: MonthGridDayContext,
+  state: DayState,
+  daySlots: AvailabilitySlot[],
+  dayAssigned: AssignedShiftInterval[],
+): string => {
+  const parts = [format(ctx.date, 'EEEE d MMMM yyyy')];
+  if (ctx.holidayName) parts.push(`${ctx.holidayName}, public holiday`);
+
+  switch (state) {
+    case 'locked':
+      parts.push(`blocked by ${dayAssigned.length} assigned shift${dayAssigned.length === 1 ? '' : 's'}`);
+      for (const s of dayAssigned) {
+        const role = s.role_name ?? 'Unknown role';
+        const dept = s.department_name ? `, ${s.department_name}` : '';
+        parts.push(`${role}${dept}, ${formatTimeForDisplay(s.start_time)} to ${formatTimeForDisplay(s.end_time)}`);
+      }
+      break;
+    case 'available':
+      parts.push('available all day');
+      break;
+    case 'partial':
+      parts.push(`partially available, ${daySlots.length} slot${daySlots.length === 1 ? '' : 's'}`);
+      for (const slot of daySlots) {
+        parts.push(`${formatTimeForDisplay(slot.start_time)} to ${formatTimeForDisplay(slot.end_time)}`);
+      }
+      break;
+    case 'unset':
+      parts.push('no availability set');
+      break;
+  }
+
+  return parts.join(', ');
+};
+
+/**
+ * State colours, applied through `modifiersClassNames`.
+ *
+ * `locked` must win over the others; `react-day-picker` appends modifier
+ * classes in object order, so the later key wins the cascade tie. The state
+ * computation is already priority-ordered and emits exactly one state per day,
+ * so this is belt-and-braces.
+ */
+const STATE_CLASSNAMES = {
+  stateUnset: 'bg-muted/30 border-border',
+  statePartial: 'bg-amber-50 border-amber-300 dark:bg-amber-900/30 dark:border-amber-700',
+  stateAvailable: 'bg-emerald-50 border-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-700',
+  stateLocked: 'bg-purple-50 border-purple-400 dark:bg-purple-900/40 dark:border-purple-600',
+} as const;
 
 // ============================================================================
 // COMPONENT
@@ -184,18 +203,107 @@ export function CalendarPane({
     return map;
   }, [assignedShifts]);
 
-  // ── Calendar grid (padded to week boundaries) ──────────────────────────────
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd   = endOfMonth(currentMonth);
-    const gridStart  = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const gridEnd    = endOfWeek(monthEnd, { weekStartsOn: 1 });
-    return eachDayOfInterval({ start: gridStart, end: gridEnd });
-  }, [currentMonth]);
+  const stateFor = React.useCallback(
+    (date: Date): DayState => {
+      const key = format(date, 'yyyy-MM-dd');
+      return computeDayState(slotsByDate.get(key) ?? [], assignedByDate.get(key) ?? []);
+    },
+    [slotsByDate, assignedByDate],
+  );
+
+  // One modifier per state. The grid resolves them to the classes above.
+  const dayModifiers = useMemo(
+    () => ({
+      stateUnset: (date: Date) => stateFor(date) === 'unset',
+      statePartial: (date: Date) => stateFor(date) === 'partial',
+      stateAvailable: (date: Date) => stateFor(date) === 'available',
+      stateLocked: (date: Date) => stateFor(date) === 'locked',
+    }),
+    [stateFor],
+  );
+
+  const renderDay = React.useCallback(
+    (ctx: MonthGridDayContext) => {
+      const dateStr = format(ctx.date, 'yyyy-MM-dd');
+      const daySlots = slotsByDate.get(dateStr) ?? [];
+      const dayAssigned = assignedByDate.get(dateStr) ?? [];
+      const state = computeDayState(daySlots, dayAssigned);
+      const isLocked = state === 'locked';
+
+      return (
+        <div className="flex h-full w-full flex-col p-1.5">
+          {/* Date number */}
+          <div
+            className={cn(
+              'mb-1 text-xs font-medium',
+              ctx.modifiers.today
+                ? 'text-blue-700 dark:text-blue-300'
+                : isLocked
+                  ? 'text-purple-800 dark:text-purple-200'
+                  : ctx.holidayName
+                    ? 'font-semibold text-amber-600 dark:text-amber-400'
+                    : 'text-foreground',
+            )}
+          >
+            {ctx.date.getDate()}
+          </div>
+
+          {isLocked ? (
+            /* LOCKED — assigned shift pills */
+            <div className="flex-1 space-y-0.5 overflow-hidden">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-800 dark:text-purple-300">
+                Assigned
+              </div>
+              {dayAssigned.slice(0, 2).map((s) => (
+                <div
+                  key={s.id}
+                  className="truncate rounded bg-purple-200/70 px-1 py-0.5 text-[10px] text-purple-900 dark:bg-purple-800/50 dark:text-purple-100"
+                >
+                  {formatTimeForDisplay(s.start_time)}–{formatTimeForDisplay(s.end_time)}
+                  {s.role_name && <span className="ml-1 opacity-80">{s.role_name}</span>}
+                </div>
+              ))}
+              {dayAssigned.length > 2 && (
+                <div className="px-1 text-[10px] text-purple-700 dark:text-purple-300">
+                  +{dayAssigned.length - 2} more
+                </div>
+              )}
+            </div>
+          ) : (
+            /* AVAILABLE / PARTIAL — declared slot pills */
+            <div className="flex-1 space-y-0.5 overflow-hidden">
+              {daySlots.slice(0, 3).map((slot, index) => (
+                <div
+                  key={slot.id || index}
+                  className="truncate rounded bg-background/70 px-1 py-0.5 text-[10px] text-foreground dark:bg-muted/30"
+                >
+                  {formatTimeForDisplay(slot.start_time)}-{formatTimeForDisplay(slot.end_time)}
+                </div>
+              ))}
+              {daySlots.length > 3 && (
+                <div className="px-1 text-[10px] text-muted-foreground">+{daySlots.length - 3} more</div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    },
+    [slotsByDate, assignedByDate],
+  );
+
+  const dayLabel = React.useCallback(
+    (ctx: MonthGridDayContext) => {
+      const dateStr = format(ctx.date, 'yyyy-MM-dd');
+      const daySlots = slotsByDate.get(dateStr) ?? [];
+      const dayAssigned = assignedByDate.get(dateStr) ?? [];
+      return buildDayLabel(ctx, computeDayState(daySlots, dayAssigned), daySlots, dayAssigned);
+    },
+    [slotsByDate, assignedByDate],
+  );
 
   if (isLoading) {
     return (
-      <div className="p-4 h-full">
+      <div className="h-full p-4">
         <Skeleton className="h-full w-full" />
       </div>
     );
@@ -206,133 +314,44 @@ export function CalendarPane({
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
       initial="hidden"
       animate="show"
-      className="flex flex-col h-full p-4"
+      className="flex h-full flex-col p-4"
     >
-
-      {/* Weekday Headers */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-          <div
-            key={day}
-            className="h-8 flex items-center justify-center text-xs font-medium text-muted-foreground"
-          >
-            {day}
-          </div>
-        ))}
-      </div>
-
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1 flex-1">
-        {calendarDays.map((date) => {
-          const dateStr      = format(date, 'yyyy-MM-dd');
-          const daySlots     = slotsByDate.get(dateStr) ?? [];
-          const dayAssigned  = assignedByDate.get(dateStr) ?? [];
-          const state        = computeDayState(daySlots, dayAssigned);
-          const isCurrentMonth = isSameMonth(date, currentMonth);
-          const isTodayDate  = isToday(date);
-          const isLocked     = state === 'locked';
-          const holiday      = isPublicHoliday(date);
-
-          return (
-            <div
-              key={dateStr}
-              className={cn(
-                'relative border rounded-md p-1.5 min-h-[80px] flex flex-col',
-                getStateClasses(state),
-                !isCurrentMonth && 'opacity-40',
-                isTodayDate && 'ring-2 ring-blue-500 ring-offset-1'
-              )}
-              title={
-                isLocked
-                  ? buildLockTooltip(dayAssigned)
-                  : holiday
-                  ? getPublicHolidayName(date) ?? undefined
-                  : undefined
-              }
-            >
-              {/* Date Number */}
-              <div
-                className={cn(
-                  'text-xs font-medium mb-1',
-                  isTodayDate
-                    ? 'text-blue-600 dark:text-blue-400'
-                    : isLocked
-                    ? 'text-purple-700 dark:text-purple-200'
-                    : holiday
-                    ? 'text-amber-500 dark:text-amber-400 font-semibold'
-                    : 'text-foreground'
-                )}
-              >
-                {format(date, 'd')}
-              </div>
-
-              {/* LOCKED state — show assigned shift pills */}
-              {isLocked ? (
-                <div className="flex-1 overflow-hidden space-y-0.5">
-                  <div className="flex items-center gap-0.5 text-purple-700 dark:text-purple-300">
-
-                    <span className="text-[9px] font-semibold uppercase tracking-wide">
-                      Assigned
-                    </span>
-                  </div>
-                  {dayAssigned.slice(0, 2).map((s) => (
-                    <div
-                      key={s.id}
-                      className="text-[9px] px-1 py-0.5 rounded bg-purple-200/70 dark:bg-purple-800/50 truncate text-purple-900 dark:text-purple-100"
-                    >
-                      {formatTimeForDisplay(s.start_time)}–{formatTimeForDisplay(s.end_time)}
-                      {s.role_name && (
-                        <span className="ml-1 opacity-75">{s.role_name}</span>
-                      )}
-                    </div>
-                  ))}
-                  {dayAssigned.length > 2 && (
-                    <div className="text-[9px] text-purple-600 dark:text-purple-400 px-1">
-                      +{dayAssigned.length - 2} more
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* AVAILABLE / PARTIAL — show declared slot time pills */
-                <div className="flex-1 overflow-hidden space-y-0.5">
-                  {daySlots.slice(0, 3).map((slot, index) => (
-                    <div
-                      key={slot.id || index}
-                      className="text-[10px] px-1 py-0.5 rounded bg-background/70 dark:bg-muted/30 truncate text-foreground"
-                      title={`${formatTimeForDisplay(slot.start_time)} – ${formatTimeForDisplay(slot.end_time)}`}
-                    >
-                      {formatTimeForDisplay(slot.start_time)}-{formatTimeForDisplay(slot.end_time)}
-                    </div>
-                  ))}
-                  {daySlots.length > 3 && (
-                    <div className="text-[10px] text-muted-foreground px-1">
-                      +{daySlots.length - 3} more
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <MonthGrid
+        month={currentMonth}
+        // The month is driven by the pane's own header, not by the grid.
+        captionVariant="hidden"
+        renderDay={renderDay}
+        dayLabel={dayLabel}
+        dayModifiers={dayModifiers}
+        modifiersClassNames={{
+          ...STATE_CLASSNAMES,
+          today: 'ring-2 ring-blue-500 ring-inset',
+          outside: 'opacity-50',
+        }}
+        dayClassName="rounded-md border"
+        minCellHeight="5rem"
+        className="flex-1"
+      />
 
       {/* Legend */}
-      <motion.div variants={itemVariants} className="mt-4 flex items-center justify-center gap-4 text-xs flex-wrap text-foreground">
+      <motion.div
+        variants={itemVariants}
+        className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs text-foreground"
+      >
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-emerald-400 border border-emerald-500" />
+          <div className="h-3 w-3 rounded bg-emerald-400 border border-emerald-500" aria-hidden="true" />
           <span className="text-muted-foreground">Available</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-amber-400 border border-amber-500" />
+          <div className="h-3 w-3 rounded bg-amber-400 border border-amber-500" aria-hidden="true" />
           <span className="text-muted-foreground">Partial</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-purple-400 border border-purple-500" />
-
+          <div className="h-3 w-3 rounded bg-purple-400 border border-purple-500" aria-hidden="true" />
           <span className="text-muted-foreground">Assigned</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-muted border border-border" />
+          <div className="h-3 w-3 rounded bg-muted border border-border" aria-hidden="true" />
           <span className="text-muted-foreground">Unset</span>
         </div>
       </motion.div>

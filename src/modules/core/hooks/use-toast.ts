@@ -7,6 +7,8 @@ import type {
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
+const DEFAULT_TOAST_DURATION = 1200
+const DESTRUCTIVE_TOAST_DURATION = 4000
 
 type ToasterToast = ToastProps & {
   id: string
@@ -154,6 +156,11 @@ function toast({ ...props }: Toast) {
     toast: {
       ...props,
       id,
+      duration:
+        props.duration ??
+        (props.variant === "destructive"
+          ? DESTRUCTIVE_TOAST_DURATION
+          : DEFAULT_TOAST_DURATION),
       open: true,
       onOpenChange: (open) => {
         if (!open) dismiss()

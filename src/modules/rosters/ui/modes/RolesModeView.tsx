@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
-import { format, addDays, startOfWeek, parse, isToday } from 'date-fns';
+import { format, addDays, parse, isToday } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import { 
   Plus, 
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
+import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import {
     Tooltip,
@@ -325,7 +327,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const { data: roles = [], isLoading: isLoadingRoles } = useRoles(organizationId, activeDeptId, activeSubDeptId);
 
   const startDate = useMemo(() => {
-    if (viewType === 'week') return format(startOfWeek(selectedDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    if (viewType === 'week') return format(startOfWeekAU(selectedDate), 'yyyy-MM-dd');
     // Month: first of month minus the buffer (calendar continuity + matches fetch).
     if (viewType === 'month') return format(addDays(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), -MONTH_BUFFER_DAYS), 'yyyy-MM-dd');
     return format(selectedDate, 'yyyy-MM-dd');
@@ -630,12 +632,21 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
               <th className="sticky top-0 left-0 z-[40] w-64 min-w-[256px] px-4 py-3 text-left bg-muted/80 backdrop-blur-xl border-b border-r border-border shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]">
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Role Description</span>
               </th>
-              {dates.map(date => (
-                <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-3 text-center border-b border-border bg-muted/30", format(date, 'yyyy-MM-dd') === todayISO() && "bg-primary/5")}>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.12em] font-mono text-muted-foreground">{format(date, 'EEE')}</div>
-                  <div className="text-sm font-mono tabular-nums mt-0.5 text-muted-foreground/50">{format(date, 'MMM d')}</div>
-                </th>
-              ))}
+              {dates.map(date => {
+                const holidayName = getPublicHolidayName(date);
+                const isToday = format(date, 'yyyy-MM-dd') === todayISO();
+                return (
+                  <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-border bg-muted/30 transition-colors", holidayName ? "bg-amber-500/10 border-amber-500/30" : isToday && "bg-primary/5")}>
+                    <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", holidayName ? "text-amber-400 font-extrabold" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
+                    <div className={cn("text-sm font-mono tabular-nums mt-0.5", holidayName ? "text-amber-300 font-bold" : "text-muted-foreground/50")}>{format(date, 'MMM d')}</div>
+                    {holidayName && (
+                      <div className="mt-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[9px] font-black uppercase tracking-wider truncate max-w-full shadow-sm" title={`ANZ Public Holiday: ${holidayName}`}>
+                        {holidayName}
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           {levelGroups.map((group) => (

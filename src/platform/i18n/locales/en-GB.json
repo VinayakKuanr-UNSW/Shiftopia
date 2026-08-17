@@ -32,10 +32,10 @@
     "broadcast": "Broadcast",
     "insights": "Insights",
     "performance": "Performance",
-    "grid": "Grid",
     "users": "Users",
     "my_leave": "My Leave",
     "leave_approvals": "Leave Approvals",
+    "team_availability": "Team Availability",
     "gross_pay": "Gross Pay"
   },
   "settings": {

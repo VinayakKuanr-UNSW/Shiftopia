@@ -83,5 +83,14 @@ Run and **paste the actual output** as proof. Never claim green without it.
 
 ---
 
+## 6. Concurrency & Locking Contract
+
+- **All Shift Mutations Route Through `sm_apply_shift_op`**: Direct `UPDATE public.shifts` statements outside `_apply_shift_op_write` are strictly prohibited to prevent lost updates and version CAS bypasses.
+- **Employee Assignment Advisory Locks**: All assignment operations MUST acquire a deterministic transactional advisory lock on the target employee identity (`pg_advisory_xact_lock(hashtext('emp_assign:' || employee_id::text))`) before running overlap or compliance checks.
+- **Multi-Employee Lock Ordering (Deadlock Prevention)**: When an operation touches multiple employees (e.g., shift trades/swaps), advisory locks MUST be acquired in ascending lexicographical UUID order: `LEAST(empA, empB)` then `GREATEST(empA, empB)`.
+- **Background Cron Locks**: All background workers/cron functions MUST acquire a non-blocking advisory lock (`pg_try_advisory_xact_lock(hashtext('job_name'))`) at execution start to guarantee single-execution semantics across multi-replica deployments.
+
+---
+
 _When in doubt: run the gates, show the output, and ask before anything irreversible or
 outward-facing (push to main, deploy, delete branches, mutate prod data)._

@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
 import { format, isBefore, startOfDay } from 'date-fns';
-import type { DateRange } from 'react-day-picker';
+import type { DateRange } from '@/modules/core/ui/calendar';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { Calendar } from '@/modules/core/ui/primitives/calendar';
+import { Calendar } from '@/modules/core/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/modules/core/ui/primitives/tabs';
 import { CalendarDays, Clock, Zap, AlertTriangle } from 'lucide-react';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';

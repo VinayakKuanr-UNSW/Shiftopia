@@ -31,7 +31,10 @@ export const MyBroadcastsPage: React.FC = () => {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               onRefresh={() => setRefreshTrigger(prev => prev + 1)}
-              onCreateGroup={() => {}}
+              // MyBroadcastsScreen is a member view — it has no group-creation
+              // path, which is why this was previously wired to a no-op button.
+              // Managers create groups on /broadcast.
+              canCreateGroup={false}
             />
           }
         />

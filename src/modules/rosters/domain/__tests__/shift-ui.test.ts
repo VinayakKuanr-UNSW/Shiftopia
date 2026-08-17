@@ -334,3 +334,45 @@ describe('overnight shifts via shift_date + times fallback', () => {
         expect(isTimesheetReviewable(overnight)).toBe(true); // No Show stand-in
     });
 });
+
+describe('unassigned shifts never accrue attendance', () => {
+    const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+    const HOUR = 60 * 60 * 1000;
+
+    // A shift whose scheduled window has fully passed — the condition that used
+    // to synthesise "No Show" from nothing but the clock.
+    const finishedWindow = { lifecycle_status: 'Published', start_at: iso(-9 * HOUR), end_at: iso(-1 * HOUR) };
+
+    it('reports No Show for an ASSIGNED shift nobody clocked into', () => {
+        const s = { ...finishedWindow, assigned_employee_id: 'emp-1', assignment_status: 'assigned' };
+        expect(getLiveRuleBadges(s).arrival?.label).toBe('No Show');
+        expect(getPayrollRuleBadges(s).arrival?.label).toBe('No Show');
+    });
+
+    it('reports NOTHING for an unassigned shift — nobody was rostered to show up', () => {
+        const s = { ...finishedWindow, assigned_employee_id: null, assignment_status: 'unassigned' };
+        expect(getLiveRuleBadges(s)).toEqual({ arrival: null, departure: null });
+        expect(getPayrollRuleBadges(s)).toEqual({ arrival: null, departure: null });
+    });
+
+    it('treats a null assigned_employee_id as unassigned even without assignment_status', () => {
+        const s = { ...finishedWindow, assigned_employee_id: null };
+        expect(getLiveRuleBadges(s).arrival).toBeNull();
+        expect(getPayrollRuleBadges(s).arrival).toBeNull();
+    });
+
+    it('still closes the schedule window — Time Rules describe the SLOT, not a person', () => {
+        const s = { ...finishedWindow, assigned_employee_id: null, assignment_status: 'unassigned' };
+        expect(getTimeRule(s)?.label).toBe('Closed');
+    });
+
+    it('keeps badges for legacy callers that supply no assignment fields at all', () => {
+        expect(getLiveRuleBadges(finishedWindow).arrival?.label).toBe('No Show');
+    });
+
+    it('does not suppress a mid-shift unassigned slot into a false Missing', () => {
+        const s = { lifecycle_status: 'Published', start_at: iso(-30 * 60 * 1000), end_at: iso(+4 * HOUR),
+            assigned_employee_id: null, assignment_status: 'unassigned' };
+        expect(getLiveRuleBadges(s).arrival).toBeNull();
+    });
+});

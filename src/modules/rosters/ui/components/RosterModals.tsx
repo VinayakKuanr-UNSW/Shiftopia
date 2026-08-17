@@ -12,6 +12,7 @@
 
 import React, { useState, forwardRef, useImperativeHandle, Suspense, lazy } from 'react';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 // Heavy modals are lazy-loaded so the Rosters page chunk doesn't pay for
 // them on first paint. Each is ~500-1700 LOC and pulls in its own form
@@ -44,7 +45,8 @@ interface AutoSchedulerShift {
     roleName?: string;
     unpaid_break_minutes: number;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
-    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
+    target_employment_type?: TargetEmploymentType | null;
+    target_requires_flexible?: boolean;
 }
 
 interface RosterModalsProps {
