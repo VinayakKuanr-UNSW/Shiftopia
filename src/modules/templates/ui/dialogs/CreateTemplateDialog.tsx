@@ -56,9 +56,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   const [isLoadingDepts, setIsLoadingDepts] = useState(false);
   const [isLoadingSubDepts, setIsLoadingSubDepts] = useState(false);
 
-  // DEBUG: Track Render State (Placed after initialization)
-  console.log('[CreateTemplateDialog] RENDER:', { isOpen, selectedOrgId, selectedDeptId, selectedSubDeptId, orgsCount: organizations.length });
-
   // Generation options (Current month + 24 future months)
   const years = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -343,6 +340,10 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
   return (
     <ResponsiveDialog open={isOpen} onOpenChange={handleClose} dialogClassName="bg-card border-border p-0 overflow-hidden sm:max-w-[760px] shadow-2xl">
+      <ResponsiveDialog.Header className="sr-only">
+        <ResponsiveDialog.Title>Create Template</ResponsiveDialog.Title>
+        <ResponsiveDialog.Description>Configure your new template skeleton</ResponsiveDialog.Description>
+      </ResponsiveDialog.Header>
       <ResponsiveDialog.Body className="overflow-y-auto max-h-[85dvh] p-0">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr]">
           {/* Left Column: Hierarchy (Locked) */}
@@ -401,14 +402,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                   <h3 className="text-xl font-bold text-foreground tracking-tight">Template Details</h3>
                   <p className="text-muted-foreground text-sm mt-1">Configure your new template skeleton.</p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClose}
-                  className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted -mt-8 -mr-4"
-                >
-                  <Plus className="h-5 w-5 rotate-45" />
-                </Button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -463,7 +456,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                         Auto-Seeding
                       </Label>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Created with core shifts for <span className="text-foreground">Convention</span>, <span className="text-foreground">Exhibition</span>, and <span className="text-foreground">Theatre</span>.
+                        Created with core shifts for <span className="text-foreground">Convention</span>, <span className="text-foreground">Exhibition</span>, <span className="text-foreground">Theatre</span>, and <span className="text-foreground">The Cutaway</span>.
                       </p>
                     </div>
                   </div>

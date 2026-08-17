@@ -262,6 +262,16 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       // Employee assignment - CRITICAL!
       assignedEmployeeId: shiftData.assigned_employee_id || shiftData.assignedEmployeeId || null,
       assignedEmployeeName: shiftData.assignedEmployeeName || null,
+      // NOT NULL in the database with no default. The modal already requires it
+      // (a zod enum), so dropping it here was what made every new template shift
+      // fail to save with a 400 once the column became mandatory.
+      targetEmploymentType:
+        shiftData.target_employment_type || shiftData.targetEmploymentType || editShift?.targetEmploymentType || 'FT',
+      targetRequiresFlexible:
+        shiftData.target_requires_flexible ?? shiftData.targetRequiresFlexible ?? false,
+      // 0 = Sunday .. 6 = Saturday; null is the "any day" wildcard, and the two
+      // are distinct states — see TemplateShift.dayOfWeek.
+      dayOfWeek: shiftData.day_of_week ?? shiftData.dayOfWeek ?? editShift?.dayOfWeek ?? null,
     };
 
     console.log('[TemplateEditor] shiftPayload to save:', shiftPayload);

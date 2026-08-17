@@ -1105,7 +1105,9 @@ export function useTemplates(): UseTemplatesReturn {
                 event_tags: s.eventTags,
                 notes: s.notes,
                 sort_order: idx,
-                day_of_week: s.dayOfWeek ?? 0,
+                // `?? null`, not `?? 0` — 0 is Sunday. Duplicating a shift with
+                // no weekday used to pin the copy to Sundays.
+                day_of_week: s.dayOfWeek ?? null,
                 assigned_employee_id: s.assignedEmployeeId || null,
                 assigned_employee_name: s.assignedEmployeeName || null,
               }));

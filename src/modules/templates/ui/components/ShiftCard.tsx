@@ -1,6 +1,6 @@
 // src/components/templates/ShiftCard.tsx
 import React from 'react';
-import { Clock, Edit2, Trash2, Coffee, User, Tag, Copy, MoreHorizontal } from 'lucide-react';
+import { Clock, Edit2, Trash2, Coffee, User, Briefcase, Copy, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import {
@@ -22,6 +22,10 @@ import {
   formatTimeDisplay,
   calculateNetHours,
 } from '@/modules/templates/model/templates.types';
+import {
+  TARGET_EMPLOYMENT_TYPE_LABELS,
+  toTargetEmploymentType,
+} from '@/modules/core/model/employment.types';
 import { useSkills, useLicenses } from '@/modules/rosters/state/useRosterShifts';
 
 interface ShiftCardProps {
@@ -86,6 +90,11 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
     [licensesLookup],
   );
 
+  const roleLabel = shift.roleName || shift.name || 'Unnamed Shift';
+  const remunerationLabel =
+    shift.remunerationLevelName ||
+    (shift.remunerationLevel ? `Level ${shift.remunerationLevel}` : null);
+
   const netHours = calculateNetHours(
     shift.startTime,
     shift.endTime,
@@ -93,6 +102,15 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
   );
   const totalBreak =
     (shift.paidBreakDuration || 0) + (shift.unpaidBreakDuration || 0);
+
+  const targetType = shift.targetEmploymentType
+    ? toTargetEmploymentType(shift.targetEmploymentType)
+    : null;
+  const employmentTypeLabel = targetType
+    ? (targetType === 'PT' && shift.targetRequiresFlexible
+        ? 'Flexible Part-Time'
+        : TARGET_EMPLOYMENT_TYPE_LABELS[targetType] || targetType)
+    : 'Full-Time';
 
   return (
     <div
@@ -104,23 +122,23 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
         'hover:border-opacity-60'
       )}
     >
-      {/* Actions */}
+      {/* Actions. The trigger was icon-only with no aria-label, so it announced
+          as an unnamed "button" — the tooltip is not an accessible name. */}
       {!isReadOnly && (
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-1 right-1">
           <TooltipProvider>
             <Tooltip>
               <DropdownMenu>
                 <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Actions for ${roleLabel}`}
+                    className="h-11 w-11 min-h-[44px] min-w-[44px] text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                  </Button>
                 </TooltipTrigger>
                 <DropdownMenuContent align="end" className="w-40">
                   <DropdownMenuItem
@@ -130,7 +148,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                     }}
                     className="cursor-pointer"
                   >
-                    <Edit2 className="h-4 w-4 mr-2" />
+                    <Edit2 className="h-4 w-4 mr-2" aria-hidden="true" />
                     Edit Shift
                   </DropdownMenuItem>
 
@@ -142,13 +160,13 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                       }}
                       className="cursor-pointer"
                     >
-                      <Copy className="h-4 w-4 mr-2" />
+                      <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
                       Clone Shift
                     </DropdownMenuItem>
                   )}
 
                   <DropdownMenuSeparator />
-                  
+
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
@@ -156,7 +174,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                     }}
                     className="text-destructive focus:text-destructive cursor-pointer"
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
+                    <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
                     Delete Shift
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -167,27 +185,34 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Shift Name / Role */}
-      <div className="flex items-start gap-2 mb-2 pr-16">
+      {/* Row 1: <Role> <Remuneration Level> */}
+      <div className="flex items-start gap-2 mb-2 pr-12">
         <div
           className={cn(
-            'w-6 h-6 rounded flex items-center justify-center shrink-0',
+            'w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5',
             colors.bg
           )}
         >
           <User className={cn('h-3.5 w-3.5', colors.text)} />
         </div>
         <div className="min-w-0">
-          <h4 className="text-sm font-medium text-foreground truncate">
-            {shift.name || shift.roleName || 'Unnamed Shift'}
-          </h4>
-          {shift.roleName && shift.name && shift.name !== shift.roleName && (
-            <p className="text-xs text-muted-foreground truncate">{shift.roleName}</p>
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <h4 className="text-sm font-medium text-foreground truncate">
+              {roleLabel}
+            </h4>
+            {remunerationLabel && (
+              <span className="text-xs text-muted-foreground font-normal shrink-0">
+                {remunerationLabel}
+              </span>
+            )}
+          </div>
+          {shift.name && shift.roleName && shift.name !== shift.roleName && (
+            <p className="text-xs text-muted-foreground truncate">{shift.name}</p>
           )}
         </div>
       </div>
 
-      {/* Time */}
+      {/* Row 2: Timings Net */}
       <div className="flex items-center gap-2 mb-2">
         <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
         <span className="text-sm text-foreground/80">
@@ -202,7 +227,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
         </Badge>
       </div>
 
-      {/* Breaks */}
+      {/* Row 3: Breaks */}
       {totalBreak > 0 && (
         <div className="flex items-center gap-2 mb-2">
           <Coffee className="h-3.5 w-3.5 text-muted-foreground/70" />
@@ -222,15 +247,13 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Remuneration Level */}
-      {(shift.remunerationLevelName || shift.remunerationLevel) && (
-        <div className="flex items-center gap-2 mb-2">
-          <Tag className="h-3.5 w-3.5 text-muted-foreground/70" />
-          <span className="text-xs text-muted-foreground">
-            {shift.remunerationLevelName || `Level ${shift.remunerationLevel}`}
-          </span>
-        </div>
-      )}
+      {/* Row 4: <target employment type> */}
+      <div className="flex items-center gap-2 mb-2">
+        <Briefcase className="h-3.5 w-3.5 text-muted-foreground/70" />
+        <span className="text-xs text-muted-foreground">
+          {employmentTypeLabel}
+        </span>
+      </div>
 
       {/* Tags */}
       {(shift.skills?.length > 0 || shift.licenses?.length > 0) && (
