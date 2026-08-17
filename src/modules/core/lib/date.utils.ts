@@ -230,40 +230,18 @@ export const isSydneyFuture = (date: Date): boolean => isFutureInTimezone(date, 
 export const isSydneyToday = (date: Date): boolean => isTodayInTimezone(date, SYDNEY_TZ);
 
 /**
- * Checks if a given date is an Australian Public Holiday (2026)
- * @param date The date to check
+ * Checks if a given date is an Australian (NSW) public holiday.
+ *
+ * @deprecated Import from `@/modules/core/lib/holidays` instead. Re-exported
+ * here only so existing call sites keep working; new code should not add to
+ * them. This used to be a hard-coded 2026 list that returned `false` for
+ * Easter, Anzac Day, King's Birthday and Labour Day in every other year — and
+ * it fed `is_public_holiday` into the V8 compliance engine and the shift form's
+ * minimum-engagement floor. It also omitted the NSW substitute days (Mon 27 Apr
+ * 2026 for Anzac Day, Mon 28 Dec 2026 for Boxing Day), which do attract
+ * public-holiday penalty rates.
  */
-export const isPublicHoliday = (date: Date): boolean => {
-    const month = date.getMonth(); // 0-indexed
-    const d = date.getDate();
-    const year = date.getFullYear();
-
-    if (year !== 2026) {
-        // Basic fixed-date fallback for other years
-        if (month === 0 && d === 1) return true;   // New Year
-        if (month === 0 && d === 26) return true;  // Australia Day
-        if (month === 11 && d === 25) return true; // Christmas
-        if (month === 11 && d === 26) return true; // Boxing Day
-        return false;
-    }
-
-    // 2026 Specifics (NSW context)
-    const holidays = [
-        { m: 0, d: 1 },   // New Year
-        { m: 0, d: 26 },  // Australia Day
-        { m: 3, d: 3 },   // Good Friday (Apr 3)
-        { m: 3, d: 4 },   // Easter Saturday
-        { m: 3, d: 5 },   // Easter Sunday
-        { m: 3, d: 6 },   // Easter Monday
-        { m: 3, d: 25 },  // Anzac Day (Apr 25)
-        { m: 5, d: 8 },   // King's Birthday (Jun 8)
-        { m: 9, d: 5 },   // Labour Day (Oct 5)
-        { m: 11, d: 25 }, // Christmas
-        { m: 11, d: 26 }, // Boxing Day
-    ];
-
-    return holidays.some(h => h.m === month && h.d === d);
-};
+export { isPublicHoliday } from '@/modules/core/lib/holidays';
 
 /**
  * Checks if a specific wall-clock time on a specific date has already passed in Sydney.
