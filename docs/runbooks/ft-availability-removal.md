@@ -68,15 +68,49 @@ SELECT uc.user_id, p.email, uc.employment_status, uc.contracted_weekly_hours
  ORDER BY p.email;
 ```
 
-## 3. Apply
+## 3. Apply — ONE FILE ONLY. Never `supabase db push`.
 
-```bash
-supabase db push          # or apply the single file via the SQL editor
+> ### ⛔ `supabase db push` WILL DAMAGE PRODUCTION
+>
+> The repo holds **124 migration files; 82 carry version numbers absent from
+> production's `schema_migrations`** — because production applied most of them
+> under its own timestamps during an earlier reconciliation. The CLI cannot tell
+> "already applied under a different version" from "never applied", so a push
+> re-runs all 82. Among them:
+>
+> * `20260811000000_seed_realistic_availabilities` — **re-seeds availability
+>   rows**, i.e. re-creates the FT data this migration exists to remove, and
+>   duplicates casual/PT declarations.
+> * `20260812000000_baseline_ft_schedule` and `20260813000000_baseline_ft_template_merge`
+>   — **re-create the baseline FT roster and templates that were deliberately
+>   withdrawn** (they generated a 56-shift roster that fails `SHAPE_FT_MIN_DAY`).
+> * `20260710120000_leave_module` and other `CREATE TABLE` migrations — will error
+>   on objects that already exist, aborting mid-push in an unpredictable place.
+>
+> This drift is pre-existing and is **not** resolved by this change set. Verify it
+> yourself before believing any tooling that claims the database is behind:
+>
+> ```sql
+> SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;
+> ```
+
+Apply the single file, then record it in history so the CLI does not offer it
+again. Both statements, in this order:
+
+```sql
+-- 1. Paste the whole of
+--    supabase/migrations/20260817120000_ft_availability_removal.sql
+--    into the SQL editor and run it. It is one transaction.
+
+-- 2. Record it.
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES ('20260817120000', 'ft_availability_removal')
+ON CONFLICT (version) DO NOTHING;
 ```
 
-The migration is one transaction and self-verifying: it aborts if the archived row
-counts do not survive its own deletes (`archive verification failed`). A failure
-there means nothing was committed — investigate before retrying.
+The migration is self-verifying: it aborts if the archived row counts do not
+survive its own deletes (`archive verification failed`). A failure there means
+**nothing was committed** — investigate before retrying, and do not run step 2.
 
 ## 4. Post-apply verification
 
