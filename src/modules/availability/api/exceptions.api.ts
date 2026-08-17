@@ -16,6 +16,8 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { fetchContractBasis } from './contract-basis.api';
+import { FT_AVAILABILITY_ERROR, resolveProfileId } from './availability.service';
 
 export type ExceptionSeverity = 'HARD' | 'SOFT' | 'PREFERENCE';
 
@@ -80,16 +82,28 @@ export async function createAvailabilityException(
     profileId: string,
     input: CreateExceptionInput,
 ): Promise<AvailabilityException> {
+    // `resolveProfileId` FIRST: callers pass the 'current-user' sentinel here as
+    // well as real uuids, and `fetchContractBasis('current-user')` returns the
+    // empty basis (not Full-Time), which would wave an FT straight through.
+    // Unlike `availability_rules`, this table has no DB-level FT trigger, so this
+    // check is the only enforcement there is.
+    const resolvedProfileId = await resolveProfileId(profileId);
+    const basis = await fetchContractBasis(resolvedProfileId);
+    if (basis.isFullTime) throw new Error(FT_AVAILABILITY_ERROR);
+
     const { data, error } = await (supabase as any)
         .from('availability_exceptions')
         .insert({
-            profile_id: profileId,
+            // The RESOLVED id in both columns. These read `profileId` verbatim
+            // before, so a 'current-user' caller sent the literal string into a
+            // uuid column and got a 22P02 rather than a row.
+            profile_id: resolvedProfileId,
             exception_date: input.exceptionDate,
             start_time: input.startTime,
             end_time: input.endTime,
             severity: input.severity,
             reason: input.reason ?? null,
-            created_by: profileId,
+            created_by: resolvedProfileId,
         })
         .select()
         .single();

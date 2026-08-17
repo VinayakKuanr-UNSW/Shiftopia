@@ -12,7 +12,7 @@ import {
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
-import { Calendar } from '@/modules/core/ui/primitives/calendar';
+import { Calendar } from '@/modules/core/ui/calendar';
 import { PlusCircle, Trash2, CalendarIcon } from 'lucide-react';
 import { TimeSlot } from '../../model/availability.types';
 import { cn } from '@/modules/core/lib/utils';

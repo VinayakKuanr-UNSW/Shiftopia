@@ -126,14 +126,14 @@ function mockSupabase(opts: {
     };
 }
 
-const shift = (id: string, date = '2026-05-15'): ShiftMeta => ({
+const shift = (id: string, date: string = '2026-05-15'): ShiftMeta => ({
     id, shift_date: date, start_time: '09:00', end_time: '17:00',
     role_id: 'role-A',
 });
 
-const employee = (id: string): EmployeeMeta => ({
-    id, name: `E-${id}`, contract_type: 'FT',
-    contracted_weekly_hours: 38, remuneration_rate: 25,
+const employee = (id: string, contract_type: 'FT' | 'PT' | 'CASUAL' = 'CASUAL'): EmployeeMeta => ({
+    id, name: `E-${id}`, contract_type,
+    contracted_weekly_hours: contract_type === 'FT' ? 38 : 0, remuneration_rate: 25,
 });
 
 // ---------------------------------------------------------------------------
@@ -323,6 +323,168 @@ describe('RosterFetcher.fetchAvailability', () => {
         // Slot presence → assume "has data"
         expect(result.get('e1')!.hasAnyData).toBe(true);
         warnSpy.mockRestore();
+    });
+
+    it('treats Full-Time employees as contract-available without querying availability rules/slots', async () => {
+        const supa = mockSupabase({
+            availabilitySlots: { data: [], error: null },
+            availabilityRules: { data: [], error: null },
+        });
+        const fetcher = new RosterFetcher(supa);
+
+        const result = await fetcher.fetchAvailability(
+            [shift('s1')],
+            [employee('ft1', 'FT')],
+        );
+
+        expect(result.get('ft1')!.hasAnyData).toBe(false);
+        expect(result.get('ft1')!.slots).toEqual([]);
+        // The claim in the test name, actually asserted. An all-FT pool must not
+        // reach either table — the rows are not merely ignored, they do not exist
+        // (20260817120000 purges them).
+        expect(supa.from).not.toHaveBeenCalled();
+    });
+
+    it('still queries for a mixed pool, and leaves only the FT out of the filter', async () => {
+        const supa = mockSupabase({
+            availabilitySlots: {
+                data: [{ profile_id: 'c1', slot_date: '2026-05-15', start_time: '09:00', end_time: '17:00' }],
+                error: null,
+            },
+            availabilityRules: { data: [{ profile_id: 'c1' }], error: null },
+        });
+        const fetcher = new RosterFetcher(supa);
+
+        const result = await fetcher.fetchAvailability(
+            [shift('s1')],
+            [employee('ft1', 'FT'), employee('c1', 'CASUAL')],
+        );
+
+        // The casual is hard-filtered on their declaration…
+        expect(result.get('c1')!.hasAnyData).toBe(true);
+        expect(result.get('c1')!.slots).toHaveLength(1);
+        // …and the FT is not, without inheriting the casual's rows.
+        expect(result.get('ft1')!.hasAnyData).toBe(false);
+        expect(result.get('ft1')!.slots).toEqual([]);
+    });
+
+    // `employment_status` beats `contract_type` — 12 people in production look
+    // Casual on the profile but hold a Full-Time contract, and the contract is
+    // what the write path enforces against.
+    it('classifies on the contract employment_status when the two disagree', async () => {
+        const supa = mockSupabase({});
+        const fetcher = new RosterFetcher(supa);
+
+        const result = await fetcher.fetchAvailability(
+            [shift('s1')],
+            [{ ...employee('p1', 'CASUAL'), employment_status: 'Full-Time' }],
+        );
+
+        expect(result.get('p1')!.hasAnyData).toBe(false);
+        expect(supa.from).not.toHaveBeenCalled();
+    });
+});
+
+describe('RosterFetcher.fetchOrdinaryHoursEnvelopes', () => {
+    const envRow = (over: Record<string, unknown> = {}) => ({
+        user_id: 'p1',
+        ordinary_span_start: '06:00:00',
+        ordinary_span_end: '18:00:00',
+        ordinary_days: [1, 2, 3, 4, 5],
+        contracted_weekly_hours: 20,
+        start_date: '2026-01-01',
+        ...over,
+    });
+
+    it('returns the envelope for a contract that configures one', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({ userContracts: { data: [envRow()], error: null } }));
+        const result = await fetcher.fetchOrdinaryHoursEnvelopes([employee('p1', 'PT')]);
+
+        expect(result.get('p1')).toEqual({
+            ordinary_span_start: '06:00:00',
+            ordinary_span_end: '18:00:00',
+            ordinary_days: [1, 2, 3, 4, 5],
+        });
+    });
+
+    // Both ends or neither — a half-configured span is unrestricted, not a bound
+    // with one open edge.
+    it('omits a contract with only one span end set', async () => {
+        for (const partial of [{ ordinary_span_end: null }, { ordinary_span_start: null }]) {
+            const fetcher = new RosterFetcher(mockSupabase({
+                userContracts: { data: [envRow(partial)], error: null },
+            }));
+            const result = await fetcher.fetchOrdinaryHoursEnvelopes([employee('p1', 'PT')]);
+            expect(result.has('p1')).toBe(false);
+        }
+    });
+
+    it('omits a contract with no span at all — production\'s current state', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [envRow({ ordinary_span_start: null, ordinary_span_end: null })],
+                error: null,
+            },
+        }));
+        expect((await fetcher.fetchOrdinaryHoursEnvelopes([employee('p1', 'PT')])).size).toBe(0);
+    });
+
+    it('normalises a null ordinary_days to "all seven"', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: [envRow({ ordinary_days: null })], error: null },
+        }));
+        expect((await fetcher.fetchOrdinaryHoursEnvelopes([employee('p1', 'PT')])).get('p1')!.ordinary_days)
+            .toEqual([]);
+    });
+
+    // 30 of 103 people hold several Active contracts; an arbitrary pick would
+    // make their rosterable span depend on row order.
+    it('picks the largest weekly basis across multiple active contracts', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [
+                    envRow({ contracted_weekly_hours: 12, ordinary_span_start: '08:00:00', ordinary_span_end: '12:00:00' }),
+                    envRow({ contracted_weekly_hours: 30, ordinary_span_start: '06:00:00', ordinary_span_end: '18:00:00' }),
+                ],
+                error: null,
+            },
+        }));
+        const env = (await fetcher.fetchOrdinaryHoursEnvelopes([employee('p1', 'PT')])).get('p1')!;
+        expect(env.ordinary_span_start).toBe('06:00:00');
+        expect(env.ordinary_span_end).toBe('18:00:00');
+    });
+
+    it('breaks a weekly-hours tie on the later start date', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [
+                    envRow({ start_date: '2026-01-01', ordinary_span_end: '14:00:00' }),
+                    envRow({ start_date: '2026-06-01', ordinary_span_end: '18:00:00' }),
+                ],
+                error: null,
+            },
+        }));
+        expect((await fetcher.fetchOrdinaryHoursEnvelopes([employee('p1', 'PT')])).get('p1')!.ordinary_span_end)
+            .toBe('18:00:00');
+    });
+
+    // FAIL OPEN. An envelope we cannot read must not become a hard filter that
+    // excludes the entire pool from every shift.
+    it('returns an empty map when the read fails, leaving everyone unrestricted', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: null, error: { message: 'column does not exist' } },
+        }));
+
+        expect((await fetcher.fetchOrdinaryHoursEnvelopes([employee('p1', 'PT')])).size).toBe(0);
+        expect(warn).toHaveBeenCalled();
+        warn.mockRestore();
+    });
+
+    it('short-circuits on an empty employee list', async () => {
+        const supa = mockSupabase({});
+        expect((await new RosterFetcher(supa).fetchOrdinaryHoursEnvelopes([])).size).toBe(0);
+        expect(supa.from).not.toHaveBeenCalled();
     });
 
     it('treats all employees as universally available when slots query fails', async () => {

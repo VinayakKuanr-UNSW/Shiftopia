@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -21,8 +21,6 @@ import {
     AlertCircle,
     WifiOff,
     Calendar,
-    Activity,
-    Scale,
     ArrowUpDown,
     ChevronUp,
     ChevronDown,
@@ -31,28 +29,15 @@ import {
 } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { format } from 'date-fns';
 import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { AutoSchedulerInsights } from './AutoSchedulerInsights';
-import { WhyThisPerson } from './WhyThisPerson';
-import { useToast } from '@/modules/core/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
-import {
-    autoSchedulerController,
-    AutoSchedulerInputTooLargeError,
-    OptimizerError,
-} from '@/modules/scheduling';
-import type {
-    AutoSchedulerResult,
-    ValidatedProposal,
-    OptimizerHealth,
-    ShiftMeta,
-    EmployeeMeta,
-} from '@/modules/scheduling';
-import { useShiftsByDateRange, type ShiftFilters } from '@/modules/rosters/state/useRosterShifts';
+import { AutoSchedulerMobileFlow } from './AutoSchedulerMobileFlow';
+import { useAutoScheduler, sortEmployeeGroups, complianceRateOf } from './useAutoScheduler';
+import type { SortField, SortDirection } from './useAutoScheduler';
+import type { ShiftMeta, EmployeeMeta } from '@/modules/scheduling';
+import { type ShiftFilters } from '@/modules/rosters/state/useRosterShifts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/modules/core/ui/primitives/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/modules/core/ui/primitives/popover";
@@ -72,7 +57,6 @@ interface AutoSchedulerModalProps {
     queryFilters?: ShiftFilters;
 }
 
-type PipelinePhase = 'idle' | 'optimizing' | 'validating' | 'reviewing' | 'done';
 const LEVEL_COLORS: Record<string, string> = {
     'L0': '#64748b', // Slate
     'L1': '#3b82f6', // Blue
@@ -118,408 +102,107 @@ export function AutoSchedulerModal({
     organizationId,
     queryFilters,
 }: AutoSchedulerModalProps) {
-    const { toast } = useToast();
-    const queryClient = useQueryClient();
+    // All run behaviour lives in useAutoScheduler so the desktop console below and
+    // the mobile flow are two views of ONE pipeline. Only view state stays here.
+    const {
+        health,
+        phase,
+        result,
+        isCommitting,
+        isDownloading,
+        elapsedTime,
+        estimatedTotalSeconds: ESTIMATED_TOTAL_SECONDS,
+        startDate,
+        setStartDate,
+        endDate,
+        setEndDate,
+        validationError,
+        applyWindowPreset,
+        activeWindowPreset,
+        isShiftsLoading,
+        filteredShifts,
+        scopeBreakdown,
+        preRunCapacity,
+        canRun,
+        runBlockedReason,
+        totals,
+        employeeGroups,
+        handleRun,
+        handleCancel,
+        handleCommit,
+        handleClose,
+        handleDownloadAudit,
+    } = useAutoScheduler({ open, onClose, onComplete, shifts: initialShifts, employees, organizationId, queryFilters });
 
-    const [health, setHealth] = useState<OptimizerHealth | null>(null);
-    const [phase, setPhase] = useState<PipelinePhase>('idle');
-    const [result, setResult] = useState<AutoSchedulerResult | null>(null);
-    const [isCommitting, setIsCommitting] = useState(false);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const [elapsedTime, setElapsedTime] = useState(0);
-
-    const [sortField, setSortField] = useState<'name' | 'utilization' | 'shifts' | 'compliance' | 'cost' | 'fatigue'>('name');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const isMobile = useIsMobile();
+    const [sortField, setSortField] = useState<SortField>('name');
+    const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
     const [hoveredDistId, setHoveredDistId] = useState<string | null>(null);
-    const runAbortRef = useRef<AbortController | null>(null);
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Timer for "Estimated Time Left"
-    useEffect(() => {
-        if (phase === 'optimizing') {
-            setElapsedTime(0);
-            timerRef.current = setInterval(() => {
-                setElapsedTime(prev => prev + 1);
-            }, 1000);
-        } else {
-            if (timerRef.current) clearInterval(timerRef.current);
-            timerRef.current = null;
-        }
-        return () => {
-            if (timerRef.current) clearInterval(timerRef.current);
-        };
-    }, [phase]);
-
-
-    // Date Range Selection
-    const defaultStart = useMemo(() => initialShifts.length > 0 ? [...initialShifts].sort((a, b) => a.shift_date.localeCompare(b.shift_date))[0].shift_date : '', [initialShifts]);
-    const defaultEnd = useMemo(() => initialShifts.length > 0 ? [...initialShifts].sort((a, b) => b.shift_date.localeCompare(a.shift_date))[0].shift_date : '', [initialShifts]);
-
-    const [startDate, setStartDate] = useState(defaultStart);
-    const [endDate, setEndDate] = useState(defaultEnd);
-
-    const validationError = useMemo(() => {
-        if (!startDate || !endDate) {
-            return "Please select both start and end dates.";
-        }
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-            return "Invalid date format.";
-        }
-        if (start > end) {
-            return "Start date cannot be after end date.";
-        }
-        const diffTime = end.getTime() - start.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // inclusive
-        if (diffDays > 31) {
-            return "Date range cannot exceed 31 days.";
-        }
-        return null;
-    }, [startDate, endDate]);
-
-    // Operational limits (single-mode: cost/fatigue/fairness weight sliders +
-    // presets were removed — the solver runs a fixed lexicographic policy).
-
-    const { data: rawShifts = [], isFetching: isShiftsLoading } = useShiftsByDateRange(
-        organizationId || null,
-        validationError ? null : (startDate || null),
-        validationError ? null : (endDate || null),
-        queryFilters
-    );
-
-    const filteredShifts = useMemo(() => {
-        if (!startDate || !endDate || validationError) return [];
-        // Scope: DRAFT + unassigned only. Published shifts are in the bidding/
-        // offer pipeline; emergent shifts (TTS ≤ 4h, includes already-started)
-        // belong to the emergency-assignment flow. The controller re-checks
-        // the time window at run time in case a shift crosses into it.
-        return rawShifts
-            .filter((s) =>
-                !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
-                && (s.is_draft ?? true)
-                && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
-            .map((s) => ({
-                id: s.id,
-                shift_date: s.shift_date,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                role_id: (s as any).role_id ?? null,
-                roleName: (s as any).role_name || (s as any).roles?.name || '',
-                unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
-            } as ShiftMeta));
-    }, [rawShifts, startDate, endDate, validationError]);
-
-    const ESTIMATED_TOTAL_SECONDS = useMemo(() => {
-        // Must stay in sync with dynamicBudget in auto-scheduler.controller.ts.
-        // Largest bucket gets extra headroom for big monthly rosters; this
-        // composes with the solver's front-loaded per-tier time allocation.
-        const rawPairs = filteredShifts.length * employees.length;
-        if (rawPairs > 30000) return 120;
-        if (rawPairs > 10000) return 60;
-        return 30;
-    }, [filteredShifts.length, employees.length]);
-
-    const preRunCapacity = useMemo(() => {
-        if (filteredShifts.length === 0 || employees.length === 0) return null;
-        return autoSchedulerController.capacityCheck(filteredShifts, employees);
-    }, [filteredShifts, employees]);
-
-    useEffect(() => {
-        if (!open) return;
-        setHealth(null);
-        autoSchedulerController.checkHealth().then(setHealth);
-    }, [open]);
-
-    const handleRun = useCallback(async () => {
-        if (filteredShifts.length === 0) return;
-        runAbortRef.current?.abort();
-        const ac = new AbortController();
-        runAbortRef.current = ac;
-
-        setResult(null);
-        setPhase('optimizing');
-
-        try {
-            const schedResult = await autoSchedulerController.run({
-                shifts: filteredShifts,
-                employees,
-                organizationId,
-                signal: ac.signal,
-                timeLimitSeconds: ESTIMATED_TOTAL_SECONDS,
-                // Single-mode: no cost/fatigue/fairness sliders. The solver runs a
-                // fixed lexicographic policy (coverage » guardrails » cost). We
-                // also request Pareto "what-if" alternatives for the explorer.
-                computeAlternatives: true,
-            });
-            if (ac.signal.aborted) return;
-            setPhase('reviewing');
-            setResult(schedResult);
-        } catch (err: any) {
-            if (ac.signal.aborted || err?.name === 'AbortError') {
-                console.debug('[AutoScheduler] Run aborted by user');
-                return;
-            }
-            setPhase('idle');
-            toast({
-                title: err instanceof AutoSchedulerInputTooLargeError ? 'Too much to optimize' : 'Optimization Failed',
-                description: err?.message ?? 'Unexpected error',
-                variant: 'destructive',
-            });
-        } finally {
-            if (runAbortRef.current === ac) runAbortRef.current = null;
-        }
-    }, [filteredShifts, employees, toast, organizationId]);
-
-    const handleCancel = useCallback(() => {
-        if (runAbortRef.current) {
-            runAbortRef.current.abort();
-            runAbortRef.current = null;
-        }
-        setPhase('idle');
-        setResult(null);
-        toast({
-            title: 'Operation Cancelled',
-            description: 'The optimization process was stopped.',
-        });
-    }, [toast]);
-
-    const handleCommit = useCallback(async () => {
-        if (!result) return;
-        setIsCommitting(true);
-
-        try {
-            const commitResult = await autoSchedulerController.commit(result);
-            if (commitResult.success || commitResult.totalCommitted > 0) {
-                setPhase('done');
-                toast({
-                    title: 'Shifts Assigned',
-                    description: `Successfully assigned ${commitResult.totalCommitted} shift(s).`,
-                });
-                queryClient.invalidateQueries({ queryKey: [shiftKeys.all[0]] });
-                onComplete();
-                handleClose();
-            } else {
-                toast({
-                    title: 'Commit Failed',
-                    description: 'No shifts were committed. Check compliance results.',
-                    variant: 'destructive',
-                });
-            }
-        } catch (err: any) {
-            toast({ title: 'Error', description: err?.message ?? 'Failed to commit', variant: 'destructive' });
-        } finally {
-            setIsCommitting(false);
-        }
-    }, [result, queryClient, toast, onComplete]);
-
-    const handleClose = () => {
-        runAbortRef.current?.abort();
-        runAbortRef.current = null;
-        setResult(null);
-        setPhase('idle');
-        onClose();
-    };
-
-    const handleDownloadAudit = useCallback(() => {
-        // Generate for ANY completed run — a clean 100%-compliant roster deserves
-        // an audit report too. (Old guard required `uncoveredAudit`, which is only
-        // computed when shifts are uncovered, so the button silently did nothing
-        // on a perfect run.)
-        if (!result) return;
-        setIsDownloading(true);
-
-        try {
-            const csvEscape = (v: string | number) => {
-                const s = String(v ?? '');
-                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-            };
-            const money = (n: number) =>
-                new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n || 0);
-            const row = (...cells: (string | number)[]) => cells.map(csvEscape).join(',');
-
-            const audit = result.uncoveredAudit ?? [];
-            const totalUncovered = result.uncoveredV8ShiftIds.length;
-            const audited = audit.length;
-            const compliancePct = result.totalProposals > 0
-                ? Math.round((result.passing / result.totalProposals) * 100)
-                : 100;
-
-            const lines: string[] = [
-                'AUTO-SCHEDULE AUDIT REPORT',
-                row('Generated', new Date().toLocaleString()),
-                row('Window', `${startDate} to ${endDate}`),
-                row('Optimizer status', result.optimizerStatus),
-                '',
-            ];
-
-            // ── Scorecard — the new single-source-of-truth metrics (matches the
-            //    on-screen pillars: Coverage / Wellbeing / Fairness / Compliance /
-            //    Labour cost), NOT the old Passing/Failing-proposal framing. ──
-            const p = result.pillars;
-            if (p) {
-                lines.push('--- SCORECARD ---');
-                lines.push(row('Metric', 'Score', 'Detail'));
-                lines.push(row('Coverage', `${p.coverage.score}%`, `${p.coverage.covered}/${p.coverage.total} shifts filled`));
-                lines.push(row('Wellbeing', `${p.fatigue.score}/100`,
-                    p.fatigue.critical > 0 ? `${p.fatigue.critical} over-tired`
-                        : p.fatigue.amber > 0 ? `${p.fatigue.amber} near limit` : 'all well-rested'));
-                lines.push(row('Fairness', `${p.fairness.score}/100`, `${p.fairness.employees_used} staff · ${Math.round(p.fairness.spread_minutes / 60)}h spread`));
-                lines.push(row('Compliance', `${compliancePct}%`, `${result.passing}/${result.totalProposals} assignments passing`));
-                lines.push(row('Labour cost', money(p.cost.total), `${money(p.cost.avg_per_shift)}/shift avg`));
-                lines.push('');
-            }
-
-            // ── Summary — compliance is a hard gate (100% by construction). ──
-            lines.push('--- SUMMARY ---');
-            lines.push(row('Compliant assignments booked', result.passing));
-            lines.push(row('Uncovered shifts', totalUncovered));
-            lines.push(row('Compliance policy', '100% by construction — non-compliant assignments are never booked; they are left uncovered.'));
-            lines.push('');
-
-            if (result.capacityCheck) {
-                const cc = result.capacityCheck;
-                lines.push('--- CAPACITY PRE-CHECK ---');
-                lines.push(row('Status', cc.sufficient ? 'SUFFICIENT' : 'INSUFFICIENT'));
-                lines.push(row('Total Demand (min)', cc.totalDemandMinutes));
-                lines.push(row('Total Supply (min)', cc.totalSupplyMinutes));
-                lines.push('Date,Shifts,Employees,Demand (min),Supply (min),Deficit (min),Sufficient');
-                for (const day of cc.perDay) {
-                    lines.push(row(day.date, day.shiftCount, day.employeeCount, day.demandMinutes,
-                        day.supplyMinutes, day.deficitMinutes, day.sufficient ? 'YES' : 'NO'));
-                }
-                lines.push('');
-            }
-
-            // ── Uncovered analysis — only when there is something uncovered. ──
-            if (totalUncovered > 0) {
-                lines.push('--- UNCOVERED SHIFT ANALYSIS ---');
-                lines.push(row('Audited', `${audited}${audited < totalUncovered ? ` (capped — ${totalUncovered - audited} not detailed)` : ''}`));
-                lines.push('Shift Date,Time,Reason Summary');
-                for (const a of audit) {
-                    const summary = Object.entries(a.rejectionSummary).map(([type, count]) => `${type}: ${count}`).join(' | ');
-                    lines.push(row(a.shiftDate, `${a.startTime}-${a.endTime}`, summary || 'No reasons recorded'));
-                }
-                lines.push('', '--- UNCOVERED — PER-EMPLOYEE DETAIL ---');
-                lines.push('Shift Date,Time,Employee,Status,Violations');
-                for (const a of audit) {
-                    for (const detail of a.employeeDetails) {
-                        lines.push(row(a.shiftDate, `${a.startTime}-${a.endTime}`,
-                            detail.employeeName, detail.status, detail.violations.map(v => v.description).join('; ')));
-                    }
-                }
-                lines.push('');
-            }
-
-            // ── Booked roster — keeps the report substantive even at 100%
-            //    coverage (every row here is compliant by the hard gate). ──
-            lines.push('--- BOOKED ASSIGNMENTS ---');
-            lines.push('Shift Date,Time,Employee,Role,Est. Cost,Compliance');
-            const sortedProposals = [...result.proposals].sort((a, b) =>
-                a.shiftDate.localeCompare(b.shiftDate) || a.startTime.localeCompare(b.startTime));
-            for (const pr of sortedProposals) {
-                lines.push(row(pr.shiftDate, `${pr.startTime}-${pr.endTime}`, pr.employeeName,
-                    pr.roleName ?? '', money(pr.optimizerCost ?? 0), pr.complianceStatus));
-            }
-
-            const blob = new Blob(['\ufeff', lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.setAttribute('href', url);
-            link.setAttribute('download', `Auto-Schedule_Audit_${startDate || new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error('Failed to generate report', err);
-        } finally {
-            setIsDownloading(false);
-        }
-    }, [result, startDate, endDate]);
-
-    const { totals, employeeGroups } = useMemo(() => {
-        if (!result) return { totals: { cost: 0, fatigue: 0, p95Fatigue: 0, fairness: 0 }, employeeGroups: [] };
-        
-        const map = new Map<string, { name: string; proposals: ValidatedProposal[] }>();
-        let totalCost = 0;
-        let totalFatigue = 0;
-        let totalUtilization = 0;
-        let proposalCount = 0;
-
-        for (const p of result.proposals) {
-            if (!map.has(p.employeeId)) map.set(p.employeeId, { name: p.employeeName, proposals: [] });
-            map.get(p.employeeId)!.proposals.push(p);
-            totalCost += p.optimizerCost || 0;
-            if (p.fatigueScore != null) {
-                totalFatigue += p.fatigueScore;
-                proposalCount++;
-            }
-            if (p.utilization != null) {
-                totalUtilization += p.utilization;
-            }
-        }
-
-        const groups = Array.from(map.entries()).map(([id, { name, proposals }]) => {
-            const emp = employees.find(e => e.id === id);
-            const roleDist: Record<string, number> = {};
-            proposals.forEach(p => {
-                const role = p.roleName || 'Unassigned';
-                roleDist[role] = (roleDist[role] ?? 0) + 1;
-            });
-
-            const sortedDist = Object.entries(roleDist)
-                .map(([name, value]) => ({ name, value }))
-                .sort((a, b) => a.name.localeCompare(b.name));
-
-            // Fix 2: use LAST proposal's utilization — the scorer accumulates it
-            // cumulatively as shifts are added, so proposals[0] reflects only the
-            // first shift. The final entry reflects all shifts assigned to this employee.
-            const utilization = proposals.at(-1)?.utilization ?? 0;
-
-            // Fix 3: use LAST proposal's fatigueScore per employee (final cumulative
-            // value), then the caller averages across employees — not across assignments.
-            const finalFatigue = proposals.at(-1)?.fatigueScore ?? 0;
-
-            return {
-                id,
-                name,
-                proposals,
-                roleDistribution: sortedDist,
-                totalCost: proposals.reduce((acc, p) => acc + (p.optimizerCost || 0), 0),
-                avgFatigue: finalFatigue,
-                utilization,
-                employmentType: emp?.contract_type || 'Casual',
-                contractedHours: emp?.contracted_weekly_hours || 0,
-                assignedRoles: Array.from(new Set(proposals.map(p => p.roleName).filter(Boolean))) as string[],
-            };
-        });
-
-        const aggregateFairness = groups.length > 0
-            ? groups.reduce((acc, g) => acc + g.utilization, 0) / groups.length
-            : 0;
-
-        // Fix 3: average fatigue across employees (each employee's final cumulative
-        // fatigue score), not across individual assignments.
-        const avgFatiguePerEmployee = groups.length > 0
-            ? groups.reduce((acc, g) => acc + g.avgFatigue, 0) / groups.length
-            : 0;
-
-        // p95 fatigue across employees for additional signal
-        const sortedFatigue = [...groups].map(g => g.avgFatigue).sort((a, b) => a - b);
-        const p95FatigueIdx = Math.floor(sortedFatigue.length * 0.95);
-        const p95Fatigue = sortedFatigue.length > 0 ? (sortedFatigue[Math.min(p95FatigueIdx, sortedFatigue.length - 1)] ?? 0) : 0;
-
-        return {
-            totals: {
-                cost: totalCost,
-                fatigue: avgFatiguePerEmployee,
-                p95Fatigue,
-                fairness: aggregateFairness
-            },
-            employeeGroups: groups
-        };
-    }, [result]);
+    /* ── MOBILE ──────────────────────────────────────────────────────────
+       A 320px control rail beside a results canvas has nowhere to go on a
+       phone; shrinking it gives two unreadable columns. The mobile flow is a
+       full-screen, one-thing-at-a-time sequence over the same pipeline. */
+    if (isMobile) {
+        return (
+            <Dialog open={open} onOpenChange={o => !o && handleClose()}>
+                <DialogContent
+                    overlayClassName="bg-background/80 backdrop-blur-sm"
+                    // The mobile bottom nav is z-[60] and this dialog is z-50, so
+                    // without this the nav floats OVER the sticky primary action.
+                    // BottomNavbar watches for this attribute and slides itself out.
+                    data-hide-bottom-nav="true"
+                    className={cn(
+                        'left-0 top-0 flex h-[100dvh] max-h-none w-screen max-w-none translate-x-0 translate-y-0',
+                        'flex-col gap-0 overflow-hidden rounded-none border-0 bg-background p-0 text-foreground',
+                        // The built-in close sits under our own app-bar X.
+                        '[&>button]:hidden',
+                        // DialogContent's defaults slide a *centred* panel in from
+                        // left-1/2 / top-48%. Applied to a full-screen surface that
+                        // reads as flying in from off-corner, so the translate legs
+                        // are zeroed and the panel just fades in.
+                        'data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0',
+                        'data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0',
+                        'sm:rounded-none',
+                    )}
+                >
+                    <DialogTitle className="sr-only">Auto-Schedule</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Fill unassigned draft shifts with the V8 optimizer, then review and apply the result.
+                    </DialogDescription>
+                    <AutoSchedulerMobileFlow
+                        health={health}
+                        phase={phase}
+                        result={result}
+                        isCommitting={isCommitting}
+                        isDownloading={isDownloading}
+                        elapsedTime={elapsedTime}
+                        estimatedTotalSeconds={ESTIMATED_TOTAL_SECONDS}
+                        startDate={startDate}
+                        setStartDate={setStartDate}
+                        endDate={endDate}
+                        setEndDate={setEndDate}
+                        validationError={validationError}
+                        applyWindowPreset={applyWindowPreset}
+                        activeWindowPreset={activeWindowPreset}
+                        isShiftsLoading={isShiftsLoading}
+                        shiftsInScope={filteredShifts.length}
+                        staffCount={employees.length}
+                        scopeBreakdown={scopeBreakdown}
+                        preRunCapacity={preRunCapacity}
+                        canRun={canRun}
+                        runBlockedReason={runBlockedReason}
+                        employeeGroups={employeeGroups}
+                        onRun={handleRun}
+                        onCancelRun={handleCancel}
+                        onCommit={handleCommit}
+                        onClose={handleClose}
+                        onDownloadAudit={handleDownloadAudit}
+                    />
+                </DialogContent>
+            </Dialog>
+        );
+    }
 
     return (
         <Dialog open={open} onOpenChange={o => !o && handleClose()}>
@@ -554,10 +237,16 @@ export function AutoSchedulerModal({
                     {/* Pipeline Progress (Vertical) */}
                     <div className="space-y-6 mb-12">
                         <div className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/50 mb-4">Pipeline Status</div>
+                        {/* `awaitingUser` separates "the machine is working" from
+                            "it is your turn". The run ends at `reviewing` — the
+                            proposals are ready and nothing further happens until
+                            Commit is pressed — but the indicator put a spinner on
+                            whichever step was active, so the last one spun forever
+                            and read as a hang. */}
                         {[
-                            { id: 'optimizing', label: 'Optimization', icon: Cpu, active: phase === 'optimizing', done: ['validating', 'reviewing', 'done'].includes(phase) },
-                            { id: 'validating', label: 'Compliance', icon: ShieldCheck, active: phase === 'validating', done: ['reviewing', 'done'].includes(phase) },
-                            { id: 'reviewing',  label: 'Review & Audit', icon: Users, active: phase === 'reviewing', done: phase === 'done' },
+                            { id: 'optimizing', label: 'Optimization', icon: Cpu, active: phase === 'optimizing', done: ['validating', 'reviewing', 'done'].includes(phase), awaitingUser: false },
+                            { id: 'validating', label: 'Compliance', icon: ShieldCheck, active: phase === 'validating', done: ['reviewing', 'done'].includes(phase), awaitingUser: false },
+                            { id: 'reviewing',  label: 'Review & Audit', icon: Users, active: phase === 'reviewing', done: phase === 'done', awaitingUser: true },
                         ].map((step, idx, arr) => (
                             <div key={step.id} className="relative flex items-center gap-4">
                                 {idx < arr.length - 1 && (
@@ -566,12 +255,17 @@ export function AutoSchedulerModal({
                                 <div className={cn(
                                     "h-8 w-8 rounded-lg flex items-center justify-center transition-all",
                                     step.done ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
+                                    step.active && step.awaitingUser ? "bg-primary/10 text-primary ring-2 ring-primary/20" :
                                     step.active ? "bg-primary/10 text-primary animate-pulse ring-2 ring-primary/20" :
                                     "bg-muted text-muted-foreground/40"
                                 )}>
-                                    {step.active ? <Loader2 className="h-4 w-4 animate-spin" /> : <step.icon className="h-4 w-4" />}
+                                    {step.active && !step.awaitingUser
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <step.icon className="h-4 w-4" />}
                                 </div>
-                                <span className={cn("text-[10px] font-bold uppercase tracking-widest", step.active ? "text-foreground" : "text-muted-foreground/60")}>{step.label}</span>
+                                <span className={cn("text-[10px] font-bold uppercase tracking-widest", step.active ? "text-foreground" : "text-muted-foreground/60")}>
+                                    {step.active && step.awaitingUser ? 'Review & Commit' : step.label}
+                                </span>
                             </div>
                         ))}
                     </div>
@@ -689,9 +383,13 @@ export function AutoSchedulerModal({
 
                         <div className="flex items-center gap-2">
                             {result && (
-                                <Button onClick={handleDownloadAudit} variant="outline" className="h-8 gap-2 rounded-lg bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
-                                    <Download className="h-3.5 w-3.5" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest">Audit Report</span>
+                                <Button onClick={handleDownloadAudit} disabled={isDownloading} variant="outline" className="h-8 gap-2 rounded-lg bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
+                                    {isDownloading
+                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        : <Download className="h-3.5 w-3.5" />}
+                                    <span className="text-[10px] font-bold uppercase tracking-widest">
+                                        {isDownloading ? 'Preparing…' : 'Audit Report'}
+                                    </span>
                                 </Button>
                             )}
                         </div>
@@ -1060,30 +758,10 @@ export function AutoSchedulerModal({
                                                 </button>
                                             </div>
                                             
-                                            {[...employeeGroups].sort((a, b) => {
-                                                const getComplianceRate = (g: any) => {
-                                                    const p = g.proposals.filter((pr: any) => pr.complianceStatus === 'PASS').length;
-                                                    return g.proposals.length > 0 ? (p / g.proposals.length) : 0;
-                                                };
-                                                
-                                                let valA: any, valB: any;
-                                                switch (sortField) {
-                                                    case 'name': valA = a.name; valB = b.name; break;
-                                                    case 'utilization': valA = a.utilization; valB = b.utilization; break;
-                                                    case 'shifts': valA = a.proposals.length; valB = b.proposals.length; break;
-                                                    case 'compliance': valA = getComplianceRate(a); valB = getComplianceRate(b); break;
-                                                    case 'cost': valA = a.totalCost; valB = b.totalCost; break;
-                                                    case 'fatigue': valA = a.avgFatigue; valB = b.avgFatigue; break;
-                                                    default: valA = a.name; valB = b.name;
-                                                }
-                                                
-                                                if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
-                                                if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
-                                                return 0;
-                                            }).map(group => {
+                                            {sortEmployeeGroups(employeeGroups, sortField, sortDirection).map(group => {
                                                 const passing = group.proposals.filter(p => p.complianceStatus === 'PASS').length;
                                                 const total = group.proposals.length;
-                                                const rate = total > 0 ? (passing / total) * 100 : 0;
+                                                const rate = complianceRateOf(group) * 100;
                                                 
                                                 return (
                                                     <div key={group.id} className="group flex items-center px-6 py-4 rounded-[1.25rem] bg-muted/10 border border-border/40 hover:bg-muted/20 hover:border-primary/30 transition-all duration-300 gap-4">
@@ -1268,9 +946,10 @@ export function AutoSchedulerModal({
                     <div className="p-8 flex justify-center bg-gradient-to-t from-background to-transparent pt-12">
                         <div className="bg-muted/80 backdrop-blur-2xl rounded-full p-2 border border-border flex items-center gap-2 shadow-2xl shadow-background/80 ring-1 ring-border/50">
                             {phase === 'idle' && (
-                                <Button 
+                                <Button
                                     onClick={handleRun}
-                                    disabled={!health?.available || filteredShifts.length === 0 || !!validationError}
+                                    disabled={!canRun}
+                                    title={runBlockedReason ?? undefined}
                                     className="rounded-full px-10 h-14 bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest text-[10px] gap-3 shadow-lg shadow-primary/30 group"
                                 >
                                     <Zap className="h-4 w-4 fill-current group-hover:scale-125 transition-transform" />

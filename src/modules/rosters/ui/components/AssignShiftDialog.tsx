@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { getEmployeeAvailabilityForDate } from '@/modules/rosters/api/availability.api';
 import { evaluateShiftAvailability } from '@/modules/rosters/domain/availability-check';
+import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
 
 interface ShiftGroup {
   shiftIds: string[];
@@ -189,8 +190,17 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
         // just collect a notice when a shift falls outside declared availability
         // (unset availability is treated as unavailable).
         try {
-          const avail = await getEmployeeAvailabilityForDate(assignment.employeeId, shift.date);
-          const availCheck = evaluateShiftAvailability(avail, candidateShift.start_time, candidateShift.end_time);
+          // The mode comes from the contract, not from the presence of slots:
+          // FT/PT hold none by design, so evaluating without it would warn on
+          // every permanent in the batch. Read through the shared basis reader
+          // so this agrees with what the employee sees on their own page.
+          const [avail, basis] = await Promise.all([
+            getEmployeeAvailabilityForDate(assignment.employeeId, shift.date),
+            fetchContractBasis(assignment.employeeId),
+          ]);
+          const availCheck = evaluateShiftAvailability(
+            avail, candidateShift.start_time, candidateShift.end_time, basis.availabilityMode,
+          );
           if (availCheck.isWarning) {
             const empName = employees.find(e => e.id === assignment.employeeId)?.fullName ?? 'Employee';
             availabilityWarns.push(`${empName}: ${availCheck.message}`);

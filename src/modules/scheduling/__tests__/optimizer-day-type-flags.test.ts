@@ -50,6 +50,9 @@ vi.mock('@/modules/scheduling/data/roster-fetcher', async (importOriginal) => {
             fetchPendingLeave:          vi.fn().mockResolvedValue(new Map()),
             fetchAvailabilityExceptions: vi.fn().mockResolvedValue(new Map()),
             fetchEmployeeContractDetails: vi.fn().mockResolvedValue(new Map()),
+            // Empty = no contract has an ordinary-hours envelope, which is
+            // production's state and keeps this test about day-type flags only.
+            fetchOrdinaryHoursEnvelopes: vi.fn().mockResolvedValue(new Map()),
         },
     };
 });

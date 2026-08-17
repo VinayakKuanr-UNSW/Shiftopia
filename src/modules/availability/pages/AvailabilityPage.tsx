@@ -1,7 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { addMonths, subMonths } from 'date-fns';
-import { CalendarDays, ChevronLeft, ChevronRight, Phone, Plus, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Phone,
+  Plus,
+  RefreshCw,
+  CalendarCheck2,
+  ArrowRight,
+  ShieldCheck,
+  Clock,
+  FileText,
+} from 'lucide-react';
 import { useAvailability } from '../state/useAvailability';
 import { useAvailabilityEditing } from '../state/useAvailabilityEditing';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -14,10 +27,10 @@ import { pageVariants } from '@/modules/core/ui/motion/presets';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useAuth } from '@/platform/auth/useAuth';
-import { parseISO } from 'date-fns';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { useMyContractBasis } from '../state/useMyContractBasis';
+import { formatEnvelopeDaysClause, formatEnvelopeTime } from '../ui/envelope-format';
 import { ContractBasisBanner } from '../ui/header/ContractBasisBanner';
 import { ExceptionsPanel } from '../ui/exceptions/ExceptionsPanel';
 
@@ -53,6 +66,7 @@ function useBreakpoint(): Breakpoint {
 
 export const AvailabilityPage: React.FC = () => {
   const breakpoint = useBreakpoint();
+  const navigate = useNavigate();
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
   const { user } = useAuth();
   const { isDark } = useTheme();
@@ -60,12 +74,19 @@ export const AvailabilityPage: React.FC = () => {
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // What an ABSENT declaration means for this person. Without it the page
-  // shows a full-timer an empty calendar and implies they owe it an answer,
-  // when in fact a declaration NARROWS what they can be rostered for.
+  // What an ABSENT declaration means for this person.
+  // For FT employees, availability is contract-obligation based; unavailabilities are managed via Leave.
   const { basis: contractBasis, loading: basisLoading } = useMyContractBasis(user?.id);
 
-  const availabilityData = useAvailability({ month: currentMonth });
+  // `isFullTime` IS `contractType === 'FT'` (domain/contract-basis.ts), so
+  // testing both was one test written twice. While the basis is still loading it
+  // is false, which renders the declaration editor for a beat — the safe way
+  // round, since the FT card is the one that asserts something.
+  const isFullTime = contractBasis.isFullTime;
+
+  // A full-timer has no rules and no slots to load. Passing `enabled` rather
+  // than calling conditionally keeps the hook order stable.
+  const availabilityData = useAvailability({ month: currentMonth, enabled: !isFullTime });
   const editingData = useAvailabilityEditing();
   const reserveListOptIn = useReserveListOptIn();
 
@@ -117,7 +138,11 @@ export const AvailabilityPage: React.FC = () => {
             isDark ? "bg-[#111827]/60" : "bg-slate-100"
           )}>
             <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
-              {/* Month Navigation */}
+              {/* Month Navigation — a calendar control, so it goes where the
+                  calendar goes. A full-timer has no month-scoped view below,
+                  and paging a month that changes nothing on screen reads as a
+                  broken control rather than an absent one. */}
+              {!isFullTime && (
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <Button
                   variant="ghost"
@@ -152,46 +177,53 @@ export const AvailabilityPage: React.FC = () => {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              )}
+
+              {/* Add Availability Button — only for Non-FT staff (Casuals / PT who declare availability) */}
+              {!isFullTime && (
+                <>
+                  <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+                  <Button
+                    onClick={handleAddAvailability}
+                    className={cn(
+                      "flex-shrink-0 gap-2 h-9 lg:h-11 px-3 lg:px-6 rounded-xl font-black uppercase text-[9px] lg:text-[10px] tracking-wider transition-all shadow-sm",
+                      isDark 
+                        ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20" 
+                        : "bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100"
+                    )}
+                  >
+                    <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                    <span className="hidden sm:inline">Add Availability</span>
+                    <span className="sm:hidden text-[8px]">Add</span>
+                  </Button>
+                </>
+              )}
+
+              {/* Refresh — refreshes the rules and slots, which a full-timer has
+                  none of and no view onto. */}
+              {!isFullTime && (
+                <>
+                  <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleRefresh}
+                    className={cn(
+                        "h-9 w-9 lg:h-11 lg:w-11 rounded-xl flex-shrink-0 transition-all",
+                        isDark
+                            ? "bg-[#111827]/60 text-muted-foreground hover:text-white"
+                            : "bg-slate-200/50 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
+                    )}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                  </Button>
+                </>
+              )}
 
               <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
 
-              {/* Add Availability Button */}
-              <Button
-                onClick={handleAddAvailability}
-                className={cn(
-                  "flex-shrink-0 gap-2 h-9 lg:h-11 px-3 lg:px-6 rounded-xl font-black uppercase text-[9px] lg:text-[10px] tracking-wider transition-all shadow-sm",
-                  isDark 
-                    ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20" 
-                    : "bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100"
-                )}
-              >
-                <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-                <span className="hidden sm:inline">Add Availability</span>
-                <span className="sm:hidden text-[8px]">Add</span>
-              </Button>
-
-              <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-
-              {/* Refresh Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleRefresh}
-                className={cn(
-                    "h-9 w-9 lg:h-11 lg:w-11 rounded-xl flex-shrink-0 transition-all",
-                    isDark 
-                        ? "bg-[#111827]/60 text-muted-foreground hover:text-white" 
-                        : "bg-slate-200/50 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
-                )}
-              >
-                <RefreshCw className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-              </Button>
-
-              <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-
-              {/* Reserve List opt-in — OFF by default; controls whether this
-                  employee can be found in a manager's emergency Reserve List
-                  search (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §8). */}
+              {/* Reserve List opt-in. Kept for FT: an emergency replacement call
+                  is a genuine choice they make, and independent of availability. */}
               <div
                 className={cn(
                   "flex items-center gap-2 flex-shrink-0 h-9 lg:h-11 px-3 lg:px-4 rounded-xl transition-all",
@@ -220,28 +252,154 @@ export const AvailabilityPage: React.FC = () => {
         variants={pageVariants}
         initial="hidden"
         animate="show"
-        className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col gap-3"
+        className="flex-1 min-h-0 overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col gap-4"
       >
-        <ContractBasisBanner basis={contractBasis} loading={basisLoading} />
+        {/* NOT rendered for FT. Its OPT_OUT copy tells the reader that "anything
+            you add BELOW narrows when you can be rostered … use it for one-off
+            exceptions" — advice about a calendar and an exceptions panel that no
+            longer exist on this page for them. The card below carries the same
+            hours/leave facts in a form that matches what they can actually do. */}
+        {!isFullTime && <ContractBasisBanner basis={contractBasis} loading={basisLoading} />}
 
-        {/* Where a permanent's agency actually lives: they cannot usefully
-            declare availability, and leave is for absences that draw down a
-            balance. Casuals keep the declaration editor as their primary tool,
-            so the panel is only surfaced for OPT_OUT staff. */}
-        {!basisLoading && contractBasis.availabilityMode === 'OPT_OUT' && user?.id && (
-          <ExceptionsPanel profileId={user.id} />
+        {isFullTime ? (
+          /* ── FULL-TIME INFORMATIONAL STATE ── */
+          <div className={cn(
+            "rounded-3xl border p-6 md:p-8 flex flex-col gap-6 transition-all shadow-sm",
+            isDark
+              ? "bg-[#111827]/80 border-slate-800 text-slate-100"
+              : "bg-white border-slate-200/80 text-slate-900"
+          )}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className={cn(
+                  "p-3.5 rounded-2xl flex items-center justify-center flex-shrink-0",
+                  isDark ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                )}>
+                  <CalendarCheck2 className="h-7 w-7" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase tracking-widest text-emerald-500">
+                      Contract-Obligation Model
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      Available by Default
+                    </span>
+                  </div>
+                  <h2 className="text-xl md:text-2xl font-black tracking-tight">
+                    Full-Time Availability
+                  </h2>
+                  <p className={cn(
+                    "text-sm leading-relaxed max-w-2xl",
+                    isDark ? "text-slate-400" : "text-slate-600"
+                  )}>
+                    Full Time employees are rostered according to their contracted working arrangements ({contractBasis.contractedWeeklyHours ?? 38}h/week ordinary hours).
+                    You do not need to submit weekly availability. All rosterable blocks within your contractual envelope are available by default.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => navigate('/my-leave')}
+                className="flex items-center gap-2 h-11 px-5 rounded-2xl font-black uppercase text-xs tracking-wider bg-primary text-primary-foreground shadow-md hover:shadow-lg transition-all flex-shrink-0 self-start md:self-auto"
+              >
+                <FileText className="h-4 w-4" />
+                <span>Go to Leave Management</span>
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className={cn(
+                "p-4 rounded-2xl border flex flex-col gap-1.5",
+                isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
+              )}>
+                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Contracted Basis
+                </div>
+                <div className="text-lg font-black text-foreground">
+                  {contractBasis.contractedWeeklyHours ?? 38} Hours / Week
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Averaged over the 4-week roster cycle (ICC Sydney EBA cl 35).
+                </div>
+              </div>
+
+              {/* The ordinary-hours envelope, when the contract sets one. NULL
+                  span ends mean unrestricted, which is every contract in
+                  production until one is explicitly opted in — so this states
+                  which of the two it is rather than rendering a blank. */}
+              <div className={cn(
+                "p-4 rounded-2xl border flex flex-col gap-1.5",
+                isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
+              )}>
+                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <Clock className="h-4 w-4 text-sky-500" />
+                  Ordinary Hours
+                </div>
+                <div className="text-lg font-black text-foreground">
+                  {contractBasis.envelope.isConfigured
+                    ? `${formatEnvelopeTime(contractBasis.envelope.spanStart)}–${formatEnvelopeTime(contractBasis.envelope.spanEnd)}`
+                    : 'Any rosterable time'}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {contractBasis.envelope.isConfigured
+                    ? `Your contract limits rostering to this span${formatEnvelopeDaysClause(contractBasis.envelope.days)}.`
+                    : 'Your contract sets no span limit; the EBA rules below still apply.'}
+                </div>
+              </div>
+
+              <div className={cn(
+                "p-4 rounded-2xl border flex flex-col gap-1.5",
+                isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
+              )}>
+                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                  Unavailability Policy
+                </div>
+                <div className="text-lg font-black text-foreground">
+                  Leave Management
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Planned or unplanned time off must be submitted as Leave Requests.
+                </div>
+              </div>
+
+              <div className={cn(
+                "p-4 rounded-2xl border flex flex-col gap-1.5",
+                isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
+              )}>
+                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <CalendarDays className="h-4 w-4 text-indigo-500" />
+                  Roster Protections
+                </div>
+                <div className="text-lg font-black text-foreground">
+                  EBA & Compliance
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Paired days off, rest gaps, and rolling caps are automatically audited.
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ── CASUAL & PART-TIME AVAILABILITY SCREEN ── */
+          <>
+            {!basisLoading && contractBasis.availabilityMode === 'OPT_OUT' && user?.id && (
+              <ExceptionsPanel profileId={user.id} />
+            )}
+
+            <div className="flex-1 min-h-0">
+              <AvailabilityScreen
+                layout={breakpoint === 'desktop' ? 'desktop' : breakpoint === 'tablet' ? 'tablet' : 'mobile'}
+                currentMonth={currentMonth}
+                availabilityData={availabilityData}
+                editingData={editingData}
+              />
+            </div>
+          </>
         )}
-
-        {/* AvailabilityScreen is `h-full`; with a sibling banner above it needs
-            an explicit flex track or it overflows the column. */}
-        <div className="flex-1 min-h-0">
-          <AvailabilityScreen
-            layout={breakpoint === 'desktop' ? 'desktop' : breakpoint === 'tablet' ? 'tablet' : 'mobile'}
-            currentMonth={currentMonth}
-            availabilityData={availabilityData}
-            editingData={editingData}
-          />
-        </div>
       </motion.div>
     </div>
   );

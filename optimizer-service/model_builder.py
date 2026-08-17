@@ -495,6 +495,30 @@ class EmployeeInput:
     # this employee. See `normalize_availability_mode` and HC-5d below.
     # Defaults to the strict reading so an older client is unaffected.
     availability_mode: str = 'OPT_IN'
+    # CONTRACT ORDINARY-HOURS ENVELOPE (HC-5e). When this contract may be
+    # rostered at all — the span-of-hours question, answered by the CONTRACT
+    # rather than declared by the employee.
+    #
+    # Why it must live here and not only in `availability_slots`: an FT carries
+    # no slots at all (their availability is implicit), so the envelope is the
+    # ONLY thing that can bound them, and without it "available by contract"
+    # silently means available 24/7 on all seven days. A part-timer's envelope is
+    # additionally materialized into slots by
+    # `sm_materialize_contract_envelope`, which is belt-and-braces, not the
+    # mechanism.
+    #
+    # 'HH:MM' / 'HH:MM:SS', or None for UNRESTRICTED — which is every contract in
+    # production until one is explicitly opted in. BOTH ends are required for the
+    # envelope to bind; one end alone is treated as unrestricted rather than as a
+    # bound with no opposite edge (the DB CHECK `user_contracts_ordinary_span_valid`
+    # rejects that shape, and this keeps a client that somehow sends it harmless).
+    ordinary_span_start: Optional[str] = None
+    ordinary_span_end: Optional[str] = None
+    # ISO weekdays (1=Mon .. 7=Sun) the span applies on. None/empty = all seven.
+    # NOT the days-off pattern: cl 35.1(e) paired days off and the 20-in-28 cap
+    # are separate rules, and an envelope reading "06:00-18:00, seven days" is
+    # correct for someone rostered only five of them.
+    ordinary_days: list[int] = field(default_factory=list)
 
     def __post_init__(self):
         # Canonicalize the wire form ('Full-Time'/'Part-Time'/'Casual') to the
@@ -805,6 +829,42 @@ def _slot_covers_shift(slot: AvailabilitySlotInput, s0: int, s1: int) -> bool:
     return a0 <= s0 and a1 >= s1
 
 
+def envelope_excludes_shift(emp: EmployeeInput, shift: ShiftInput) -> bool:
+    """HC-5e: does the contract ordinary-hours envelope put this shift out of
+    bounds for this employee?
+
+    False whenever the envelope does not bind — no span configured, or only one
+    end of it. That is the state of every contract in production today, so this
+    function is a no-op until one is explicitly opted in.
+
+    Two independent tests when it does bind:
+      DAY   the shift's ISO weekday must be in `ordinary_days` (empty = all).
+      SPAN  the shift must be FULLY CONTAINED in [span_start, span_end) on that
+            day — the same containment rule as a declared slot, for the same
+            reason: a shift half inside the span is not a shift the contract
+            permits.
+
+    The day test uses the shift's OWN date. An overnight shift is anchored to the
+    day it starts, matching `shift_window`, so a 22:00-06:00 Friday shift is
+    tested against Friday and against a span that `shift_window`'s cross-midnight
+    adjustment has already extended past 24:00.
+    """
+    if not emp.ordinary_span_start or not emp.ordinary_span_end:
+        return False
+
+    if emp.ordinary_days:
+        iso_weekday = datetime.date.fromisoformat(shift.shift_date).isoweekday()
+        if iso_weekday not in emp.ordinary_days:
+            return True
+
+    s0, s1 = shift_window(shift)
+    e0 = _time_to_abs_minutes(shift.shift_date, emp.ordinary_span_start)
+    e1 = _time_to_abs_minutes(shift.shift_date, emp.ordinary_span_end)
+    if e1 <= e0:
+        e1 += 1440  # span crosses midnight, e.g. 18:00-02:00
+    return not (e0 <= s0 and e1 >= s1)
+
+
 def employee_eligible(
     emp: EmployeeInput,
     shift: ShiftInput,
@@ -867,6 +927,16 @@ def employee_eligible(
     for ov in emp.availability_overrides:
         if ov.severity == 'HARD' and override_blocks_shift(ov, shift):
             return False
+
+    # HC-5e: Contract ordinary-hours envelope.
+    #
+    # BEFORE HC-5d and independent of `availability_mode`, because it answers a
+    # different question. HC-5d asks what the EMPLOYEE declared; this asks what
+    # the CONTRACT permits, and a declaration cannot widen a contract. It
+    # therefore applies to every population — an FT has no slots for HC-5d to
+    # read, so for them this is the only bound there is.
+    if envelope_excludes_shift(emp, shift):
+        return False
 
     # HC-5d: Declared availability windows.
     #

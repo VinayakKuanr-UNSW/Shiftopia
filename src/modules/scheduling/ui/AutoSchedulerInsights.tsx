@@ -92,7 +92,19 @@ function toRadarRow(axis: string, get: (p: PillarScores) => number, options: Arr
     return row;
 }
 
-export function AutoSchedulerInsights({ result }: { result: AutoSchedulerResult }) {
+/**
+ * @param compact  Mobile: drop the Pareto radar and keep its conclusion in
+ *   prose. Four axes × three overlaid series at ~340px wide is a decoration,
+ *   not a chart — nobody can read a value off it, and the legend alone eats a
+ *   quarter of the height. The sentence below it carried the actual finding.
+ */
+export function AutoSchedulerInsights({
+    result,
+    compact = false,
+}: {
+    result: AutoSchedulerResult;
+    compact?: boolean;
+}) {
     const pillars = result.pillars ?? null;
     const alternatives: ParetoAlternative[] = result.alternatives ?? [];
     const binding = result.bindingConstraints ?? [];
@@ -130,6 +142,19 @@ export function AutoSchedulerInsights({ result }: { result: AutoSchedulerResult 
         ? Math.round((result.passing / result.totalProposals) * 100)
         : 100;
 
+    // The hours breach outranks the fatigue band for the Wellbeing subtitle:
+    // "5 over-tired" describes a score, while "5 staff up to 74h over cap" is a
+    // fact a manager can act on. The solver's cap is soft and yields to
+    // coverage, so this is the only place the overrun becomes visible without
+    // dividing the objective breakdown by the 1e8 penalty weight.
+    // `?? 0` is NOT used on the staff count: an older optimizer omits these
+    // fields entirely, and rendering "0h over" would read as an all-clear.
+    const overCapStaff = pillars.fatigue.over_cap_staff;
+    const overCapWorstH = Math.round((pillars.fatigue.over_cap_worst_minutes ?? 0) / 60);
+    const overCapSub = overCapStaff && overCapStaff > 0 && overCapWorstH > 0
+        ? `${overCapStaff} staff up to ${overCapWorstH}h over cap`
+        : null;
+
     const radarColors: Record<string, string> = {
         chosen: '#10b981', cheapest: '#f59e0b', fairest: '#6366f1',
     };
@@ -165,11 +190,11 @@ export function AutoSchedulerInsights({ result }: { result: AutoSchedulerResult 
                     label="Wellbeing"
                     score={pillars.fatigue.score}
                     value={`${pillars.fatigue.score}`}
-                    sub={pillars.fatigue.critical > 0
+                    sub={overCapSub ?? (pillars.fatigue.critical > 0
                         ? `${pillars.fatigue.critical} over-tired`
                         : pillars.fatigue.amber > 0
                             ? `${pillars.fatigue.amber} near limit`
-                            : 'all well-rested'}
+                            : 'all well-rested')}
                 />
                 <PillarCard
                     index={2}
@@ -213,8 +238,26 @@ export function AutoSchedulerInsights({ result }: { result: AutoSchedulerResult 
                 </Alert>
             )}
 
+            {/* U3 — Pareto trade-off, as prose on mobile */}
+            {compact && cheapest && (
+                <Card className="border-border bg-card p-4">
+                    <h4 className="mb-1.5 text-sm font-semibold text-foreground">What else was possible?</h4>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                        The <span className="font-medium text-amber-600 dark:text-amber-400">cheapest</span> roster
+                        would
+                        {costDelta > 0
+                            ? <> have saved <span className="font-semibold text-foreground">{fmtMoney(costDelta)}</span></>
+                            : <> have cost about the same</>}
+                        {fairnessDelta > 0
+                            ? <>, but fairness drops <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
+                            : <>.</>}
+                        {' '}This roster is optimised for wellbeing before cost.
+                    </p>
+                </Card>
+            )}
+
             {/* U3 — Pareto trade-off explorer */}
-            {radarData && alternatives.length > 0 && (
+            {!compact && radarData && alternatives.length > 0 && (
                 <Card className="p-4 bg-card border-border">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="text-sm font-semibold text-foreground">What else was possible?</h4>

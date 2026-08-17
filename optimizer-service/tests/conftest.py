@@ -86,6 +86,9 @@ def make_employee(
     availability_mode: str = "OPT_IN",
     availability_overrides: list | None = None,
     unavailable_dates: list[str] | None = None,
+    ordinary_span_start: str | None = None,
+    ordinary_span_end: str | None = None,
+    ordinary_days: list[int] | None = None,
 ) -> EmployeeInput:
     return EmployeeInput(
         id=eid, name=f"Emp-{eid}",
@@ -105,6 +108,9 @@ def make_employee(
         # post-construction assignment skips it.
         availability_overrides=availability_overrides or [],
         unavailable_dates=unavailable_dates or [],
+        ordinary_span_start=ordinary_span_start,
+        ordinary_span_end=ordinary_span_end,
+        ordinary_days=ordinary_days or [],
     )
 
 

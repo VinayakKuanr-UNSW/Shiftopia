@@ -56,6 +56,14 @@ const QUERY_KEYS = {
 export interface UseAvailabilityOptions {
   profileId?: string; // Defaults to 'current-user'
   month?: Date;       // Defaults to current month
+  /**
+   * Run the queries at all. Defaults to true.
+   *
+   * `false` for Full-Time employees: they hold no rules and no slots by design
+   * (20260817120000) and the page renders no view onto either, so fetching would
+   * re-query two tables on every month change to render nothing.
+   */
+  enabled?: boolean;
 }
 
 export interface UseAvailabilityResult {
@@ -89,7 +97,7 @@ export interface UseAvailabilityResult {
 export function useAvailability(
   options: UseAvailabilityOptions = {}
 ): UseAvailabilityResult {
-  const { profileId = "current-user", month = new Date() } = options;
+  const { profileId = "current-user", month = new Date(), enabled = true } = options;
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -111,6 +119,7 @@ export function useAvailability(
       const resolvedProfileId = await resolveProfileId(profileId);
       return getAvailabilityRules(resolvedProfileId);
     },
+    enabled,
     staleTime: 1000 * 60 * 5,
     retry: 2,
   });
@@ -129,6 +138,7 @@ export function useAvailability(
       const resolvedProfileId = await resolveProfileId(profileId);
       return getAvailabilitySlots(resolvedProfileId, startDate, endDate);
     },
+    enabled,
     staleTime: 1000 * 60 * 2,
     retry: 3,
   });

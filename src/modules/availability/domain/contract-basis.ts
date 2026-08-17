@@ -79,6 +79,11 @@ export interface ContractBasis {
     employmentStatus: string | null;
     envelope: OrdinaryHoursEnvelope;
     /**
+     * True when the employee's compliance basis contract is Full-Time (FT).
+     * For FT employees, availability is contract-based and managed via Leave.
+     */
+    isFullTime: boolean;
+    /**
      * What an ABSENT availability declaration means for this person — the
      * frontend mirror of the solver's `availability_mode`, resolved from the
      * same property (do they carry a contract obligation?) so the page cannot
@@ -193,6 +198,7 @@ export function resolveComplianceBasis(contracts: readonly ContractBasisInput[])
             contractedWeeklyHours: undefined,
             employmentStatus: null,
             envelope: UNRESTRICTED_ENVELOPE,
+            isFullTime: false,
             // No contract we could read. OPT_IN is the strict reading and the
             // one the solver defaults to, so the page never promises someone
             // they are available when the solver will not place them.
@@ -202,11 +208,13 @@ export function resolveComplianceBasis(contracts: readonly ContractBasisInput[])
 
     const hours = weeklyHoursOf(winner);
     const contractType = toContractType(winner.employmentStatus);
+    const isFullTime = contractType === 'FT';
     return {
         contractType,
         contractedWeeklyHours: hours > 0 ? hours : undefined,
         employmentStatus: winner.employmentStatus,
         envelope: toEnvelope(winner),
+        isFullTime,
         // Mirrors the controller: driven by whether a contract obligation
         // exists, not by the employment token. An unrecognised status ranks
         // with the capped population everywhere else in this file, but it

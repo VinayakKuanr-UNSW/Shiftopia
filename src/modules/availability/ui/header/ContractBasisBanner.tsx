@@ -24,28 +24,10 @@ import { CalendarCheck, CalendarClock, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/modules/core/lib/utils';
 import type { ContractBasis } from '../../domain/contract-basis';
+// Shared with the Full-Time card on AvailabilityPage so both render the same
+// contract field identically. See ui/envelope-format.ts.
+import { formatEnvelopeDays as formatDays, formatEnvelopeTime as formatTime } from '../envelope-format';
 
-const ISO_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-/** '06:00:00' -> '6:00am'. Falls back to the raw value if it is not a time. */
-function formatTime(value: string | null): string {
-    if (!value) return '';
-    const [h, m] = value.split(':').map(Number);
-    if (!Number.isFinite(h) || !Number.isFinite(m)) return value;
-    const suffix = h < 12 ? 'am' : 'pm';
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return m === 0 ? `${hour12}${suffix}` : `${hour12}:${String(m).padStart(2, '0')}${suffix}`;
-}
-
-/** [1,2,3,4,5] -> 'Mon–Fri'; [1,3,5] -> 'Mon, Wed, Fri'; null -> 'any day'. */
-function formatDays(days: number[] | null): string {
-    if (!days || days.length === 0 || days.length === 7) return 'any day';
-    const sorted = [...days].sort((a, b) => a - b);
-    const isRun = sorted.every((d, i) => i === 0 || d === sorted[i - 1] + 1);
-    const label = (d: number) => ISO_DAY_LABELS[d - 1] ?? String(d);
-    if (isRun && sorted.length > 2) return `${label(sorted[0])}–${label(sorted[sorted.length - 1])}`;
-    return sorted.map(label).join(', ');
-}
 
 export interface ContractBasisBannerProps {
     basis: ContractBasis;

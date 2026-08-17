@@ -41,6 +41,7 @@ import { ApplyShiftOpResponseSchema, OverlapCheckSchema } from '@/modules/roster
 import { EligibilityService } from '@/modules/rosters/services/eligibility.service';
 import { validateCompliance } from '@/modules/rosters/services/compliance.service';
 import {
+  availabilityModeForEmploymentStatus,
   evaluateShiftAvailabilityFromSlots,
   type DeclaredSlot,
 } from '@/modules/rosters/domain/availability-check';
@@ -179,11 +180,16 @@ export async function getReserveListCandidates(shiftId: string): Promise<Reserve
 
     const profile = profileById.get(id);
     const eligibleInfo = eligibleById.get(id);
+    // Mode from the contract already in hand — an FT/PT holds no slots by
+    // design, so without it every permanent in the reserve pool would come back
+    // flagged "no declared availability" and the panel's advisory column would
+    // be noise on exactly the staff most likely to be called in.
     const availability = evaluateShiftAvailabilityFromSlots(
       slotsByProfile.get(id) ?? null,
       shift.shift_date,
       shift.start_time,
       shift.end_time,
+      availabilityModeForEmploymentStatus(eligibleInfo?.contract_type),
     );
 
     candidates.push({

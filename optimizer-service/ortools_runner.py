@@ -42,6 +42,7 @@ from model_builder import (
     StrategyInput,
     existing_blocks_proposal,
     override_blocks_shift,
+    envelope_excludes_shift,
     shift_window,
     _slot_covers_shift,
     _time_to_abs_minutes,
@@ -182,6 +183,14 @@ class EmployeeReq(BaseModel):
     # `normalize_availability_mode` in model_builder.py. Defaults to the strict
     # reading, so a client that does not send it behaves exactly as before.
     availability_mode: str = 'OPT_IN'
+    # Contract ordinary-hours envelope (HC-5e) — when this contract may be
+    # rostered at all, as opposed to what the employee declared. MUST be declared
+    # here or Pydantic drops it at the wire boundary and the envelope silently
+    # stops binding, which for an FT (who has no slots) means available 24/7.
+    # None = unrestricted, the state of every contract in production today.
+    ordinary_span_start: Optional[str] = None
+    ordinary_span_end: Optional[str] = None
+    ordinary_days: list[int] = Field(default_factory=list)
     existing_shifts: list[ExistingShiftReq] = Field(default_factory=list)
     level: int = 0
     is_flexible: bool = False
@@ -653,6 +662,12 @@ def _explain_eligibility(
         if ov.severity == 'HARD' and override_blocks_shift(ov, shift):
             reasons.append('HARD_AVAILABILITY_BLOCK')
             break
+
+    # HC-5e: contract ordinary-hours envelope. Reported separately from
+    # OUTSIDE_DECLARED_AVAILABILITY because the fix differs — a declaration can be
+    # widened by the employee, a contract span cannot.
+    if envelope_excludes_shift(emp, shift):
+        reasons.append('OUTSIDE_CONTRACT_ORDINARY_HOURS')
 
     # Declared availability slots (HC-5d). MUST mirror `employee_eligible`,
     # including its OPT_IN / OPT_OUT split — this block previously carried only

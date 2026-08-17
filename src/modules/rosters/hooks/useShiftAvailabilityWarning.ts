@@ -15,6 +15,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { getEmployeeAvailabilityForDate } from '@/modules/rosters/api/availability.api';
+import { useAvailabilityMode } from '@/modules/availability/state/useAvailabilityMode';
 import {
   evaluateShiftAvailability,
   type ShiftAvailabilityResult,
@@ -44,11 +45,18 @@ export function useShiftAvailabilityWarning(
     staleTime: 30_000,
   });
 
+  // An FT/PT employee's silence means available, so the verdict depends on their
+  // contract as much as on their slots.
+  const { mode, isLoading: modeLoading } = useAvailabilityMode(employeeId, enabled);
+
   if (!enabled) return { result: null, isLoading: false };
 
+  // Report loading until BOTH are in. Evaluating against a not-yet-resolved mode
+  // would default to OPT_IN and flash "no declared availability on file" at a
+  // full-timer before correcting itself.
   return {
-    result: evaluateShiftAvailability(data ?? null, startTime!, endTime!),
-    isLoading,
+    result: evaluateShiftAvailability(data ?? null, startTime!, endTime!, mode),
+    isLoading: isLoading || modeLoading,
   };
 }
 

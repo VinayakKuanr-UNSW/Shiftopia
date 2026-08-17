@@ -35,7 +35,7 @@ import { resolveRateSet, type RateSet } from '../rosters/domain/projections/util
 import { calculateFatigueWithRecovery, effectiveMinutes, FATIGUE_BANDS } from '../rosters/domain/projections/utils/fatigue';
 import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
-import { toTargetEmploymentType } from '@/modules/core/model/employment.types';
+import { isFullTimeEmployee, toTargetEmploymentType } from '@/modules/core/model/employment.types';
 import type { AvailabilityOverrideRef, ExistingShiftRef } from './types';
 import { auditor } from './audit/auditor';
 import { rosterFetcher, durationMinutes } from './data/roster-fetcher';
@@ -1019,6 +1019,13 @@ export class AutoSchedulerController {
         const contractDetails = await rosterFetcher.fetchEmployeeContractDetails(input.employees);
         const employeeDetails = mergeEmployeeDetails(contractDetails, input.employeeDetails);
         throwIfAborted();
+
+        // Contract ordinary-hours envelopes (solver HC-5e). Read separately from
+        // the classification columns above on purpose — see
+        // `fetchOrdinaryHoursEnvelopes`. Empty map = every contract unrestricted,
+        // which is production's current state and a safe one.
+        const envelopes = await rosterFetcher.fetchOrdinaryHoursEnvelopes(input.employees);
+        throwIfAborted();
         const totalExisting = Array.from(existingRoster.values())
             .reduce((acc, list) => acc + list.length, 0);
         if (totalExisting > 0) {
@@ -1304,17 +1311,36 @@ export class AutoSchedulerController {
                 existing_shifts: existingRoster.get(e.id) ?? [],
                 availability_slots: availabilityData.get(e.id)?.slots ?? [],
                 has_availability_data: availabilityData.get(e.id)?.hasAnyData ?? false,
-                // Driven by the CONTRACT FLOOR, not by the employment token,
-                // because that is the property the mode actually protects: if
-                // HC-7 charges the solver for failing to give this person
-                // hours, missing availability data must not be what makes
-                // giving them hours impossible. The two are then incapable of
-                // disagreeing. Uses the weekly basis rather than the
-                // window obligation so an employee whose leave happens to span
-                // this window does not flip to OPT_IN for it.
-                availability_mode: (weeklyContractMinutes.get(e.id) ?? 0) > 0
-                    ? 'OPT_OUT'
-                    : 'OPT_IN',
+                // FT is OPT_OUT unconditionally, because `RosterFetcher` has
+                // already decided — using this exact predicate — not to fetch
+                // their slots. The two MUST agree: an empty slot list under
+                // OPT_IN is a hard filter against every shift.
+                //
+                // The contract floor is still honoured for everyone else, which
+                // is the property the mode protects for PT: if HC-7 charges the
+                // solver for failing to give someone hours, missing availability
+                // data must not be what makes giving them hours impossible. It
+                // uses the WEEKLY basis rather than the window obligation so an
+                // employee whose leave happens to span this window does not flip
+                // to OPT_IN for it.
+                //
+                // Why FT no longer rides on that test alone: the floor comes
+                // from `employeeDetails.min_contract_minutes ?? baseline(...)`,
+                // and `??` passes a recorded ZERO straight through. One FT row
+                // with a 0 floor used to flip that person to OPT_IN, and with
+                // their slots now deliberately empty there was nothing left to
+                // save them — they would be eligible for nothing, silently.
+                availability_mode:
+                    isFullTimeEmployee(e.employment_status, e.contract_type) ||
+                    (weeklyContractMinutes.get(e.id) ?? 0) > 0
+                        ? 'OPT_OUT'
+                        : 'OPT_IN',
+                // HC-5e. What the CONTRACT permits, as against what the employee
+                // declared — the only bound on an FT, who carries no slots. Sits
+                // after the `...det` spread for the same reason as
+                // `unavailable_dates`: a caller-supplied `employeeDetails` must
+                // not be able to widen someone's rosterable span.
+                ...(envelopes.get(e.id) ?? {}),
                 // WINDOW-SCALED limits — like `unavailable_dates` below, these MUST
                 // sit after the `...det` spread. They were previously written above
                 // it, so any caller-supplied `employeeDetails` carrying either key

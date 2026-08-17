@@ -53,6 +53,7 @@ describe('resolveComplianceBasis', () => {
             contractedWeeklyHours: undefined,
             employmentStatus: null,
             envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
+            isFullTime: false,
             // Nobody we can read a contract for stays on the STRICT reading —
             // the same default the solver applies — so the page never tells
             // someone they are available when the solver will not place them.
@@ -64,13 +65,24 @@ describe('resolveComplianceBasis', () => {
         const basis = resolveComplianceBasis([PT]);
         expect(basis.contractType).toBe('PT');
         expect(basis.contractedWeeklyHours).toBe(20);
+        expect(basis.isFullTime).toBe(false);
+    });
+
+    it('marks Full-Time contracts with isFullTime=true', () => {
+        const basis = resolveComplianceBasis([FT]);
+        expect(basis.contractType).toBe('FT');
+        expect(basis.contractedWeeklyHours).toBe(38);
+        expect(basis.isFullTime).toBe(true);
+        expect(basis.availabilityMode).toBe('OPT_OUT');
     });
 
     // The production case: one person holds {Full-Time, Casual}. Resolving to
     // the casual would exempt them from every rolling window.
     it('prefers a non-casual contract over a casual one, in either input order', () => {
         expect(resolveComplianceBasis([CASUAL, FT]).contractType).toBe('FT');
+        expect(resolveComplianceBasis([CASUAL, FT]).isFullTime).toBe(true);
         expect(resolveComplianceBasis([FT, CASUAL]).contractType).toBe('FT');
+        expect(resolveComplianceBasis([FT, CASUAL]).isFullTime).toBe(true);
     });
 
     it('is stable across every permutation of three contracts', () => {

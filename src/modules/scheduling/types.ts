@@ -190,6 +190,20 @@ export interface OptimizerEmployee {
      */
     availability_mode?: 'OPT_IN' | 'OPT_OUT';
     /**
+     * Contract ordinary-hours envelope (solver HC-5e) — when this contract may be
+     * rostered at all, as opposed to what the employee declared. Both ends must
+     * be present for it to bind; omitted or null means UNRESTRICTED, which is
+     * every contract in production until one is explicitly opted in.
+     *
+     * Separate from `availability_slots` because an FT holds none: their
+     * availability is implicit, so this is the only thing that bounds them, and
+     * without it "available by contract" means available 24/7 on all seven days.
+     */
+    ordinary_span_start?: string | null;
+    ordinary_span_end?: string | null;
+    /** ISO weekdays (1=Mon .. 7=Sun) the span applies on. Empty = all seven. */
+    ordinary_days?: number[];
+    /**
      * Severity-based availability windows: tuples of
      * `[start_time, end_time, severity]` where severity is 'HARD',
      * 'SOFT', or 'PREFERENCE'. HARD entries are pre-filter blockers;

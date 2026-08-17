@@ -9,7 +9,9 @@ attaching. These tests lock the single normalization boundary.
 """
 from model_builder import (
     normalize_employment_type,
+    employee_eligible,
     EmployeeInput,
+    OptimizerConstraints,
     ShiftInput,
 )
 
@@ -68,3 +70,106 @@ def test_ft_and_target_now_match_after_normalization():
     emp = EmployeeInput(id='e', name='n', employment_type='Full-Time')
     shift = _shift(target_employment_type='Full-Time')
     assert emp.employment_type == shift.target_employment_type == 'FT'
+
+
+# ---------------------------------------------------------------------------
+# target_requires_flexible — the second axis of the employment target.
+#
+# 'Flexible Part-Time' normalizes to 'PT', so the token alone CANNOT express
+# "flexible part-timers only". These lock the tuple semantics that SC-1 relies
+# on, and the reason a fourth 'Flexible PT' token was rejected in favour of a
+# companion boolean.
+# ---------------------------------------------------------------------------
+
+def test_flexible_target_is_not_expressible_as_a_token():
+    """Regression guard for the design decision. If someone later adds a
+    'Flexible PT' alias mapping to its own token, this test fails and forces
+    them to revisit SC-1 — which compares against the collapsed set."""
+    assert normalize_employment_type('Flexible Part-Time') == 'PT'
+    assert normalize_employment_type('flexible part time') == 'PT'
+    # A flexible employee is indistinguishable from a plain part-timer by
+    # employment_type alone; only `is_flexible` separates them.
+    flexible = EmployeeInput(id='e', name='n', employment_type='Flexible Part-Time', is_flexible=True)
+    plain = EmployeeInput(id='e2', name='n2', employment_type='Part-Time')
+    assert flexible.employment_type == plain.employment_type == 'PT'
+    assert flexible.is_flexible is True
+    assert plain.is_flexible is False
+
+
+def test_shift_input_keeps_flexible_requirement_for_pt_target():
+    shift = _shift(target_employment_type='Part-Time', target_requires_flexible=True)
+    assert shift.target_employment_type == 'PT'
+    assert shift.target_requires_flexible is True
+
+    # Long form normalizes the same way.
+    shift = _shift(target_employment_type='Flexible Part-Time', target_requires_flexible=True)
+    assert shift.target_employment_type == 'PT'
+    assert shift.target_requires_flexible is True
+
+
+def test_shift_input_clears_flexible_requirement_off_pt_target():
+    """Mirrors shifts_target_flexible_requires_pt_check. An incoherent payload
+    degrades to the plain target rather than penalizing every candidate."""
+    for target in ('Full-Time', 'Casual'):
+        shift = _shift(target_employment_type=target, target_requires_flexible=True)
+        assert shift.target_requires_flexible is False
+
+    # No target at all → nothing to qualify.
+    assert _shift(target_requires_flexible=True).target_requires_flexible is False
+
+
+def test_shift_input_defaults_flexible_requirement_false():
+    assert _shift().target_requires_flexible is False
+    assert _shift(target_employment_type='Part-Time').target_requires_flexible is False
+
+
+# ---------------------------------------------------------------------------
+# HC-5c — the employment target is a HARD eligibility criterion.
+#
+# It used to be soft (a 5000c SC-1 penalty), so the solver would place an
+# off-target employee whenever coverage was worth more than $50. The column is
+# now NOT NULL and enforced by V8_EMPLOYMENT_TARGET and by
+# trg_shift_employment_target_2_enforce, so such a proposal would be rejected on
+# write. Asserting on `employee_eligible` rather than the objective is
+# deliberate: it is the single predicate feeding BOTH variable creation and
+# compute_greedy_hint, so these also pin that the greedy fallback obeys the rule.
+# ---------------------------------------------------------------------------
+
+def _emp(**over):
+    base = dict(id='e1', name='n', employment_type='Casual', contracted_role_ids=[])
+    base.update(over)
+    return EmployeeInput(**base)
+
+
+_C = OptimizerConstraints(enforce_role_match=False, enforce_skill_match=False)
+
+
+def test_off_target_employee_is_ineligible():
+    casual = _emp(employment_type='Casual')
+    assert employee_eligible(casual, _shift(target_employment_type='FT'), _C) is False
+    assert employee_eligible(casual, _shift(target_employment_type='PT'), _C) is False
+
+
+def test_on_target_employee_is_eligible():
+    assert employee_eligible(
+        _emp(employment_type='Full-Time'), _shift(target_employment_type='FT'), _C) is True
+    assert employee_eligible(
+        _emp(employment_type='Casual'), _shift(target_employment_type='Casual'), _C) is True
+
+
+def test_flexible_requirement_separates_part_timers():
+    plain = _emp(employment_type='Part-Time')
+    flexi = _emp(employment_type='Flexible Part-Time', is_flexible=True)
+    shift = _shift(target_employment_type='PT', target_requires_flexible=True)
+
+    # Both normalize to 'PT'; only is_flexible tells them apart.
+    assert plain.employment_type == flexi.employment_type == 'PT'
+    assert employee_eligible(plain, shift, _C) is False
+    assert employee_eligible(flexi, shift, _C) is True
+
+
+def test_plain_pt_target_accepts_both_part_timers():
+    shift = _shift(target_employment_type='PT')
+    assert employee_eligible(_emp(employment_type='Part-Time'), shift, _C) is True
+    assert employee_eligible(
+        _emp(employment_type='Flexible Part-Time', is_flexible=True), shift, _C) is True

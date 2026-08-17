@@ -77,6 +77,10 @@ const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({
     existing_shifts: 0, contracts: 0, qualifications: 0,
     availability_slots: 0, has_availability_data: 0,
     availability_mode: 0,
+    // HC-5e contract ordinary-hours envelope. Declared on BOTH sides or Pydantic
+    // drops it at the wire boundary and the envelope silently stops binding —
+    // which for an FT, who carries no availability slots, means available 24/7.
+    ordinary_span_start: 0, ordinary_span_end: 0, ordinary_days: 0,
     availability_overrides: 0, fairness_debts: 0,
     initial_effective_minutes: 0,
     // Schedule 3/4/5/6 classification carriers. These had drifted out of this
