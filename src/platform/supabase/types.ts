@@ -731,6 +731,48 @@ export type Database = {
           },
         ]
       }
+      availability_requests: {
+        Row: {
+          cancelled_at: string | null
+          created_at: string
+          id: string
+          note: string | null
+          period_end: string
+          period_start: string
+          profile_id: string
+          requested_by: string
+          responded_at: string | null
+          responded_rule_id: string | null
+          status: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          period_end: string
+          period_start: string
+          profile_id: string
+          requested_by: string
+          responded_at?: string | null
+          responded_rule_id?: string | null
+          status?: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          period_end?: string
+          period_start?: string
+          profile_id?: string
+          requested_by?: string
+          responded_at?: string | null
+          responded_rule_id?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       availability_rules: {
         Row: {
           created_at: string | null
@@ -2390,12 +2432,15 @@ export type Database = {
         Row: {
           approval_date: string | null
           approved_by: string | null
+          certificate_url: string | null
           created_at: string | null
           employee_id: string
           end_date: string
           id: string
           leave_type: string
           reason: string | null
+          rejection_reason: string | null
+          requested_hours: number | null
           start_date: string
           status: string | null
           updated_at: string | null
@@ -2403,12 +2448,15 @@ export type Database = {
         Insert: {
           approval_date?: string | null
           approved_by?: string | null
+          certificate_url?: string | null
           created_at?: string | null
           employee_id: string
           end_date: string
           id?: string
           leave_type: string
           reason?: string | null
+          rejection_reason?: string | null
+          requested_hours?: number | null
           start_date: string
           status?: string | null
           updated_at?: string | null
@@ -2416,12 +2464,15 @@ export type Database = {
         Update: {
           approval_date?: string | null
           approved_by?: string | null
+          certificate_url?: string | null
           created_at?: string | null
           employee_id?: string
           end_date?: string
           id?: string
           leave_type?: string
           reason?: string | null
+          rejection_reason?: string | null
+          requested_hours?: number | null
           start_date?: string
           status?: string | null
           updated_at?: string | null
