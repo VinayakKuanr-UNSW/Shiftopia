@@ -348,10 +348,28 @@ export async function executeAssignShift(
             return { success: true, advisories };
         }
 
-        // Build the update payload for metadata changes (date, times)
+        // Build the update payload for metadata changes (times only — see below)
         const metadataPayload: any = {};
-        if (targetDate && targetDate !== (shift as any).shift_date) {
-            metadataPayload.shift_date = targetDate;
+
+        // A date change is NOT a plain column write. `rosters` is a per-day
+        // container and `roster_groups`/`roster_subgroups` hang off it, so moving a
+        // shift to another day has to re-point roster_id and re-resolve the
+        // group/subgroup on the destination day — and create that day's roster if
+        // nobody has scheduled on it yet. sm_move_shift does all of that
+        // atomically; a raw `.update({ shift_date })` here silently left roster_id
+        // on the ORIGINAL day, which is the drift this replaces.
+        const isDateMove = !!targetDate && targetDate !== (shift as any).shift_date;
+        if (isDateMove) {
+            const { data: moveResult, error: moveError } = await (supabase as any)
+                .rpc('sm_move_shift', {
+                    p_shift_id:   shiftId,
+                    p_shift_date: targetDate,
+                    p_user_id:    userId ?? null,
+                });
+            if (moveError) return { success: false, error: moveError.message };
+            if (moveResult && moveResult.success === false) {
+                return { success: false, error: moveResult.error };
+            }
         }
         if (targetStartTime && targetStartTime !== (shift as any).start_time) {
             metadataPayload.start_time = targetStartTime;

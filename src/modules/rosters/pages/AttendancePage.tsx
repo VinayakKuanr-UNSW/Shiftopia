@@ -9,8 +9,9 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import {
-  format, parseISO, startOfWeek, startOfMonth,
+  format, parseISO, startOfMonth,
 } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useQuery } from '@tanstack/react-query';
 import {
   Fingerprint, MapPin, Loader2, UserX, LogIn, LogOut,
@@ -521,7 +522,7 @@ const AttendancePage: React.FC = () => {
   const handleViewTypeChange = useCallback((view: ViewType) => {
     let newDate = selectedDate;
     if (view === 'week') {
-      newDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
+      newDate = startOfWeekAU(selectedDate);
     } else if (view === 'month') {
       newDate = startOfMonth(selectedDate);
     }

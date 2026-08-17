@@ -1,4 +1,5 @@
 import React from 'react';
+import { addDays, startOfWeek } from 'date-fns';
 import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 import {
   navigateDate,
@@ -10,6 +11,7 @@ import DayView from './DayView';
 import ThreeDayView from './ThreeDayView';
 import WeekView from './WeekView';
 import MonthView from './MonthView';
+import MobileRosterAgendaView from './MobileRosterAgendaView';
 import { Shift } from '@/modules/rosters';
 
 interface ShiftWithDetails {
@@ -44,6 +46,27 @@ const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
   onOffersClick: _onOffersClick,
 }) => {
   const isMobile = useIsMobile();
+  const mobileAgendaDays = React.useMemo(() => {
+    if (view === 'day') return [selectedDate];
+    if (view === '3day') return [selectedDate, addDays(selectedDate, 1), addDays(selectedDate, 2)];
+    if (view === 'week') {
+      const start = startOfWeek(selectedDate, { weekStartsOn: 1 });
+      return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    }
+    return [];
+  }, [selectedDate, view]);
+
+  if (isMobile && view !== 'month') {
+    return (
+      <div className="h-full min-h-0 overflow-hidden">
+        <MobileRosterAgendaView
+          days={mobileAgendaDays}
+          getShiftsForDate={getShiftsForDate}
+          includeContinuations={view === 'week' ? false : undefined}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

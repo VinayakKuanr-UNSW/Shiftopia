@@ -1,8 +1,9 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useQueryClient } from '@tanstack/react-query';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { format, addDays } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -99,6 +100,7 @@ import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
 import { resolveGroupType } from '@/modules/rosters/utils/roster-utils';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
+import { describeShiftMutationError } from '@/modules/rosters/domain/shiftMutationError';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import {
   Tooltip,
@@ -135,8 +137,8 @@ const MONTH_INTERACTIVE_SHIFT_LIMIT = 1500;
    ============================================================ */
 const NewRostersPage: React.FC = () => {
   const { toast } = useToast();
-  const { hasPermission } = useAuth();
-  const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
+  const { hasPermission, user } = useAuth();
+  const { scope, setScope, isGammaLocked, scopeTree } = useScopeFilter('managerial');
   const queryClient = useQueryClient();
 
   const { showUnfilledPanel, setShowUnfilledPanel, isDnDModeActive } = useRosterStore(
@@ -171,10 +173,11 @@ const NewRostersPage: React.FC = () => {
   } = useRosterUI();
 
   // ==================== GROUP BUCKET VIEW (scalability) ====================
-  // Group-mode default summary grid: 3-Day / Week / Month, NOT in DnD mode,
+  // Group-mode default summary grid in Month view when NOT in DnD mode
   // and NOT bulk mode. In this state the grid renders aggregate summary cells only.
   const isGroupBucketView =
     activeMode === 'group' &&
+    viewType === 'month' &&
     !isDnDModeActive &&
     !bulkModeActive;
 
@@ -342,7 +345,7 @@ const NewRostersPage: React.FC = () => {
     // per-shift fetch by gating the query off (null orgId → enabled = false).
     // React Query auto-refetches when this flips back to a real org id on
     // switching into DnD / Collapse / Bulk / Day view.
-    isGroupBucketView ? null : selectedOrganizationId,
+    isGroupBucketView ? null : (selectedOrganizationId || scope.org_ids[0] || '00000000-0000-0000-0000-000000000001'),
     startDate,
     endDate,
     queryFilters
@@ -470,7 +473,7 @@ const NewRostersPage: React.FC = () => {
   // ==================== VIEW TYPE HANDLER ====================
   const handleViewTypeChange = (nextView: ViewType) => {
     if (nextView === 'week') {
-      setSelectedDate(startOfWeek(selectedDate, { weekStartsOn: 1 }));
+      setSelectedDate(startOfWeekAU(selectedDate));
       setViewType(nextView);
       return;
     }
@@ -506,7 +509,7 @@ const NewRostersPage: React.FC = () => {
       plannerStats.totalShifts > MONTH_INTERACTIVE_SHIFT_LIMIT
     ) {
       autoNarrowedRef.current = true;
-      setSelectedDate(startOfWeek(selectedDate, { weekStartsOn: 1 }));
+      setSelectedDate(startOfWeekAU(selectedDate));
       setViewType('week');
       toast({
         title: 'Narrowed to Week view',
@@ -803,7 +806,11 @@ const NewRostersPage: React.FC = () => {
       setBulkModeActive(false);
     } catch (error) {
       console.error(error);
-      toast({ title: 'Error', description: 'Failed to unassign shifts', variant: 'destructive' });
+      toast({
+        title: 'Could not unassign',
+        description: describeShiftMutationError(error) ?? 'Failed to unassign shifts.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -885,7 +892,12 @@ const NewRostersPage: React.FC = () => {
           toast({ title: 'Shift updated', description: 'Moved to open shifts on ' + shiftDate });
           queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
         } catch (error) {
-          toast({ title: 'Failed to unassign', variant: 'destructive' });
+          console.error(error);
+          toast({
+            title: 'Could not unassign',
+            description: describeShiftMutationError(error),
+            variant: 'destructive',
+          });
         } finally {
           setIsExecutingDnd(false);
         }
@@ -1102,11 +1114,14 @@ const NewRostersPage: React.FC = () => {
   return (
     <ShiftEditingPresenceProvider>
     <div
-      className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4"
+      // pb clears the mobile bottom nav (var defined in index.css); without it
+      // the last roster row sits underneath the nav and cannot be reached.
+      className="h-full flex flex-col overflow-hidden p-2.5 pb-[calc(var(--mobile-bottom-nav-clearance,90px)+0.75rem)] md:p-4 md:pb-4 lg:p-6 space-y-2.5 md:space-y-4"
     >
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30">
-        <div className="rounded-[32px] p-4 lg:p-6 transition-all border bg-white/95 border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333] dark:border-white/5 dark:shadow-2xl dark:shadow-black/20">
+        <div className="rounded-[24px] p-3 sm:rounded-[32px] sm:p-4 lg:p-6 transition-all border relative overflow-hidden bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
           {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
           <PersonalPageHeader
             title="Roster Planner"
@@ -1118,9 +1133,10 @@ const NewRostersPage: React.FC = () => {
           />
 
           {/* Row 3: Function Bar */}
-          <div className="mt-4 lg:mt-6">
+          <div className="mt-2 sm:mt-4 lg:mt-6">
             <RosterFunctionBar
               transparent
+              compactOnMobile
               // Context state
               selectedOrganizationId={selectedOrganizationId}
               selectedRosterId={selectedRosterId}
@@ -1163,20 +1179,28 @@ const NewRostersPage: React.FC = () => {
 
       {/* Bulk Mode Banner — sticky amber bar shown while bulk selection is active */}
       {bulkModeActive && (
-        <div className="flex-shrink-0 bg-amber-500/10 border-y border-amber-500/30 px-6 py-2 flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3 text-amber-700 dark:text-amber-300 text-sm font-medium">
-            <span>Bulk selection active — click shifts or buckets to select</span>
+        <div className="flex-shrink-0 bg-amber-500/10 rounded-2xl border border-amber-500/30 px-4 sm:px-6 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 text-amber-700 dark:text-amber-300 text-sm font-medium">
+            {/* "click" and Esc are both desktop-only affordances. */}
+            <span className="truncate">
+              <span className="sm:hidden">Tap shifts to select</span>
+              <span className="hidden sm:inline">Bulk selection active — click shifts or buckets to select</span>
+            </span>
             {selectedV8ShiftIds.size > 0 && (
-              <span className="bg-amber-500/20 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full text-xs font-bold">
+              <span className="shrink-0 bg-amber-500/20 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full text-xs font-bold">
                 {selectedV8ShiftIds.size} selected
               </span>
             )}
           </div>
+          {/* This was always a real button, but labelled as a keyboard hint — on
+              a phone that reads as instructions for a key that does not exist,
+              leaving no visible way out of bulk mode. */}
           <button
             onClick={() => { setBulkModeActive(false); clearSelection(); }}
-            className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
+            className="shrink-0 min-h-[36px] px-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 active:scale-95 transition-all"
           >
-            Press Esc to exit
+            <span className="sm:hidden">Done</span>
+            <span className="hidden sm:inline">Press Esc to exit</span>
           </button>
         </div>
       )}
@@ -1190,7 +1214,42 @@ const NewRostersPage: React.FC = () => {
 
       {/* ── Main Content Area ─────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/95 border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333] dark:border-white/5 dark:shadow-2xl dark:shadow-black/20">
+        <div className="h-full rounded-[24px] sm:rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
+          {/* Mobile-only stats strip. The desktop footer is `hidden md:block`
+              below — it is a wide multi-column row that does not survive a phone
+              — so these numbers would otherwise be invisible on mobile.
+              Budget/Left follow the same `showBudget` rule as the footer: when
+              no department_budgets row overlaps the window, budget is 0 and we
+              show nothing rather than a fabricated figure. */}
+          <div
+            data-testid="mobile-roster-summary"
+            className={cn(
+              'grid flex-shrink-0 divide-x divide-slate-200/70 border-b border-slate-200/70 bg-white/35 px-1.5 py-1.5 dark:divide-white/5 dark:border-white/5 dark:bg-black/10 md:hidden',
+              showBudget ? 'grid-cols-5' : 'grid-cols-3',
+            )}
+            aria-label="Roster summary"
+          >
+            {[
+              { label: 'Total', value: String(totalShifts), tone: 'text-foreground' },
+              { label: 'Assigned', value: String(totalAssignedShifts), tone: 'text-emerald-500 dark:text-emerald-400' },
+              { label: 'Open', value: String(totalUnfilledShifts), tone: 'text-amber-500 dark:text-amber-400' },
+              ...(showBudget
+                ? [
+                    { label: 'Cost', value: formatCost(estimatedCost), tone: 'text-foreground' },
+                    { label: 'Left', value: formatCost(remainingBudget), tone: remainingBudget < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400' },
+                  ]
+                : []),
+            ].map((metric) => (
+              <div key={metric.label} className="flex min-w-0 flex-col items-center justify-center px-1">
+                <span className="text-[8px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                  {metric.label}
+                </span>
+                <span className={cn('max-w-full truncate text-[11px] font-bold leading-tight tabular-nums', metric.tone)}>
+                  {metric.value}
+                </span>
+              </div>
+            ))}
+          </div>
           <DndProvider backend={HTML5Backend}>
             <div className="flex-1 min-h-0 overflow-hidden flex relative">
         {/* Loading Overlay */}
@@ -1312,6 +1371,13 @@ const NewRostersPage: React.FC = () => {
                 estimatedCost,
                 budget,
                 remainingBudget,
+                scheduledCost: plannerStats.scheduledCost,
+                actualCost: plannerStats.actualCost,
+                scheduledNetMinutes: plannerStats.scheduledNetMinutes,
+                actualNetMinutes: plannerStats.actualNetMinutes,
+                costedShifts: plannerStats.costedShifts,
+                uncostedShifts: plannerStats.uncostedShifts,
+                actualShifts: plannerStats.actualShifts,
               }}
               showBudget={showBudget}
               // Centralized DnD assignment (employee → shift card)
@@ -1362,12 +1428,16 @@ const NewRostersPage: React.FC = () => {
         <div
           className={cn(
             'min-h-0 overflow-hidden border-l border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/10 backdrop-blur-md transition-all duration-300 ease-in-out',
-            showUnfilledPanel ? 'w-80' : 'w-0 border-l-0'
+            // On a phone a fixed 320px side panel leaves the grid roughly a
+            // third of the viewport, so below md it floats over the grid as an
+            // overlay instead of competing with it for width.
+            'absolute inset-y-0 right-0 z-40 shadow-2xl md:static md:z-auto md:shadow-none',
+            showUnfilledPanel ? 'w-[85%] max-w-xs md:w-80 md:max-w-none' : 'w-0 border-l-0'
           )}
         >
           <div
             className={cn(
-              'w-80 h-full overflow-auto transition-opacity duration-300',
+              'w-full md:w-80 h-full overflow-auto transition-opacity duration-300',
               showUnfilledPanel ? 'opacity-100' : 'opacity-0'
             )}
           >
@@ -1437,6 +1507,13 @@ const NewRostersPage: React.FC = () => {
             role_id: (s as any).role_id ?? null,
             roleName: (s as any).role_name || (s as any).roles?.name || '',
             unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+            /* Kept in step with the projection in useAutoScheduler.ts — see the
+               note there on why an omitted optional field silently disables a
+               hard rule rather than failing the type-check. */
+            target_employment_type: s.target_employment_type ?? null,
+            target_requires_flexible: s.target_requires_flexible ?? false,
+            is_training: s.is_training ?? false,
+            level: (s as any).remuneration_level ?? undefined,
           }))}
         autoSchedulerEmployees={employees.map((e) => ({
           id: e.id,
@@ -1444,6 +1521,14 @@ const NewRostersPage: React.FC = () => {
           contracted_weekly_hours: (e as any).contracted_weekly_hours,
           contract_type: (e as any).contract_type,
           contracted_role_ids: (e as any).contracted_role_ids,
+          /* The RAW in-scope `user_contracts.employment_status`, which is what
+             trg_shift_employment_target_2_enforce matches against. `contract_type`
+             alone cannot stand in for it: it collapses 'Flexible Part-Time' onto
+             'PT', losing the distinction `target_requires_flexible` needs.
+             EligibilityService already resolves both from the sub-department
+             contract — this mapper was dropping them. */
+          employment_status: (e as any).employment_status ?? null,
+          is_flexible: (e as any).is_flexible ?? false,
         }))}
         onShiftSaved={handleShiftCreated}
         onAssignComplete={() => { clearSelection(); setBulkModeActive(false); }}
@@ -1485,9 +1570,11 @@ const NewRostersPage: React.FC = () => {
         date={drillDownState.date}
         groupType={drillDownState.groupType}
         subGroupName={drillDownState.subGroupName}
-        organizationId={selectedOrganizationId || undefined}
+        organizationId={selectedOrganizationId || scope.org_ids[0] || undefined}
         departmentId={selectedDepartmentIds[0] || undefined}
         subDepartmentId={selectedSubDepartmentIds[0] || undefined}
+        departmentIds={selectedDepartmentIds}
+        subDepartmentIds={selectedSubDepartmentIds}
         groupName={GROUP_DISPLAY_NAMES[drillDownState.groupType as TemplateGroupType | 'unassigned'] || drillDownState.groupType}
         rosterId={selectedRosterId || undefined}
       />

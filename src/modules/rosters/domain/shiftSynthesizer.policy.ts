@@ -1,4 +1,5 @@
 import type { TemplateGroupType } from "./shift.entity";
+import type { TargetEmploymentType } from "@/modules/core/model/employment.types";
 export { timeToMinutes, minutesToTime } from "./availabilityResolution";
 
 export const MIN_SHIFT_MINUTES = 180; // 3 hrs min
@@ -52,7 +53,8 @@ export interface SynthesizedShift {
 
   // Labor Forecasting Metadata
   demand_source?: "baseline" | "ml_predicted" | "derived" | null;
-  target_employment_type?: "FT" | "PT" | "Casual" | null;
+  target_employment_type?: TargetEmploymentType | null;
+  target_requires_flexible?: boolean;
   demand_group_id?: string | null;
 }
 

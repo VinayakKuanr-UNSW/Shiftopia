@@ -23,7 +23,7 @@ import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDate
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
-import { getAnzHolidayName } from '@/modules/core/lib/anz-holidays';
+import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useCreateShift } from '@/modules/rosters/state/useRosterShifts';
@@ -462,7 +462,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                   {/* Date Column Headers */}
                   {dates.map((date, idx) => {
                     const dateIsToday = format(date, 'yyyy-MM-dd') === todayISO();
-                    const holidayName = getAnzHolidayName(date);
+                    const holidayName = getPublicHolidayName(date);
                     return (
                       <div
                         role="columnheader"

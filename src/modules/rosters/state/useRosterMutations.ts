@@ -17,6 +17,7 @@ import { ROSTER_STRUCTURE_KEY } from './useRosterStructure';
 import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { templateKeys } from '@/modules/templates/hooks/queries/useTemplateQueries';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
+import { rostersApi } from '@/modules/rosters/api/rosters.api';
 
 // ── Helper to extract a user-facing message from any thrown value ─────────────
 
@@ -113,149 +114,57 @@ export function useAddSubGroupRange() {
   });
 }
 
-// ── useActivateRoster ─────────────────────────────────────────────────────────
+// NOTE: `useActivateRoster` (and the ActivateRosterDialog that never had a mount
+// point) were removed on 2026-08-05. Roster activation is implicit — the day
+// container is created on first write by sm_resolve_roster, called from
+// sm_create_shift, apply_template_to_date_range_v2 and sm_move_shift. The
+// underlying `activate_roster_for_range` RPC is left in place but has no callers.
+//
+// `useCreatePlanningPeriod` went the same way. It wrote a `planning_periods` row
+// that no screen in the application ever read — the only consumer was the dialog
+// that created it, checking for its own duplicates (5 rows against 193 rosters in
+// prod). Its two real jobs are now explicit: `useEnsureRosters` below creates the
+// day containers, and `useApplyTemplate` seeds the shifts. The RPC and the table
+// are left in place so the 99 rosters already linked to a period keep their
+// reference; nothing writes them any more.
 
-interface ActivateRosterVariables {
-  organizationId:  string;
-  departmentId:    string;
-  subDepartmentId: string | null;
-  startDate:       string;
-  endDate:         string;
+// ── useEnsureRosters ──────────────────────────────────────────────────────────
+
+interface EnsureRostersVariables {
+  organizationId:   string;
+  departmentId:     string;
+  /** May contain `null` — a department-level roster, not "unset". */
+  subDepartmentIds: (string | null)[];
+  startDate:        string;
+  endDate:          string;
 }
 
-export function useActivateRoster() {
+export function useEnsureRosters() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
   return useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async (vars: ActivateRosterVariables): Promise<any> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.rpc as any)('activate_roster_for_range', {
-        p_org_id:      vars.organizationId,
-        p_dept_id:     vars.departmentId,
-        p_sub_dept_id: vars.subDepartmentId,
-        p_start_date:  vars.startDate,
-        p_end_date:    vars.endDate,
-      });
-
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (vars: EnsureRostersVariables) =>
+      rostersApi.ensureRostersForRange(vars),
 
     onSuccess: (data) => {
-      // Structural change: refresh roster metadata + shift lists
       queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
 
-      const days = (data?.days_activated as number | undefined) ?? 0;
-      toast({
-        title:       days > 0 ? 'Roster Activated' : 'Roster Ready',
-        description: days > 0
-          ? `Successfully activated rosters for ${days} days.`
-          : 'Roster is already active for this range.',
-      });
+      // Report what actually happened, including the days deliberately not
+      // touched — a range starting in the past silently does less than the user
+      // asked for unless we say so.
+      const parts = [`${data.days_created} day${data.days_created !== 1 ? 's' : ''} prepared`];
+      if (data.days_existing > 0) parts.push(`${data.days_existing} already existed`);
+      if (data.days_skipped  > 0) parts.push(`${data.days_skipped} past day${data.days_skipped !== 1 ? 's' : ''} skipped`);
+
+      toast({ title: 'Days Prepared', description: `${parts.join(' · ')}.` });
     },
 
     onError: (err) => {
-      console.error('[useActivateRoster]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to activate roster'), variant: 'destructive' });
-    },
-  });
-}
-
-// ── useCreatePlanningPeriod ───────────────────────────────────────────────────
-
-interface CreatePlanningPeriodVariables {
-  organizationId: string;
-  departmentId:   string;
-  subDeptIds:     string[];
-  startDate:      string;
-  endDate:        string;
-  templateId?:    string | null;
-  autoSeed?:      boolean;
-  autoPublish?:   boolean;
-  overridePast?:  boolean;
-}
-
-export function useCreatePlanningPeriod() {
-  const queryClient = useQueryClient();
-  const { toast }   = useToast();
-
-  return useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async (vars: CreatePlanningPeriodVariables): Promise<any> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.rpc as any)('create_planning_period', {
-        p_org_id:        vars.organizationId,
-        p_dept_id:       vars.departmentId,
-        p_sub_dept_ids:  vars.subDeptIds,
-        p_start_date:    vars.startDate,
-        p_end_date:      vars.endDate,
-        p_template_id:   vars.templateId ?? null,
-        p_auto_seed:     vars.autoSeed  ?? true,
-        p_auto_publish:  vars.autoPublish ?? false,
-        p_override_past: vars.overridePast ?? false,
-      });
-      if (error) throw error;
-      return data;
-    },
-
-    onMutate: async (vars) => {
-      // Optimistic update for planning periods cache
-      await queryClient.cancelQueries({ queryKey: ['planning-periods', vars.organizationId, vars.departmentId] });
-      const previousPeriods = queryClient.getQueryData(['planning-periods', vars.organizationId, vars.departmentId]);
-
-      if (previousPeriods) {
-        queryClient.setQueryData(['planning-periods', vars.organizationId, vars.departmentId], (old: any) => [
-          {
-            id: 'optimistic-' + Math.random(),
-            department_id: vars.departmentId,
-            sub_department_ids: vars.subDeptIds,
-            start_date: vars.startDate,
-            end_date: vars.endDate,
-            status: 'draft',
-            is_optimistic: true,
-          },
-          ...(old || []),
-        ]);
-      }
-
-      return { previousPeriods };
-    },
-
-    onSuccess: (data, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['planning-periods', vars.organizationId, vars.departmentId] });
-      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
-
-      const days = (data?.days_created as number | undefined) ?? 0;
-      const seedResults = (data?.seed_results as any[]) ?? [];
-      const totalSkipped = seedResults.reduce((acc, r) => acc + (r.result?.shifts_skipped || 0), 0);
-      const totalCreated = seedResults.reduce((acc, r) => acc + (r.result?.shifts_created || 0), 0);
-
-      toast({
-        title: 'Planning Period Created',
-        description: `${days} roster day${days !== 1 ? 's' : ''} created. ${totalCreated} shifts seeded${totalSkipped > 0 ? ` (${totalSkipped} past shifts skipped)` : ''}.`,
-      });
-    },
-
-    onError: (err, vars, context) => {
-      if (context?.previousPeriods) {
-        queryClient.setQueryData(['planning-periods', vars.organizationId, vars.departmentId], context.previousPeriods);
-      }
-      console.error('[useCreatePlanningPeriod]', err);
-      toast({
-        title: 'Error',
-        description: errorMessage(err, 'Failed to create planning period'),
-        variant: 'destructive',
-      });
-    },
-
-    onSettled: (_data, _err, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['planning-periods', vars.organizationId, vars.departmentId] });
+      console.error('[useEnsureRosters]', err);
+      toast({ title: 'Error', description: errorMessage(err, 'Failed to prepare roster days'), variant: 'destructive' });
     },
   });
 }
@@ -384,7 +293,13 @@ interface ApplyTemplateVariables {
   targetSubDepartmentId?: string;
   /** When true, bypasses the "shift already started" temporal guard so managers can
    *  re-apply templates to today or past dates without an exception. The per-shift
-   *  template_instance_id duplicate check still prevents actual duplicates. */
+   *  template_instance_id duplicate check still prevents actual duplicates.
+   *
+   *  Defaults to FALSE. It previously defaulted to true, which meant every template
+   *  apply from the roster modal silently created shifts in the past — directly
+   *  against the rule that shifts are never created, edited or updated in the past
+   *  (decision 2026-08-05). Past shifts are now soft-skipped and reported through
+   *  `shifts_skipped`. Callers that genuinely need to backfill must opt in. */
   forceStack?:            boolean;
 }
 
@@ -404,7 +319,7 @@ export function useApplyTemplate() {
         p_source:                   vars.source,
         p_target_department_id:     vars.targetDepartmentId,
         p_target_sub_department_id: vars.targetSubDepartmentId,
-        p_force_stack:              vars.forceStack ?? true,
+        p_force_stack:              vars.forceStack ?? false,
       });
 
       if (error) throw error;
@@ -420,6 +335,24 @@ export function useApplyTemplate() {
 
       const shiftsCreated = (data?.shifts_created as number | undefined) ?? 0;
       const shiftsSkipped = (data?.shifts_skipped as number | undefined) ?? 0;
+
+      if (shiftsCreated === 0) {
+        // "Template Applied — Created 0 shifts" reads as success and explains
+        // nothing. Each template shift carries a weekday and
+        // apply_template_to_date_range_v2 only creates one on a matching day,
+        // so applying a Mon–Fri template to a Saturday is a no-op by design.
+        // The RPC does not report which rule rejected what, so this names the
+        // rule behind nearly every case rather than asserting a cause it
+        // cannot know.
+        toast({
+          title: 'No shifts created',
+          description:
+            'Each template shift is tied to a weekday, and none of them fall on the dates you chose. Check the template covers the days in your range.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       toast({
         title:       'Template Applied',
         description: `Created ${shiftsCreated} shift${shiftsCreated !== 1 ? 's' : ''}${shiftsSkipped > 0 ? ` (${shiftsSkipped} past shifts skipped)` : ''}.`,

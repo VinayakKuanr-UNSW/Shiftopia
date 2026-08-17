@@ -35,6 +35,7 @@ import { toast } from "sonner";
 
 // Domain
 import { shiftsQueries } from "../api/shifts.queries";
+import { rostersApi } from "../api/rosters.api";
 import { shiftKeys } from "../api/queryKeys";
 import { useShiftsByDate } from "../state/useRosterShifts";
 import type { Shift } from "../domain/shift.entity";
@@ -1308,27 +1309,35 @@ const LaborDemandForecastingPage: React.FC = () => {
       options,
     });
 
-    const rosters = await shiftsQueries.getRosters(organizationId, {
-      departmentId,
-      subDepartmentId: subDepartmentId ?? undefined,
-    });
-    const active = rosters.find(
-      (r) => r.start_date <= selectedDate && r.end_date >= selectedDate,
-    );
-    if (!active) {
-      log.warn("no active roster for date", {
+    // The synthesizer inserts into `shifts` directly (deliberately — it bypasses
+    // sm_create_shift's field allow-list), so it needs the roster id up front.
+    // Resolve-or-create rather than erroring: a day with no roster yet is a normal
+    // starting point now that activation is implicit. sm_resolve_roster still
+    // enforces roster.edit and refuses past dates.
+    let activeRosterId: string;
+    try {
+      activeRosterId = await rostersApi.resolveRoster({
+        organizationId,
+        departmentId,
+        subDepartmentId: subDepartmentId ?? null,
+        date: selectedDate,
+      });
+    } catch (err) {
+      log.warn("could not resolve a roster for date", {
         operation: "handleConfirmGeneration",
         date: selectedDate,
-        rostersFound: rosters.length,
+        error: err instanceof Error ? err.message : String(err),
       });
       toast.error(
-        `No active roster found for ${selectedDate}. Create a roster first.`,
+        err instanceof Error
+          ? err.message
+          : `Could not open a roster for ${selectedDate}.`,
       );
       return;
     }
-    log.info("active roster found", {
+    log.info("roster resolved", {
       operation: "handleConfirmGeneration",
-      rosterId: active.id,
+      rosterId: activeRosterId,
       date: selectedDate,
     });
 
@@ -1337,7 +1346,7 @@ const LaborDemandForecastingPage: React.FC = () => {
         organizationId,
         departmentId,
         subDepartmentId: subDepartmentId ?? null,
-        rosterId: active.id,
+        rosterId: activeRosterId,
         shiftDate: selectedDate,
         demandTensors: previewResponse?.appliedTensors ?? scopeDemand?.tensors ?? [],
         demandTensorRows: scopeDemand?.demandTensorRows ?? [],

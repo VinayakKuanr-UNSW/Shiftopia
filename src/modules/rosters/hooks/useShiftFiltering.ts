@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { parse } from 'date-fns';
 type BidWithEmployee = any;
 type GroupedBids = any;
-import { DateRange } from 'react-day-picker';
+import type { DateRange } from '@/modules/core/ui/calendar';
 
 export const useShiftFiltering = (bids: BidWithEmployee[], initialDateRange?: DateRange) => {
     // State for search and filters

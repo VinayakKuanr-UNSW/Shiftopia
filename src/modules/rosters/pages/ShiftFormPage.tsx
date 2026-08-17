@@ -74,6 +74,8 @@ const ShiftFormPage: React.FC = () => {
         // Statuses
         isAssignmentEnabled,
         minShiftHours,
+        shape,
+        shapeBlockers,
 
         // Values
         shiftLength,
@@ -266,6 +268,8 @@ const ShiftFormPage: React.FC = () => {
                         hardValidation={hardValidation}
                         isAssignmentEnabled={isAssignmentEnabled}
                         minShiftHours={minShiftHours}
+                        shape={shape}
+                        shapeBlockers={shapeBlockers}
                         compliancePanel={compliancePanel}
                         runV2Compliance={runChecks}
                         onUnpublish={handleUnpublish}

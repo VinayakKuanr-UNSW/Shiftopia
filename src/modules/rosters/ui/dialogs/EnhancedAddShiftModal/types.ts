@@ -1,7 +1,9 @@
+import type * as React from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { ShiftTimeRange, HardValidationResult, ComplianceResult } from '@/modules/compliance';
 import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
+import type { ShapeResult, ShapeHit } from '@/modules/compliance/shape';
 
 /* ============================================================
    FORM SCHEMA
@@ -23,6 +25,15 @@ export const formSchema = z.object({
     event_ids: z.array(z.string()).optional(),
     notes: z.string().optional(),
     is_training: z.boolean().optional(),
+    // Who this shift is for. MANDATORY — there is no "Any": the DB column is NOT
+    // NULL and the match is enforced hard at assignment time.
+    target_employment_type: z.enum(['FT', 'PT', 'Casual'], {
+        required_error: 'Target employment type is required',
+        invalid_type_error: 'Target employment type is required',
+    }),
+    // Only meaningful with a 'PT' target — mirrors
+    // shifts_target_flexible_requires_pt_check.
+    target_requires_flexible: z.boolean().optional(),
 });
 
 export type FormValues = z.infer<typeof formSchema>;
@@ -130,27 +141,13 @@ export interface Roster {
     }[];
 }
 
-export interface ShiftFormData {
-    roles: Role[];
-    remunerationLevels: RemunerationLevel[];
-    employees: Employee[];
-    skills: Skill[];
-    licenses: License[];
-    events: Event[];
-    rosters: Roster[];
-    isLoading: boolean;
-}
-
 /* ============================================================
-   STEP TYPES
+   RENDER LAYERS
+   The per-step prop interfaces (ScheduleStepProps, RoleStepProps,
+   RequirementsStepProps, ComplianceStepProps, AssignmentStepProps, BreakStepProps
+   and the shared StepProps) were deleted with the components they described.
+   Two render layers remain: the desktop drawer and the mobile sheet.
    ============================================================ */
-export interface StepProps {
-    form: any;
-    isReadOnly: boolean;
-    isLoadingData: boolean;
-    isTemplateMode: boolean;
-}
-
 export interface ShiftFormDrawerContentProps {
     form: ReturnType<typeof useForm<FormValues>>;
     isReadOnly: boolean;
@@ -160,7 +157,7 @@ export interface ShiftFormDrawerContentProps {
     isTemplateMode: boolean;
     editMode: boolean;
     existingShift?: any;
-    
+
     // Data
     roles: any[];
     remunerationLevels: any[];
@@ -185,11 +182,15 @@ export interface ShiftFormDrawerContentProps {
     hardValidation: any;
     isAssignmentEnabled: boolean;
     minShiftHours: number;
+    /** Employee-free EBA shape verdict for the current form values. */
+    shape: ShapeResult;
+    /** `shape.hits` filtered to the blocking ones, in field order. */
+    shapeBlockers: ShapeHit[];
 
     // Compliance
     compliancePanel: any;
     runV2Compliance: () => void;
-    
+
     // Handlers
     onUnpublish?: () => void;
     canUnpublish?: boolean;
@@ -207,69 +208,63 @@ export interface ShiftFormDrawerContentProps {
     completedSteps?: Set<number>;
 }
 
-export interface ScheduleStepProps extends StepProps {
+/**
+ * Props for the MOBILE bottom-sheet render layer (ShiftFormSheet).
+ *
+ * Deliberately not `ShiftFormDrawerContentProps`: the sheet has no wizard, so
+ * the step props (currentStep / onStepChange / completedSteps) are meaningless,
+ * and it owns the primary action itself instead of leaving it to a modal
+ * chrome above — hence canSave / isLoading / onSubmit / onCancel.
+ */
+export interface ShiftFormSheetProps {
+    form: ReturnType<typeof useForm<FormValues>>;
+    isReadOnly: boolean;
+    isPast?: boolean;
+    isStarted?: boolean;
+    isPublished?: boolean;
+    isTemplateMode: boolean;
+    editMode: boolean;
+    existingShift?: any;
+
+    // Data
+    roles: any[];
+    employees: any[];
+    skills: Skill[];
+    licenses: License[];
+    events: Event[];
+    rosters: any[];
+    isLoadingData: boolean;
+    isLoadingShifts: boolean;
+
+    // Derived / computed
+    resolvedContext: any;
+    selectedRosterId: string;
     shiftLength: number;
     netLength: number;
     hardValidation: any;
-    rosters: any[];
-    rosterStructure: any[];
-    selectedRosterId: string;
-    onRosterChange: (id: string) => void;
-    isGroupLocked?: boolean;
-    isSubGroupLocked?: boolean;
-    isRosterLocked?: boolean;
-    context?: ShiftContext | null;
-    activeSubGroups?: Record<string, any>;
-    roles: Role[];
-    remunerationLevels: RemunerationLevel[];
-    skills: Skill[];
-    licenses: License[];
-    events: Event[];
-    selectedRemLevel?: RemunerationLevel;
-    isRoleLocked?: boolean;
-}
+    minShiftHours: number;
+    /** Employee-free EBA shape verdict for the current form values. */
+    shape: ShapeResult;
+    /** `shape.hits` filtered to the blocking ones, in field order. */
+    shapeBlockers: ShapeHit[];
 
-export interface RoleStepProps extends StepProps {
-    roles: Role[];
-    remunerationLevels: RemunerationLevel[];
-    employees: Employee[];
-    existingShift?: any;
-    netLength: number;
-    selectedRemLevel?: any;
-    safeContext?: ShiftContext;
-    isRoleLocked?: boolean;
-    isEmployeeLocked?: boolean;
-}
-
-export interface BreakStepProps extends StepProps {
-    shiftLength: number;
-}
-
-export interface RequirementsStepProps extends StepProps {
-    skills: Skill[];
-    licenses: License[];
-    events: Event[];
-}
-
-export interface ComplianceStepProps {
-    isTemplateMode: boolean;
-    watchEmployeeId: string | null | undefined;
-    compliancePanel: UseCompliancePanelReturn;
-}
-
-export interface AssignmentStepProps {
-    form: any;
-    isReadOnly: boolean;
-    isLoadingData: boolean;
-    isTemplateMode: boolean;
-    employees: Employee[];
-    isEmployeeLocked?: boolean;
-    existingShift?: any;
     // Compliance
-    watchEmployeeId: string | null | undefined;
-    hardValidation: HardValidationResult;
     compliancePanel: UseCompliancePanelReturn;
-    /** v1 per-employee compliance runner for hover/inspect flow */
-    runChecks: (overrideEmployeeId?: string) => Promise<void>;
-    clearResults: () => void;
+
+    // Locks
+    isGroupLocked: boolean;
+    isSubGroupLocked: boolean;
+    isRoleLocked?: boolean;
+    isEmployeeLocked?: boolean;
+
+    // Actions
+    canUnpublish?: boolean;
+    onUnpublish?: () => void;
+    canSave: boolean;
+    /** Why `canSave` is false, phrased as the next action. `null` when saveable. */
+    saveBlockReason: string | null;
+    isLoading: boolean;
+    onSubmit: (values: FormValues) => void | Promise<void>;
+    onCancel: () => void;
+    containerRef?: React.Ref<HTMLDivElement>;
 }

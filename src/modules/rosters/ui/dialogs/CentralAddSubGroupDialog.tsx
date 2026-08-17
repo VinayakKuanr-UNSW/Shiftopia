@@ -29,11 +29,10 @@ import {
     format,
     startOfMonth,
     endOfMonth,
-    startOfWeek,
-    endOfWeek,
     addWeeks,
     addMonths,
 } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useAddSubGroupRange } from '@/modules/rosters/state/useRosterMutations';
 
 interface CentralAddSubGroupDialogProps {
@@ -73,7 +72,6 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
 
     // Roster period calculations
     const computedRange = useMemo(() => {
-        const weekOpts = { weekStartsOn: 1 as const };
         switch (preset) {
             case 'current-month':
                 return {
@@ -87,13 +85,13 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
                 };
             case 'this-week':
                 return {
-                    start: startOfWeek(selectedDate, weekOpts),
-                    end: endOfWeek(selectedDate, weekOpts),
+                    start: startOfWeekAU(selectedDate),
+                    end: endOfWeekAU(selectedDate),
                 };
             case 'next-week':
                 return {
-                    start: startOfWeek(addWeeks(selectedDate, 1), weekOpts),
-                    end: endOfWeek(addWeeks(selectedDate, 1), weekOpts),
+                    start: startOfWeekAU(addWeeks(selectedDate, 1)),
+                    end: endOfWeekAU(addWeeks(selectedDate, 1)),
                 };
             case 'custom':
             default:
@@ -141,37 +139,47 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[480px] bg-background border-border text-foreground shadow-2xl p-0 overflow-hidden ring-1 ring-border rounded-[2rem]">
-                <form onSubmit={handleSubmit}>
+            <DialogContent 
+                className="w-[calc(100vw-2rem)] sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-[2rem] border border-border bg-background text-foreground shadow-2xl backdrop-blur-xl ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+                aria-describedby="central-add-subgroup-description"
+            >
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-y-auto" noValidate>
                     {/* Header */}
-                    <div className="relative p-8 pb-6 border-b border-border bg-muted/20">
-                        <div className="absolute top-6 right-6 opacity-10">
-                            <FolderPlus className="h-20 w-20 text-primary" />
+                    <div className="relative p-6 sm:p-8 pb-5 border-b border-border bg-muted/20">
+                        <div className="absolute top-6 right-6 opacity-10 pointer-events-none">
+                            <FolderPlus className="h-16 w-16 sm:h-20 sm:w-20 text-primary" aria-hidden="true" />
                         </div>
-                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                            <FolderPlus className="h-5 w-5 text-primary" />
+                        <DialogTitle className="text-lg sm:text-xl font-bold flex items-center gap-2 text-foreground">
+                            <FolderPlus className="h-5 w-5 text-primary" aria-hidden="true" />
                             Add Roster Subgroup
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-muted-foreground mt-2">
+                        <DialogDescription id="central-add-subgroup-description" className="text-xs text-muted-foreground mt-1 leading-relaxed">
                             Create a new subgroup for managing shifts and assignments.
                         </DialogDescription>
                     </div>
 
                     {/* Body */}
-                    <div className="p-8 space-y-6">
+                    <div className="p-6 sm:p-8 space-y-5 flex-1">
                         {/* Group Selector */}
                         <div className="space-y-2">
-                            <Label className="text-[10px] uppercase font-black tracking-[0.15em] text-muted-foreground/75 flex items-center gap-2">
-                                <Sparkles className="h-3.5 w-3.5" />
+                            <Label 
+                                htmlFor="target-group-select"
+                                className="text-[10px] uppercase font-black tracking-[0.15em] text-muted-foreground flex items-center gap-2"
+                            >
+                                <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                                 Target Group
                             </Label>
                             <Select value={groupExternalId} onValueChange={setGroupExternalId}>
-                                <SelectTrigger className="bg-muted/50 border-border rounded-xl h-10">
+                                <SelectTrigger 
+                                    id="target-group-select"
+                                    className="bg-muted/50 border-border rounded-xl h-11 text-foreground"
+                                    aria-label="Select target group"
+                                >
                                     <SelectValue placeholder="Select group..." />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-popover border-border text-popover-foreground shadow-xl rounded-xl">
                                     {GROUP_OPTIONS.map((opt) => (
-                                        <SelectItem key={opt.value} value={opt.value}>
+                                        <SelectItem key={opt.value} value={opt.value} className="cursor-pointer py-2.5">
                                             {opt.label}
                                         </SelectItem>
                                     ))}
@@ -181,37 +189,46 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
 
                         {/* Period Selector */}
                         <div className="space-y-3">
-                            <Label className="text-[10px] uppercase font-black tracking-[0.15em] text-muted-foreground/75 flex items-center gap-2">
-                                <CalendarRange className="h-3.5 w-3.5" />
+                            <Label 
+                                htmlFor="roster-period-select"
+                                className="text-[10px] uppercase font-black tracking-[0.15em] text-muted-foreground flex items-center gap-2"
+                            >
+                                <CalendarRange className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                                 Roster Period
                             </Label>
                             <Select value={preset} onValueChange={(val: any) => setPreset(val)}>
-                                <SelectTrigger className="bg-muted/50 border-border rounded-xl h-10">
+                                <SelectTrigger 
+                                    id="roster-period-select"
+                                    className="bg-muted/50 border-border rounded-xl h-11 text-foreground"
+                                    aria-label="Select roster period"
+                                >
                                     <SelectValue placeholder="Select period..." />
                                 </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="current-month">Current Month ({format(selectedDate, 'MMMM yyyy')})</SelectItem>
-                                    <SelectItem value="next-month">Next Month ({format(addMonths(selectedDate, 1), 'MMMM yyyy')})</SelectItem>
-                                    <SelectItem value="this-week">This Week</SelectItem>
-                                    <SelectItem value="next-week">Next Week</SelectItem>
-                                    <SelectItem value="custom">Custom Range...</SelectItem>
+                                <SelectContent className="bg-popover border-border text-popover-foreground shadow-xl rounded-xl">
+                                    <SelectItem value="current-month" className="cursor-pointer py-2.5">Current Month ({format(selectedDate, 'MMMM yyyy')})</SelectItem>
+                                    <SelectItem value="next-month" className="cursor-pointer py-2.5">Next Month ({format(addMonths(selectedDate, 1), 'MMMM yyyy')})</SelectItem>
+                                    <SelectItem value="this-week" className="cursor-pointer py-2.5">This Week</SelectItem>
+                                    <SelectItem value="next-week" className="cursor-pointer py-2.5">Next Week</SelectItem>
+                                    <SelectItem value="custom" className="cursor-pointer py-2.5">Custom Range...</SelectItem>
                                 </SelectContent>
                             </Select>
 
                             {preset === 'custom' ? (
-                                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                     <input
                                         type="date"
                                         value={customStart}
                                         onChange={(e) => setCustomStart(e.target.value)}
-                                        className="flex-1 h-9 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                                        aria-label="Start date"
+                                        className="flex-1 h-10 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                     />
-                                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
                                     <input
                                         type="date"
                                         value={customEnd}
                                         onChange={(e) => setCustomEnd(e.target.value)}
-                                        className="flex-1 h-9 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                                        aria-label="End date"
+                                        className="flex-1 h-10 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                     />
                                 </div>
                             ) : (
@@ -223,45 +240,55 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
 
                         {/* Subgroup Name */}
                         <div className="space-y-2">
-                            <Label className="text-[10px] uppercase font-black tracking-[0.15em] text-muted-foreground/75">
-                                Subgroup Name
+                            <Label 
+                                htmlFor="central-subgroup-name-input"
+                                className="text-[10px] uppercase font-black tracking-[0.15em] text-muted-foreground flex items-center justify-between"
+                            >
+                                <span>Subgroup Name <span className="text-destructive">*</span></span>
+                                <span className="text-[10px] font-normal tracking-normal text-muted-foreground">{name.length}/50</span>
                             </Label>
                             <Input
+                                id="central-subgroup-name-input"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="e.g. Morning Shift, Logistics Team"
-                                className="bg-muted/50 border-border rounded-xl h-10"
+                                className="bg-muted/50 border-border rounded-xl h-11 text-base sm:text-sm text-foreground placeholder:text-muted-foreground/60"
                                 maxLength={50}
                                 required
+                                aria-required="true"
                             />
                         </div>
                     </div>
 
                     {/* Footer */}
-                    <DialogFooter className="bg-muted/30 border-t border-border p-6 flex-col sm:flex-row gap-3">
+                    <DialogFooter className="bg-muted/30 border-t border-border p-6 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5">
                         <Button
                             type="button"
                             variant="ghost"
                             onClick={() => onOpenChange(false)}
                             disabled={addSubGroupMutation.isPending}
-                            className="h-11 px-6 rounded-xl text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-muted"
+                            className="w-full sm:w-auto h-11 px-6 rounded-xl text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-muted"
+                            aria-label="Cancel and close dialog"
                         >
                             Cancel
                         </Button>
                         <Button
                             type="submit"
                             disabled={!canSubmit}
-                            className="flex-1 sm:flex-none h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 font-black text-xs uppercase tracking-[0.15em] transition-all active:scale-95"
+                            className="w-full sm:w-auto h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 font-black text-xs uppercase tracking-[0.15em] transition-all active:scale-95 flex items-center justify-center gap-2"
+                            aria-label={addSubGroupMutation.isPending ? "Adding subgroup..." : "Add Subgroup"}
+                            aria-busy={addSubGroupMutation.isPending}
                         >
                             {addSubGroupMutation.isPending ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Adding...
+                                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                    <span>Adding...</span>
+                                    <span className="sr-only">Adding subgroup, please wait...</span>
                                 </>
                             ) : (
                                 <>
-                                    <FolderPlus className="mr-2 h-4 w-4" />
-                                    Add Subgroup
+                                    <FolderPlus className="h-4 w-4" aria-hidden="true" />
+                                    <span>Add Subgroup</span>
                                 </>
                             )}
                         </Button>

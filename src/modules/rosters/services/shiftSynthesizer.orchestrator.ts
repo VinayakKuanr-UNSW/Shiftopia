@@ -35,6 +35,8 @@ import { deriveRoomCount } from './eventFeatureBuilder.service';
 //       When it is added (planned for a later phase), stamp it here on insert.
 //       For now we log the compliance result and proceed with Draft insertion.
 import { runV8Orchestrator } from '@/modules/compliance/v8/index';
+import { evaluateShiftShape } from '@/modules/compliance/shape';
+import type { ShapeEmploymentTarget } from '@/modules/compliance/shape';
 import { buildSkeletonInput } from '@/modules/planning/unified/compliance/input-builder';
 import type { V8OrchestratorInput, V8OrchestratorShift } from '@/modules/compliance/v8/index';
 
@@ -142,34 +144,63 @@ async function ensureDefaultRosterSubgroup(
 }
 
 /**
- * Run Compliance Engine v2 against a synthesized shift (skeleton mode -- no employee).
+ * Validate a synthesized shift before insertion (no employee assigned yet).
  *
- * Uses `employee_id: 'skeleton'` so only structural rules fire (R01 overlap,
- * R02 min length, R08 meal break). Employee-centric rules are skipped.
+ * Two layers, because they answer different questions:
  *
- * Returns the compliance status string. 'BLOCKING' shifts are still inserted
- * as Draft so managers can review -- they are never silently dropped.
+ *   1. SHAPE — is this shift lawful in itself? Minimum engagement (or the
+ *      full-time 7.6h floor), maximum duration, meal break, rest pauses. These
+ *      depend only on the shift, so they are checked here at CREATION. This
+ *      used to be done by running the V8 engine with `employee_id: 'skeleton'`
+ *      so that "only structural rules fire" — a workaround for the fact that
+ *      those rules lived behind an employee-scoped API. They no longer do.
+ *
+ *   2. V8 skeleton — the remaining employee-independent structural rules.
+ *
+ * Returns the combined status. 'BLOCKING' shifts are still inserted as Draft so
+ * managers can review — they are never silently dropped.
  */
 function runSkeletonCompliance(
   shift: SynthesizedShift,
   shiftDate: string,
 ): { status: string; blocked: boolean } {
+  const startTime = minutesToTime(shift.startMinutes);
+  const endTime = minutesToTime(shift.endMinutes);
+
+  // Layer 1 — shift shape. The synthesizer emits no breaks, so a synthesized
+  // shift over 5h will correctly raise the meal-break warning for the manager.
+  const shapeResult = evaluateShiftShape({
+    shift_date: shiftDate,
+    start_time: startTime,
+    end_time: endTime,
+    unpaid_break_minutes: 0,
+    paid_break_minutes: 0,
+    is_training: false,
+    target_employment_type: (shift.target_employment_type as ShapeEmploymentTarget) ?? 'Casual',
+  });
+
+  // Layer 2 — remaining structural V8 rules.
   const candidateShift: V8OrchestratorShift = {
     id: `synth-${shift.roleId}-${shift.startMinutes}-${shift.endMinutes}`,
     date: shiftDate,
-    start_time: minutesToTime(shift.startMinutes),
-    end_time: minutesToTime(shift.endMinutes),
+    start_time: startTime,
+    end_time: endTime,
     role_id: shift.roleId,
     required_qualifications: [],
     is_ordinary_hours: true,
     break_minutes: 0,
   };
 
-  const input = buildSkeletonInput({ candidateShift });
+  const result = runV8Orchestrator(buildSkeletonInput({ candidateShift }));
 
-  const result = runV8Orchestrator(input);
-  const blocked = result.overall_status === 'BLOCKING';
-  return { status: result.overall_status, blocked };
+  const blocked = shapeResult.blocking || result.overall_status === 'BLOCKING';
+  const status = blocked
+    ? 'BLOCKING'
+    : (shapeResult.status === 'WARNING' || result.overall_status === 'WARNING')
+      ? 'WARNING'
+      : result.overall_status;
+
+  return { status, blocked };
 }
 
 /**

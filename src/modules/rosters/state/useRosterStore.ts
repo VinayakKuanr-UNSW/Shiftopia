@@ -20,12 +20,12 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   addDays, subDays,
-  startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
   eachDayOfInterval,
   format,
   parseISO,
 } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 // ── Re-exported types (match what was exported from RosterUIContext) ──────────
@@ -329,8 +329,8 @@ export const selectDateRange = (s: RosterState): DateRange => {
     case '3day':
       return { from: date, to: addDays(date, 2) };
     case 'week': {
-      const from = startOfWeek(date, { weekStartsOn: 1 });
-      const to = endOfWeek(date, { weekStartsOn: 1 });
+      const from = startOfWeekAU(date);
+      const to = endOfWeekAU(date);
       return { from, to };
     }
     case 'month':

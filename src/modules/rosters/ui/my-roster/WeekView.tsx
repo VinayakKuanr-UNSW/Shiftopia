@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { startOfWeek, addDays } from 'date-fns';
+import { addDays } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import TimeGrid, { HOUR_HEIGHT } from '@/modules/rosters/ui/components/TimeGrid';
 import { Shift } from '@/modules/rosters';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
@@ -49,7 +50,7 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
   } | null>(null);
 
   // Start week on Monday (app-wide Mon–Sun convention)
-  const start = startOfWeek(date, { weekStartsOn: 1 });
+  const start = startOfWeekAU(date);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
 

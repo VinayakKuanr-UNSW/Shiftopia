@@ -1,7 +1,8 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format, addDays, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { format, addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useAuth } from '@/platform/auth/useAuth';
 import { CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
@@ -37,8 +38,8 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
             start = selectedDate;
             end = addDays(selectedDate, 2);
         } else if (view === 'week') {
-            start = startOfWeek(selectedDate, { weekStartsOn: 1 });
-            end = endOfWeek(selectedDate, { weekStartsOn: 1 });
+            start = startOfWeekAU(selectedDate);
+            end = endOfWeekAU(selectedDate);
         } else if (view === 'month') {
             start = startOfMonth(selectedDate);
             end = endOfMonth(selectedDate);

@@ -21,6 +21,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 import { isValidUuid } from '../domain/shift.entity';
+import { isFlexibleEmploymentStatus } from '@/modules/core/model/employment.types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,15 @@ export interface EligibleEmployee {
     department_name?: string;
     sub_department_name?: string;
     contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    /**
+     * The in-scope contract's raw `employment_status`. Kept ALONGSIDE
+     * `contract_type` because that field collapses 'Flexible Part-Time' onto
+     * 'PT' and callers that need the distinction (the employment-target filter,
+     * the assignment picker's badges) cannot recover it afterwards.
+     */
+    employment_status?: string | null;
+    /** Convenience mirror of `isFlexibleEmploymentStatus(employment_status)`. */
+    is_flexible?: boolean;
     contracted_role_ids?: string[];
     contracted_weekly_hours?: number;
 }
@@ -181,6 +191,21 @@ export const EligibilityService = {
                     if (!hasRole) return;
                 }
 
+                // Employment status is a property of the CONTRACT, not the person:
+                // the same profile can be Casual in one sub-department and Part-Time
+                // in another. So `employment_status` below must be read from a
+                // contract that is in scope for THIS lookup, not from whichever
+                // active contract happened to sort first.
+                //
+                // A contract with sub_department_id === null is org/dept-wide and
+                // therefore in scope for every sub-department under it — the same
+                // rule the SubDept verification above already applies. Excluding
+                // those would hide staff who are legitimately assignable.
+                const scopedContracts = (context.subDepartmentId && isValidUuid(context.subDepartmentId))
+                    ? activeContracts.filter((c: any) =>
+                        c.sub_department_id === context.subDepartmentId || c.sub_department_id === null)
+                    : activeContracts;
+
                 // Skills match verification
                 if (context.skills && context.skills.length > 0) {
                     const empSkills = row.employee_skills || [];
@@ -205,7 +230,10 @@ export const EligibilityService = {
                     if (!hasAllLicenses) return;
                 }
 
-                const displayContract = activeContracts[0] || contracts[0];
+                // Prefer a contract that is actually in scope for this lookup — with
+                // multiple active contracts, activeContracts[0] could describe a
+                // different sub-department than the one being planned.
+                const displayContract = scopedContracts[0] || activeContracts[0] || contracts[0];
 
                 profilesMap.set(row.id, {
                     id: row.id,
@@ -217,6 +245,8 @@ export const EligibilityService = {
                                   displayContract?.employment_status === 'Part-Time' ? 'PT' :
                                   displayContract?.employment_status === 'Casual' ? 'CASUAL' :
                                   displayContract?.employment_status === 'Flexible Part-Time' ? 'PT' : null,
+                    employment_status: displayContract?.employment_status ?? null,
+                    is_flexible: isFlexibleEmploymentStatus(displayContract?.employment_status),
                     contracted_role_ids: Array.from(new Set(activeContracts.map((c: any) => c.role_id).filter(Boolean))),
                     contracted_weekly_hours: displayContract?.contracted_weekly_hours ?? 38
                 } as EligibleEmployee);

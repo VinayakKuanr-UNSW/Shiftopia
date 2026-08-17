@@ -167,6 +167,17 @@ export const shiftsCommands = {
             creation_source: shiftData.creation_source ?? (shiftData.is_from_template ? 'template' : 'manual'),
             assignment_source: shiftData.assigned_employee_id ? (shiftData.assignment_source ?? 'direct') : null,
             is_training: shiftData.is_training ?? false,
+            // Planning target. `null` = "Any employment type". Persisted by
+            // sm_create_shift as of 20260805060000 — before that migration this
+            // key was silently swallowed by the RPC's explicit column list.
+            target_employment_type: shiftData.target_employment_type ?? null,
+            // Coerce the pair into a coherent state rather than letting
+            // shifts_target_flexible_requires_pt_check reject the write: the flag
+            // is only meaningful for a PT target.
+            target_requires_flexible:
+                shiftData.target_employment_type === 'PT'
+                    ? (shiftData.target_requires_flexible ?? false)
+                    : false,
         };
 
         const newV8ShiftId = await callRpc('sm_create_shift', {
@@ -297,6 +308,28 @@ export const shiftsCommands = {
         if (updates.tags !== undefined) excludedPayload.tags = updates.tags;
         if (updates.cancellation_reason !== undefined)
             excludedPayload.cancellation_reason = updates.cancellation_reason;
+
+        // Employment target: a PLANNING attribute, in the same family as `tags`.
+        // It is deliberately NOT routed through the gateway `edit` op — that op's
+        // server-side whitelist does not carry these keys, so sending them there
+        // would be silently dropped (`NO_EDITABLE_FIELDS` / ignored key). It also
+        // drives no FSM transition and no compliance gate, so the direct-update
+        // path the other planning fields already use is the correct home.
+        //
+        // Both keys move together so the pair can never violate
+        // shifts_target_flexible_requires_pt_check: clearing the type to "Any"
+        // must also clear the flexible flag.
+        // The flag is only writable alongside the type it qualifies. Writing it
+        // alone is rejected rather than guessed at: we would have to read the
+        // shift's current target to know whether `true` is even legal, and a
+        // wrong guess either trips the CHECK or silently clears the planner's
+        // intent. Every caller in the app submits the pair together.
+        if (updates.target_employment_type !== undefined) {
+            const nextTarget = updates.target_employment_type ?? null;
+            excludedPayload.target_employment_type = nextTarget;
+            excludedPayload.target_requires_flexible =
+                nextTarget === 'PT' ? (updates.target_requires_flexible ?? false) : false;
+        }
 
         const hasEdit = Object.keys(editPayload).length > 0;
         const hasExcluded = Object.keys(excludedPayload).length > 0;

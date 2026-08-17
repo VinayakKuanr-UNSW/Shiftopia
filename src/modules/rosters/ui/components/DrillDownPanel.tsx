@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { 
   useShiftsByDateRange,
@@ -40,6 +40,8 @@ interface DrillDownPanelProps {
   organizationId?: string;
   departmentId?: string;
   subDepartmentId?: string;
+  departmentIds?: string[];
+  subDepartmentIds?: string[];
   groupName: string;
   rosterId?: string;
 }
@@ -53,6 +55,8 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   organizationId,
   departmentId,
   subDepartmentId,
+  departmentIds,
+  subDepartmentIds,
   groupName,
   rosterId,
 }) => {
@@ -81,24 +85,51 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const unpublishMutation = useUnpublishShift();
   const createShiftMutation = useCreateShift();
 
-  // Fetch only when panel is open
-  const queryOrgId = isOpen ? organizationId || null : null;
-  const { data: shifts = [], isLoading } = useShiftsByDateRange(
-    queryOrgId,
-    date,
-    date,
-    {
-      departmentIds: departmentId ? [departmentId] : undefined,
-      subDepartmentIds: subDepartmentId ? [subDepartmentId] : undefined,
-    }
+  // Fetch data with guaranteed organization ID fallback and enabled only when modal is open
+  const activeOrgId = organizationId || useRosterStore.getState().selectedOrganizationId || '00000000-0000-0000-0000-000000000001';
+
+  // Scope the fetch to the SAME org/department/sub-department the bucket cell
+  // was aggregated over. `get_roster_summary` (which produced the count the
+  // manager clicked) filters on p_department_ids / p_sub_department_ids, so
+  // fetching org-wide here and filtering only on group_type + sub_group_name
+  // made the panel disagree with its own cell whenever a department filter was
+  // active, or whenever two departments share a bucket name.
+  // Shape matches the planner's `queryFilters` (undefined when empty) so the
+  // query key stays stable across renders.
+  const shiftFilters = useMemo(() => ({
+    departmentIds: departmentIds && departmentIds.length > 0 ? departmentIds : undefined,
+    subDepartmentIds: subDepartmentIds && subDepartmentIds.length > 0 ? subDepartmentIds : undefined,
+  }), [departmentIds, subDepartmentIds]);
+
+  const {
+    data: shifts = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useShiftsByDateRange(
+    isOpen && !!date ? activeOrgId : null,
+    date || null,
+    date || null,
+    shiftFilters,
   );
 
-  // Filter shifts
-  const filteredShifts = shifts.filter(s => {
-    if (s.group_type !== groupType) return false;
-    if (subGroupName && s.sub_group_name !== subGroupName) return false;
-    return true;
-  });
+  // Filter shifts with robust fallback normalization, trimming, and case-insensitivity
+  const filteredShifts = useMemo(() => {
+    if (!isOpen || !date) return [];
+    return shifts.filter(s => {
+      const sGroupType = (s.group_type || 'convention_centre').trim().toLowerCase();
+      const targetGroupType = (groupType || 'convention_centre').trim().toLowerCase();
+      if (sGroupType !== targetGroupType) return false;
+
+      if (subGroupName) {
+        const sSubGroup = (s.sub_group_name || 'General').trim().toLowerCase();
+        const targetSubGroup = subGroupName.trim().toLowerCase();
+        if (sSubGroup !== targetSubGroup) return false;
+      }
+      return true;
+    });
+  }, [isOpen, date, shifts, groupType, subGroupName]);
 
   // Bulk Mode Store selectors & actions
   const bulkModeActive = useRosterStore((s) => s.bulkModeActive);
@@ -328,6 +359,19 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
       <div
         onClick={onClose}
         aria-hidden={!isOpen}
+        // `inert` as well as aria-hidden. The panel stays mounted while closed
+        // so it can animate out, but opacity-0 does not remove its buttons from
+        // the tab order — so focus could sit inside an aria-hidden subtree, and
+        // Chrome refuses that outright:
+        //   "Blocked aria-hidden on an element because its descendant retained
+        //    focus ... Consider using the inert attribute instead."
+        // inert hides it from AT *and* makes it unfocusable, which is what the
+        // closed state actually means.
+        //
+        // Spread rather than a plain prop: React 18 has no typed `inert`, and
+        // inert={false} would still serialise as an attribute (inert is
+        // presence-based), leaving the panel permanently inert.
+        {...(!isOpen ? ({ inert: '' } as Record<string, string>) : {})}
         className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <div
@@ -400,6 +444,19 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin mb-4" />
               <p>Loading full shift details...</p>
+            </div>
+          ) : isError ? (
+            // A failed fetch must NOT masquerade as an empty day — that is how a
+            // rejected select (bad column / bad embed) read as "no shifts here"
+            // while the bucket cell, served by an RPC, still showed a count.
+            <div className="flex flex-col items-center justify-center h-40 text-center gap-3 px-4">
+              <p className="text-sm font-medium text-destructive">Couldn’t load shifts for this day.</p>
+              <p className="text-xs text-muted-foreground max-w-md break-words">
+                {(error as Error)?.message || 'Unknown error'}
+              </p>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => refetch()}>
+                Retry
+              </Button>
             </div>
           ) : filteredShifts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-center">

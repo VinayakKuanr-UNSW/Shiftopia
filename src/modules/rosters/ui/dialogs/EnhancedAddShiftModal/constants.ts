@@ -1,5 +1,6 @@
-// Drawer wizard: 1 Schedule & Details · 2 Assignment · 3 Compliance & Notes
-export const TOTAL_STEPS = 3;
+// The drawer wizard derives its step count from STEP_META.length — the single
+// source of truth lives beside the step definitions in ShiftFormDrawerContent.
+// A TOTAL_STEPS constant used to live here saying 3 while the drawer rendered 5.
 
 export const TIMEZONES = [
     { value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },

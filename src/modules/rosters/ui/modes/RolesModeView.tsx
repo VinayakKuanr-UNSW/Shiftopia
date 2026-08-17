@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
-import { format, addDays, startOfWeek, parse, isToday } from 'date-fns';
+import { format, addDays, parse, isToday } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import { 
   Plus, 
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
-import { getAnzHolidayName } from '@/modules/core/lib/anz-holidays';
+import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import {
     Tooltip,
@@ -326,7 +327,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const { data: roles = [], isLoading: isLoadingRoles } = useRoles(organizationId, activeDeptId, activeSubDeptId);
 
   const startDate = useMemo(() => {
-    if (viewType === 'week') return format(startOfWeek(selectedDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    if (viewType === 'week') return format(startOfWeekAU(selectedDate), 'yyyy-MM-dd');
     // Month: first of month minus the buffer (calendar continuity + matches fetch).
     if (viewType === 'month') return format(addDays(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1), -MONTH_BUFFER_DAYS), 'yyyy-MM-dd');
     return format(selectedDate, 'yyyy-MM-dd');
@@ -632,7 +633,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Role Description</span>
               </th>
               {dates.map(date => {
-                const holidayName = getAnzHolidayName(date);
+                const holidayName = getPublicHolidayName(date);
                 const isToday = format(date, 'yyyy-MM-dd') === todayISO();
                 return (
                   <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-border bg-muted/30 transition-colors", holidayName ? "bg-amber-500/10 border-amber-500/30" : isToday && "bg-primary/5")}>

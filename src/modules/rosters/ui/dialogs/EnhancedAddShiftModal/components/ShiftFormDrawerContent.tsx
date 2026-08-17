@@ -15,7 +15,7 @@
  * single staggered entrance. Theme-aware via semantic tokens (light + dark).
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import {
     FormControl,
@@ -75,6 +75,11 @@ import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { MultiSelect } from './MultiSelect';
 import type { ShiftFormDrawerContentProps } from '../types';
 import { formatHours, calculateShiftLength } from '../utils';
+import {
+    TARGET_EMPLOYMENT_TYPES,
+    TARGET_EMPLOYMENT_TYPE_LABELS,
+    contractMatchesTarget,
+} from '@/modules/core/model/employment.types';
 
 /* ═══════════════════════════════════════════════════════════════════════
    CONSTANTS
@@ -222,6 +227,7 @@ const CardHeader = ({
     state,
     completed,
     badge,
+    headingRef,
 }: {
     icon: React.ElementType;
     step: number;
@@ -231,6 +237,8 @@ const CardHeader = ({
     state: CardState;
     completed?: boolean;
     badge?: React.ReactNode;
+    /** Focus lands here when the wizard advances — see `stepHeadingRef`. */
+    headingRef?: React.Ref<HTMLHeadingElement>;
 }) => {
     const a = ACCENT[accent];
     return (
@@ -269,7 +277,11 @@ const CardHeader = ({
                             Step {step}
                         </span>
                     </div>
-                    <h3 className="truncate text-[15px] font-bold leading-tight tracking-tight text-foreground">
+                    <h3
+                        ref={headingRef}
+                        tabIndex={headingRef ? -1 : undefined}
+                        className="truncate text-[15px] font-bold leading-tight tracking-tight text-foreground outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                    >
                         {title}
                     </h3>
                     <p className="truncate text-[11px] font-medium text-muted-foreground/70">
@@ -301,7 +313,7 @@ const StatusBadge = ({
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.14em] whitespace-nowrap',
+                'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-bold uppercase tracking-[0.14em] whitespace-nowrap',
                 cls,
             )}
         >
@@ -344,7 +356,7 @@ const StatChip = ({
                     : 'border-border/50 bg-muted/60 dark:bg-zinc-800/70',
             )}
         >
-            <p className="mb-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+            <p className="mb-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
                 {label}
             </p>
             <p className={cn('font-mono text-lg font-black leading-none', colorClass)}>
@@ -380,6 +392,8 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     netLength,
     hardValidation,
     minShiftHours,
+    shape,
+    shapeBlockers,
     compliancePanel,
     onUnpublish,
     canUnpublish,
@@ -397,24 +411,51 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     const watchGroup        = form.watch('group_type');
     const watchSubGroupName = form.watch('sub_group_name');
     const watchUnpaidBreak  = form.watch('unpaid_break_minutes');
+    const watchPaidBreak    = form.watch('paid_break_minutes');
+    const watchIsTraining   = form.watch('is_training');
     const watchStart        = form.watch('start_time');
     const watchEnd          = form.watch('end_time');
     const watchV8RoleId     = form.watch('role_id');
     const watchEmployeeId   = form.watch('assigned_employee_id');
+    const watchTargetType   = form.watch('target_employment_type');
+    const watchTargetFlex   = form.watch('target_requires_flexible');
 
-    const isStep1Valid = !!watchGroup && !!watchSubGroupName && !!watchV8RoleId;
-    const isStep2Valid = true; // Details/notes/events/training are optional
-    const isStep3Valid = !!watchStart && !!watchEnd && (isTemplateMode || !!watchShiftDate);
-    const isStep4Valid = true; // Assignment is optional
+    /* ── Wizard steps ──
+     * Three steps, not five. Two of the old five gated nothing at all
+     * (`isStep2Valid = true`, `isStep4Valid = true`) and the fifth had no Next,
+     * so three of them were pagination charging a click each. Requirements now
+     * shares a step with Role, and Compliance shares one with Assignment — the
+     * cards still render separately, they just no longer sit behind their own
+     * Next button.
+     *
+     * `STEP` is the single source of which step a card belongs to; nothing in
+     * this file compares `wizardStep` to a bare number. */
+    const STEP = { role: 1, requirements: 1, timings: 2, assignment: 3, compliance: 3 } as const;
+
+    /* `shape` / `shapeBlockers` arrive as props from the orchestrator — this
+     * file is a render layer and must not decide whether a shift is legal.
+     * Timings previously checked only that start/end were FILLED IN, so a 13h
+     * shift with no meal break advanced cleanly and the break requirement was a
+     * dismissible nudge. Shape breaches are blocking, so they gate the step. */
+    const isRoleStepValid = !!watchGroup && !!watchSubGroupName && !!watchV8RoleId;
+    // `shape.status === 'INCOMPLETE'` covers both a missing and a half-typed
+    // time, which raw truthiness on the field does not.
+    const isTimingsStepValid = shape.status !== 'INCOMPLETE'
+        && (isTemplateMode || !!watchShiftDate)
+        && !shape.blocking;
+
+    const isStepValid = (step: number): boolean =>
+        step === STEP.role ? isRoleStepValid
+        : step === STEP.timings ? isTimingsStepValid
+        : true;   // Assignment + Compliance are optional — an open shift is valid
 
     // Highest step the user is allowed to reach.
     const maxUnlockedStep = useMemo(() => {
-        if (!isStep1Valid) return 1;
-        if (!isStep2Valid) return 2;
-        if (!isStep3Valid) return 3;
-        if (!isStep4Valid) return 4;
-        return 5;
-    }, [isStep1Valid, isStep2Valid, isStep3Valid, isStep4Valid]);
+        if (!isRoleStepValid) return STEP.role;
+        if (!isTimingsStepValid) return STEP.timings;
+        return STEP.assignment;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRoleStepValid, isTimingsStepValid]);
 
     const cardState = (step: number): CardState =>
         wizardStep === step ? 'active' : step <= maxUnlockedStep ? 'enabled' : 'locked';
@@ -423,17 +464,35 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
         if (step <= maxUnlockedStep) setWizardStep(step);
     };
 
-    /* ── Auto-run compliance on entering Step 5 ──
-       The panel/hook never self-run by design — the wizard drives it here so a
-       changed input can't leave a stale/red verdict on screen. Runs only for an
-       assigned, editable shift, once the employee's shift history has loaded, and
-       only when the panel is idle or stale (never mid-run/results — the status
-       guard + the hook's internal runningRef prevent any re-run loop). */
+    /* ── Focus management on step change ──
+       Changing step swaps the whole card body while focus stays on the Next
+       button, so a screen-reader user hears nothing about the new step and a
+       keyboard user tabs onward from a control whose context silently changed.
+       Move focus to the new step's heading instead. Skipped on first render so
+       opening the modal does not steal focus from the focus trap's own target. */
+    const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+    const didMountRef = useRef(false);
+    useEffect(() => {
+        if (!didMountRef.current) { didMountRef.current = true; return; }
+        stepHeadingRef.current?.focus();
+    }, [wizardStep]);
+
+    /* ── Auto-run compliance as soon as an employee is chosen ──
+       Previously gated on `wizardStep === STEP.compliance`, which meant a manager picked a
+       person, advanced a step, and only then learned they were ineligible. The
+       verdict depends on the employee and the schedule, not on which step is on
+       screen, so it runs the moment both are known.
+
+       The panel/hook never self-run by design — this drives it so a changed
+       input cannot leave a stale verdict on screen. Runs only for an assigned,
+       editable shift, once the employee's shift history has loaded, and only
+       when the panel is idle or stale (never mid-run/results — the status guard
+       plus the hook's internal runningRef prevent any re-run loop). */
     const panelStatus = compliancePanel.status;
     useEffect(() => {
-        if (wizardStep !== 5) return;
         if (isReadOnly || isTemplateMode) return;
         if (!watchEmployeeId) return;      // unassigned → compliance not required
+        if (!isTimingsStepValid) return;   // no lawful schedule to evaluate yet
         if (isLoadingShifts) return;       // wait for existing-shift history to load
         if (panelStatus === 'idle' || panelStatus === 'stale') {
             compliancePanel.run();
@@ -442,16 +501,13 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
         // so listing it would fire this effect on every render. The status guard
         // above makes the current-closure run() safe.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [wizardStep, watchEmployeeId, isReadOnly, isTemplateMode, isLoadingShifts, panelStatus]);
+    }, [watchEmployeeId, isReadOnly, isTemplateMode, isLoadingShifts, panelStatus, isTimingsStepValid]);
 
-    /* ── Break recommendation logic ── */
-    const localShiftLength = useMemo(
-        () => calculateShiftLength(watchStart, watchEnd),
-        [watchStart, watchEnd],
-    );
-    const reqUnpaid    = localShiftLength > 10 ? 60 : localShiftLength > 5 ? 30 : 0;
-    const curUnpaid    = watchUnpaidBreak ?? 0;
-    const showUnpaidRec = !isReadOnly && reqUnpaid > 0 && curUnpaid < reqUnpaid;
+    /* ── Break requirements ──
+     * Owned by `@/modules/compliance/shape` (see `shape` above). The local
+     * `reqUnpaid = >10h ? 60 : >5h ? 30 : 0` ladder that used to live here was a
+     * fifth copy of a rule the engine also held, and it drove a dismissible
+     * "Apply" nudge rather than a gate. */
 
     /* ── Available Groups from Roster ── */
     const availableGroups = useMemo(() => {
@@ -482,7 +538,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     }, [watchShiftDate, resolvedContext.date]);
 
     /* ── Employee pool filtering ── */
-    const filteredEmployees = useMemo(() => {
+    const searchedEmployees = useMemo(() => {
         const q = poolQuery.trim().toLowerCase();
         if (!q) return employees;
         return employees.filter(e => {
@@ -490,6 +546,28 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
             return name.toLowerCase().includes(q);
         });
     }, [employees, poolQuery]);
+
+    /* ── Employment-target filter (HARD) ──
+       The target is a requirement, not a preference: a mismatched assignment is
+       rejected by the V8 rule, by the solver, and ultimately by
+       trg_shift_employment_target_2_enforce. Showing an unassignable person here
+       would only produce a save that fails, so they are excluded outright.
+
+       `employment_status` is the in-scope contract's raw status, so a person who
+       is Casual here but Part-Time elsewhere is judged on the contract that
+       applies to THIS sub-department. */
+    const filteredEmployees = useMemo(() => {
+        if (!watchTargetType) return searchedEmployees;
+        return searchedEmployees.filter(e =>
+            contractMatchesTarget(
+                e.employment_status ?? e.contract_type,
+                watchTargetType,
+                watchTargetType === 'PT' && !!watchTargetFlex,
+            ),
+        );
+    }, [searchedEmployees, watchTargetType, watchTargetFlex]);
+
+    const excludedByTargetCount = searchedEmployees.length - filteredEmployees.length;
 
     const displayNameOf = (e: any) =>
         e.profiles?.full_name || e.full_name || `${e.first_name ?? ''} ${e.last_name ?? ''}`.trim() || 'Employee';
@@ -512,20 +590,15 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
 
     const blockers = compliancePanel.result?.summary?.blockers ?? 0;
 
+    /** The stepper rail. Length is the step count — no separate constant to drift. */
     const STEP_META = [
-        { n: 1, label: 'Role & Context', accent: 'amber' as Accent },
-        { n: 2, label: 'Requirements', accent: 'amber' as Accent },
-        { n: 3, label: 'Timings', accent: 'cyan' as Accent },
-        { n: 4, label: 'Assignment', accent: 'emerald' as Accent },
-        { n: 5, label: 'Compliance', accent: watchEmployeeId ? ('indigo' as Accent) : ('slate' as Accent) },
+        { n: STEP.role,       label: 'Role & Details', accent: 'amber' as Accent },
+        { n: STEP.timings,    label: 'Timings',        accent: 'cyan' as Accent },
+        { n: STEP.assignment, label: 'Assignment',     accent: watchEmployeeId ? ('emerald' as Accent) : ('slate' as Accent) },
     ];
+    const TOTAL_STEPS = STEP_META.length;
 
-    const nextDisabled =
-        (wizardStep === 1 && !isStep1Valid) ||
-        (wizardStep === 2 && !isStep2Valid) ||
-        (wizardStep === 3 && !isStep3Valid) ||
-        (wizardStep === 4 && !isStep4Valid) ||
-        wizardStep === 5;
+    const nextDisabled = wizardStep >= TOTAL_STEPS || !isStepValid(wizardStep);
 
     return (
         <div className="flex min-h-0 flex-1 flex-col bg-card dark:bg-[#0a0c10]">
@@ -540,14 +613,14 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                         <h2 className="mb-0.5 text-[10px] font-black uppercase leading-none tracking-[0.18em] text-foreground/90">
                             {editMode ? 'Update Shift' : 'New Shift'}
                         </h2>
-                        <p className="font-mono text-[9px] leading-none text-muted-foreground/80">
+                        <p className="font-mono text-[11px] leading-none text-muted-foreground/80">
                             {editMode && existingShift?.id
                                 ? `#${existingShift.id.slice(0, 8).toUpperCase()}`
                                 : dateDisplay}
                         </p>
                     </div>
                 </div>
-                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
+                <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">
                     {STEP_META[wizardStep - 1].label}
                 </span>
             </div>
@@ -555,7 +628,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
             {readOnlyBanner && (
                 <div className="flex-shrink-0 border-b border-border/40 px-5 py-2">
                     <div className={cn(
-                        'flex items-center gap-2 rounded-lg border p-2 text-[9px] font-bold uppercase tracking-widest',
+                        'flex items-center gap-2 rounded-lg border p-2 text-[11px] font-bold uppercase tracking-widest',
                         readOnlyBanner.kind === 'published'
                             ? 'border-purple-500/20 bg-purple-500/5 text-purple-400'
                             : 'border-slate-500/20 bg-slate-500/5 text-slate-400',
@@ -569,7 +642,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 variant="ghost"
                                 size="sm"
                                 onClick={onUnpublish}
-                                className="ml-auto h-6 border border-purple-500/20 bg-purple-500/10 px-2 text-[8px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/20"
+                                className="ml-auto h-6 border border-purple-500/20 bg-purple-500/10 px-2 text-[10px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/20"
                             >
                                 Unpublish
                             </Button>
@@ -646,21 +719,22 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                 <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
 
                     {/* ─────────── CARD 1 · Role & Context ─────────── */}
-                    {wizardStep === 1 && (
+                    {wizardStep === STEP.role && (
                     <Card
                         accent="amber"
-                        state={cardState(1)}
+                        state={cardState(STEP.role)}
                         index={0}
-                        onClick={() => goToStep(1)}
+                        onClick={() => goToStep(STEP.role)}
                     >
                         <CardHeader
                             icon={Briefcase}
-                            step={1}
+                            step={STEP.role}
+                            headingRef={stepHeadingRef}
                             title="Role & Context"
                             subtitle="Who & where this shift sits"
                             accent="amber"
-                            state={cardState(1)}
-                            completed={isStep1Valid}
+                            state={cardState(STEP.role)}
+                            completed={isRoleStepValid}
                             badge={<StatusBadge tone="accent" accent="amber">Required</StatusBadge>}
                         />
 
@@ -705,7 +779,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     field.onChange(val);
                                                     form.setValue('sub_group_name', '', { shouldValidate: false });
                                                 }}
-                                                disabled={isReadOnly || wizardStep !== 1}
+                                                disabled={isReadOnly || wizardStep !== STEP.role}
                                             >
                                                 <FormControl>
                                                     <SelectTrigger className="h-11 rounded-lg border-border/60 bg-background text-sm">
@@ -723,7 +797,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <FormMessage className="text-[9px] text-rose-500" />
+                                            <FormMessage className="text-[11px] text-rose-500" />
                                         </FormItem>
                                     )}
                                 />
@@ -751,7 +825,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                         field.onChange(val);
                                                         setTimeout(() => form.trigger('sub_group_name'), 0);
                                                     }}
-                                                    disabled={isReadOnly || !watchGroup || wizardStep !== 1}
+                                                    disabled={isReadOnly || !watchGroup || wizardStep !== STEP.role}
                                                 >
                                                     <FormControl>
                                                         <SelectTrigger className="h-11 rounded-lg border-border/60 bg-background text-sm">
@@ -766,7 +840,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
-                                                <FormMessage className="text-[9px] text-rose-500" />
+                                                <FormMessage className="text-[11px] text-rose-500" />
                                             </FormItem>
                                         )}
                                     />
@@ -782,12 +856,12 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                             <Select
                                                 value={field.value || ''}
                                                 onValueChange={field.onChange}
-                                                disabled={isReadOnly || isRoleLocked || wizardStep !== 1}
+                                                disabled={isReadOnly || isRoleLocked || wizardStep !== STEP.role}
                                             >
                                                 <FormControl>
                                                     <SelectTrigger className={cn(
                                                         'h-11 rounded-lg border-border/60 bg-background text-sm',
-                                                        (isRoleLocked || wizardStep !== 1) && 'opacity-60',
+                                                        (isRoleLocked || wizardStep !== STEP.role) && 'opacity-60',
                                                     )}>
                                                         <SelectValue placeholder="Select role…" />
                                                     </SelectTrigger>
@@ -800,60 +874,137 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <FormMessage className="text-[9px] text-rose-500" />
+                                            <FormMessage className="text-[11px] text-rose-500" />
                                         </FormItem>
                                     )}
                                 />
+
+                                {/* Target Employment Type */}
+                                <FormField
+                                    control={form.control}
+                                    name="target_employment_type"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FieldLabel required>Target Employment Type</FieldLabel>
+                                            <Select
+                                                value={field.value ?? ''}
+                                                onValueChange={(v) => {
+                                                    field.onChange(v);
+                                                    // The flexible flag is only coherent for a PT
+                                                    // target — clear it as soon as the target moves
+                                                    // away, so the form can never submit a pair that
+                                                    // shifts_target_flexible_requires_pt_check rejects.
+                                                    if (v !== 'PT') {
+                                                        form.setValue('target_requires_flexible', false);
+                                                    }
+                                                    // Changing the target changes who is assignable.
+                                                    // Drop an assignee the new target excludes rather
+                                                    // than carrying a mismatch to a submit the DB
+                                                    // trigger would reject.
+                                                    const assigned = form.getValues('assigned_employee_id');
+                                                    if (assigned) {
+                                                        const emp = employees.find(e => e.id === assigned);
+                                                        const stillOk = contractMatchesTarget(
+                                                            emp?.employment_status ?? emp?.contract_type,
+                                                            v as typeof TARGET_EMPLOYMENT_TYPES[number],
+                                                            v === 'PT' && !!form.getValues('target_requires_flexible'),
+                                                        );
+                                                        if (!stillOk) form.setValue('assigned_employee_id', null);
+                                                    }
+                                                }}
+                                                disabled={isReadOnly || wizardStep !== STEP.role}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger className={cn(
+                                                        'h-11 rounded-lg border-border/60 bg-background text-sm',
+                                                        wizardStep !== STEP.role && 'opacity-60',
+                                                    )}>
+                                                        <SelectValue placeholder="Select employment target…" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent className="z-[200] max-h-[280px]">
+                                                    {TARGET_EMPLOYMENT_TYPES.map(t => (
+                                                        <SelectItem key={t} value={t}>
+                                                            {TARGET_EMPLOYMENT_TYPE_LABELS[t]}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Only staff on a matching contract for this sub-department
+                                                can be assigned.
+                                            </p>
+                                            <FormMessage className="text-[11px] text-rose-500" />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {/* Flexible Part-Time narrowing — only meaningful for a PT target */}
+                                {watchTargetType === 'PT' && (
+                                    <FormField
+                                        control={form.control}
+                                        name="target_requires_flexible"
+                                        render={({ field }) => (
+                                            <FormItem className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                                                <div className="space-y-0.5 pr-3">
+                                                    <FieldLabel>Flexible Part-Time only</FieldLabel>
+                                                    <p className="text-[11px] text-muted-foreground">
+                                                        Narrows the Part-Time target to staff on a Flexible
+                                                        Part-Time contract.
+                                                    </p>
+                                                </div>
+                                                <FormControl>
+                                                    <Switch
+                                                        checked={!!field.value}
+                                                        onCheckedChange={(v) => {
+                                                            field.onChange(v);
+                                                            // Narrowing to Flexible can exclude the
+                                                            // person already selected — drop them
+                                                            // rather than submitting a pair the DB
+                                                            // trigger would reject.
+                                                            const assigned = form.getValues('assigned_employee_id');
+                                                            if (v && assigned) {
+                                                                const emp = employees.find(e => e.id === assigned);
+                                                                const stillOk = contractMatchesTarget(
+                                                                    emp?.employment_status ?? emp?.contract_type,
+                                                                    'PT',
+                                                                    true,
+                                                                );
+                                                                if (!stillOk) form.setValue('assigned_employee_id', null);
+                                                            }
+                                                        }}
+                                                        disabled={isReadOnly || wizardStep !== STEP.role}
+                                                    />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
                             </div>
                         </div>
                     </Card>
                     )}
 
                     {/* ─────────── CARD 2 · Requirements & Notes ─────────── */}
-                    {wizardStep === 2 && (
+                    {wizardStep === STEP.requirements && (
                     <Card
                         accent="amber"
-                        state={cardState(2)}
+                        state={cardState(STEP.requirements)}
                         index={1}
-                        onClick={() => goToStep(2)}
+                        onClick={() => goToStep(STEP.requirements)}
                     >
                         <CardHeader
                             icon={GraduationCap}
-                            step={2}
+                            step={STEP.requirements}
                             title="Requirements & Notes"
                             subtitle="Skills, certs & handover"
                             accent="amber"
-                            state={cardState(2)}
-                            completed={wizardStep > 2}
+                            state={cardState(STEP.requirements)}
+                            completed={wizardStep > STEP.requirements && isRoleStepValid}
                             badge={<StatusBadge>Optional</StatusBadge>}
                         />
 
                         <div className="space-y-2.5">
-                            {/* Training toggle */}
-                            <FormField
-                                control={form.control}
-                                name="is_training"
-                                render={({ field }) => (
-                                    <FormItem className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/20 p-2.5 transition-colors hover:bg-muted/30">
-                                        <div className="flex items-center gap-2">
-                                            <GraduationCap className="h-4 w-4 shrink-0 text-amber-500/70" />
-                                            <div>
-                                                <p className="text-[11px] font-bold leading-tight text-foreground">Training shift</p>
-                                                <p className="text-[9px] text-muted-foreground/80">Exempt from 2h minimum</p>
-                                            </div>
-                                        </div>
-                                        <FormControl>
-                                            <Switch
-                                                checked={field.value}
-                                                onCheckedChange={field.onChange}
-                                                disabled={isReadOnly || wizardStep !== 2}
-                                                className="scale-90 data-[state=checked]:bg-amber-500"
-                                            />
-                                        </FormControl>
-                                    </FormItem>
-                                )}
-                            />
-
                             {/* Skills + Certs */}
                             <div className="grid grid-cols-2 gap-2">
                                 <FormField
@@ -867,7 +1018,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 selected={field.value || []}
                                                 onChange={field.onChange}
                                                 placeholder="None"
-                                                disabled={isReadOnly || wizardStep !== 2}
+                                                disabled={isReadOnly || wizardStep !== STEP.requirements}
                                                 compact
                                             />
                                         </FormItem>
@@ -884,7 +1035,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 selected={field.value || []}
                                                 onChange={field.onChange}
                                                 placeholder="None"
-                                                disabled={isReadOnly || wizardStep !== 2}
+                                                disabled={isReadOnly || wizardStep !== STEP.requirements}
                                                 compact
                                             />
                                         </FormItem>
@@ -904,7 +1055,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                             selected={field.value || []}
                                             onChange={field.onChange}
                                             placeholder="None"
-                                            disabled={isReadOnly || wizardStep !== 2}
+                                            disabled={isReadOnly || wizardStep !== STEP.requirements}
                                             compact
                                         />
                                     </FormItem>
@@ -925,7 +1076,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                             <Textarea
                                                 {...field}
                                                 placeholder="Shift notes or handover…"
-                                                disabled={isReadOnly || wizardStep !== 2}
+                                                disabled={isReadOnly || wizardStep !== STEP.requirements}
                                                 className="min-h-[60px] resize-none rounded-lg border-border/60 bg-background p-2.5 text-xs font-medium placeholder:text-muted-foreground/30 focus:ring-amber-500/30"
                                             />
                                         </FormControl>
@@ -937,21 +1088,22 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                     )}
 
                     {/* ─────────── CARD 3 · Timings ─────────── */}
-                    {wizardStep === 3 && (
+                    {wizardStep === STEP.timings && (
                     <Card
                         accent="cyan"
-                        state={cardState(3)}
+                        state={cardState(STEP.timings)}
                         index={2}
-                        onClick={() => goToStep(3)}
+                        onClick={() => goToStep(STEP.timings)}
                     >
                         <CardHeader
                             icon={Clock}
-                            step={3}
+                            step={STEP.timings}
+                            headingRef={stepHeadingRef}
                             title="Timings"
                             subtitle="Start, end & breaks"
                             accent="cyan"
-                            state={cardState(3)}
-                            completed={wizardStep > 3 && isStep3Valid}
+                            state={cardState(STEP.timings)}
+                            completed={wizardStep > STEP.timings && isTimingsStepValid}
                             badge={<StatusBadge tone="accent" accent="cyan">Required</StatusBadge>}
                         />
 
@@ -959,13 +1111,39 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             {/* Date (locked) */}
                             {!isTemplateMode && (
                                 <div>
-                                    <FieldLabel>Date <span className="ml-1 text-[8px] text-cyan-500/70">LOCKED</span></FieldLabel>
+                                    <FieldLabel>Date <span className="ml-1 text-[10px] text-cyan-500/70">LOCKED</span></FieldLabel>
                                     <div className="flex h-9 select-none items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-3">
                                         <LockIcon className="h-2.5 w-2.5 shrink-0 text-muted-foreground/40" />
                                         <span className="truncate text-xs font-medium text-foreground/70">{dateDisplay}</span>
                                     </div>
                                 </div>
                             )}
+
+                            {/* Training toggle — placed first so the minimum engagement floor (2h vs 3h/4h) is established before setting times */}
+                            <FormField
+                                control={form.control}
+                                name="is_training"
+                                render={({ field }) => (
+                                    <FormItem className="flex min-h-[48px] items-center justify-between rounded-lg border border-border/50 bg-muted/20 p-2.5 transition-colors hover:bg-muted/30">
+                                        <div className="flex items-center gap-2">
+                                            <GraduationCap className="h-4 w-4 shrink-0 text-purple-500/80" />
+                                            <div>
+                                                <p className="text-[11px] font-bold leading-tight text-foreground">Training shift</p>
+                                                <p className="text-[11px] text-muted-foreground/80">Exempt from standard minimum engagement (2h floor)</p>
+                                            </div>
+                                        </div>
+                                        <FormControl>
+                                            <Switch
+                                                aria-label="Training shift (exempt from standard minimum engagement)"
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                                disabled={isReadOnly || wizardStep !== STEP.timings}
+                                                className="scale-90 data-[state=checked]:bg-purple-600 focus-visible:ring-2 focus-visible:ring-purple-400"
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
 
                             {/* Start / End */}
                             <div className="grid grid-cols-2 gap-2">
@@ -983,7 +1161,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                             type="time"
                                                             placeholder="HH:MM"
                                                             defaultValue={field.value ?? undefined}
-                                                            disabled={isReadOnly || wizardStep !== 3}
+                                                            disabled={isReadOnly || wizardStep !== STEP.timings}
                                                             onChange={e => {
                                                                 const raw = e.target.value.replace(/\D/g, '').slice(0, 4);
                                                                 const formatted = raw.length > 2
@@ -1004,7 +1182,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                         <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-500/50" />
                                                     </div>
                                                 </FormControl>
-                                                <FormMessage className="text-[9px] text-rose-500" />
+                                                <FormMessage className="text-[11px] text-rose-500" />
                                             </FormItem>
                                         )}
                                     />
@@ -1030,7 +1208,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     onChange={e =>
                                                         field.onChange(e.target.value === '' ? undefined : Number(e.target.value))
                                                     }
-                                                    disabled={isReadOnly || wizardStep !== 3}
+                                                    disabled={isReadOnly || wizardStep !== STEP.timings}
                                                     placeholder="0"
                                                     className={cn(inputCls, 'font-mono')}
                                                 />
@@ -1055,7 +1233,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     onChange={e =>
                                                         field.onChange(e.target.value === '' ? undefined : Number(e.target.value))
                                                     }
-                                                    disabled={isReadOnly || wizardStep !== 3}
+                                                    disabled={isReadOnly || wizardStep !== STEP.timings}
                                                     placeholder="0"
                                                     className={cn(inputCls, 'font-mono')}
                                                 />
@@ -1064,26 +1242,6 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     )}
                                 />
                             </div>
-
-                            {/* Break recommendation */}
-                            {showUnpaidRec && (
-                                <button
-                                    type="button"
-                                    onClick={() => form.setValue('unpaid_break_minutes', reqUnpaid, { shouldDirty: true })}
-                                    className="flex w-full items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-2 text-left transition-colors hover:bg-amber-500/[0.08]"
-                                    disabled={wizardStep !== 3}
-                                >
-                                    <div className="flex items-center gap-1.5">
-                                        <Info className="h-3 w-3 shrink-0 text-amber-500/70" />
-                                        <span className="text-[9px] font-medium text-amber-600 dark:text-amber-400/90">
-                                            {reqUnpaid}m unpaid required ({curUnpaid}m set)
-                                        </span>
-                                    </div>
-                                    <span className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-amber-500 ring-1 ring-amber-500/15">
-                                        Apply
-                                    </span>
-                                </button>
-                            )}
 
                             {/* Duration stats */}
                             <div className="flex gap-2">
@@ -1097,16 +1255,49 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     value={formatHours(netLength)}
                                     colorClass={
                                         netLength <= 0 ? 'text-muted-foreground/30'
-                                        : netLength < minShiftHours ? 'text-rose-500'
+                                        : shape.blocking ? 'text-rose-500'
                                         : 'text-emerald-500'
                                     }
                                 />
                             </div>
 
-                            {netLength > 0 && netLength < minShiftHours && (
-                                <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-2 text-rose-500">
-                                    <AlertTriangle className="h-3 w-3 shrink-0" />
-                                    <p className="text-[9px] font-medium">Below {formatHours(minShiftHours)} minimum</p>
+                            {/* Shift-shape breaches. Every one of these is blocking and
+                                gates Next — an unlawful shift shape is not reviewable.
+                                Each carries a one-click fix where the required value is
+                                unambiguous (breaks), since the manager's intent is never
+                                "leave the break off". */}
+                            {!isReadOnly && shapeBlockers.length > 0 && (
+                                <div
+                                    role="alert"
+                                    aria-live="polite"
+                                    className="space-y-1.5 rounded-lg border border-rose-500/25 bg-rose-500/[0.05] p-2"
+                                >
+                                    {shapeBlockers.map(hit => (
+                                        <div key={hit.rule_id} className="flex items-center justify-between gap-2">
+                                            <div className="flex min-w-0 items-center gap-1.5">
+                                                <AlertTriangle className="h-3 w-3 shrink-0 text-rose-500" />
+                                                <span className="truncate text-[11px] font-medium text-rose-500">
+                                                    {hit.summary}
+                                                </span>
+                                            </div>
+                                            {hit.fix && (
+                                                <div className="flex shrink-0 items-center gap-1">
+                                                    {(hit.fix.options ?? [{ value: hit.fix.value as number, label: hit.fix.label }]).map(opt => (
+                                                        <button
+                                                            key={String(opt.value)}
+                                                            type="button"
+                                                            onClick={() => form.setValue(hit.fix!.field, opt.value as never, { shouldDirty: true })}
+                                                            disabled={wizardStep !== STEP.timings}
+                                                            aria-label={`Set ${opt.label} — resolves: ${hit.summary}`}
+                                                            className="rounded bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-rose-500 ring-1 ring-rose-500/20 transition-colors hover:bg-rose-500/20 disabled:opacity-50"
+                                                        >
+                                                            {opt.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -1114,21 +1305,22 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                     )}
 
                     {/* ─────────── CARD 4 · Assignment ─────────── */}
-                    {wizardStep === 4 && (
+                    {wizardStep === STEP.assignment && (
                     <Card
                         accent="emerald"
-                        state={cardState(4)}
+                        state={cardState(STEP.assignment)}
                         index={3}
-                        onClick={() => goToStep(4)}
+                        onClick={() => goToStep(STEP.assignment)}
                     >
                         <CardHeader
                             icon={UserCircle}
-                            step={4}
+                            step={STEP.assignment}
+                            headingRef={stepHeadingRef}
                             title="Assignment"
                             subtitle="Pick an employee or leave open"
                             accent="emerald"
-                            state={cardState(4)}
-                            completed={wizardStep > 4 && !!form.watch('assigned_employee_id')}
+                            state={cardState(STEP.assignment)}
+                            completed={wizardStep > STEP.assignment && !!form.watch('assigned_employee_id')}
                             badge={
                                 isTemplateMode ? (
                                     <StatusBadge>Templates unassigned</StatusBadge>
@@ -1173,12 +1365,12 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     <div>
                                                         <p className="text-sm font-bold text-foreground">{displayName}</p>
                                                         <div className="mt-1 flex items-center gap-1.5">
-                                                            <span className="flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[9px] font-bold uppercase tracking-widest text-emerald-500/80"><CheckCircle2 className="h-2.5 w-2.5" /> Available</span>
-                                                            <span className="flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[9px] font-bold uppercase tracking-widest text-emerald-500/80"><CheckCircle2 className="h-2.5 w-2.5" /> Qualified</span>
+                                                            <span className="flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[11px] font-bold uppercase tracking-widest text-emerald-500/80"><CheckCircle2 className="h-2.5 w-2.5" /> Available</span>
+                                                            <span className="flex items-center gap-1 rounded bg-emerald-500/10 px-1 text-[11px] font-bold uppercase tracking-widest text-emerald-500/80"><CheckCircle2 className="h-2.5 w-2.5" /> Qualified</span>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                {!isReadOnly && wizardStep === 4 && (
+                                                {!isReadOnly && wizardStep === STEP.assignment && (
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
@@ -1196,12 +1388,12 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     <UserCircle className="h-6 w-6 text-muted-foreground/30" />
                                                 </div>
                                                 <p className="text-xs font-semibold text-foreground/60">Unassigned</p>
-                                                <p className="text-[9px] text-muted-foreground/60">Will open for bidding</p>
+                                                <p className="text-[11px] text-muted-foreground/60">Will open for bidding</p>
                                             </div>
                                         )}
 
                                         {/* Inline employee picker */}
-                                        {!isReadOnly && !isTemplateMode && !isEmployeeLocked && wizardStep === 4 && (
+                                        {!isReadOnly && !isTemplateMode && !isEmployeeLocked && wizardStep === STEP.assignment && (
                                             <Popover open={poolOpen} onOpenChange={setPoolOpen} modal={false}>
                                                 <PopoverTrigger asChild>
                                                     <Button
@@ -1211,7 +1403,12 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     >
                                                         <Plus className="h-4 w-4" />
                                                         {isAssigned ? 'Change Employee' : 'Select Employee'}
-                                                        <span className="ml-auto font-mono normal-case tracking-normal text-emerald-100/70">{employees.length}</span>
+                                                        {/* Count the pool the planner will actually SEE, not the
+                                                            raw fetch — an unfiltered number next to a filtered list
+                                                            reads as a bug. */}
+                                                        <span className="ml-auto font-mono normal-case tracking-normal text-emerald-100/70">
+                                                            {filteredEmployees.length}
+                                                        </span>
                                                     </Button>
                                                 </PopoverTrigger>
                                                 <PopoverContent
@@ -1234,8 +1431,21 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] dark:border-white/10 dark:bg-[#1a2333]">
                                                                 <CommandList className="max-h-[300px] overflow-y-auto overflow-x-hidden p-1.5">
                                                                     <CommandEmpty className="py-8 text-center text-sm font-medium text-muted-foreground">
-                                                                        No employees found.
+                                                                        {watchTargetType && excludedByTargetCount > 0
+                                                                            ? `No ${TARGET_EMPLOYMENT_TYPE_LABELS[watchTargetType]}${watchTargetType === 'PT' && watchTargetFlex ? ' (Flexible)' : ''} staff are contracted to this sub-department.`
+                                                                            : 'No employees found.'}
                                                                     </CommandEmpty>
+
+                                                                    {/* State WHY the pool is short. A hard filter that silently
+                                                                        shrinks the list reads as missing data; naming the
+                                                                        restriction points the planner at the target field. */}
+                                                                    {watchTargetType && excludedByTargetCount > 0 && (
+                                                                        <div className="border-b border-border/40 px-2 py-1.5">
+                                                                            <span className="text-[10px] text-muted-foreground">
+                                                                                {`Showing ${TARGET_EMPLOYMENT_TYPE_LABELS[watchTargetType]}${watchTargetType === 'PT' && watchTargetFlex ? ' (Flexible)' : ''} only · ${excludedByTargetCount} excluded by the shift's employment target`}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
                                                                     <CommandGroup>
                                                                         <CommandItem
                                                                             value="__leave_unassigned__"
@@ -1245,7 +1455,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground/70 group-aria-selected:bg-white/20 group-aria-selected:text-white">—</div>
                                                                             <div className="min-w-0 flex-1">
                                                                                 <p className="truncate text-xs font-semibold">Leave Unassigned</p>
-                                                                                <p className="font-mono text-[9px] text-zinc-400 group-aria-selected:text-white/60">open for bidding</p>
+                                                                                <p className="font-mono text-[11px] text-zinc-400 group-aria-selected:text-white/60">open for bidding</p>
                                                                             </div>
                                                                             {!field.value && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400 group-aria-selected:text-white" />}
                                                                         </CommandItem>
@@ -1263,7 +1473,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                                                     )}
                                                                                 >
                                                                                     <div className={cn(
-                                                                                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[9px] font-bold',
+                                                                                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
                                                                                         selected
                                                                                             ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30 group-aria-selected:bg-white/20 group-aria-selected:text-white group-aria-selected:ring-0'
                                                                                             : 'bg-muted text-muted-foreground/70 group-aria-selected:bg-white/20 group-aria-selected:text-white',
@@ -1272,7 +1482,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                                                     </div>
                                                                                     <div className="min-w-0 flex-1">
                                                                                         <p className="truncate text-xs font-semibold">{displayNameOf(emp)}</p>
-                                                                                        <p className="font-mono text-[9px] text-zinc-400 group-aria-selected:text-white/60">{emp.id.slice(0, 8)}</p>
+                                                                                        <p className="font-mono text-[11px] text-zinc-400 group-aria-selected:text-white/60">{emp.id.slice(0, 8)}</p>
                                                                                     </div>
                                                                                     {selected && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400 group-aria-selected:text-white" />}
                                                                                 </CommandItem>
@@ -1281,7 +1491,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                                     </CommandGroup>
                                                                 </CommandList>
 
-                                                                <div className="flex items-center justify-between border-t border-indigo-500/5 bg-indigo-50/50 p-3 text-[9px] font-black uppercase tracking-[0.2em] text-indigo-500/50 dark:border-white/5 dark:bg-muted/20 dark:text-muted-foreground/50">
+                                                                <div className="flex items-center justify-between border-t border-indigo-500/5 bg-indigo-50/50 p-3 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500/50 dark:border-white/5 dark:bg-muted/20 dark:text-muted-foreground/50">
                                                                     <div className="flex items-center gap-4">
                                                                         <span className="flex items-center gap-1">
                                                                             <kbd className="rounded border border-indigo-500/10 bg-white/80 px-1 py-0.5 font-sans text-indigo-500/70 dark:border-border/40 dark:bg-background/50 dark:text-inherit">↑↓</kbd> NAV
@@ -1310,7 +1520,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                         className="flex items-center gap-1.5 rounded-md border border-rose-500/20 bg-rose-500/[0.04] p-1.5 text-rose-500"
                                                     >
                                                         <AlertCircle className="h-3 w-3 shrink-0" />
-                                                        <p className="text-[9px] font-medium">{err.message}</p>
+                                                        <p className="text-[11px] font-medium">{err.message}</p>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1323,21 +1533,21 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                     )}
 
                     {/* ─────────── CARD 5 · Compliance (full width) ─────────── */}
-                    {wizardStep === 5 && (
+                    {wizardStep === STEP.compliance && (
                     <Card
                         accent={watchEmployeeId ? "indigo" : "slate"}
-                        state={cardState(5)}
+                        state={cardState(STEP.compliance)}
                         index={4}
-                        onClick={() => goToStep(5)}
+                        onClick={() => goToStep(STEP.compliance)}
                         className="lg:col-span-2"
                     >
                         <CardHeader
                             icon={Shield}
-                            step={5}
+                            step={STEP.compliance}
                             title="Compliance"
                             subtitle={watchEmployeeId ? "Final guardrail checks before saving" : "Not required for unassigned shifts"}
                             accent={watchEmployeeId ? "indigo" : "slate"}
-                            state={cardState(5)}
+                            state={cardState(STEP.compliance)}
                             badge={
                                 !watchEmployeeId ? (
                                     <StatusBadge tone="accent" accent="slate">Not Required</StatusBadge>
@@ -1356,7 +1566,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/60 backdrop-blur-[2px]">
                                         <div className="flex items-center gap-2">
                                             <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
-                                            <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-400">Fetching history…</span>
+                                            <span className="text-[11px] font-bold uppercase tracking-widest text-indigo-400">Fetching history…</span>
                                         </div>
                                     </div>
                                 )}
@@ -1369,7 +1579,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                         <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                                             Compliance Not Required
                                         </p>
-                                        <p className="mx-auto max-w-[240px] text-[9px] text-muted-foreground/80">
+                                        <p className="mx-auto max-w-[240px] text-[11px] text-muted-foreground/80">
                                             Compliance is not required for unassigned shifts. Evaluated when assigned.
                                         </p>
                                     </div>
@@ -1381,7 +1591,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                         <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-emerald-500">
                                             Checks Passed
                                         </p>
-                                        <p className="mx-auto max-w-[200px] text-[9px] text-muted-foreground/80">
+                                        <p className="mx-auto max-w-[200px] text-[11px] text-muted-foreground/80">
                                             Validated when assigned to an employee.
                                         </p>
                                     </div>
@@ -1389,7 +1599,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     <CompliancePanel
                                         hook={compliancePanel}
                                         className="compliance-panel-integrated"
-                                        disabled={isReadOnly || isLoadingShifts || wizardStep !== 5}
+                                        disabled={isReadOnly || isLoadingShifts || wizardStep !== STEP.compliance}
                                     />
                                 )}
                             </div>
@@ -1406,15 +1616,21 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                     variant="ghost"
                     disabled={wizardStep === 1}
                     onClick={() => setWizardStep(prev => Math.max(1, prev - 1))}
-                    className="h-9 gap-1.5 rounded-lg px-4 text-xs font-bold text-muted-foreground transition-all hover:bg-muted/30 hover:text-foreground disabled:opacity-40"
+                    // h-11 (44px) on touch, back to the compact h-9 from sm up.
+                    className="h-11 sm:h-9 gap-1.5 rounded-lg px-4 text-xs font-bold text-muted-foreground transition-all hover:bg-muted/30 hover:text-foreground disabled:opacity-40"
                 >
                     <ChevronLeft className="h-4 w-4" />
                     Back
                 </Button>
 
-                {/* Segmented progress rail — mobile only (desktop uses the left vertical stepper) */}
-                <div className="flex items-center gap-1.5 sm:hidden">
-                    {STEP_META.map(({ n, accent }, i) => {
+                {/* Segmented progress rail — mobile only (desktop uses the left vertical stepper).
+                    The dot stays 24px visually, but the BUTTON is 44x44: a 24px
+                    touch target is half of Apple HIG (44pt) and Material (48dp),
+                    and only scrapes WCAG 2.5.8's 24px AA floor. Negative margins
+                    keep the rail looking the same while the hit areas overlap
+                    nothing — the gap between adjacent centres is unchanged. */}
+                <nav aria-label="Wizard steps" className="flex items-center sm:hidden">
+                    {STEP_META.map(({ n, accent, label }, i) => {
                         const reached = n <= maxUnlockedStep;
                         const isCurrent = wizardStep === n;
                         const done = n < wizardStep && reached;
@@ -1422,8 +1638,9 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             <React.Fragment key={n}>
                                 {i > 0 && (
                                     <div
+                                        aria-hidden="true"
                                         className={cn(
-                                            'h-px w-3 transition-colors sm:w-5',
+                                            'h-px w-3 shrink-0 transition-colors sm:w-5',
                                             n <= wizardStep ? ACCENT[accent].chip : 'bg-border/50',
                                         )}
                                     />
@@ -1432,34 +1649,47 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     type="button"
                                     disabled={!reached}
                                     onClick={() => goToStep(n)}
-                                    aria-label={`Go to step ${n}`}
+                                    aria-current={isCurrent ? 'step' : undefined}
+                                    aria-label={
+                                        `Step ${n}: ${label}` +
+                                        (done ? ' (completed)' : isCurrent ? ' (current)' : reached ? '' : ' (locked)')
+                                    }
                                     className={cn(
-                                        'flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-black transition-all duration-300',
-                                        isCurrent
-                                            ? cn(ACCENT[accent].chip, 'scale-110 text-white shadow-md')
-                                            : done
-                                            ? 'bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30'
-                                            : reached
-                                            ? 'bg-muted text-muted-foreground hover:bg-muted/80'
-                                            : 'cursor-not-allowed bg-muted/40 text-muted-foreground/30',
+                                        'flex h-11 w-11 shrink-0 items-center justify-center rounded-full -mx-2.5 first:-ml-2.5 last:-mr-2.5',
+                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                                        !reached && 'cursor-not-allowed',
                                     )}
                                 >
-                                    {done ? <Check className="h-3 w-3" strokeWidth={3} /> : n}
+                                    <span
+                                        aria-hidden="true"
+                                        className={cn(
+                                            'flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-black transition-all duration-300',
+                                            isCurrent
+                                                ? cn(ACCENT[accent].chip, 'scale-110 text-white shadow-md')
+                                                : done
+                                                ? 'bg-emerald-500/20 text-emerald-500'
+                                                : reached
+                                                ? 'bg-muted text-muted-foreground'
+                                                : 'bg-muted/40 text-muted-foreground/30',
+                                        )}
+                                    >
+                                        {done ? <Check className="h-3 w-3" strokeWidth={3} /> : n}
+                                    </span>
                                 </button>
                             </React.Fragment>
                         );
                     })}
-                </div>
+                </nav>
 
                 <Button
                     type="button"
                     disabled={nextDisabled}
-                    onClick={() => setWizardStep(prev => Math.min(5, prev + 1))}
+                    onClick={() => setWizardStep(prev => Math.min(TOTAL_STEPS, prev + 1))}
                     className={cn(
-                        'flex h-9 items-center gap-1.5 rounded-lg px-6 text-xs font-black uppercase tracking-[0.12em] shadow-lg transition-all',
+                        'flex h-11 sm:h-9 items-center gap-1.5 rounded-lg px-6 text-xs font-black uppercase tracking-[0.12em] shadow-lg transition-all',
                         nextDisabled
                             ? 'cursor-not-allowed border border-border/50 bg-muted text-muted-foreground/50'
-                            : 'border border-amber-400/20 bg-amber-600 text-white shadow-amber-500/20 hover:bg-amber-500',
+                            : 'border border-purple-400/20 bg-purple-600 text-white shadow-purple-500/20 hover:bg-purple-500 active:bg-purple-700 focus-visible:ring-2 focus-visible:ring-purple-400',
                     )}
                 >
                     Next

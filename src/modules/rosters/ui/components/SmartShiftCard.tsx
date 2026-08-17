@@ -1207,7 +1207,13 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     // shares the same SharedShiftCard UI) shows real Billable Pay + a
     // Variance→Pay delta instead of leaving them at 'N/A'/'--'.
     const isSecurityRole = (shift.roles?.name || '').toLowerCase().includes('security');
-    const employmentType = (shift as any).assigned_profiles?.employment_type ?? null;
+    // Assigned shift → price the person who is actually working it. Unassigned →
+    // price the shift's declared target. Falling through to `null` used to make
+    // the estimator assume Casual, so every unassigned shift carried a phantom
+    // 25% loading regardless of what it was actually rostered for.
+    const employmentType = (shift as any).assigned_profiles?.employment_type
+      ?? shift.target_employment_type
+      ?? null;
 
     const scheduledCost = useMemo(() => {
         if (!shift.start_time || !shift.end_time) return null;
@@ -1218,6 +1224,8 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
                 end_time: shift.end_time,
                 roles: { name: roleName },
                 employmentType,
+                // Real classification beats guessing it from the role name.
+                remuneration_level: shift.remuneration_level,
                 is_training: shift.is_training,
                 unpaid_break_minutes: shift.unpaid_break_minutes || 0,
                 scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
@@ -1225,7 +1233,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         } catch {
             return null;
         }
-    }, [shift.shift_date, shift.start_time, shift.end_time, roleName, employmentType, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
+    }, [shift.shift_date, shift.start_time, shift.end_time, roleName, employmentType, shift.remuneration_level, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
     const estimatedPay = scheduledCost ? `$${scheduledCost.totalCost.toFixed(2)}` : null;
     const estimatedPayBreakdown = useMemo(
         () => scheduledCost
@@ -1256,6 +1264,8 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
                 end_time: resolvedEnd.hhmm,
                 roles: { name: roleName },
                 employmentType,
+                // Real classification beats guessing it from the role name.
+                remuneration_level: shift.remuneration_level,
                 is_training: shift.is_training,
                 unpaid_break_minutes: shift.unpaid_break_minutes || 0,
                 scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
@@ -1263,7 +1273,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         } catch {
             return null;
         }
-    }, [shift.shift_date, resolvedStart.hhmm, resolvedEnd.hhmm, billableNetMinutes, roleName, employmentType, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
+    }, [shift.shift_date, resolvedStart.hhmm, resolvedEnd.hhmm, billableNetMinutes, roleName, employmentType, shift.remuneration_level, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
     const billablePay = billableCost ? `$${billableCost.totalCost.toFixed(2)}` : null;
     const billablePayBreakdown = useMemo(
         () => billableCost

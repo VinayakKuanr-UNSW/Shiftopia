@@ -21,15 +21,25 @@ import { assignmentEvaluator } from '@/modules/compliance';
 import type { RosterShift } from '@/modules/compliance';
 import type { CandidateShift, EmployeeInfo, ShiftViolation, SimulatedRoster, ViolationType } from '../types';
 
+/**
+ * Bulk assignment places EXISTING shifts, whose shape was already validated at
+ * creation by `@/modules/compliance/shape`. Minimum engagement and meal break
+ * are therefore no longer evaluated here — they cannot change as a result of
+ * choosing a different person for an unchanged shift.
+ */
 const CONSTRAINT_TO_VIOLATION: Record<string, ViolationType> = {
+    // Unmapped constraint IDs are DROPPED by the loop below, so a rule missing
+    // from this table is indistinguishable from a rule that passed. This entry
+    // is what lets V8_EMPLOYMENT_TARGET actually block: without it the hit was
+    // computed and then silently discarded, and the only thing standing between
+    // an off-target proposal and a failed write was the DB trigger.
+    V8_EMPLOYMENT_TARGET: 'EMPLOYMENT_TARGET',
     V8_MIN_REST_GAP:     'REST_GAP',
     V8_ORD_HOURS_AVG:    'WEEKLY_HOURS',
     V8_MAX_DAILY_HOURS:  'DAILY_HOURS',
     V8_WORKING_DAYS_CAP: 'WORKING_DAYS_CAP',
     V8_STREAK_LIMIT:     'STREAK_LIMIT',
-    V8_MIN_ENGAGEMENT:   'MIN_ENGAGEMENT',
     V8_SPREAD_OF_HOURS:  'SPREAD_OF_HOURS',
-    V8_MEAL_BREAK:       'MEAL_BREAK',
     V8_STUDENT_VISA:     'STUDENT_VISA',
     V8_LEAVE_CONFLICT:   'APPROVED_LEAVE',
 };
@@ -49,6 +59,12 @@ function candidateToRosterShift(s: CandidateShift): RosterShift {
         is_ordinary_hours: true, // Default for V8 rules
         role_id: s.role_id ?? undefined,
         is_training: s.lifecycle_status === 'TRAINING', // If applicable
+        // Explicit field mappers like this one are where per-shift rule inputs
+        // go missing: V8_EMPLOYMENT_TARGET is guarded on the target being
+        // present, so dropping it here reads as "rule passed" rather than as a
+        // type error.
+        target_employment_type: s.target_employment_type ?? null,
+        target_requires_flexible: s.target_requires_flexible ?? false,
     };
 }
 
@@ -90,6 +106,10 @@ export class ComplianceEvaluator {
                 contracted_weekly_hours: employee.contracted_weekly_hours,
                 // audit F1 — approved-leave dates drive V8_LEAVE_CONFLICT.
                 leave_days: employee.leave_days,
+                // Raw contract statuses drive V8_EMPLOYMENT_TARGET. The rule
+                // returns [] on an empty list, so the shift-side target above is
+                // inert without this.
+                employment_statuses: employee.employment_statuses,
             },
         });
 

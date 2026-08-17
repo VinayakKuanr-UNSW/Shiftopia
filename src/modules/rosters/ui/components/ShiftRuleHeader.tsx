@@ -4,6 +4,7 @@ import {
     getTimeRule,
     getLiveRuleBadges,
     getPayrollRuleBadges,
+    isShiftAssigned,
     type ShiftDotInput,
     type ShiftRuleBadge,
 } from '../../domain/shift-ui';
@@ -93,14 +94,12 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
 
     const isDraft = shift.lifecycle_status === 'Draft';
 
-    // Unassigned shifts have no attendance → no Live Rules row at all. Prefer the
-    // explicit prop; otherwise derive from the shift's assignment fields, falling
-    // back to "show" when no assignment info is available (legacy callers).
-    const isAssigned =
-        assigned !== undefined                  ? assigned
-        : shift.assignment_status != null       ? shift.assignment_status === 'assigned'
-        : shift.assigned_employee_id != null    ? !!shift.assigned_employee_id
-        : true;
+    // Unassigned shifts have no attendance → no Live Rules row at all. The
+    // explicit prop wins; otherwise defer to the shared domain helper so this
+    // component and the badge derivations can't drift apart on what "assigned"
+    // means. (The derivations now return empty for unassigned shifts too, so
+    // this is belt-and-braces for callers that pass `assigned` explicitly.)
+    const isAssigned = assigned !== undefined ? assigned : isShiftAssigned(shift);
 
     const showLive = isDraft || (isAssigned && !!(live.arrival || live.departure));
 

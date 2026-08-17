@@ -2,6 +2,8 @@
    ENUMS & TYPES - Must match database
    ============================================================ */
 
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
+
 export type ShiftStatus =
     | 'open'
     | 'assigned'
@@ -189,7 +191,12 @@ export interface Shift {
 
     // Labor Forecasting Metadata
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
-    target_employment_type?: 'FT' | 'PT' | 'Casual' | 'Unassigned' | null;
+    // 'Unassigned' was never a legal value here: `shifts_target_employment_type_check`
+    // only admits FT/PT/Casual, and nothing ever compared against the token. Dropped
+    // so this declaration matches the DB and the solver.
+    target_employment_type?: TargetEmploymentType | null;
+    /** Narrows a 'PT' target to Flexible Part-Time staff only. */
+    target_requires_flexible?: boolean;
     demand_group_id?: string | null;
 
     // Allowances

@@ -35,7 +35,7 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
           border: 'border-blue-500/40',
           accent: 'bg-blue-500',
           text: 'text-blue-700 dark:text-blue-300',
-          time: 'text-blue-600/60 dark:text-blue-400/60'
+          time: 'text-blue-700 dark:text-blue-300'
         };
       case 'exhibition':
         return {
@@ -43,7 +43,7 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
           border: 'border-emerald-500/40',
           accent: 'bg-emerald-500',
           text: 'text-emerald-700 dark:text-emerald-300',
-          time: 'text-emerald-600/60 dark:text-emerald-400/60'
+          time: 'text-emerald-700 dark:text-emerald-300'
         };
       case 'theatre':
         return {
@@ -51,7 +51,7 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
           border: 'border-rose-500/40',
           accent: 'bg-rose-500',
           text: 'text-rose-700 dark:text-rose-300',
-          time: 'text-rose-600/60 dark:text-rose-400/60'
+          time: 'text-rose-700 dark:text-rose-300'
         };
       case 'cutaway':
         return {
@@ -67,7 +67,7 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
           border: 'border-slate-500/40',
           accent: 'bg-slate-500',
           text: 'text-slate-700 dark:text-slate-300',
-          time: 'text-slate-600/60 dark:text-slate-400/60'
+          time: 'text-slate-700 dark:text-slate-300'
         };
     }
   }, [groupVariant]);
