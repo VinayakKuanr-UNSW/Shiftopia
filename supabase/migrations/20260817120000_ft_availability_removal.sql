@@ -306,6 +306,14 @@ ALTER TABLE public.availability_slots_archive ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.availability_rules_archive FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.availability_slots_archive FROM PUBLIC, anon, authenticated;
 
+-- `LIKE` copies no indexes, and the purge below looks rows up by id to decide
+-- what still needs archiving. Not a performance concern at this size — it is what
+-- keeps the re-run path O(n) instead of a seq scan per live row.
+CREATE INDEX IF NOT EXISTS availability_rules_archive_id_idx
+  ON public.availability_rules_archive (id);
+CREATE INDEX IF NOT EXISTS availability_slots_archive_id_idx
+  ON public.availability_slots_archive (id);
+
 COMMENT ON TABLE public.availability_rules_archive IS
   'Cold storage for availability_rules removed by a migration or data-hygiene '
   'job. Deliberately carries no keys or FKs so it can hold rows the live table '
@@ -323,20 +331,54 @@ DECLARE
   v_slots_arch  int;
   v_rules_del   int;
   v_slots_del   int;
+  v_missing     int;
 BEGIN
   -- Archive BOTH tables before deleting EITHER. Rules must be captured before
   -- their delete cascades the slots out from under the slot archive.
+  --
+  -- `NOT EXISTS ... a.id = r.id` makes this RE-RUNNABLE. A second run (a retry
+  -- after a partial failure, or a `db push` that offers the file again) finds the
+  -- live rows already gone and archives nothing, instead of appending a duplicate
+  -- copy — which would then make a COUNT-based verification fail and report
+  -- "archive verification failed" when nothing whatsoever is wrong. A migration
+  -- whose retry path lies to the operator is worse than one that cannot retry.
   INSERT INTO public.availability_rules_archive
   SELECT r.*, now(), v_reason
     FROM public.availability_rules r
-   WHERE public.sm_holds_active_ft_contract(r.profile_id);
+   WHERE public.sm_holds_active_ft_contract(r.profile_id)
+     AND NOT EXISTS (SELECT 1 FROM public.availability_rules_archive a WHERE a.id = r.id);
   GET DIAGNOSTICS v_rules_arch = ROW_COUNT;
 
   INSERT INTO public.availability_slots_archive
   SELECT s.*, now(), v_reason
     FROM public.availability_slots s
-   WHERE public.sm_holds_active_ft_contract(s.profile_id);
+   WHERE public.sm_holds_active_ft_contract(s.profile_id)
+     AND NOT EXISTS (SELECT 1 FROM public.availability_slots_archive a WHERE a.id = s.id);
   GET DIAGNOSTICS v_slots_arch = ROW_COUNT;
+
+  -- VERIFY BEFORE DELETING, and verify by IDENTITY rather than by count.
+  --
+  -- Every live row about to be deleted must already have its id in the archive.
+  -- That is a strictly stronger claim than "the counts match" — a count check
+  -- passes if the archive holds the right NUMBER of wrong rows — and unlike a
+  -- count it stays true on a re-run, where there are no live rows left and the
+  -- test is vacuously satisfied.
+  SELECT count(*) INTO v_missing FROM (
+    SELECT r.id FROM public.availability_rules r
+     WHERE public.sm_holds_active_ft_contract(r.profile_id)
+       AND NOT EXISTS (SELECT 1 FROM public.availability_rules_archive a WHERE a.id = r.id)
+    UNION ALL
+    SELECT s.id FROM public.availability_slots s
+     WHERE public.sm_holds_active_ft_contract(s.profile_id)
+       AND NOT EXISTS (SELECT 1 FROM public.availability_slots_archive a WHERE a.id = s.id)
+  ) missing;
+
+  IF v_missing > 0 THEN
+    RAISE EXCEPTION
+      'ft_availability_removal: % row(s) would be deleted without being archived — refusing to proceed',
+      v_missing
+      USING ERRCODE = 'data_exception';
+  END IF;
 
   -- Rules first: availability_slots.rule_id is ON DELETE CASCADE, so this
   -- clears most of the slots as a side effect.
@@ -358,17 +400,27 @@ BEGIN
    WHERE public.sm_holds_active_ft_contract(s.profile_id);
   GET DIAGNOSTICS v_slots_del = ROW_COUNT;
 
-  -- Every archived row must still be there after the deletes. If the counts
-  -- disagree, something cascaded into the archive and the migration must not
-  -- commit — a silent partial archive is worse than no archive, because the
-  -- runbook would claim a restore is possible when it is not.
+  -- The deletes must not have reached the archive. Nothing declares a FK from
+  -- the archive to the live tables — that is the point of building it with a bare
+  -- `LIKE` — but this asserts it rather than assuming it, because a stray cascade
+  -- here empties the only copy of the data at the exact moment the live rows go.
   IF (SELECT count(*) FROM public.availability_rules_archive
-       WHERE archived_reason = v_reason) <> v_rules_arch
+       WHERE archived_reason = v_reason) < v_rules_arch
      OR (SELECT count(*) FROM public.availability_slots_archive
-          WHERE archived_reason = v_reason) <> v_slots_arch THEN
+          WHERE archived_reason = v_reason) < v_slots_arch THEN
     RAISE EXCEPTION
-      'ft_availability_removal: archive verification failed — expected %/% rules/slots'
+      'ft_availability_removal: archived rows disappeared during delete — expected at least %/% rules/slots'
       , v_rules_arch, v_slots_arch
+      USING ERRCODE = 'data_exception';
+  END IF;
+
+  -- Nothing FT-held may remain live. The guard blocks future INSERTs; this
+  -- catches a delete predicate that silently matched less than the archive did.
+  IF EXISTS (SELECT 1 FROM public.availability_slots s
+              WHERE public.sm_holds_active_ft_contract(s.profile_id))
+     OR EXISTS (SELECT 1 FROM public.availability_rules r
+                 WHERE public.sm_holds_active_ft_contract(r.profile_id)) THEN
+    RAISE EXCEPTION 'ft_availability_removal: FT availability rows still present after purge'
       USING ERRCODE = 'data_exception';
   END IF;
 
