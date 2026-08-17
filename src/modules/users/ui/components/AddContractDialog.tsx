@@ -1,8 +1,8 @@
-import React, { useState } from 'react'; // Re-triggering build
+import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { Plus, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil, Clock, GraduationCap, Award, School, BookOpen, Trophy, Info, Accessibility, Scale, CalendarClock } from 'lucide-react';
+import { Plus, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil, Clock, GraduationCap, Award, School, BookOpen, Trophy, Info, Accessibility, Scale, CalendarClock, AlertTriangle } from 'lucide-react';
 import { useReferenceData } from '../hooks/useReferenceData';
 import { useContractForm, FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../hooks/useContractForm';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/supabase/client';
 import { Input } from '@/modules/core/ui/primitives/input';
+import { validateContractHours, computeRemainingCapacity, isCeilingCounted, MAX_CONTRACTED_WEEKLY_HOURS, type ExistingContract } from '../../domain/contractHoursCeiling';
 
 interface AddContractDialogProps {
     employeeId: string;
@@ -24,10 +25,12 @@ interface AddContractDialogProps {
         remuneration_level?: number | null;
         employment_status?: string | null;
     };
+    /** All contracts for this employee — used for the 38h ceiling check. */
+    existingContracts?: any[];
     onSuccess?: () => void;
 }
 
-export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId, employeeName, existingContract, onSuccess }) => {
+export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId, employeeName, existingContract, existingContracts = [], onSuccess }) => {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
 
@@ -126,11 +129,58 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
         ((formData.annual_guaranteed_hours ?? 0) < FLEXIBLE_PT_ANNUAL_HOURS_MIN ||
             (formData.annual_guaranteed_hours ?? 0) > FLEXIBLE_PT_ANNUAL_HOURS_MAX);
 
+    // ── 38h contracted weekly hours ceiling validation ──────────────────
+    const ceilingContracts: ExistingContract[] = useMemo(() =>
+        (existingContracts ?? []).map((c: any) => ({
+            id: c.id,
+            employment_status: c.employment_status ?? null,
+            contracted_weekly_hours: c.contracted_weekly_hours ?? null,
+            status: c.status ?? null,
+        })),
+        [existingContracts],
+    );
+
+    const ceilingValidation = useMemo(() => {
+        const proposedHours = formData.contracted_weekly_hours || 0;
+        const proposedStatus = formData.employment_status || '';
+        return validateContractHours(
+            proposedHours,
+            proposedStatus,
+            ceilingContracts,
+            isEditMode ? existingContract?.id : undefined,
+        );
+    }, [
+        formData.contracted_weekly_hours,
+        formData.employment_status,
+        ceilingContracts,
+        isEditMode,
+        existingContract?.id,
+    ]);
+
+    const capacityInfo = useMemo(() =>
+        computeRemainingCapacity(
+            ceilingContracts,
+            isEditMode ? existingContract?.id : undefined,
+        ),
+        [ceilingContracts, isEditMode, existingContract?.id],
+    );
+
+    const isCeilingExceeded = !ceilingValidation.valid;
+
     const handleSubmit = async () => {
         if (isFptHoursInvalid) {
             toast({
                 title: 'Validation Error',
                 description: `Annual Guaranteed Hours must be between ${FLEXIBLE_PT_ANNUAL_HOURS_MIN}-${FLEXIBLE_PT_ANNUAL_HOURS_MAX}h (cl 12.4).`,
+                variant: 'destructive',
+            });
+            return;
+        }
+        // Block if the 38h ceiling would be exceeded
+        if (isCeilingExceeded) {
+            toast({
+                title: 'Contract Hours Ceiling',
+                description: ceilingValidation.message || 'Combined contracted hours would exceed 38h/week.',
                 variant: 'destructive',
             });
             return;
@@ -170,6 +220,12 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
             
             if (error) {
                 console.error('Update error:', error);
+                // Surface DB trigger rejection message to the user
+                toast({
+                    title: 'Contract Update Failed',
+                    description: error.message || 'Failed to update contract.',
+                    variant: 'destructive',
+                });
                 return;
             }
             setOpen(false);
@@ -423,6 +479,53 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                                 <p className="text-[11px] text-destructive font-medium">
                                                     Must be between {FLEXIBLE_PT_ANNUAL_HOURS_MIN}-{FLEXIBLE_PT_ANNUAL_HOURS_MAX}h/year (cl 12.4).
                                                 </p>
+                                            )}
+
+                                            {/* ── 38h Contracted Hours Capacity Banner ── */}
+                                            {formData.employment_status !== 'Flexible Part-Time' && isCeilingCounted(formData.employment_status) && (
+                                                <div className={cn(
+                                                    "mt-2 p-3 rounded-xl border space-y-2 transition-all",
+                                                    isCeilingExceeded
+                                                        ? "bg-destructive/10 border-destructive/30"
+                                                        : "bg-emerald-500/5 border-emerald-500/20"
+                                                )}>
+                                                    <div className="flex items-center gap-2">
+                                                        {isCeilingExceeded
+                                                            ? <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                                                            : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+                                                        <span className={cn(
+                                                            "text-[10px] font-bold uppercase tracking-wider",
+                                                            isCeilingExceeded ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+                                                        )}>
+                                                            Weekly Hours Capacity
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                                                        <span className="text-muted-foreground">Existing contracted:</span>
+                                                        <span className="font-bold text-foreground">{ceilingValidation.existingHours}h/week</span>
+                                                        <span className="text-muted-foreground">New contract:</span>
+                                                        <span className="font-bold text-foreground">{formData.contracted_weekly_hours || 0}h/week</span>
+                                                        <span className="text-muted-foreground">Combined:</span>
+                                                        <span className={cn(
+                                                            "font-bold",
+                                                            isCeilingExceeded ? "text-destructive" : "text-foreground"
+                                                        )}>
+                                                            {ceilingValidation.proposedTotal}h/week
+                                                        </span>
+                                                        <span className="text-muted-foreground">Remaining capacity:</span>
+                                                        <span className={cn(
+                                                            "font-bold",
+                                                            isCeilingExceeded ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+                                                        )}>
+                                                            {isCeilingExceeded ? '0' : ceilingValidation.remainingCapacity}h/week
+                                                        </span>
+                                                    </div>
+                                                    {isCeilingExceeded && ceilingValidation.message && (
+                                                        <p className="text-[11px] text-destructive font-medium mt-1">
+                                                            {ceilingValidation.message}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             )}
                                         </motion.div>
                                     )}
@@ -866,10 +969,10 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                         </Button>
                         <Button 
                             onClick={handleSubmit} 
-                            disabled={isSubmitting || isLoadingRefs || !isRoleSelected || isFptHoursInvalid}
+                            disabled={isSubmitting || isLoadingRefs || !isRoleSelected || isFptHoursInvalid || isCeilingExceeded}
                             className={cn(
                                 "rounded-xl px-8 transition-all duration-500 font-bold shadow-lg shadow-primary/20",
-                                isRoleSelected ? "bg-primary hover:bg-primary/90 scale-100" : "bg-muted-foreground/20 scale-95 opacity-50"
+                                isRoleSelected && !isCeilingExceeded ? "bg-primary hover:bg-primary/90 scale-100" : "bg-muted-foreground/20 scale-95 opacity-50"
                             )}
                         >
                             {isSubmitting ? (

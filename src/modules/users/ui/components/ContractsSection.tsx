@@ -98,30 +98,30 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
     };
 
     return (
-        <Card className="border-border/40 bg-card/50 backdrop-blur-sm shadow-xl rounded-[2rem] overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-border/10 pb-6">
+        <Card className="border-border/30 bg-card rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border/20 pb-4">
                 <div>
-                    <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-primary/10 text-primary shadow-inner">
-                            <Briefcase className="w-5 h-5" />
+                    <CardTitle className="text-lg font-black uppercase tracking-wider text-foreground flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <Briefcase className="w-4 h-4" aria-hidden="true" />
                         </div>
-                        Employment Contracts
+                        Employment Contracts ({contracts?.length || 0})
                     </CardTitle>
                 </div>
                 {isAuthorizedAdmin && (
-                    <AddContractDialog employeeId={employeeId} employeeName={employeeName} />
+                    <AddContractDialog employeeId={employeeId} employeeName={employeeName} existingContracts={contracts ?? []} />
                 )}
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {isLoading ? (
                         Array.from({ length: 2 }).map((_, i) => (
-                            <div key={i} className="h-32 rounded-2xl bg-muted/20 animate-pulse" />
+                            <div key={i} className="h-32 rounded-xl bg-muted/20 animate-pulse" />
                         ))
                     ) : contracts?.length === 0 ? (
-                        <div className="col-span-full py-12 flex flex-col items-center text-muted-foreground">
-                            <Briefcase className="w-12 h-12 mb-4 opacity-20" />
-                            <p className="text-sm font-medium">No active contracts found</p>
+                        <div className="col-span-full py-10 flex flex-col items-center text-muted-foreground">
+                            <Briefcase className="w-10 h-10 mb-2 opacity-20" aria-hidden="true" />
+                            <p className="text-xs font-bold">No active contracts found</p>
                         </div>
                     ) : (
                         contracts?.map((contract) => {
@@ -141,9 +141,9 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                             return (
                             <motion.div
                                 key={contract.id}
-                                initial={{ opacity: 0, scale: 0.95 }}
+                                initial={{ opacity: 0, scale: 0.98 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                className="group relative p-5 rounded-2xl border border-border/40 bg-card hover:border-primary/30 hover:shadow-lg transition-all duration-300"
+                                className="group relative p-4 rounded-xl border border-border/20 bg-muted/20 hover:border-primary/30 transition-colors shadow-xs"
                             >
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="space-y-1">
@@ -180,6 +180,7 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                 employeeId={employeeId} 
                                                 employeeName={employeeName} 
                                                 existingContract={contract}
+                                                existingContracts={contracts ?? []}
                                                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] })}
                                             />
                                             <Button

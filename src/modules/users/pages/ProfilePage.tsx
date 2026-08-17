@@ -100,11 +100,12 @@ const ProfilePage: React.FC = () => {
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
         <div className={cn(
-            "rounded-[32px] p-4 lg:p-6 transition-all border",
-            isDark 
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            "rounded-[32px] p-4 lg:p-6 transition-all border relative overflow-hidden",
+            isDark
+                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20 backdrop-blur-xl"
                 : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
         )}>
+          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
           {/* Row 1 & 2: Identity & Title */}
           <PersonalPageHeader
             title="My Profile"
