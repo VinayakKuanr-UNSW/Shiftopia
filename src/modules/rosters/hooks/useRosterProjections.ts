@@ -121,7 +121,12 @@ export function useRosterProjections(input: ProjectionInput): ProjectionResult {
   const [workerStats, setWorkerStats] = useState(syncStats);
 
   useEffect(() => {
-    if (shifts.length === 0) {
+    // People mode must still project the employee roster when the selected
+    // window has no shifts. The worker accepts an empty shift list and builds
+    // employee-only rows from `employees`; returning early here previously
+    // made the UI report employees in the toolbar while rendering an empty
+    // table body.
+    if (shifts.length === 0 && activeMode !== 'people') {
       setWorkerPeople(null);
       setWorkerGroup(null);
       setWorkerEvents(null);

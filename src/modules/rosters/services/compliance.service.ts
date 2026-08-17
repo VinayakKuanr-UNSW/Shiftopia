@@ -188,8 +188,16 @@ export const complianceService = {
     // mean the check ran and found no blocking violation. Any other status
     // (including 'unavailable') is treated as invalid to prevent silent saves
     // when the compliance engine is unreachable.
+    //
+    // `status` is returned alongside so callers can tell the two failures apart.
+    // They are not the same thing: 'violated' means the shift breaks a rule and
+    // the manager needs to change it; 'unavailable' means we never found out,
+    // and no amount of editing the shift will help. Collapsing both into
+    // isValid=false produced "Compliance check failed:" with nothing after the
+    // colon, because an unreachable engine reports no violations to list.
     return {
       isValid: result.status === 'passed' || result.status === 'warned',
+      status: result.status,
       violations: result.violations,
       warnings: result.warnings,
       weeklyHours: result.weeklyHours,
