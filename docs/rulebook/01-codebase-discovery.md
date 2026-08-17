@@ -66,7 +66,7 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 
 ### 2.6 `insights`
 **Purpose:** Analytics/reporting dashboard — workforce utilization, scheduling efficiency, financial/budget, compliance-cost, manager-scorecard metrics, mostly aggregated server-side.
-**Structure:** `api/insights.api.ts`, `hooks/` (one per KPI domain), `model/` (metric types, `grid-compliance.ts`), `pages/` (`InsightsPage`, `AnalysisPage`, `GridPage`), `state/`, `ui/{components,views}` (Workforce/Financial/Forecasting/Location/Charts tabs).
+**Structure:** `api/insights.api.ts`, `hooks/` (one per KPI domain), `model/` (metric types), `pages/` (`InsightsPage`, `AnalysisPage`), `state/`, `ui/{components,views}` (Workforce/Financial/Forecasting/Location/Charts tabs). `GridPage` + `grid-compliance.ts` were retired into `availability/` — see docs/architecture/availability-manager-grid-merge-plan.md.
 **Entry points:** `pages/InsightsPage.tsx`, `api/insights.api.ts`, `state/useInsights.ts`.
 **DB:** `employee_licenses` directly; otherwise entirely RPC-driven — `get_insights_summary`, `get_insights_trend`, `get_dept_insights_breakdown`, `get_bidding_kpis`, `get_marketplace_kpis`, `get_manager_scorecard`, `get_metric_detailed_analysis`, `get_quarterly_performance_report`, `get_employee_quarterly_performance` — i.e. most of Insights' real logic lives in Postgres functions, not client queries.
 **Depends on:** `core`, `rosters` (Grid page), `users` (performance metrics).
@@ -192,7 +192,8 @@ Three layered guards wrap the route tree:
 | `/broadcast` | `BroadcastManagerPage` | broadcasts | `broadcast` |
 | `/management/leave` | `LeavePage` (`tab="approvals"`) | leave | `management` |
 | `/management/payroll` | `GrossPayPage` | payroll | `management` |
-| `/insights`, `/insights/:metricId`, `/grid` | `InsightsPage`/`AnalysisPage`/`GridPage` | insights | `insights` |
+| `/insights`, `/insights/:metricId` | `InsightsPage`/`AnalysisPage` | insights | `insights` |
+| `/team-availability` (and `/grid`, redirected) | `TeamAvailabilityPage` | availability | `management` OR `insights` |
 | `/compliance/rejections` | `ComplianceRejectionsPage` | compliance | **none** (⚠ see Ch. 8) |
 | `/users` | `UsersPage` | users | `users` |
 | `/settings`, `/settings/:section` | `SettingsPage` | settings | none (self-gated per-section) |
