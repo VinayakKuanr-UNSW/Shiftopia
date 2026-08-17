@@ -16,29 +16,46 @@ import { minRestGapRule } from './rules/rest-requirements';
 import { maxWorkdayLimitsRule } from './rules/consecutive-days';
 import { studentVisaRule } from './rules/student-visa';
 import { noOverlapRule } from './rules/structural-rules';
-import { mealBreakRule } from './rules/meal-break';
-import { restPauseRule } from './rules/rest-pause';
 import { spreadOfHoursRule } from './rules/spread-of-hours';
 import { splitShiftRule } from './rules/split-shift';
 import { multiHireEligibilityRule } from './rules/multi-hire-eligibility';
 import { maxDailyEngagementsRule } from './rules/max-daily-engagements';
-import { minEngagementRule } from './rules/min-engagement';
 import { qualificationRule } from './rules/employment-rules';
+import { employmentTargetRule } from './rules/employment-target';
 import { leaveConflictRule } from './rules/leave-conflict';
+import { ftDaysOffRule } from './rules/ft-days-off';
+
+/**
+ * MOVED OUT — shift-shape rules (2026-08-15)
+ * ------------------------------------------
+ * Minimum engagement, the full-time 7.6h floor, meal breaks and rest pauses are
+ * decided from a shift ALONE — its length, its breaks, its day type and its
+ * `target_employment_type`. None of them consult the employee. Evaluating them
+ * here forced them through an employee-scoped API, which meant they could not
+ * run at all until somebody was assigned; an unassigned shift skipped them
+ * entirely, and a whole full-time roster sat 6 minutes under the cl 35.1(c)
+ * floor without a single hit being raised.
+ *
+ * They now live in `@/modules/compliance/shape` and run at shift CREATION.
+ * A shift whose shape is valid stays valid regardless of who fills it, so
+ * re-checking at assign/bid/swap time was duplicate work — this engine no
+ * longer does it.
+ *
+ * Do not re-add them here. If a creation path is missing shape validation, wire
+ * `evaluateShiftShape` into that path instead.
+ */
 
 // Optimized Rule Execution Order
 const ACTIVE_RULES: V8RuleEvaluator[] = [
     // 1. Structural (Fastest)
     leaveConflictRule,       // audit F1 — approved leave = legal-hard unavailability
     noOverlapRule,
-    minEngagementRule, // single owner of minimum-duration enforcement
-    
+
     // 2. Staffing
     qualificationRule,
-    
+    employmentTargetRule,    // shifts.target_employment_type — HARD match, no "Any"
+
     // 3. Safety & Breaks
-    mealBreakRule,
-    restPauseRule,           // clause 37 — paid rest pauses (advisory, see rest-pause.ts)
     maxDailyHoursRule,
     spreadOfHoursRule,
     splitShiftRule,          // clause 39 — PT/flexi same-day gap (warns on >3h)
@@ -47,7 +64,8 @@ const ACTIVE_RULES: V8RuleEvaluator[] = [
     minRestGapRule,          // clause 40 — cross-day pairs only
     
     // 4. Budget & Patterns (Cumulative)
-    maxWorkdayLimitsRule,
+    maxWorkdayLimitsRule,    // clause 35.1(e) — 20-in-28 half
+    ftDaysOffRule,           // clause 35.1(e) — paired-days-off half
     studentVisaRule,
     ordinaryHoursAvgRule,
 ];

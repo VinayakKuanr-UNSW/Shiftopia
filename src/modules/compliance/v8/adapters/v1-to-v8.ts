@@ -47,6 +47,7 @@ export async function runV8Compliance(
             end_time: s.end_time,
             is_ordinary_hours: true,
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
+            paid_break_minutes: s.paid_break_minutes || 0,
             is_sunday: isSunday(s.shift_date),
             is_public_holiday: isHoliday(s.shift_date)
         }))
@@ -60,6 +61,7 @@ export async function runV8Compliance(
             end_time: input.candidate_shift.end_time,
             is_ordinary_hours: true,
             unpaid_break_minutes: input.candidate_shift.unpaid_break_minutes || 0,
+            paid_break_minutes: input.candidate_shift.paid_break_minutes || 0,
             is_sunday: isSunday(input.candidate_shift.shift_date),
             is_public_holiday: isHoliday(input.candidate_shift.shift_date),
             is_training: input.candidate_is_training

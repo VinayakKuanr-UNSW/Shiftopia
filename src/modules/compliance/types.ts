@@ -22,6 +22,7 @@ export interface ShiftTimeRange {
     end_time: string;    // HH:mm format
     shift_date: string;  // YYYY-MM-DD format
     unpaid_break_minutes?: number;  // Optional break time to subtract for net hours
+    paid_break_minutes?: number;    // Optional paid break time (e.g. rest pauses)
     shift_id?: string;   // Unique identifier for database lookups
 }
 

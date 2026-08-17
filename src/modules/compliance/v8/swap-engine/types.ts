@@ -24,6 +24,11 @@ export interface SwapParty {
     leave_days?:               string[];
     /** EBA Schedule 3 §3 — see V8Employee.is_security_role (audit H-5). */
     is_security_role?:         boolean;
+    /** Raw per-contract employment statuses — see V8Employee.employment_statuses.
+     *  Feeds V8_EMPLOYMENT_TARGET, which returns no hits without them.
+     *  NOT derivable from `contract_type` (global source; collapses the
+     *  Flexible Part-Time variant onto 'PT'). */
+    employment_statuses?:      string[];
 }
 
 export interface SwapScenario {

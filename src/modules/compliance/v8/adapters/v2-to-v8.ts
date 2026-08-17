@@ -36,6 +36,9 @@ export function runV8ComplexBridge(
         leave_days: input.employee_context.leave_days,
         // audit H-5 — Schedule 3 §3 Full-Time Security hours structure.
         is_security_role: input.employee_context.is_security_role,
+        // V8_EMPLOYMENT_TARGET — raw per-contract statuses. Cannot be derived
+        // from contract_type (global source + STUDENT_VISA overwrite).
+        employment_statuses: input.employee_context.employment_statuses,
     };
 
     // Shifts being added/changed by this operation — the only ones that pure
@@ -52,10 +55,15 @@ export function runV8ComplexBridge(
             end_time: s.end_time,
             is_ordinary_hours: s.is_ordinary_hours,
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
+            paid_break_minutes: (s as any).paid_break_minutes || 0,
             is_training: s.is_training ?? false,
             is_sunday: s.is_sunday ?? isSunday(dateStr),
             is_public_holiday: s.is_public_holiday ?? isPublicHoliday(parseLocalDateStr(dateStr)),
-            is_candidate: candidateIds.has(s.id)
+            is_candidate: candidateIds.has(s.id),
+            // V8_EMPLOYMENT_TARGET. Absent on callers that don't carry it, in
+            // which case the rule stays silent and the DB trigger guards it.
+            target_employment_type: (s as any).target_employment_type ?? null,
+            target_requires_flexible: (s as any).target_requires_flexible ?? false,
         };
     });
 

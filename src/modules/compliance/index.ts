@@ -91,6 +91,22 @@ export {
 // Swap Engine (Replaces legacy solver)
 export { V8SwapEngine as SwapEvaluator } from './v8';
 
+// Shift Shape (employee-free, runs at shift creation — see ./shape/types.ts)
+export type {
+    ShapeInput,
+    ShapeResult,
+    ShapeHit,
+    ShapeStatus,
+    ShapeConfig,
+    ShapeEmploymentTarget
+} from './shape';
+
+export {
+    evaluateShiftShape,
+    requiredMinEngagementMinutes,
+    DEFAULT_SHAPE_CONFIG
+} from './shape';
+
 // Bulk Compliance
 export type {
     BulkComplianceMode,

@@ -37,9 +37,14 @@ const SYSTEM_CATEGORIES = new Set(['SKILL']);
 
 /**
  * Rules whose feedback is surfaced directly in the form UI (Timings section).
- * These are excluded from the compliance panel to avoid duplicate / confusing messaging
+ * These are excluded from the compliance panel to avoid duplicate / confusing messaging.
+ *
+ * Empty since the shape rules moved out of V8 (2026-08-15): meal break was the
+ * only member, and `V8_MEAL_BREAK` can no longer appear in a V8Hit[] at all.
+ * Shape findings are rendered by the form directly and never reach this mapper.
+ * Kept as the mechanism for any future rule that is double-surfaced.
  */
-export const UI_VALIDATED_RULES = new Set(['V8_MEAL_BREAK']);
+export const UI_VALIDATED_RULES = new Set<string>([]);
 
 export function classifyBuckets(hits: V8Hit[]): BucketMap {
     const A: V8Hit[] = [];
