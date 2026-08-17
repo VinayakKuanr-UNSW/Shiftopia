@@ -26,6 +26,11 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   '/my-swaps',
   '/my-broadcasts',
   '/my-notifications',
+  // Both leave routes render LeavePage, which is inside this guard. They were
+  // never allowlisted, so the bottom nav's Leave button landed on the
+  // "Desktop Only" screen on every phone.
+  '/my-leave',
+  '/management/leave',
   '/management/bids',
   '/management/swaps',
   '/templates',
@@ -34,12 +39,20 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   '/performance',
 
   '/insights',
+  // The Availability Manager, and '/grid' which now redirects into it. It does
+  // NOT render its people x days matrix on a phone — a matrix needs
+  // two-dimensional scrolling at 320px, which SC 1.4.10 forbids — it swaps to a
+  // one-day list composition. See TeamMobileDayList.
+  '/team-availability',
   '/grid',
   '/contracts',
   '/users',
   '/search',
   '/settings',
   '/timesheet',
+  '/compliance/rejections',
+  '/rosters',
+  '/rosters/shift/new',
 ]);
 
 // ── Desktop-Only Screen ────────────────────────────────────────────────────────
@@ -111,7 +124,8 @@ const MobileAccessGuard: React.FC = () => {
   const { pathname } = useLocation();
 
   const isAllowed = ALLOWED_MOBILE_ROUTES.has(pathname)
-    || pathname.startsWith('/insights/');
+    || pathname.startsWith('/insights/')
+    || pathname.startsWith('/settings/');
 
   if (isMobile && !isAllowed) {
     return <DesktopOnlyScreen />;
