@@ -4,7 +4,7 @@
 import React, { createContext, useEffect, useState } from 'react';
 import { supabase } from '@/platform/supabase/client';
 import { User, AccessLevel, Role, UserContract, AccessCertificate, PermissionObject } from './types';
-import { authService } from './auth.service';
+import { authService, AuthSessionError } from './auth.service';
 import { hasAccess as checkAccess } from './access.policy';
 
 // Re-export types for backward compatibility with existing imports
@@ -60,6 +60,45 @@ export const AuthContext = createContext<AuthContextType | undefined>(
   undefined
 );
 
+/**
+ * A cached copy of the profile lets an already-signed-in user stay signed in
+ * offline: when the startup profile fetch fails because there is no network,
+ * we fall back to this so they can open the app and read cached data instead of
+ * being bounced to the login screen. Cleared on logout and on a rejected
+ * session.
+ *
+ * This is deliberately only a *fallback*. A rejected token takes the sign-out
+ * path in `endRejectedSession` and wipes the cache first — reusing it there
+ * would produce a signed-in-looking shell where every screen reads zero.
+ */
+const PROFILE_CACHE_KEY = 'shiftopia.cachedProfile';
+
+function readCachedProfile(): User | null {
+  try {
+    const cached = localStorage.getItem(PROFILE_CACHE_KEY);
+    return cached ? (JSON.parse(cached) as User) : null;
+  } catch {
+    // Unavailable storage or a corrupt entry — treat as no cache.
+    return null;
+  }
+}
+
+function writeCachedProfile(profile: User): void {
+  try {
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+  } catch {
+    /* ignore storage quota / privacy-mode errors */
+  }
+}
+
+function clearCachedProfile(): void {
+  try {
+    localStorage.removeItem(PROFILE_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -74,6 +113,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // Profile fetch delegate
   const fetchProfile = async (userId: string): Promise<User | null> => {
     return authService.getUserProfile(userId);
+  };
+
+  /**
+   * Ends a session the server has explicitly rejected.
+   *
+   * Signing out is the point: it clears the stale token from storage so the
+   * next load starts clean instead of retrying a credential that can never
+   * succeed. The message is set last so `logout()`'s state reset cannot
+   * clear it before the login screen renders.
+   */
+  const endRejectedSession = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e: any) {
+      // Already unauthenticated server-side is fine — local state is what matters.
+      console.error('[Auth] sign-out during session teardown failed:', e?.message);
+    }
+    // Drop the offline cache too. Leaving it would let the next load resurrect
+    // a profile whose token the server has already rejected.
+    clearCachedProfile();
+    setUser(null);
+    setPermissionObject(null);
+    setActiveContractId(null);
+    setActiveCertificateId(null);
+    setError('Your session expired. Please sign in again.');
   };
 
   // Fetch resolved permissions from RPC
@@ -91,6 +155,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     } catch (e: any) {
       console.error('[Auth] Permission fetch error:', e.message);
+      // Permissions are fetched after the profile loads, so a token revoked
+      // mid-session surfaces here first. Left unhandled it produced the
+      // zero-everything screen: a signed-in user whose every scope is empty.
+      if (e instanceof AuthSessionError) {
+        await endRejectedSession();
+      }
     } finally {
       setIsPermissionsLoading(false);
     }
@@ -120,12 +190,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (session?.user) {
           const profile = await fetchProfile(session.user.id);
 
-          if (mounted && profile) {
-            setUser(profile);
+          if (mounted) {
+            if (profile) {
+              setUser(profile);
+              // Refresh the offline copy on every successful start-up so the
+              // fallback below never serves a stale role or scope.
+              writeCachedProfile(profile);
+            } else {
+              // Valid session but no fresh profile. getUserProfile resolves
+              // null for a network failure (a *rejected* token throws
+              // AuthSessionError instead and is handled in catch), so this is
+              // the offline case: fall back to the cached profile rather than
+              // bouncing a signed-in user to the login screen.
+              const cached = readCachedProfile();
+              if (cached) {
+                console.warn('[Auth] profile unavailable — using cached profile (offline)');
+                setUser(cached);
+              }
+            }
           }
         }
       } catch (e: any) {
         console.error('[Auth] init ERROR:', e.message);
+        // A rejected token leaves a session in storage that will never work
+        // again. Without this the provider just skipped setUser, so the app
+        // fell back to the login screen with no message, and the dead session
+        // survived every reload. Tear it down and say why.
+        if (e instanceof AuthSessionError && mounted) {
+          await endRejectedSession();
+        }
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -176,7 +269,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (data.user) {
-        const profile = await fetchProfile(data.user.id);
+        // fetchProfile can now reject with AuthSessionError. It previously
+        // resolved null on every failure, so without this catch the message
+        // would never reach `error` and the form would fail silently.
+        let profile: User | null;
+        try {
+          profile = await fetchProfile(data.user.id);
+        } catch (e: any) {
+          if (e instanceof AuthSessionError) {
+            setError(e.message);
+            await supabase.auth.signOut();
+          }
+          throw e;
+        }
 
         if (!profile) {
           setError('Profile not found');
@@ -185,6 +290,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         setUser(profile);
+        // Seed the offline copy at sign-in, so the very next cold start works
+        // offline without needing one successful online start-up first.
+        writeCachedProfile(profile);
       }
     } finally {
       setIsLoading(false);
@@ -196,6 +304,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (typeof window !== 'undefined') {
       sessionStorage.clear();
     }
+    // Must clear, or the next cold start would sign the previous user back in
+    // from cache on a device with no network.
+    clearCachedProfile();
     setUser(null);
     setActiveContractId(null);
     setActiveCertificateId(null);
