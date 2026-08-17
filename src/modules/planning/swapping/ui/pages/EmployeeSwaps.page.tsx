@@ -52,7 +52,8 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useSwaps } from '../../state/useSwaps';
 import { ShiftSwap, swapsApi } from '../../api/swaps.api';
-import { format, differenceInMinutes, parse, startOfWeek, endOfWeek } from 'date-fns';
+import { format, differenceInMinutes, parse } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
 import { ViewOffersModal } from '../components/ViewOffersModal';
 import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
@@ -390,8 +391,8 @@ export const EmployeeSwapsPage: React.FC = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [priorityFilter, setPriorityFilter] = useState<ShiftUrgency | 'all'>('all');
     // Default to the current week (Mon–Sun) preset on every load.
-    const [startDate, setStartDate] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-    const [endDate, setEndDate]     = useState<Date>(() => endOfWeek(new Date(), { weekStartsOn: 1 }));
+    const [startDate, setStartDate] = useState<Date>(() => startOfWeekAU(new Date()));
+    const [endDate, setEndDate]     = useState<Date>(() => endOfWeekAU(new Date()));
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
     // Modal State

@@ -51,6 +51,7 @@ export interface GlobalScopeFilterProps {
     /** Enable multi-select (checkboxes + select all). Default true for personal, false for managerial */
     multiSelect?: boolean;
     className?: string;
+    compactOnMobile?: boolean;
 }
 
 // =============================================
@@ -199,7 +200,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                     type="button"
                 >
                     <div className="flex flex-col items-start gap-0.5">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/30 leading-none">{label}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">{label}</span>
                         <span className="truncate max-w-[120px] sm:max-w-[180px] text-xs sm:text-sm font-semibold">{displayText}</span>
                     </div>
                     {locked ? (
@@ -320,6 +321,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     mode,
     multiSelect = true,
     className,
+    compactOnMobile = false,
 }) => {
     const orgs = allowedScopeTree?.organizations || [];
     const breakpoint = useBreakpoint();
@@ -473,17 +475,33 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
     if (isMobile) {
         return (
-            <div className={cn("w-full mb-2 px-0.5", className)}>
+            <div className={cn(
+                'w-full mb-2 px-0.5',
+                compactOnMobile && 'mb-0 px-0',
+                className,
+            )}>
                 <Sheet>
                     <SheetTrigger asChild>
-                        <button className="flex items-center justify-between w-full px-4 py-3 bg-card/60 backdrop-blur-md border border-border/40 rounded-2xl shadow-sm active:scale-[0.98] transition-all group">
-                            <div className="flex items-center gap-3">
-                                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary transition-colors group-hover:bg-primary/20">
-                                    <Building2 className="w-5 h-5" />
+                        <button className={cn(
+                            'flex items-center justify-between w-full px-4 py-3 bg-card/60 backdrop-blur-md border border-border/40 rounded-2xl shadow-sm active:scale-[0.98] transition-all group',
+                            compactOnMobile && 'px-3 py-2 rounded-xl',
+                        )}>
+                            <div className={cn('flex items-center gap-3', compactOnMobile && 'gap-2.5')}>
+                                <div className={cn(
+                                    'h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary transition-colors group-hover:bg-primary/20',
+                                    compactOnMobile && 'h-8 w-8 rounded-lg',
+                                )}>
+                                    <Building2 className={cn('w-5 h-5', compactOnMobile && 'w-4 h-4')} />
                                 </div>
                                 <div className="flex flex-col items-start">
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">Organizational Scope</span>
-                                    <span className="text-sm font-bold text-foreground truncate max-w-[180px]">{summaryText}</span>
+                                    <span className={cn(
+                                        'text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1',
+                                        compactOnMobile && 'text-[9px] tracking-[0.16em] mb-0.5',
+                                    )}>Organizational Scope</span>
+                                    <span className={cn(
+                                        'text-sm font-bold text-foreground truncate max-w-[180px]',
+                                        compactOnMobile && 'text-xs max-w-[210px]',
+                                    )}>{summaryText}</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -491,8 +509,11 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                                     {selectedDeptIds.length > 0 && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-background" />}
                                     {selectedSubDeptIds.length > 0 && <div className="h-1.5 w-1.5 rounded-full bg-blue-500 ring-2 ring-background" />}
                                 </div>
-                                <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground">
-                                    <Settings2 className="w-4 h-4" />
+                                <div className={cn(
+                                    'h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground',
+                                    compactOnMobile && 'h-7 w-7',
+                                )}>
+                                    <Settings2 className={cn('w-4 h-4', compactOnMobile && 'w-3.5 h-3.5')} />
                                 </div>
                             </div>
                         </button>

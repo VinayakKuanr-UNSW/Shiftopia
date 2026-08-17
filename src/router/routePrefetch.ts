@@ -34,6 +34,7 @@ const routeImporters: Record<string, () => Promise<unknown>> = {
   // ── Management ──
   '/management/bids':    () => import('@/modules/planning/bidding/ui/pages/ManagerBids.page.tsx'),
   '/management/swaps':   () => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page.tsx'),
+  '/team-availability':  () => import('@/modules/availability/pages/TeamAvailabilityPage.tsx'),
 
 
 
@@ -42,7 +43,6 @@ const routeImporters: Record<string, () => Promise<unknown>> = {
 
   // ── Insights ──
   '/insights':           () => import('@/modules/insights/pages/InsightsPage.tsx'),
-  '/grid':               () => import('@/modules/insights/pages/GridPage.tsx'),
 
   // ── Other ──
   '/compliance/rejections': () => import('@/modules/compliance/ui/pages/RejectionsPage.tsx'),

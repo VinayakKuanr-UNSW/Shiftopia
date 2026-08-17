@@ -8,7 +8,7 @@ import { cn } from '@/modules/core/lib/utils'
 import { Button } from '@/modules/core/ui/primitives/button'
 import { Input } from '@/modules/core/ui/primitives/input'
 import { Separator } from '@/modules/core/ui/primitives/separator'
-import { Sheet, SheetContent } from '@/modules/core/ui/primitives/sheet'
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/modules/core/ui/primitives/sheet'
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton'
 import {
   Tooltip,
@@ -203,7 +203,14 @@ const Sidebar = React.forwardRef<
               } as React.CSSProperties
             }
             side={side}
+            aria-describedby="sidebar-mobile-description"
           >
+            <div className="sr-only">
+              <SheetTitle>Sidebar Navigation</SheetTitle>
+              <SheetDescription id="sidebar-mobile-description">
+                Mobile navigation sidebar menu
+              </SheetDescription>
+            </div>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
         </Sheet>

@@ -19,6 +19,7 @@ interface ScopeFilterBannerProps {
     multiSelect?: boolean;
     /** Additional CSS classes */
     className?: string;
+    compactOnMobile?: boolean;
 }
 
 /**
@@ -33,6 +34,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
     hidden = false,
     multiSelect,
     className,
+    compactOnMobile = false,
 }) => {
     const context = useContext(AuthContext);
     const { permissionObject } = context || {};
@@ -68,6 +70,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
                 <ManagerialScopeFilter
                     onScopeChange={onScopeChange}
                     multiSelect={effectiveMultiSelect}
+                    compactOnMobile={compactOnMobile}
                 />
             )}
         </div>

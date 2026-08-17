@@ -23,6 +23,21 @@ body,
   padding: 0;
 }
 
+/* Paints the area behind the app — visible during native launch and on
+   overscroll. The reference used a hardcoded dark hex here; tracking the theme
+   variable instead keeps light mode from showing a dark band. */
+html {
+  background: hsl(var(--background));
+}
+
+/* CapacitorBridge adds .capacitor-native to <html> on a native platform only. */
+html.capacitor-native,
+html.capacitor-native body,
+html.capacitor-native #root {
+  min-height: 100%;
+  background: hsl(var(--background));
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -122,6 +137,29 @@ body,
 
   body {
     @apply font-sans antialiased text-foreground bg-background selection:bg-primary/30 selection:text-primary-foreground;
+  }
+
+  /* ── Reduced motion ────────────────────────────────────────────────────
+     WCAG 2.2 AA (2.3.3 Animation from Interactions). Durations are collapsed
+     rather than set to `none`: tailwindcss-animate's enter/exit keyframes run
+     with animation-fill-mode, so cancelling them outright can leave an element
+     stuck at its *starting* opacity/transform. Running them instantly keeps
+     the end state and removes the motion.
+
+     This covers CSS animation only. framer-motion animates via inline styles
+     and honours this preference through <MotionConfig reducedMotion="user">,
+     which is not yet mounted at the app root — motion-driven entrances still
+     animate for these users. */
+  @media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -262,6 +300,71 @@ body,
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;  /* Chrome, Safari and Opera */
+  }
+
+  /* ── Native safe areas ──────────────────────────────────────────────────
+     StatusBar.setOverlaysWebView(true) in CapacitorBridge draws the app behind
+     the system bars, so content must inset itself. env(safe-area-inset-*)
+     resolves to 0px in a browser, which makes every rule below a no-op on web.
+     ---------------------------------------------------------------------- */
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .mobile-safe-area-shell {
+    min-height: 0;
+  }
+
+  @media (max-width: 767px) {
+    html.capacitor-native .mobile-safe-area-shell {
+      padding-top: env(safe-area-inset-top, 0px);
+      box-sizing: border-box;
+    }
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .pb-mobile-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8rem);
+  }
+
+  /* One place that defines how much room the bottom nav needs, so floating
+     actions, toasts and scroll padding cannot drift apart. */
+  .mobile-bottom-safe-vars {
+    --mobile-bottom-nav-offset: calc(env(safe-area-inset-bottom, 0px) + 18px);
+    --mobile-bottom-nav-height: 72px;
+    --mobile-bottom-nav-gap: 24px;
+    --mobile-toast-bottom-offset: 1rem;
+    --mobile-bottom-nav-clearance: calc(
+      var(--mobile-bottom-nav-offset) + var(--mobile-bottom-nav-height)
+    );
+    --mobile-floating-action-bottom: calc(
+      var(--mobile-bottom-nav-clearance) + var(--mobile-bottom-nav-gap)
+    );
+  }
+
+  @media (max-width: 767px) {
+    .pb-mobile-safe {
+      padding-bottom: calc(
+        var(--mobile-bottom-nav-clearance, 90px) +
+        var(--mobile-bottom-nav-gap, 24px) +
+        1rem
+      );
+    }
+
+    .mobile-bottom-safe-vars {
+      --mobile-toast-bottom-offset: calc(
+        var(--mobile-bottom-nav-clearance) + 1rem
+      );
+    }
   }
 
   .custom-scrollbar::-webkit-scrollbar {

@@ -41,6 +41,8 @@ const NavSection: React.FC<NavSectionProps> = ({
           <TooltipTrigger asChild>
             <button
               onClick={onToggle}
+              aria-expanded={isOpen}
+              aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${title}`}
               className={cn(
                 // Always keep space for icon + label on the left, arrow (chevron) on the right
                 "flex items-center w-full px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors justify-between",

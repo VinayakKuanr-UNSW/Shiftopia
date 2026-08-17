@@ -12,34 +12,17 @@ import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import { cn } from '@/modules/core/lib/utils';
+import { normalizeNotificationEventType, resolveNotificationPolicy } from '@/platform/notifications/notificationPolicy';
 
 /* ── Priority map ───────────────────────────────────────────── */
 type Priority = 'high' | 'medium' | 'low';
 
-const PRIORITY_MAP: Record<string, Priority> = {
-  emergency_assignment: 'high',
-  shift_cancelled:      'high',
-  shift_assigned:       'high',
-  shift_dropped:        'high',
-  timesheet_rejected:   'high',
-  swap_rejected:        'high',
-  bid_no_winner:        'high',
-  offer_expired:        'high',
-  swap_expired:         'high',
-  bid_rejected:         'medium',
-  timesheet_approved:   'medium',
-  swap_approved:        'medium',
-  bid_accepted:         'medium',
-  swap_request:         'medium',
-  broadcast:            'medium',
-  shift_updated:        'low',
-  general:              'low',
-};
-
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
 function getPriority(type: string): Priority {
-  return PRIORITY_MAP[type] ?? 'low';
+  const configured = resolveNotificationPolicy(type).priority;
+  if (configured === 'critical' || configured === 'high') return 'high';
+  return configured;
 }
 
 /* ── Type metadata ──────────────────────────────────────────── */
@@ -53,6 +36,8 @@ const TYPE_META: Record<string, TypeMeta> = {
   emergency_assignment: { label: 'Emergency', dot: 'bg-rose-600',    group: 'Shifts'     },
   bid_accepted:      { label: 'Bid',       dot: 'bg-green-500',   group: 'Bids'       },
   bid_rejected:      { label: 'Bid',       dot: 'bg-red-500',     group: 'Bids'       },
+  bid_submitted:     { label: 'Bid',       dot: 'bg-blue-500',    group: 'Bids'       },
+  shift_bidding_open:{ label: 'Bid',       dot: 'bg-blue-500',    group: 'Bids'       },
   bid_no_winner:     { label: 'Bid',       dot: 'bg-rose-500',    group: 'Bids'       },
   offer_expired:     { label: 'Offer',     dot: 'bg-rose-500',    group: 'Shifts'     },
   swap_request:      { label: 'Swap',      dot: 'bg-orange-500',  group: 'Swaps'      },
@@ -66,7 +51,16 @@ const TYPE_META: Record<string, TypeMeta> = {
 };
 
 function getMeta(type: string): TypeMeta {
-  return TYPE_META[type] ?? { label: 'Notice', dot: 'bg-slate-400', group: 'General' };
+  const key = type.toLowerCase();
+  const canonicalKey = normalizeNotificationEventType(type).toLowerCase();
+  return TYPE_META[key] ?? TYPE_META[canonicalKey] ?? inferMeta(canonicalKey);
+}
+
+function inferMeta(type: string): TypeMeta {
+  if (type.includes('swap')) return { label: 'Swap', dot: 'bg-orange-500', group: 'Swaps' };
+  if (type.includes('bid') || type.includes('marketplace')) return { label: 'Bid', dot: 'bg-blue-500', group: 'Bids' };
+  if (type.includes('shift') || type.includes('offer')) return { label: 'Shift', dot: 'bg-cyan-500', group: 'Shifts' };
+  return { label: 'Notice', dot: 'bg-slate-400', group: 'General' };
 }
 
 /* ── Priority left-border colour ────────────────────────────── */

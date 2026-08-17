@@ -16,6 +16,9 @@ export type RPCErrorCode =
   | 'NOT_FOUND'         // Resource doesn't exist
   | 'STATE_TRANSITION'  // Invalid state transition attempted
   | 'COMPLIANCE'        // Hard compliance violation (blocks save)
+  | 'COMPLIANCE_UNAVAILABLE' // Rules engine unreachable — NOT a violation; the
+                             // shift is unsaved and no edit to it will help
+
   | 'CONFLICT'          // Optimistic-lock / version conflict
   | 'VALIDATION'        // Client-side input validation failed
   | 'UNKNOWN';          // Unclassified — should never be used in new code
@@ -55,13 +58,44 @@ export class AppError extends Error {
 /** Hard compliance violation — blocks saving the shift */
 export class ComplianceError extends AppError {
   constructor(violations: string[], rpcName?: string) {
+    // A failure with no violations listed used to render as "Compliance check
+    // failed:" — a bare colon and nothing after it. That only happens when the
+    // check did not actually run, which ComplianceUnavailableError now covers,
+    // but keep a readable fallback rather than trailing off mid-sentence.
+    const reason = violations.length
+      ? violations.join('; ')
+      : 'the check reported a failure without naming a rule';
+
     super({
       code: 'COMPLIANCE',
-      message: `Compliance check failed: ${violations.join('; ')}`,
+      message: `Compliance check failed — ${reason}.`,
       rpcName,
       violations,
     });
     this.name = 'ComplianceError';
+  }
+}
+
+/**
+ * The compliance engine could not be reached, so the shift was never checked.
+ *
+ * Distinct from ComplianceError on purpose. A violation is the manager's
+ * problem and editing the shift fixes it; an unreachable engine is ours, and no
+ * amount of editing will help. Telling someone their shift "failed compliance"
+ * when nothing was ever evaluated sends them looking for a rule that does not
+ * exist.
+ */
+export class ComplianceUnavailableError extends AppError {
+  constructor(detail?: string, rpcName?: string) {
+    super({
+      code: 'COMPLIANCE_UNAVAILABLE',
+      message:
+        'Compliance could not be checked — the rules service did not respond, so this shift was not saved. ' +
+        (detail ?? 'Leave the shift unassigned to save it without an employee-level check.'),
+      rpcName,
+      violations: [],
+    });
+    this.name = 'ComplianceUnavailableError';
   }
 }
 

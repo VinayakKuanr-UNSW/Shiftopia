@@ -54,17 +54,34 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
+>(({ side = "right", className, children, style, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}
+      // Any sheet reaching the top of the screen sits under the system status
+      // bar, because StatusBar.setOverlaysWebView(true) lets the WebView extend
+      // behind it. This has to be an inline style rather than a utility class:
+      // several callers pass `p-0` for edge-to-edge content, and since their
+      // className is merged last it would win over any padding set in the
+      // variant. env() is 0 off-device, so the web layout is unchanged, and
+      // `bottom` is skipped because it never reaches the status bar.
+      style={
+        side === "bottom"
+          ? style
+          : { paddingTop: "env(safe-area-inset-top, 0px)", ...style }
+      }
       {...props}
     >
       {children}
-      <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-        <X className="h-4 w-4" />
+      {/* Absolutely positioned, so it measures from the padding box and the
+          padding above does not move it clear of the status bar on its own.
+          Sized 44x44 rather than shrink-wrapping the 16px icon: this is the only
+          close affordance on a touch sheet, and a 16px target fails WCAG 2.5.5.
+          Negative margins keep the icon optically where it has always been. */}
+      <SheetPrimitive.Close className="absolute right-2 top-[calc(env(safe-area-inset-top,0px)+0.5rem)] flex h-11 w-11 items-center justify-center rounded-lg opacity-70 ring-offset-background transition-opacity hover:bg-muted/50 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+        <X className="h-4 w-4" aria-hidden="true" />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>

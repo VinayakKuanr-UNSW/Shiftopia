@@ -13,7 +13,7 @@ import {
 import {
     Popover, PopoverContent, PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
-import { Calendar as CalendarComponent } from '@/modules/core/ui/primitives/calendar';
+import { DatePicker } from '@/modules/core/ui/calendar';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -68,7 +68,6 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
     isSelectMode, onToggleSelectMode,
     selectedCount, onBulkApprove, onBulkReject,
 }) => {
-    const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [draftFilters, setDraftFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
 
@@ -113,22 +112,12 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
                 >
                     <ChevronLeft className="h-4 w-4" />
                 </button>
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                    <PopoverTrigger asChild>
-                        <button className="flex items-center gap-1.5 px-2.5 h-8 font-black text-[12px] text-foreground hover:text-primary rounded-lg transition-colors min-w-[118px] justify-center">
-                            {isToday && <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />}
-                            {format(selectedDate, 'EEE, MMM d')}
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-popover border-border rounded-2xl shadow-2xl" align="center">
-                        <CalendarComponent
-                            mode="single"
-                            selected={selectedDate}
-                            onSelect={(d) => { if (d) { onDateChange(d); setIsCalendarOpen(false); } }}
-                            initialFocus
-                        />
-                    </PopoverContent>
-                </Popover>
+                <DatePicker value={selectedDate} onChange={onDateChange} label="Date shown" align="center">
+                    <button className="flex items-center gap-1.5 px-2.5 h-8 font-black text-[12px] text-foreground hover:text-primary rounded-lg transition-colors min-w-[118px] justify-center">
+                        {isToday && <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />}
+                        {format(selectedDate, 'EEE, MMM d')}
+                    </button>
+                </DatePicker>
                 <button
                     onClick={() => onDateChange(addDays(selectedDate, 1))}
                     className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-lg transition-colors"

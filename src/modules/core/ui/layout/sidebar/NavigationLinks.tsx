@@ -203,6 +203,15 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
 
 
           <NavItem
+            icon={<CalendarDays className="h-5 w-5" />}
+            label={t('nav.team_availability', 'Team Availability')}
+            path="/team-availability"
+            active={isRouteActive('/team-availability') || isRouteActive('/availability-manager') || isRouteActive('/availibility-manger')}
+            indent
+            sectionColor="green"
+          />
+
+          <NavItem
             icon={<Palmtree className="h-5 w-5" />}
             label={t('nav.leave_approvals', 'Leave Approvals')}
             path="/management/leave"

@@ -4,7 +4,8 @@ import { useAuth } from '@/platform/auth/useAuth';
 import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO, addDays, startOfWeek, endOfWeek } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
+import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
 import { validateCompliance, type ComplianceResult, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
@@ -79,8 +80,8 @@ export const EmployeeBidsPage: React.FC = () => {
     const { isDark } = useTheme();
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     // Default to the current week (Mon–Sun) preset on every load.
-    const [startDate, setStartDate] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-    const [endDate, setEndDate]     = useState<Date>(() => endOfWeek(new Date(), { weekStartsOn: 1 }));
+    const [startDate, setStartDate] = useState<Date>(() => startOfWeekAU(new Date()));
+    const [endDate, setEndDate]     = useState<Date>(() => endOfWeekAU(new Date()));
 
     const [drawerOpp, setDrawerOpp] = useState<ShiftOpportunity | null>(null);
     const [groupBy, setGroupBy] = useState<BidGroupBy>('date');

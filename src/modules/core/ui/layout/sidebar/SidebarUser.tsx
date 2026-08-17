@@ -20,7 +20,7 @@ export const SidebarUser: React.FC = () => {
                 <h3 className="font-bold text-sm text-foreground truncate tracking-tight">
                     {user.fullName}
                 </h3>
-                <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-widest mt-0.5">
+                <p className="text-[10px] font-medium text-slate-600 dark:text-slate-300 uppercase tracking-widest mt-0.5">
                     {activeCertificate ? `<${activeCertificate.accessLevel}>` : (user.systemRole || 'Team Member')}
                 </p>
             </div>
@@ -54,6 +54,7 @@ export const SidebarUser: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     onClick={() => logout()}
+                    aria-label="Log out"
                     className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors rounded-full"
                     title="Log Out"
                 >

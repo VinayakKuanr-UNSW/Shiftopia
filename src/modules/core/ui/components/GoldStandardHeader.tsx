@@ -49,6 +49,13 @@ interface ScopeRowProps {
 interface BuiltInFunctionBarProps {
     viewMode?: 'card' | 'table';
     onViewModeChange?: (mode: 'card' | 'table') => void;
+    /**
+     * Suppress the card/table switch while still using the built-in function
+     * bar. For pages that own their own view switcher (e.g. Team Availability's
+     * Team / Coverage / Declared / Near-miss tabs) and would otherwise show two
+     * competing view controls.
+     */
+    hideViewModeToggle?: boolean;
     startDate?: Date;
     endDate?: Date;
     onDateChange?: (start: Date, end: Date) => void;
@@ -93,6 +100,7 @@ export const GoldStandardHeader: React.FC<GoldStandardHeaderProps> = ({
     // Row 3 (structured)
     viewMode,
     onViewModeChange,
+    hideViewModeToggle,
     startDate,
     endDate,
     onDateChange,
@@ -143,6 +151,7 @@ export const GoldStandardHeader: React.FC<GoldStandardHeaderProps> = ({
                         <UnifiedModuleFunctionBar
                             viewMode={viewMode!}
                             onViewModeChange={onViewModeChange!}
+                            hideViewModeToggle={hideViewModeToggle}
                             startDate={startDate}
                             endDate={endDate}
                             onDateChange={onDateChange}

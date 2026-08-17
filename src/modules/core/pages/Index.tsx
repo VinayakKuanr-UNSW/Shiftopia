@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from '@/platform/auth/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -298,16 +299,44 @@ const SocialProof: React.FC = () => (
 /* -------------------------------------------------------------------------- */
 
 const Index: React.FC = () => {
-  const { isAuthenticated, getLandingPage } = useAuth();
-  // Authenticated visitors landing on the marketing page jump straight to
-  // their workspace; everyone else is funnelled to sign-up.
-  const ctaPath = isAuthenticated ? getLandingPage() : '/signup';
-  const ctaLabel = isAuthenticated ? 'Go to Workspace' : 'Get Started';
-  const heroCtaLabel = isAuthenticated ? 'Go to Workspace' : 'Start Scheduling';
+  const { isAuthenticated, isLoading, getLandingPage } = useAuth();
+
+  // Credential-first entry: a visitor who already has a session never sees the
+  // marketing page — they go straight into their workspace. We hold on a
+  // spinner while the session is still resolving so logged-in users don't
+  // flash the marketing hero before the redirect fires.
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-[#0b0718]">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-fuchsia-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={getLandingPage()} replace />;
+  }
+
+  // Inside the installed app there is nobody left to convince — the marketing
+  // hero and its "Get Started" are addressed to a visitor deciding whether to
+  // sign up, and someone who has already installed the APK has decided. Go
+  // straight to the sign-in screen, which still links to sign-up for anyone
+  // who needs it.
+  //
+  // Gated on the native shell rather than viewport width on purpose: a phone
+  // browser visiting the public site is exactly the visitor this page is for.
+  if (Capacitor.isNativePlatform()) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Logged-out visitors are funnelled to sign-up.
+  const ctaPath = '/signup';
+  const ctaLabel = 'Get Started';
+  const heroCtaLabel = 'Start Scheduling';
 
   return (
     <div
-      className="flex min-h-screen w-full flex-col overflow-hidden font-sans"
+      className="flex min-h-screen w-full flex-col overflow-hidden font-sans safe-area-top safe-area-x"
       style={{
         background:
           'radial-gradient(125% 125% at 0% 0%, #f6dcb8 0%, #e7c2dd 16%, #c69ae4 30%, #8a5fc8 44%, #3b2570 64%, #140d2c 84%, #0b0718 100%)',
@@ -426,7 +455,7 @@ const Index: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.5 }}
-        className="relative z-10 flex w-full justify-center px-6 pb-10 pt-2"
+        className="relative z-10 flex w-full justify-center px-6 pb-[calc(env(safe-area-inset-bottom,0px)+2.5rem)] pt-2"
       >
         <CapabilityDock />
       </motion.div>

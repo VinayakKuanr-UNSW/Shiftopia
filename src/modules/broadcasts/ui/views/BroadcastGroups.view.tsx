@@ -12,6 +12,7 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { BroadcastGroupWithStats } from '../../model/broadcast.types';
 import { cn } from '@/modules/core/lib/utils';
+import { PageState } from '@/modules/core/ui/components/PageState';
 import { formatDistanceToNow } from 'date-fns';
 
 interface BroadcastGroupsViewProps {
@@ -31,24 +32,31 @@ export const BroadcastGroupsView: React.FC<BroadcastGroupsViewProps> = ({
 }) => {
     if (isLoading) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-48 w-full rounded-xl" />
-                ))}
-            </div>
+            <PageState
+                state="loading"
+                scope="section"
+                title="Loading broadcast groups"
+                skeleton={
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2" aria-hidden="true">
+                        {[1, 2, 3, 4].map((i) => (
+                            <Skeleton key={i} className="h-48 w-full rounded-xl" />
+                        ))}
+                    </div>
+                }
+            />
         );
     }
 
     if (groups.length === 0) {
         return (
             <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <Megaphone className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                    <h3 className="text-lg font-semibold">No Broadcast Groups</h3>
-                    <p className="text-muted-foreground max-w-sm mt-2">
-                        Create your first group to start sending broadcasts to your team.
-                    </p>
-                </CardContent>
+                <PageState
+                    state="empty"
+                    scope="section"
+                    title="No broadcast groups"
+                    description="Create your first group to start sending broadcasts to your team."
+                    icon={Megaphone}
+                />
             </Card>
         );
     }

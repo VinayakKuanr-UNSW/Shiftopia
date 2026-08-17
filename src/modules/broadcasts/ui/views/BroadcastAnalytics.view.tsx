@@ -3,6 +3,7 @@ import { BarChart3, TrendingUp, Users, MessageSquare, Eye, Clock } from 'lucide-
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
+import { PageState } from '@/modules/core/ui/components/PageState';
 import { useBroadcastAnalytics } from '../../state/useBroadcastAnalytics';
 
 export const BroadcastAnalytics: React.FC = () => {
@@ -10,30 +11,44 @@ export const BroadcastAnalytics: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <Skeleton className="h-32" />
-                <Skeleton className="h-32" />
-                <Skeleton className="h-32" />
-                <Skeleton className="h-32" />
-            </div>
+            <PageState
+                state="loading"
+                scope="section"
+                title="Loading broadcast analytics"
+                skeleton={
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4" aria-hidden="true">
+                        <Skeleton className="h-32" />
+                        <Skeleton className="h-32" />
+                        <Skeleton className="h-32" />
+                        <Skeleton className="h-32" />
+                    </div>
+                }
+            />
         );
     }
 
     if (error) {
         return (
-            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                <p className="text-destructive font-medium">{error}</p>
-                <button
-                    onClick={refetch}
-                    className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
-                >
-                    Retry
-                </button>
-            </div>
+            <PageState
+                state="error"
+                scope="section"
+                title="Couldn’t load broadcast analytics"
+                description={error}
+                onRetry={refetch}
+            />
         );
     }
 
-    if (!analytics) return null;
+    if (!analytics) {
+        return (
+            <PageState
+                state="empty"
+                scope="section"
+                title="No broadcast analytics yet"
+                description="Analytics will appear after broadcasts have been sent."
+            />
+        );
+    }
 
     return (
         <div className="space-y-6">

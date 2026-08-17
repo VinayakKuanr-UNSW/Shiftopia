@@ -25,6 +25,7 @@ const NotFound = lazy(() => import('@/modules/core/pages/NotFound.tsx'));
 const ProfilePage = lazy(() => import('@/modules/users/pages/ProfilePage.tsx'));
 const MyRosterPage = lazy(() => import('@/modules/rosters/pages/MyRosterPage.tsx'));
 const AvailabilityPage = lazy(() => import('@/modules/availability/pages/AvailabilityPage.tsx'));
+const TeamAvailabilityPage = lazy(() => import('@/modules/availability/pages/TeamAvailabilityPage.tsx'));
 const EmployeeBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/EmployeeBids.page.tsx'));
 const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/EmployeeSwaps.page.tsx'));
 const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage.tsx'));
@@ -49,7 +50,6 @@ const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/Br
 // Features
 const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage.tsx'));
 const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage.tsx'));
-const GridPage = lazy(() => import('@/modules/insights/pages/GridPage.tsx'));
 const ComplianceRejectionsPage = lazy(() => import('@/modules/compliance/ui/pages/RejectionsPage.tsx'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage.tsx'));
 
@@ -120,10 +120,16 @@ const AuthLayout: React.FC = () => {
    FEATURE GATE
    Optional per-route permission check — wraps child routes that need
    a specific feature permission. Redirects to /unauthorized if denied.
+
+   An ARRAY means "any of these". The Availability Manager needs it: it
+   absorbed the Annual Shift Grid, which was an `insights` page, so analysts
+   who never held `management` would otherwise have lost the hours and
+   compliance matrix along with the route.
    ======================= */
-const FeatureGate: React.FC<{ feature: string }> = ({ feature }) => {
+const FeatureGate: React.FC<{ feature: string | string[] }> = ({ feature }) => {
     const { hasPermission } = useAuth();
-    if (!hasPermission(feature)) {
+    const features = Array.isArray(feature) ? feature : [feature];
+    if (!features.some((f) => hasPermission(f))) {
         return <Navigate to="/unauthorized" replace />;
     }
     return <Outlet />;
@@ -205,7 +211,20 @@ const AppRouter: React.FC = () => {
                     <Route element={<FeatureGate feature="insights" />}>
                         <Route path="/insights" element={<InsightsPage />} />
                         <Route path="/insights/:metricId" element={<AnalysisPage />} />
-                        <Route path="/grid" element={<GridPage />} />
+                    </Route>
+
+                    {/* ── Availability Manager ──
+                        Employer half of the availability pair (see
+                        docs/architecture/persona-toggle-plan.md), and since the
+                        merge, the home of the hours + compliance matrix that
+                        used to be the Annual Shift Grid at /grid. Hence the
+                        two-permission gate and the /grid redirect — see
+                        docs/architecture/availability-manager-grid-merge-plan.md */}
+                    <Route element={<FeatureGate feature={['management', 'insights']} />}>
+                        <Route path="/team-availability" element={<TeamAvailabilityPage />} />
+                        <Route path="/grid" element={<Navigate to="/team-availability" replace />} />
+                        <Route path="/availability-manager" element={<Navigate to="/team-availability" replace />} />
+                        <Route path="/availibility-manger" element={<Navigate to="/team-availability" replace />} />
                     </Route>
 
                     {/* ── Compliance audit ── */}

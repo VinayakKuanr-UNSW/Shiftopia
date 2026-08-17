@@ -56,14 +56,14 @@ const LoginPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0f1113]">
+      <div className="min-h-screen flex items-center justify-center bg-[#0f1113] safe-area-top safe-area-bottom safe-area-x">
         <Loader2 className="h-10 w-10 text-purple-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row bg-[#0f1113] font-sans">
+    <div className="min-h-screen w-full flex flex-col md:flex-row bg-[#0f1113] font-sans safe-area-top safe-area-bottom safe-area-x">
 
       {/* LEFT SIDE */}
       <motion.div

@@ -6,6 +6,7 @@ import type { ScopeSelection } from '@/platform/auth/types';
 interface ManagerialScopeFilterProps {
     onScopeChange: (scope: ScopeSelection) => void;
     multiSelect?: boolean;
+    compactOnMobile?: boolean;
 }
 
 /**
@@ -17,6 +18,7 @@ interface ManagerialScopeFilterProps {
 export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
     onScopeChange,
     multiSelect = false,
+    compactOnMobile = false,
 }) => {
     const { scope, scopeTree, isGammaLocked, isLoading } = useScopeFilter('managerial');
 
@@ -36,6 +38,7 @@ export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
             defaultSelection={scope}
             onScopeChange={onScopeChange}
             multiSelect={multiSelect}
+            compactOnMobile={compactOnMobile}
         />
     );
 };
