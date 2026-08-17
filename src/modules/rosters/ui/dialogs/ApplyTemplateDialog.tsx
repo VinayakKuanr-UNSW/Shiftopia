@@ -64,7 +64,7 @@ const HistoryItem: React.FC<{ batch: any }> = ({ batch }) => {
         }
         try {
             await undo.mutateAsync({ batchId: batch.id });
-            toast.success('Sequence reversed successfully');
+            toast.success('Template application reversed');
         } catch (err) {
             toast.error('Failed to undo application');
         }
@@ -200,7 +200,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                 targetDepartmentId: departmentId || undefined,
                 targetSubDepartmentId: subDepartmentId || undefined
             });
-            toast.success('Template sequence injected successfully');
+            toast.success('Template applied');
             onOpenChange(false);
             setSelectedId(null);
         } catch (err) {
@@ -213,28 +213,31 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
-                className="w-[calc(100vw-1rem)] sm:max-w-[1040px] h-[85vh] sm:h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-2xl sm:rounded-[2.5rem] [&>button]:hidden z-[150]"
+                // Same status-bar overlap as SnapFromRosterDialog: padding for the
+                // content, a separate offset for the absolutely-positioned close
+                // button. env() is 0 off-device, so desktop is unchanged.
+                className="z-[150] flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background p-0 pt-[env(safe-area-inset-top,0px)] shadow-2xl sm:h-[720px] sm:max-h-[85vh] sm:max-w-[1040px] sm:rounded-[2.5rem] sm:pt-0 [&>button]:z-50 [&>button]:flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full [&>button]:bg-background/90 [&>button]:top-[calc(env(safe-area-inset-top,0px)+1rem)] sm:[&>button]:top-4"
             >
                 <VisuallyHidden>
                     <DialogTitle>Apply Template to Roster</DialogTitle>
                     <DialogDescription>
-                        Select a template sequence from the library, configure the date range, and inject it into your roster.
+                        Pick a template, choose the dates, and its shifts are created across that range.
                     </DialogDescription>
                 </VisuallyHidden>
 
-                <div className="flex flex-col md:flex-row flex-1 h-full min-h-0 overflow-auto md:overflow-hidden">
+                <div className="custom-scrollbar block min-h-0 flex-1 overflow-y-auto md:flex md:flex-row md:overflow-hidden">
 
-                    {/* LEFT PANE: LIBRARY */}
-                    <div className="w-full md:w-[280px] border-r border-border flex flex-col bg-muted/30">
-                        <div className="p-10 pb-8">
+                    {/* LEFT PANE: TEMPLATE LIST */}
+                    <div className="flex w-full flex-col border-b border-border bg-muted/30 md:w-[280px] md:border-b-0 md:border-r">
+                        <div className="p-5 pb-6 sm:p-10 sm:pb-8">
                             <div className="flex items-center gap-4 mb-10">
                                 <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-sm">
                                     <Layers className="h-5 w-5 text-primary" />
                                 </div>
                                 <div className="flex flex-col">
-                                    <h2 className="text-lg font-black text-foreground tracking-tight leading-none">Library</h2>
+                                    <h2 className="text-lg font-black text-foreground tracking-tight leading-none">Templates</h2>
                                     <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.15em] mt-1.5">
-                                        Published Assets
+                                        Ready to apply
                                     </p>
                                 </div>
                             </div>
@@ -242,7 +245,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                             <div className="relative group">
                                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 group-focus-within:text-primary transition-colors" />
                                 <Input
-                                    placeholder="Search sequences..."
+                                    placeholder="Search templates..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="bg-background border-border pl-10 text-xs h-10 focus:ring-1 focus:ring-primary/40 rounded-xl placeholder:text-muted-foreground/40 font-medium"
@@ -250,7 +253,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-2.5 custom-scrollbar">
+                        <div className="custom-scrollbar max-h-[280px] flex-1 space-y-2.5 overflow-y-auto px-5 pb-8 md:max-h-none">
                             {isLoadingTemplates ? (
                                 <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-50">
                                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -305,7 +308,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                     </div>
 
                     {/* MIDDLE PANE: EDITOR */}
-                    <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
+                    <div className="relative flex w-full flex-col overflow-visible bg-background md:flex-1 md:overflow-hidden">
 
                         {/* Static background flare */}
                         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 blur-[120px] rounded-full pointer-events-none opacity-50" />
@@ -319,15 +322,15 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.98, y: -10 }}
                                     transition={{ duration: 0.3, ease: "easeOut" }}
-                                    className="flex-1 flex flex-col p-10 relative z-10"
+                                    className="relative z-10 flex flex-1 flex-col p-5 sm:p-10"
                                 >
-                                    <div className="max-w-[480px] mx-auto w-full flex flex-col h-full">
+                                    <div className="mx-auto flex w-full max-w-[480px] flex-col md:h-full">
                                         {/* Selection Header */}
                                         <div className="mb-12 text-center">
                                             <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 shadow-inner">
                                                 <Sparkles className="h-3 w-3 text-primary" />
                                                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
-                                                    Injection Sequence
+                                                    Apply Template
                                                 </span>
                                             </div>
                                             <h2 className="text-3xl font-black text-foreground tracking-tighter leading-none mb-4">
@@ -340,7 +343,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
 
                                         <div className="flex-1 flex flex-col justify-center gap-10">
                                             {/* Date Config */}
-                                            <div className="space-y-6 bg-white/[0.02] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+                                            <div className="group relative space-y-6 overflow-hidden rounded-3xl border border-white/5 bg-white/[0.02] p-5 shadow-2xl sm:rounded-[2.5rem] sm:p-8">
                                                 {/* Card inner flare */}
                                                 <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 blur-3xl rounded-full" />
 
@@ -349,7 +352,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-200">Execution Range</span>
                                                 </div>
 
-                                                <div className="grid grid-cols-2 gap-8 relative z-10">
+                                                <div className="relative z-10 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8">
                                                     <div className="space-y-3">
                                                         <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Start Point</Label>
                                                         <Input
@@ -401,7 +404,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                             >
                                                                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
                                                                 <span className="text-[11px] font-bold text-muted-foreground">
-                                                                    Ready to inject <span className="text-foreground text-xs px-1.5 py-0.5 bg-muted rounded-md border border-border mx-0.5">{daysCount}</span> shifts instances
+                                                                    Applying to <span className="text-foreground text-xs px-1.5 py-0.5 bg-muted rounded-md border border-border mx-0.5">{daysCount}</span> {daysCount === 1 ? 'day' : 'days'}
                                                                 </span>
                                                             </motion.div>
                                                         </>
@@ -439,7 +442,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                         "Roster Activation Required"
                                                     ) : (
                                                         <div className="flex items-center gap-3">
-                                                            <span>Inject Sequence</span>
+                                                            <span>Apply Template</span>
                                                             <Check className="h-5 w-5" />
                                                         </div>
                                                     )}
@@ -449,7 +452,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                             <div className="flex items-center gap-4 px-2 opacity-50 hover:opacity-100 transition-opacity">
                                                 <Info className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                                                 <p className="text-[10px] font-bold text-muted-foreground leading-relaxed uppercase tracking-widest">
-                                                    Injecting will append shifts to existing data for the selected range.
+                                                    Applying adds shifts to whatever is already in the selected range.
                                                 </p>
                                             </div>
                                         </div>
@@ -466,7 +469,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                     </div>
                                     <h3 className="text-2xl font-black text-foreground mb-3 tracking-tighter">System Idle</h3>
                                     <p className="text-sm text-muted-foreground max-w-[280px] font-medium leading-relaxed opacity-70">
-                                        Select an distribution asset from the library to configure deployment.
+                                        Pick a template on the left to choose its date range.
                                     </p>
                                 </motion.div>
                             )}

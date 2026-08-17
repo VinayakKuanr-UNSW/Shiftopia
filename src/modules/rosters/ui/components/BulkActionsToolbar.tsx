@@ -399,9 +399,9 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                         && (action === 'publish' || action === 'unpublish');
 
     return (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 duration-300">
+      <div className="fixed bottom-[calc(var(--mobile-bottom-nav-clearance,90px)+0.75rem)] sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1.5rem)] sm:w-auto animate-in slide-in-from-bottom-5 duration-300">
         <div className={cn(
-          'backdrop-blur-xl border shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-2xl px-6 py-4 flex flex-col gap-3 min-w-[320px] max-w-[520px]',
+          'backdrop-blur-xl border shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-2xl px-4 sm:px-6 py-4 flex flex-col gap-3 w-full sm:w-auto sm:min-w-[320px] max-w-full sm:max-w-[520px]',
           isAllFailed
             ? 'bg-destructive/10 border-destructive/30'
             : isPartial
@@ -472,12 +472,16 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
 
   return (
     <>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 duration-300">
-        <div className="bg-background/95 dark:bg-popover/90 backdrop-blur-xl border border-border shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-full px-6 py-3 flex items-center gap-4">
-          <div className="flex items-center gap-4">
+      <div className="fixed bottom-[calc(var(--mobile-bottom-nav-clearance,90px)+0.75rem)] sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-1.5rem)] sm:w-auto animate-in slide-in-from-bottom-5 duration-300">
+        {/* Scrolls sideways on a phone. The pill holds a selection badge plus
+            every bulk action, which is wider than a phone — without this the
+            actions past Publish were off screen, so the mode could be entered
+            but not used. A pill that wraps looks broken, hence scroll. */}
+        <div className="bg-background/95 dark:bg-popover/90 backdrop-blur-xl border border-border shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-2xl sm:rounded-full px-3 sm:px-6 py-3 flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-2 sm:gap-4">
+          <div className="grid grid-cols-2 gap-2 w-full [&_button]:w-full [&_button]:h-10 [&_button]:justify-center sm:flex sm:flex-nowrap sm:items-center sm:justify-start sm:gap-4 sm:w-auto sm:[&_button]:w-auto sm:[&_button]:h-9">
 
             {/* Selection badge */}
-            <div className="flex flex-col items-start min-w-[120px]">
+            <div className="col-span-2 flex flex-col items-center sm:items-start w-full sm:w-auto min-w-0 sm:min-w-[120px] sm:col-span-1">
               <Badge variant="glass" className="px-3 py-1.5 text-sm font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-glow whitespace-nowrap flex-shrink-0">
                 {isAllSelected ? `All ${selectedCount}` : selectedCount} Selected
               </Badge>
@@ -609,7 +613,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               </Tooltip>
             )}
 
-            <div className="w-px h-6 bg-border mx-1" />
+            <div className="hidden sm:block w-px h-6 bg-border mx-1" />
 
             {/* Assign */}
             {onAssign && (
@@ -675,9 +679,9 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               )}
             </Button>
 
-            <div className="w-px h-6 bg-border mx-2" />
+            <div className="hidden sm:block w-px h-6 bg-border mx-2" />
 
-            <Button variant="ghost" size="icon" onClick={onClearSelection} className="text-muted-foreground hover:text-foreground rounded-full hover:bg-muted">
+            <Button variant="ghost" size="icon" onClick={onClearSelection} className="hidden sm:inline-flex text-muted-foreground hover:text-foreground rounded-full hover:bg-muted">
               <X className="h-4 w-4" />
             </Button>
           </div>
