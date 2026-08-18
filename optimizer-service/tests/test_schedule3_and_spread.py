@@ -280,3 +280,48 @@ def test_a_compliant_casual_security_pair_is_allowed():
     out = solve(shifts, [make_employee("e1", employment_type="Casual", is_security_role=True)])
     assert out.unassigned_shift_ids == []
     assert legal_penalty(out) == 0
+
+
+# ---------------------------------------------------------------------------
+# HC-12 — student visa, 48 hours per fortnight
+#
+# Migration Act 1958 (Cth), visa condition 8105. Not an EBA clause, but a hard
+# legal cap the solver has always modelled and never applied: `emp.is_student`
+# was read from a details map built entirely from `user_contracts`, while the
+# fact lives in `employee_licenses`. Nothing set the flag, so the constraint
+# was inert on every run for all 13 holders in production.
+#
+# The constraint itself was never broken, which is why no solver test caught
+# this — the fixtures set the flag directly and passed throughout. These pin
+# the BINDING behaviour; `roster-fetcher.test.ts` pins the hydration that
+# decides whether the flag ever arrives.
+# ---------------------------------------------------------------------------
+
+def _a_fortnight_of_eight_hour_days() -> list:
+    """14 consecutive 8h days = 112h — far over the 48h cap."""
+    return [
+        make_shift(sid=f"s{i}", date=day(i), start="09:00", end="17:00")
+        for i in range(14)
+    ]
+
+
+def test_visa_holder_is_capped_at_48h_per_fortnight():
+    out = solve(
+        _a_fortnight_of_eight_hour_days(),
+        [make_employee("e1", employment_type="Casual", is_student=True)],
+    )
+    # 6 x 8h = 48h, exactly the ceiling. A seventh would breach it.
+    assert len(out.assignments) == 6
+    # Hard, not priced: the cap is respected rather than paid off in slack.
+    assert legal_penalty(out) == 0
+
+
+def test_the_same_roster_is_unrestricted_without_the_flag():
+    # The discriminating half. Without this, a cap that never binds and a cap
+    # that always binds look identical from the assertion above.
+    out = solve(
+        _a_fortnight_of_eight_hour_days(),
+        [make_employee("e1", employment_type="Casual", is_student=False)],
+    )
+    assert len(out.assignments) == 14
+    assert legal_penalty(out) == 0

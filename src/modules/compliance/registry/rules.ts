@@ -448,12 +448,6 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         authority: { source: 'statute', clauses: [], instrument: 'Migration Act 1958 (Cth), visa condition 8105' },
         engines: { shape: false, v8: true, solver: 'HC-12' },
         description: 'A student visa holder may not exceed 48 hours per fortnight.',
-        knownGap:
-            'Unreachable from the AutoScheduler. The rule guards on `is_student_visa`, but ' +
-            'EmployeeInfo carries no such field, ScenarioLoader never selects one, and the ' +
-            "assignment validator's employee_context never passes one — so the rule short-circuits " +
-            'before it can fire. This is a hydration gap, not a rule defect. Pinned by ' +
-            'no-rule-is-dropped.test.ts.',
     },
 
     V8_ORD_HOURS_AVG: {

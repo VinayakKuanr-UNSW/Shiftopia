@@ -110,7 +110,8 @@ export async function fetchV8EmployeeContext(
     const licenses = licensesRes.data ?? [];
 
     // Determine contract type — map DB employment_type enum to ContractType,
-    // then visa flag override, then default to CASUAL.
+    // defaulting to CASUAL. The student-visa flag is derived separately below;
+    // it is not a contract type and must not overwrite one.
     const rawType = (profile?.employment_type || '').toLowerCase().replace(/[-_]/g, ' ');
     const employmentTypeMap: Record<string, ContractType> = {
         'full time':   'FULL_TIME',
@@ -129,10 +130,16 @@ export async function fetchV8EmployeeContext(
         else if (/part/i.test(rawType)) contract_type = 'PART_TIME';
     }
 
-    const hasStudentVisa = licenses.some(
+    // The visa condition is its OWN axis — it does not replace the employment
+    // type. Overwriting `contract_type` with 'STUDENT_VISA' (as this did) made
+    // the two facts mutually exclusive: it erased FT/PT/Casual, silently
+    // exempting the holder from every rule scoped to those, and the two
+    // converters downstream that mapped the value back to 'CASUAL' to recover
+    // an employment type then erased the visa fact in turn — which is why
+    // V8_STUDENT_VISA_LIMIT could never fire from the AutoScheduler or a swap.
+    const is_student_visa = licenses.some(
         l => l.license_type === 'WorkRights' && l.has_restricted_work_limit === true,
     );
-    if (hasStudentVisa) contract_type = 'STUDENT_VISA';
 
     // Build qualifications array — skills and licenses share the same shape.
     const FALLBACK_ISSUED = '2000-01-01';
@@ -237,6 +244,7 @@ export async function fetchV8EmployeeContext(
         leave_days,
         is_security_role,
         employment_statuses,
+        is_student_visa,
     };
 
     // Cache the result

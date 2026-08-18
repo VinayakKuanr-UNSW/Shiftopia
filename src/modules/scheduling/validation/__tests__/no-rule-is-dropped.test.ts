@@ -150,21 +150,34 @@ describe('no rule is dropped between the engine and the caller', () => {
     });
 
     /**
-     * KNOWN GAP, pinned deliberately.
+     * The third dropped rule, V8_STUDENT_VISA_LIMIT.
      *
-     * The third dropped rule, V8_STUDENT_VISA_LIMIT, still cannot fire here —
-     * but no longer because of the lookup table. `EmployeeInfo` has no
-     * `is_student_visa` field, ScenarioLoader never selects one, and
-     * ComplianceEvaluator's `employee_context` never passes one, so the rule
-     * short-circuits on its own guard before any of this code runs. Fixing the
-     * table exposed the hydration gap underneath it; closing that gap is a
-     * separate change with a DB dependency.
-     *
-     * This asserts the CURRENT state so the gap is visible in the suite rather
-     * than assumed closed. When hydration lands, this test should fail and be
-     * rewritten as a positive assertion.
+     * Fixing the lookup table exposed a hydration gap underneath it: the flag
+     * the rule guards on existed nowhere on this path — not on `EmployeeInfo`,
+     * not in ScenarioLoader's select, not in ComplianceEvaluator's
+     * `employee_context` — so the rule short-circuited on its own guard before
+     * any of the mapping code ran. This test asserted that unreachability, to
+     * keep the gap visible rather than assumed closed, and said in as many
+     * words that it should be rewritten as a positive assertion once hydration
+     * landed. It has, so it is.
      */
-    it('student-visa cap is still unreachable — hydration, not mapping', () => {
+    it('reports V8_STUDENT_VISA_LIMIT once the flag is hydrated', () => {
+        const heavyFortnight = priorDays(13).map(s => ({ ...s, start_time: '06:00', end_time: '18:00' }));
+
+        const violations = complianceEvaluator.evaluate(
+            candidate({ start_time: '06:00', end_time: '18:00' }),
+            employee({ contract_type: 'CASUAL', is_student_visa: true }),
+            { existingShifts: heavyFortnight, proposedAssignments: [] },
+        );
+
+        const hit = violations.find(v => v.violation_type === 'V8_STUDENT_VISA_LIMIT');
+        expect(hit).toBeDefined();
+        expect(hit!.blocking).toBe(true);
+    });
+
+    it('stays silent for the same roster without the visa condition', () => {
+        // The counterpart the old pinned test could not distinguish itself
+        // from: before hydration, EVERY employee looked like this.
         const heavyFortnight = priorDays(13).map(s => ({ ...s, start_time: '06:00', end_time: '18:00' }));
 
         const violations = complianceEvaluator.evaluate(
@@ -174,5 +187,56 @@ describe('no rule is dropped between the engine and the caller', () => {
         );
 
         expect(violations.some(v => v.violation_type === 'V8_STUDENT_VISA_LIMIT')).toBe(false);
+    });
+});
+
+/**
+ * `is_student_visa` was not the only fact this path dropped.
+ *
+ * `fetchV8EmployeeContext` has derived `is_security_role` since audit H-5, and
+ * it fell off at the same two hops — `EmployeeInfo` had no field for it and
+ * `ComplianceEvaluator` did not forward it. Everything keyed on EBA Schedule 3
+ * was therefore unreachable from the AutoScheduler however correct the rules
+ * were, including Sch 3 §5.3(g), which was only added to the labour layer once
+ * the agreement text was read.
+ *
+ * Same bug class as the lookup table above, one layer further out: the rule
+ * runs, finds no discriminator, and returns nothing — indistinguishable
+ * downstream from a rule that passed.
+ */
+describe('Schedule 3 reaches the engine', () => {
+    const SECURITY_DAY = '2026-08-17';
+
+    /** Two engagements spanning 13h gross — over Sch 3 §5.3(g)'s 12h ceiling. */
+    function longSecurityDay(): CandidateShift[] {
+        return [
+            candidate({
+                id: 'sec-am', shift_date: SECURITY_DAY,
+                start_time: '06:00', end_time: '11:00',
+                assigned_employee_id: 'e1', unpaid_break_minutes: 0,
+            }),
+        ];
+    }
+
+    it('applies the casual-security spread cap when the role flag is hydrated', () => {
+        const violations = complianceEvaluator.evaluate(
+            candidate({ start_time: '15:00', end_time: '19:00', unpaid_break_minutes: 0 }),
+            employee({ contract_type: 'CASUAL', is_security_role: true }),
+            { existingShifts: longSecurityDay(), proposedAssignments: [] },
+        );
+
+        expect(violations.some(v => v.violation_type === 'V8_CASUAL_SECURITY_SPREAD')).toBe(true);
+    });
+
+    it('leaves a non-security casual alone on the identical roster', () => {
+        // cl 39.1 confines the split-shift spread to PT and FPT, so a general
+        // casual has no spread cap at all. The flag is the only difference.
+        const violations = complianceEvaluator.evaluate(
+            candidate({ start_time: '15:00', end_time: '19:00', unpaid_break_minutes: 0 }),
+            employee({ contract_type: 'CASUAL' }),
+            { existingShifts: longSecurityDay(), proposedAssignments: [] },
+        );
+
+        expect(violations.some(v => v.violation_type === 'V8_CASUAL_SECURITY_SPREAD')).toBe(false);
     });
 });

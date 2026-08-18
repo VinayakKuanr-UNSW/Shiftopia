@@ -602,6 +602,50 @@ export class RosterFetcher {
 
         const employeeIds = employees.map(e => e.id);
 
+        // ── Student-visa work limit (HC-12) ─────────────────────────────────
+        //
+        // Migration Act 1958 (Cth), visa condition 8105 — 48 hours per
+        // fortnight. The solver has always had the constraint, guarded on
+        // `emp.is_student`, and nothing ever set that flag: it was read off
+        // this details map, which is built purely from `user_contracts`, while
+        // the fact lives in `employee_licenses`. So HC-12 was inert for every
+        // employee on every run.
+        //
+        // Fetched separately rather than folded into the contract select below
+        // because it is a different table AND a different cardinality: an
+        // employee may hold the visa with no Active contract row at all (one
+        // does in prod), and such a person must still be capped. Running FIRST
+        // for the same reason — the contract fetch has two early returns, and
+        // behind either of them a visa holder would silently lose the flag.
+        //
+        // Fail-open on error, matching the contract fetch: a lookup hiccup
+        // leaves the flag false and HC-12 silent, and the labour layer still
+        // refuses the assignment at commit time.
+        const { data: visaRows, error: visaErr } = await this.supabase
+            .from('employee_licenses')
+            .select('employee_id')
+            .in('employee_id', employeeIds)
+            .eq('license_type', 'WorkRights')
+            .eq('has_restricted_work_limit', true);
+
+        if (visaErr) {
+            console.warn('[RosterFetcher] student-visa lookup failed — HC-12 (48h/fortnight) will not bind this run', visaErr);
+        } else {
+            let visaCount = 0;
+            for (const row of (visaRows ?? []) as any[]) {
+                const uid = row.employee_id as string | null;
+                if (!uid) continue;
+                const existing = result.get(uid) ?? {};
+                if (existing.is_student) continue;   // an employee may hold several
+                existing.is_student = true;
+                result.set(uid, existing);
+                visaCount++;
+            }
+            if (visaCount > 0) {
+                console.info('[RosterFetcher] Student-visa work limit applies to %d employee(s)', visaCount);
+            }
+        }
+
         const { data, error } = await this.supabase
             .from('user_contracts')
             .select(`
@@ -656,7 +700,11 @@ export class RosterFetcher {
                 (a, b) => (b.remuneration_level ?? -1) - (a.remuneration_level ?? -1),
             )[0];
 
+            // Spread what the visa pass already seeded — this loop used to
+            // `set` a fresh object, which would drop `is_student` for every
+            // holder who also has a contract (12 of the 13 in prod).
             const details: Partial<OptimizerEmployee> = {
+                ...(result.get(employeeId) ?? {}),
                 level: topLevelContract?.remuneration_level ?? undefined,
                 is_security_role: isSecurityRole,
             };

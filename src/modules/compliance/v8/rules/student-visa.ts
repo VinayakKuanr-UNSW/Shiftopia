@@ -10,8 +10,14 @@ import { shiftDurationMinutes } from '../utils/time';
 export const studentVisaRule: V8RuleEvaluator = (ctx) => {
     const { employee, shifts, config } = ctx;
     
-    // Only applies to student visa holders
-    if (employee.contract_type !== 'STUDENT_VISA') return [];
+    // Only applies to student visa holders.
+    //
+    // Reads the dedicated axis, not `contract_type`. The guard used to be
+    // `contract_type !== 'STUDENT_VISA'`, which required an employment type to
+    // be overwritten with a visa condition before this rule could fire — so it
+    // fired only on the one path that did the overwrite, and only by erasing
+    // the employee's real FT/PT/Casual type on the way. See V8ContractType.
+    if (employee.is_student_visa !== true) return [];
     
     const limitHours = config.student_visa_fortnightly_limit;
     const windowDays = 14;

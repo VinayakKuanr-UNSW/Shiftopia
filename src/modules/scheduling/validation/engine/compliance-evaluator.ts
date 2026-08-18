@@ -101,6 +101,13 @@ export class ComplianceEvaluator {
                 // returns [] on an empty list, so the shift-side target above is
                 // inert without this.
                 employment_statuses: employee.employment_statuses,
+                // EBA Schedule 3 (§3.1(a) FT security hours cycle, §5.3(g)
+                // casual security spread) and Migration Act condition 8105.
+                // Both are facts about the person, not the shift, and both were
+                // dropped here — leaving three BLOCKING rules unreachable from
+                // the AutoScheduler no matter what the loader hydrated.
+                is_security_role: employee.is_security_role,
+                is_student_visa:  employee.is_student_visa,
             },
         });
 

@@ -231,6 +231,20 @@ export interface EmployeeInfo {
      * silent (fail-open) and the DB trigger remains the guarantee.
      */
     employment_statuses?: string[];
+    /**
+     * Holds a Security role on any Active contract (EBA Schedule 3). Switches
+     * V8_ORD_HOURS_AVG onto Sch 3 §3.1(a)'s 42h/8-week cycle for full-timers,
+     * and V8_CASUAL_SECURITY_SPREAD / _ENGAGEMENT on for casuals (Sch 3 §5.3(g)).
+     * Undefined ⇒ both fall back to the general structure.
+     */
+    is_security_role?: boolean;
+    /**
+     * Holds a student visa with a restricted work limit (Migration Act 1958
+     * (Cth), condition 8105). Its own axis — never a `contract_type` value —
+     * so a student-visa casual is still evaluated as a casual. Undefined ⇒
+     * V8_STUDENT_VISA_LIMIT stays silent.
+     */
+    is_student_visa?: boolean;
 }
 
 // =============================================================================
