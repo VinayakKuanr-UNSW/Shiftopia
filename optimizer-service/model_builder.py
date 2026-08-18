@@ -176,7 +176,20 @@ MAX_CONSECUTIVE_DAYS_FLEXI_PT = 10
 MAX_CASUAL_DAILY_ENGAGEMENTS = 2
 
 # cl 35.1(d)/35.2(d)/35.3(d)/35.4(c) — daily ordinary hours ceiling.
-MAX_DAILY_MINUTES = 720                # 12h
+MAX_DAILY_MINUTES = 720
+
+# Sch 3 §5.3(g) — where a casual Event Security Team Member works two shifts in
+# one day, EACH engagement must be at least three hours. A flat floor: the
+# two-hour non-event-day training concession in §5.3(e) does not survive
+# alongside a second shift.
+CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES = 180
+
+# cl 36.1 — "more than five (5) hours on any one day" entitles a Team Member to
+# a meal break of not less than 30 and not more than 60 minutes. Measured per
+# DAY, so a day worked in two parts can cross the threshold with neither part
+# doing so — which is exactly the pairing this solver is free to propose.
+DAILY_MEAL_BREAK_THRESHOLD_MINUTES = 300
+DAILY_MEAL_BREAK_MIN_MINUTES = 30                # 12h
 
 
 # EBA cl 12.5(b): a Casual's `hourly_rate` is ALREADY loaded with the 25%
@@ -1594,6 +1607,7 @@ class ScheduleModelBuilder:
         self._add_min_contract_hours()  # HC-7: FT/PT minimum utilization
         self._add_min_engagement()      # HC-8: 3h/4h min engagement
         self._add_spread_of_hours()     # HC-9: 12h daily spread
+        self._add_daily_pairing_rules() # HC-13: Sch 3 §5.3(g) floor + cl 36.1 break
         self._add_objective()
 
         self._metrics.num_constraints = len(self.model.proto.constraints)
@@ -2251,6 +2265,128 @@ class ScheduleModelBuilder:
                 # Collected here and added to the objective by the SC-8 loop in
                 # _add_objective(), which drains every _workload_slack_terms entry.
                 self._hard_legal_slack_terms.append(100_000_000 * spread_slack)
+
+    # -- HC-13: Daily pairing rules (Sch 3 §5.3(g) + cl 36.1) ------------------
+
+    def _add_daily_pairing_rules(self):
+        """Two BLOCKING labour rules the solver could otherwise walk into.
+
+        Both are properties of a PAIR of same-day engagements, not of either
+        shift alone, so neither the shape gate at creation nor a per-shift
+        solver constraint can see them. Left unmodelled the solver proposes a
+        roster, `dailySpreadRule` / `dailyMealBreakRule` reject it at commit
+        time, and nothing connects the two events — the operator sees a
+        proposal that will not save and no reason why.
+
+        (a) Sch 3 §5.3(g). "A casual Event Security Team Member may work up to
+            two (2) shifts in one day, provided that EACH ENGAGEMENT IS NOT
+            LESS THAN THREE (3) HOURS." Reachable exactly when a two-hour
+            non-event-day training block is paired with a second shift: §5.3(e)
+            allows that block on its own, and this clause withdraws the
+            concession the moment a second engagement appears.
+
+        (b) cl 36.1. More than five hours worked "on any one day" requires a
+            meal break of at least thirty minutes. Two engagements that abut —
+            or nearly — cross the threshold together while each stays under it,
+            so both pass HC-8 and the shape gate.
+
+            The gap BETWEEN engagements counts as the break, matching
+            `dailyMealBreakRule`: someone rostered 06:00-09:00 and again
+            11:00-14:00 has plainly had a meal break, and reading it otherwise
+            would make every split shift a breach of a clause cl 39 expressly
+            permits.
+
+        Formulated PAIRWISE, which is exact for every quantity involved:
+        starts, ends, durations and declared breaks are all fixed inputs, so
+        whether a given pair breaches is decided before the solve and the only
+        variable left is whether one employee holds both.
+
+        RESIDUAL, stated. Three or more engagements in a day whose breach
+        emerges only from the total — 2h + 2h + 2h with fifteen-minute gaps is
+        six hours worked with no qualifying break, while no PAIR of them
+        exceeds five hours. cl 35.4(f) caps casuals at two engagements and
+        permanents effectively never hold three in a day, so this is out of
+        reach in practice rather than merely unlikely; the labour layer catches
+        it at commit either way. Recorded rather than papered over.
+        """
+        shifts_by_day = {}
+        for s in self.data.shifts:
+            shifts_by_day.setdefault(s.shift_date, []).append(s)
+
+        for date, day_shifts in shifts_by_day.items():
+            if len(day_shifts) < 2:
+                continue
+
+            for emp in self.data.employees:
+                is_casual_security = (
+                    emp.employment_type == 'Casual' and emp.is_security_role
+                )
+                # Sch 3 §3.2(a) / §5.3(a) make the security meal break PAID, so
+                # for them the qualifying in-shift interval is the paid
+                # allotment. Capped at the ceiling because `paid_break_minutes`
+                # pools the meal break with the cl 37 rest pauses, and only the
+                # meal-break part of it answers cl 36.1 — the same reading the
+                # shape layer and `dailyMealBreakRule` take.
+                def in_shift_break(sh):
+                    if emp.is_security_role:
+                        return min(
+                            getattr(sh, 'paid_break_minutes', 0) or 0,
+                            60,
+                        )
+                    return getattr(sh, 'unpaid_break_minutes', 0) or 0
+
+                def worked(sh):
+                    return max(0, sh.duration_minutes - in_shift_break(sh))
+
+                active = []
+                for s in day_shifts:
+                    var = self._x.get((emp.id, s.id))
+                    if var is not None:
+                        active.append((s, var))
+                if len(active) < 2:
+                    continue
+
+                for i in range(len(active)):
+                    for j in range(i + 1, len(active)):
+                        s_i, v_i = active[i]
+                        s_j, v_j = active[j]
+
+                        breaches = []
+
+                        if is_casual_security and (
+                            worked(s_i) < CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES
+                            or worked(s_j) < CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES
+                        ):
+                            breaches.append('sec3h')
+
+                        # Order the pair in time before measuring the gap.
+                        a_start, a_end = shift_window(s_i)
+                        b_start, b_end = shift_window(s_j)
+                        if b_start < a_start:
+                            a_start, a_end, b_start, b_end = b_start, b_end, a_start, a_end
+                        gap = max(0, b_start - a_end)
+
+                        longest_break = max(
+                            in_shift_break(s_i), in_shift_break(s_j), gap
+                        )
+                        if (
+                            worked(s_i) + worked(s_j) > DAILY_MEAL_BREAK_THRESHOLD_MINUTES
+                            and longest_break < DAILY_MEAL_BREAK_MIN_MINUTES
+                        ):
+                            breaches.append('meal')
+
+                        if not breaches:
+                            continue
+
+                        # One penalty per breaching pair. `pair >= v_i + v_j - 1`
+                        # forces it to 1 only when this employee holds both.
+                        pair = self.model.NewBoolVar(
+                            f'pair_{"_".join(breaches)}_{emp.id[:4]}_{s_i.id[:4]}_{s_j.id[:4]}'
+                        )
+                        self.model.Add(pair >= v_i + v_j - 1)
+                        # Tier 0: Hard Legal Compliance, same weight as every
+                        # other legal cap here.
+                        self._hard_legal_slack_terms.append(100_000_000 * pair)
 
     # -- HC-6: Time-Coupled Capacity --------------------------------------------
 

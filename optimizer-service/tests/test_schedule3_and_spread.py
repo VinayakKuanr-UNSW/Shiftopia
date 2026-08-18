@@ -325,3 +325,99 @@ def test_the_same_roster_is_unrestricted_without_the_flag():
     )
     assert len(out.assignments) == 14
     assert legal_penalty(out) == 0
+
+
+# ---------------------------------------------------------------------------
+# HC-13 — daily pairing rules (Sch 3 §5.3(g) engagement floor, cl 36.1 break)
+#
+# Both are properties of a PAIR of same-day engagements, not of either shift
+# alone, so neither the shape gate at creation nor a per-shift solver
+# constraint can see them. Unmodelled, the solver proposed a roster the labour
+# layer then refused at commit, with nothing connecting the two events.
+#
+# Each pair below is matched by a case in the TypeScript suites, because a
+# constraint that binds differently from the rule it mirrors is a divergence
+# of the kind this whole file exists to close.
+# ---------------------------------------------------------------------------
+
+SECURITY_CASUAL = dict(employment_type="Casual", is_security_role=True)
+
+
+def test_casual_security_two_hour_training_cannot_be_paired():
+    # §5.3(e) allows a two-hour non-event-day training block on its own;
+    # §5.3(g) withdraws the concession the moment a second engagement appears.
+    shifts = [
+        make_shift(sid="a", date=day(0), start="09:00", end="11:00", is_training=True),
+        make_shift(sid="b", date=day(0), start="14:00", end="18:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", **SECURITY_CASUAL)])
+    assert len(out.assignments) == 1
+    assert legal_penalty(out) == 0
+
+
+def test_casual_security_three_hour_pair_is_allowed():
+    shifts = [
+        make_shift(sid="a", date=day(0), start="08:00", end="11:00"),
+        make_shift(sid="b", date=day(0), start="14:00", end="18:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", **SECURITY_CASUAL)])
+    assert len(out.assignments) == 2
+    assert legal_penalty(out) == 0
+
+
+def test_the_engagement_floor_does_not_reach_a_general_casual():
+    # Sch 3 is the SECURITY schedule. A general casual's short engagement is
+    # governed by cl 12.5(c), which HC-8 already applies per shift.
+    shifts = [
+        make_shift(sid="a", date=day(0), start="09:00", end="11:00", is_training=True),
+        make_shift(sid="b", date=day(0), start="14:00", end="18:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", employment_type="Casual")])
+    assert len(out.assignments) == 2
+    assert legal_penalty(out) == 0
+
+
+def test_abutting_engagements_crossing_five_hours_need_a_break():
+    # 08:00-11:00 then 11:00-14:00. Six hours worked, not one minute off, and
+    # each part clears HC-8 and the shape gate on its own.
+    shifts = [
+        make_shift(sid="a", date=day(0), start="08:00", end="11:00"),
+        make_shift(sid="b", date=day(0), start="11:00", end="14:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", employment_type="Casual")])
+    assert len(out.assignments) == 1
+    assert legal_penalty(out) == 0
+
+
+def test_the_gap_between_engagements_is_the_meal_break():
+    # The interpretive choice, asserted on this side too: two unpaid hours in
+    # the middle of the day IS a meal break. Reading it otherwise would make
+    # every split shift a breach of a clause cl 39 expressly permits.
+    shifts = [
+        make_shift(sid="a", date=day(0), start="06:00", end="09:00"),
+        make_shift(sid="b", date=day(0), start="11:00", end="14:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", employment_type="Casual")])
+    assert len(out.assignments) == 2
+    assert legal_penalty(out) == 0
+
+
+def test_five_hours_flat_creates_no_entitlement():
+    # "MORE than five (5) hours" — the boundary belongs to the Team Member.
+    shifts = [
+        make_shift(sid="a", date=day(0), start="08:00", end="10:30"),
+        make_shift(sid="b", date=day(0), start="10:30", end="13:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", employment_type="Casual")])
+    assert len(out.assignments) == 2
+    assert legal_penalty(out) == 0
+
+
+def test_a_declared_in_shift_break_satisfies_the_day():
+    shifts = [
+        make_shift(sid="a", date=day(0), start="08:00", end="11:00", unpaid_break_minutes=30),
+        make_shift(sid="b", date=day(0), start="11:00", end="14:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", employment_type="Casual")])
+    assert len(out.assignments) == 2
+    assert legal_penalty(out) == 0

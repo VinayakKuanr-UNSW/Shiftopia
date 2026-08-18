@@ -144,8 +144,6 @@ describe('cross-engine coverage is recorded, not assumed', () => {
         // Pinned so the list cannot grow unnoticed — shrinking it means Phase 5
         // landed, and this expectation should shrink with it.
         expect(solverCoverageGaps().map(r => r.id).sort()).toEqual([
-            'V8_CASUAL_SECURITY_ENGAGEMENT',
-            'V8_DAILY_MEAL_BREAK',
             'V8_FT_DAYS_OFF',
             'V8_MULTI_HIRE_ELIGIBILITY',
             'V8_ORD_HOURS_CONTRACTED',
@@ -161,7 +159,6 @@ describe('cross-engine coverage is recorded, not assumed', () => {
             'SHAPE_MIN_ENGAGEMENT',
             'SHAPE_REST_PAUSE_1',
             'SHAPE_REST_PAUSE_2',
-            'V8_CASUAL_SECURITY_ENGAGEMENT',
             'V8_DAILY_MEAL_BREAK',
             'V8_FT_DAYS_OFF',
         ]);

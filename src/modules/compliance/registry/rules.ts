@@ -362,15 +362,11 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         category: 'TIME',
         employment: ['CASUAL'],
         authority: eba('Sch 3 §5.3(g)'),
-        engines: { shape: false, v8: true, solver: null },
+        engines: { shape: false, v8: true, solver: 'HC-13' },
         description:
             'Where a casual Event Security Team Member works two shifts in one day, each engagement ' +
             'must be at least 3 hours — a flat floor that displaces the 2-hour training concession ' +
             'in Sch 3 §5.3(e).',
-        knownGap:
-            'Not modelled in CP-SAT. The solver can propose a casual security day pairing a 2-hour ' +
-            'training block with a second shift, which this rule then rejects. Narrow, but it is a ' +
-            'genuine divergence rather than a rule the solver makes unreachable.',
     },
 
     V8_SPLIT_SHIFT: {
@@ -422,15 +418,16 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         category: 'TIME',
         employment: 'ALL',
         authority: eba('cl 36.1', 'Sch 3 §3.2(a)', 'Sch 3 §5.3(a)'),
-        engines: { shape: false, v8: true, solver: null },
+        engines: { shape: false, v8: true, solver: 'HC-13' },
         description:
             'A day worked in more than one part must still offer a meal break of at least 30 ' +
             'minutes once more than 5 hours are worked. The gap between engagements counts.',
         knownGap:
-            'Not modelled in CP-SAT. The solver can propose two abutting engagements that together ' +
-            'cross five hours with no break, which this rule then rejects. The companion limb — a ' +
-            'single shift over five hours — is blocked at creation by SHAPE_MEAL_BREAK, so the ' +
-            'solver can only reach the pairing case.',
+            'HC-13 models this PAIRWISE, which is exact for two engagements and misses a breach ' +
+            'that emerges only from three or more — 2h+2h+2h at fifteen-minute gaps is six hours ' +
+            'worked with no qualifying break while no pair exceeds five. cl 35.4(f) caps casuals ' +
+            'at two engagements and permanents effectively never hold three in a day, so this is ' +
+            'out of reach in practice; the labour layer catches it at commit either way.',
     },
 
     V8_20_IN_28: {
