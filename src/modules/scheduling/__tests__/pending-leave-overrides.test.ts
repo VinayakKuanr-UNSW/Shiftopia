@@ -15,11 +15,11 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/modules/rosters/bulk-assignment', async (importOriginal) => {
+vi.mock('@/modules/scheduling/validation', async (importOriginal) => {
     const original = await importOriginal() as any;
-    return { ...original, bulkAssignmentController: { simulate: vi.fn() } };
+    return { ...original, assignmentValidator: { simulate: vi.fn() } };
 });
-vi.mock('@/modules/rosters/bulk-assignment/engine/assignment-committer', async (importOriginal) => {
+vi.mock('@/modules/scheduling/validation/engine/assignment-committer', async (importOriginal) => {
     const original = await importOriginal() as any;
     return { ...original, assignmentCommitter: { commitAtomic: vi.fn(), commit: vi.fn() } };
 });

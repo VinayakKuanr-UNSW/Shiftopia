@@ -58,6 +58,7 @@ function checkPastShift(shift: CandidateShift): ShiftViolation | null {
     if (!isNaN(startTime) && startTime <= now) {
         return {
             violation_type: 'PAST_SHIFT',
+            rule_name: 'Shift Already Started',
             description: `Shift on ${shift.shift_date} (${shift.start_time}) has already started and cannot be assigned.`,
             blocking: true,
         };
@@ -72,7 +73,8 @@ function checkDraftState(shift: CandidateShift): ShiftViolation | null {
 
     return {
         violation_type: 'DRAFT_STATE',
-        description: `Shift on ${shift.shift_date} is in "${shift.lifecycle_status}" state and cannot be reassigned. Only Draft shifts can be bulk-assigned.`,
+        rule_name: 'Shift Not In Draft',
+        description: `Shift on ${shift.shift_date} is in "${shift.lifecycle_status}" state and cannot be reassigned. Only Draft shifts can be assigned.`,
         blocking: true,
     };
 }
@@ -82,7 +84,8 @@ function checkAlreadyAssigned(shift: CandidateShift): ShiftViolation | null {
 
     return {
         violation_type: 'ALREADY_ASSIGNED',
-        description: `Shift on ${shift.shift_date} is already assigned. Unassign it first before bulk-assigning.`,
+        rule_name: 'Already Assigned',
+        description: `Shift on ${shift.shift_date} is already assigned. Unassign it first before reassigning.`,
         blocking: true,
     };
 }
@@ -98,6 +101,7 @@ function checkOverlap(
         if (shiftsOverlap(candidate, existing)) {
             return {
                 violation_type: 'OVERLAP',
+                rule_name: 'Overlapping Shift',
                 conflicting_shift: {
                     id: existing.id,
                     shift_date: existing.shift_date,
@@ -140,6 +144,7 @@ function checkRoleContractMatch(
     if (!isValid) {
         return {
             violation_type: 'ROLE_MISMATCH',
+            rule_name: 'Role Not Contracted',
             description: `Employee is not contracted for this position on ${shift.shift_date} — no active contract matches the shift's role and department.`,
             blocking: true,
         };
@@ -164,6 +169,7 @@ function checkQualificationMatch(
 
     return {
         violation_type: 'QUALIFICATION_MISSING',
+        rule_name: 'Missing Qualification',
         description: `Employee is missing ${missing.length} required qualification(s) for this shift.`,
         blocking: true,
     };
@@ -189,6 +195,7 @@ function checkQualificationExpiry(
 
     return {
         violation_type: 'QUALIFICATION_EXPIRED',
+        rule_name: 'Expired Qualification',
         description: `Employee has ${expiredQuals.length} expired qualification(s) on ${shift.shift_date}.`,
         blocking: true,
     };

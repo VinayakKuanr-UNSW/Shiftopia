@@ -253,11 +253,11 @@ describe('one-click remedies', () => {
         });
     });
 
-    it('trims an over-spread shift back to the 12h cap', () => {
+    it('offers a trim on an over-spread shift, without blocking it', () => {
         const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '19:00' }));
-        expect(r.hits.find(h => h.rule_id === 'SHAPE_MAX_SPREAD')!.fix).toMatchObject({
-            field: 'end_time', value: '18:00',
-        });
+        const hit = r.hits.find(h => h.rule_id === 'SHAPE_SPREAD_GUARDRAIL')!;
+        expect(hit.fix).toMatchObject({ field: 'end_time', value: '18:00' });
+        expect(hit.blocking).toBe(false);
     });
 });
 
@@ -340,20 +340,24 @@ describe('result contract', () => {
         expect(r.passed).toBe(false);
     });
 
-    it('blocks a 13h SPAN even when net is a lawful 12h', () => {
+    it('warns on a 13h SPAN but does not block a lawful 12h net', () => {
         // 06:00-19:00 = 13h gross; a 60m unpaid break makes it 12h net, which
-        // SHAPE_MAX_DURATION alone would allow. It is still a 13-hour day for
-        // the person working it, so the spread cap has to catch it.
+        // cl 35.1(d) expressly permits ("may work up to twelve (12) ordinary
+        // hours on any one day"). This used to BLOCK, citing cl 39.2 — a clause
+        // that governs split shifts and is measured EXCLUDING breaks. Refusing
+        // a lawful roster is a worse failure than flagging one, so the house
+        // guardrail warns and the shift saves.
         const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '19:00', unpaid_break_minutes: 60, paid_break_minutes: 30 }));
         expect(r.net_minutes).toBe(720);
         expect(has(r, 'SHAPE_MAX_DURATION')).toBe(false);
-        expect(has(r, 'SHAPE_MAX_SPREAD')).toBe(true);
-        expect(r.passed).toBe(false);
+        expect(has(r, 'SHAPE_SPREAD_GUARDRAIL')).toBe(true);
+        expect(r.status).toBe('WARNING');
+        expect(r.passed).toBe(true);
     });
 
     it('allows an exactly-12h span', () => {
         const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '18:00', unpaid_break_minutes: 60, paid_break_minutes: 30 }));
-        expect(has(r, 'SHAPE_MAX_SPREAD')).toBe(false);
+        expect(has(r, 'SHAPE_SPREAD_GUARDRAIL')).toBe(false);
         expect(r.passed).toBe(true);
     });
 

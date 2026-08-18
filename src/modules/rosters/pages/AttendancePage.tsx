@@ -79,6 +79,7 @@ import {
   type AttendanceInput,
 } from '@/modules/rosters/domain/attendance-metrics';
 import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/AttendanceMetricsBar';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ── Motion variants ────────────────────────────────────────────────────────────
 
@@ -165,7 +166,7 @@ function shiftToTimesheetRow(shift: Shift, employmentType: string | null): Times
   const resolvedStart = resolveBillableSide(shift.adjusted_start ?? null, shift.actual_start ?? null, finished);
   const resolvedEnd = resolveBillableSide(shift.adjusted_end ?? null, shift.actual_end ?? null, finished);
   const rawNetMins = calculateNetMinutes(resolvedStart, resolvedEnd, shift.unpaid_break_minutes || 0);
-  const isSecurityRoleForFloor = (shift.roles?.name ?? '').toLowerCase().includes('security');
+  const isSecurityRoleForFloor = isSecurityRoleName(shift.roles?.name);
   const floored = rawNetMins !== null
     ? applyMinEngagementFloor(rawNetMins, {
         isTraining: shift.is_training === true,

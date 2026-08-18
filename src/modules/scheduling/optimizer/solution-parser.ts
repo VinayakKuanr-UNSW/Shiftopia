@@ -83,7 +83,7 @@ export interface EnrichedProposal {
 }
 
 // =============================================================================
-// GROUPED ASSIGNMENTS (by employee, for BulkAssignmentController)
+// GROUPED ASSIGNMENTS (by employee, for AssignmentValidator)
 // =============================================================================
 
 export interface EmployeeProposalGroup {

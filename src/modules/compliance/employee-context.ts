@@ -12,6 +12,7 @@ import { supabase } from '@/platform/supabase/client';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import type { ContractRecordV2, QualificationV2, ContractType } from './v8/types';
 import type { V8EmployeeContext, V8OrchestratorShift } from './v8/orchestrator/types';
+import { isSecurityRoleName } from './security-role';
 
 // =============================================================================
 // SESSION-SCOPED CACHE  (TTL: 5 minutes per entry)
@@ -189,7 +190,7 @@ export async function fetchV8EmployeeContext(
             .select('name')
             .in('id', assigned_role_ids);
         if (!roleErr) {
-            is_security_role = (roleRows ?? []).some((r: any) => /security/i.test(r?.name || ''));
+            is_security_role = (roleRows ?? []).some((r: any) => isSecurityRoleName(r?.name));
         }
     }
 

@@ -28,7 +28,6 @@ import {
   CalendarDays,
   Briefcase,
   Wand2,
-  Activity,
   Hand,
   FolderPlus,
 } from 'lucide-react';
@@ -255,15 +254,11 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     isDnDModeActive,
     setIsDnDModeActive,
     setShowUnfilledPanel,
-    showFatigueHeatmap,
-    setShowFatigueHeatmap,
   } = useRosterStore(
     useShallow((s) => ({
       isDnDModeActive: s.isDnDModeActive,
       setIsDnDModeActive: s.setIsDnDModeActive,
       setShowUnfilledPanel: s.setShowUnfilledPanel,
-      showFatigueHeatmap: s.showFatigueHeatmap,
-      setShowFatigueHeatmap: s.setShowFatigueHeatmap,
     })),
   );
 
@@ -459,20 +454,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
                 </span>
               )}
             </div>
-
-            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
-
-            {/* ── People tools group ──────────────────────────────────── */}
-            <IconButton
-              icon={<Activity className="h-4 w-4" />}
-              tooltip={activeMode === 'people'
-                ? (showFatigueHeatmap ? "Deactivate Heatmap" : "Fatigue Heatmap")
-                : "Fatigue Heatmap — switch to People mode to enable"}
-              onClick={() => setShowFatigueHeatmap(!showFatigueHeatmap)}
-              isActive={showFatigueHeatmap}
-              variant={showFatigueHeatmap ? "warning" : "success"}
-              disabled={activeMode !== 'people'}
-            />
 
             <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
 

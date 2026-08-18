@@ -14,7 +14,7 @@
  *  4. Generates and forwards an idempotency key to commitAtomic.
  *
  * Mocking strategy (mirrors roster-fetcher.test.ts / auditor.test.ts style):
- *  - Mock @/modules/rosters/bulk-assignment (simulate must NOT be called now)
+ *  - Mock @/modules/scheduling/validation (simulate must NOT be called now)
  *  - Mock the assignment-committer for commitAtomic()
  */
 
@@ -26,17 +26,17 @@ import type { AutoSchedulerResult, ValidatedProposal } from '../types';
 // Module mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/modules/rosters/bulk-assignment', async (importOriginal) => {
+vi.mock('@/modules/scheduling/validation', async (importOriginal) => {
     const original = await importOriginal() as any;
     return {
         ...original,
-        bulkAssignmentController: {
+        assignmentValidator: {
             simulate: vi.fn(),
         },
     };
 });
 
-vi.mock('@/modules/rosters/bulk-assignment/engine/assignment-committer', async (importOriginal) => {
+vi.mock('@/modules/scheduling/validation/engine/assignment-committer', async (importOriginal) => {
     const original = await importOriginal() as any;
     return {
         ...original,
@@ -60,10 +60,10 @@ vi.mock('@/modules/scheduling/audit/auditor', () => ({
     auditor: { audit: vi.fn() },
 }));
 
-import { bulkAssignmentController } from '@/modules/rosters/bulk-assignment';
-import { assignmentCommitter } from '@/modules/rosters/bulk-assignment/engine/assignment-committer';
+import { assignmentValidator } from '@/modules/scheduling/validation';
+import { assignmentCommitter } from '@/modules/scheduling/validation/engine/assignment-committer';
 
-const mockSimulate       = bulkAssignmentController.simulate   as ReturnType<typeof vi.fn>;
+const mockSimulate       = assignmentValidator.simulate   as ReturnType<typeof vi.fn>;
 const mockCommitAtomic   = assignmentCommitter.commitAtomic     as ReturnType<typeof vi.fn>;
 
 // ---------------------------------------------------------------------------

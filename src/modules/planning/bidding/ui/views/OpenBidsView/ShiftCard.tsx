@@ -27,6 +27,7 @@ import { formatTimeRemaining } from './utils';
 // preferring cost.ts over cost/index.ts made this a silent mismatch.
 import { estimateDetailedShiftCost } from '@/modules/rosters/domain/projections/utils/cost/index';
 import type { EarningsLine } from '@/modules/payroll/model/gross-pay.types';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 interface ShiftCardProps {
   /** `group.items` is `ManagerBidShift[]`; this card only reads `group` and
@@ -84,7 +85,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         is_cancelled: false,
         shift_date: shift.date,
         unpaid_break_minutes: shift.unpaidBreak,
-        isSecurityRole: (shift.role || '').toLowerCase().includes('security'),
+        isSecurityRole: isSecurityRoleName(shift.role),
       });
       if (!detailed || !detailed.totalCost) return null;
 

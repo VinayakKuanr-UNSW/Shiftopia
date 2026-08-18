@@ -13,10 +13,23 @@
  * not run at all on an unassigned shift, which is exactly how a roster full of
  * 7.5h full-time days went unnoticed.
  *
- * Consequence: shape rules run at shift CREATION (the Add Shift modal, the
- * synthesiser), not at assignment/bid/swap time. Once a shift's shape is valid
- * it stays valid regardless of who fills it, so re-checking downstream is
- * duplicate work.
+ * Consequence: shape rules run at shift CREATION, not at assignment/bid/swap
+ * time. Once a shift's shape is valid it stays valid regardless of who fills it,
+ * so re-checking downstream is duplicate work.
+ *
+ * WHERE THEY ARE ENFORCED. Deciding is not enforcing, and for a while this
+ * module was only decided-with, never enforced-by: the Add Shift modal and the
+ * demand synthesiser were its only two callers, so every other way of making a
+ * shift wrote straight past it. There are now two enforcement points, both
+ * chosen because nothing reaches the database around them:
+ *
+ *   - `rosters/api/shift-shape-gate.ts`, called from `shiftsCommands.createShift`
+ *     and `.updateShift` — the funnel every client-side write already passes
+ *     through.
+ *   - `templates/model/templateShape.ts`, called when a template is saved,
+ *     because `apply_template_to_date_range_v2` stamps shifts SERVER-side and
+ *     the client never holds those rows. Validating the mould is what makes
+ *     checking each casting unnecessary.
  *
  * NET LENGTH IS THE UNIVERSAL MEASURE (locked 2026-08-15)
  * ------------------------------------------------------
@@ -28,7 +41,17 @@
  * and it is now the only reading in the codebase.
  */
 
-/** Which employment type a shift is targeted at. Mirrors `shifts.target_employment_type`. */
+/**
+ * Which employment type a shift is targeted at. Mirrors
+ * `shifts.target_employment_type` — three values, not four.
+ *
+ * Flexible part-time is NOT a member. It is expressed as `'PT'` plus
+ * `target_requires_flexible`, which is how the column, the DB CHECK
+ * (`NOT target_requires_flexible OR target_employment_type = 'PT'`), the solver's
+ * `normalize_employment_type()` and `TargetEmploymentType` all model it. A
+ * fourth enum member here would be a value the database cannot store and the
+ * solver would collapse anyway.
+ */
 export type ShapeEmploymentTarget = 'FT' | 'PT' | 'Casual';
 
 /**
@@ -105,6 +128,26 @@ export interface ShapeInput {
     /** Mandatory on the shifts table; drives which minimum applies. */
     target_employment_type: ShapeEmploymentTarget;
     /**
+     * Narrows a `'PT'` target to flexible part-time. The second axis of the
+     * employment model, not a decoration: cl 12.3(e) gives plain part-time a
+     * flat three-hour minimum with NO exceptions, while the two-hour training
+     * and four-hour Sunday concessions belong only to flexible part-time
+     * (cl 12.4(c)) and casual (cl 12.5(c)). Without this flag the layer cannot
+     * tell the two apart and grants PT concessions it is not owed.
+     */
+    target_requires_flexible?: boolean;
+    /**
+     * True when the shift is a Security role under EBA Schedule 3.
+     *
+     * Schedule 3 §1.1 makes it prevail over the Agreement wherever they
+     * conflict, and it conflicts here: security meal breaks are PAID —
+     * §3.2(a) for full-time security, §5.3(a) and (c) for part-time and casual
+     * event security, both on the basis that the member stays available to
+     * respond. So for security, net length equals gross, and the meal-break
+     * requirement is met from the PAID break field rather than the unpaid one.
+     */
+    is_security?: boolean;
+    /**
      * Pre-computed day typing. When omitted, the evaluator derives both from
      * `shift_date` via the shared holiday calendar. Callers that already know
      * (the solver, batch paths) can pass them to skip the lookup.
@@ -134,15 +177,29 @@ export interface ShapeConfig {
     /** Maximum net length of a single shift. 12h. */
     max_shift_minutes:           number;
     /**
-     * cl 39.2 — maximum SPREAD of a single engagement: first start to last end,
-     * breaks included. 12h.
+     * HOUSE POLICY — maximum gross span of a single engagement, breaks
+     * included. 12h. Advisory, not blocking.
      *
-     * Distinct from `max_shift_minutes` and both are needed. Net alone would let
-     * a 13-hour span through as long as an hour of it were unpaid break, which
-     * is a 13-hour day for the person working it however it is paid. Gross alone
-     * would block a lawful 12h-worked shift. The pair is the real constraint.
+     * This used to cite cl 39.2 and block. It should not have. The clause reads
+     * "Where SPLIT SHIFTS are worked, the total spread of hours over which work
+     * is performed cannot exceed 12 hours EXCLUDING meal and rest breaks" — it
+     * is scoped to split shifts, which cl 39.1 and cl 7.14 confine to PT and
+     * FPT, and it is expressed NET. Applied to every shift and measured gross,
+     * it blocked an 06:00–19:00 shift carrying a 1h unpaid break: twelve hours
+     * worked, lawful under cl 35.1(d), refused by the form.
+     *
+     * The underlying concern is real — a 13-hour tether is a 13-hour day however
+     * it is paid — so the check survives as a warning under its own name. The
+     * genuine cl 39.2 test needs BOTH halves of a split shift and therefore
+     * belongs in the labour layer, not here.
      */
     max_spread_minutes:          number;
+    /**
+     * cl 56.2 — minimum engagement on a public holiday, for EVERY Team Member.
+     * 4h. Independent of cl 12's per-type tiers — which is why it is its own
+     * value and its own rule rather than another row in that table.
+     */
+    public_holiday_min_engagement_minutes: number;
     /**
      * cl 36.1 — net length above which an unpaid meal break is required. 5h.
      *
@@ -170,7 +227,8 @@ export interface ShapeConfig {
 export const DEFAULT_SHAPE_CONFIG: ShapeConfig = {
     ft_min_ordinary_day_minutes:    456,  // 7.6h — 38h ÷ 5
     max_shift_minutes:              720,  // 12h net
-    max_spread_minutes:             720,  // 12h span (cl 39.2)
+    max_spread_minutes:             720,  // 12h span — house policy, not cl 39.2
+    public_holiday_min_engagement_minutes: 240,  // 4h — cl 56.2
     meal_break_threshold_minutes:   300,  // 5h
     meal_break_min_minutes:          30,
     meal_break_max_minutes:          60,

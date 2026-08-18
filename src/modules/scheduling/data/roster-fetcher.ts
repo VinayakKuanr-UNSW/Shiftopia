@@ -23,6 +23,7 @@ import { supabase as prodSupabase } from '@/platform/supabase/client';
 import type { AvailabilityOverrideRef, ExistingShiftRef, OptimizerEmployee } from '../types';
 import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 import { isFullTimeEmployee } from '@/modules/core/model/employment.types';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // =============================================================================
 // SHARED UTILITIES — pure functions, no I/O
@@ -634,7 +635,7 @@ export class RosterFetcher {
                 console.warn('[RosterFetcher] roles lookup failed — Security status will not be resolved from contracts this run', roleErr);
             } else {
                 for (const r of (roleRows ?? []) as any[]) {
-                    if (/security/i.test(r?.name || '')) securityRoleIds.add(r.id);
+                    if (isSecurityRoleName(r?.name)) securityRoleIds.add(r.id);
                 }
             }
         }

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import {
-  X, Trash2, TrendingUp, Loader2, Undo2, UserCheck,
+  X, Trash2, TrendingUp, Loader2, Undo2,
   CheckCircle2, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import {
@@ -53,7 +53,6 @@ export interface ToolbarPreflightData {
   publish:   { eligible: number; blocked: number; warned: number };
   unpublish: { eligible: number; blocked: number; warned: number };
   delete:    { eligible: number; warned: number };
-  unassign:  { eligible: number; blocked: number };
 }
 
 // =============================================================================
@@ -110,8 +109,6 @@ interface BulkActionsToolbarProps {
   onSelectAll?: () => void;
   onPublish?: (shiftIds: string[]) => Promise<BulkActionResult>;
   onUnpublish?: (shiftIds: string[]) => Promise<BulkActionResult>;
-  onAssign?: () => void;
-  onUnassign?: () => void;
   stateCounts?: {
     assignedCount: number;
     unassignedCount: number;
@@ -167,8 +164,6 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   onDelete,
   onPublish,
   onUnpublish,
-  onAssign,
-  onUnassign,
   stateCounts,
   preflightData,
   allowedActions,
@@ -199,12 +194,9 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   // ── Eligibility counts for button labels ─────────────────────────────────
   const publishEligible   = preflightData?.publish.eligible   ?? (stateCounts?.draftCount     ?? 0);
   const unpublishEligible = preflightData?.unpublish.eligible ?? (stateCounts?.publishedCount ?? 0);
-  const unassignEligible  = preflightData?.unassign.eligible  ?? (stateCounts?.assignedCount  ?? 0);
 
   const publishEnabled   = publishEligible > 0;
   const unpublishEnabled = unpublishEligible > 0;
-  const assignEnabled    = stateCounts ? stateCounts.unassignedCount > 0 : true;
-  const unassignEnabled  = unassignEligible > 0;
 
   // Preview from confirming state
   const preview = actionState.type === 'confirming' ? actionState.preview : null;
@@ -608,58 +600,6 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 {unpublishEnabled && preflightData && preflightData.unpublish.blocked > 0 && !isBusy && (
                   <TooltipContent>
                     <p>{preflightData.unpublish.blocked} in bidding — cannot unpublish</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            )}
-
-            <div className="hidden sm:block w-px h-6 bg-border mx-1" />
-
-            {/* Assign */}
-            {onAssign && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0}>
-                    <Button
-                      variant="default" size="sm"
-                      disabled={isBusy || !assignEnabled}
-                      onClick={onAssign}
-                      className={cn(
-                        'gap-2 rounded-full shadow-glow',
-                        assignEnabled ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : 'bg-muted text-muted-foreground/30',
-                      )}
-                    >
-                      <UserCheck className="h-4 w-4" />Assign
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                {!assignEnabled && <TooltipContent><p>No unassigned shifts in selection</p></TooltipContent>}
-              </Tooltip>
-            )}
-
-            {/* Unassign */}
-            {onUnassign && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0}>
-                    <Button
-                      variant="ghost" size="sm"
-                      disabled={isBusy || !unassignEnabled}
-                      onClick={onUnassign}
-                      className={cn(
-                        'gap-2 rounded-full',
-                        unassignEnabled ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/10' : 'text-muted-foreground/30',
-                      )}
-                    >
-                      <X className="h-4 w-4" />
-                      Unassign{eligibleSuffix(unassignEligible, selectedCount)}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                {!unassignEnabled && <TooltipContent><p>No assigned shifts eligible for unassign</p></TooltipContent>}
-                {unassignEnabled && preflightData && preflightData.unassign.blocked > 0 && !isBusy && (
-                  <TooltipContent>
-                    <p>{preflightData.unassign.blocked} in bidding or not assigned — will be skipped</p>
                   </TooltipContent>
                 )}
               </Tooltip>

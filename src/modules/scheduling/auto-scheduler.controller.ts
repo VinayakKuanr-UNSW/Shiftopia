@@ -6,7 +6,7 @@
  *   Receives proposed assignment map (proposals only, never writes DB).
  *
  * Layer 2 — Compliance Validation:
- *   BulkAssignmentController.simulate() validates each proposal against the
+ *   AssignmentValidator.simulate() validates each proposal against the
  *   employee's real schedule (incremental feasibility check).
  *
  * Concurrency Recheck (Critical):
@@ -15,7 +15,7 @@
  *
  * Fallback Strategy:
  *   INFEASIBLE / UNKNOWN / CONNECTION_REFUSED → falls back to the incremental
- *   bulk assignment engine (greedy first-fit over unfilled shifts).
+ *   greedy assignment engine (first-fit over unfilled shifts).
  *
  * Usage:
  *   const preview = await autoSchedulerController.run(shifts, employees);
@@ -26,8 +26,8 @@
 import { parseISO, startOfISOWeek } from 'date-fns';
 import { optimizerClient, OptimizerError } from './optimizer/optimizer.client';
 import { solutionParser } from './optimizer/solution-parser';
-import { bulkAssignmentController, type BulkAssignmentResult } from '@/modules/rosters/bulk-assignment';
-import { assignmentCommitter } from '@/modules/rosters/bulk-assignment/engine/assignment-committer';
+import { assignmentValidator, type ValidationRunResult } from '@/modules/scheduling/validation';
+import { assignmentCommitter } from '@/modules/scheduling/validation/engine/assignment-committer';
 import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { extractLevel } from '../rosters/domain/projections/utils/cost';
 import { estimateDetailedShiftCost as estimateDetailedShiftCostObj } from '../rosters/domain/projections/utils/cost/index';
@@ -50,6 +50,7 @@ import {
 } from '@/modules/rosters/domain/fairness-ledger';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { EMERGENT_WINDOW_MS } from '@/modules/rosters/domain/bidding-urgency';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import type {
     OptimizeRequest,
     OptimizeResponse,
@@ -103,7 +104,7 @@ const SECURITY_ANNUALISED_LEVELS = new Set([3, 4, 5, 6]);
 export function deriveSecurityRoleIds(shifts: { role_id?: string | null; roleName?: string }[]): Set<string> {
     return new Set(
         shifts
-            .filter(s => s.roleName?.toLowerCase().includes('security'))
+            .filter(s => isSecurityRoleName(s.roleName))
             .map(s => s.role_id)
             .filter((id): id is string => !!id),
     );
@@ -835,7 +836,7 @@ async function greedyFallback(
                 const existing = existingRoster.get(emp.id) ?? [];
                 
                 // Only simulate if they passed the basic pre-filters above
-                const simResult = await bulkAssignmentController.simulate(
+                const simResult = await assignmentValidator.simulate(
                     candidateIds,
                     emp.id,
                     { 
@@ -903,7 +904,10 @@ async function greedyFallback(
                 optimizerCost: 0,
                 employmentType: 'Casual',
                 complianceStatus: 'FAIL',
-                violations: [{ type: 'NO_ELIGIBLE_EMPLOYEE', description: 'No available employee passed compliance for this shift.', blocking: true }],
+                violations: [{
+                    type: 'NO_ELIGIBLE_EMPLOYEE', ruleName: 'No Eligible Employee',
+                    description: 'No available employee passed compliance for this shift.', blocking: true,
+                }],
                 passing: false,
             });
         }
@@ -1070,6 +1074,11 @@ export class AutoSchedulerController {
 
         // Failed-proposal stubs for the excluded shifts — appended to every
         // result path (optimizer and greedy) so UI accounting stays complete.
+        const UNSCHEDULABLE_LABEL: Record<'PAST_SHIFT' | 'EMERGENT_SHIFT', string> = {
+            PAST_SHIFT:     'Shift Already Started',
+            EMERGENT_SHIFT: 'Emergent Shift (TTS ≤ 4h)',
+        };
+
         const unschedulableProposal = (s: ShiftMeta, type: 'PAST_SHIFT' | 'EMERGENT_SHIFT', description: string): ValidatedProposal => ({
             shiftId: s.id,
             employeeId: '',
@@ -1080,7 +1089,7 @@ export class AutoSchedulerController {
             optimizerCost: 0,
             employmentType: 'Casual',
             complianceStatus: 'FAIL',
-            violations: [{ type, description, blocking: true }],
+            violations: [{ type, ruleName: UNSCHEDULABLE_LABEL[type], description, blocking: true }],
             passing: false,
         });
         const excludedProposals: ValidatedProposal[] = [
@@ -1604,7 +1613,7 @@ export class AutoSchedulerController {
                     // priced every fallback shift's unpaid break as paid time.
                     const empDet = employeeDetails.get(emp.id);
                     const isSecurityShift = empDet?.is_security_role
-                        ?? (shift.roleName?.toLowerCase().includes('security') ?? false);
+                        ?? isSecurityRoleName(shift.roleName);
                     const grossMins = durationMinutes(shift.start_time, shift.end_time);
                     const mins = isSecurityShift
                         ? grossMins
@@ -2164,19 +2173,19 @@ export class AutoSchedulerController {
         const failByRule: Record<string, number> = {};
 
         for (const group of groups) {
-            let bulkResult: BulkAssignmentResult;
+            let validationResult: ValidationRunResult;
             try {
                 const details = employeeDetails.get(group.employeeId);
                 const existing = existingRoster.get(group.employeeId) ?? [];
 
-                bulkResult = await bulkAssignmentController.simulate(
+                validationResult = await assignmentValidator.simulate(
                     group.shiftIds, 
                     group.employeeId, 
                     { 
                         mode: 'PARTIAL_APPLY',
                         injectedData: {
                             // Pass candidate shifts in their unassigned
-                            // (draft) state. The bulk validator's Rule 2
+                            // (draft) state. The validator's Rule 2
                             // (`ALREADY_ASSIGNED`) rejects any shift whose
                             // `assigned_employee_id` is set — pre-stamping
                             // the optimizer's target employee here makes
@@ -2229,24 +2238,27 @@ export class AutoSchedulerController {
                         shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime,
                         optimizerCost: p.cost, employmentType: p.employmentType, complianceStatus: 'FAIL',
                         roleName: p.roleName,
-                        violations: [{ type: 'SYSTEM', description: 'Compliance check error', blocking: true }],
+                        violations: [{
+                            type: 'SYSTEM', ruleName: 'Compliance Check Failed',
+                            description: 'Compliance check error', blocking: true,
+                        }],
                         passing: false,
                     });
                 }
                 continue;
             }
 
-            const resultByShift = new Map(bulkResult.results.map(r => [r.shiftId, r]));
+            const resultByShift = new Map(validationResult.results.map(r => [r.shiftId, r]));
 
             // Diagnostic: accumulate WHICH rule disagrees with the solver, so the
             // single end-of-pass summary can report it. (The optimizer can return
             // 100% coverage while the validator rejects some proposals; those are
             // then left uncovered to keep the roster compliant.)
-            const groupFail = bulkResult.results.filter(r => !r.passing).length;
+            const groupFail = validationResult.results.filter(r => !r.passing).length;
             if (groupFail > 0) {
                 failTotal += groupFail;
                 failedStaff.add(group.employeeName);
-                for (const r of bulkResult.results) {
+                for (const r of validationResult.results) {
                     for (const v of r.violations ?? []) {
                         failByRule[v.violation_type] = (failByRule[v.violation_type] ?? 0) + 1;
                     }
@@ -2263,7 +2275,8 @@ export class AutoSchedulerController {
                     roleName: p.roleName,
                     complianceStatus: cr?.status === 'PASS' ? 'PASS' : cr?.status === 'WARN' ? 'WARN' : 'FAIL',
                     violations: (cr?.violations ?? []).map(v => ({
-                        type: v.violation_type, description: v.description, blocking: v.blocking,
+                        type: v.violation_type, ruleName: v.rule_name,
+                        description: v.description, blocking: v.blocking,
                     })),
                     passing: cr?.passing ?? false,
                 });

@@ -43,10 +43,6 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock('@/platform/supabase/client', () => ({ supabase: h.supabase }));
-// leave.api imports shiftsCommands at module load (used only by unassign); stub it.
-vi.mock('@/modules/rosters/api/shifts.commands', () => ({
-  shiftsCommands: { bulkUnassignShifts: vi.fn() },
-}));
 
 import { createLeaveRequest, approveLeaveRequest } from '../api/leave.api';
 

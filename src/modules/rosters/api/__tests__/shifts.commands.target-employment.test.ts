@@ -17,6 +17,11 @@
  * 20260805060000_sm_create_shift_target_employment_type_passthrough.sql.
  *
  * Network-free: supabase + the RPC client are mocked.
+ *
+ * NOTE ON THE FIXTURES. Both paths now run the Layer-1 shape gate before
+ * touching the RPC, so the shifts below have to be lawful ones. They were
+ * 09:00–17:00 with no breaks — eight hours with no meal break, which cl 36.1
+ * forbids. That went unremarked for as long as nothing checked.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -77,6 +82,12 @@ vi.mock('@/platform/supabase/rpc/client', () => ({
 // Both paths re-read the shift: create returns the new row, update uses it for
 // the "shift is in the past" guard. The date is far-future so that guard never
 // trips and the tests stay time-independent.
+//
+// The breaks are not decoration. `updateShift` now runs the Layer-1 shape gate
+// on the MERGED post-edit shift, so this row has to be a lawful one or every
+// test here fails on cl 36.1 instead of on the thing it is testing. 09:00–17:30
+// less a 30m unpaid break is 8h net: over the 7.6h full-time floor, carrying the
+// meal break cl 36.1 requires and both rest pauses cl 37 requires.
 vi.mock('../shifts.queries', () => ({
     shiftsQueries: {
         getShiftById: async (id: string) => ({
@@ -84,7 +95,12 @@ vi.mock('../shifts.queries', () => ({
             version: 1,
             shift_date: '2099-01-01',
             start_time: '09:00',
-            end_time: '17:00',
+            end_time: '17:30',
+            unpaid_break_minutes: 30,
+            paid_break_minutes: 30,
+            is_training: false,
+            role_id: null,
+            roles: null,
         }),
     },
 }));
@@ -97,12 +113,19 @@ vi.mock('../../services/compliance.service', () => ({
 
 import { shiftsCommands } from '../shifts.commands';
 
+// A LAWFUL shift, deliberately. `createShift` now gates on shift shape before
+// it builds the RPC payload, so a fixture that breaches the EBA never reaches
+// the assertion it was written for. 8h net with a 30m unpaid meal break and 30m
+// of paid rest pauses satisfies cl 12 (every target including the 7.6h
+// full-time floor), cl 36.1 and cl 37.1–37.2.
 const baseShift = {
     roster_id: 'r1',
     department_id: '11111111-1111-4111-8111-111111111111',
     shift_date: '2026-06-01',
     start_time: '09:00',
-    end_time: '17:00',
+    end_time: '17:30',
+    unpaid_break_minutes: 30,
+    paid_break_minutes: 30,
 };
 
 function createPayload() {

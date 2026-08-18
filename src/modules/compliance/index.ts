@@ -107,19 +107,26 @@ export {
     DEFAULT_SHAPE_CONFIG
 } from './shape';
 
-// Bulk Compliance
-export type {
-    BulkComplianceMode,
-    BulkActionType,
-    BulkAssignment,
-    BulkComplianceCheckRequest,
-    BulkComplianceResultStatus,
-    BulkRuleDetail,
-    BulkShiftComplianceResult,
-    BulkComplianceSummary,
-    BulkComplianceCheckResponse,
-    BulkApplyRequest,
-    BulkApplyResponse
-} from './bulk-types';
+// Rule Registry — the single description of every rule, both layers, all three
+// engines. `v8/metadata.ts` is a derived view of it; see ./registry/types.ts for
+// why the checkable fields are checked rather than merely written down.
+export {
+    RULE_REGISTRY,
+    allRules,
+    getRule,
+    rulesForLayer,
+    rulesForEmployment,
+    solverCoverageGaps,
+    rulesWithKnownGaps,
+} from './registry';
 
-export { checkBulkCompliance } from './bulk-engine';
+export type {
+    RuleSpec,
+    RuleLayer,
+    RuleTier,
+    RuleCategory,
+    RuleAuthority,
+    RuleEngines,
+    EmploymentType,
+    EmploymentScope,
+} from './registry';

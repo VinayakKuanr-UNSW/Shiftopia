@@ -43,7 +43,6 @@ import {
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { useAllTemplates } from '@/modules/templates/hooks/queries/useTemplateQueries';
 
-import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import {
   RenameSubGroupDialog,
   CloneSubGroupDialog,
@@ -86,9 +85,6 @@ import {
   useRenameSubGroup,
   useCloneSubGroup
 } from '@/modules/rosters/state/useRosterMutations';
-import {
-  getAllowedActions
-} from '../../domain/bulk-validation';
 import { computeShiftUrgency, computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { startOfMonth, endOfMonth } from 'date-fns';

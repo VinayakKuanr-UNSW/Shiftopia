@@ -44,6 +44,16 @@ export interface CreateShiftData {
     /** Narrows a 'PT' target to Flexible Part-Time staff only. */
     target_requires_flexible?: boolean;
     demand_group_id?: string | null;
+    /**
+     * Named bypass for the Layer-1 shape gate in `shiftsCommands.createShift`.
+     *
+     * Absent (the normal case) means a shift whose shape breaches the EBA is
+     * refused. Present means it is recorded and written anyway, and the string
+     * says why — the demand synthesiser sets it because its output is a coverage
+     * skeleton with no breaks modelled, inserted as Draft for a manager to
+     * complete. Never persisted; it is a client-side instruction to the gate.
+     */
+    shape_exempt_reason?: string;
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {

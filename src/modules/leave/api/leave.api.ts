@@ -6,7 +6,6 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import type {
   LeaveBalance,
   LeaveRequest,
@@ -16,6 +15,7 @@ import type {
 } from '../model/leave.types';
 import { LEAVE_POLICIES } from '../domain/leave-policy';
 import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ── Balances ─────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ export async function isFullTimeSecurityEmployee(employeeId: string): Promise<bo
   // a person holding one Security and one non-Security contract accrues at the
   // Schedule 3 rate there too.
   return roles.some((r: { name?: string | null }) =>
-    String(r?.name ?? '').toLowerCase().includes('security'));
+    isSecurityRoleName(r?.name));
 }
 
 function mapBalanceRow(row: any): LeaveBalance {
@@ -426,9 +426,9 @@ export interface UnassignConflictsResult {
 /**
  * Unassign the shifts that overlap an approved leave range (the ones surfaced
  * by `getLeaveShiftConflicts`). Routes through the audited shift-mutation
- * gateway (`sm_apply_shift_op` via `bulkUnassignShifts`), so each removal is
- * version-checked, FSM-guarded and recorded as a durable UNASSIGNED
- * shift_event naming the removed worker — never a raw table write.
+ * gateway (`sm_apply_shift_op`), so each removal is version-checked,
+ * FSM-guarded and recorded as a durable UNASSIGNED shift_event naming the
+ * removed worker — never a raw table write.
  *
  * Partial success is normal: a shift already reassigned/cancelled by another
  * user (version conflict, illegal transition) is skipped, not fatal, so
@@ -439,8 +439,37 @@ export async function unassignConflictingShifts(
 ): Promise<MutationResult<UnassignConflictsResult>> {
   if (shiftIds.length === 0) return { data: { attempted: 0, succeeded: 0 } };
   try {
-    const updated = await shiftsCommands.bulkUnassignShifts(shiftIds);
-    return { data: { attempted: shiftIds.length, succeeded: updated.length } };
+    const { data: preState, error: selectErr } = await (supabase as any)
+      .from('shifts')
+      .select('id, version, assigned_employee_id')
+      .in('id', shiftIds)
+      .is('deleted_at', null);
+
+    if (selectErr) throw selectErr;
+
+    let succeeded = 0;
+    await Promise.all(
+      (preState ?? []).map(async (s: { id: string; version: number; assigned_employee_id: string | null }) => {
+        if (s.assigned_employee_id === null) return;
+        try {
+          const { data: envelope, error: rpcErr } = await (supabase as any).rpc('sm_apply_shift_op', {
+            p_shift_id: s.id,
+            p_expected_version: s.version,
+            p_op: 'unassign',
+            p_payload: { reason: 'Leave approval unassign' },
+            p_idempotency_key: null,
+          });
+          if (rpcErr) return;
+          const code = envelope?.code;
+          if (code === 'APPLIED' || code === 'IDEMPOTENT_REPLAY') {
+            succeeded++;
+          }
+        } catch {
+          // ignore per-shift failure
+        }
+      }),
+    );
+    return { data: { attempted: shiftIds.length, succeeded } };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Failed to unassign shifts' };
   }

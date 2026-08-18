@@ -48,6 +48,7 @@ import type {
   GrossPayInputProvenance,
 } from './types';
 import { getLeaveGrossPayInputs } from './leaveGrossPay';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 /** A mapped input plus its provenance (returned by the *WithProvenance fetch). */
 export interface GrossPayInputWithProvenance {
@@ -177,7 +178,7 @@ export function mapShiftRowToGrossPayInput(
   const roleName = role?.name || undefined;
   // Hoisted above the min-engagement floor block below (which needs both) —
   // also reused for the final returned GrossPayShiftInput further down.
-  const isSecurityRole = (role?.name ?? '').toLowerCase().includes('security');
+  const isSecurityRole = isSecurityRoleName(role?.name);
   const employmentType = mapEmploymentType(row._employmentType);
 
   // ── not-worked flags ─────────────────────────────────────────────────────

@@ -1,16 +1,22 @@
 /**
- * ComplianceEvaluator — Rules 7–12 via the constraint solver.
+ * ComplianceEvaluator — labour compliance via the V8 constraint engine.
  *
  * Delegates to AssignmentEvaluator (the same engine used by the
- * EnhancedAddShiftModal) to evaluate scheduling constraints against
- * the SimulatedRoster:
+ * EnhancedAddShiftModal, the bid modal and the swap modals) and reports
+ * WHATEVER IT RAISES, verbatim. This evaluator deliberately keeps no list of
+ * the rules it expects: V8 owns that set, and any list kept here is a second
+ * copy that silently goes stale.
  *
- *   Rule 7:  REST_GAP         — min 10h between shifts (blocking)
- *   Rule 8:  WEEKLY_HOURS     — max ordinary hours in 4-week rolling cycle
- *   Rule 9:  CONSECUTIVE_DAYS — max consecutive working days
- *   Rule 10: DAILY_HOURS      — max 12h in a single calendar day (blocking)
- *   Rule 11: WORKING_DAYS_CAP — max 20 days in rolling 28-day window (EBA Cl 35.1e, blocking)
- *   Rule 12: STUDENT_VISA     — 48h/fortnight limit (warning)
+ * It used to keep one. `CONSTRAINT_TO_VIOLATION` mapped V8 rule ids onto a local
+ * `ViolationType` enum and dropped anything unmapped with a bare `continue`, so
+ * a rule missing from the table was indistinguishable from a rule that passed.
+ * Three BLOCKING rules were being discarded that way — the 20-in-28 cap, the
+ * student-visa limit, and the casual two-shifts-a-day cap. See `ViolationCode`
+ * in ../types for the detail.
+ *
+ * Since this evaluator is the AutoScheduler's compliance gate — called once to
+ * build the preview and again as the pre-commit concurrency recheck — a dropped
+ * rule there is a rule that never reaches an operator at all.
  *
  * The SimulatedRoster (existingShifts + proposedAssignments) is passed as
  * `current_shifts` so each new candidate is validated against the
@@ -18,31 +24,16 @@
  */
 
 import { assignmentEvaluator } from '@/modules/compliance';
-import type { RosterShift } from '@/modules/compliance';
-import type { CandidateShift, EmployeeInfo, ShiftViolation, SimulatedRoster, ViolationType } from '../types';
+import type { ConstraintViolation, RosterShift } from '@/modules/compliance';
+import type { CandidateShift, EmployeeInfo, ShiftViolation, SimulatedRoster } from '../types';
 
 /**
- * Bulk assignment places EXISTING shifts, whose shape was already validated at
- * creation by `@/modules/compliance/shape`. Minimum engagement and meal break
- * are therefore no longer evaluated here — they cannot change as a result of
- * choosing a different person for an unchanged shift.
+ * Shape rules are absent here by design, not by omission. Assignment places
+ * EXISTING shifts, whose shape was validated at creation by
+ * `@/modules/compliance/shape` — minimum engagement, meal break and the rest
+ * cannot change because a different person was chosen for an unchanged shift.
+ * V8 does not emit them either; the two modules agree on the boundary.
  */
-const CONSTRAINT_TO_VIOLATION: Record<string, ViolationType> = {
-    // Unmapped constraint IDs are DROPPED by the loop below, so a rule missing
-    // from this table is indistinguishable from a rule that passed. This entry
-    // is what lets V8_EMPLOYMENT_TARGET actually block: without it the hit was
-    // computed and then silently discarded, and the only thing standing between
-    // an off-target proposal and a failed write was the DB trigger.
-    V8_EMPLOYMENT_TARGET: 'EMPLOYMENT_TARGET',
-    V8_MIN_REST_GAP:     'REST_GAP',
-    V8_ORD_HOURS_AVG:    'WEEKLY_HOURS',
-    V8_MAX_DAILY_HOURS:  'DAILY_HOURS',
-    V8_WORKING_DAYS_CAP: 'WORKING_DAYS_CAP',
-    V8_STREAK_LIMIT:     'STREAK_LIMIT',
-    V8_SPREAD_OF_HOURS:  'SPREAD_OF_HOURS',
-    V8_STUDENT_VISA:     'STUDENT_VISA',
-    V8_LEAVE_CONFLICT:   'APPROVED_LEAVE',
-};
 
 // =============================================================================
 // ADAPTER
@@ -78,7 +69,7 @@ export class ComplianceEvaluator {
      *
      * Uses AssignmentEvaluator with the SimulatedRoster as current_shifts,
      * so each shift is validated against the incremental state of all
-     * previously-proposed assignments in this bulk run.
+     * previously-proposed assignments in this validation run.
      *
      * @returns Array of ShiftViolation objects from solver failures/warnings.
      */
@@ -113,33 +104,27 @@ export class ComplianceEvaluator {
             },
         });
 
-        // Convert ConstraintViolation[] → ShiftViolation[]
+        // ConstraintViolation[] → ShiftViolation[]. A rename, not a filter:
+        // every hit V8 raises is reported, keyed by its own rule id.
         const violations: ShiftViolation[] = [];
+        const seen = new Set<string>();
 
-        for (const cv of result.violations) {
-            const violationType = CONSTRAINT_TO_VIOLATION[cv.constraint_id];
-            if (!violationType) continue;
-
+        const push = (cv: ConstraintViolation, blocking: boolean) => {
+            if (seen.has(cv.constraint_id)) return;
+            seen.add(cv.constraint_id);
             violations.push({
-                violation_type: violationType,
+                violation_type: cv.constraint_id,
+                // V8 already carries the display label; the old enum threw it
+                // away and rendered the identifier instead.
+                rule_name:   cv.constraint_name || cv.name || cv.constraint_id,
                 description: cv.summary,
-                blocking: cv.blocking,
+                blocking,
             });
-        }
+        };
 
-        // Include non-blocking warnings too
-        for (const cv of result.warnings) {
-            const violationType = CONSTRAINT_TO_VIOLATION[cv.constraint_id];
-            if (!violationType) continue;
-            // Avoid duplicates
-            if (violations.some(v => v.violation_type === violationType)) continue;
-
-            violations.push({
-                violation_type: violationType,
-                description: cv.summary,
-                blocking: false,
-            });
-        }
+        // Blocking first, so a rule appearing in both lists keeps its severity.
+        for (const cv of result.violations) push(cv, cv.blocking);
+        for (const cv of result.warnings)   push(cv, false);
 
         return violations;
     }

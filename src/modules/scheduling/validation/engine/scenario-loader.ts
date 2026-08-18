@@ -2,7 +2,7 @@
  * ScenarioLoader — Fetches the employee's ±28-day roster from Supabase.
  *
  * Returns:
- *   - candidateShifts:  The specific shifts being bulk-assigned (from shiftIds)
+ *   - candidateShifts:  The specific shifts being validated (from shiftIds)
  *   - existingShifts:   All shifts assigned to the employee in the scenario window
  *   - employee:         Profile including role and qualifications
  *
@@ -25,7 +25,7 @@ export interface LoadedScenario {
 
 export class ScenarioLoader {
     /**
-     * Load all data needed to validate bulk assignment for a single employee.
+     * Load all data needed to validate proposed assignments for a single employee.
      *
      * @param shiftIds     - The candidate shift IDs selected in the planner
      * @param employeeId   - The target employee

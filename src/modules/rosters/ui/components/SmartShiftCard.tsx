@@ -64,6 +64,7 @@ import {
 } from '@/modules/timesheets/domain/billable-time';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ============================================================================
 // HISTORY OVERLAY COMPONENT
@@ -1206,7 +1207,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     // uses (TimesheetMobileCard), so this Roster drill-down card (which
     // shares the same SharedShiftCard UI) shows real Billable Pay + a
     // Variance→Pay delta instead of leaving them at 'N/A'/'--'.
-    const isSecurityRole = (shift.roles?.name || '').toLowerCase().includes('security');
+    const isSecurityRole = isSecurityRoleName(shift.roles?.name);
     // Assigned shift → price the person who is actually working it. Unassigned →
     // price the shift's declared target. Falling through to `null` used to make
     // the estimator assume Casual, so every unassigned shift carried a phantom

@@ -411,7 +411,10 @@ export interface ValidatedProposal {
     employmentType: string;
     complianceStatus: ProposalValidationStatus;
     violations: Array<{
+        /** Pre-flight code, or the V8 rule id verbatim (`V8_20_IN_28`, …). */
         type: string;
+        /** Human-readable rule name. Render this, not `type`. */
+        ruleName?: string;
         description: string;
         blocking: boolean;
     }>;

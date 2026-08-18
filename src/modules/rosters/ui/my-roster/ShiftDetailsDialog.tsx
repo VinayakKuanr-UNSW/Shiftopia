@@ -28,6 +28,7 @@ import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } fr
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { useAuth } from '@/platform/auth/useAuth';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
     resolveBillableSide,
     calculateNetMinutes,
@@ -219,7 +220,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     const rawNetMins = calculateNetMinutes(resolvedBillableStart, resolvedBillableEnd, unpaidBreak);
     if (rawNetMins === null) return null;
     const { isSunday, isPublicHoliday } = getShiftDayType(shiftData.shift.shift_date);
-    const isSecurityRoleForFloor = (shiftData.shift.roles?.name ?? '').toLowerCase().includes('security');
+    const isSecurityRoleForFloor = isSecurityRoleName(shiftData.shift.roles?.name);
     return applyMinEngagementFloor(rawNetMins, {
       isTraining: (shiftData.shift as any).is_training === true,
       isSunday,
@@ -283,7 +284,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   // "$123.45" strings (not the bespoke Tooltip JSX this dialog used to build)
   // — that's what SharedShiftCard's own Variance section needs to compute a
   // Pay delta; a ReactNode there can't be parsed and silently shows "--".
-  const isSecurityRoleForCost = (shiftData?.shift?.roles?.name ?? '').toLowerCase().includes('security');
+  const isSecurityRoleForCost = isSecurityRoleName(shiftData?.shift?.roles?.name);
   const estimatedPayLines = React.useMemo(
     () => shiftData?.shift
       ? buildOrdinaryEarningsLines(costBreakdown, { isSecurityRole: isSecurityRoleForCost, shiftDate: shiftData.shift.shift_date, startTime: shiftData.shift.start_time })

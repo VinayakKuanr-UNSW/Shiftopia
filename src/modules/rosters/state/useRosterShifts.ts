@@ -696,72 +696,7 @@ export function useApplyShiftOp() {
   });
 }
 
-/** Bulk assign shifts to one employee. Instant assignment update in all list views. */
-export function useBulkAssignShifts() {
-  const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: ({ employeeId, shiftIds }: { employeeId: string; shiftIds: string[] }) =>
-      shiftsCommands.bulkAssignShifts(employeeId, shiftIds),
-
-    onMutate: async ({ employeeId, shiftIds }) => {
-      await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
-      const snapshot = snapshotLists(queryClient);
-
-      patchLists(queryClient, (old) =>
-        old.map(s =>
-          shiftIds.includes(s.id)
-            ? { ...s, assigned_employee_id: employeeId, assignment_status: 'assigned' as const }
-            : s,
-        ),
-      );
-
-      return { snapshot };
-    },
-
-    onError: (_err, _vars, context) => {
-      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
-    },
-
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
-      invalidateShiftAggregates(queryClient);
-    },
-  });
-}
-
-/** Bulk unassign shifts. Clears assignment in all list views instantly. */
-export function useBulkUnassignShifts() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (shiftIds: string[]) => shiftsCommands.bulkUnassignShifts(shiftIds),
-
-    onMutate: async (shiftIds) => {
-      await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
-      const snapshot = snapshotLists(queryClient);
-
-      patchLists(queryClient, (old) =>
-        old.map(s =>
-          shiftIds.includes(s.id)
-            ? { ...s, assigned_employee_id: null, assignment_status: 'unassigned' as const }
-            : s,
-        ),
-      );
-
-      return { snapshot };
-    },
-
-    onError: (_err, _vars, context) => {
-      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
-    },
-
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
-      invalidateShiftAggregates(queryClient);
-    },
-  });
-}
 
 /** Publish a single shift. Instant lifecycle_status patch. */
 export function usePublishShift() {
@@ -1522,8 +1457,6 @@ export function useRosterShifts(
   const createShift = useCreateShift();
   const updateShift = useUpdateShift();
   const deleteShift = useDeleteShift();
-  const bulkAssign = useBulkAssignShifts();
-  const bulkUnassign = useBulkUnassignShifts();
   const bulkPublish = useBulkPublishShifts();
   const bulkUnpublish = useBulkUnpublishShifts();
   const bulkDelete = useBulkDeleteShifts();
@@ -1544,9 +1477,8 @@ export function useRosterShifts(
     createShift,
     updateShift,
     deleteShift,
-    bulkAssign,
-    bulkUnassign,
     bulkPublish,
+    bulkUnpublish,
     bulkDelete,
     bulkUpdateTimes,
     invalidateAll,

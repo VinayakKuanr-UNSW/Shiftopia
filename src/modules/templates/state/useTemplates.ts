@@ -32,6 +32,10 @@ import {
 } from '@/modules/templates/model/templates.types';
 import { SYDNEY_TZ, getTodayInTimezone, getNowInTimezone } from '@/modules/core/lib/date.utils';
 import { parse, isSameMonth, startOfMonth, endOfMonth, format as formatCb } from 'date-fns';
+import {
+  validateTemplateShapes,
+  describeTemplateShapeFailures,
+} from '../model/templateShape';
 
 /* ============================================================
    CONSTANTS
@@ -820,6 +824,30 @@ export function useTemplates(): UseTemplatesReturn {
         description: 'Published templates cannot be edited',
         variant: 'destructive',
       });
+      return false;
+    }
+
+    // ── Layer 1: shift shape ────────────────────────────────────────────────
+    // Templates are the one creation path the gate in `shiftsCommands` cannot
+    // see: apply_template_to_date_range_v2 stamps rows server-side, one per
+    // matching day, so an unlawful template shift becomes an unlawful shift a
+    // hundred times over without the client ever holding one. Checking the
+    // mould here is what makes that unnecessary to check per casting.
+    const shapeFailures = validateTemplateShapes(localTemplate.groups);
+    if (shapeFailures.length > 0) {
+      const lines = describeTemplateShapeFailures(shapeFailures);
+      log('error', `Template shape breaches: ${lines.join(' | ')}`);
+      toast({
+        title:
+          shapeFailures.length === 1
+            ? 'A shift in this template breaches the EBA'
+            : `${shapeFailures.length} shifts in this template breach the EBA`,
+        // Every failure, not just the first: a manager fixing a fifty-shift
+        // template should not be sent back into the editor once per breach.
+        description: lines.join('\n'),
+        variant: 'destructive',
+      });
+      safeSetState(setError, lines.join('; '));
       return false;
     }
 

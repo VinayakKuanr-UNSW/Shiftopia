@@ -5,7 +5,7 @@
  *   1. Manager opens panel → service health check runs automatically
  *   2. "Optimise" → Layer 1 (OR-Tools) + Layer 2 (compliance) run
  *   3. Results shown: per-employee groups with per-shift PASS/WARN/FAIL
- *   4. "Apply X Assignments" → atomic commit via sm_bulk_assign per employee
+ *   4. "Apply X Assignments" → atomic commit via sm_bulk_assign_atomic
  *
  * Architecture:
  *   Optimizer proposes → Compliance validates → Manager confirms → DB commit
@@ -194,7 +194,9 @@ function ProposalRow({ p, onSwap }: { p: ValidatedProposal; onSwap: () => void }
                     {p.violations.map((v, i) => (
                         <p key={i} className="text-[11px] text-muted-foreground leading-relaxed">
                             <span className={cn('font-medium', v.blocking ? 'text-red-500' : 'text-amber-500')}>
-                                {v.type}:{' '}
+                                {/* `type` is an identifier (`V8_20_IN_28`); `ruleName` is the
+                                    copy V8 already wrote for it ("20 Days in 28 Limit"). */}
+                                {v.ruleName ?? v.type}:{' '}
                             </span>
                             {v.description}
                         </p>
