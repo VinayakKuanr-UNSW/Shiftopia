@@ -17,6 +17,7 @@ import { maxWorkdayLimitsRule } from './rules/consecutive-days';
 import { studentVisaRule } from './rules/student-visa';
 import { noOverlapRule } from './rules/structural-rules';
 import { dailySpreadRule } from './rules/daily-spread';
+import { dailyMealBreakRule } from './rules/daily-meal-break';
 import { splitShiftRule } from './rules/split-shift';
 import { multiHireEligibilityRule } from './rules/multi-hire-eligibility';
 import { maxDailyEngagementsRule } from './rules/max-daily-engagements';
@@ -61,6 +62,7 @@ const ACTIVE_RULES: V8RuleEvaluator[] = [
     splitShiftRule,          // clause 39 — PT/flexi same-day gap (warns on >3h)
     multiHireEligibilityRule, // clause 13.1(f) — flags same-role "multi-hire" pairs (audit M-1)
     maxDailyEngagementsRule, // clause 35.4(f) — casual hard cap of 2 shifts/day
+    dailyMealBreakRule,      // clause 36.1 — the per-DAY limb the shape layer cannot see
     minRestGapRule,          // clause 40 — cross-day pairs only
     
     // 4. Budget & Patterns (Cumulative)

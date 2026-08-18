@@ -165,9 +165,10 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
             'More than 5h net requires a meal break of at least 30 minutes — unpaid under ' +
             'cl 36.1, paid for security roles under Schedule 3.',
         knownGap:
-            'cl 36.1 says "more than five (5) hours ON ANY ONE DAY", not per shift, so a casual ' +
-            'working 3h + 3h in one day is owed a break this per-shift rule cannot see. That limb ' +
-            'needs the labour layer, which is the only place both engagements are visible.',
+            'Enforces the per-SHIFT reading only. cl 36.1 says "more than five (5) hours ON ANY ONE ' +
+            'DAY", and a day worked in two parts can cross five hours with neither part doing so. ' +
+            'That limb is V8_DAILY_MEAL_BREAK in the labour layer, the only place both engagements ' +
+            'are visible; this entry stays recorded so the split is deliberate rather than assumed.',
     },
 
     SHAPE_MEAL_BREAK_CEILING: {
@@ -411,6 +412,25 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         engines: { shape: false, v8: true, solver: 'HC-4c' },
         description:
             'A casual may work at most 2 engagements in one day, totalling no more than 12 hours.',
+    },
+
+    V8_DAILY_MEAL_BREAK: {
+        id: 'V8_DAILY_MEAL_BREAK',
+        name: 'Daily Meal Break',
+        tier: 'BLOCKING',
+        layer: 'LABOUR',
+        category: 'TIME',
+        employment: 'ALL',
+        authority: eba('cl 36.1', 'Sch 3 §3.2(a)', 'Sch 3 §5.3(a)'),
+        engines: { shape: false, v8: true, solver: null },
+        description:
+            'A day worked in more than one part must still offer a meal break of at least 30 ' +
+            'minutes once more than 5 hours are worked. The gap between engagements counts.',
+        knownGap:
+            'Not modelled in CP-SAT. The solver can propose two abutting engagements that together ' +
+            'cross five hours with no break, which this rule then rejects. The companion limb — a ' +
+            'single shift over five hours — is blocked at creation by SHAPE_MEAL_BREAK, so the ' +
+            'solver can only reach the pairing case.',
     },
 
     V8_20_IN_28: {
