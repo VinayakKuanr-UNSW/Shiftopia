@@ -157,14 +157,54 @@ async function fetchBaselineShifts(
   const { data: template, error: tError } = await query.maybeSingle();
   if (tError || !template) return [];
 
-  // 2. Fetch shifts for this day
+  // 2. Fetch the template's shifts for this day.
+  //
+  // TWO BUGS LIVED HERE, both of which read downstream as "this template
+  // contributes no baseline demand" rather than as a failure.
+  //
+  //   * `.eq('template_id', ...)`. `template_shifts` has NO such column — the
+  //     hierarchy is template_shifts.subgroup_id -> template_subgroups.group_id
+  //     -> template_groups.template_id. PostgREST rejects a filter on a column
+  //     that does not exist, and the `if (sError) return []` below swallowed it.
+  //
+  //   * `.eq('day_of_week', dayOfWeek)` excludes NULL. `day_of_week IS NULL`
+  //     means "every day" — that is exactly how apply_template_to_date_range_v2
+  //     reads it, and ALL 22 rows in the production library are NULL. So even
+  //     with the join fixed, an equality filter would still have matched none
+  //     of them.
+  //
+  // Both were dormant only because no template is flagged `is_base_template`;
+  // the first row to carry that flag would have silently contributed nothing.
+  //
+  // Walked in three plain queries rather than one nested select: an embedded
+  // resource that cannot be resolved fails the whole request, and a failure
+  // here is indistinguishable from an empty template — which is the precise
+  // shape of the bug being fixed.
+  const { data: groups, error: gError } = await supabase
+    .from('template_groups')
+    .select('id')
+    .eq('template_id', template.id);
+  if (gError || !groups || groups.length === 0) return [];
+
+  const { data: subGroups, error: sgError } = await supabase
+    .from('template_subgroups')
+    .select('id')
+    .in('group_id', groups.map((g) => g.id));
+  if (sgError || !subGroups || subGroups.length === 0) return [];
+
   const { data: shifts, error: sError } = await supabase
     .from('template_shifts')
     .select('*')
-    .eq('template_id', template.id)
-    .eq('day_of_week', dayOfWeek);
+    .in('subgroup_id', subGroups.map((sg) => sg.id))
+    .or(`day_of_week.is.null,day_of_week.eq.${dayOfWeek}`);
 
-  if (sError) return [];
+  if (sError) {
+    console.warn(
+      '[demandTensorBuilder] baseline template shifts fetch failed — this scope will show no template demand',
+      sError,
+    );
+    return [];
+  }
   return (shifts ?? []).map((ts) => ({
     ...ts,
     lifecycle_status: 'Published', // Treat template shifts as active for coverage
