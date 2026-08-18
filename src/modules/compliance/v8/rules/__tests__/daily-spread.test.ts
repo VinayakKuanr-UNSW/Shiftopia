@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { spreadOfHoursRule } from '../spread-of-hours';
+import { dailySpreadRule as spreadOfHoursRule } from '../daily-spread';
 import { buildContext, buildShift, resetIdCounter } from './_helpers';
 
 /**
- * cl 39.2 — the split-shift spread ceiling.
+ * Daily spread — cl 39.2 for part-timers, EBA Sch 3 §5.3(g) for casual security.
  *
  * The rule these tests replace read the clause as a universal daily spread cap:
  * every employment type, measured gross, firing on a lone shift. All three are
@@ -105,10 +105,11 @@ describe('measure — cl 39.2 says "excluding meal and rest breaks"', () => {
         }));
         expect(hit.calculation).toMatchObject({
             gross_spread_minutes: 960,
-            unpaid_break_minutes: 30,
+            break_minutes: 30,
             net_spread_minutes: 930,
             limit_minutes: 720,
             engagements: 2,
+            measure: 'net',
         });
     });
 });
@@ -146,5 +147,117 @@ describe('arity — a spread needs two engagements to span', () => {
             ],
         }));
         expect(hits).toEqual([]);
+    });
+});
+
+
+describe('cl 39.2 excludes REST breaks as well as meal breaks', () => {
+    it('deducts the paid rest allotment, not only the unpaid meal', () => {
+        // The clause reads "excluding meal AND rest breaks". Reading only the
+        // unpaid half measured a longer spread than the agreement allows and
+        // refused lawful pairings. An 840m span less 30m meal and 30m of pauses
+        // is 780m — still over. Less 60m and 60m it is 720m — the ceiling exactly.
+        resetIdCounter();
+        const over = spreadOfHoursRule(buildContext({
+            employee: PT,
+            shifts: [
+                buildShift({ date: '2026-06-01', start_time: '06:00', end_time: '08:00', unpaid_break_minutes: 30, paid_break_minutes: 15 }),
+                buildShift({ date: '2026-06-01', start_time: '18:00', end_time: '20:00', unpaid_break_minutes: 0, paid_break_minutes: 15 }),
+            ],
+        }));
+        expect(over).toHaveLength(1);
+        expect(over[0].calculation!.break_minutes).toBe(60);
+        expect(over[0].calculation!.net_spread_minutes).toBe(780);
+
+        const exact = spreadOfHoursRule(buildContext({
+            employee: PT,
+            shifts: [
+                buildShift({ date: '2026-06-01', start_time: '06:00', end_time: '08:00', unpaid_break_minutes: 60, paid_break_minutes: 30 }),
+                buildShift({ date: '2026-06-01', start_time: '18:00', end_time: '20:00', unpaid_break_minutes: 0, paid_break_minutes: 30 }),
+            ],
+        }));
+        expect(exact).toEqual([]);
+    });
+});
+
+describe('EBA Schedule 3 §5.3(g) — casual event security', () => {
+    const CASUAL_SEC = { contract_type: 'CASUAL' as const, is_security_role: true };
+
+    /** 06:00-08:00 and 18:00-20:00 — a 14h span. */
+    const twoShifts = (over: Record<string, unknown> = {}) => [
+        buildShift({ date: '2026-06-01', start_time: '06:00', end_time: '08:00', ...over }),
+        buildShift({ date: '2026-06-01', start_time: '18:00', end_time: '20:00', ...over }),
+    ];
+
+    it('caps a casual security two-shift day at 12h', () => {
+        resetIdCounter();
+        const hits = spreadOfHoursRule(buildContext({ employee: CASUAL_SEC, shifts: twoShifts() }));
+        const hit = hits.find(h => h.rule_id === 'V8_CASUAL_SECURITY_SPREAD');
+        expect(hit).toBeDefined();
+        expect(hit!.blocking).toBe(true);
+    });
+
+    it('measures GROSS — breaks do not buy headroom', () => {
+        // The decisive difference from cl 39.2. §5.3(g) states no exclusion, and
+        // §5.3(a) has already made the meal break paid, so there is no unpaid
+        // time to take out. A deduction here would read the cap out of existence.
+        resetIdCounter();
+        const hits = spreadOfHoursRule(buildContext({
+            employee: CASUAL_SEC,
+            shifts: twoShifts({ unpaid_break_minutes: 60, paid_break_minutes: 60 }),
+        }));
+        const hit = hits.find(h => h.rule_id === 'V8_CASUAL_SECURITY_SPREAD')!;
+        expect(hit).toBeDefined();
+        expect(hit.calculation!.measure).toBe('gross');
+        expect(hit.calculation!.gross_spread_minutes).toBe(840);
+    });
+
+    it('leaves a general casual alone — cl 35.4(f) is not a spread cap', () => {
+        // cl 35.4(f) caps the TOTAL ENGAGEMENT (hours worked) at 12h, which
+        // V8_MAX_DAILY_HOURS owns. Where the drafters meant span they wrote
+        // "spread", four clauses later, about the same fact pattern.
+        resetIdCounter();
+        expect(spreadOfHoursRule(buildContext({
+            employee: { contract_type: 'CASUAL', is_security_role: false }, shifts: twoShifts(),
+        }))).toEqual([]);
+    });
+
+    it('accepts a compliant casual security pair', () => {
+        resetIdCounter();
+        expect(spreadOfHoursRule(buildContext({
+            employee: CASUAL_SEC,
+            shifts: [
+                buildShift({ date: '2026-06-01', start_time: '06:00', end_time: '10:00' }),
+                buildShift({ date: '2026-06-01', start_time: '14:00', end_time: '18:00' }),
+            ],
+        }))).toEqual([]);
+    });
+
+    it('requires a flat 3h per engagement, displacing the 2h training tier', () => {
+        // §5.3(g): "each engagement is not less than three (3) hours". §5.3(e)
+        // would allow a 2h non-event-day training block on its own; alongside a
+        // second shift it does not survive. Only the labour layer can see this —
+        // the shape layer judges one shift at a time.
+        resetIdCounter();
+        const hits = spreadOfHoursRule(buildContext({
+            employee: CASUAL_SEC,
+            shifts: [
+                buildShift({ date: '2026-06-01', start_time: '09:00', end_time: '11:00', is_training: true }),
+                buildShift({ date: '2026-06-01', start_time: '14:00', end_time: '18:00' }),
+            ],
+        }));
+        const hit = hits.find(h => h.rule_id === 'V8_CASUAL_SECURITY_ENGAGEMENT')!;
+        expect(hit).toBeDefined();
+        expect(hit.calculation!.required_minutes).toBe(180);
+        expect(hit.affected_shifts).toHaveLength(1);
+    });
+
+    it('does not raise the engagement floor on a single shift', () => {
+        // "Where a casual works two shifts in one day" — one shift is not that.
+        resetIdCounter();
+        expect(spreadOfHoursRule(buildContext({
+            employee: CASUAL_SEC,
+            shifts: [buildShift({ date: '2026-06-01', start_time: '09:00', end_time: '11:00', is_training: true })],
+        }))).toEqual([]);
     });
 });

@@ -148,7 +148,26 @@ export function evaluateShiftShape(
     // satisfied from the paid-break field. Sch 3 §1.1 makes this prevail over
     // cl 36.1 for these roles.
     const mealBreakIsPaid  = isSecurity;
-    const mealBreakMinutes = mealBreakIsPaid ? paidBreak : unpaidBreak;
+
+    /**
+     * Schedule 3 sets TWO different meal-break entitlements, not one.
+     *
+     *   §3.2(a) FULL-TIME security — "a paid meal break of 30 minutes". A fixed
+     *           amount, not a range: the 12-hour continuous roster under §3.1(a)
+     *           is built around it.
+     *   §5.3(a) PART-TIME and CASUAL EVENT security — "a paid meal break of not
+     *           less than thirty (30) minutes and not more than sixty (60)
+     *           minutes". The cl 36.1 range, but paid.
+     *
+     * Both are drawn from the same `paid_break_minutes` field as the rest
+     * pauses, so what the field holds is a POOL, not a meal break. Reading the
+     * whole pool as the meal break is what made a 75-minute allotment (30 meal +
+     * 45 of pauses) trip the cl 36.1 ceiling. Cap the reading at the entitlement
+     * and the pool stops masquerading as one component of itself.
+     */
+    const isFtSecurity     = isSecurity && input.target_employment_type === 'FT';
+    const mealBreakCap     = isFtSecurity ? config.meal_break_min_minutes : config.meal_break_max_minutes;
+    const mealBreakMinutes = mealBreakIsPaid ? Math.min(paidBreak, mealBreakCap) : unpaidBreak;
     /**
      * Security draws BOTH the meal break and the rest pauses from the single
      * `paid_break_minutes` field, so the two have to be told apart. Reserve the
@@ -394,13 +413,19 @@ export function evaluateShiftShape(
     if (netMinutes > config.meal_break_threshold_minutes && mealBreakMinutes < config.meal_break_min_minutes) {
         const kind   = mealBreakIsPaid ? 'paid' : 'unpaid';
         const field  = mealBreakIsPaid ? ('paid_break_minutes' as const) : ('unpaid_break_minutes' as const);
-        const clause = mealBreakIsPaid ? 'EBA Sch 3 §3.2 / §5.3' : 'ICC EBA cl 36.1';
+        const clause = isFtSecurity      ? 'EBA Sch 3 §3.2(a)'
+                     : mealBreakIsPaid   ? 'EBA Sch 3 §5.3(a)'
+                     :                     'ICC EBA cl 36.1';
+        // §3.2(a) states one number; cl 36.1 and §5.3(a) state a range.
+        const entitlement = isFtSecurity
+            ? `${config.meal_break_min_minutes} minutes`
+            : `not less than ${config.meal_break_min_minutes} and not more than ${config.meal_break_max_minutes} minutes`;
         hits.push({
             rule_id:   'SHAPE_MEAL_BREAK',
             rule_name: 'Meal Break Requirement',
             status:    'BLOCKING',
             summary:   `${mealBreakIsPaid ? 'Paid' : 'Unpaid'} meal break required — min ${config.meal_break_min_minutes}m (${mealBreakMinutes}m set)`,
-            details:   `A Team Member who works more than ${hours(config.meal_break_threshold_minutes)} hours on any one day is entitled to a ${kind} meal break of not less than ${config.meal_break_min_minutes} and not more than ${config.meal_break_max_minutes} minutes (${clause}). This shift has ${mealBreakMinutes} minutes scheduled.`,
+            details:   `A Team Member who works more than ${hours(config.meal_break_threshold_minutes)} hours on any one day is entitled to a ${kind} meal break of ${entitlement} (${clause}). This shift has ${mealBreakMinutes} minutes scheduled.`,
             blocking:  true,
             field,
             fix: {
@@ -416,7 +441,7 @@ export function evaluateShiftShape(
                 meal_break_is_paid: mealBreakIsPaid,
                 required_break_minutes: config.meal_break_min_minutes,
                 max_break_minutes: config.meal_break_max_minutes,
-                eba_clause: mealBreakIsPaid ? 'Sch 3 §3.2 / §5.3' : 'cl 36.1',
+                eba_clause: clause,
             },
         });
     }
@@ -424,7 +449,13 @@ export function evaluateShiftShape(
     // ── SHAPE_MEAL_BREAK_CEILING (cl 36.1) ───────────────────────────────────
     // The other half of the same sentence: "not more than sixty (60) minutes".
     // Applies at every shift length, since there is only ever one meal break.
-    if (mealBreakMinutes > config.meal_break_max_minutes) {
+    //
+    // UNPAID ONLY. For security the meal break and the rest pauses share one
+    // field, so an over-60 total says nothing about the meal break — it is far
+    // more likely to be a correct meal plus generous pauses. A ceiling that
+    // cannot distinguish the thing it caps from the thing beside it is not a
+    // ceiling, it is a false positive waiting for a long security shift.
+    if (!mealBreakIsPaid && mealBreakMinutes > config.meal_break_max_minutes) {
         hits.push({
             rule_id:   'SHAPE_MEAL_BREAK_CEILING',
             rule_name: 'Meal Break Ceiling',

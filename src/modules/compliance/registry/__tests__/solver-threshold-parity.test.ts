@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { DEFAULT_V8_CONFIG } from '../../v8/types';
-import { SPLIT_SHIFT_SPREAD_MINUTES } from '../../v8/rules/spread-of-hours';
+import {
+    DAILY_SPREAD_LIMIT_MINUTES,
+    CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES,
+} from '../../v8/rules/daily-spread';
 import { CASUAL_MAX_DAILY_ENGAGEMENTS } from '../../v8/rules/max-daily-engagements';
 import {
     MAX_WORKDAYS_PER_28,
@@ -76,7 +79,15 @@ describe('daily and weekly caps', () => {
     });
 
     it('agrees on the cl 39.2 split-shift spread ceiling', () => {
-        expect(solverConstant('SPLIT_SHIFT_SPREAD_MINUTES')).toBe(SPLIT_SHIFT_SPREAD_MINUTES);
+        expect(solverConstant('SPLIT_SHIFT_SPREAD_MINUTES')).toBe(DAILY_SPREAD_LIMIT_MINUTES);
+    });
+
+    it('agrees on the Sch 3 §5.3(g) casual security spread ceiling', () => {
+        // Same twelve hours, different MEASURE — gross rather than net. The
+        // number matching is necessary but not sufficient, so the source
+        // assertions below pin the measure too.
+        expect(solverConstant('CASUAL_SECURITY_SPREAD_MINUTES')).toBe(DAILY_SPREAD_LIMIT_MINUTES);
+        expect(CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES).toBe(180);
     });
 
     it('agrees on 20 worked days in any 28', () => {
@@ -107,7 +118,15 @@ describe('the solver actually uses the constants it declares', () => {
         expect(src).toMatch(/is_ft_security\s*=\s*emp\.is_security_role and emp\.employment_type == 'FT'/);
     });
 
-    it('scopes the spread constraint to part-time, per cl 39.1', () => {
-        expect(src).toMatch(/if emp\.employment_type != 'PT':\s*\n\s*continue/);
+    it('scopes the cl 39.2 spread to part-time and casual security to Sch 3', () => {
+        expect(src).toMatch(/is_split_shift_population = emp\.employment_type == 'PT'/);
+        expect(src).toMatch(/emp\.employment_type == 'Casual' and emp\.is_security_role/);
+    });
+
+    it('deducts BOTH break fields for cl 39.2 and neither for Sch 3 §5.3(g)', () => {
+        // "excluding meal AND rest breaks" — reading only the unpaid half
+        // measured a longer spread than the agreement allows.
+        expect(src).toMatch(/unpaid_break_minutes', 0\) or 0\)\s*\n\s*\+ \(getattr\(s, 'paid_break_minutes'/);
+        expect(src).toMatch(/break_expr = 0\s*\n\s*limit = CASUAL_SECURITY_SPREAD_MINUTES/);
     });
 });

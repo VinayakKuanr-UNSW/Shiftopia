@@ -216,3 +216,67 @@ def test_is_security_role_survives_the_http_boundary():
         and k not in ("existing_shifts", "availability_slots")
     })
     assert emp.is_security_role is True, "dropped between pydantic and the dataclass"
+
+
+# ---------------------------------------------------------------------------
+# Sch 3 §5.3(g) — casual event security spread
+# ---------------------------------------------------------------------------
+
+def test_cl_39_2_deducts_both_break_fields():
+    """"...cannot exceed 12 hours EXCLUDING MEAL AND REST BREAKS."
+
+    Reading only the unpaid half measured a longer spread than the agreement
+    allows and refused pairings the labour layer accepts. 840m less 120m of
+    meal break is 720m — the ceiling exactly.
+    """
+    shifts = [
+        make_shift(sid="a", date=day(0), start="06:00", end="08:00", unpaid_break_minutes=60),
+        make_shift(sid="b", date=day(0), start="18:00", end="20:00", unpaid_break_minutes=60),
+    ]
+    out = solve(shifts, [make_employee("e1", employment_type="PT")])
+    assert out.unassigned_shift_ids == []
+    assert legal_penalty(out) == 0
+
+
+def test_casual_security_has_its_own_spread_cap():
+    # Sch 3 §5.3(g) caps a casual Event Security member's two-shift day at 12
+    # hours. Sch 3 §1.1 makes the schedule prevail, so this binds where cl 39.2
+    # — a split-shift clause casuals are excluded from — does not.
+    out = solve(_two_engagements(), [
+        make_employee("e1", employment_type="Casual", is_security_role=True),
+    ])
+    assert out.unassigned_shift_ids or legal_penalty(out) > 0
+
+
+def test_casual_security_spread_is_measured_gross():
+    """The decisive difference from cl 39.2.
+
+    §5.3(g) states no exclusion for breaks, and §5.3(a) has already made the
+    meal break paid — there is no unpaid time to take out. Deducting breaks here
+    would read the cap out of existence.
+    """
+    out = solve(_two_engagements(unpaid=60), [
+        make_employee("e1", employment_type="Casual", is_security_role=True),
+    ])
+    assert out.unassigned_shift_ids or legal_penalty(out) > 0, (
+        "breaks bought headroom against a GROSS cap"
+    )
+
+
+def test_a_general_casual_has_no_spread_cap():
+    # cl 35.4(f) caps the TOTAL ENGAGEMENT (hours worked) at 12h, not the span.
+    # Where the drafters meant span they wrote "spread", four clauses later,
+    # about the same fact pattern.
+    out = solve(_two_engagements(), [make_employee("e1", employment_type="Casual")])
+    assert out.unassigned_shift_ids == []
+    assert legal_penalty(out) == 0
+
+
+def test_a_compliant_casual_security_pair_is_allowed():
+    shifts = [
+        make_shift(sid="a", date=day(0), start="06:00", end="10:00"),
+        make_shift(sid="b", date=day(0), start="14:00", end="18:00"),
+    ]
+    out = solve(shifts, [make_employee("e1", employment_type="Casual", is_security_role=True)])
+    assert out.unassigned_shift_ids == []
+    assert legal_penalty(out) == 0

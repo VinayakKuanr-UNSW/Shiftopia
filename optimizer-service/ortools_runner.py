@@ -103,6 +103,11 @@ class ShiftReq(BaseModel):
     required_license_ids: list[str] = Field(default_factory=list)
     priority: int = 1
     unpaid_break_minutes: int = 0
+    # cl 39.2 measures the split-shift spread "excluding meal AND REST breaks",
+    # so HC-9 needs the paid pause allotment as well as the unpaid meal break.
+    # Without it the solver measures a longer spread than the labour layer does
+    # and refuses pairings V8 would accept.
+    paid_break_minutes: int = 0
     target_employment_type: Optional[str] = None
     # Narrows a 'PT' target to Flexible Part-Time staff. Declared at the wire
     # boundary (not dataclass-only) so the TS layer's setting actually reaches

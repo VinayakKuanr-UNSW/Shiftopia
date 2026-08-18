@@ -182,3 +182,69 @@ describe('security meal breaks are paid (EBA Schedule 3)', () => {
         expect(r.passed).toBe(true);
     });
 });
+
+describe('Schedule 3 sets two meal-break entitlements, not one', () => {
+    it('gives full-time security a flat 30 minutes (§3.2(a))', () => {
+        // "shall be entitled to a paid meal break of 30 minutes" — one number,
+        // not a range. The 12-hour continuous roster of §3.1(a) is built on it.
+        const r = evaluateShiftShape(shift({
+            target_employment_type: 'FT', is_security: true,
+            start_time: '06:00', end_time: '18:00', paid_break_minutes: 60,
+        }));
+        expect(r.passed).toBe(true);
+        expect(r.net_minutes).toBe(720);   // a lawful 12h security shift
+    });
+
+    it('names §3.2(a) for full-time security and §5.3(a) for event security', () => {
+        const ft = evaluateShiftShape(shift({
+            target_employment_type: 'FT', is_security: true,
+            start_time: '06:00', end_time: '18:00', paid_break_minutes: 0,
+        }));
+        expect(ft.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK')!.details)
+            .toContain('Sch 3 §3.2(a)');
+        expect(ft.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK')!.details)
+            .toContain('30 minutes');
+
+        const casual = evaluateShiftShape(shift({
+            target_employment_type: 'Casual', is_security: true,
+            end_time: '17:00', paid_break_minutes: 0,
+        }));
+        expect(casual.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK')!.details)
+            .toContain('Sch 3 §5.3(a)');
+        expect(casual.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK')!.details)
+            .toContain('not less than 30 and not more than 60');
+    });
+
+    it('never trips the cl 36.1 ceiling on a pooled paid field', () => {
+        // Security draws the meal break AND the rest pauses from one field, so a
+        // total over 60 says nothing about the meal break — far more likely a
+        // correct meal plus generous pauses. 75m on a 12h shift is 30m meal
+        // (§3.2(a)) plus 45m of pauses; the old reading called it an over-long
+        // meal break and refused the shift.
+        const r = evaluateShiftShape(shift({
+            target_employment_type: 'FT', is_security: true,
+            start_time: '06:00', end_time: '18:00', paid_break_minutes: 75,
+        }));
+        expect(r.hits.map(h => h.rule_id)).not.toContain('SHAPE_MEAL_BREAK_CEILING');
+        expect(r.passed).toBe(true);
+    });
+
+    it('still caps an UNPAID meal break at 60 minutes (cl 36.1)', () => {
+        const r = evaluateShiftShape(shift({
+            end_time: '18:00', unpaid_break_minutes: 90, paid_break_minutes: 30,
+        }));
+        expect(r.hits.map(h => h.rule_id)).toContain('SHAPE_MEAL_BREAK_CEILING');
+    });
+
+    it('accepts the Schedule 3 §3.1(a) twelve-hour continuous shift', () => {
+        // §3.1(a) mandates a "12 hour continuous eight (8) week shift roster",
+        // so the 12h ceiling must be inclusive or the schedule's own roster
+        // pattern would be unbuildable.
+        const r = evaluateShiftShape(shift({
+            target_employment_type: 'FT', is_security: true,
+            start_time: '18:00', end_time: '06:00', paid_break_minutes: 60,
+        }));
+        expect(r.net_minutes).toBe(720);
+        expect(r.hits.map(h => h.rule_id)).not.toContain('SHAPE_MAX_DURATION');
+    });
+});

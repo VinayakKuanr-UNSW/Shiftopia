@@ -1,15 +1,41 @@
 /**
  * Compliance Rule Registry — the table.
  *
- * 31 rules: 12 shape, 19 labour. See `./types.ts` for why this exists and which
+ * 33 rules: 12 shape, 21 labour. See `./types.ts` for why this exists and which
  * fields are machine-verified.
  *
  * REGISTERED AS IMPLEMENTED, NOT AS PROPOSED. Several rules diverge from the
- * agreement — the tier on the rest pauses, the per-day limb of the meal break,
- * the solver's missing Schedule 3 handling. Those are recorded in `knownGap` and
- * left alone. A registry describing an intended future state cannot be checked
- * against the code, which would make it the fifth stale copy rather than the one
- * source of truth.
+ * agreement — the tier on the rest pauses, the per-day limb of the meal break.
+ * Those are recorded in `knownGap` and left alone. A registry describing an
+ * intended future state cannot be checked against the code, which would make it
+ * the fifth stale copy rather than the one source of truth.
+ *
+ * CLAUSES DELIBERATELY NOT MODELLED
+ * ---------------------------------
+ * The same principle forbids registering a rule nothing emits — `registry-parity`
+ * would report it as a phantom, which is precisely the failure this table exists
+ * to stop. So the obligations below have no entry, and are listed here instead so
+ * that "absent from the registry" never has to mean "nobody noticed".
+ *
+ *   cl 12.4(c)(b), cl 12.5(c)(b) — ONLINE TRAINING is "paid on the basis of the
+ *     time it would reasonably take ... as nominated by the Employer": no fixed
+ *     minimum at all. `is_training` cannot tell an online block from an on-site
+ *     one, so the layer applies the 2-hour on-site floor to both. Strict in the
+ *     employee's favour, and one shift flag away from being right.
+ *
+ *   cl 13.1(e) — MULTI-HIRE minimum engagement is 3h, or 2h where the separate
+ *     engagement starts within one hour of the Team Member's usual rostered
+ *     finish. `shift_type: 'MULTI_HIRE'` exists and reaches the rest-gap rules
+ *     (cl 13.1(f) / cl 40.3's 8h), but not the minimum-engagement tiers.
+ *
+ *   cl 12.4(a), cl 35.3(a) — FLEXIBLE PART-TIME must be engaged for a minimum of
+ *     624 and a maximum of 1,976 ordinary hours PER ANNUM. An annual envelope
+ *     needs a year of history; nothing here holds one, and the longest window any
+ *     rule looks at is 56 days.
+ *
+ *   Sch 3 §3.1(b) — full-time Security work an "even time" roster: equal days on
+ *     and days off across the 8-week cycle. Structural, and only checkable across
+ *     a whole cycle. V8_FT_DAYS_OFF exempts them rather than testing it.
  */
 
 import type { RuleSpec } from './types';
@@ -103,6 +129,13 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         description:
             'Plain part-time is a flat 3h net with no exceptions. Flexible part-time and casual ' +
             'get 3h, reduced to 2h for training on a non-event day and raised to 4h on a Sunday.',
+        knownGap:
+            'Two tiers of cl 12 are unreachable. cl 12.4(c)(b)/12.5(c)(b) put NO minimum on ' +
+            'online training done at home or off site ("the time it would reasonably take"), and ' +
+            '`is_training` cannot tell it from an on-site block, so the 2h on-site floor is ' +
+            'applied to both — strict in the Team Member\'s favour. cl 13.1(e) gives multi-hire ' +
+            'its own 3h/2h pair, keyed on starting within an hour of the usual rostered finish; ' +
+            '`shift_type` carries MULTI_HIRE as far as the rest-gap rules but not to here.',
     },
 
     SHAPE_MIN_ENGAGEMENT_PH: {
@@ -300,8 +333,43 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         authority: eba('cl 39.2', 'cl 39.1', 'cl 7.14'),
         engines: { shape: false, v8: true, solver: 'HC-9' },
         description:
-            'Where a split shift is worked, first start to last end less unpaid breaks may not ' +
-            'exceed 12 hours.',
+            'Where a split shift is worked, first start to last end less meal and rest breaks may ' +
+            'not exceed 12 hours.',
+    },
+
+    V8_CASUAL_SECURITY_SPREAD: {
+        id: 'V8_CASUAL_SECURITY_SPREAD',
+        name: 'Casual Security Daily Spread',
+        tier: 'BLOCKING',
+        layer: 'LABOUR',
+        category: 'TIME',
+        // Sch 3 §5.3 covers casual EVENT security specifically.
+        employment: ['CASUAL'],
+        authority: eba('Sch 3 §5.3(g)', 'Sch 3 §1.1'),
+        engines: { shape: false, v8: true, solver: 'HC-9' },
+        description:
+            'A casual Event Security Team Member working two shifts in one day may span no more ' +
+            'than 12 hours, measured GROSS — the schedule states no exclusion for breaks, and ' +
+            'Sch 3 §5.3(a) already makes the meal break paid.',
+    },
+
+    V8_CASUAL_SECURITY_ENGAGEMENT: {
+        id: 'V8_CASUAL_SECURITY_ENGAGEMENT',
+        name: 'Casual Security Two-Shift Engagement',
+        tier: 'BLOCKING',
+        layer: 'LABOUR',
+        category: 'TIME',
+        employment: ['CASUAL'],
+        authority: eba('Sch 3 §5.3(g)'),
+        engines: { shape: false, v8: true, solver: null },
+        description:
+            'Where a casual Event Security Team Member works two shifts in one day, each engagement ' +
+            'must be at least 3 hours — a flat floor that displaces the 2-hour training concession ' +
+            'in Sch 3 §5.3(e).',
+        knownGap:
+            'Not modelled in CP-SAT. The solver can propose a casual security day pairing a 2-hour ' +
+            'training block with a second shift, which this rule then rejects. Narrow, but it is a ' +
+            'genuine divergence rather than a rule the solver makes unreachable.',
     },
 
     V8_SPLIT_SHIFT: {

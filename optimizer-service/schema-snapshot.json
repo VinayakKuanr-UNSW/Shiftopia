@@ -59,6 +59,7 @@
     "is_sunday",
     "is_training",
     "level",
+    "paid_break_minutes",
     "priority",
     "required_license_ids",
     "required_skill_ids",

@@ -255,6 +255,10 @@ export function useAutoScheduler({
                 role_id: (s as any).role_id ?? null,
                 roleName: (s as any).role_name || (s as any).roles?.name || '',
                 unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+                // cl 39.2 measures the split-shift spread "excluding meal AND
+                // rest breaks", so HC-9 and dailySpreadRule both read this.
+                // Already in SHIFT_SELECT; this projection was the only gap.
+                paid_break_minutes: s.paid_break_minutes ?? 0,
                 // EVERY field the solver and V8 read must be projected here.
                 // These are optional on ShiftMeta, so omitting one is not a type
                 // error — it silently disables the rule that consumes it. That is

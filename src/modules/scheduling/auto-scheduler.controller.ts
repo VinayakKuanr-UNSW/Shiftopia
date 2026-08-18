@@ -1133,6 +1133,7 @@ export class AutoSchedulerController {
                 level: s.level ?? 0,
                 is_training: (s as any).is_training ?? false,
                 unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+                paid_break_minutes: s.paid_break_minutes ?? 0,
                 is_sunday: dayType.isSunday,
                 is_public_holiday: dayType.isPublicHoliday,
             };

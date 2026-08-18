@@ -65,7 +65,7 @@ const SHIFT_FIELDS = fieldSet<Required<OptimizerShift>>({
     priority: 0, demand_source: 0, target_employment_type: 0,
     target_requires_flexible: 0, level: 0,
     is_sunday: 0, is_saturday: 0, is_public_holiday: 0, is_training: 0,
-    unpaid_break_minutes: 0, shift_type: 0,
+    unpaid_break_minutes: 0, paid_break_minutes: 0, shift_type: 0,
 });
 
 const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({

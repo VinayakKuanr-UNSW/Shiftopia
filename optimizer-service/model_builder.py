@@ -155,10 +155,16 @@ ORD_AVG_CYCLE_MINUTES = 9120           # 152h
 ORD_AVG_SECURITY_CYCLE_DAYS = 56
 ORD_AVG_SECURITY_CYCLE_MINUTES = 20160  # 336h = 42h x 8
 
-# cl 39.2 — the split-shift spread ceiling, measured EXCLUDING meal and rest
-# breaks. Scoped to split shifts, which cl 39.1 and cl 7.14 confine to part-time
-# and flexible part-time.
+# cl 39.2 / cl 28.4 — the split-shift spread ceiling, measured EXCLUDING meal
+# AND rest breaks. Scoped to split shifts, which cl 39.1 and cl 7.14 confine to
+# part-time and flexible part-time.
 SPLIT_SHIFT_SPREAD_MINUTES = 720       # 12h NET
+
+# Sch 3 §5.3(g) — the same twelve hours for a casual EVENT SECURITY member
+# working two shifts in one day, but measured GROSS: the schedule states no
+# exclusion for breaks, and §5.3(a) has already made the meal break paid, so
+# there is no unpaid time to take out. Sch 3 §1.1 makes it prevail.
+CASUAL_SECURITY_SPREAD_MINUTES = 720   # 12h GROSS
 
 # cl 35.1(e)/35.2(f)/35.3(h)/35.4(e) — at most 20 worked days in any 28.
 MAX_WORKDAYS_PER_28 = 20
@@ -306,6 +312,11 @@ class ShiftInput:
     required_license_ids: list[str] = field(default_factory=list)
     priority: int = 1
     unpaid_break_minutes: int = 0
+    # cl 39.2 measures the split-shift spread "excluding meal AND REST breaks",
+    # so HC-9 needs the paid pause allotment as well as the unpaid meal break.
+    # Without it the solver measures a longer spread than the labour layer does
+    # and refuses pairings V8 would accept.
+    paid_break_minutes: int = 0
     is_sunday: bool = False
     is_saturday: bool = False
     is_public_holiday: bool = False
@@ -2125,9 +2136,9 @@ class ScheduleModelBuilder:
         # Now handled via pre-filtering in employee_eligible (Precision Fix #5)
         pass
 
-    # -- HC-9: Split-Shift Spread (cl 39.2) ------------------------------------
+    # -- HC-9: Daily Spread (cl 39.2 + Sch 3 §5.3(g)) --------------------------
     def _add_spread_of_hours(self):
-        """Split-shift spread, first start to last end LESS unpaid breaks, <= 12h.
+        """Daily spread caps — two clauses, two populations, two measures.
 
         cl 39.2: "Where SPLIT SHIFTS are worked, the total spread of hours over
         which work is performed cannot exceed 12 hours EXCLUDING meal and rest
@@ -2162,10 +2173,23 @@ class ScheduleModelBuilder:
         for date, day_shifts in shifts_by_day.items():
             if len(day_shifts) < 2: continue
             for emp in self.data.employees:
-                # cl 39.1 / cl 7.14. `normalize_employment_type` collapses
-                # 'Flexible Part-Time' onto 'PT', so this single test covers both
-                # PT and FPT — exactly the pair `spreadOfHoursRule` gates on.
-                if emp.employment_type != 'PT':
+                # TWO populations, TWO measures — see the docstring.
+                #
+                #   cl 39.2   part-time and flexible part-time, NET of breaks.
+                #             `normalize_employment_type` collapses 'Flexible
+                #             Part-Time' onto 'PT', so one test covers both —
+                #             exactly the pair `dailySpreadRule` gates on.
+                #   §5.3(g)   casual EVENT SECURITY, GROSS.
+                #
+                # A general casual is governed by cl 35.4(f) instead: at most two
+                # engagements (section 4c above) whose TOTAL ENGAGEMENT — hours
+                # worked, not span — stays under 12h (the day_over term). Neither
+                # is a spread cap, and neither belongs here.
+                is_split_shift_population = emp.employment_type == 'PT'
+                is_casual_security = (
+                    emp.employment_type == 'Casual' and emp.is_security_role
+                )
+                if not is_split_shift_population and not is_casual_security:
                     continue
 
                 active_vars = []
@@ -2195,24 +2219,34 @@ class ScheduleModelBuilder:
                     self.model.Add(d_start <= s_start_rel).OnlyEnforceIf(v)
                     self.model.Add(d_end >= s_end_rel).OnlyEnforceIf(v)
 
-                # Unpaid break time is time the Team Member is released, so
-                # cl 39.2 takes it out of the spread. Only breaks on shifts this
-                # employee is actually assigned count, hence the linear term over
-                # the same vars rather than a constant.
-                unpaid_terms = [
-                    (getattr(s, 'unpaid_break_minutes', 0) or 0, v)
-                    for s, v in active_vars
-                    if (getattr(s, 'unpaid_break_minutes', 0) or 0) > 0
-                ]
-                unpaid_expr = cp_model.LinearExpr.Sum(
-                    [mins * v for mins, v in unpaid_terms]
-                ) if unpaid_terms else 0
+                # cl 39.2 says "excluding meal AND rest breaks", so BOTH fields
+                # come out — not just the unpaid meal. Reading only the unpaid
+                # half measured a longer spread than the labour layer did and
+                # refused pairings V8 would have accepted. Only breaks on shifts
+                # this employee is actually assigned count, hence a linear term
+                # over the same vars rather than a constant.
+                #
+                # Sch 3 §5.3(g) deducts nothing: it states no exclusion, and the
+                # casual security meal break is already paid under §5.3(a).
+                if is_split_shift_population:
+                    break_terms = [
+                        (mins, v) for mins, v in (
+                            ((getattr(s, 'unpaid_break_minutes', 0) or 0)
+                             + (getattr(s, 'paid_break_minutes', 0) or 0), v)
+                            for s, v in active_vars
+                        ) if mins > 0
+                    ]
+                    break_expr = cp_model.LinearExpr.Sum(
+                        [mins * v for mins, v in break_terms]
+                    ) if break_terms else 0
+                    limit = SPLIT_SHIFT_SPREAD_MINUTES
+                else:
+                    break_expr = 0
+                    limit = CASUAL_SECURITY_SPREAD_MINUTES
 
-                # Enforce the 12h NET spread (softened with a Tier-0 penalty)
+                # Softened with a Tier-0 penalty, like every other legal cap here.
                 spread_slack = self.model.NewIntVar(0, 1440, f'spread_slack_{emp.id[:4]}_{date}')
-                self.model.Add(
-                    d_end - d_start - unpaid_expr - spread_slack <= SPLIT_SHIFT_SPREAD_MINUTES
-                )
+                self.model.Add(d_end - d_start - break_expr - spread_slack <= limit)
                 # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute).
                 # Collected here and added to the objective by the SC-8 loop in
                 # _add_objective(), which drains every _workload_slack_terms entry.
