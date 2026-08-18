@@ -243,6 +243,18 @@ export interface OptimizerConstraints {
      * always sends true; manual workflows do NOT use this (availability is warn-only there).
      */
     enforce_availability?: boolean;
+    /**
+     * cl 28.4 split-shift allowance, in CENTS, for the roster's date.
+     *
+     * Sent rather than hardcoded in the solver because the amount is
+     * effective-dated ($11.13 under EA 2025, $11.70 from 6 Jul 2026) and moves
+     * with the annual increase. `resolveRateSet()` already resolves it here; a
+     * constant on the Python side would be the stale copy that disagrees.
+     *
+     * Cents because the CP-SAT objective is integral — a float here would be
+     * truncated silently, and 1113 is exact where 11.13 is not.
+     */
+    split_shift_allowance_cents?: number;
 }
 
 export interface OptimizeRequest {

@@ -236,6 +236,16 @@ class ConstraintsReq(BaseModel):
     # HARD availability + "unset = unavailable" for the auto-scheduler (see
     # OptimizerConstraints.enforce_availability). The live scheduler sends True.
     enforce_availability: bool = False
+    # cl 28.4 split-shift allowance in CENTS for the roster's date. MUST be
+    # declared here or pydantic drops it at the wire boundary and the objective
+    # silently reverts to under-pricing every split shift — the same failure
+    # mode that hid `is_security_role` for as long as it went undeclared.
+    #
+    # Effective-dated on the TypeScript side ($11.13 under EA 2025, $11.70 from
+    # 6 Jul 2026, CPI-indexed after that), so it is sent rather than defined
+    # here. Default 0 = "caller did not price it", which leaves the objective
+    # exactly as it was rather than inventing a rate.
+    split_shift_allowance_cents: int = 0
 
 
 class StrategyReq(BaseModel):

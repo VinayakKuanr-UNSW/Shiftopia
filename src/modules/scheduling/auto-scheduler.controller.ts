@@ -77,6 +77,46 @@ import type {
 // (coverage » guardrails » cost, see model_builder.py). Weights are sent only
 // because the wire schema requires them; under lexicographic tiers they are
 // cross-tier-irrelevant and pinned to the calibrated 1.0× defaults.
+/**
+ * The constraint block every solve sends.
+ *
+ * Availability is a HARD constraint for the auto-scheduler — unset means
+ * unavailable and the solver may never place a shift outside a declared block —
+ * so it is forced on regardless of what the caller supplied.
+ *
+ * The cl 28.4 split-shift allowance is resolved HERE rather than defined in the
+ * solver, because the amount is effective-dated ($11.13 under EA 2025, $11.70
+ * from 6 Jul 2026, CPI-indexed after) and a Python constant would be the stale
+ * copy that disagrees with the roster grid and payroll. Without it the solver
+ * priced a part-timer's second same-day engagement as if it were free, and its
+ * cost is the number the AutoScheduler shows.
+ *
+ * Keyed on the EARLIEST shift date in the batch. A roster spanning a 1 July
+ * increase would price the whole batch at the old rate; that is one day a year,
+ * the error is bounded by a single allowance, and the alternative — a per-shift
+ * rate on a per-day allowance — has no well-defined answer for a pair that
+ * straddles the boundary.
+ */
+function buildSolverConstraints(
+    supplied: OptimizeRequest['constraints'] | undefined,
+    shifts: OptimizerShift[],
+): OptimizeRequest['constraints'] {
+    const earliest = shifts.reduce<string | undefined>(
+        (min, s) => (!min || (s.shift_date && s.shift_date < min) ? s.shift_date : min),
+        undefined,
+    );
+    const rateSet = resolveRateSet(earliest);
+    return {
+        min_rest_minutes: 600,
+        relax_constraints: false,
+        ...supplied,
+        enforce_availability: true,
+        // Cents: the CP-SAT objective is integral, and 1113 is exact where
+        // 11.13 is not.
+        split_shift_allowance_cents: Math.round(rateSet.allowances.splitShift * 100),
+    };
+}
+
 const SINGLE_MODE_STRATEGY: OptimizerStrategy = {
     fatigue_weight: 50, fairness_weight: 50, cost_weight: 50, coverage_weight: 100,
 };
@@ -1454,7 +1494,7 @@ export class AutoSchedulerController {
                 // Availability is a HARD constraint for the auto-scheduler: unset =
                 // unavailable, and the solver may never place a shift outside a
                 // declared block. Forced on regardless of caller-supplied constraints.
-                constraints: { min_rest_minutes: 600, relax_constraints: false, ...input.constraints, enforce_availability: true },
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts),
                 // B1 — single-mode: always send the pinned policy (no sliders).
                 strategy: SINGLE_MODE_STRATEGY,
                 solver_params: {
@@ -1562,7 +1602,7 @@ export class AutoSchedulerController {
                 // Availability is a HARD constraint for the auto-scheduler: unset =
                 // unavailable, and the solver may never place a shift outside a
                 // declared block. Forced on regardless of caller-supplied constraints.
-                constraints: { min_rest_minutes: 600, relax_constraints: false, ...input.constraints, enforce_availability: true },
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts),
                 budgetSeconds: Math.min(30, Math.max(10, Math.round(solverBudget / 4))),
                 signal: input.signal,
             });
@@ -1784,7 +1824,7 @@ export class AutoSchedulerController {
                 // Availability is a HARD constraint for the auto-scheduler: unset =
                 // unavailable, and the solver may never place a shift outside a
                 // declared block. Forced on regardless of caller-supplied constraints.
-                constraints: { min_rest_minutes: 600, relax_constraints: false, ...input.constraints, enforce_availability: true },
+                constraints: buildSolverConstraints(input.constraints, optimizerShifts),
                 capacityCheck,
                 availabilityData,
             });

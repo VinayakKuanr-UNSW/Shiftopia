@@ -100,6 +100,10 @@ const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({
 const CONSTRAINTS_FIELDS = fieldSet<Required<OptimizerConstraints>>({
     min_rest_minutes: 0, enforce_role_match: 0, enforce_skill_match: 0,
     allow_partial: 0, relax_constraints: 0, enforce_availability: 0,
+    // cl 28.4. Declared on BOTH pydantic models AND the Python dataclass: the
+    // request is filtered through `__dataclass_fields__` on the way in, so a
+    // field missing from either side is dropped without an error.
+    split_shift_allowance_cents: 0,
 });
 
 const STRATEGY_FIELDS = fieldSet<Required<OptimizerStrategy>>({

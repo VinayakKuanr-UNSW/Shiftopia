@@ -175,6 +175,13 @@ MAX_CONSECUTIVE_DAYS_FLEXI_PT = 10
 # cl 35.4(f) — a casual may work at most 2 engagements starting on one day.
 MAX_CASUAL_DAILY_ENGAGEMENTS = 2
 
+# cl 39.4 — the maximum gap between two same-day engagements that still makes
+# them a SPLIT SHIFT, and so attracts the cl 28.4 allowance. Distinct from
+# SPLIT_SHIFT_SPREAD_MINUTES, which caps how far apart the ends may be: cl 39.4
+# decides whether the allowance attaches, cl 39.2 whether the day is lawful at
+# all. `split-shift-eligibility.ts` uses this same 180 on the pricing side.
+MAX_SPLIT_SHIFT_GAP_MINUTES = 180
+
 # cl 35.1(d)/35.2(d)/35.3(d)/35.4(c) — daily ordinary hours ceiling.
 MAX_DAILY_MINUTES = 720
 
@@ -632,6 +639,14 @@ class OptimizerConstraints:
     # "no records on file = universally available" behaviour for callers/tests that
     # don't send availability. The live auto-scheduler sends True.
     enforce_availability: bool = False
+    # cl 28.4 split-shift allowance in CENTS for the roster's date, resolved by
+    # the caller from its effective-dated rate schedule. 0 = not priced, which
+    # leaves the objective unchanged rather than inventing a rate.
+    #
+    # Declared BOTH here and on ConstraintsReq: the wire model is filtered
+    # through `__dataclass_fields__` on the way in, so a field missing from
+    # either side is dropped without an error.
+    split_shift_allowance_cents: int = 0
 
 
 @dataclass
@@ -2502,6 +2517,86 @@ class ScheduleModelBuilder:
                         avail_expr = availability_penalty * var
                         _t(avail_expr, 'availability')
 
+
+        # -- SC-12: Split-shift allowance (cl 28.4) --------------------------
+        #
+        # SC-1 prices a shift on its own: hours x cl 41 loading, plus the cl 43
+        # night allowance. cl 28.4 is not a property of any one shift — it is
+        # one payment for a DAY worked in two parts, so a per-shift cost
+        # function structurally cannot carry it, and did not.
+        #
+        # That mattered because the solver's cost is the number the AutoScheduler
+        # SHOWS. The roster grid and payroll both price this allowance
+        # (`split-shift-eligibility.ts`, `aggregatePeriodGrossPay.ts`), so the
+        # two disagreed about the same roster — and the solver, seeing a split
+        # shift as cheaper than it is, would prefer giving a part-timer a second
+        # engagement over spreading the work.
+        #
+        # cl 39.1 confines split shifts to PT and FPT; cl 28.4 pays the
+        # allowance to everyone "other than a casual", and full-timers cannot
+        # lawfully work one. `normalize_employment_type` collapses
+        # 'Flexible Part-Time' onto 'PT', so that single test covers both —
+        # matching `detectSplitShiftEligibleIds`, which excludes Casual and
+        # Full-Time by name.
+        #
+        # ONE payment per qualifying day, not one per segment. With cl 35.4(f)
+        # capping engagements at two this is the same thing pairwise, but a
+        # third same-day engagement would double-count, so the pairs are
+        # collapsed onto a single per-day indicator.
+        allowance_cents = max(0, self.data.constraints.split_shift_allowance_cents)
+        if allowance_cents > 0:
+            cost_mult = _strategy_mult(self.data.strategy.cost_weight)
+            weighted_allowance = int(allowance_cents * cost_mult)
+
+            shifts_by_day_sc12 = {}
+            for sh in self.data.shifts:
+                shifts_by_day_sc12.setdefault(sh.shift_date, []).append(sh)
+
+            for emp in self.data.employees:
+                if emp.employment_type != 'PT':
+                    continue
+                for date, day_shifts in shifts_by_day_sc12.items():
+                    if len(day_shifts) < 2:
+                        continue
+                    active = [
+                        (sh, self._x[(emp.id, sh.id)])
+                        for sh in day_shifts
+                        if (emp.id, sh.id) in self._x
+                    ]
+                    if len(active) < 2:
+                        continue
+
+                    # Which PAIRS are close enough to be a split shift is fixed
+                    # before the solve — only who holds them is a variable.
+                    pair_vars = []
+                    for i in range(len(active)):
+                        for j in range(i + 1, len(active)):
+                            s_i, v_i = active[i]
+                            s_j, v_j = active[j]
+                            a_start, a_end = shift_window(s_i)
+                            b_start, b_end = shift_window(s_j)
+                            if b_start < a_start:
+                                a_start, a_end, b_start, b_end = b_start, b_end, a_start, a_end
+                            gap = b_start - a_end
+                            if gap < 0 or gap > MAX_SPLIT_SHIFT_GAP_MINUTES:
+                                continue
+                            pv = self.model.NewBoolVar(
+                                f'split_pair_{emp.id[:4]}_{s_i.id[:4]}_{s_j.id[:4]}'
+                            )
+                            self.model.Add(pv >= v_i + v_j - 1)
+                            pair_vars.append(pv)
+
+                    if not pair_vars:
+                        continue
+
+                    # `day_var >= each pair` charges the allowance once however
+                    # many qualifying pairs the day contains. It is only pushed
+                    # DOWN by the objective, so the >= direction is enough — the
+                    # minimiser will never set it above what a pair forces.
+                    day_var = self.model.NewBoolVar(f'split_day_{emp.id[:4]}_{date}')
+                    for pv in pair_vars:
+                        self.model.Add(day_var >= pv)
+                    _t(weighted_allowance * day_var, 'cost')
 
         # -- SC-3: Uncovered penalty (Tier -1: highest) ----------------------
         # Coverage MUST outrank every soft/softened-hard constraint. A single
