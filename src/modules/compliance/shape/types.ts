@@ -30,6 +30,10 @@
  *     because `apply_template_to_date_range_v2` stamps shifts SERVER-side and
  *     the client never holds those rows. Validating the mould is what makes
  *     checking each casting unnecessary.
+ *   - the same module again from `useApplyTemplate`, for the two rules a mould
+ *     cannot answer. `SHAPE_MIN_ENGAGEMENT_PH` and the Sunday tier of
+ *     `SHAPE_MIN_ENGAGEMENT` need a DATE, and a template carries at most a
+ *     day-of-week — so those are checked against the range being applied.
  *
  * NET LENGTH IS THE UNIVERSAL MEASURE (locked 2026-08-15)
  * ------------------------------------------------------

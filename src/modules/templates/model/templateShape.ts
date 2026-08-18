@@ -23,13 +23,14 @@
  *
  * Public holidays cannot be reached from a day-of-week at all. So a template
  * applied across Christmas can still produce a three-hour casual shift that
- * cl 56.2 says must be four. That residual is real and is called out here rather
- * than papered over; closing it needs a check at APPLICATION time, when the
- * dates are known.
+ * cl 56.2 says must be four. Closing that needs a check at APPLICATION time,
+ * when the dates are known — `validateTemplateApplication` below, which the
+ * apply mutation runs before it calls the RPC.
  */
 
 import { evaluateShiftShape, type ShapeHit } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { getShiftDayType } from '@/modules/core/lib/holidays';
 import type { Group, TemplateShift } from './templates.types';
 
 /**
@@ -108,4 +109,173 @@ export function describeTemplateShapeFailures(failures: TemplateShapeFailure[]):
         `${f.groupName} › ${f.subGroupName} › ${f.shiftName} (${f.startTime}–${f.endTime}): ` +
         f.hits.map(h => h.summary).join('; '),
     );
+}
+
+// =============================================================================
+// APPLICATION TIME — the two day-typed rules, against the real dates
+// =============================================================================
+
+/**
+ * A template shift paired with where it lives, so a failure can be named.
+ * The apply path reads these from `template_shifts` rather than from the
+ * editor's in-memory `Group[]`.
+ */
+export interface PlacedTemplateShift {
+    groupName:    string;
+    subGroupName: string;
+    shift:        TemplateShift;
+}
+
+export interface TemplateApplicationFailure extends TemplateShapeFailure {
+    /** The date this instance would be stamped onto. */
+    date:    string;
+    /** Why that date is special — what the authoring gate could not know. */
+    dayType: 'public holiday' | 'Sunday';
+}
+
+/** Inclusive YYYY-MM-DD range, walked in local dates to match the RPC. */
+function eachDate(startDate: string, endDate: string): string[] {
+    const out: string[] = [];
+    const [sy, sm, sd] = startDate.split('-').map(Number);
+    const [ey, em, ed] = endDate.split('-').map(Number);
+    if (!sy || !ey) return out;
+    const cursor = new Date(sy, sm - 1, sd);
+    const end = new Date(ey, em - 1, ed);
+    // A range inverted by the caller yields nothing rather than looping forever.
+    while (cursor <= end && out.length <= 366) {
+        const y = cursor.getFullYear();
+        const m = String(cursor.getMonth() + 1).padStart(2, '0');
+        const d = String(cursor.getDate()).padStart(2, '0');
+        out.push(`${y}-${m}-${d}`);
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return out;
+}
+
+/**
+ * Which template shifts land on which dates.
+ *
+ * Mirrors `apply_template_to_date_range_v2` exactly: it stamps a shift when
+ * `day_of_week IS NULL OR day_of_week = <the day>`. A null day-of-week is
+ * therefore EVERY day, not no day — which is precisely how a template shift
+ * reaches a public holiday nobody chose to roster.
+ */
+export function planTemplateApplication(
+    placed: ReadonlyArray<PlacedTemplateShift>,
+    startDate: string,
+    endDate: string,
+): Array<PlacedTemplateShift & { date: string }> {
+    const plan: Array<PlacedTemplateShift & { date: string }> = [];
+    for (const date of eachDate(startDate, endDate)) {
+        const [y, m, d] = date.split('-').map(Number);
+        const dow = new Date(y, m - 1, d).getDay();
+        for (const p of placed) {
+            const target = p.shift.dayOfWeek;
+            if (target === null || target === undefined || target === dow) {
+                plan.push({ ...p, date });
+            }
+        }
+    }
+    return plan;
+}
+
+/**
+ * Shape failures that only exist once a template meets a calendar.
+ *
+ * The authoring gate has already cleared everything intrinsic to the shift, so
+ * anything raised here is a rule that needed a DATE: cl 56.2's four-hour public
+ * holiday minimum, and the Sunday tier of cl 12.4(c)/12.5(c) reached by a shift
+ * whose day-of-week is "any". Ordinary weekdays are skipped outright — they
+ * cannot produce a verdict the authoring gate did not already reach, and
+ * walking them would re-report a template the manager has already been told
+ * about, once per matching day in the range.
+ */
+export function validateTemplateApplication(
+    placed: ReadonlyArray<PlacedTemplateShift>,
+    startDate: string,
+    endDate: string,
+): TemplateApplicationFailure[] {
+    const failures: TemplateApplicationFailure[] = [];
+
+    for (const item of planTemplateApplication(placed, startDate, endDate)) {
+        const { isSunday, isPublicHoliday } = getShiftDayType(item.date);
+        if (!isSunday && !isPublicHoliday) continue;
+
+        const shift = item.shift;
+        const result = evaluateShiftShape({
+            shift_date:               item.date,
+            start_time:               shift.startTime,
+            end_time:                 shift.endTime,
+            unpaid_break_minutes:     shift.unpaidBreakDuration ?? 0,
+            paid_break_minutes:       shift.paidBreakDuration ?? 0,
+            target_employment_type:   shift.targetEmploymentType ?? 'Casual',
+            target_requires_flexible: shift.targetRequiresFlexible ?? false,
+            is_security:              isSecurityRoleName(shift.roleName),
+            is_sunday:                isSunday,
+            is_public_holiday:        isPublicHoliday,
+        });
+        if (!result.blocking) continue;
+
+        failures.push({
+            date:         item.date,
+            dayType:      isPublicHoliday ? 'public holiday' : 'Sunday',
+            groupName:    item.groupName,
+            subGroupName: item.subGroupName,
+            shiftName:    shift.name?.trim() || `${shift.roleName ?? 'Shift'}`,
+            startTime:    shift.startTime,
+            endTime:      shift.endTime,
+            hits:         result.hits.filter(h => h.blocking),
+        });
+    }
+
+    return failures;
+}
+
+/** One line per failure, naming the DATE — the fact the authoring gate lacked. */
+export function describeTemplateApplicationFailures(
+    failures: ReadonlyArray<TemplateApplicationFailure>,
+): string[] {
+    return failures.map(f =>
+        `${f.date} (${f.dayType}) — ${f.groupName} › ${f.subGroupName} › ${f.shiftName} ` +
+        `(${f.startTime}–${f.endTime}): ${f.hits.map(h => h.summary).join('; ')}`,
+    );
+}
+
+// =============================================================================
+// LOADING A STORED TEMPLATE
+// =============================================================================
+
+/** The `template_shifts` columns the shape layer reads. */
+export interface TemplateShiftRow {
+    id:                       string;
+    name:                     string | null;
+    role_name:                string | null;
+    start_time:               string | null;
+    end_time:                 string | null;
+    unpaid_break_minutes:     number | null;
+    paid_break_minutes:       number | null;
+    day_of_week:              number | null;
+    target_employment_type:   string | null;
+    target_requires_flexible: boolean | null;
+}
+
+/** Normalise a stored row into the shape the evaluator already understands. */
+export function templateShiftFromRow(row: TemplateShiftRow): TemplateShift {
+    return {
+        id:                       row.id,
+        name:                     row.name ?? undefined,
+        roleName:                 row.role_name ?? undefined,
+        startTime:                (row.start_time ?? '').slice(0, 5),
+        endTime:                  (row.end_time ?? '').slice(0, 5),
+        paidBreakDuration:        row.paid_break_minutes ?? 0,
+        unpaidBreakDuration:      row.unpaid_break_minutes ?? 0,
+        dayOfWeek:                row.day_of_week,
+        targetEmploymentType:     (row.target_employment_type ?? 'Casual') as TemplateShift['targetEmploymentType'],
+        targetRequiresFlexible:   row.target_requires_flexible ?? false,
+        skills:                   [],
+        licenses:                 [],
+        siteTags:                 [],
+        eventTags:                [],
+        sortOrder:                0,
+    };
 }

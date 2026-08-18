@@ -18,6 +18,13 @@ import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { templateKeys } from '@/modules/templates/hooks/queries/useTemplateQueries';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import { rostersApi } from '@/modules/rosters/api/rosters.api';
+import {
+  validateTemplateApplication,
+  describeTemplateApplicationFailures,
+  templateShiftFromRow,
+  type PlacedTemplateShift,
+  type TemplateShiftRow,
+} from '@/modules/templates/model/templateShape';
 
 // ── Helper to extract a user-facing message from any thrown value ─────────────
 
@@ -303,6 +310,78 @@ interface ApplyTemplateVariables {
   forceStack?:            boolean;
 }
 
+/**
+ * Load a stored template's shifts, with the group/subgroup names a failure
+ * needs to be findable.
+ *
+ * Three plain queries rather than one nested PostgREST select: an embedded
+ * resource that cannot be resolved fails the WHOLE request, and a failure here
+ * must never be mistaken for "this template has no shifts", which would turn
+ * the gate below into a silent pass.
+ */
+async function loadPlacedTemplateShifts(templateId: string): Promise<PlacedTemplateShift[]> {
+  const { data: groups, error: gErr } = await supabase
+    .from('template_groups')
+    .select('id, name')
+    .eq('template_id', templateId);
+  if (gErr) throw gErr;
+  if (!groups || groups.length === 0) return [];
+
+  const { data: subGroups, error: sgErr } = await supabase
+    .from('template_subgroups')
+    .select('id, name, group_id')
+    .in('group_id', groups.map(g => g.id));
+  if (sgErr) throw sgErr;
+  if (!subGroups || subGroups.length === 0) return [];
+
+  const { data: rows, error: sErr } = await supabase
+    .from('template_shifts')
+    .select(
+      'id, name, role_name, start_time, end_time, unpaid_break_minutes, ' +
+      'paid_break_minutes, day_of_week, target_employment_type, target_requires_flexible',
+    )
+    .in('subgroup_id', subGroups.map(sg => sg.id));
+  if (sErr) throw sErr;
+
+  const groupName = new Map(groups.map(g => [g.id as string, g.name as string]));
+  const subGroupById = new Map(subGroups.map(sg => [sg.id as string, sg]));
+
+  return ((rows ?? []) as unknown as Array<TemplateShiftRow & { subgroup_id: string }>).map(row => {
+    const sg = subGroupById.get(row.subgroup_id);
+    return {
+      groupName:    (sg && groupName.get(sg.group_id as string)) || 'Template',
+      subGroupName: (sg?.name as string) || '',
+      shift:        templateShiftFromRow(row),
+    };
+  });
+}
+
+/**
+ * Refuse an apply that would stamp an unlawful shift onto a special day.
+ *
+ * Throws with every offending date rather than the first: a manager who has to
+ * discover a fortnight's worth of breaches one apply at a time will reach for
+ * a narrower date range instead of fixing the template.
+ */
+async function assertTemplateApplicationShape(vars: ApplyTemplateVariables): Promise<void> {
+  const placed = await loadPlacedTemplateShifts(vars.templateId);
+  if (placed.length === 0) return;
+
+  const failures = validateTemplateApplication(placed, vars.startDate, vars.endDate);
+  if (failures.length === 0) return;
+
+  const lines = describeTemplateApplicationFailures(failures);
+  const shown = lines.slice(0, 5);
+  const rest = lines.length - shown.length;
+  throw new Error(
+    `This template cannot be applied to the dates you chose — ${failures.length} shift` +
+    `${failures.length !== 1 ? 's' : ''} would breach the agreement on a public holiday or ` +
+    `Sunday:\n\n${shown.join('\n')}` +
+    (rest > 0 ? `\n…and ${rest} more.` : '') +
+    `\n\nEither shorten the date range or fix the template.`,
+  );
+}
+
 export function useApplyTemplate() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
@@ -310,6 +389,19 @@ export function useApplyTemplate() {
   return useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: async (vars: ApplyTemplateVariables): Promise<any> => {
+      // ── Layer 1, application half ──────────────────────────────────────────
+      //
+      // The authoring gate clears everything intrinsic to a template shift, but
+      // two shape rules need a DATE and a template has at most a day-of-week:
+      // cl 56.2's four-hour public-holiday minimum, and the Sunday tier of
+      // cl 12.4(c)/12.5(c) reached by a shift whose day-of-week is "any".
+      // Applying a lawful template across Christmas could still mint a
+      // three-hour casual shift the agreement says must be four.
+      //
+      // Runs here rather than in the dialogs because both of them call this
+      // mutation, and a gate one caller can skip is not a gate.
+      await assertTemplateApplicationShape(vars);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase.rpc as any)('apply_template_to_date_range_v2', {
         p_template_id:              vars.templateId,
