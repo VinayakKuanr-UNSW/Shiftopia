@@ -131,6 +131,48 @@ def normalize_availability_mode(value: Optional[str]) -> str:
     return _AVAILABILITY_MODE_ALIASES.get(key, 'OPT_IN')
 
 
+# ---------------------------------------------------------------------------
+# EBA NUMERIC THRESHOLDS
+#
+# These are the numbers the CP-SAT model and the TypeScript labour layer BOTH
+# have to agree on. Where they disagree the solver proposes a roster the labour
+# layer then rejects, which is invisible until someone reads a solved roster
+# beside a compliance panel.
+#
+# `tests/test_eba_thresholds.py` pins every constant below against
+# `src/modules/compliance/registry/thresholds.ts`, so a change on one side
+# fails the build on the other rather than drifting quietly.
+# ---------------------------------------------------------------------------
+
+# cl 35.1(a) — the general work cycle: 38h/week averaged over 4 weeks.
+ORD_AVG_CYCLE_DAYS = 28
+ORD_AVG_CYCLE_MINUTES = 9120           # 152h
+
+# Sch 3 §3.1 — FULL-TIME Security only: an "even time" 8-week cycle averaging
+# 42h/week (38 ordinary + 4 reasonable additional). Sch 3 §1.1 makes this
+# prevail over cl 35. Part-time and casual EVENT security (Sch 3 §5) are not
+# covered and keep the general cycle above.
+ORD_AVG_SECURITY_CYCLE_DAYS = 56
+ORD_AVG_SECURITY_CYCLE_MINUTES = 20160  # 336h = 42h x 8
+
+# cl 39.2 — the split-shift spread ceiling, measured EXCLUDING meal and rest
+# breaks. Scoped to split shifts, which cl 39.1 and cl 7.14 confine to part-time
+# and flexible part-time.
+SPLIT_SHIFT_SPREAD_MINUTES = 720       # 12h NET
+
+# cl 35.1(e)/35.2(f)/35.3(h)/35.4(e) — at most 20 worked days in any 28.
+MAX_WORKDAYS_PER_28 = 20
+
+# cl 35.3(g) — flexible part-time consecutive-day cap.
+MAX_CONSECUTIVE_DAYS_FLEXI_PT = 10
+
+# cl 35.4(f) — a casual may work at most 2 engagements starting on one day.
+MAX_CASUAL_DAILY_ENGAGEMENTS = 2
+
+# cl 35.1(d)/35.2(d)/35.3(d)/35.4(c) — daily ordinary hours ceiling.
+MAX_DAILY_MINUTES = 720                # 12h
+
+
 # EBA cl 12.5(b): a Casual's `hourly_rate` is ALREADY loaded with the 25%
 # casual loading. cl 41.1/41.2/41.3 publish the casual Saturday/Sunday/Public
 # Holiday rates as flat percentages (150% / 175% / 275%) of the ORDINARY
@@ -455,6 +497,20 @@ class EmployeeInput:
     is_flexible: bool = False
     is_student: bool = False
     visa_limit: int = 2880 # Standard 48h/fortnight
+    # EBA Schedule 3 — Security. Sch 3 §1.1 makes the schedule PREVAIL over the
+    # Agreement wherever they conflict, and §3.1 conflicts with cl 35 directly:
+    # full-time Security work an "even time" 8-week cycle averaging 42h/week
+    # (38 ordinary + 4 reasonable additional), not 38h/week over 4 weeks.
+    #
+    # This flag was set by the controller and thrown away here for as long as
+    # the field went undeclared. It sat in the TS schema-contract test's
+    # BROWSER_ONLY_FIELDS beside is_apprentice/is_trainee/is_sws under a comment
+    # explaining that the solver has no apprentice/trainee/SWS WAGE model — true
+    # of those, but is_security_role is not a wage carrier. It is a CONSTRAINT
+    # discriminator, and withholding it meant the solver evaluated full-time
+    # Security against the general envelope, under-utilised them by 4h/week, and
+    # could never produce the roster V8 would have accepted.
+    is_security_role: bool = False
 
 
     initial_fatigue_score: float = 0.0
@@ -890,13 +946,34 @@ def employee_eligible(
     
 
 
-    # HC-6: Minimum Engagement Pre-filter
-    # Note: keep this loose by default — many valid rosters use 1-2h
-    # micro-shifts (training blocks, briefings, splits). Reject only
-    # implausibly short (<60m) shifts here; the proper award-specific min
-    # engagement is enforced as a soft penalty inside the V8 compliance
-    # engine, not a hard pre-filter.
-    if shift.duration_minutes < 60:
+    # DEGENERATE SHIFT GUARD (was: "HC-6 Minimum Engagement Pre-filter")
+    #
+    # This used to reject any shift under 60 minutes, on the stated grounds that
+    # "the proper award-specific min engagement is enforced as a soft penalty
+    # inside the V8 compliance engine". Both halves of that are now false, and
+    # the second was never quite true.
+    #
+    #   * Minimum engagement is not a soft penalty and is no longer V8's. It is
+    #     a SHAPE rule — decidable from the shift alone — enforced as BLOCKING
+    #     at shift creation by `shiftsCommands.createShift` and at template
+    #     save. No shift reaching this solver can be below its own minimum.
+    #
+    #   * 60 minutes is not a number the EBA contains. The real minima are 2h
+    #     (training), 3h (standard) and 4h (Sunday / public holiday), and they
+    #     vary by employment type. A flat 60 was neither the floor nor a
+    #     conservative approximation of it.
+    #
+    # Worse than being wrong, it failed SILENTLY: filtering here removes the
+    # pair before a variable exists, so a short shift is not rejected with a
+    # reason — it simply becomes assignable to nobody and returns as uncovered,
+    # indistinguishable from a shift with no qualified staff. Leaving a shift
+    # uncovered does not cure a minimum-engagement breach; it adds a second
+    # problem to the first.
+    #
+    # What remains is the invariant this check should always have been: a shift
+    # with no positive duration cannot be worked by anyone. That is a data
+    # defect, not an award judgement.
+    if shift.duration_minutes <= 0:
         return False
 
     # HC-5c: Employment Isolation — HARD again.
@@ -1913,15 +1990,32 @@ class ScheduleModelBuilder:
             for i in range(1, num_calendar_days):
                 self.model.Add(S[i] == S[i-1] + day_vars[i])
 
-            # 3. Ordinary Hours Averaging (Precision Fix #1: Keep ONLY 28-day)
+            # 3. Ordinary Hours Averaging (Precision Fix #1: Keep ONLY the
+            #    declared work cycle — no short-window caps, which cl 35.1(a)
+            #    permits to average out.)
+            #
+            #    TWO CYCLES, not one. cl 35 gives the general population 38h/week
+            #    averaged over 4 weeks. EBA Schedule 3 §3.1 gives FULL-TIME
+            #    Security an "even time" 8-week cycle averaging 42h/week (38
+            #    ordinary + 4 reasonable additional), and Sch 3 §1.1 makes the
+            #    schedule prevail wherever it conflicts with the Agreement — as
+            #    it does here, in both the rate and the window.
+            #
+            #    Part-time and casual EVENT security (Sch 3 §5) are NOT covered
+            #    by §3.1 and keep the general structure, which is why the branch
+            #    below tests full-time as well as the role. This matches
+            #    `ordinaryHoursAvgRule`'s `isFtSecurity` exactly; the two must
+            #    agree or the solver proposes rosters the labour layer rejects.
             if emp.employment_type in ('FT', 'PT'):
+                is_ft_security = emp.is_security_role and emp.employment_type == 'FT'
+                cycle_days = ORD_AVG_SECURITY_CYCLE_DAYS if is_ft_security else ORD_AVG_CYCLE_DAYS
+                limit_mins = ORD_AVG_SECURITY_CYCLE_MINUTES if is_ft_security else ORD_AVG_CYCLE_MINUTES
+
                 for i in range(num_calendar_days):
-                    if i >= 27: # 28-day rolling window
-                        start_idx = i - 27
+                    if i >= cycle_days - 1:
+                        start_idx = i - (cycle_days - 1)
                         start_val = S[start_idx-1] if start_idx > 0 else 0
-                        # Standard 152h/28d = 9120m
-                        limit_mins = 9120
-                        
+
                         slack = self.model.NewIntVar(0, 100_000, f'slack_h_{emp.id[:4]}_{i}')
                         self.model.Add(S[i] - start_val - slack <= limit_mins)
                         # Tier 0: Hard Legal Compliance (100,000,000 penalty)
@@ -2031,16 +2125,35 @@ class ScheduleModelBuilder:
         # Now handled via pre-filtering in employee_eligible (Precision Fix #5)
         pass
 
-    # -- HC-9: Spread of Hours ------------------------------------------------
+    # -- HC-9: Split-Shift Spread (cl 39.2) ------------------------------------
     def _add_spread_of_hours(self):
-        """Total spread (first start to last end) <= 12h per day.
-        
-        Optimized Formulation:
-        For each (employee, day), define d_start and d_end variables.
-        For each shift s assigned to the employee:
-            d_start <= s.start
-            d_end >= s.end
-        Constraint: d_end - d_start <= 720 (12 hours)
+        """Split-shift spread, first start to last end LESS unpaid breaks, <= 12h.
+
+        cl 39.2: "Where SPLIT SHIFTS are worked, the total spread of hours over
+        which work is performed cannot exceed 12 hours EXCLUDING meal and rest
+        breaks." Two limits follow from the wording and both used to be wrong
+        here, in the same two ways `spreadOfHoursRule` was wrong on the TS side:
+
+          * SCOPE. Split shifts are a part-time / flexible part-time structure
+            (cl 39.1, cl 7.14); cl 28.4 excludes casuals from it outright. This
+            constraint applied to every employment type, so a full-timer with an
+            early and a late shift on one day was charged 100M/minute against a
+            clause that does not reach them.
+
+          * MEASURE. "Excluding meal and rest breaks" is NET. This measured
+            first-start to last-end and subtracted nothing, so an 06:00-19:00
+            pair carrying an hour of unpaid break — twelve hours worked, lawful
+            under cl 35.1(d) — was penalised as a 13h breach.
+
+        A casual's two-engagements-in-a-day case is not unregulated: cl 35.4(f)
+        caps them at two (section 4c of _add_workload_limits) and the 12h daily
+        WORKED ceiling applies to everyone (the day_over term above). Neither is
+        a spread cap, and neither belongs here.
+
+        Formulation. For each (employee, day) define d_start / d_end; for each
+        assigned shift s: d_start <= s.start, d_end >= s.end. The unpaid break
+        deduction is a linear term over the same assignment vars, so the whole
+        constraint stays linear.
         """
         shifts_by_day = {}
         for s in self.data.shifts:
@@ -2049,6 +2162,12 @@ class ScheduleModelBuilder:
         for date, day_shifts in shifts_by_day.items():
             if len(day_shifts) < 2: continue
             for emp in self.data.employees:
+                # cl 39.1 / cl 7.14. `normalize_employment_type` collapses
+                # 'Flexible Part-Time' onto 'PT', so this single test covers both
+                # PT and FPT — exactly the pair `spreadOfHoursRule` gates on.
+                if emp.employment_type != 'PT':
+                    continue
+
                 active_vars = []
                 for s in day_shifts:
                     var = self._x.get((emp.id, s.id))
@@ -2076,9 +2195,24 @@ class ScheduleModelBuilder:
                     self.model.Add(d_start <= s_start_rel).OnlyEnforceIf(v)
                     self.model.Add(d_end >= s_end_rel).OnlyEnforceIf(v)
 
-                # Enforce 12h spread (Softened with Tier 0 penalty)
+                # Unpaid break time is time the Team Member is released, so
+                # cl 39.2 takes it out of the spread. Only breaks on shifts this
+                # employee is actually assigned count, hence the linear term over
+                # the same vars rather than a constant.
+                unpaid_terms = [
+                    (getattr(s, 'unpaid_break_minutes', 0) or 0, v)
+                    for s, v in active_vars
+                    if (getattr(s, 'unpaid_break_minutes', 0) or 0) > 0
+                ]
+                unpaid_expr = cp_model.LinearExpr.Sum(
+                    [mins * v for mins, v in unpaid_terms]
+                ) if unpaid_terms else 0
+
+                # Enforce the 12h NET spread (softened with a Tier-0 penalty)
                 spread_slack = self.model.NewIntVar(0, 1440, f'spread_slack_{emp.id[:4]}_{date}')
-                self.model.Add(d_end - d_start - spread_slack <= 720)
+                self.model.Add(
+                    d_end - d_start - unpaid_expr - spread_slack <= SPLIT_SHIFT_SPREAD_MINUTES
+                )
                 # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute).
                 # Collected here and added to the objective by the SC-8 loop in
                 # _add_objective(), which drains every _workload_slack_terms entry.

@@ -288,21 +288,20 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         description: 'Total hours worked on any one calendar day may not exceed 12.',
     },
 
-    V8_SPREAD_OF_HOURS: {
-        id: 'V8_SPREAD_OF_HOURS',
-        name: 'Spread of Hours',
+    V8_SPLIT_SHIFT_SPREAD: {
+        id: 'V8_SPLIT_SHIFT_SPREAD',
+        name: 'Split-Shift Spread',
         tier: 'BLOCKING',
         layer: 'LABOUR',
         category: 'TIME',
-        employment: 'ALL',
-        authority: eba('cl 39.2'),
+        // cl 39.1 and cl 7.14 confine split shifts to PT and FPT; cl 28.4
+        // excludes casuals from the structure entirely.
+        employment: ['PT', 'FPT'],
+        authority: eba('cl 39.2', 'cl 39.1', 'cl 7.14'),
         engines: { shape: false, v8: true, solver: 'HC-9' },
-        description: 'First start to last end on one day may not exceed 12 hours.',
-        knownGap:
-            'cl 39.2 governs SPLIT SHIFTS, which cl 39.1 and cl 7.14 confine to PT and FPT, and it ' +
-            'is measured EXCLUDING meal and rest breaks. Applied here to every employment type and ' +
-            'measured gross. The shape layer has already dropped this citation for its own ' +
-            'guardrail; this rule has not.',
+        description:
+            'Where a split shift is worked, first start to last end less unpaid breaks may not ' +
+            'exceed 12 hours.',
     },
 
     V8_SPLIT_SHIFT: {
@@ -369,11 +368,6 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         engines: { shape: false, v8: true, solver: 'HC-4 (streak)' },
         description:
             'A flexible part-timer may work at most 10 consecutive days without a day off.',
-        knownGap:
-            'Correct as implemented — scoped to FPT, which is the only type the EBA caps. But the ' +
-            'docstring above maxWorkdayLimitsRule still advertises "Standard: Max 6 days", and ' +
-            'DEFAULT_V8_CONFIG.max_consecutive_days (6) is dead config no code reads. Both will ' +
-            'mislead the next reader into thinking a universal streak cap exists.',
     },
 
     V8_STUDENT_VISA_LIMIT: {
@@ -406,11 +400,6 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         description:
             'Average ordinary hours must not exceed 38/week over a cycle of up to 4 weeks — or ' +
             '42/week over 8 weeks for full-time security under Schedule 3.',
-        knownGap:
-            'V8 handles the Schedule 3 security cycle via `is_security_role`; the CP-SAT model has ' +
-            'no security discriminator at all and evaluates full-time security against the standard ' +
-            '38h/4-week envelope. The solver will therefore under-utilise security staff and never ' +
-            'generate a roster V8 would have accepted for them.',
     },
 
     V8_ORD_HOURS_CONTRACTED: {

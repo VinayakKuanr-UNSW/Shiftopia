@@ -197,6 +197,20 @@ class EmployeeReq(BaseModel):
     is_student: bool = False
     visa_limit: int = 2880
     contract_weekly_minutes: int = 2280
+    # EBA Schedule 3 — Security. Sch 3 §1.1 makes the schedule PREVAIL over the
+    # Agreement wherever they conflict, and §3.1 conflicts with cl 35 directly:
+    # full-time Security work an "even time" 8-week cycle averaging 42h/week
+    # (38 ordinary + 4 reasonable additional), not 38h/week over 4 weeks.
+    #
+    # This flag was set by the controller and thrown away here for as long as
+    # the field went undeclared. It sat in the TS schema-contract test's
+    # BROWSER_ONLY_FIELDS beside is_apprentice/is_trainee/is_sws under a comment
+    # explaining that the solver has no apprentice/trainee/SWS WAGE model — true
+    # of those, but is_security_role is not a wage carrier. It is a CONSTRAINT
+    # discriminator, and withholding it meant the solver evaluated full-time
+    # Security against the general envelope, under-utilised them by 4h/week, and
+    # could never produce the roster V8 would have accepted.
+    is_security_role: bool = False
     # F1 fairness-ledger debts per metric. Declared so it survives the wire and
     # reaches EmployeeInput.fairness_debts (consumed by SC-11). Without this the
     # controller's debts are silently dropped here.

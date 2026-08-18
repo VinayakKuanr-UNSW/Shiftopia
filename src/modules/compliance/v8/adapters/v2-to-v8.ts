@@ -70,7 +70,6 @@ export function runV8ComplexBridge(
     const v8Config: Partial<V8Config> = {
         max_daily_hours: input.config?.max_daily_hours,
         min_rest_gap_minutes: (input.config as any)?.rest_gap_hours ? (input.config as any).rest_gap_hours * 60 : 600,
-        max_consecutive_days: input.config?.max_consecutive_days,
         ord_avg_weekly_limit: input.employee_context.contracted_weekly_hours || 38
     };
 

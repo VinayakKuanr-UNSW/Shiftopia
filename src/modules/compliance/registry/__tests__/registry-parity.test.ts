@@ -159,9 +159,6 @@ describe('cross-engine coverage is recorded, not assumed', () => {
             'SHAPE_REST_PAUSE_1',
             'SHAPE_REST_PAUSE_2',
             'V8_FT_DAYS_OFF',
-            'V8_ORD_HOURS_AVG',
-            'V8_SPREAD_OF_HOURS',
-            'V8_STREAK_LIMIT',
             'V8_STUDENT_VISA_LIMIT',
         ]);
     });

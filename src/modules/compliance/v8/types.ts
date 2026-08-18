@@ -129,7 +129,20 @@ export interface V8Config {
     
     /** Rest & Recovery */
     min_rest_gap_minutes:   number;   // default 600 (10h)
-    max_consecutive_days:   number;   // default 6
+    /**
+     * REMOVED — there is no general consecutive-day cap.
+     *
+     * `max_consecutive_days: 6` sat here from the beginning and no rule ever
+     * read it. The 2026-07-05 policy lock scoped the streak cap to FLEXIBLE
+     * part-time (cl 35.3(g), max 10) on the grounds that the EBA gives no basis
+     * for an arbitrary standard cap — consecutive-day density is governed by the
+     * 20-in-28 limit alone — but the config key and the "Standard: Max 6 days"
+     * docstring on `maxWorkdayLimitsRule` both survived the rule they described.
+     * A tunable that changes nothing is worse than no tunable: it reads as the
+     * knob for a cap that does not exist. The live numbers are exported from
+     * `rules/consecutive-days.ts` as MAX_WORKDAYS_PER_28 and
+     * MAX_CONSECUTIVE_DAYS_FLEXI_PT, where the solver-parity test can see them.
+     */
     
     /** Legal / Visa */
     student_visa_fortnightly_limit: number; // default 48
@@ -145,7 +158,6 @@ export const DEFAULT_V8_CONFIG: V8Config = {
     security_ord_avg_weekly_limit: 42,
     max_daily_hours:        12,
     min_rest_gap_minutes:   600,
-    max_consecutive_days:   6,
     student_visa_fortnightly_limit: 48,
     enforce_ft_days_off:      false,
 };

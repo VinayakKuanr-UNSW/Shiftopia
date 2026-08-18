@@ -51,6 +51,7 @@ def make_shift(
     level: int = 0,
     is_training: bool = False,
     target_employment_type: str | None = None,
+    unpaid_break_minutes: int = 0,
 ) -> ShiftInput:
     if duration_minutes is None:
         sh, sm = map(int, start.split(":"))
@@ -64,6 +65,7 @@ def make_shift(
         duration_minutes=duration_minutes, role_id=role_id,
         priority=priority, level=level, is_training=is_training,
         target_employment_type=target_employment_type,
+        unpaid_break_minutes=unpaid_break_minutes,
     )
 
 
@@ -76,6 +78,7 @@ def make_employee(
     max_weekly_minutes: int = 2400,
     level: int = 0,
     is_student: bool = False,
+    is_security_role: bool = False,
     visa_limit: int = 2880,
     contracted_role_ids: list[str] | None = None,
     skill_ids: list[str] | None = None,
@@ -97,6 +100,7 @@ def make_employee(
         min_contract_minutes=min_contract_minutes,
         max_weekly_minutes=max_weekly_minutes,
         level=level, is_student=is_student, visa_limit=visa_limit,
+        is_security_role=is_security_role,
         skill_ids=skill_ids or [], license_ids=license_ids or [],
         existing_shifts=existing_shifts or [],
         availability_slots=availability_slots or [],

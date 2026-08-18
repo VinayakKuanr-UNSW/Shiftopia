@@ -125,12 +125,21 @@ const BROWSER_ONLY_FIELDS: Record<string, Set<string>> = {
     // maps between them. Keeping both in TS for backwards compat.
     Employee: new Set([
         'contract_type', 'contracts', 'qualifications',
-        // Schedule 3/4/5/6 wage classification. The CP-SAT solver has no
+        // Schedule 4/5/6 WAGE classification. The CP-SAT solver has no
         // apprentice/trainee/SWS wage model — only a flat `hourly_rate` — so
         // these deliberately do not cross the wire. They are consumed solely by
         // the greedy fallback's own cost re-estimate, which implements
         // Schedule 4/5/6 in full. See the OptimizerEmployee doc comment.
-        'is_security_role',
+        //
+        // `is_security_role` USED TO BE LISTED HERE, and should never have been.
+        // It sat among the wage carriers under a comment about the solver having
+        // no wage model, which is true of apprentices and trainees and false of
+        // this flag: Schedule 3 §3.1 makes it a CONSTRAINT discriminator, setting
+        // a full-time Security employee's work cycle to 8 weeks at 42h/week
+        // instead of 4 weeks at 38h. The controller had been populating it all
+        // along; the wire dropped it, so the solver sized every Security roster
+        // against the general envelope and could never produce the roster the
+        // labour layer would have accepted. It now crosses.
         'is_apprentice', 'apprentice_type', 'apprentice_year', 'has_completed_year_12',
         'is_trainee', 'trainee_category', 'trainee_level', 'trainee_exit_year',
         'trainee_years_out', 'trainee_aqf_level', 'trainee_year',

@@ -26,6 +26,7 @@
     "id",
     "initial_effective_minutes",
     "is_flexible",
+    "is_security_role",
     "is_student",
     "level",
     "license_ids",
