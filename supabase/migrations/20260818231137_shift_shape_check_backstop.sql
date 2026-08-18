@@ -41,6 +41,11 @@
 --
 -- These stay in the application layer, which can see what a row cannot.
 --
+-- APPLIED TO PRODUCTION 2026-08-18 as version 20260818231137 (this filename).
+-- The filename was renamed from 20260818000000 to match the version the apply
+-- actually recorded in supabase_migrations.schema_migrations — a mismatch there
+-- is what makes `supabase migration list` report drift that does not exist.
+--
 -- SAFETY
 -- ------
 -- `shifts` held 0 rows when this was written (verified against production
@@ -49,7 +54,8 @@
 -- named constraint so a violation names the clause it breached rather than
 -- reporting one opaque composite failure.
 
-BEGIN;
+-- No explicit BEGIN/COMMIT: the migration runner owns the transaction, and
+-- 121 of the 125 migrations in this project leave it that way.
 
 -- Net working minutes, from a single row. Overnight shifts wrap: an end_time at
 -- or before start_time means the shift crosses midnight, so a day is added.
@@ -75,6 +81,15 @@ $$;
 
 COMMENT ON FUNCTION public.shift_net_minutes(time, time, integer) IS
     'Net working minutes for one shift: gross span (wrapping past midnight) less the unpaid break. Mirrors the NET measure locked across the compliance layer on 2026-08-15.';
+
+-- DELIBERATELY NOT REVOKED. This project's standing practice is to revoke
+-- EXECUTE from PUBLIC/anon on new functions, because Supabase grants it
+-- automatically and 211 definer functions were once exposed that way. This one
+-- is the exception on purpose: it takes three scalars, touches no table, and
+-- returns arithmetic, so there is nothing to leak — and it is called from CHECK
+-- constraints on every INSERT into `shifts`. Revoking a function the constraint
+-- machinery has to evaluate risks breaking every write to the table, which is a
+-- far worse outcome than exposing a subtraction.
 
 -- SHAPE_VALID_RANGE — a zero-length shift is degenerate, not a 24-hour one.
 ALTER TABLE public.shifts
@@ -179,4 +194,3 @@ ALTER TABLE public.shifts VALIDATE CONSTRAINT shifts_shape_min_engagement_floor;
 ALTER TABLE public.shifts VALIDATE CONSTRAINT shifts_shape_meal_break;
 ALTER TABLE public.shifts VALIDATE CONSTRAINT shifts_shape_rest_pause;
 
-COMMIT;

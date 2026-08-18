@@ -26,8 +26,19 @@ import { requiredMinEngagementMinutes } from '../evaluate';
  * source can.
  */
 
-const MIGRATION = 'supabase/migrations/20260818000000_shift_shape_check_backstop.sql';
-const sql = readFileSync(MIGRATION, 'utf8');
+const MIGRATION = 'supabase/migrations/20260818231137_shift_shape_check_backstop.sql';
+const raw = readFileSync(MIGRATION, 'utf8');
+
+/**
+ * The migration with `--` comments stripped.
+ *
+ * Assertions about what the SQL does must not be satisfiable by prose ABOUT
+ * what it does. A sibling test in `baselineTemplateQuery.test.ts` was written
+ * without this and passed against a comment describing the very bug it was
+ * meant to catch — the file documents the rules it deliberately omits, so a
+ * naive match would find them named and conclude they were carried.
+ */
+const sql = raw.replace(/--.*$/gm, '');
 
 /** The integer a named constraint compares against. */
 function constraintBody(name: string): string {
@@ -105,7 +116,8 @@ describe('the backstop stays loose exactly where it cannot see', () => {
     it('never claims to replace the application layer', () => {
         // If this ever reads as the authority, the next person will trust it
         // for the rules it deliberately omits.
-        expect(sql).toContain('DELIBERATELY WEAKER THAN THE APPLICATION LAYER');
-        expect(sql).toContain('WHAT IT DOES NOT CARRY, AND WHY');
+        // Reads `raw`, not `sql` — this one is deliberately ABOUT the prose.
+        expect(raw).toContain('DELIBERATELY WEAKER THAN THE APPLICATION LAYER');
+        expect(raw).toContain('WHAT IT DOES NOT CARRY, AND WHY');
     });
 });
