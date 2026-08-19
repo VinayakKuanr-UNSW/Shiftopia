@@ -421,3 +421,120 @@ def test_a_declared_in_shift_break_satisfies_the_day():
     out = solve(shifts, [make_employee("e1", employment_type="Casual")])
     assert len(out.assignments) == 2
     assert legal_penalty(out) == 0
+
+
+# ---------------------------------------------------------------------------
+# SC-12 — cl 28.4 split-shift allowance
+#
+# SC-1 prices a shift on its own. cl 28.4 is not a property of any one shift —
+# it is ONE payment for a day worked in two parts — so a per-shift cost
+# function structurally could not carry it, and did not.
+#
+# That mattered because the solver's cost is the number the AutoScheduler
+# SHOWS. The roster grid and payroll both priced this allowance, so the two
+# disagreed about the same roster, and the solver saw a part-timer's second
+# same-day engagement as free.
+#
+# The amount is effective-dated and arrives over the wire, so these pass it in
+# rather than asserting a constant the solver has no business owning.
+# ---------------------------------------------------------------------------
+
+ALLOWANCE_CENTS = 1113  # $11.13 under EA 2025
+
+
+def _solve_with_allowance(shifts, employees, cents):
+    from model_builder import (OptimizerInput, OptimizerConstraints,
+                               StrategyInput, SolverParameters,
+                               ScheduleModelBuilder)
+    data = OptimizerInput(
+        shifts=shifts, employees=employees,
+        constraints=OptimizerConstraints(
+            min_rest_minutes=600, enforce_role_match=False,
+            enforce_skill_match=False, allow_partial=True,
+            relax_constraints=False, split_shift_allowance_cents=cents),
+        strategy=StrategyInput(),
+        solver_params=SolverParameters(max_time_seconds=5.0, num_workers=2,
+                                       enable_greedy_hint=True, log_search=False))
+    return ScheduleModelBuilder(data).build_and_solve()
+
+
+def _cost_of(out) -> int:
+    entry = (out.objective_breakdown or {}).get('cost')
+    return entry.get('total') if isinstance(entry, dict) else (entry or 0)
+
+
+def _split_pair():
+    """Two engagements two hours apart — a split shift under cl 39.4."""
+    return [
+        make_shift(sid="a", date=day(0), start="06:00", end="10:00"),
+        make_shift(sid="b", date=day(0), start="12:00", end="16:00"),
+    ]
+
+
+def _allowance_delta(employment_type, shifts=None):
+    shifts = shifts or _split_pair()
+    emps = [make_employee("e1", employment_type=employment_type)]
+    return (_cost_of(_solve_with_allowance(shifts, emps, ALLOWANCE_CENTS))
+            - _cost_of(_solve_with_allowance(shifts, emps, 0)))
+
+
+def test_a_part_timers_split_shift_costs_the_allowance():
+    assert _allowance_delta("PT") == ALLOWANCE_CENTS
+
+
+def test_a_casual_never_attracts_it():
+    # cl 28.4 pays the allowance to everyone "other than a casual".
+    assert _allowance_delta("Casual") == 0
+
+
+def test_a_full_timer_never_attracts_it():
+    # cl 39.1 confines split shifts to part-time and flexible part-time.
+    assert _allowance_delta("FT") == 0
+
+
+def test_a_gap_over_three_hours_is_not_a_split_shift():
+    # cl 39.4 draws the line at three hours. Same hours worked, no allowance —
+    # which is why the gap has to be measured rather than assumed from "two
+    # engagements on one day".
+    wide = [
+        make_shift(sid="a", date=day(0), start="06:00", end="10:00"),
+        make_shift(sid="b", date=day(0), start="14:00", end="18:00"),
+    ]
+    assert _allowance_delta("PT", wide) == 0
+
+
+def test_it_is_charged_once_a_day_not_once_a_pair():
+    # "One payment for the day's split pattern, not one per segment."
+    # Three engagements make two qualifying pairs; the day indicator collapses
+    # them, so a third engagement must not double the allowance.
+    three = [
+        make_shift(sid="a", date=day(0), start="06:00", end="09:00"),
+        make_shift(sid="b", date=day(0), start="11:00", end="14:00"),
+        make_shift(sid="c", date=day(0), start="16:00", end="18:00"),
+    ]
+    assert _allowance_delta("PT", three) == ALLOWANCE_CENTS
+
+
+def test_not_priced_leaves_the_objective_untouched():
+    # 0 means "the caller did not price it", which must leave the cost exactly
+    # as it was rather than the solver inventing a rate.
+    emps = [make_employee("e1", employment_type="PT")]
+    assert _cost_of(_solve_with_allowance(_split_pair(), emps, 0)) > 0
+    assert _allowance_delta("PT") > 0
+
+
+def test_the_allowance_survives_the_http_boundary():
+    # The `is_security_role` lesson: a field undeclared on the pydantic model is
+    # dropped silently, and the request is filtered AGAIN through the dataclass
+    # `__dataclass_fields__` on the way in. Both boundaries, in one assertion.
+    from ortools_runner import ConstraintsReq
+    from model_builder import OptimizerConstraints as ConstraintsDC
+
+    parsed = ConstraintsReq(**{"split_shift_allowance_cents": ALLOWANCE_CENTS})
+    assert parsed.split_shift_allowance_cents == ALLOWANCE_CENTS
+
+    dc = ConstraintsDC(**{
+        k: v for k, v in parsed.model_dump().items()
+        if k in ConstraintsDC.__dataclass_fields__
+    })
+    assert dc.split_shift_allowance_cents == ALLOWANCE_CENTS

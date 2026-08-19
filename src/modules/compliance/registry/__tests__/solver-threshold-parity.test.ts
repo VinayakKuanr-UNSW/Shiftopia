@@ -14,6 +14,8 @@ import {
     MAX_WORKDAYS_PER_28,
     MAX_CONSECUTIVE_DAYS_FLEXI_PT,
 } from '../../v8/rules/consecutive-days';
+import { MAX_SPLIT_SHIFT_GAP_MINUTES } from '@/modules/rosters/domain/projections/utils/cost/split-shift-eligibility';
+import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
 
 /**
  * The CP-SAT model and the labour layer must agree on every number.
@@ -119,6 +121,36 @@ describe('daily and weekly caps', () => {
             .toBe(DAILY_MEAL_BREAK_THRESHOLD_MINUTES);
         expect(solverConstant('DAILY_MEAL_BREAK_MIN_MINUTES'))
             .toBe(DAILY_MEAL_BREAK_MIN_MINUTES);
+    });
+
+    it('agrees on cl 39.4’s three-hour split-shift gap', () => {
+        // The gap decides whether the cl 28.4 allowance ATTACHES. Three
+        // implementations now key off it — the solver's SC-12 objective, the
+        // roster/payroll pricing in `split-shift-eligibility.ts`, and the
+        // labour layer's V8_SPLIT_SHIFT warning. If they drift, the solver
+        // prices a day the grid does not, on the same roster.
+        expect(solverConstant('MAX_SPLIT_SHIFT_GAP_MINUTES')).toBe(MAX_SPLIT_SHIFT_GAP_MINUTES);
+    });
+
+    it('never lets the allowance amount be defined solver-side', () => {
+        // It is effective-dated ($11.13 under EA 2025, $11.70 from 6 Jul 2026,
+        // CPI-indexed after). A constant in the Python module would be the
+        // stale copy that disagrees with the grid the following July.
+        // `src` belongs to the source-reading describe below; read it here.
+        const model = readFileSync(MODEL_BUILDER, 'utf8');
+        expect(model).not.toMatch(/^SPLIT_SHIFT_ALLOWANCE\w*\s*=\s*\d/m);
+        // Sourced from the caller's constraints, never a literal.
+        expect(model).toMatch(/self\.data\.constraints\.split_shift_allowance_cents/);
+    });
+
+    it('resolves an allowance that is actually payable', () => {
+        // Guards the wire conversion: dollars here, integer cents on the wire.
+        const cents = Math.round(resolveRateSet('2026-01-01').allowances.splitShift * 100);
+        expect(cents).toBeGreaterThan(0);
+        expect(Number.isInteger(cents)).toBe(true);
+        // And it moves with the schedule — a fixed number would not.
+        expect(Math.round(resolveRateSet('2027-01-01').allowances.splitShift * 100))
+            .toBeGreaterThan(cents);
     });
 
     it('keeps the shape layer and the labour layer on one cl 36.1 threshold', () => {

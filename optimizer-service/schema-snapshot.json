@@ -10,7 +10,8 @@
     "enforce_role_match",
     "enforce_skill_match",
     "min_rest_minutes",
-    "relax_constraints"
+    "relax_constraints",
+    "split_shift_allowance_cents"
   ],
   "Employee": [
     "availability_mode",
