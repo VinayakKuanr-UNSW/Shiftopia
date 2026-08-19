@@ -31,12 +31,12 @@
     "features": "Fonctionnalités",
     "broadcast": "Diffusion",
     "insights": "Analyses",
-    "performance": "Performance",
     "users": "Utilisateurs",
     "my_leave": "Mes Congés",
     "leave_approvals": "Approbations de Congés",
     "team_availability": "Disponibilités de l’équipe",
-    "gross_pay": "Salaire Brut"
+    "gross_pay": "Salaire Brut",
+    "compliance_rejections": "Refus de Conformité"
   },
   "settings": {
     "title": "Mes Paramètres",

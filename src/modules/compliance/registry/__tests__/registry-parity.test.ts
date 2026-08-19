@@ -33,6 +33,7 @@ import { V8_RULE_METADATA } from '../../v8/metadata';
 
 const V8_RULES_DIR = 'src/modules/compliance/v8/rules';
 const SHAPE_EVALUATE = 'src/modules/compliance/shape/evaluate.ts';
+const REGISTRY_RULES = 'src/modules/compliance/registry/rules.ts';
 
 /** `rule_id` / `rule_name` / `status` triples as literally written in source. */
 function scrape(source: string, prefix: string): Map<string, { name: string; tier: string }> {
@@ -162,6 +163,31 @@ describe('cross-engine coverage is recorded, not assumed', () => {
             'V8_DAILY_MEAL_BREAK',
             'V8_FT_DAYS_OFF',
         ]);
+    });
+
+    it('states the real counts in its own header docblock', () => {
+        // The one fact in rules.ts that is prose rather than data, and it had
+        // already drifted: the header read "33 rules: 12 shape, 21 labour" while
+        // the table below it defined 34 — 12 and 22. Nothing caught it, because
+        // a sentence is not a rule table and no test was reading it.
+        //
+        // This assertion matches a COMMENT on purpose, which every other
+        // source-reading test in this repo is careful not to do — matching one is
+        // how a test comes to pass against a description of the bug it was meant
+        // to catch. Here the comment IS the subject under test, so it is read
+        // deliberately. Do not "fix" this by stripping comments first.
+        const header = readFileSync(REGISTRY_RULES, 'utf8');
+        const stated = header.match(/^ \* (\d+) rules: (\d+) shape, (\d+) labour\./m);
+
+        expect(stated, 'rules.ts header should read "N rules: N shape, N labour."')
+            .not.toBeNull();
+
+        const [, total, shape, labour] = stated!.map(Number);
+        expect({ total, shape, labour }).toEqual({
+            total:  allRules().length,
+            shape:  rulesForLayer('SHAPE').length,
+            labour: rulesForLayer('LABOUR').length,
+        });
     });
 
     it('cites a clause wherever it claims EBA authority', () => {

@@ -4838,6 +4838,7 @@ export type Database = {
           synthesis_run_id: string | null
           tags: Json | null
           target_employment_type: string | null
+          target_requires_flexible: boolean
           template_batch_id: string | null
           template_group:
             | Database["public"]["Enums"]["template_group_type"]
@@ -4955,6 +4956,7 @@ export type Database = {
           synthesis_run_id?: string | null
           tags?: Json | null
           target_employment_type?: string | null
+          target_requires_flexible?: boolean
           template_batch_id?: string | null
           template_group?:
             | Database["public"]["Enums"]["template_group_type"]
@@ -5072,6 +5074,7 @@ export type Database = {
           synthesis_run_id?: string | null
           tags?: Json | null
           target_employment_type?: string | null
+          target_requires_flexible?: boolean
           template_batch_id?: string | null
           template_group?:
             | Database["public"]["Enums"]["template_group_type"]

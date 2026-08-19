@@ -7,7 +7,7 @@ import { complianceService } from '../services/compliance.service';
 import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/platform/supabase/rpc/client';
 import { shiftsQueries } from './shifts.queries';
 import { ComplianceError } from '@/platform/supabase/rpc/errors';
-import { assertShapeForRow } from './shift-shape-gate';
+import { assertShapeForRow, assertShapeForShiftId } from './shift-shape-gate';
 import {
     CreateShiftResponseSchema,
     UpdateShiftResponseSchema,
@@ -78,6 +78,27 @@ export const shiftsCommands = {
     }): Promise<{ success: boolean; error?: string }> {
         const user = await requireUser();
 
+        // ── Layer 1: shape of the shift AFTER the move ────────────────────────
+        //
+        // A move that changes only the group or subgroup cannot change a shape
+        // verdict — nothing in Layer 1 reads either. A move that changes the
+        // DATE can change two: cl 56.2's four-hour public-holiday minimum, and
+        // the Sunday tier of cl 12.4(c)/12.5(c). Dragging a lawful three-hour
+        // Monday casual onto Christmas Day made it unlawful, and this path
+        // never asked, because it calls `sm_move_shift` directly rather than
+        // going through `updateShift` where the create/edit gate lives.
+        //
+        // Gated by id rather than by row: the caller holds a destination date
+        // and nothing else, and the question a re-date raises — "is this shift
+        // long enough for THAT day" — cannot be answered from the patch alone.
+        if (params.shiftDate) {
+            await assertShapeForShiftId(
+                shiftId,
+                { shift_date: params.shiftDate },
+                { rpcName: 'sm_move_shift' },
+            );
+        }
+
         const { data, error } = await supabase.rpc('sm_move_shift', {
             p_shift_id: shiftId,
             p_group_type: params.groupType ?? undefined,
@@ -126,7 +147,7 @@ export const shiftsCommands = {
                 target_requires_flexible: shiftData.target_requires_flexible,
                 role_id:                  shiftData.role_id,
             },
-            { exemptReason: shiftData.shape_exempt_reason, rpcName: 'sm_create_shift' },
+            { exempt: shiftData.shape_exempt, rpcName: 'sm_create_shift' },
         );
 
         // ── Layer 2: labour compliance ────────────────────────────────────────

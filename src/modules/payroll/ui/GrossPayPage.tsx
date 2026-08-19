@@ -5,9 +5,10 @@
  *
  * GROSS pay only. Not a payslip of record (banner lives in GrossPayPeriodView).
  *
- * ROUTE: register at /payroll or similar. The router is a shared file that
- * another lane owns — this page is exported but intentionally NOT wired into
- * the route table here.
+ * ROUTE: /management/payroll, behind the `management` FeatureGate. This block
+ * used to say the page was deliberately NOT wired into the route table — true
+ * when the lane that owned the router was separate, and stale from the moment
+ * it was.
  *
  * Dark-first, light-mode safe: every colour utility is paired with a light
  * counterpart.

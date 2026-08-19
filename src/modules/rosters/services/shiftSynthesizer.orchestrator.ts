@@ -231,17 +231,29 @@ function expandToCreatePayloads(
       organization_id: params.organizationId ?? null,
       timezone: params.timezone ?? 'Australia/Sydney',
       creation_source: 'synthesizer',
-      // Layer-1 exemption. A synthesized shift is a COVERAGE SKELETON: it says
-      // "this many people, these hours" and models no breaks at all, so every
-      // skeleton over 5h net fails cl 36.1 by construction. Blocking them would
-      // make demand synthesis produce nothing for a normal 8-hour day.
+      // Layer-1 exemption, scoped to the rules the justification actually
+      // covers. A synthesized shift is a COVERAGE SKELETON: it says "this many
+      // people, these hours" and models no breaks at all, so every skeleton
+      // over 5h net fails cl 36.1 by construction. Blocking them would make
+      // demand synthesis produce nothing for a normal 8-hour day.
       //
       // The alternative — having the synthesizer emit a compliant 30m break —
       // was NOT taken here: it would change net paid hours, and therefore the
       // cost and coverage figures the demand model reports, which is a product
       // decision rather than a compliance fix. The skeletons land as Draft with
       // their shape findings recorded for the manager who completes them.
-      shape_exempt_reason: 'demand synthesis skeleton — breaks are filled in by the manager',
+      //
+      // NAMED RULES, not a blanket pass (2026-08-19). This was one reason
+      // string that waived EVERYTHING, so the sentence "breaks are filled in by
+      // the manager" was also, silently, waiving cl 56.2's four-hour
+      // public-holiday minimum and cl 12's engagement tiers. A missing break is
+      // something a manager can add later; a two-hour engagement on Christmas
+      // Day is not a gap in the skeleton, it is the wrong shift. Those still
+      // block, which is what forces the demand model to ask for a lawful one.
+      shape_exempt: {
+        rules: ['SHAPE_MEAL_BREAK', 'SHAPE_REST_PAUSE_1', 'SHAPE_REST_PAUSE_2'],
+        reason: 'demand synthesis skeleton — breaks are filled in by the manager',
+      },
       synthesis_run_id: params.synthesisRunId ?? null,
       shift_subgroup_id: rosterSubgroupId,
       notes: shift.reasons?.[0],

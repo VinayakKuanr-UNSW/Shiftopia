@@ -20,6 +20,7 @@ import {
   TrendingUp,
   UserCircle2,
   Shield,
+  ShieldX,
   FolderKanban,
   Sparkles,
   Radio,
@@ -76,7 +77,8 @@ type IconColorKey =
   | 'laborDemand'
   | 'myLeave'
   | 'leaveApprovals'
-  | 'grossPay';
+  | 'grossPay'
+  | 'complianceRejections';
 
 const iconColorMap: Record<IconColorKey, string> = {
   workspace: 'text-purple-400',
@@ -107,6 +109,7 @@ const iconColorMap: Record<IconColorKey, string> = {
   myLeave: 'text-teal-400',
   leaveApprovals: 'text-emerald-400',
   grossPay: 'text-lime-400',
+  complianceRejections: 'text-red-400',
 };
 
 /* ============================================================
@@ -508,6 +511,16 @@ const AppSidebar: React.FC = () => {
               label={t('nav.gross_pay', 'Gross Pay')}
               isActive={isRouteActive('/management/payroll')}
               description="Itemised employee earnings"
+            />
+
+            <NavigationItem
+              to="/compliance/rejections"
+              icon={ShieldX}
+              iconColor={iconColorMap.complianceRejections}
+              label={t('nav.compliance_rejections', 'Compliance Rejections')}
+              isActive={isRouteActive('/compliance/rejections')}
+              description="Why actions were blocked"
+              onMouseEnter={() => handlePrefetch('/compliance/rejections')}
             />
           </CollapsibleSection>
         )}

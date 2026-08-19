@@ -1,4 +1,5 @@
 import { TemplateGroupType } from '../domain/shift.entity';
+import type { ShapeExemption } from './shift-shape-gate';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 export interface CreateShiftData {
@@ -45,15 +46,21 @@ export interface CreateShiftData {
     target_requires_flexible?: boolean;
     demand_group_id?: string | null;
     /**
-     * Named bypass for the Layer-1 shape gate in `shiftsCommands.createShift`.
+     * Named, RULE-SCOPED bypass for the Layer-1 shape gate in
+     * `shiftsCommands.createShift`.
      *
      * Absent (the normal case) means a shift whose shape breaches the EBA is
-     * refused. Present means it is recorded and written anyway, and the string
-     * says why — the demand synthesiser sets it because its output is a coverage
-     * skeleton with no breaks modelled, inserted as Draft for a manager to
-     * complete. Never persisted; it is a client-side instruction to the gate.
+     * refused. Present means the LISTED rules are recorded and written anyway,
+     * and the reason says why — the demand synthesiser sets it because its
+     * output is a coverage skeleton with no breaks modelled, inserted as Draft
+     * for a manager to complete. Rules it does not list still block.
+     *
+     * This was a bare reason string until 2026-08-19, which waived every rule
+     * at once: the synthesiser's "breaks are filled in by the manager" also
+     * silently waived cl 56.2's four-hour public-holiday minimum. Never
+     * persisted; it is a client-side instruction to the gate.
      */
-    shape_exempt_reason?: string;
+    shape_exempt?: ShapeExemption;
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {

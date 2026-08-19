@@ -5,14 +5,39 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { Mail, Lock, Loader2, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { supabase } from '@/platform/supabase/client';
 import { Input } from '@/modules/core/ui/primitives/input';
 
+/**
+ * Remembered email, for prefill only.
+ *
+ * NOT a session control. `persistSession: true` is set globally on the Supabase
+ * client, so every session already survives a browser restart — a "Remember me"
+ * that claimed to govern that would be describing behaviour the user gets either
+ * way. This stores the address and nothing else: no password, no token.
+ */
+const REMEMBERED_EMAIL_KEY = 'icc-remembered-email';
+
 const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem(REMEMBERED_EMAIL_KEY) ?? '';
+    } catch {
+      return '';   // private browsing / storage disabled
+    }
+  });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const [rememberEmail, setRememberEmail] = useState(() => {
+    try {
+      return Boolean(localStorage.getItem(REMEMBERED_EMAIL_KEY));
+    } catch {
+      return false;
+    }
+  });
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,6 +50,43 @@ const LoginPage: React.FC = () => {
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, isLoading, navigate, location]);
+
+  /**
+   * Password reset from the login screen.
+   *
+   * This used to be a <Link to="/forgot-password">, which no route has ever
+   * served — every click landed on NotFound. There is no reset PAGE to route to
+   * either, and there does not need to be: Supabase mails a recovery link that
+   * signs the user in and returns them to `redirectTo`, so pointing that at the
+   * security settings tab lands them exactly where the password field already
+   * lives. Same call and same destination SettingsPage uses for a signed-in
+   * user, so there is one reset mechanism rather than two.
+   */
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setLoginError('Enter your email address first, then choose "Forgot password?"');
+      return;
+    }
+
+    setIsResetting(true);
+    setLoginError(null);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/settings/security`,
+      });
+      if (error) throw error;
+
+      toast({
+        title: 'Reset email sent',
+        description: `If an account exists for ${email.trim()}, a reset link is on its way.`,
+      });
+    } catch (err: any) {
+      setLoginError(err.message || 'Could not send the reset email. Try again shortly.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +101,13 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(email.trim(), password);
+
+      try {
+        if (rememberEmail) localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
+        else localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      } catch {
+        /* storage unavailable — prefill is a convenience, never a blocker */
+      }
 
       toast({
         title: 'Welcome back!',
@@ -122,7 +191,7 @@ const LoginPage: React.FC = () => {
           <header className="mb-10">
             <h1 className="text-4xl font-bold text-white mb-3">Sign In</h1>
             <p className="text-gray-400">
-              Already have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link
                 to="/signup"
                 className="text-purple-400 hover:text-purple-300 underline underline-offset-4"
@@ -189,14 +258,25 @@ const LoginPage: React.FC = () => {
 
             {/* Actions */}
             <div className="flex justify-between text-sm">
-              <label className="flex items-center gap-2 text-gray-400">
-                <input type="checkbox" className="w-4 h-4" />
-                Remember me
+              <label htmlFor="remember-email" className="flex items-center gap-2 text-gray-400 cursor-pointer">
+                <input
+                  id="remember-email"
+                  type="checkbox"
+                  className="w-4 h-4 cursor-pointer"
+                  checked={rememberEmail}
+                  onChange={(e) => setRememberEmail(e.target.checked)}
+                />
+                Remember my email
               </label>
 
-              <Link to="/forgot-password" className="text-purple-400">
-                Forgot password?
-              </Link>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isResetting}
+                className="text-purple-400 hover:text-purple-300 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 rounded"
+              >
+                {isResetting ? 'Sending…' : 'Forgot password?'}
+              </button>
             </div>
 
             {/* Button */}
