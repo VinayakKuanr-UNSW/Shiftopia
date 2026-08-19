@@ -25,6 +25,21 @@
  * constraint would be the belt to this braces, and is deliberately left as a
  * backstop rather than the primary guarantee — a constraint can only reject, it
  * cannot tell the manager which clause they breached or offer the fix.
+ *
+ * THE DATE IS AN INPUT, NOT A CONSTANT (2026-08-19).
+ * Two of these rules — cl 56.2's public-holiday minimum and the Sunday tier of
+ * cl 12.4(c)/12.5(c) — are decided by WHICH DAY the shift falls on. Placing the
+ * gate only on create/edit quietly assumed a shift's date never changes after
+ * it is written, and three paths broke that assumption: `sm_move_shift` re-dates
+ * a row without going through `updateShift` at all, and the assign command both
+ * re-dates via that RPC and writes `start_time`/`end_time` with a raw table
+ * update. A lawful three-hour Monday casual dragged onto Christmas Day became
+ * unlawful with nothing objecting.
+ *
+ * `assertShapeForShiftId` below is the answer: it takes the id of a row that
+ * already exists, loads it, merges the pending change, and judges the RESULT.
+ * Any caller that moves a shift in time can therefore be gated without first
+ * being refactored to route through `updateShift`.
  */
 
 import { supabase } from '@/platform/supabase/client';
@@ -32,6 +47,7 @@ import {
     evaluateShiftShape,
     type ShapeEmploymentTarget,
     type ShapeResult,
+    type ShapeRuleId,
 } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { ComplianceError } from '@/platform/supabase/rpc/errors';
@@ -154,22 +170,30 @@ export async function evaluateShapeForRow(input: ShapeGateInput): Promise<ShapeR
     });
 }
 
+/**
+ * A named, reasoned, RULE-SCOPED bypass.
+ *
+ * This used to be a bare `exemptReason: string` that waived every blocking rule
+ * at once. It had exactly one user — the demand synthesiser, whose output is a
+ * coverage skeleton with no breaks modelled — and the reason it gave said so:
+ * "breaks are filled in by the manager". But a blanket waiver does not mean what
+ * its reason says. It also waived `SHAPE_MIN_ENGAGEMENT_PH`, so the synthesiser
+ * could mint a two-hour casual shift on Christmas Day and the audit trail would
+ * explain it as a missing meal break.
+ *
+ * Naming the rules makes the waiver as narrow as its justification, and makes
+ * the next one impossible to widen by accident: a rule the caller did not list
+ * still blocks.
+ */
+export interface ShapeExemption {
+    /** Exactly the rules this caller may breach. Anything else still throws. */
+    rules:  readonly ShapeRuleId[];
+    /** Why — recorded in the warning, read by whoever finds the shift later. */
+    reason: string;
+}
+
 export interface ShapeGateOptions {
-    /**
-     * Named, reasoned bypass. Present ⇒ a blocking shape is recorded and allowed
-     * through; absent ⇒ it throws.
-     *
-     * A string rather than a boolean, and a string rather than an inference from
-     * `creation_source`, because a bypass keyed off some other field is exactly
-     * the implicit coupling this consolidation exists to remove. If a caller
-     * needs out, it says so and says why, in the code, where a reader will find
-     * it.
-     *
-     * There is currently one legitimate user: the demand synthesiser, whose
-     * output is a coverage skeleton with no breaks modelled at all. It inserts
-     * blocking shifts as Draft ON PURPOSE so a manager can complete them.
-     */
-    exemptReason?: string;
+    exempt?: ShapeExemption;
     /** Included in the thrown error so the message names the operation. */
     rpcName?: string;
 }
@@ -190,16 +214,96 @@ export async function assertShapeForRow(
 
     if (!result.blocking) return result;
 
-    if (options.exemptReason) {
+    const blocking = result.hits.filter(h => h.blocking);
+    const exempt   = options.exempt;
+    // Partition rather than short-circuit: a caller exempt from the meal break
+    // must still be refused a two-hour public holiday engagement. Waiving the
+    // listed rules is not the same as waiving the call.
+    const waived   = exempt ? blocking.filter(h => exempt.rules.includes(h.rule_id)) : [];
+    const enforced = exempt ? blocking.filter(h => !exempt.rules.includes(h.rule_id)) : blocking;
+
+    if (waived.length > 0) {
         console.warn(
-            `[shape-gate] blocking shape allowed through — ${options.exemptReason}:`,
-            result.hits.filter(h => h.blocking).map(h => h.rule_id).join(', '),
+            `[shape-gate] blocking shape allowed through — ${exempt!.reason}:`,
+            waived.map(h => h.rule_id).join(', '),
         );
-        return result;
     }
 
-    throw new ComplianceError(
-        result.hits.filter(h => h.blocking).map(h => h.details),
-        options.rpcName,
+    if (enforced.length === 0) return result;
+
+    throw new ComplianceError(enforced.map(h => h.details), options.rpcName);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Gating a change to a row that already exists
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/** The columns a shape verdict needs from a stored shift. */
+const SHAPE_COLUMNS =
+    'id, shift_date, start_time, end_time, unpaid_break_minutes, paid_break_minutes, ' +
+    'is_training, target_employment_type, target_requires_flexible, role_id, roles(name)';
+
+/** The subset of a shift a caller may be changing. Absent ⇒ unchanged. */
+export type ShapePatch = Partial<Omit<ShapeGateInput, 'role_name'>>;
+
+/**
+ * Judge a shift AFTER a pending change, given only its id.
+ *
+ * For callers that change one intrinsic field of a stored row without holding
+ * the rest of it — `moveShift` knows a date and nothing else, the assign
+ * command knows a start and end time. Evaluating the patch alone would be
+ * meaningless: a new date says nothing about whether the shift is long enough
+ * for that date, which is the entire question a re-date raises.
+ *
+ * Merged with `!== undefined` rather than object spread, for the reason
+ * `updateShift` already documents: a spread copies a key that is
+ * present-but-undefined, so `{ target_employment_type: undefined }` would blank
+ * an 'FT' target down to the untargeted default and silently relax the 7.6h
+ * floor to three hours.
+ *
+ * A row that cannot be read is NOT a pass. It throws, because the alternative
+ * is a gate that opens whenever the network is unreliable.
+ */
+export async function assertShapeForShiftId(
+    shiftId: string,
+    patch: ShapePatch,
+    options: ShapeGateOptions = {},
+): Promise<ShapeResult> {
+    const { data, error } = await supabase
+        .from('shifts')
+        .select(SHAPE_COLUMNS)
+        .eq('id', shiftId)
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!data) throw new Error(`Shift ${shiftId} could not be read, so its shape cannot be checked.`);
+
+    const current = data as unknown as {
+        shift_date: string; start_time: string; end_time: string;
+        unpaid_break_minutes: number | null; paid_break_minutes: number | null;
+        is_training: boolean | null; target_employment_type: string | null;
+        target_requires_flexible: boolean | null; role_id: string | null;
+        roles?: { name?: string | null } | null;
+    };
+
+    const pick = <K extends keyof ShapePatch & keyof typeof current>(key: K) =>
+        (patch[key] !== undefined ? patch[key] : current[key]);
+
+    return assertShapeForRow(
+        {
+            shift_date:               pick('shift_date') as string,
+            start_time:               pick('start_time') as string,
+            end_time:                 pick('end_time') as string,
+            unpaid_break_minutes:     pick('unpaid_break_minutes') as number | null,
+            paid_break_minutes:       pick('paid_break_minutes') as number | null,
+            is_training:              pick('is_training') as boolean | null,
+            target_employment_type:   pick('target_employment_type') as string | null,
+            target_requires_flexible: pick('target_requires_flexible') as boolean | null,
+            role_id:                  pick('role_id') as string | null,
+            // The joined role travels with the row, so a patch that leaves
+            // `role_id` alone needs no second lookup.
+            role_name: patch.role_id === undefined ? current.roles?.name ?? null : null,
+        },
+        options,
     );
 }

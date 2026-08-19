@@ -70,6 +70,50 @@ export type ShapeEmploymentTarget = 'FT' | 'PT' | 'Casual';
  */
 export type ShapeStatus = 'PASS' | 'WARNING' | 'BLOCKING' | 'INCOMPLETE';
 
+/**
+ * Every rule id this layer can emit.
+ *
+ * A union rather than `string` because the ids are now an API: callers waive
+ * named rules through `exemptRules`, and a typo in a waiver is silent — it
+ * would leave the rule enforced and the caller believing it was not, or the
+ * reverse once the name is fixed. The compiler is the only thing that catches
+ * that, and it can only do so if the names are a type.
+ *
+ * Kept in emission order so this list can be diffed against `evaluate.ts`
+ * top-to-bottom; `shape-rule-ids.test.ts` asserts the two agree.
+ */
+export type ShapeRuleId =
+    | 'SHAPE_VALID_RANGE'
+    | 'SHAPE_BREAK_EXCEEDS_SHIFT'
+    | 'SHAPE_SPREAD_GUARDRAIL'
+    | 'SHAPE_MAX_DURATION'
+    | 'SHAPE_MIN_ENGAGEMENT_PH'
+    | 'SHAPE_FT_MIN_DAY'
+    | 'SHAPE_MIN_ENGAGEMENT'
+    | 'SHAPE_MEAL_BREAK'
+    | 'SHAPE_MEAL_BREAK_CEILING'
+    | 'SHAPE_REST_PAUSE_1'
+    | 'SHAPE_REST_PAUSE_2'
+    | 'SHAPE_SECURITY_PAID_BREAK';
+
+/**
+ * The rules that need a DATE, and therefore cannot be decided when a shift's
+ * date is unknown or is about to change.
+ *
+ * cl 56.2 is the whole of `SHAPE_MIN_ENGAGEMENT_PH`. `SHAPE_MIN_ENGAGEMENT`
+ * only becomes date-dependent through its Sunday tier — on any other day it is
+ * decidable from the shift alone — but a caller cannot waive half a rule, so
+ * the whole id is listed and the distinction is left to the evaluator.
+ *
+ * This is the set the template AUTHORING gate is blind to, that the database
+ * CHECK backstop deliberately omits, and that the day-typed trigger added on
+ * 2026-08-19 exists to carry.
+ */
+export const DAY_TYPED_SHAPE_RULES: readonly ShapeRuleId[] = Object.freeze([
+    'SHAPE_MIN_ENGAGEMENT_PH',
+    'SHAPE_MIN_ENGAGEMENT',
+]);
+
 /** A hit is only ever raised on an evaluable shift, so it cannot be INCOMPLETE. */
 export type ShapeHitStatus = 'WARNING' | 'BLOCKING';
 
@@ -78,7 +122,7 @@ export type ShapeHitStatus = 'WARNING' | 'BLOCKING';
  * compliance rule-card UI renders it with no new plumbing.
  */
 export interface ShapeHit {
-    rule_id:     string;
+    rule_id:     ShapeRuleId;
     rule_name:   string;
     status:      ShapeHitStatus;
     /** Short line for inline form feedback. */

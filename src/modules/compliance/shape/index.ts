@@ -14,6 +14,7 @@ export type {
     ShapeStatus,
     ShapeConfig,
     ShapeEmploymentTarget,
+    ShapeRuleId,
 } from './types';
 
-export { DEFAULT_SHAPE_CONFIG } from './types';
+export { DEFAULT_SHAPE_CONFIG, DAY_TYPED_SHAPE_RULES } from './types';

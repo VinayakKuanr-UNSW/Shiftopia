@@ -202,20 +202,44 @@ describe('an untargeted shift is judged as the form judges it', () => {
     });
 });
 
-describe('the bypass is named, not inferred', () => {
-    it('allows a blocking shape through when a reason is given', async () => {
+describe('the bypass is named, reasoned, and RULE-SCOPED', () => {
+    it('allows a blocking rule through when that rule is listed', async () => {
         const r = await assertShapeForRow(
             lawful({ unpaid_break_minutes: 0 }),
-            { exemptReason: 'demand synthesis skeleton' },
+            { exempt: { rules: ['SHAPE_MEAL_BREAK'], reason: 'demand synthesis skeleton' } },
         );
         expect(r.blocking).toBe(true);   // still recorded, not laundered
     });
 
-    it('still throws when the reason is absent or empty', async () => {
-        for (const exemptReason of [undefined, '']) {
-            await expect(
-                assertShapeForRow(lawful({ unpaid_break_minutes: 0 }), { exemptReason }),
-            ).rejects.toThrow();
-        }
+    it('still throws when the exemption is absent', async () => {
+        await expect(
+            assertShapeForRow(lawful({ unpaid_break_minutes: 0 })),
+        ).rejects.toThrow();
+    });
+
+    it('still throws when the breached rule is NOT the one listed', async () => {
+        // The synthesiser's real waiver. It must not also excuse a two-hour
+        // engagement — the whole reason the blanket string was replaced.
+        await expect(
+            assertShapeForRow(
+                lawful({ start_time: '09:00', end_time: '11:00', unpaid_break_minutes: 0 }),
+                { exempt: { rules: ['SHAPE_MEAL_BREAK'], reason: 'demand synthesis skeleton' } },
+            ),
+        ).rejects.toThrow();
+    });
+
+    it('enforces the unlisted rule even when a listed one is ALSO breached', async () => {
+        // Two breaches at once: no meal break (waived) and a public-holiday
+        // engagement under four hours (not waived). Partitioning, not
+        // short-circuiting, is what makes the second one survive.
+        await expect(
+            assertShapeForRow(
+                lawful({
+                    shift_date: '2026-12-25', start_time: '09:00', end_time: '11:00',
+                    unpaid_break_minutes: 0, target_employment_type: 'Casual',
+                }),
+                { exempt: { rules: ['SHAPE_MEAL_BREAK'], reason: 'demand synthesis skeleton' } },
+            ),
+        ).rejects.toThrow();
     });
 });

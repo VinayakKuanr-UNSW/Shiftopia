@@ -98,13 +98,15 @@ export type {
     ShapeHit,
     ShapeStatus,
     ShapeConfig,
-    ShapeEmploymentTarget
+    ShapeEmploymentTarget,
+    ShapeRuleId
 } from './shape';
 
 export {
     evaluateShiftShape,
     requiredMinEngagementMinutes,
-    DEFAULT_SHAPE_CONFIG
+    DEFAULT_SHAPE_CONFIG,
+    DAY_TYPED_SHAPE_RULES
 } from './shape';
 
 // Rule Registry — the single description of every rule, both layers, all three
