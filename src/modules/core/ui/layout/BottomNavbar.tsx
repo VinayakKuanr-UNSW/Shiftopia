@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   Settings,
   LogOut,
-  TrendingUp,
   Moon,
   Sun,
   Palmtree,
@@ -120,7 +119,6 @@ const toolMoreItems: MoreNavItem[] = [
   { label: "Team Avail", Icon: CalendarDays, path: "/team-availability", requiredPermission: "management" },
   { label: "Users", Icon: Users, path: "/users", requiredPermission: "users" },
   { label: "Settings", Icon: Settings, path: "/settings" },
-  { label: "Perform", Icon: TrendingUp, path: "/performance", requiredPermission: "management" },
   { label: "Leave Mgmt", Icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
 ];
 

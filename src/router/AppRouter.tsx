@@ -227,8 +227,16 @@ const AppRouter: React.FC = () => {
                         <Route path="/availibility-manger" element={<Navigate to="/team-availability" replace />} />
                     </Route>
 
-                    {/* ── Compliance audit ── */}
-                    <Route path="/compliance/rejections" element={<ComplianceRejectionsPage />} />
+                    {/* ── Compliance audit ──
+                        Manager-grade data: every BLOCKING verdict the orchestrator
+                        recorded, for every employee in scope, with the calculation
+                        that produced it. It sat outside every FeatureGate until
+                        2026-08-19 — readable by any authenticated user — and had no
+                        sidebar entry, so the exposure was invisible from both sides.
+                        Gated with the rest of Management, and surfaced in the nav. */}
+                    <Route element={<FeatureGate feature="management" />}>
+                        <Route path="/compliance/rejections" element={<ComplianceRejectionsPage />} />
+                    </Route>
 
 
                     <Route element={<FeatureGate feature="users" />}>

@@ -1,7 +1,7 @@
 /**
  * Compliance Rule Registry — the table.
  *
- * 33 rules: 12 shape, 21 labour. See `./types.ts` for why this exists and which
+ * 34 rules: 12 shape, 22 labour. See `./types.ts` for why this exists and which
  * fields are machine-verified.
  *
  * REGISTERED AS IMPLEMENTED, NOT AS PROPOSED. Several rules diverge from the

@@ -36,8 +36,6 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   '/templates',
   '/broadcast',
   '/labor-demand',
-  '/performance',
-
   '/insights',
   // The Availability Manager, and '/grid' which now redirects into it. It does
   // NOT render its people x days matrix on a phone — a matrix needs
@@ -45,7 +43,6 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   // one-day list composition. See TeamMobileDayList.
   '/team-availability',
   '/grid',
-  '/contracts',
   '/users',
   '/search',
   '/settings',

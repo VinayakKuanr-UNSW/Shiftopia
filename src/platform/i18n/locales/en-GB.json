@@ -31,12 +31,12 @@
     "features": "Features",
     "broadcast": "Broadcast",
     "insights": "Insights",
-    "performance": "Performance",
     "users": "Users",
     "my_leave": "My Leave",
     "leave_approvals": "Leave Approvals",
     "team_availability": "Team Availability",
-    "gross_pay": "Gross Pay"
+    "gross_pay": "Gross Pay",
+    "compliance_rejections": "Compliance Rejections"
   },
   "settings": {
     "title": "My Settings",
