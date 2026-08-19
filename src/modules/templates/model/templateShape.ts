@@ -133,6 +133,34 @@ export interface TemplateApplicationFailure extends TemplateShapeFailure {
     dayType: 'public holiday' | 'Sunday';
 }
 
+/**
+ * The longest range this gate will walk, and therefore the longest range that
+ * may be applied.
+ *
+ * There used to be a `366` here as a runaway-loop guard, silently TRUNCATING
+ * the plan: `apply_template_to_date_range_v2` has no range cap of its own, so
+ * applying an eighteen-month range validated the first 367 days and stamped all
+ * five hundred. The days nobody checked were exactly the ones furthest from
+ * where a manager would look.
+ *
+ * A guard that changes the answer is not a guard. This one throws instead, so
+ * the caller finds out that the range exceeds what can be verified rather than
+ * receiving a verdict about a prefix of it.
+ */
+export const MAX_APPLICATION_DAYS = 366;
+
+export class TemplateRangeTooLongError extends Error {
+    constructor(readonly days: number) {
+        super(
+            `A template can be applied to at most ${MAX_APPLICATION_DAYS} days at a time; ` +
+            `this range is ${days}. Every day in the range has to be checked against the ` +
+            `calendar before any of it is written, and beyond a year that check is the ` +
+            `thing that would be skipped. Apply it in shorter runs.`,
+        );
+        this.name = 'TemplateRangeTooLongError';
+    }
+}
+
 /** Inclusive YYYY-MM-DD range, walked in local dates to match the RPC. */
 function eachDate(startDate: string, endDate: string): string[] {
     const out: string[] = [];
@@ -142,7 +170,8 @@ function eachDate(startDate: string, endDate: string): string[] {
     const cursor = new Date(sy, sm - 1, sd);
     const end = new Date(ey, em - 1, ed);
     // A range inverted by the caller yields nothing rather than looping forever.
-    while (cursor <= end && out.length <= 366) {
+    while (cursor <= end) {
+        if (out.length >= MAX_APPLICATION_DAYS) throw new TemplateRangeTooLongError(out.length + 1);
         const y = cursor.getFullYear();
         const m = String(cursor.getMonth() + 1).padStart(2, '0');
         const d = String(cursor.getDate()).padStart(2, '0');

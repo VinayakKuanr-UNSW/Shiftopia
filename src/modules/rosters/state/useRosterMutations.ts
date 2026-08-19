@@ -357,29 +357,36 @@ async function loadPlacedTemplateShifts(templateId: string): Promise<PlacedTempl
 }
 
 /**
- * Refuse an apply that would stamp an unlawful shift onto a special day.
+ * Which instances this apply will NOT be able to write, and why.
  *
- * Throws with every offending date rather than the first: a manager who has to
- * discover a fortnight's worth of breaches one apply at a time will reach for
- * a narrower date range instead of fixing the template.
+ * PREVIEW, NOT REFUSAL — changed 2026-08-19. This used to throw, cancelling the
+ * whole apply over a single offending instance. That was the wrong trade. Every
+ * one of the 22 rows in the live template library carries `day_of_week = NULL`,
+ * which the RPC reads as EVERY day, so one three-hour shift in a template makes
+ * every public holiday and every Sunday in the range a refusal — and a manager
+ * who cannot apply a quarter applies three narrower ranges instead. The
+ * coverage they wanted on the public holiday then simply does not exist, with
+ * no error and no record, and the roster looks finished.
+ *
+ * `apply_template_to_date_range_v2` now skips those instances itself and
+ * reports them, using the same `shift_day_typed_shortfall` predicate that
+ * `trg_shift_shape_3_day_typed` enforces. So the authoritative answer comes
+ * back WITH the result. This runs first anyway, because a warning a manager
+ * sees before committing a quarter of roster is worth one extra round trip —
+ * and because it is the only half of the pair that can name the group and
+ * subgroup a manager needs in order to go and fix the template.
+ *
+ * Returns the lines to show rather than throwing. A failure to LOAD still
+ * throws: not knowing is not the same as nothing being wrong.
  */
-async function assertTemplateApplicationShape(vars: ApplyTemplateVariables): Promise<void> {
+async function previewTemplateApplicationShape(vars: ApplyTemplateVariables): Promise<string[]> {
   const placed = await loadPlacedTemplateShifts(vars.templateId);
-  if (placed.length === 0) return;
+  if (placed.length === 0) return [];
 
   const failures = validateTemplateApplication(placed, vars.startDate, vars.endDate);
-  if (failures.length === 0) return;
+  if (failures.length === 0) return [];
 
-  const lines = describeTemplateApplicationFailures(failures);
-  const shown = lines.slice(0, 5);
-  const rest = lines.length - shown.length;
-  throw new Error(
-    `This template cannot be applied to the dates you chose — ${failures.length} shift` +
-    `${failures.length !== 1 ? 's' : ''} would breach the agreement on a public holiday or ` +
-    `Sunday:\n\n${shown.join('\n')}` +
-    (rest > 0 ? `\n…and ${rest} more.` : '') +
-    `\n\nEither shorten the date range or fix the template.`,
-  );
+  return describeTemplateApplicationFailures(failures);
 }
 
 export function useApplyTemplate() {
@@ -399,8 +406,8 @@ export function useApplyTemplate() {
       // three-hour casual shift the agreement says must be four.
       //
       // Runs here rather than in the dialogs because both of them call this
-      // mutation, and a gate one caller can skip is not a gate.
-      await assertTemplateApplicationShape(vars);
+      // mutation, and a check one caller can skip is not a check.
+      const shapeWarnings = await previewTemplateApplicationShape(vars);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase.rpc as any)('apply_template_to_date_range_v2', {
@@ -415,7 +422,9 @@ export function useApplyTemplate() {
       });
 
       if (error) throw error;
-      return data;
+      // The client preview travels with the server's answer so `onSuccess` can
+      // name the group and subgroup, which the RPC's own report cannot.
+      return { ...(data ?? {}), __shapeWarnings: shapeWarnings };
     },
 
     onSuccess: (data, vars) => {
@@ -425,23 +434,53 @@ export function useApplyTemplate() {
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
       queryClient.invalidateQueries({ queryKey: templateKeys.history(vars.templateId) });
 
-      const shiftsCreated = (data?.shifts_created as number | undefined) ?? 0;
-      const shiftsSkipped = (data?.shifts_skipped as number | undefined) ?? 0;
+      const shiftsCreated  = (data?.shifts_created as number | undefined) ?? 0;
+      const shiftsSkipped  = (data?.shifts_skipped as number | undefined) ?? 0;
+      // Counted separately from `shifts_skipped` on purpose: that one means
+      // "starts in the past", and the two have opposite remedies — pick a later
+      // date versus make the shift longer. One number meaning both would tell a
+      // manager to do the wrong thing half the time.
+      const shiftsUnlawful = (data?.shifts_skipped_unlawful as number | undefined) ?? 0;
+      const warnings       = (data?.__shapeWarnings as string[] | undefined) ?? [];
+
+      if (shiftsUnlawful > 0) {
+        // Its own toast, not a clause appended to the success line. These
+        // instances are the manager's to fix in the template, and the fix is
+        // invisible from the roster they are looking at.
+        const shown = warnings.slice(0, 4);
+        const rest  = Math.max(0, warnings.length - shown.length);
+        toast({
+          title: `${shiftsUnlawful} shift${shiftsUnlawful !== 1 ? 's were' : ' was'} not created`,
+          description:
+            `They would breach the agreement on a public holiday or Sunday, so they were left out ` +
+            `and the rest of the range was applied.` +
+            (shown.length > 0 ? `\n\n${shown.join('\n')}` : '') +
+            (rest > 0 ? `\n…and ${rest} more.` : '') +
+            `\n\nLengthen the shift in the template and apply again to fill them.`,
+          variant: 'destructive',
+        });
+      }
 
       if (shiftsCreated === 0) {
         // "Template Applied — Created 0 shifts" reads as success and explains
         // nothing. Each template shift carries a weekday and
         // apply_template_to_date_range_v2 only creates one on a matching day,
         // so applying a Mon–Fri template to a Saturday is a no-op by design.
-        // The RPC does not report which rule rejected what, so this names the
-        // rule behind nearly every case rather than asserting a cause it
-        // cannot know.
-        toast({
-          title: 'No shifts created',
-          description:
-            'Each template shift is tied to a weekday, and none of them fall on the dates you chose. Check the template covers the days in your range.',
-          variant: 'destructive',
-        });
+        // That is the one cause left for this branch to name: the RPC now
+        // reports compliance skips explicitly (handled above) and past-date
+        // skips as `shifts_skipped`, so by elimination a zero with neither of
+        // those set is a weekday mismatch.
+        // Don't repeat the compliance toast above with a weekday explanation
+        // that is not the reason — if everything was held back for breaching
+        // the agreement, the manager has already been told exactly why.
+        if (shiftsUnlawful === 0) {
+          toast({
+            title: 'No shifts created',
+            description:
+              'Each template shift is tied to a weekday, and none of them fall on the dates you chose. Check the template covers the days in your range.',
+            variant: 'destructive',
+          });
+        }
         return;
       }
 

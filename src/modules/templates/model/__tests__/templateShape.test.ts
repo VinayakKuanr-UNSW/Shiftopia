@@ -5,6 +5,7 @@ import {
     describeTemplateShapeFailures,
     planTemplateApplication,
     validateTemplateApplication,
+    TemplateRangeTooLongError,
     type PlacedTemplateShift,
 } from '../templateShape';
 import type { Group, TemplateShift } from '../templates.types';
@@ -211,6 +212,23 @@ describe('template application is validated against the real dates', () => {
 
     it('returns nothing for an inverted range rather than looping', () => {
         expect(validateTemplateApplication(place(THREE_HOURS), '2026-12-25', '2026-12-01')).toEqual([]);
+    });
+
+    it('THROWS on a range longer than a year instead of silently truncating it', () => {
+        // `apply_template_to_date_range_v2` has no range cap of its own, so the
+        // old `out.length <= 366` guard validated the first 367 days and let
+        // the RPC stamp all of them. A guard that changes the answer is not a
+        // guard — and the days it dropped were the ones furthest from where a
+        // manager would look.
+        expect(() => validateTemplateApplication(place(THREE_HOURS), '2026-01-01', '2027-06-30'))
+            .toThrow(TemplateRangeTooLongError);
+    });
+
+    it('accepts a range of exactly the maximum', () => {
+        // 2026-01-01 to 2026-12-31 inclusive is 365 days; the cap is 366 so a
+        // full leap year still applies in one go.
+        expect(() => validateTemplateApplication(place(THREE_HOURS), '2026-01-01', '2026-12-31'))
+            .not.toThrow();
     });
 
     it('lets the whole production library through on a public holiday', () => {
