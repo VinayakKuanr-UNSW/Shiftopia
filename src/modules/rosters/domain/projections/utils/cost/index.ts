@@ -5,6 +5,7 @@ import * as SecurityEngine from './security';
 import { Shift } from '../../../shift.entity';
 import type { AwardContext } from './award-context';
 import { buildAwardContext } from './award-context';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 /**
  * Dispatcher for cost estimation.
@@ -20,7 +21,7 @@ function isSecurityShift(options: CostCalculatorOptions | any): boolean {
   
   // Check if it's a Shift entity passed to the legacy wrappers
   const shift = options as Shift;
-  if (shift.roles?.name?.toLowerCase().includes('security')) return true;
+  if (isSecurityRoleName(shift.roles?.name)) return true;
   
   return false;
 }
@@ -165,7 +166,7 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     // every caller that relies on that fallback.
     unpaid_break_minutes: shift.unpaid_break_minutes,
     employmentType: shift.target_employment_type,
-    isSecurityRole: shift.roles?.name?.toLowerCase().includes('security'),
+    isSecurityRole: isSecurityRoleName(shift.roles?.name),
     classificationLevel: resolveClassificationLevel(shift.remuneration_level, shift.roles?.name),
     // cl 42 weekly OT is cross-shift context this single-shift wrapper can't
     // derive; pass it through only if a caller has already computed it. Undefined
@@ -211,7 +212,7 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     // See estimateCostFromShift — without this the unpaid meal break is paid.
     unpaid_break_minutes: shift.unpaid_break_minutes,
     employmentType: resolveEmploymentType(empType),
-    isSecurityRole: roleName?.toLowerCase().includes('security'),
+    isSecurityRole: isSecurityRoleName(roleName),
     classificationLevel: resolveClassificationLevel(shift.remuneration_level, roleName),
     // See estimateCostFromShift — cross-shift weekly-OT context is only forwarded
     // when a caller has already computed it; undefined leaves weekly OT off.

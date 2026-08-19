@@ -6,6 +6,7 @@
 import { supabase } from '@/platform/supabase/client';
 import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
     snapToQuarterHour,
     isShiftFinished,
@@ -282,7 +283,7 @@ export async function getShiftsForTimesheet(
             // still flagged no-show/cancelled, and that resolved window must still
             // get the floor (see applyMinEngagementFloor's docstring).
             const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date);
-            const isSecurityRoleForFloor = (role?.name ?? '').toLowerCase().includes('security');
+            const isSecurityRoleForFloor = isSecurityRoleName(role?.name);
             const flooredNet = rawNetMins !== null
                 ? applyMinEngagementFloor(rawNetMins, {
                       isTraining: shift.is_training === true,

@@ -67,6 +67,12 @@ export interface AssignmentEvaluationInput {
          *  enforces on write. Absent ⇒ the rule stays silent and the trigger
          *  remains the only guarantee. */
         employment_statuses?: string[];
+        /** Holds a Security role (EBA Schedule 3). Absent ⇒ the general hours
+         *  structure applies and the casual-security caps stay silent. */
+        is_security_role?: boolean;
+        /** Holds a student visa with a restricted work limit. Its own axis, so
+         *  the employee keeps their real contract_type. Absent ⇒ silent. */
+        is_student_visa?: boolean;
     };
 }
 
@@ -166,6 +172,16 @@ export class AssignmentEvaluator {
             contracted_weekly_hours: input.employee_context?.contracted_weekly_hours,
             leave_days: input.employee_context?.leave_days,
             employment_statuses: input.employee_context?.employment_statuses,
+            is_security_role: input.employee_context?.is_security_role,
+            // The context is authoritative. `config.student_visa_enforcement`
+            // is the same DB fact (`employee_licenses.has_restricted_work_limit`)
+            // derived independently by the shift form and the bids view; it was
+            // arriving here and being read by nothing, so callers who set only
+            // that had no visa check at all. Accepting it retires a dead input
+            // rather than leaving a second derivation of one fact unconsumed.
+            is_student_visa:
+                input.employee_context?.is_student_visa
+                ?? input.config?.student_visa_enforcement,
         };
 
         const scenario: SwapScenario = {

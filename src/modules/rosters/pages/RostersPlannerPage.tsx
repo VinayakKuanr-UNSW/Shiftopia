@@ -51,10 +51,8 @@ import {
   useCreateShift,
   useUpdateShift,
   useDeleteShift,
-  useBulkAssignShifts,
   useBulkPublishShifts,
   useBulkDeleteShifts,
-  useBulkUnassignShifts,
   useBulkUnpublishShifts,
   useAcceptOffer,
   useRequestTrade,
@@ -86,7 +84,6 @@ import {
   preflightPublish,
   preflightUnpublish,
   preflightDelete,
-  preflightUnassign,
   planPublishRoster,
   type PublishRosterPlan,
 } from '@/modules/rosters/domain/bulk-action-engine';
@@ -354,12 +351,10 @@ const NewRostersPage: React.FC = () => {
   // Mutation hooks
   const bulkPublish = useBulkPublishShifts();
   const bulkDelete = useBulkDeleteShifts();
-  const bulkAssign = useBulkAssignShifts();
   const bidShiftMutation = useAcceptOffer();
   const swapShiftMutation = useRequestTrade();
   const cancelShiftMutation = useCancelShift();
   const unpublishShiftMutation = useUnpublishShift();
-  const bulkUnassign = useBulkUnassignShifts();
   const bulkUnpublishByHook = useBulkUnpublishShifts();
   const updateShiftMutation = useUpdateShift();
 
@@ -650,13 +645,11 @@ const NewRostersPage: React.FC = () => {
     const pub     = preflightPublish(selectedShiftsData);
     const unpub   = preflightUnpublish(selectedShiftsData);
     const del     = preflightDelete(selectedShiftsData);
-    const unassign = preflightUnassign(selectedShiftsData);
 
     return {
       publish:   { eligible: pub.eligibleIds.length,     blocked: pub.blocked.length,     warned: pub.warned.length },
       unpublish: { eligible: unpub.eligibleIds.length,   blocked: unpub.blocked.length,   warned: unpub.warned.length },
       delete:    { eligible: del.eligibleIds.length,     warned: del.warned.length },
-      unassign:  { eligible: unassign.eligibleIds.length, blocked: unassign.blocked.length },
     };
   }, [selectedShiftsData]);
 
@@ -788,31 +781,6 @@ const NewRostersPage: React.FC = () => {
     },
     [bulkDelete, bulkPublish],
   );
-
-  const handleBulkUnassign = async () => {
-    const assignedIds = selectedShiftsData
-      .filter(s => s.assigned_employee_id)
-      .map(s => s.id);
-
-    if (assignedIds.length === 0) return;
-
-    try {
-      await bulkUnassign.mutateAsync(assignedIds);
-      toast({
-        title: 'Unassigned',
-        description: `Unassigned ${assignedIds.length} shift${assignedIds.length !== 1 ? 's' : ''} successfully.`,
-      });
-      clearSelection();
-      setBulkModeActive(false);
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: 'Could not unassign',
-        description: describeShiftMutationError(error) ?? 'Failed to unassign shifts.',
-        variant: 'destructive',
-      });
-    }
-  };
 
   const handleBulkDelete = async (): Promise<BulkActionResult> => {
     if (selectedV8ShiftIds.size === 0) return { successCount: 0, failedCount: 0 };
@@ -1467,8 +1435,6 @@ const NewRostersPage: React.FC = () => {
           onDelete={handleBulkDelete}
           onPublish={handleBulkPublish}
           onUnpublish={handleBulkUnpublish}
-          onAssign={() => modalsRef.current?.openBulkAssign()}
-          onUnassign={handleBulkUnassign}
           onValidatePublish={handleValidatePublish}
           onActionComplete={() => { clearSelection(); setBulkModeActive(false); }}
           allowedActions={{
@@ -1478,18 +1444,11 @@ const NewRostersPage: React.FC = () => {
         />
       )}
 
-      {/* Modals (add/edit shift, bulk assign, auto-scheduler) */}
+      {/* Modals (add/edit shift, auto-scheduler) */}
       <RosterModals
         ref={modalsRef}
         organizationId={selectedOrganizationId || undefined}
         queryFilters={queryFilters}
-        selectedV8ShiftIds={selectedV8ShiftIdsArray}
-        employees={employees.map((e) => ({
-          id: e.id,
-          name: `${e.first_name} ${e.last_name}`.trim() || e.id,
-          avatarUrl: (e as any).avatar_url ?? undefined,
-          role: (e as any).role_name ?? undefined,
-        }))}
         autoSchedulerShifts={shifts
           /* Autoscheduler scope: DRAFT + unassigned, outside the emergent
              (TTS ≤ 4h) window — published shifts belong to bidding/offers,
@@ -1531,7 +1490,6 @@ const NewRostersPage: React.FC = () => {
           is_flexible: (e as any).is_flexible ?? false,
         }))}
         onShiftSaved={handleShiftCreated}
-        onAssignComplete={() => { clearSelection(); setBulkModeActive(false); }}
         onAutoScheduleComplete={() => {}}
       />
 

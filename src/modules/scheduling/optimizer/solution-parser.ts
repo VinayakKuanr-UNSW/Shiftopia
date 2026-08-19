@@ -26,6 +26,13 @@ export interface ShiftMeta {
     role_id?: string | null;
     roleName?: string;
     unpaid_break_minutes?: number;
+    /**
+     * Paid rest-pause allotment. cl 39.2 measures the split-shift spread
+     * "excluding meal AND rest breaks", so HC-9 and `dailySpreadRule` both need
+     * it; without it the solver measures a longer spread than the labour layer
+     * does and refuses pairings V8 would accept.
+     */
+    paid_break_minutes?: number;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: TargetEmploymentType | null;
     /** Narrows a 'PT' target to Flexible Part-Time staff only. */
@@ -83,7 +90,7 @@ export interface EnrichedProposal {
 }
 
 // =============================================================================
-// GROUPED ASSIGNMENTS (by employee, for BulkAssignmentController)
+// GROUPED ASSIGNMENTS (by employee, for AssignmentValidator)
 // =============================================================================
 
 export interface EmployeeProposalGroup {

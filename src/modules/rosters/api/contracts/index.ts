@@ -156,16 +156,7 @@ export const BulkPublishResponseSchema = z.object({
 }).passthrough();
 export type BulkPublishResponse = z.infer<typeof BulkPublishResponseSchema>;
 
-// sm_bulk_assign
-export const BulkAssignResponseSchema = z.object({
-  success: z.boolean(),
-  total_requested: z.number().int().optional(),
-  success_count: z.number().int().optional(),
-  failure_count: z.number().int().optional(),
-  message: z.string().optional(),
-  error: z.string().optional(),
-});
-export type BulkAssignResponse = z.infer<typeof BulkAssignResponseSchema>;
+
 
 // sm_bulk_assign_atomic
 const BulkAssignAtomicPerEmployeeSchema = z.object({

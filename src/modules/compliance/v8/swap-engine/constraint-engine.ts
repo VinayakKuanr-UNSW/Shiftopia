@@ -47,6 +47,13 @@ export class V8SwapEngine {
             // V8_EMPLOYMENT_TARGET short-circuits on an empty list, so this was
             // the last gap keeping the rule silent on every assign/bid/swap.
             employment_statuses: scenario.partyA.employment_statuses,
+            // `is_student_visa` reached the SwapParty and stopped here: the
+            // engine never copied it onto the employee, so V8_STUDENT_VISA_LIMIT
+            // had nothing to guard on and could not fire from any swap or
+            // assignment. Read strictly per-party — `config` is scenario-wide
+            // and cannot say WHICH party holds the visa, so the single-party
+            // assignment path resolves that fallback before it gets here.
+            is_student_visa: scenario.partyA.is_student_visa,
         };
         const shiftsA: V8Shift[] = scenario.partyA.hypothetical_schedule.map(s => ({
             ...s,
@@ -76,6 +83,7 @@ export class V8SwapEngine {
                 leave_days: scenario.partyB.leave_days,
                 is_security_role: scenario.partyB.is_security_role,
                 employment_statuses: scenario.partyB.employment_statuses,
+                is_student_visa: scenario.partyB.is_student_visa,
             };
             const shiftsB: V8Shift[] = scenario.partyB.hypothetical_schedule.map(s => ({
                 ...s,

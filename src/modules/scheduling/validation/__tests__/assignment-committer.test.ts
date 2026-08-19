@@ -8,7 +8,6 @@
  *  - RPC returns success:false → failedEmployees set; conflicts propagated.
  *  - Employees with committed=0 in per_employee → flagged as failedEmployees.
  *  - Idempotency key is forwarded to the RPC call.
- *  - Single-employee commit() path still works (regression guard).
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -20,15 +19,13 @@ import { AssignmentCommitter } from '../engine/assignment-committer';
 
 vi.mock('@/modules/rosters/api/shifts.commands', () => ({
     shiftsCommands: {
-        bulkAssignShifts: vi.fn(),
         bulkAssignShiftsAtomic: vi.fn(),
     },
 }));
 
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 
-const mockBulkAssign         = shiftsCommands.bulkAssignShifts as ReturnType<typeof vi.fn>;
-const mockBulkAssignAtomic   = shiftsCommands.bulkAssignShiftsAtomic as ReturnType<typeof vi.fn>;
+const mockBulkAssignAtomic = shiftsCommands.bulkAssignShiftsAtomic as ReturnType<typeof vi.fn>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -156,61 +153,5 @@ describe('AssignmentCommitter.commitAtomic', () => {
             [{ employeeId: 'e1', shiftIds: ['s1'] }],
             key,
         );
-    });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: commit (single-employee path — regression guard)
-// ---------------------------------------------------------------------------
-
-describe('AssignmentCommitter.commit (single-employee regression)', () => {
-    let committer: AssignmentCommitter;
-
-    beforeEach(() => {
-        vi.clearAllMocks();
-        committer = new AssignmentCommitter();
-    });
-
-    it('returns no-op when shiftIds is empty', async () => {
-        const result = await committer.commit([], 'e1');
-        expect(result.success).toBe(true);
-        expect(result.committed).toEqual([]);
-        expect(mockBulkAssign).not.toHaveBeenCalled();
-    });
-
-    it('marks all shifts committed on RPC success', async () => {
-        mockBulkAssign.mockResolvedValueOnce({
-            success: true,
-            total_requested: 2,
-            success_count: 2,
-            failure_count: 0,
-            message: 'ok',
-        });
-
-        const result = await committer.commit(['s1', 's2'], 'e1');
-
-        expect(result.success).toBe(true);
-        expect(result.committed).toEqual(['s1', 's2']);
-        expect(result.failed).toEqual([]);
-    });
-
-    it('marks all shifts failed when RPC returns success:false', async () => {
-        mockBulkAssign.mockResolvedValueOnce({ success: false, message: 'rpc fail' });
-
-        const result = await committer.commit(['s1'], 'e1');
-
-        expect(result.success).toBe(false);
-        expect(result.failed).toEqual(['s1']);
-    });
-
-    it('marks all shifts failed when RPC throws', async () => {
-        mockBulkAssign.mockRejectedValueOnce(new Error('db down'));
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-        const result = await committer.commit(['s1'], 'e1');
-
-        expect(result.success).toBe(false);
-        expect(result.failed).toEqual(['s1']);
-        errorSpy.mockRestore();
     });
 });

@@ -52,6 +52,9 @@ export interface V8EmployeeContext {
     /** Raw per-contract employment statuses — see V8Employee.employment_statuses.
      *  Feeds V8_EMPLOYMENT_TARGET; NOT derivable from `contract_type`. */
     employment_statuses?:     string[];
+    /** Student visa with a restricted work limit — see V8Employee.is_student_visa.
+     *  Its own axis, never a `contract_type` value. */
+    is_student_visa?:         boolean;
 }
 
 export interface V8OrchestratorInput {

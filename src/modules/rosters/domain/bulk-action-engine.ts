@@ -138,39 +138,7 @@ export function preflightDelete(shifts: Shift[]): BulkPreflightSummary {
     return { eligibleIds, blocked: [], warned };
 }
 
-/**
- * Unassign pre-flight.
- *
- * Eligible   — assigned, not in bidding, not cancelled
- * Blocked    — in bidding OR cancelled OR already unassigned
- */
-export function preflightUnassign(shifts: Shift[]): BulkPreflightSummary {
-    const eligibleIds: string[] = [];
-    const blocked: Array<{ id: string; reason: string }> = [];
 
-    // Real "now" instant. shiftStartAt below is the absolute instant of the shift's
-    // Sydney wall-clock start, so comparing against real now is correct in any tz.
-    const now = new Date();
-
-    for (const s of shifts) {
-        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
-        const isPast = now >= shiftStartAt;
-
-        if (isPast) {
-            blocked.push({ id: s.id, reason: 'Shift is in the past' });
-        } else if (s.bidding_status !== 'not_on_bidding') {
-            blocked.push({ id: s.id, reason: 'In bidding' });
-        } else if (s.is_cancelled || s.lifecycle_status === 'Cancelled') {
-            blocked.push({ id: s.id, reason: 'Cancelled' });
-        } else if (!s.assigned_employee_id) {
-            blocked.push({ id: s.id, reason: 'Not assigned' });
-        } else {
-            eligibleIds.push(s.id);
-        }
-    }
-
-    return { eligibleIds, blocked, warned: [] };
-}
 
 // ============================================================
 // PUBLISH-ROSTER PLAN (one-click roster finalize)

@@ -39,6 +39,7 @@ import { runV8Orchestrator } from '@/modules/compliance/v8';
 import { buildAssignInput, buildSkeletonInput } from '@/modules/planning/unified/compliance/input-builder';
 import type { V8OrchestratorInput, V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
 import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG } from '@/modules/compliance/shape';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
@@ -267,9 +268,21 @@ export function useShiftFormOrchestrator({
         paid_break_minutes:   Number(watchPaidBreak) || 0,
         is_training: watchIsTraining || false,
         target_employment_type: watchTargetEmploymentType || 'Casual',
+        // The second employment axis. Without it the layer cannot tell plain
+        // part-time from flexible part-time, and grants PT the cl 12.4(c)
+        // training and Sunday concessions that only FPT and casual are owed.
+        target_requires_flexible: watchTargetRequiresFlexible ?? false,
+        // EBA Schedule 3. Security meal breaks are PAID (§3.2(a), §5.3(a),(c)),
+        // so a compliant security shift carries 30m in `paid_break_minutes` and
+        // nothing in `unpaid_break_minutes`. Read without this flag that looks
+        // like a shift with no meal break at all, and the form refuses to save a
+        // lawful roster. The role is the only signal the schema carries for it.
+        is_security: isSecurityRoleName(roles.find(r => r.id === watchV8RoleId)?.name),
     }), [
         watchShiftDate, watchStart, watchEnd,
-        watchUnpaidBreak, watchPaidBreak, watchIsTraining, watchTargetEmploymentType,
+        watchUnpaidBreak, watchPaidBreak, watchIsTraining,
+        watchTargetEmploymentType, watchTargetRequiresFlexible,
+        watchV8RoleId, roles,
     ]);
 
     // Retained for the step-1 length readout. `minShiftHours` is now derived
@@ -281,11 +294,16 @@ export function useShiftFormOrchestrator({
             watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : '',
         );
         return requiredMinEngagementMinutes({
+            target: watchTargetEmploymentType || 'Casual',
+            isFlexible: watchTargetRequiresFlexible ?? false,
             isTraining: watchIsTraining || false,
             isSunday,
             isPublicHoliday: isPH,
         }).requiredMins / 60;
-    }, [watchIsTraining, watchShiftDate, watchTargetEmploymentType]);
+    }, [
+        watchIsTraining, watchShiftDate,
+        watchTargetEmploymentType, watchTargetRequiresFlexible,
+    ]);
 
     /** Blocking shape findings only — what the form renders and what gates Save. */
     const shapeBlockers = useMemo(() => shape.hits.filter(h => h.blocking), [shape]);
@@ -294,7 +312,9 @@ export function useShiftFormOrchestrator({
     // verdict means anything — an empty form is "incomplete", not "invalid".
     const isEvaluable = shape.status !== 'INCOMPLETE';
     const isMinLengthValid = isEvaluable && !shape.hits.some(
-        h => h.rule_id === 'SHAPE_MIN_ENGAGEMENT' || h.rule_id === 'SHAPE_FT_MIN_DAY',
+        h => h.rule_id === 'SHAPE_MIN_ENGAGEMENT'
+          || h.rule_id === 'SHAPE_MIN_ENGAGEMENT_PH'
+          || h.rule_id === 'SHAPE_FT_MIN_DAY',
     );
     const isNetLengthValid = isEvaluable && shape.passed;
 

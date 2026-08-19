@@ -65,7 +65,6 @@ export interface SwapEvaluationInput {
 export interface SolverConfig {
     max_daily_hours?:          number;
     rest_gap_hours?:           number;
-    max_consecutive_days?:     number;
     averaging_cycle_weeks?:    number;
     student_visa_enforcement?: boolean;
     public_holiday_dates?:     string[];

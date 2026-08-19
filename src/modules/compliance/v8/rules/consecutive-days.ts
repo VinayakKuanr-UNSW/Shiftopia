@@ -2,14 +2,30 @@ import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
 import { parseTimeToMinutes } from '../utils/time';
 
 /**
- * V8 Rule: Workday Limits (20-in-28 & Streaks)
- * 
+ * V8 Rule: Workday Limits (20-in-28 & flexible part-time streaks)
+ *
  * EBA Requirements:
- * 1. 20 Days in 28: Employees (especially FT) cannot work more than 20 days in any 28-day window.
- * 2. Contract-Aware Streaks: 
- *    - Standard: Max 6 days.
- *    - Flexible Part-Time: Up to 10 days.
+ *  1. 20 days in any 28 (cl 35.1(e)/35.2(f)/35.3(h)/35.4(e)) — every type.
+ *  2. Consecutive-day streak, FLEXIBLE PART-TIME ONLY (cl 35.3(g)), max 10.
+ *
+ * There is NO general streak cap. This docstring used to advertise "Standard:
+ * Max 6 days", and `DEFAULT_V8_CONFIG` carried a `max_consecutive_days: 6` to
+ * match, but no rule has ever read either — the six was removed in the
+ * 2026-07-05 policy lock, on the grounds that the EBA gives no basis for an
+ * arbitrary standard streak cap and consecutive-day density is governed by the
+ * 20-in-28 limit alone. The prose and the dead config outlived the rule and
+ * would have told the next reader a cap exists that does not.
  */
+/**
+ * cl 35.1(e)/35.2(f)/35.3(h)/35.4(e) — at most 20 worked days in any 28.
+ * Exported so `solver-threshold-parity.test.ts` can hold the CP-SAT model to
+ * the same number; an inline literal on each side is how the two drift.
+ */
+export const MAX_WORKDAYS_PER_28 = 20;
+
+/** cl 35.3(g) — flexible part-time consecutive-day cap. No other type has one. */
+export const MAX_CONSECUTIVE_DAYS_FLEXI_PT = 10;
+
 export const maxWorkdayLimitsRule: V8RuleEvaluator = (ctx) => {
     const { shifts, employee } = ctx;
     if (shifts.length === 0) return [];
@@ -38,7 +54,7 @@ export const maxWorkdayLimitsRule: V8RuleEvaluator = (ctx) => {
     const violations: V8Hit[] = [];
 
     // --- RULE A: 20 IN 28 (Rolling Window) ---
-    const maxWorkdays = 20;
+    const maxWorkdays = MAX_WORKDAYS_PER_28;
 
     let worstWindow: any = null;
 
@@ -87,7 +103,7 @@ export const maxWorkdayLimitsRule: V8RuleEvaluator = (ctx) => {
     // streak cap applies to them. Policy locked 2026-07-05 and mirrored in the
     // CP-SAT scheduler (model_builder.py `_add_workload_limits`).
     if (employee.contract_type === 'FLEXI_PART_TIME') {
-        const streakLimit = 10;
+        const streakLimit = MAX_CONSECUTIVE_DAYS_FLEXI_PT;
         let currentStreak = 1;
         let streakStart = sortedDates[0];
 

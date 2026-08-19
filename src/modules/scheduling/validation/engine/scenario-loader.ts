@@ -2,7 +2,7 @@
  * ScenarioLoader — Fetches the employee's ±28-day roster from Supabase.
  *
  * Returns:
- *   - candidateShifts:  The specific shifts being bulk-assigned (from shiftIds)
+ *   - candidateShifts:  The specific shifts being validated (from shiftIds)
  *   - existingShifts:   All shifts assigned to the employee in the scenario window
  *   - employee:         Profile including role and qualifications
  *
@@ -25,7 +25,7 @@ export interface LoadedScenario {
 
 export class ScenarioLoader {
     /**
-     * Load all data needed to validate bulk assignment for a single employee.
+     * Load all data needed to validate proposed assignments for a single employee.
      *
      * @param shiftIds     - The candidate shift IDs selected in the planner
      * @param employeeId   - The target employee
@@ -204,12 +204,18 @@ export class ScenarioLoader {
         const profile = profileRes.data;
 
         // Map the V8 contract type ('FULL_TIME'|'PART_TIME'|'CASUAL'|
-        // 'STUDENT_VISA'|'FLEXI_PART_TIME') onto the 'FT'|'PT'|'CASUAL' form
-        // EmployeeInfo carries. Without this, contract_type stays undefined and
-        // the V8 engine defaults everyone to CASUAL — which silently exempts
-        // real FT/PT staff from the ordinary-hours 4-week averaging cap
-        // (V8_ORD_HOURS_AVG). STUDENT_VISA maps to CASUAL: its binding limit is
-        // the separate student-visa cap, and CASUAL keeps the ord-hours exemption.
+        // 'FLEXI_PART_TIME') onto the 'FT'|'PT'|'CASUAL' form EmployeeInfo
+        // carries. Without this, contract_type stays undefined and the V8
+        // engine defaults everyone to CASUAL — which silently exempts real
+        // FT/PT staff from the ordinary-hours 4-week averaging cap
+        // (V8_ORD_HOURS_AVG).
+        //
+        // This used to carry a fifth case mapping 'STUDENT_VISA' onto 'CASUAL',
+        // justified by "its binding limit is the separate student-visa cap".
+        // That cap is V8_STUDENT_VISA_LIMIT, whose guard was the very value
+        // being collapsed here — so the fallback the comment relied on did not
+        // exist, and the rule could not fire on this path. The visa condition
+        // now travels on its own axis (`is_student_visa`), forwarded below.
         const contractType: EmployeeInfo['contract_type'] =
             ctx.contract_type === 'FULL_TIME'                                  ? 'FT'
             : ctx.contract_type === 'PART_TIME' || ctx.contract_type === 'FLEXI_PART_TIME' ? 'PT'
@@ -229,6 +235,13 @@ export class ScenarioLoader {
             // already derives these from the contract rows; they were simply not
             // forwarded, leaving the rule with an empty list and no verdict.
             employment_statuses: ctx.employment_statuses,
+            // EBA Schedule 3. `fetchV8EmployeeContext` has always derived this
+            // (audit H-5) and it was dropped at this hop, so Sch 3 §3.1(a)'s
+            // 42h/8-week cycle and §5.3(g)'s casual-security spread cap were
+            // both unreachable from the AutoScheduler.
+            is_security_role:    ctx.is_security_role,
+            // Migration Act condition 8105 — see the contract_type note above.
+            is_student_visa:     ctx.is_student_visa,
             qualifications:      (ctx.qualifications ?? []).map(q => ({
                 qualification_id: q.qualification_id,
                 expires_at:       q.expires_at,

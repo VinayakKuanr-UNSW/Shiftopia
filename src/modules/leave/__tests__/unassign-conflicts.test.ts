@@ -5,52 +5,74 @@
  * its contract — empty-input short-circuit, success/partial-success counting,
  * and error surfacing — without a live Supabase.
  */
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-// The gateway is the only real dependency; mock it so the test never touches
-// supabase or the RPC layer. `vi.hoisted` lets the (hoisted) mock factory point
-// straight at the same spy the tests configure — no wrapper indirection.
-const { bulkUnassignShifts } = vi.hoisted(() => ({ bulkUnassignShifts: vi.fn() }));
-vi.mock('@/modules/rosters/api/shifts.commands', () => ({
-  shiftsCommands: { bulkUnassignShifts },
+const mockSelect = vi.fn();
+const mockRpc = vi.fn();
+
+vi.mock('@/platform/supabase/client', () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({
+        in: () => ({
+          is: mockSelect,
+        }),
+      }),
+    }),
+    rpc: (...args: any[]) => mockRpc(...args),
+  },
 }));
-// leave.api pulls in the supabase client at module load; stub it out.
-vi.mock('@/platform/supabase/client', () => ({ supabase: {} }));
 
 import { unassignConflictingShifts } from '../api/leave.api';
 
-// Reset AFTER each test (not before). A resolved-value test primes tinyspy's
-// promise tracker; if that state survives into the later throwing test, vitest
-// 4 spuriously reports the (handled) throw as an unhandled error. Clearing the
-// spy at the end of each test lets the throw test start from a pristine tracker.
-afterEach(() => bulkUnassignShifts.mockReset());
-
 describe('unassignConflictingShifts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('short-circuits on empty input WITHOUT calling the gateway', async () => {
     const res = await unassignConflictingShifts([]);
     expect(res.data).toEqual({ attempted: 0, succeeded: 0 });
-    expect(bulkUnassignShifts).not.toHaveBeenCalled();
+    expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 
   it('reports full success when every shift unassigns', async () => {
-    bulkUnassignShifts.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
+    mockSelect.mockResolvedValueOnce({
+      data: [
+        { id: 'a', version: 1, assigned_employee_id: 'emp-1' },
+        { id: 'b', version: 2, assigned_employee_id: 'emp-1' },
+      ],
+      error: null,
+    });
+    mockRpc.mockResolvedValue({ data: { code: 'APPLIED' }, error: null });
+
     const res = await unassignConflictingShifts(['a', 'b']);
-    expect(bulkUnassignShifts).toHaveBeenCalledWith(['a', 'b']);
+    expect(mockRpc).toHaveBeenCalledTimes(2);
     expect(res.data).toEqual({ attempted: 2, succeeded: 2 });
   });
 
   it('reports partial success when the gateway skips some shifts', async () => {
-    // e.g. one shift was reassigned/cancelled by another user (version conflict)
-    // — the gateway returns only the rows it actually unassigned.
-    bulkUnassignShifts.mockResolvedValue([{ id: 'a' }]);
+    mockSelect.mockResolvedValueOnce({
+      data: [
+        { id: 'a', version: 1, assigned_employee_id: 'emp-1' },
+        { id: 'b', version: 2, assigned_employee_id: 'emp-1' },
+        { id: 'c', version: 1, assigned_employee_id: 'emp-1' },
+      ],
+      error: null,
+    });
+    mockRpc.mockImplementation(async (_rpcName: string, args: { p_shift_id: string }) => {
+      if (args.p_shift_id === 'a') return { data: { code: 'APPLIED' }, error: null };
+      return { data: { code: 'VERSION_CONFLICT' }, error: null };
+    });
+
     const res = await unassignConflictingShifts(['a', 'b', 'c']);
     expect(res.data).toEqual({ attempted: 3, succeeded: 1 });
   });
 
   it('surfaces a gateway throw as an error result, not a throw', async () => {
-    bulkUnassignShifts.mockImplementation(async () => {
-      throw new Error('network down');
-    });
+    mockSelect.mockRejectedValueOnce(new Error('network down'));
+
     const res = await unassignConflictingShifts(['a']);
     expect(res.error).toBe('network down');
     expect(res.data).toBeUndefined();

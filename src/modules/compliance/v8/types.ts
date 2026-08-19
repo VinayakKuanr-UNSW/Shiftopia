@@ -14,7 +14,23 @@ export type V8ShiftId = string;
 export type V8EmpId   = string;
 export type V8RoleId  = string;
 
-export type V8ContractType = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA' | 'FLEXI_PART_TIME';
+/**
+ * The EMPLOYMENT axis, and only that.
+ *
+ * 'STUDENT_VISA' used to be a fifth member. It is not an employment type — it
+ * is a visa condition that an employee holds *in addition to* being FT, PT,
+ * flexi or casual — and modelling it here made the two facts mutually
+ * exclusive. Setting it erased the real employment type, so every rule that
+ * branches on FT/PT/CASUAL silently exempted the holder (cl 35.4(f) daily
+ * engagements, cl 39.2 spread, cl 35 ordinary-hours averaging); and the two
+ * converters that mapped it back to 'CASUAL' to recover an employment type
+ * then erased the visa fact, leaving V8_STUDENT_VISA_LIMIT unreachable.
+ * Whichever direction the value was converted, one of the two facts was lost.
+ *
+ * The visa condition now lives on its own axis as `V8Employee.is_student_visa`
+ * — the same separation `target_requires_flexible` uses for FPT.
+ */
+export type V8ContractType = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'FLEXI_PART_TIME';
 export type V8Severity     = 'WARNING' | 'BLOCKING';
 export type V8Status       = 'PASS' | 'WARNING' | 'BLOCKING';
 
@@ -78,8 +94,7 @@ export interface V8Employee {
      * Deliberately separate from `contract_type`, which cannot answer the
      * employment-target question for two reasons: it is derived from the GLOBAL
      * `profiles.employment_type` rather than the per-sub-department contract, and
-     * a student-visa holder has it overwritten with 'STUDENT_VISA'
-     * (employee-context.ts), erasing whether they are FT, PT or Casual.
+     * it collapses 'Flexible Part-Time' onto a single part-time member.
      *
      * Absent/empty ⇒ V8_EMPLOYMENT_TARGET is silent, matching how `leave_days`
      * tolerates callers that don't hydrate it.
@@ -98,6 +113,16 @@ export interface V8Employee {
      * flag alone (without FULL_TIME) has no effect.
      */
     is_security_role?:      boolean;
+    /**
+     * Holds a student visa with a restricted work limit (Migration Act 1958
+     * (Cth), visa condition 8105 — 48 hours per fortnight).
+     *
+     * A SEPARATE axis from `contract_type`, deliberately: the holder is still
+     * FT, PT, flexi or casual, and every rule scoped to those must keep seeing
+     * the real value. Sourced from `employee_licenses.has_restricted_work_limit`
+     * ('WorkRights'). Absent/false ⇒ V8_STUDENT_VISA_LIMIT is silent.
+     */
+    is_student_visa?:       boolean;
 }
 
 export interface QualificationV2 {
@@ -129,7 +154,20 @@ export interface V8Config {
     
     /** Rest & Recovery */
     min_rest_gap_minutes:   number;   // default 600 (10h)
-    max_consecutive_days:   number;   // default 6
+    /**
+     * REMOVED — there is no general consecutive-day cap.
+     *
+     * `max_consecutive_days: 6` sat here from the beginning and no rule ever
+     * read it. The 2026-07-05 policy lock scoped the streak cap to FLEXIBLE
+     * part-time (cl 35.3(g), max 10) on the grounds that the EBA gives no basis
+     * for an arbitrary standard cap — consecutive-day density is governed by the
+     * 20-in-28 limit alone — but the config key and the "Standard: Max 6 days"
+     * docstring on `maxWorkdayLimitsRule` both survived the rule they described.
+     * A tunable that changes nothing is worse than no tunable: it reads as the
+     * knob for a cap that does not exist. The live numbers are exported from
+     * `rules/consecutive-days.ts` as MAX_WORKDAYS_PER_28 and
+     * MAX_CONSECUTIVE_DAYS_FLEXI_PT, where the solver-parity test can see them.
+     */
     
     /** Legal / Visa */
     student_visa_fortnightly_limit: number; // default 48
@@ -145,7 +183,6 @@ export const DEFAULT_V8_CONFIG: V8Config = {
     security_ord_avg_weekly_limit: 42,
     max_daily_hours:        12,
     min_rest_gap_minutes:   600,
-    max_consecutive_days:   6,
     student_visa_fortnightly_limit: 48,
     enforce_ft_days_off:      false,
 };

@@ -85,6 +85,7 @@ function mockSupabase(opts: {
     availabilityRules?: MockResp;
     userContracts?: MockResp;
     roles?: MockResp;
+    employeeLicenses?: MockResp;
 }): any {
     return {
         rpc: vi.fn().mockImplementation((name: string) => {
@@ -109,6 +110,8 @@ function mockSupabase(opts: {
                 resp = opts.userContracts ?? { data: [], error: null };
             } else if (table === 'roles') {
                 resp = opts.roles ?? { data: [], error: null };
+            } else if (table === 'employee_licenses') {
+                resp = opts.employeeLicenses ?? { data: [], error: null };
             } else {
                 resp = { data: null, error: { message: `unknown table ${table}` } };
             }
@@ -785,5 +788,86 @@ describe('RosterFetcher.fetchEmployeeContractDetails', () => {
 
         const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
         expect(result.size).toBe(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// fetchEmployeeContractDetails — student-visa work limit (HC-12)
+// ---------------------------------------------------------------------------
+
+/**
+ * Migration Act 1958 (Cth), visa condition 8105 — 48 hours per fortnight.
+ *
+ * The solver's HC-12 constraint guards on `emp.is_student`, which the
+ * controller reads off this map. Nothing ever set it: the map is built from
+ * `user_contracts` and the fact lives in `employee_licenses`, so the
+ * constraint was inert on every run for all 13 holders in production.
+ */
+describe('RosterFetcher.fetchEmployeeContractDetails — student visa', () => {
+    const CONTRACT_ROW = {
+        user_id: 'e1', role_id: 'role-A', remuneration_level: 3,
+        is_apprentice: false, is_trainee: false, is_sws: false,
+    };
+
+    it('flags a visa holder', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: [CONTRACT_ROW], error: null },
+            employeeLicenses: { data: [{ employee_id: 'e1' }], error: null },
+        }));
+
+        const details = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(details.get('e1')?.is_student).toBe(true);
+    });
+
+    it('does not flag an employee with no restricted-work licence', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: [CONTRACT_ROW], error: null },
+            employeeLicenses: { data: [], error: null },
+        }));
+
+        const details = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(details.get('e1')?.is_student).toBeFalsy();
+    });
+
+    it('keeps the flag alongside the contract fields, not instead of them', async () => {
+        // The contract loop used to `set` a freshly built object over whatever
+        // was already in the map. That silently dropped the flag for every
+        // holder who also holds a contract — 12 of the 13 in production, i.e.
+        // almost exactly the population the fix is for.
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: [CONTRACT_ROW], error: null },
+            roles: { data: [{ id: 'role-A', name: 'Security Officer' }], error: null },
+            employeeLicenses: { data: [{ employee_id: 'e1' }], error: null },
+        }));
+
+        const details = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(details.get('e1')).toMatchObject({
+            is_student: true,
+            is_security_role: true,
+            level: 3,
+        });
+    });
+
+    it('flags a holder who has no Active contract row at all', async () => {
+        // One of the 13 is in exactly this position. The contract fetch returns
+        // no rows and bails early, so the visa pass has to run before it.
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: [], error: null },
+            employeeLicenses: { data: [{ employee_id: 'e9' }], error: null },
+        }));
+
+        const details = await fetcher.fetchEmployeeContractDetails([employee('e9')]);
+        expect(details.get('e9')?.is_student).toBe(true);
+    });
+
+    it('fails open when the licence lookup errors', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: [CONTRACT_ROW], error: null },
+            employeeLicenses: { data: null, error: { message: 'boom' } },
+        }));
+
+        const details = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(details.get('e1')?.is_student).toBeFalsy();
+        expect(details.get('e1')?.level).toBe(3);   // the rest still resolves
     });
 });

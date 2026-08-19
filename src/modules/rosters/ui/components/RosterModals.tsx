@@ -17,11 +17,6 @@ import type { TargetEmploymentType } from '@/modules/core/model/employment.types
 // Heavy modals are lazy-loaded so the Rosters page chunk doesn't pay for
 // them on first paint. Each is ~500-1700 LOC and pulls in its own form
 // stack, compliance engine bindings, and validation logic.
-const BulkAssignmentPanel = lazy(() =>
-    import('@/modules/rosters/ui/dialogs/BulkAssignmentPanel').then((m) => ({
-        default: m.BulkAssignmentPanel,
-    })),
-);
 const AutoSchedulerModal = lazy(() =>
     import('@/modules/scheduling/ui/AutoSchedulerModal').then((m) => ({
         default: m.AutoSchedulerModal,
@@ -29,7 +24,6 @@ const AutoSchedulerModal = lazy(() =>
 );
 
 import type { ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
-import type { BulkAssignmentEmployee } from '@/modules/rosters/ui/dialogs/BulkAssignmentPanel';
 import type { ShiftFilters } from '@/modules/rosters/api/queryKeys';
 
 // =============================================================================
@@ -50,10 +44,6 @@ interface AutoSchedulerShift {
 }
 
 interface RosterModalsProps {
-    /** Shift IDs currently selected (forwarded to BulkAssignmentPanel). */
-    selectedV8ShiftIds: string[];
-    /** Employee list for BulkAssignmentPanel. */
-    employees: BulkAssignmentEmployee[];
     /** Unassigned shifts for AutoSchedulerPanel. */
     autoSchedulerShifts: AutoSchedulerShift[];
     /** Employee summary for AutoSchedulerPanel. */
@@ -67,8 +57,6 @@ interface RosterModalsProps {
     }>;
     /** Called when a shift is created or saved successfully. */
     onShiftSaved: () => void;
-    /** Called after bulk assignment completes (clears selection). */
-    onAssignComplete: () => void;
     /** Called after auto-scheduler finishes. */
     onAutoScheduleComplete: () => void;
     /** Org scope forwarded to the auto-scheduler for the F1 fairness ledger. */
@@ -82,7 +70,6 @@ export interface RosterModalsHandle {
     openAddShift: (context: ShiftContext) => void;
     openEditShift: (shift: any, context: ShiftContext) => void;
 
-    openBulkAssign: () => void;
     openAutoScheduler: () => void;
 }
 
@@ -92,12 +79,9 @@ export interface RosterModalsHandle {
 
 export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
     {
-        selectedV8ShiftIds,
-        employees,
         autoSchedulerShifts,
         autoSchedulerEmployees,
         onShiftSaved,
-        onAssignComplete,
         onAutoScheduleComplete,
         organizationId,
         queryFilters,
@@ -106,7 +90,6 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
 ) => {
     const openShiftForm = useShiftFormNav();
 
-    const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
     const [isAutoSchedulerOpen, setIsAutoSchedulerOpen] = useState(false);
 
     useImperativeHandle(ref, () => ({
@@ -117,7 +100,6 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
         openEditShift: (shift, context) =>
             openShiftForm({ context, editMode: true, existingShift: shift }),
 
-        openBulkAssign: () => setIsBulkAssignOpen(true),
         openAutoScheduler: () => setIsAutoSchedulerOpen(true),
     }));
 
@@ -137,21 +119,9 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
                     />
                 </Suspense>
             )}
-
-            {/* Bulk Assignment Panel */}
-            {isBulkAssignOpen && (
-                <Suspense fallback={null}>
-                    <BulkAssignmentPanel
-                        open={isBulkAssignOpen}
-                        onClose={() => setIsBulkAssignOpen(false)}
-                        selectedV8ShiftIds={selectedV8ShiftIds}
-                        employees={employees}
-                        onAssignComplete={onAssignComplete}
-                    />
-                </Suspense>
-            )}
         </>
     );
 });
 
 RosterModals.displayName = 'RosterModals';
+

@@ -37,6 +37,7 @@ import { projectPeople } from '../projectors/people.projector';
 import { projectGroup } from '../projectors/group.projector';
 import { projectEvents } from '../projectors/events.projector';
 import { projectRoles } from '../projectors/roles.projector';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ── Filter Logic (mirrors utils/filters.ts but operates on DTOs) ─────────────
 
@@ -118,7 +119,7 @@ export function computeCostForShift(
     isCarerLeave: shift.isCarerLeave,
     previousWage: shift.previousWage,
     employmentType: (empType === 'FT' || /full/i.test(empType as string)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType as string)) ? 'Part-Time' : (empType as any || 'Casual'),
-    isSecurityRole: shift.roleName?.toLowerCase().includes('security'),
+    isSecurityRole: isSecurityRoleName(shift.roleName),
     classificationLevel: extractLevel(shift.roleName),
   } as CostCalculatorOptions, ctx);
 
@@ -162,7 +163,7 @@ export function computeCostForShiftAdjusted(
     isCarerLeave: shift.isCarerLeave,
     previousWage: shift.previousWage,
     employmentType: (empType === 'FT' || /full/i.test(empType as string)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType as string)) ? 'Part-Time' : (empType as any || 'Casual'),
-    isSecurityRole: shift.roleName?.toLowerCase().includes('security'),
+    isSecurityRole: isSecurityRoleName(shift.roleName),
     classificationLevel: extractLevel(shift.roleName),
     priorOrdinaryHoursThisWeek: overrides.priorOrdinaryHoursThisWeek,
   } as CostCalculatorOptions, ctx);

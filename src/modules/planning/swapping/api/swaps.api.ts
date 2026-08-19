@@ -13,12 +13,15 @@ import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'da
 // Audit C-4: the swap engine's SwapPartyInput.contract_type uses the
 // shorthand 'FT' | 'PT' | 'CASUAL' union; fetchV8EmployeeContext (the
 // same helper the manager-approval orchestrator uses) returns the V2
-// orchestrator's 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA'.
-// Map between them rather than introduce a second contract-type
-// vocabulary. STUDENT_VISA workers in this venue are casual/part-time
-// by award structure and the underlying FT/PT/CASUAL value is not
-// preserved once STUDENT_VISA overrides it upstream, so fall back to
-// the safe, previously-universal default (CASUAL) for that case only.
+// orchestrator's 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'FLEXI_PART_TIME'.
+// Map between them rather than introduce a second contract-type vocabulary.
+//
+// This used to carry a fifth case, 'STUDENT_VISA' → 'CASUAL', on the reasoning
+// that "the underlying FT/PT/CASUAL value is not preserved once STUDENT_VISA
+// overrides it upstream". That was an accurate description of the upstream
+// defect and the wrong place to absorb it: the visa condition is now a
+// separate axis that never displaces an employment type, so both facts survive
+// and are forwarded independently below.
 /**
  * Map a V8 contract type onto the swap engine's narrower vocabulary.
  *
@@ -40,7 +43,6 @@ const toSwapEngineContractType = (
         // against a part-time contract), not a casual engagement.
         case 'FLEXI_PART_TIME': return 'PT';
         case 'CASUAL': return 'CASUAL';
-        case 'STUDENT_VISA': return 'CASUAL';
         default: return null;
     }
 };
@@ -131,6 +133,10 @@ const validateSwapCompliance = async (
             contracted_weekly_hours: requesterCtx.contracted_weekly_hours || undefined,
             leave_days: requesterCtx.leave_days,
             is_security_role: requesterCtx.is_security_role,
+            // Per-party, because the visa is a fact about the person. The
+            // swap engine has carried this field all along and no caller ever
+            // set it, so V8_STUDENT_VISA_LIMIT could not fire on a swap.
+            is_student_visa: requesterCtx.is_student_visa,
         },
         partyB: {
             employee_id: offererId,
@@ -141,6 +147,10 @@ const validateSwapCompliance = async (
             contracted_weekly_hours: offererCtx.contracted_weekly_hours || undefined,
             leave_days: offererCtx.leave_days,
             is_security_role: offererCtx.is_security_role,
+            // Per-party, because the visa is a fact about the person. The
+            // swap engine has carried this field all along and no caller ever
+            // set it, so V8_STUDENT_VISA_LIMIT could not fire on a swap.
+            is_student_visa: offererCtx.is_student_visa,
         },
     });
 

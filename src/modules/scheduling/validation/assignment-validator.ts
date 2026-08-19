@@ -1,5 +1,5 @@
 /**
- * BulkAssignmentController — Orchestrates the full bulk assignment pipeline.
+ * AssignmentValidator — Orchestrates the full proposal-validation pipeline.
  *
  * Incremental Feasibility Assignment algorithm:
  *
@@ -30,19 +30,18 @@ import { complianceEvaluator }   from './engine/compliance-evaluator';
 import { conflictReporter }      from './engine/conflict-reporter';
 import { assignmentCommitter }   from './engine/assignment-committer';
 import type {
-    BulkAssignmentOptions,
-    BulkAssignmentResult,
+    ValidationRunOptions,
+    ValidationRunResult,
     SimulatedRoster,
 } from './types';
-import type { CommitResult } from './engine/assignment-committer';
 
 // =============================================================================
 // CONTROLLER
 // =============================================================================
 
-export class BulkAssignmentController {
+export class AssignmentValidator {
     /**
-     * Simulate bulk assignment — validate all shifts, build compliance results.
+     * Validate every proposed (shift, employee) pair and build compliance results.
      * Does NOT write to the database.
      *
      * @param shiftIds   - Selected shift IDs from the planner
@@ -52,11 +51,11 @@ export class BulkAssignmentController {
     async simulate(
         shiftIds: string[],
         employeeId: string,
-        options: BulkAssignmentOptions = { mode: 'PARTIAL_APPLY' },
-    ): Promise<BulkAssignmentResult> {
+        options: ValidationRunOptions = { mode: 'PARTIAL_APPLY' },
+    ): Promise<ValidationRunResult> {
         const t0 = performance.now();
 
-        console.debug('[BulkAssignmentController] Simulating', shiftIds.length, 'shifts for', employeeId);
+        console.debug('[AssignmentValidator] Simulating', shiftIds.length, 'shifts for', employeeId);
 
         // ── Step 1: Load scenario ────────────────────────────────────────────
         const scenario = await scenarioLoader.load(shiftIds, employeeId, options.injectedData);
@@ -127,7 +126,8 @@ export class BulkAssignmentController {
                 endTime: '',
                 status: 'FAIL' as const,
                 violations: [{
-                    violation_type: 'DRAFT_STATE' as const,
+                    violation_type: 'SHIFT_NOT_FOUND' as const,
+                    rule_name: 'Shift Not Found',
                     description: 'Shift not found in database.',
                     blocking: true,
                 }],
@@ -147,7 +147,7 @@ export class BulkAssignmentController {
 
         const validationMs = Math.round(performance.now() - t0);
 
-        console.debug('[BulkAssignmentController] Simulation complete:', {
+        console.debug('[AssignmentValidator] Simulation complete:', {
             total: shiftIds.length,
             passing: passedV8ShiftIds.length,
             failing: failedV8ShiftIds.length,
@@ -166,70 +166,7 @@ export class BulkAssignmentController {
             validationMs,
         };
     }
-
-    /**
-     * Commit the assignment to the database.
-     *
-     * TOCTOU GUARD: always re-simulates with fresh data immediately before
-     * writing.  Any shifts that were passing at simulate() time but are now
-     * non-compliant (because another assignment changed the employee's schedule)
-     * are dropped from the commit set.
-     *
-     * In PARTIAL_APPLY mode → commits freshly-passing shiftIds only.
-     * In ALL_OR_NOTHING mode → fails if any shift now has a blocking violation.
-     *
-     * @param simulationResult - Original output from simulate() (used only for shift IDs + mode)
-     * @param employeeId       - Target employee
-     */
-    async commit(
-        simulationResult: BulkAssignmentResult,
-        employeeId: string,
-    ): Promise<CommitResult> {
-        if (!simulationResult.canCommit) {
-            return {
-                success: false,
-                committed: [],
-                failed: simulationResult.failedV8ShiftIds,
-                message: 'Cannot commit: blocking violations exist.',
-            };
-        }
-
-        // Re-simulate with fresh DB data to catch any schedule changes since
-        // the original simulation (another manager, another assignment flow, etc.)
-        const allCandidateIds = [
-            ...simulationResult.passedV8ShiftIds,
-            ...simulationResult.failedV8ShiftIds,
-        ];
-
-        console.debug('[BulkAssignmentController] Re-simulating before commit (TOCTOU guard)');
-
-        const freshResult = await this.simulate(
-            allCandidateIds,
-            employeeId,
-            { mode: simulationResult.mode },
-        );
-
-        if (freshResult.passing === 0) {
-            return {
-                success:   false,
-                committed: [],
-                failed:    allCandidateIds,
-                message:   'All shifts became non-compliant since validation — please re-check.',
-            };
-        }
-
-        if (simulationResult.mode === 'ALL_OR_NOTHING' && freshResult.failing > 0) {
-            return {
-                success:   false,
-                committed: [],
-                failed:    freshResult.failedV8ShiftIds,
-                message:   `${freshResult.failing} shift(s) have blocking violations — all-or-nothing mode requires all shifts to pass.`,
-            };
-        }
-
-        return assignmentCommitter.commit(freshResult.passedV8ShiftIds, employeeId);
-    }
 }
 
 /** Singleton controller. */
-export const bulkAssignmentController = new BulkAssignmentController();
+export const assignmentValidator = new AssignmentValidator();

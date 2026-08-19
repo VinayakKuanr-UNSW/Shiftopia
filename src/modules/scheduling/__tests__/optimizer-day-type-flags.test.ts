@@ -26,10 +26,10 @@ import type { OptimizerShift } from '../types';
 
 // ── Module mocks (mirrors auto-scheduler-commit.test.ts) ────────────────────
 
-vi.mock('@/modules/rosters/bulk-assignment', () => ({
-    bulkAssignmentController: { simulate: vi.fn() },
+vi.mock('@/modules/scheduling/validation', () => ({
+    assignmentValidator: { simulate: vi.fn() },
 }));
-vi.mock('@/modules/rosters/bulk-assignment/engine/assignment-committer', () => ({
+vi.mock('@/modules/scheduling/validation/engine/assignment-committer', () => ({
     assignmentCommitter: { commitAtomic: vi.fn(), commit: vi.fn() },
 }));
 vi.mock('@/modules/scheduling/audit/auditor', () => ({ auditor: { audit: vi.fn() } }));

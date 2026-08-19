@@ -43,6 +43,8 @@ export interface OptimizerShift {
     is_training?: boolean;
     /** Required by `_calculate_effective_minutes` for fatigue scoring. */
     unpaid_break_minutes?: number;
+    /** cl 39.2 measures the split-shift spread net of meal AND rest breaks. */
+    paid_break_minutes?: number;
     /** 'NORMAL' or 'MULTI_HIRE' — shorter rest gap (480m) for multi-hire. */
     shift_type?: 'NORMAL' | 'MULTI_HIRE';
 }
@@ -411,7 +413,10 @@ export interface ValidatedProposal {
     employmentType: string;
     complianceStatus: ProposalValidationStatus;
     violations: Array<{
+        /** Pre-flight code, or the V8 rule id verbatim (`V8_20_IN_28`, …). */
         type: string;
+        /** Human-readable rule name. Render this, not `type`. */
+        ruleName?: string;
         description: string;
         blocking: boolean;
     }>;

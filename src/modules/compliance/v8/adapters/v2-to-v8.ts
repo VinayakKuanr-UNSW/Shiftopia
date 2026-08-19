@@ -37,8 +37,11 @@ export function runV8ComplexBridge(
         // audit H-5 — Schedule 3 §3 Full-Time Security hours structure.
         is_security_role: input.employee_context.is_security_role,
         // V8_EMPLOYMENT_TARGET — raw per-contract statuses. Cannot be derived
-        // from contract_type (global source + STUDENT_VISA overwrite).
+        // from contract_type, which comes from the global profile and collapses
+        // 'Flexible Part-Time' onto a single part-time member.
         employment_statuses: input.employee_context.employment_statuses,
+        // V8_STUDENT_VISA_LIMIT — its own axis, never read off contract_type.
+        is_student_visa: input.employee_context.is_student_visa ?? false,
     };
 
     // Shifts being added/changed by this operation — the only ones that pure
@@ -70,7 +73,6 @@ export function runV8ComplexBridge(
     const v8Config: Partial<V8Config> = {
         max_daily_hours: input.config?.max_daily_hours,
         min_rest_gap_minutes: (input.config as any)?.rest_gap_hours ? (input.config as any).rest_gap_hours * 60 : 600,
-        max_consecutive_days: input.config?.max_consecutive_days,
         ord_avg_weekly_limit: input.employee_context.contracted_weekly_hours || 38
     };
 

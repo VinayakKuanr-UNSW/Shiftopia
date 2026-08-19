@@ -10,14 +10,19 @@ import { consecutivePairs, shiftStartDate } from '../utils/rest-gap';
  *
  * Applicability:
  *   - Part-time & flexible part-time ONLY (clause 39.1).
- *   - Excludes casuals (clause 28.4 — no split-shift allowance for casuals;
- *     their two-shifts-per-day case is governed by the 12h spread cap only).
+ *   - Excludes casuals (clause 28.4 — no split-shift allowance for casuals).
+ *     Their two-engagements case is governed by cl 35.4(f), which caps them at
+ *     two per day, and by the 12h daily WORKED ceiling — NOT by the cl 39.2
+ *     spread cap, which reaches only the split-shift structure they are
+ *     excluded from.
  *   - Excludes multi-hire engagements (clause 39.4).
  *
  * This rule enforces the 3h maximum gap as a WARNING (not blocking): a larger
  * intraday gap means the pairing is not a compliant split-shift structure, but
  * the EBA does not expressly prohibit it — the hard 12h spread cap
- * (V8_SPREAD_OF_HOURS, clause 39.2) remains the blocking limit. A compliant
+ * (V8_SPLIT_SHIFT_SPREAD, clause 39.2) remains the blocking limit. That rule
+ * gates on the same PT/FPT scope as this one; the two are limbs of a single
+ * provision and must not diverge on who they reach. A compliant
  * (≤3h) split shift produces no hit; the Split Shift Allowance ($11.13/shift,
  * Schedule 2) that attaches to it is a payroll concern handled downstream.
  */

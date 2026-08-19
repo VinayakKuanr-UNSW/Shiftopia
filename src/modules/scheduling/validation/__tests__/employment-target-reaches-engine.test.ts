@@ -15,6 +15,11 @@ import type { CandidateShift, EmployeeInfo, SimulatedRoster } from '../types';
  * the rule on an empty list; and `CONSTRAINT_TO_VIOLATION` had no entry for the
  * rule, so a hit that did fire was discarded by `if (!violationType) continue`.
  *
+ * That last link is gone — the lookup table was deleted and rule ids now travel
+ * verbatim, which is why these assertions name `V8_EMPLOYMENT_TARGET` rather
+ * than the local `EMPLOYMENT_TARGET` code it used to be translated into. See
+ * `no-rule-is-dropped.test.ts`.
+ *
  * The result was a roster scored 100% compliant whose every assignment was
  * rejected by `trg_shift_employment_target_2_enforce` on write — with all 90
  * shifts rolled back because one plpgsql exception unwinds the whole block.
@@ -56,7 +61,7 @@ describe('employment target reaches the compliance engine', () => {
             emptyRoster,
         );
 
-        const hit = violations.find(v => v.violation_type === 'EMPLOYMENT_TARGET');
+        const hit = violations.find(v => v.violation_type === 'V8_EMPLOYMENT_TARGET');
         expect(hit).toBeDefined();
         expect(hit!.blocking).toBe(true);
     });
@@ -68,7 +73,7 @@ describe('employment target reaches the compliance engine', () => {
             emptyRoster,
         );
 
-        expect(violations.some(v => v.violation_type === 'EMPLOYMENT_TARGET')).toBe(true);
+        expect(violations.some(v => v.violation_type === 'V8_EMPLOYMENT_TARGET')).toBe(true);
     });
 
     it('allows a Casual on a Casual-target shift', () => {
@@ -78,7 +83,7 @@ describe('employment target reaches the compliance engine', () => {
             emptyRoster,
         );
 
-        expect(violations.some(v => v.violation_type === 'EMPLOYMENT_TARGET')).toBe(false);
+        expect(violations.some(v => v.violation_type === 'V8_EMPLOYMENT_TARGET')).toBe(false);
     });
 
     it('matches on the RAW contract status, not the collapsed contract_type', () => {
@@ -89,14 +94,14 @@ describe('employment target reaches the compliance engine', () => {
             employee({ contract_type: 'PT', employment_statuses: ['Flexible Part-Time'] }),
             emptyRoster,
         );
-        expect(flexible.some(v => v.violation_type === 'EMPLOYMENT_TARGET')).toBe(false);
+        expect(flexible.some(v => v.violation_type === 'V8_EMPLOYMENT_TARGET')).toBe(false);
 
         const plainPartTimer = complianceEvaluator.evaluate(
             candidate({ target_employment_type: 'PT', target_requires_flexible: true }),
             employee({ contract_type: 'PT', employment_statuses: ['Part-Time'] }),
             emptyRoster,
         );
-        expect(plainPartTimer.some(v => v.violation_type === 'EMPLOYMENT_TARGET')).toBe(true);
+        expect(plainPartTimer.some(v => v.violation_type === 'V8_EMPLOYMENT_TARGET')).toBe(true);
     });
 
     it('stays silent when the target was never hydrated', () => {
@@ -109,7 +114,7 @@ describe('employment target reaches the compliance engine', () => {
             emptyRoster,
         );
 
-        expect(violations.some(v => v.violation_type === 'EMPLOYMENT_TARGET')).toBe(false);
+        expect(violations.some(v => v.violation_type === 'V8_EMPLOYMENT_TARGET')).toBe(false);
     });
 
     it('stays silent when the employee statuses were never hydrated', () => {
@@ -119,6 +124,6 @@ describe('employment target reaches the compliance engine', () => {
             emptyRoster,
         );
 
-        expect(violations.some(v => v.violation_type === 'EMPLOYMENT_TARGET')).toBe(false);
+        expect(violations.some(v => v.violation_type === 'V8_EMPLOYMENT_TARGET')).toBe(false);
     });
 });

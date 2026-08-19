@@ -7,13 +7,12 @@ import { complianceService } from '../services/compliance.service';
 import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/platform/supabase/rpc/client';
 import { shiftsQueries } from './shifts.queries';
 import { ComplianceError } from '@/platform/supabase/rpc/errors';
+import { assertShapeForRow } from './shift-shape-gate';
 import {
     CreateShiftResponseSchema,
     UpdateShiftResponseSchema,
     PublishShiftResponseSchema,
     BulkPublishResponseSchema,
-    BulkAssignResponse,
-    BulkAssignResponseSchema,
     BulkAssignAtomicResponse,
     BulkAssignAtomicResponseSchema,
     BulkDeleteResponse,
@@ -108,7 +107,30 @@ export const shiftsCommands = {
     async createShift(shiftData: CreateShiftData): Promise<Shift> {
         const user = await requireUser();
 
-        // Compliance check before hitting the DB — blocks the request early
+        // ── Layer 1: shift shape ──────────────────────────────────────────────
+        // Runs on EVERY creation, assigned or not, because a shift's shape is
+        // wrong before anyone is put in it. This is the only enforcement point:
+        // the shape layer used to be reachable solely through the Add Shift
+        // modal, so the DnD quick-add, Group Mode inline create, the Labor
+        // Demand page and the synthesiser all wrote unchecked rows. See
+        // ./shift-shape-gate.ts for why the bypass is a reason string.
+        await assertShapeForRow(
+            {
+                shift_date:               shiftData.shift_date,
+                start_time:               shiftData.start_time,
+                end_time:                 shiftData.end_time,
+                unpaid_break_minutes:     shiftData.unpaid_break_minutes,
+                paid_break_minutes:       shiftData.paid_break_minutes,
+                is_training:              shiftData.is_training,
+                target_employment_type:   shiftData.target_employment_type,
+                target_requires_flexible: shiftData.target_requires_flexible,
+                role_id:                  shiftData.role_id,
+            },
+            { exemptReason: shiftData.shape_exempt_reason, rpcName: 'sm_create_shift' },
+        );
+
+        // ── Layer 2: labour compliance ────────────────────────────────────────
+        // Person-scoped, so it only runs once there is a person.
         if (shiftData.assigned_employee_id && isValidUuid(shiftData.assigned_employee_id)) {
             const netMinutes =
                 calculateMinutesBetweenTimes(shiftData.start_time, shiftData.end_time)
@@ -207,6 +229,53 @@ export const shiftsCommands = {
             const shiftStartAt = parseZonedDateTime(currentShift.shift_date, currentShift.start_time, SYDNEY_TZ);
             if (now >= shiftStartAt) {
                 throw new Error('Cannot edit a shift that is in the past.');
+            }
+
+            // ── Layer 1: shape of the shift AFTER this edit ───────────────────
+            // Merged onto the current row rather than read from the patch alone:
+            // a patch that only shortens `end_time` still has to be judged
+            // against the break minutes already on the shift, and a patch that
+            // only clears the unpaid break has to be judged against the existing
+            // length. Evaluating the patch in isolation would miss both.
+            //
+            // Only runs when the edit actually touches an intrinsic field, so
+            // re-grouping or re-noting a shift never re-litigates its shape.
+            const TOUCHES_SHAPE = [
+                'start_time', 'end_time', 'shift_date',
+                'unpaid_break_minutes', 'paid_break_minutes',
+                'is_training', 'role_id',
+                'target_employment_type', 'target_requires_flexible',
+            ] as const;
+
+            if (TOUCHES_SHAPE.some(k => updates[k] !== undefined)) {
+                // Field-by-field rather than `{ ...current, ...updates }`: object
+                // spread copies a key that is PRESENT-but-undefined, so a patch
+                // built as `{ target_employment_type: undefined }` would blank an
+                // 'FT' target down to the untargeted default and quietly relax
+                // the 7.6h floor to 3h. `!== undefined` cannot be fooled that way.
+                const pick = <K extends keyof UpdateShiftData & keyof Shift>(key: K) =>
+                    (updates[key] !== undefined ? updates[key] : currentShift[key]);
+
+                await assertShapeForRow(
+                    {
+                        shift_date:               pick('shift_date') as string,
+                        start_time:               pick('start_time') as string,
+                        end_time:                 pick('end_time') as string,
+                        unpaid_break_minutes:     pick('unpaid_break_minutes') as number,
+                        paid_break_minutes:       pick('paid_break_minutes') as number,
+                        is_training:              pick('is_training') as boolean,
+                        target_employment_type:   pick('target_employment_type') as string | null,
+                        target_requires_flexible: pick('target_requires_flexible') as boolean,
+                        role_id:                  pick('role_id') as string | null,
+                        // The joined role travels with the row, so an edit that
+                        // leaves `role_id` alone needs no lookup at all.
+                        role_name:
+                            updates.role_id === undefined
+                                ? currentShift.roles?.name ?? null
+                                : null,
+                    },
+                    { rpcName: 'sm_apply_shift_op' },
+                );
             }
         }
 
@@ -313,8 +382,10 @@ export const shiftsCommands = {
         // It is deliberately NOT routed through the gateway `edit` op — that op's
         // server-side whitelist does not carry these keys, so sending them there
         // would be silently dropped (`NO_EDITABLE_FIELDS` / ignored key). It also
-        // drives no FSM transition and no compliance gate, so the direct-update
-        // path the other planning fields already use is the correct home.
+        // drives no FSM transition, so the direct-update path the other planning
+        // fields already use is the correct home. It DOES now drive the Layer-1
+        // shape gate at the top of this method — which is why that gate reads the
+        // merged post-update value rather than the payload assembled here.
         //
         // Both keys move together so the pair can never violate
         // shifts_target_flexible_requires_pt_check: clearing the type to "Any"
@@ -426,31 +497,6 @@ export const shiftsCommands = {
     },
 
     /* ============================================================
-       BULK ASSIGN SHIFTS
-       ============================================================ */
-
-    /**
-     * Assign multiple shifts to a single employee
-     * @param employeeId The employee UUID to assign
-     * @param shiftIds Array of shift UUIDs to assign
-     * @returns Array of updated shifts
-     */
-    async bulkAssignShifts(employeeId: string, shiftIds: string[]): Promise<BulkAssignResponse> {
-        if (!employeeId || !isValidUuid(employeeId)) {
-            throw new Error('Invalid employee ID');
-        }
-        if (shiftIds.length === 0) {
-            return { success: true, total_requested: 0, success_count: 0, failure_count: 0, message: 'No shifts selected' };
-        }
-
-        return callAuthenticatedRpc(
-            'sm_bulk_assign',
-            (userId) => ({ p_shift_ids: shiftIds, p_employee_id: employeeId, p_user_id: userId }),
-            BulkAssignResponseSchema,
-        );
-    },
-
-    /* ============================================================
        ATOMIC BULK ASSIGN SHIFTS (multi-employee, idempotent)
        ============================================================ */
 
@@ -494,78 +540,6 @@ export const shiftsCommands = {
             }),
             BulkAssignAtomicResponseSchema,
         );
-    },
-
-    /* ============================================================
-       BULK UNASSIGN SHIFTS
-       ============================================================ */
-
-    /**
-     * Remove assignment from multiple shifts
-     * @param shiftIds Array of shift UUIDs to unassign
-     * @returns Array of updated shifts
-     */
-    async bulkUnassignShifts(shiftIds: string[]): Promise<Shift[]> {
-        if (shiftIds.length === 0) return [];
-
-        // Route each unassign through the audited mutation gateway (the `unassign`
-        // op added in 20260623000100_shift_unassign_op). The gateway records a
-        // durable UNASSIGNED shift_events row per shift (naming the removed worker),
-        // so the previous console.info "audit log" is gone. Partial-success
-        // semantics are preserved: a per-shift failure (already-unassigned, version
-        // conflict, illegal state, etc.) is skipped, not fatal.
-        //
-        // The gateway requires the EXACT current version for its CAS, so fetch
-        // version per shift first (this also lets us return the updated rows).
-        const { data: preState } = await supabase
-            .from('shifts')
-            .select('id, version, assigned_employee_id')
-            .in('id', shiftIds)
-            .is('deleted_at', null);
-
-        const succeededIds: string[] = [];
-
-        await Promise.all(
-            (preState ?? []).map(async (s: { id: string; version: number; assigned_employee_id: string | null }) => {
-                // Nothing to remove — the gateway would soft-reject (ALREADY_UNASSIGNED).
-                if (s.assigned_employee_id === null) return;
-
-                try {
-                    const envelope = await callRpc(
-                        'sm_apply_shift_op',
-                        {
-                            p_shift_id: s.id,
-                            p_expected_version: s.version,
-                            p_op: 'unassign',
-                            p_payload: { reason: 'Bulk unassign' },
-                            p_idempotency_key: null,
-                        },
-                        ApplyShiftOpResponseSchema,
-                    );
-
-                    if (envelope.code === 'APPLIED' || envelope.code === 'IDEMPOTENT_REPLAY') {
-                        succeededIds.push(s.id);
-                    }
-                    // Any other code (VERSION_CONFLICT / ILLEGAL_TRANSITION /
-                    // WRITE_REJECTED / FORBIDDEN / GONE) is a per-shift skip.
-                } catch {
-                    // Network/validation error on one shift must not fail the batch.
-                }
-            }),
-        );
-
-        if (succeededIds.length === 0) return [];
-
-        // Return the freshly-unassigned rows (preserves the Shift[] return type).
-        const { data, error } = await supabase
-            .from('shifts')
-            .select('*')
-            .in('id', succeededIds)
-            .is('deleted_at', null);
-
-        if (error) throw error;
-
-        return (data || []) as unknown as Shift[];
     },
 
 
@@ -840,7 +814,7 @@ export const shiftsCommands = {
         // `supabase.from('shifts').update()` here — the exact gap
         // docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §6 flagged as
         // needing to close before Reserve List's own writes could rely on the same
-        // pattern. One RPC call per shift (mirrors bulkUnassignShifts below), since
+        // pattern. One RPC call per shift, since
         // the gateway is single-shift by design.
         if (emergencyIds.length > 0) {
             const { data: preState } = await supabase

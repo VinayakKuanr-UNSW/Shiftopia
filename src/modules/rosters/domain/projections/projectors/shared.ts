@@ -16,6 +16,7 @@ import { buildAwardContext } from '../utils/cost/award-context';
 import type { AwardContext } from '../utils/cost/award-context';
 import { detectSplitShiftEligibleIds } from '../utils/cost/split-shift-eligibility';
 import { detectRestGapBreaches } from '../utils/cost/rest-gap-breach';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 /**
  * Compute the top-level ProjectionStats bag from a flat Shift array.
@@ -162,7 +163,7 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
         isCarerLeave: (shift as any).isCarerLeave,
         previousWage: (shift as any).previousWage,
         employmentType: empType === 'FT' ? 'Full-Time' : empType === 'PT' ? 'Part-Time' : (empType as any || 'Casual'),
-        isSecurityRole: roleName?.toLowerCase().includes('security'),
+        isSecurityRole: isSecurityRoleName(roleName),
         classificationLevel: roleName?.match(/(?:L|Level\s*)(\d)/i)
           ? `LEVEL_${roleName.match(/(?:L|Level\s*)(\d)/i)![1]}`
           : undefined,

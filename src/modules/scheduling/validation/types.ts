@@ -1,11 +1,8 @@
 /**
- * Bulk Assignment Engine — Core Types
+ * Assignment Validation — Core Types
  *
- * Types for the incremental feasibility assignment engine.
- * These complement (and do not replace) the compliance bulk-types.ts,
- * which handle the read-only compliance check surface.
- *
- * The bulk assignment engine is responsible for:
+ * Types for the incremental feasibility assignment engine, which is
+ * responsible for:
  *   1. Loading a SimulatedRoster for a given employee
  *   2. Incrementally validating candidate shifts against it
  *   3. Atomically committing passing shifts via Supabase RPC
@@ -63,7 +60,7 @@ export interface CandidateShift {
  *
  * - existingShifts:       DB shifts already assigned to the employee (±28 days).
  * - proposedAssignments:  Shifts that have already passed validation in this
- *                         bulk run. Each newly validated shift is appended here
+ *                         validation run. Each newly validated shift is appended here
  *                         so subsequent checks see the "committed" state.
  *
  * This is the "incremental" aspect of Incremental Feasibility Assignment.
@@ -78,48 +75,65 @@ export interface SimulatedRoster {
 // =============================================================================
 
 /**
- * All ordered validation rule codes, evaluated in this order:
- *   1.  DRAFT_STATE           — shift must be in Draft (not Published/Cancelled)
- *   2.  ALREADY_ASSIGNED      — shift must be unassigned
- *   3.  OVERLAP               — no time overlap with existing/proposed shifts
- *   4.  ROLE_MISMATCH         — employee not contracted for this role/position (R10)
- *   5.  QUALIFICATION_MISSING — employee lacks required skills/licenses
- *   6.  QUALIFICATION_EXPIRED — employee has expired qualifications for this shift
- *   7.  REST_GAP              — minimum rest between consecutive shifts (10h)
- *   8.  WEEKLY_HOURS          — max ordinary hours per 4-week rolling cycle
- *   9.  DAILY_HOURS           — max hours in a single calendar day (12h cap)
- *   10. WORKING_DAYS_CAP      — max 20 working days in rolling 28-day window (EBA Cl 35.1e)
- *   11. STREAK_LIMIT          — max consecutive working days (6 or 10)
- *   12. MIN_ENGAGEMENT        — minimum shift duration (3h or 4h)
- *   13. SPREAD_OF_HOURS       — max 12h span from first start to last end
- *   14. MEAL_BREAK            — break required for shifts > 5h
- *   15. STUDENT_VISA          — student visa 48h/fortnight limit (warning only)
+ * Codes minted by `IncrementalValidator` — entity-level problems that are not
+ * EBA rules, and so have no rule id to carry. Evaluated in this order:
+ *
+ *   1. PAST_SHIFT            — shift has already started
+ *   2. DRAFT_STATE           — shift must be in Draft (not Published/Cancelled)
+ *   3. ALREADY_ASSIGNED      — shift must be unassigned
+ *   4. OVERLAP               — no time overlap with existing/proposed shifts
+ *   5. ROLE_MISMATCH         — employee not contracted for this role/position
+ *   6. QUALIFICATION_MISSING — employee lacks required skills/licenses
+ *   7. QUALIFICATION_EXPIRED — employee holds expired qualifications
+ *
+ * SHIFT_NOT_FOUND is not part of that sequence — it is raised by the controller
+ * when a requested shift id has no row. It was previously reported as
+ * DRAFT_STATE, which put a lookup failure into the `failByRule` telemetry the
+ * AutoScheduler prints as a compliance reason.
  */
-export type ViolationType =
+export type PreflightViolationCode =
     | 'PAST_SHIFT'
+    | 'SHIFT_NOT_FOUND'
     | 'DRAFT_STATE'
     | 'ALREADY_ASSIGNED'
     | 'OVERLAP'
     | 'ROLE_MISMATCH'
     | 'QUALIFICATION_MISSING'
-    | 'QUALIFICATION_EXPIRED'
-    | 'REST_GAP'
-    | 'WEEKLY_HOURS'
-    | 'DAILY_HOURS'
-    | 'WORKING_DAYS_CAP'
-    | 'STREAK_LIMIT'
-    | 'MIN_ENGAGEMENT'
-    | 'SPREAD_OF_HOURS'
-    | 'MEAL_BREAK'
-    | 'STUDENT_VISA'
-    | 'APPROVED_LEAVE'
-    | 'EMPLOYMENT_TARGET';
+    | 'QUALIFICATION_EXPIRED';
+
+/**
+ * What a violation is identified by: a pre-flight code above, or — for anything
+ * the compliance engine raised — the V8 rule id VERBATIM (`V8_20_IN_28`,
+ * `V8_MAX_DAILY_ENGAGEMENTS`, …).
+ *
+ * Deliberately open rather than a closed union. There used to be a closed
+ * `ViolationType` enum here and a lookup table in ComplianceEvaluator
+ * translating V8 rule ids onto it. Two of that table's keys named no rule V8
+ * emits — `V8_WORKING_DAYS_CAP` against the real `V8_20_IN_28`, and
+ * `V8_STUDENT_VISA` against `V8_STUDENT_VISA_LIMIT` — and a third rule was never
+ * listed at all: `V8_MAX_DAILY_ENGAGEMENTS`, the casual two-shifts-a-day cap of
+ * cl 35.4(f). Unmapped ids were dropped by a bare `continue`, so all three
+ * BLOCKING rules were computed and then discarded, indistinguishable downstream
+ * from a rule that passed.
+ *
+ * A closed enum cannot track a rule set owned by another module: every rule
+ * added to V8 had to be re-declared here or silently vanish. Carrying the id
+ * verbatim deletes the translation step, and with it the failure mode.
+ */
+export type ViolationCode = PreflightViolationCode | (string & {});
 
 /**
  * A single violation on a candidate shift.
  */
 export interface ShiftViolation {
-    violation_type: ViolationType;
+    /** Pre-flight code, or the V8 rule id verbatim. */
+    violation_type: ViolationCode;
+    /**
+     * Human-readable name for display — V8's own `rule_name` ("20 Days in 28
+     * Limit"), or a written-out label for a pre-flight code. Renderers should
+     * prefer this over `violation_type`, which is an identifier, not copy.
+     */
+    rule_name: string;
     /** The existing shift that caused the conflict (for OVERLAP, REST_GAP). */
     conflicting_shift?: {
         id: string;
@@ -128,7 +142,7 @@ export interface ShiftViolation {
         end_time: string;
     };
     description: string;
-    /** True when this violation blocks assignment (all except STUDENT_VISA). */
+    /** True when this violation blocks assignment. */
     blocking: boolean;
 }
 
@@ -154,13 +168,13 @@ export interface ShiftAssignmentResult {
 }
 
 // =============================================================================
-// BULK ASSIGNMENT RESULT
+// VALIDATION RUN RESULT
 // =============================================================================
 
 /**
- * Output from BulkAssignmentController.simulate() or .run().
+ * Output from AssignmentValidator.simulate() or .run().
  */
-export interface BulkAssignmentResult {
+export interface ValidationRunResult {
     /** 'PARTIAL_APPLY' → commit passing shifts; 'ALL_OR_NOTHING' → all or none. */
     mode: 'PARTIAL_APPLY' | 'ALL_OR_NOTHING';
     total: number;
@@ -217,6 +231,20 @@ export interface EmployeeInfo {
      * silent (fail-open) and the DB trigger remains the guarantee.
      */
     employment_statuses?: string[];
+    /**
+     * Holds a Security role on any Active contract (EBA Schedule 3). Switches
+     * V8_ORD_HOURS_AVG onto Sch 3 §3.1(a)'s 42h/8-week cycle for full-timers,
+     * and V8_CASUAL_SECURITY_SPREAD / _ENGAGEMENT on for casuals (Sch 3 §5.3(g)).
+     * Undefined ⇒ both fall back to the general structure.
+     */
+    is_security_role?: boolean;
+    /**
+     * Holds a student visa with a restricted work limit (Migration Act 1958
+     * (Cth), condition 8105). Its own axis — never a `contract_type` value —
+     * so a student-visa casual is still evaluated as a casual. Undefined ⇒
+     * V8_STUDENT_VISA_LIMIT stays silent.
+     */
+    is_student_visa?: boolean;
 }
 
 // =============================================================================
@@ -229,7 +257,7 @@ export interface InjectedSimulationData {
     employee: EmployeeInfo;
 }
 
-export interface BulkAssignmentOptions {
+export interface ValidationRunOptions {
     mode: 'PARTIAL_APPLY' | 'ALL_OR_NOTHING';
     /** When true, skips role and qualification checks (faster). */
     skipQualificationChecks?: boolean;
