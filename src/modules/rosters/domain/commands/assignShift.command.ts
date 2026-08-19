@@ -13,8 +13,19 @@
  *   For ASSIGNED shifts:
  *     R01–R11 + R_AVAIL — full employee-centric evaluation.
  *
- *   For UNASSIGNED shifts (skeleton mode):
- *     R01 (No overlap), R02 (Minimum shift length), R08 (Meal break) — shift-level only.
+ *   For UNASSIGNED shifts:
+ *     the Layer-1 SHAPE rules — length, breaks, minimum engagement — which are
+ *     decidable without an employee. This used to be described as "skeleton
+ *     mode: R01, R02, R08" and to run the V8 engine against a fabricated casual
+ *     with no contracts and no history. Two of those three rules no longer
+ *     exist there (R02/`V8_MIN_SHIFT_LENGTH` was removed when the shape layer
+ *     took ownership; overlap cannot fire against an empty shift list), so the
+ *     check had quietly become a no-op that still read like a gate.
+ *
+ *   SHAPE runs on ANY change to date or times, assigned or not. Both are inputs
+ *   to a shape verdict: cl 56.2 and the Sunday tier of cl 12.4(c)/12.5(c) are
+ *   decided by which day the shift lands on, so re-dating a lawful shift can
+ *   make it unlawful without touching a single other field.
  *
  *   Fail-closed: if the compliance engine cannot run (DB/network error),
  *   the mutation is BLOCKED — never silently allowed.
@@ -32,6 +43,7 @@ import { getAssignedShiftsForAvailability }
                                          from '@/modules/availability/api/availability-view.api';
 import type { V8AvailabilityData } from '@/modules/compliance/v8/orchestrator/types';
 import type { V8OrchestratorShift, V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
+import { evaluateShapeForRow }           from '@/modules/rosters/api/shift-shape-gate';
 
 export type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
 
@@ -165,74 +177,6 @@ async function runFullCompliancePreCheck(
 }
 
 // =============================================================================
-// SKELETON COMPLIANCE PRE-CHECK  (unassigned shifts — shift-level rules only)
-// =============================================================================
-
-/**
- * Run shift-level compliance rules (R01, R02, R08) for unassigned shifts.
- * No employee context is needed — this validates the shift structure itself.
- */
-function runSkeletonComplianceCheck(
-    shift: {
-        id:                   string;
-        shift_date:           string;
-        start_time:           string;
-        end_time:             string;
-        role_id:              string | null;
-        unpaid_break_minutes: number | null;
-        is_training?:         boolean;
-    },
-): { error: string | null; advisories: string[] } {
-    const candidateShift: V8OrchestratorShift = {
-        id:                      shift.id,
-        date:                    shift.shift_date,
-        start_time:              shift.start_time,
-        end_time:                shift.end_time,
-        role_id:                 shift.role_id ?? '',
-        required_qualifications: [],
-        is_ordinary_hours:       true,
-        is_training:             shift.is_training ?? false,
-        break_minutes:           shift.unpaid_break_minutes ?? 0,
-        unpaid_break_minutes:    shift.unpaid_break_minutes ?? 0,
-    };
-
-    // Skeleton mode: employee_id = 'skeleton' triggers the engine to
-    // only run R01 (overlap), R02 (min duration), R08 (meal break).
-    const result = runV8Orchestrator(
-        {
-            employee_id: 'skeleton',
-            employee_context: {
-                employee_id:             'skeleton',
-                contract_type:           'CASUAL',
-                contracted_weekly_hours: 0,
-                assigned_role_ids:       [],
-                contracts:               [],
-                qualifications:          [],
-            },
-            existing_shifts:   [],
-            candidate_changes: {
-                add_shifts:    [candidateShift],
-                remove_shifts: [],
-            },
-            mode:           'SIMULATED',
-            operation_type: 'ASSIGN',
-            stage:          'DRAFT',
-        },
-    ) as V8OrchestratorResult;
-
-    const blockingHits = result.hits.filter(h => h.status === 'BLOCKING');
-    if (blockingHits.length > 0) {
-        return { error: blockingHits[0].summary, advisories: [] };
-    }
-
-    const advisories = result.hits
-        .filter(h => h.status === 'WARNING')
-        .map(h => h.summary);
-
-    return { error: null, advisories };
-}
-
-// =============================================================================
 // MAIN COMMAND
 // =============================================================================
 
@@ -268,6 +212,9 @@ export async function executeAssignShift(
                 end_time,
                 role_id,
                 unpaid_break_minutes,
+                paid_break_minutes,
+                target_employment_type,
+                target_requires_flexible,
                 required_skills,
                 required_licenses,
                 assigned_employee_id,
@@ -309,6 +256,41 @@ export async function executeAssignShift(
         // 2. Compliance pre-check
         let advisories: string[] = [];
 
+        // ── Layer 1: shape of the shift AFTER this change ─────────────────────
+        //
+        // Runs for assigned and unassigned alike, and BEFORE the employee-scoped
+        // rules, because a shift whose shape is unlawful is unlawful for
+        // everyone — there is no point asking whether a particular person may
+        // work a two-hour public-holiday engagement that nobody may work.
+        //
+        // Only when the change touches a shape input. Re-dating is one: cl 56.2
+        // and the Sunday tier of cl 12.4(c)/12.5(c) are decided by the day, so
+        // a move from Monday to Christmas Day changes the verdict without
+        // changing a single other field. This path previously wrote both the
+        // date (via `sm_move_shift`) and the times (via a raw table update) with
+        // no shape check at either.
+        if (targetDate || targetStartTime || targetEndTime) {
+            const es = effectiveShift as any;
+            const shapeResult = await evaluateShapeForRow({
+                shift_date:               es.shift_date,
+                start_time:               es.start_time,
+                end_time:                 es.end_time,
+                unpaid_break_minutes:     es.unpaid_break_minutes,
+                paid_break_minutes:       es.paid_break_minutes,
+                is_training:              es.is_training,
+                target_employment_type:   es.target_employment_type,
+                target_requires_flexible: es.target_requires_flexible,
+                role_id:                  es.role_id,
+            });
+            if (shapeResult.blocking) {
+                return {
+                    success: false,
+                    error: shapeResult.hits.filter(h => h.blocking).map(h => h.summary).join('; '),
+                };
+            }
+            advisories = shapeResult.hits.filter(h => h.status === 'WARNING').map(h => h.summary);
+        }
+
         // Determine who the effective employee is for compliance
         const effectiveEmployeeId = employeeId ?? (shift as any).assigned_employee_id;
 
@@ -323,16 +305,9 @@ export async function executeAssignShift(
             if (check.error) {
                 return { success: false, error: check.error };
             }
-            advisories = check.advisories;
-        } else if (targetStartTime || targetEndTime) {
-            // UNASSIGNED shift with time changes — run skeleton compliance (R02, R08)
-            const check = runSkeletonComplianceCheck(
-                effectiveShift as Parameters<typeof runSkeletonComplianceCheck>[0],
-            );
-            if (check.error) {
-                return { success: false, error: check.error };
-            }
-            advisories = check.advisories;
+            // Appended, not assigned: the shape pass above may already have
+            // raised warnings, and the employee-scoped pass must not erase them.
+            advisories = [...advisories, ...check.advisories];
         }
 
         // 3. Execute DB write via FSM RPCs.
