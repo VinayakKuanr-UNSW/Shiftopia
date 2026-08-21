@@ -51,9 +51,15 @@ function describe(exception: AvailabilityException): string {
 
 export interface ExceptionsPanelProps {
     profileId: string;
+    /**
+     * Which job this exception applies to. NULL means unscoped / person-wide.
+     * Threaded from the availability page's scope picker; the write will
+     * attach it to the exception row so the solver can narrow by job.
+     */
+    subDepartmentId?: string | null;
 }
 
-export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId }) => {
+export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, subDepartmentId }) => {
     const [exceptions, setExceptions] = useState<AvailabilityException[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -70,7 +76,12 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId }) =
         if (!profileId) return;
         setLoading(true);
         try {
-            setExceptions(await listAvailabilityExceptions(profileId));
+            // Scoped to the job the page is showing. Without this the panel
+            // listed EVERY exception the person holds, so someone Casual in
+            // Set-up and Front of House saw their Front of House entries while
+            // looking at Set-up, and deleting one from the wrong tab looked
+            // like the panel had lost track of which job it was on.
+            setExceptions(await listAvailabilityExceptions(profileId, subDepartmentId ?? null));
             setError(null);
         } catch (e) {
             // Surfaced, not swallowed: an empty list and a failed read look
@@ -80,7 +91,11 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId }) =
         } finally {
             setLoading(false);
         }
-    }, [profileId]);
+        // `subDepartmentId` is load-bearing in this list, not just in the
+        // dependency lint: it is what re-runs the read when the scope picker
+        // switches jobs. Drop it and the panel keeps showing the job it was
+        // first mounted on.
+    }, [profileId, subDepartmentId]);
 
     useEffect(() => { void refresh(); }, [refresh]);
 
@@ -97,6 +112,7 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId }) =
                 endTime: end,
                 severity,
                 reason: reason.trim() || undefined,
+                subDepartmentId: subDepartmentId ?? null,
             });
             setAdding(false);
             setDate('');

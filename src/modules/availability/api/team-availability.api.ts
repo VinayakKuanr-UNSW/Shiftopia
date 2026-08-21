@@ -31,7 +31,8 @@ import type {
     TeamMember,
 } from '../model/team-availability.types';
 import { addDaysISO } from '../domain/team-coverage';
-import { resolveComplianceBasis, sortByComplianceBasis } from '../domain/contract-basis';
+import { resolveComplianceBasis, resolveScopedBasis, sortByComplianceBasis } from '../domain/contract-basis';
+import type { AvailabilityScopeRef } from '../domain/contract-basis';
 import { resolveNetMinutes } from '../domain/hours-compliance';
 import type { FairnessStanding } from '../domain/team-metrics';
 
@@ -170,6 +171,59 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
                 .filter((name): name is string => Boolean(name));
             const userEmploymentStatuses = [...new Set(userContracts.map((c) => c.employment_status).filter(Boolean))];
 
+            // `userContracts[0]?.department_id` is the [0]-of-unordered-rows bug
+            // class this scoping work exists to kill. 30 of 103 people hold
+            // several contracts, and the one that sorted first was the one that
+            // decided which department/sub-department the page attributes them to.
+            //
+            // Resolution: prefer a contract matching the selected sub-department
+            // scope (same rule as EligibilityService lines ~195-210), or one with
+            // a NULL sub-department under the same department (dept-wide contract),
+            // else fall back to the sorted head.
+            const selectedSubDeptIds = subDeptIds;
+            const selectedDeptIds = deptIds;
+            const scopeContract = (() => {
+                // Direct sub-department match
+                if (selectedSubDeptIds.length > 0) {
+                    const match = userContracts.find((c) =>
+                        selectedSubDeptIds.includes(c.sub_department_id ?? ''),
+                    );
+                    if (match) return match;
+                    // Department-wide contract (null sub-dept, matching dept)
+                    if (selectedDeptIds.length > 0) {
+                        const deptWide = userContracts.find((c) =>
+                            !c.sub_department_id &&
+                            selectedDeptIds.includes(c.department_id ?? ''),
+                        );
+                        if (deptWide) return deptWide;
+                    }
+                }
+                return userContracts[0] ?? null;
+            })();
+
+            // When a SINGLE sub-department is selected, the contractType must be
+            // the SCOPED one, not the person-wide winner. This is the sharpest
+            // end-to-end test of the whole feature: `isContractRostered` in
+            // `team-coverage.ts` reads `contractType === 'FT'` to decide whether
+            // a cell renders as 'contract' (a permanent, no declaration expected)
+            // or 'unset' (a casual who owes a declaration). For the multi-job
+            // employee the SAME PERSON on the SAME DAY must read 'contract' under
+            // Security and 'unset' under Set-up.
+            const scopeRef: AvailabilityScopeRef | null =
+                selectedSubDeptIds.length === 1
+                    ? { subDepartmentId: selectedSubDeptIds[0] }
+                    : null;
+            const scopedBasis = scopeRef
+                ? resolveScopedBasis(
+                    userContracts.map((c) => ({
+                        ...toBasisInput(c),
+                        subDepartmentId: c.sub_department_id ?? null,
+                        departmentId: c.department_id ?? null,
+                    })),
+                    scopeRef,
+                  )
+                : basis;
+
             return {
                 profileId: p.id,
                 fullName:
@@ -181,15 +235,15 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
                 roleName: primaryContract.roleName,
                 roleNames: distinctRoleNames,
                 contracts: contractsInfoList,
-                departmentId: userContracts[0]?.department_id ?? null,
-                subDepartmentId: userContracts[0]?.sub_department_id ?? null,
+                departmentId: scopeContract?.department_id ?? null,
+                subDepartmentId: scopeContract?.sub_department_id ?? null,
                 employmentStatus: primaryContract.employmentStatus ?? (userEmploymentStatuses.length > 0 ? userEmploymentStatuses.join(', ') : null),
                 // Deliberately NOT `employmentStatus` above: that field is a
                 // display label and may join several statuses with a comma.
-                // These two are the compliance basis and have exactly one
-                // answer each. See domain/contract-basis.ts.
-                contractType: basis.contractType,
-                contractedWeeklyHours: basis.contractedWeeklyHours,
+                // These two are the SCOPED compliance basis when a single
+                // sub-department is selected, and the person-wide one otherwise.
+                contractType: scopedBasis.contractType,
+                contractedWeeklyHours: scopedBasis.contractedWeeklyHours,
             } satisfies TeamMember;
         })
         .sort((a, b) => a.fullName.localeCompare(b.fullName));

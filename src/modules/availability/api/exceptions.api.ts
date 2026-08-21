@@ -16,7 +16,8 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { fetchContractBasis } from './contract-basis.api';
+import { fetchScopedContractBasis } from './contract-basis.api';
+import { scopeFilter } from './availability.api';
 import { FT_AVAILABILITY_ERROR, resolveProfileId } from './availability.service';
 
 export type ExceptionSeverity = 'HARD' | 'SOFT' | 'PREFERENCE';
@@ -33,6 +34,8 @@ export interface AvailabilityException {
     endTime: string;     // HH:mm
     severity: ExceptionSeverity;
     reason: string | null;
+    /** Which job this subtracts from. Null = every one of them. */
+    subDepartmentId: string | null;
     createdAt: string;
 }
 
@@ -42,6 +45,8 @@ export interface CreateExceptionInput {
     endTime: string;
     severity: ExceptionSeverity;
     reason?: string;
+    /** Which job this subtracts from. Null/undefined = every one of them. */
+    subDepartmentId?: string | null;
 }
 
 const toTime = (t: string): string => (t ? t.split(':').slice(0, 2).join(':') : t);
@@ -55,6 +60,7 @@ function mapRow(row: Record<string, unknown>): AvailabilityException {
         endTime: toTime(String(row.end_time ?? '')),
         severity: row.severity as ExceptionSeverity,
         reason: (row.reason as string | null) ?? null,
+        subDepartmentId: (row.sub_department_id as string | null) ?? null,
         createdAt: row.created_at as string,
     };
 }
@@ -66,11 +72,29 @@ function mapRow(row: Record<string, unknown>): AvailabilityException {
  */
 export async function listAvailabilityExceptions(
     profileId: string,
+    /**
+     * Which job's exceptions to list. Omit for the person-wide list — that is
+     * what every caller got before scoping, and what a caller with no resolved
+     * job still gets.
+     *
+     * A NULL `sub_department_id` on the ROW means "every job", so it is always
+     * included. That widening is the same one `scopeFilter` applies to rules,
+     * and it is why the filter is an `.or()` rather than an `.eq()`: an
+     * unscoped exception is not a Set-up exception, but it does subtract from
+     * Set-up. Listing it under the Set-up job is therefore honest, and hiding
+     * it would show the employee a calendar that disagrees with the solver.
+     */
+    subDepartmentId?: string | null,
 ): Promise<AvailabilityException[]> {
-    const { data, error } = await (supabase as any)
+    let query = (supabase as any)
         .from('availability_exceptions')
-        .select('id,profile_id,exception_date,start_time,end_time,severity,reason,created_at')
-        .eq('profile_id', profileId)
+        .select('id,profile_id,exception_date,start_time,end_time,severity,reason,created_at,sub_department_id')
+        .eq('profile_id', profileId);
+
+    const filter = scopeFilter(subDepartmentId);
+    if (filter) query = query.or(filter);
+
+    const { data, error } = await query
         .order('exception_date', { ascending: true, nullsFirst: false })
         .order('start_time', { ascending: true });
 
@@ -85,10 +109,17 @@ export async function createAvailabilityException(
     // `resolveProfileId` FIRST: callers pass the 'current-user' sentinel here as
     // well as real uuids, and `fetchContractBasis('current-user')` returns the
     // empty basis (not Full-Time), which would wave an FT straight through.
-    // Unlike `availability_rules`, this table has no DB-level FT trigger, so this
-    // check is the only enforcement there is.
+    // The DB-level guard landed in 20260821090100; this stays as the courtesy
+    // that produces a readable message instead of a check_violation.
     const resolvedProfileId = await resolveProfileId(profileId);
-    const basis = await fetchContractBasis(resolvedProfileId);
+    // SCOPED: a Full-Time job still refuses exceptions, but a Casual job held
+    // by the same person accepts them. The database agrees — 20260821090100
+    // attached `trg_prevent_ft_availability_rule` to this table too, closing the
+    // gap this comment used to describe (there was no DB-level guard here at
+    // all, so the client check WAS the only enforcement).
+    const basis = await fetchScopedContractBasis(resolvedProfileId, {
+        subDepartmentId: input.subDepartmentId ?? null,
+    });
     if (basis.isFullTime) throw new Error(FT_AVAILABILITY_ERROR);
 
     const { data, error } = await (supabase as any)
@@ -103,6 +134,7 @@ export async function createAvailabilityException(
             end_time: input.endTime,
             severity: input.severity,
             reason: input.reason ?? null,
+            sub_department_id: input.subDepartmentId ?? null,
             created_by: resolvedProfileId,
         })
         .select()

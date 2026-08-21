@@ -373,14 +373,31 @@ export function summarise(
     /** Reference point for "expiring soon"; yyyy-MM-dd. */
     today: string,
 ): TeamAvailabilitySummary {
-    const { members, dates, requiredSource } = inputs;
+    const { members, dates, requiredSource, availability } = inputs;
 
     // The chase-list. Contract-rostered staff are excluded because there is
     // nothing to chase: they cannot declare availability, so counting them would
     // make the "Not declared" tile permanently report the full-time headcount as
     // an outstanding action.
+    //
+    // "Never declared" is read the SAME way `resolveState` reads it — an absent
+    // entry in the availability map. `getResolvedAvailabilities` omits any
+    // profile with no rules, and its rule probe is scoped, so absence here means
+    // "never declared FOR THIS JOB" rather than "never declared at all". That is
+    // what makes the tile answer the question the page is filtered to.
+    //
+    // It used to test `m.hasDeclared === false` alone. Nothing populates
+    // `hasDeclared` — `getTeamMembers` does not return it and no other producer
+    // sets it — so the predicate was false for every member and the tile read a
+    // permanent ZERO. A count that is always zero looks like good news, which is
+    // why it survived: an empty chase-list is indistinguishable from a finished
+    // one. `hasDeclared` is still honoured when a caller does set it (the domain
+    // tests do), it is simply no longer the only signal.
+    const neverDeclared = (m: TeamMember): boolean =>
+        m.hasDeclared === false || !availability.get(m.profileId);
+
     const unsetCount = members.filter(
-        (m) => m.hasDeclared === false && !isContractRostered(m),
+        (m) => neverDeclared(m) && !isContractRostered(m),
     ).length;
 
     // 'contract' counts here. The tile reads "N/M declared" against
