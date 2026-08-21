@@ -29,12 +29,21 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   overlayClassName?: string
+  /**
+   * Omit the built-in close button, for dialogs that lay out their own.
+   *
+   * Callers had been doing this with `[&>button]:hidden`, which only sets
+   * `display: none` — the button stays in the DOM, so it is still a second
+   * control for the same action in the markup, and the trick silently hits any
+   * other direct-child button a dialog happens to have. This removes it.
+   */
+  hideClose?: boolean
 }
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, overlayClassName, ...props }, ref) => (
+>(({ className, children, overlayClassName, hideClose = false, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
@@ -46,10 +55,14 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 z-50 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-        <X className="h-4 w-4" />
+      {/* 44×44 hit area (WCAG 2.5.5). The icon stays 18px; the box around it is
+          what a thumb actually has to find, and it used to be the glyph alone. */}
+      {!hideClose && (
+      <DialogPrimitive.Close className="absolute right-3 top-3 z-50 inline-flex h-11 w-11 items-center justify-center rounded-lg opacity-80 ring-offset-background transition-opacity hover:opacity-100 hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <X className="h-[18px] w-[18px]" aria-hidden="true" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
+      )}
     </DialogPrimitive.Content>
   </DialogPortal>
 ))

@@ -60,7 +60,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
         aria-label={isCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
         aria-expanded={!isCollapsed}
         className={cn(
-          "hidden md:flex fixed top-4 z-[100] h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
+          "hidden md:flex fixed top-4 z-40 h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
           isCollapsed ? "left-4" : "left-[268px]"
         )}
       >

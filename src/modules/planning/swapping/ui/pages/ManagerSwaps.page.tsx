@@ -122,6 +122,7 @@ const ShiftPane: React.FC<{
             <SharedShiftCard
                 variant="timecard"
                 isFlat={false}
+                identityGrid
                 organization={data.orgName || 'ICC Sydney'}
                 department={data.deptName || 'Department'}
                 subGroup={data.subGroupName}

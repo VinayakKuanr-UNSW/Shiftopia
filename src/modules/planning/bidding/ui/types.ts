@@ -6,6 +6,12 @@ export interface ShiftData {
     organization: string;
     department: string;
     subDepartment: string;
+    /**
+     * The sub-department UUID — needed to scope the availability self-check
+     * to THIS job rather than the person-wide answer, which for a 1 FT + 4
+     * Casual employee always resolves to Full-Time and suppresses the warning.
+     */
+    subDepartmentId?: string | null;
     group: string;
     subGroupName: string;
     subGroup: string;

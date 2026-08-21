@@ -142,12 +142,17 @@ function ResponsiveDialogFooter({
   );
 }
 
-/** Generic scrollable body area — no Dialog/Drawer primitive equivalent, just a div */
+/**
+ * Generic scrollable body area — no Dialog/Drawer primitive equivalent, just a
+ * div. Remaining props are forwarded so callers can give the region its ARIA
+ * role (`role="tabpanel"` and friends) instead of leaving it anonymous.
+ */
 function ResponsiveDialogBody({
   className,
   children,
+  ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('px-4', className)}>{children}</div>;
+  return <div className={cn('px-4', className)} {...props}>{children}</div>;
 }
 
 // ── Compound export ────────────────────────────────────────────────────────────

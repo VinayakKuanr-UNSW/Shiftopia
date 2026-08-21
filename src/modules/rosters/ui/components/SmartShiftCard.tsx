@@ -55,7 +55,7 @@ import { estimateDetailedCostFromShift } from '../../domain/projections/utils/co
 import ShiftHistoryTimeline from './ShiftHistoryTimeline';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import { useReserveListPanelStore } from '@/modules/reserve-list';
-import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
+import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
     resolveBillableSide,
     isShiftFinished as isShiftFinishedForBillable,
@@ -64,6 +64,7 @@ import {
 } from '@/modules/timesheets/domain/billable-time';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ============================================================================
@@ -148,6 +149,13 @@ export interface SmartShiftCardProps {
     groupColor?: string;
     /** Human-readable group name for the breadcrumb (e.g. "Convention Centre"). */
     groupName?: string;
+    /**
+     * Which identity cells the card shows. Defaults to all nine.
+     *
+     * The roster drill-down states its org → sub-group scope once in the panel
+     * header, so its cards carry only what actually varies between them.
+     */
+    identityFields?: ShiftIdentityField[];
     /** Selection control (e.g. a checkbox) rendered at the card's top-left for consistent in-card selection. */
     selectionSlot?: React.ReactNode;
     isLocked?: boolean;
@@ -188,12 +196,16 @@ const GROUP_COLORS: Record<string, { header: string; accent: string; text: strin
 };
 
 
+/**
+ * Sydney-pinned, via the shared formatter.
+ *
+ * This used to slice the time straight out of the ISO string and never convert,
+ * so a clock-in stored as `2026-08-20T00:25:05+00` rendered here as "00:25"
+ * while My Attendance showed the same punch as 10:25 AM — the whole AEST
+ * offset, shown to a manager as the time someone started work.
+ */
 function formatTime(time: string | null): string {
-    if (!time) return '--:--';
-    const timePart = time.includes('T') ? time.split('T')[1].substring(0, 5) : time;
-    const parts = timePart.split(':');
-    if (parts.length >= 2) return `${parts[0]}:${parts[1]}`;
-    return timePart;
+    return formatClockTime(time, 'HH:mm', '--:--') ?? '--:--';
 }
 
 function getInitials(name: string): string {
@@ -1159,6 +1171,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     isPast,
     headerAction,
     groupName,
+    identityFields,
     selectionSlot,
     className,
     onViewHistory,
@@ -1208,12 +1221,23 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     // shares the same SharedShiftCard UI) shows real Billable Pay + a
     // Variance→Pay delta instead of leaving them at 'N/A'/'--'.
     const isSecurityRole = isSecurityRoleName(shift.roles?.name);
-    // Assigned shift → price the person who is actually working it. Unassigned →
-    // price the shift's declared target. Falling through to `null` used to make
-    // the estimator assume Casual, so every unassigned shift carried a phantom
-    // 25% loading regardless of what it was actually rostered for.
-    const employmentType = (shift as any).assigned_profiles?.employment_type
-      ?? shift.target_employment_type
+    // Price the BASIS THIS SHIFT IS WORKED ON, not a summary of the person.
+    //
+    // The precedence used to run the other way — assigned profile first, on the
+    // reasoning that an assigned shift should be priced for whoever is actually
+    // working it. That reads well and is wrong: someone can hold several
+    // contracts at once, so they work THIS shift under one of them, and
+    // `shifts.target_employment_type` (NOT NULL since 20260806120100) is the one
+    // that names it. A prod employee holds a Full-Time Security L7 contract
+    // alongside four Casual ones; their profile says "Full-Time", so their
+    // Casual shift was priced at permanent Level 4 ($30.26/h) instead of casual
+    // ($37.82/h) — the 25% loading dropped silently.
+    //
+    // The profile stays as a fallback for rows where the target is somehow
+    // absent (synthetic/preview objects only). Falling through to `null` makes
+    // the estimator price as permanent rather than inventing a loading.
+    const employmentType = shift.target_employment_type
+      ?? (shift as any).assigned_profiles?.employment_type
       ?? null;
 
     const scheduledCost = useMemo(() => {
@@ -1243,7 +1267,16 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         [scheduledCost, isSecurityRole, shift.shift_date, shift.start_time],
     );
 
-    const billableNetMinutes = useMemo(() => {
+    /**
+     * The EBA minimum-engagement floor.
+     *
+     * The whole result is kept, not just `.netMinutes`. Discarding
+     * `wasToppedUp` / `requiredMins` meant the "Topped Up to Min" badge — the
+     * only on-screen sign that a shift is being PAID more hours than it was
+     * worked — never rendered on the roster planner or its drill-down, while
+     * Timesheets and My Roster both showed it for the same shift.
+     */
+    const billableFloor = useMemo(() => {
         const rawNet = calculateNetMinutes(resolvedStart, resolvedEnd, shift.unpaid_break_minutes || 0);
         if (rawNet === null) return null;
         const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date);
@@ -1253,8 +1286,10 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
             isPublicHoliday,
             employmentType,
             isSecurityRole,
-        }).netMinutes;
+        });
     }, [resolvedStart, resolvedEnd, shift.unpaid_break_minutes, shift.shift_date, shift.is_training, employmentType, isSecurityRole]);
+
+    const billableNetMinutes = billableFloor?.netMinutes ?? null;
 
     const billableCost = useMemo(() => {
         if (!resolvedStart.hhmm || !resolvedEnd.hhmm || billableNetMinutes == null) return null;
@@ -1320,14 +1355,18 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     return (
         <SharedShiftCard
             variant="timecard"
+            identityGrid
+            identityFields={identityFields}
             organization={shift.organizations?.name || ''}
-            department={groupName || ''}
+            department={shift.departments?.name || ''}
+            subDepartment={shift.sub_departments?.name || undefined}
+            group={groupName || undefined}
             subGroup={shift.sub_group_name || undefined}
             role={roleName}
             shiftDate={shift.shift_date}
             startTime={shift.start_time}
             endTime={shift.end_time}
-            netLength={shift.net_length_minutes || 0}
+            netLength={billableNetMinutes ?? shift.net_length_minutes ?? 0}
             paidBreak={shift.paid_break_minutes || 0}
             unpaidBreak={shift.unpaid_break_minutes || 0}
             lifecycleStatus={shift.lifecycle_status}
@@ -1335,8 +1374,10 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
             employeeName={employeeName || undefined}
             clockIn={shift.actual_start ? formatTime(shift.actual_start) : null}
             clockOut={shift.actual_end ? formatTime(shift.actual_end) : null}
-            adjustedStart={resolvedStart.hhmm}
-            adjustedEnd={resolvedEnd.hhmm}
+            adjustedStart={formatTime(resolvedStart.hhmm)}
+            adjustedEnd={formatTime(resolvedEnd.hhmm)}
+            wasToppedUpToMinEngagement={billableFloor?.wasToppedUp}
+            requiredEngagementMinutes={billableFloor?.requiredMins || null}
             adjustedStartSource={resolvedStart.source === 'missing' ? null : resolvedStart.source}
             adjustedEndSource={resolvedEnd.source === 'missing' ? null : resolvedEnd.source}
             estimatedPay={estimatedPay}

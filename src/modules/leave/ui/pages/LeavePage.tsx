@@ -28,6 +28,7 @@ import {
 import { useAuth } from '@/platform/auth/useAuth';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
 import type {
   LeaveBalance,
   LeaveRequest,
@@ -598,24 +599,28 @@ const NewRequestForm: React.FC<{
     ? isCertificateRequired(formType, daysBetween(formStart, formEnd), computeCertificateAdjacency(formStart, formEnd))
     : false;
 
+  const leaveTypeOptions = useMemo(() => {
+    return Object.entries(LEAVE_TYPE_LABELS).map(([code, label]) => ({
+      id: code,
+      name: label,
+      description: policies[code as LeaveTypeCode]?.description,
+    }));
+  }, [policies]);
+
   return (
     <form onSubmit={onSubmit} className="mx-auto max-w-lg space-y-6">
       {/* Leave type */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-slate-600 dark:text-slate-300">
-          Leave Type
-        </label>
-        <select
+        <GlobalStyleSelect
+          label="Leave Type"
           value={formType}
-          onChange={(e) => setFormType(e.target.value as LeaveTypeCode)}
-          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-white"
-        >
-          {Object.entries(LEAVE_TYPE_LABELS).map(([code, label]) => (
-            <option key={code} value={code}>{label}</option>
-          ))}
-        </select>
+          onChange={(v) => setFormType(v as LeaveTypeCode)}
+          options={leaveTypeOptions}
+          icon={<Palmtree className="h-4 w-4" />}
+          searchPlaceholder="Search leave types..."
+        />
         {policy && (
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
             {policy.description}
           </p>
         )}

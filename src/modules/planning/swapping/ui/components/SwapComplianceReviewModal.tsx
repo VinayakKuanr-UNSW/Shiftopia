@@ -627,6 +627,7 @@ function ShiftCard({ shift, label, color }: { shift: ShiftData; label: string; c
             <SharedShiftCard
                 variant="timecard"
                 isFlat={true}
+                identityGrid
                 organization=""
                 department={shift.department_name || ''}
                 role={shift.role_name || 'Shift'}

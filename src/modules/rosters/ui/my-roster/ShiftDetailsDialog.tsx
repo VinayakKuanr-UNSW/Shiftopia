@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { isShiftLocked, isShiftCommenced } from '@/modules/rosters/domain/shift-locking.utils';
-import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { Textarea } from '@/modules/core/ui/primitives/textarea';
-import { Label } from '@/modules/core/ui/primitives/label';
 import {
   X,
   ArrowLeftRight,
-  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
+import { text, touch } from '@/modules/core/ui/typography';
 import { Shift } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge';
@@ -19,10 +23,11 @@ import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
+import DropShiftDrawer from './DropShiftDrawer';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
-import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, formatInTimezone, formatClockTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
@@ -40,18 +45,10 @@ import {
 // wall-clock values ('HH:MM' or ISO) — mirrors the Timesheets card's own
 // formatting so the two surfaces read identically, without the browser-local
 // `Date.getHours()` shortcut that other ad-hoc formatters in this codebase use.
-function formatWallClock(value: string | null | undefined): string | null {
-    if (!value) return null;
-    if (value.includes('T') || (value.length > 8 && value.includes('-'))) {
-        const d = new Date(value);
-        if (isNaN(d.getTime())) return null;
-        return formatInTimezone(d, SYDNEY_TZ, 'h:mm a');
-    }
-    const parts = value.split(':').map(Number);
-    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
-    const h = parts[0], m = parts[1];
-    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-}
+// The shared Sydney-pinned formatter. This file used to carry its own correct
+// copy while two other surfaces carried their own incorrect ones — see
+// `formatClockTime`.
+const formatWallClock = (value: string | null | undefined) => formatClockTime(value);
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -74,10 +71,10 @@ export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }
   return (
       <div className="space-y-2 p-1 min-w-[180px]">
           <div className="flex justify-between items-center pb-1 border-b border-white/10">
-              <span className="text-[10px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] opacity-90">{COST_ESTIMATE_TITLE}</span>
               <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
           </div>
-          <div className="space-y-1 text-[10px]">
+          <div className="space-y-1 text-[11px] tabular-nums">
               <div className="flex justify-between">
                   <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
                   <span>${ordinaryCost.toFixed(2)}</span>
@@ -95,7 +92,7 @@ export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }
                   </div>
               )}
           </div>
-          <div className="pt-1 text-[9px] opacity-40 italic border-t border-white/5">
+          <div className="pt-1 text-[11px] opacity-80 italic border-t border-white/10">
               {COST_ESTIMATE_DISCLAIMER}
           </div>
       </div>
@@ -113,7 +110,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
 
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
 
   const dropShiftMutation = useDropShift();
   const isDropping = dropShiftMutation.isPending;
@@ -225,7 +221,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
       isTraining: (shiftData.shift as any).is_training === true,
       isSunday,
       isPublicHoliday,
-      employmentType: user?.employmentType ?? null,
+      employmentType:
+        (shiftData.shift as any).target_employment_type ?? user?.employmentType ?? null,
       isSecurityRole: isSecurityRoleForFloor,
     });
   }, [resolvedBillableStart, resolvedBillableEnd, unpaidBreak, shiftData?.shift, user?.employmentType]);
@@ -246,17 +243,29 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   }, [shiftData?.shift, resolvedBillableStart, resolvedBillableEnd]);
 
   // ── Cost Calculation ──────────────────────────────────────────────────────
-  // Scheduled (rostered) estimate — the raw `shift` row never carries the
-  // assigned employee's employment type, which silently defaulted this to
-  // "Casual" pricing for everyone (wrong classification/rate). Supply the
-  // viewing employee's own type from auth, same as the Timesheets card does.
+  // Priced on the SHIFT's employment basis, not the viewer's profile.
+  //
+  // This used to read `user.employmentType`, on the reasoning that the raw
+  // shift row carried nothing better. It does: `target_employment_type` has
+  // been NOT NULL since 20260806120100 and is the basis the shift is paid on.
+  // The profile scalar is a person-level summary that cannot describe someone
+  // holding several contracts at once — a prod employee holds one Full-Time
+  // Security L7 contract alongside four Casual ones, so their profile reads
+  // "Full-Time" while their Casual Team Leader shift must be paid at the loaded
+  // casual rate. Pricing it off the profile charged permanent Level 4
+  // ($30.26/h) instead of casual ($37.82/h): the 25% casual loading dropped
+  // silently, a ~20% understatement. The profile stays as a last-resort
+  // fallback for rows with no persisted shift behind them.
+  const payEmploymentType =
+    (shiftData?.shift as any)?.target_employment_type ?? user?.employmentType ?? null;
+
   const costBreakdown = React.useMemo(() => {
     if (!shiftData?.shift) return ZERO_COST_BREAKDOWN;
     return estimateDetailedCostFromShift({
       ...shiftData.shift,
-      employmentType: user?.employmentType,
+      employmentType: payEmploymentType,
     } as any);
-  }, [shiftData?.shift, user?.employmentType]);
+  }, [shiftData?.shift, payEmploymentType]);
 
   // Billable (actual/payroll) estimate — priced off the resolved billable
   // window above, at the EBA-floored net minutes, mirroring the Timesheets
@@ -269,7 +278,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
         start_time: resolvedBillableStart.hhmm,
         end_time: resolvedBillableEnd.hhmm,
         roles: shiftData.shift.roles,
-        employmentType: user?.employmentType,
+        employmentType: payEmploymentType,
         is_training: (shiftData.shift as any).is_training,
         unpaid_break_minutes: unpaidBreak,
         scheduled_length_minutes: (shiftData.shift as any).scheduled_length_minutes ?? netLengthMinutes,
@@ -307,8 +316,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const handleDropShift = () => setIsCancelConfirmOpen(true);
   const handleSwapShift = () => setIsSwapModalOpen(true);
 
-  const confirmDrop = async () => {
-    if (!cancelReason.trim()) {
+  const confirmDrop = async (reason: string) => {
+    if (!reason.trim()) {
       toast({ title: 'Reason Required', description: 'Please provide a reason for dropping this shift.', variant: 'destructive' });
       return;
     }
@@ -317,12 +326,11 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
       return;
     }
     dropShiftMutation.mutate(
-      { shiftId: shift.id, reason: cancelReason.trim() },
+      { shiftId: shift.id, reason: reason.trim() },
       {
         onSuccess: () => {
           toast({ title: 'Shift Dropped', description: 'You have successfully dropped this shift. It is now available for bidding.' });
           setIsCancelConfirmOpen(false);
-          setCancelReason('');
           onClose();
         },
         onError: (error: any) => {
@@ -342,103 +350,120 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     (shift.assigned_profiles
       ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim()
       : null) ||
-    user?.fullName ||
-    user?.name ||
+    // Only fall back to the viewer when the shift is actually theirs. An
+    // unconditional fallback printed your own name on an unfilled shift, which
+    // matters now that the card states "Unassigned" as a fact rather than
+    // leaving the slot blank.
+    ((shift as any).assigned_employee_id && (shift as any).assigned_employee_id === user?.id
+      ? user?.fullName || user?.name
+      : null) ||
     undefined;
 
   return (
     <>
-      <ResponsiveDialog
-        open={isOpen}
-        onOpenChange={onClose}
-        dialogClassName="max-w-md p-0 overflow-hidden backdrop-blur-3xl bg-white/60 dark:bg-zinc-950/95 border border-white/10 shadow-2xl rounded-[32px]"
-        drawerClassName="backdrop-blur-3xl bg-white/60 dark:bg-zinc-950/95 border-t border-white/10 rounded-t-[32px]"
-      >
-        <ResponsiveDialog.Header className="sr-only">
-          <ResponsiveDialog.Title>{shift.roles?.name || 'Shift'} Details</ResponsiveDialog.Title>
-          <ResponsiveDialog.Description>
-            Shift details for {format(shiftDate, 'EEEE, MMMM d, yyyy')}
-          </ResponsiveDialog.Description>
-        </ResponsiveDialog.Header>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden bg-card/95 backdrop-blur-2xl border border-border shadow-2xl rounded-[28px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{shift.roles?.name || 'Shift'} Details</DialogTitle>
+            <DialogDescription>
+              Shift details for {format(shiftDate, 'EEEE, MMMM d, yyyy')}
+            </DialogDescription>
+          </DialogHeader>
 
-        {/* Shift Card Content */}
-        <div className="p-0">
-          <SharedShiftCard
-            variant="timecard"
-            isFlat={true}
-            customColor={groupColor}
-            organization={shift.organizations?.name || ''}
-            department={shift.departments?.name || ''}
-            subGroup={shift.sub_departments?.name || subGroupName}
-            role={shift.roles?.name || 'Shift'}
-            employeeName={assignedEmployeeName}
-            shiftDate={format(shiftDate, 'EEE, MMM d, yyyy')}
-            startTime={formatWallClock(shift.start_time) ?? shift.start_time.slice(0, 5)}
-            endTime={formatWallClock(shift.end_time) ?? shift.end_time.slice(0, 5)}
-            netLength={netLengthMinutes}
-            paidBreak={paidBreak}
-            unpaidBreak={unpaidBreak}
-            urgency={urgency}
-            groupVariant={groupVariant}
-            isPast={isPast}
-            shiftData={shiftDataForCard}
-            lifecycleStatus={shift.lifecycle_status}
-            className="pb-8" // Add some bottom padding for mobile drawers
-            clockIn={formatWallClock((shift as any).actual_start)}
-            clockOut={formatWallClock((shift as any).actual_end)}
-            adjustedStart={formatWallClock(resolvedBillableStart.hhmm)}
-            adjustedEnd={formatWallClock(resolvedBillableEnd.hhmm)}
-            adjustedStartSource={resolvedBillableStart.source === 'missing' ? null : resolvedBillableStart.source}
-            adjustedEndSource={resolvedBillableEnd.source === 'missing' ? null : resolvedBillableEnd.source}
-            wasToppedUpToMinEngagement={billableFloor?.wasToppedUp}
-            requiredEngagementMinutes={billableFloor?.requiredMins || null}
-            estimatedPay={`$${(costBreakdown.totalCost || 0).toFixed(2)}`}
-            estimatedPayBreakdown={estimatedPayLines}
-            billablePay={billableCostBreakdown ? `$${(billableCostBreakdown.totalCost || 0).toFixed(2)}` : null}
-            billablePayBreakdown={billablePayLines}
-            statusIcons={null}
-            footerActions={
-              <div className="flex flex-col gap-2 w-full">
-                {!isLockedFromActions && (
-                  <div className="flex gap-2">
+          {/* Shift Card Content */}
+          <div className="p-0">
+            <SharedShiftCard
+              variant="timecard"
+              isFlat={true}
+              hideGlow={true}
+              customColor={groupColor}
+              organization={shift.organizations?.name || ''}
+              department={shift.departments?.name || ''}
+              identityGrid
+              employeeName={assignedEmployeeName}
+              subDepartment={shift.sub_departments?.name}
+              group={shiftData?.groupName}
+              subGroup={subGroupName || (shift as any).sub_group_name}
+              role={shift.roles?.name || 'Shift'}
+              shiftDate={format(shiftDate, 'EEE, MMM d, yyyy')}
+              startTime={formatWallClock(shift.start_time) ?? shift.start_time.slice(0, 5)}
+              endTime={formatWallClock(shift.end_time) ?? shift.end_time.slice(0, 5)}
+              // The BILLABLE (post-floor) net, which is what this prop means —
+              // it feeds the Payroll section. This passed the SCHEDULED net, so
+              // a shift topped up to the EBA minimum read one net here and a
+              // different one on Timesheets.
+              netLength={billableFloor?.netMinutes ?? netLengthMinutes}
+              paidBreak={paidBreak}
+              unpaidBreak={unpaidBreak}
+              urgency={urgency}
+              groupVariant={groupVariant}
+              isPast={isPast}
+              shiftData={shiftDataForCard}
+              lifecycleStatus={shift.lifecycle_status}
+              className="pb-4"
+              clockIn={formatWallClock((shift as any).actual_start)}
+              clockOut={formatWallClock((shift as any).actual_end)}
+              adjustedStart={formatWallClock(resolvedBillableStart.hhmm)}
+              adjustedEnd={formatWallClock(resolvedBillableEnd.hhmm)}
+              adjustedStartSource={resolvedBillableStart.source === 'missing' ? null : resolvedBillableStart.source}
+              adjustedEndSource={resolvedBillableEnd.source === 'missing' ? null : resolvedBillableEnd.source}
+              wasToppedUpToMinEngagement={billableFloor?.wasToppedUp}
+              requiredEngagementMinutes={billableFloor?.requiredMins || null}
+              estimatedPay={`$${(costBreakdown.totalCost || 0).toFixed(2)}`}
+              estimatedPayBreakdown={estimatedPayLines}
+              billablePay={billableCostBreakdown ? `$${(billableCostBreakdown.totalCost || 0).toFixed(2)}` : null}
+              billablePayBreakdown={billablePayLines}
+              statusIcons={null}
+              footerActions={
+                <div className="flex flex-col gap-2 w-full">
+                  {!isLockedFromActions && (
+                    <div className="flex gap-2">
+                      {/* Solid. These were 10%-opacity tints over a coloured
+                          card, which left the label near the card's own
+                          background and read as disabled. Indigo-600 and
+                          rose-600 against white clear 4.5:1 in both themes. */}
                       <Button
-                          onClick={handleSwapShift}
-                          className={cn(
-                              'flex-1 h-12 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-95 shadow-md',
-                              'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20'
-                          )}
+                        onClick={handleSwapShift}
+                        aria-label={`Request a swap for ${shift.roles?.name || 'this shift'} on ${format(shiftDate, 'EEEE d MMMM')}`}
+                        className={cn(
+                          text.label,
+                          touch.target,
+                          'flex-1 h-12 rounded-2xl uppercase transition-colors active:scale-95 shadow-sm',
+                          'bg-indigo-600 hover:bg-indigo-500 text-white border-0',
+                        )}
                       >
-                      <ArrowLeftRight size={16} className="mr-2" />
-                      {swapLabel}
+                        <ArrowLeftRight size={18} className="mr-2" aria-hidden="true" />
+                        {swapLabel}
                       </Button>
                       <Button
-                          onClick={handleDropShift}
-                          className={cn(
-                              'flex-1 h-12 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-95 shadow-md',
-                              'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
-                          )}
+                        onClick={handleDropShift}
+                        aria-label={`Drop ${shift.roles?.name || 'this shift'} on ${format(shiftDate, 'EEEE d MMMM')}`}
+                        className={cn(
+                          text.label,
+                          touch.target,
+                          'flex-1 h-12 rounded-2xl uppercase transition-colors active:scale-95 shadow-sm',
+                          'bg-rose-600 hover:bg-rose-500 text-white border-0',
+                        )}
                       >
-                      <X size={16} className="mr-2" />
-                      {dropLabel}
+                        <X size={18} className="mr-2" aria-hidden="true" />
+                        {dropLabel}
                       </Button>
-                  </div>
-                )}
-                {isWithinLockoutPeriod && !isPast && !isActiveOrCommenced && (
-                  <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3">
-                    <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 font-mono">
-                      {"Emergent State: Lockout Active (<4h)"}
-                    </span>
-
-                  </div>
-                )}
-              </div>
-            }
-
-          />
-        </div>
-
-      </ResponsiveDialog>
+                    </div>
+                  )}
+                  {isWithinLockoutPeriod && !isPast && !isActiveOrCommenced && (
+                    <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3">
+                      <div className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                      <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
+                        {"Emergent State: Lockout Active (<4h)"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              }
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Swap Request Modal */}
       <CreateSwapRequestModal
@@ -451,46 +476,19 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
         groupColor={groupColor}
       />
 
-      {/* Drop Shift Confirmation Dialog */}
-      <ResponsiveDialog
-        open={isCancelConfirmOpen}
-        onOpenChange={setIsCancelConfirmOpen}
-      >
-        <ResponsiveDialog.Header>
-          <ResponsiveDialog.Title>Cancel Shift Assignment</ResponsiveDialog.Title>
-          <ResponsiveDialog.Description>
-            Are you sure you want to drop this shift? Depending on the timing, this may require manager approval or affect your reliability score.
-          </ResponsiveDialog.Description>
-        </ResponsiveDialog.Header>
-        <ResponsiveDialog.Body className="py-4 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="cancel-reason">Reason for cancellation</Label>
-            <Textarea
-              id="cancel-reason"
-              placeholder="Please explain why you cannot work this shift..."
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-            />
-          </div>
-          {isWithinLockoutPeriod && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-red-400 text-sm">
-              Warning: You are dropping this shift within 4 hours of start time.
-            </div>
-          )}
-        </ResponsiveDialog.Body>
-        <ResponsiveDialog.Footer>
-          <Button variant="outline" onClick={() => setIsCancelConfirmOpen(false)} disabled={isDropping}>
-            Keep Shift
-          </Button>
-          <Button variant="destructive" onClick={confirmDrop} disabled={isDropping || !cancelReason.trim()}>
-            {isDropping ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Dropping...</>
-            ) : (
-              'Confirm Drop'
-            )}
-          </Button>
-        </ResponsiveDialog.Footer>
-      </ResponsiveDialog>
+      {/* Drop Shift Drawer */}
+      <DropShiftDrawer
+        isOpen={isCancelConfirmOpen}
+        onClose={() => setIsCancelConfirmOpen(false)}
+        shift={shift}
+        shiftDate={shiftDate}
+        groupName={groupName}
+        subGroupName={subGroupName}
+        groupColor={groupColor}
+        isWithinLockoutPeriod={isWithinLockoutPeriod}
+        onConfirmDrop={confirmDrop}
+        isDropping={isDropping}
+      />
     </>
   );
 };

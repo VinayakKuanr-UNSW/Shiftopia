@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
-import { Calendar } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { listItemSpring } from '@/modules/core/ui/motion/presets';
 import { cn } from '@/modules/core/lib/utils';
+import { text } from '@/modules/core/ui/typography';
 import { isTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { Shift } from '@/modules/rosters';
 import { MobileShiftCard } from './MobileShiftCard';
@@ -28,6 +28,17 @@ interface MobileRosterAgendaViewProps {
 
 const SYDNEY_TZ = 'Australia/Sydney';
 
+/**
+ * My Roster — mobile agenda.
+ *
+ * Every day in the selected range gets a row, always. There used to be a
+ * `totalShifts === 0` short-circuit that replaced the whole agenda with a
+ * single centred "No shifts scheduled" panel, which meant an empty week lost
+ * its structure entirely: no dates, no today marker, nothing to orient
+ * against or scroll through — just a lone icon where a calendar should be.
+ * The per-day empty row below already says "No shifts" once per date, which is
+ * the same information without discarding the grid.
+ */
 const MobileRosterAgendaView: React.FC<MobileRosterAgendaViewProps> = ({
   days,
   getShiftsForDate,
@@ -50,79 +61,67 @@ const MobileRosterAgendaView: React.FC<MobileRosterAgendaViewProps> = ({
 
   return (
     <div className="h-full min-h-0 overflow-y-auto px-3 py-3 pb-32 scrollbar-none">
-      {totalShifts === 0 ? (
-        <div className="flex min-h-full flex-col items-center justify-center px-6 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted/20">
-            <Calendar className="h-8 w-8 text-muted-foreground/40" />
-          </div>
-          <p className="text-sm font-black uppercase tracking-widest text-muted-foreground/35">
-            No shifts scheduled
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {dayGroups.map(({ day, shifts }) => {
-            const isToday = isTodayInTimezone(day, SYDNEY_TZ);
+      {/* Spoken once for the whole range, so a screen-reader user learns the
+          range is empty without swiping through every day row to find out. */}
+      <p className="sr-only" role="status">
+        {totalShifts === 0
+          ? `No shifts scheduled across ${dayGroups.length} ${dayGroups.length === 1 ? 'day' : 'days'}.`
+          : `${totalShifts} ${totalShifts === 1 ? 'shift' : 'shifts'} across ${dayGroups.length} ${dayGroups.length === 1 ? 'day' : 'days'}.`}
+      </p>
 
-            return (
-              <section key={day.toISOString()} className="space-y-2">
-                <div
-                  className={cn(
-                    'mobile-roster-date-glass sticky top-0 z-30 flex items-center justify-between overflow-hidden px-3 py-2',
-                    isToday
-                      ? 'text-primary'
-                      : 'text-foreground',
+      <div className="space-y-4">
+        {dayGroups.map(({ day, shifts }) => {
+          const isToday = isTodayInTimezone(day, SYDNEY_TZ);
+
+          return (
+            <section key={day.toISOString()} className="space-y-2" aria-label={format(day, 'EEEE d MMMM')}>
+              <div
+                className={cn(
+                  'mobile-roster-date-glass sticky top-0 z-30 flex items-center justify-between overflow-hidden px-3 py-2.5',
+                  isToday ? 'text-primary' : 'text-foreground',
+                )}
+              >
+                <div>
+                  <h3 className={text.label}>{format(day, 'EEE, d MMM')}</h3>
+                  {isToday && (
+                    <p className={cn(text.overlineBare, 'mt-0.5')}>Today</p>
                   )}
-                >
-                  <div>
-                    <h3 className="text-[12px] font-black uppercase tracking-[0.16em]">
-                      {format(day, 'EEE, d MMM')}
-                    </h3>
-                    {isToday && (
-                      <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.18em]">
-                        Today
-                      </p>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                    {shifts.length} {shifts.length === 1 ? 'shift' : 'shifts'}
-                  </span>
                 </div>
+                <span className={cn(text.overline, isToday && 'text-primary')}>
+                  {shifts.length} {shifts.length === 1 ? 'shift' : 'shifts'}
+                </span>
+              </div>
 
-                <AnimatePresence mode="popLayout">
-                  {shifts.length > 0 ? (
-                    <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/40">
-                      {shifts.map((shiftData) => (
-                        <motion.div
-                          key={shiftData.shift.id}
-                          {...listItemSpring}
-                          className="border-b border-foreground/[0.03] last:border-b-0"
-                        >
-                          <MobileShiftCard
-                            shiftData={shiftData}
-                            selectedDay={day}
-                            onClick={() => setSelectedShift({ data: shiftData, date: day })}
-                          />
-                        </motion.div>
-                      ))}
-                    </div>
-                  ) : (
-                    <motion.div
-                      key={`${day.toISOString()}-empty`}
-                      {...listItemSpring}
-                      className="rounded-2xl border border-dashed border-border/50 px-4 py-5 text-center"
-                    >
-                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">
-                        No shifts
-                      </p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </section>
-            );
-          })}
-        </div>
-      )}
+              <AnimatePresence mode="popLayout">
+                {shifts.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {shifts.map((shiftData) => (
+                      <motion.div
+                        key={shiftData.shift.id}
+                        {...listItemSpring}
+                      >
+                        <MobileShiftCard
+                          shiftData={shiftData}
+                          selectedDay={day}
+                          onClick={() => setSelectedShift({ data: shiftData, date: day })}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <motion.div
+                    key={`${day.toISOString()}-empty`}
+                    {...listItemSpring}
+                    className="rounded-2xl border border-dashed border-border/60 px-4 py-5 text-center"
+                  >
+                    <p className={text.overline}>No shifts</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </section>
+          );
+        })}
+      </div>
 
       <ShiftDetailsDialog
         isOpen={!!selectedShift}

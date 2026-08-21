@@ -32,7 +32,6 @@ export const BroadcastsManagerPage: React.FC = () => {
             <BroadcastFunctionBar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              onRefresh={() => setRefreshTrigger(prev => prev + 1)}
               onCreateGroup={() => setShowCreateDialog(true)}
             />
           }

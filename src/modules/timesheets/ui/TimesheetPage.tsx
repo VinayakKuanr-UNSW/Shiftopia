@@ -28,6 +28,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { UnifiedRosterNavigator, ViewType, DateRange, computeRange, navigateDate, formatRangeLabel } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import { TimesheetTable } from './components/TimesheetTable';
+import { MobileViewRangeToggle } from '@/modules/rosters/ui/components/MobileViewRangeToggle';
 import {
     TimesheetFilterDrawer,
     ActiveFilters,
@@ -394,17 +395,17 @@ export const TimesheetPage: React.FC = () => {
                 leftContent={
                     <>
                         {/* Mobile: compact date nav with short labels */}
-                        <div className="md:hidden flex items-center gap-1.5" role="region" aria-label="Date period selector">
+                        <div className="md:hidden flex items-center gap-1" role="region" aria-label="Date period selector">
                             <button
                                 type="button"
                                 onClick={handleMobilePrev}
                                 aria-label="Previous date period"
-                                className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
+                                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors active:scale-90 touch-manipulation"
                             >
-                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                             </button>
-                            <span 
-                                className="text-[11px] font-black text-foreground whitespace-nowrap min-w-[65px] text-center"
+                            <span
+                                className="text-[11px] font-bold text-foreground whitespace-nowrap min-w-[60px] text-center tabular-nums"
                                 aria-label={`Current date period: ${mobileDateLabel}`}
                             >
                                 {mobileDateLabel}
@@ -413,10 +414,15 @@ export const TimesheetPage: React.FC = () => {
                                 type="button"
                                 onClick={handleMobileNext}
                                 aria-label="Next date period"
-                                className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
+                                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors active:scale-90 touch-manipulation"
                             >
-                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                <ChevronRight className="h-5 w-5" aria-hidden="true" />
                             </button>
+                            <MobileViewRangeToggle
+                                value={viewType}
+                                onChange={(v) => handleViewTypeChange(v as ViewType)}
+                                className="ml-1 shrink-0"
+                            />
                         </div>
                         {/* Desktop: full navigator with view tabs + date picker */}
                         <div className="hidden md:block">
@@ -445,8 +451,6 @@ export const TimesheetPage: React.FC = () => {
                             statusCounts={statusCounts}
                             statusOptions={TIMESHEET_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
                             statusSectionLabel="Timesheet Status"
-                            viewType={viewType}
-                            onViewTypeChange={(v) => handleViewTypeChange(v as ViewType)}
                         />
                         <GroupBySelector value={groupBy} onChange={setGroupBy} options={TIMESHEET_GROUP_BY_OPTIONS} />
                     </>

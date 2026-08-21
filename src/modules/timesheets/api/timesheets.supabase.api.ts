@@ -78,7 +78,15 @@ export interface TimesheetShiftRow {
     requiredEngagementMinutes: number | null;
     /** Training-shift flag (drives the 2h EBA tier) — needed downstream for edit-form floor validation. */
     isTraining: boolean;
-    /** Raw `profiles.employment_type` — feeds the min-engagement floor and the pay-estimate calls. */
+    /**
+     * The employment basis this shift is PAID on — `shifts.target_employment_type`,
+     * falling back to `profiles.employment_type` only when the shift has none.
+     * Feeds the min-engagement floor and the pay-estimate calls.
+     *
+     * NOT simply the profile scalar: a person holding both a Full-Time and a
+     * Casual contract has one profile value and differently-paid shifts, and
+     * pricing their casual shift off the profile drops the 25% casual loading.
+     */
     employmentType: string | null;
     /** Role name (lowercased) includes 'security' — selects the Security Sch 3 floor tiers. */
     isSecurityRole: boolean;
@@ -163,6 +171,7 @@ export async function getShiftsForTimesheet(
                 scheduled_length_minutes,
                 remuneration_rate,
                 is_training,
+                target_employment_type,
                 organization_id,
                 department_id,
                 sub_department_id,
@@ -292,7 +301,7 @@ export async function getShiftsForTimesheet(
                       // Regex-matched against the raw DB value ('full_time',
                       // 'flexible_part_time', ...) — resolvePaymentMinEngagementMinutes
                       // is tolerant of snake_case, no mapping needed here.
-                      employmentType: employee?.employment_type ?? null,
+                      employmentType: shift.target_employment_type ?? employee?.employment_type ?? null,
                       isSecurityRole: isSecurityRoleForFloor,
                   })
                 : { netMinutes: 0, requiredMins: 0, wasToppedUp: false };
@@ -393,7 +402,7 @@ export async function getShiftsForTimesheet(
                 wasToppedUpToMinEngagement: flooredNet.wasToppedUp,
                 requiredEngagementMinutes: flooredNet.requiredMins || null,
                 isTraining: shift.is_training === true,
-                employmentType: employee?.employment_type ?? null,
+                employmentType: shift.target_employment_type ?? employee?.employment_type ?? null,
                 isSecurityRole: isSecurityRoleForFloor,
 
                 shiftStatus: shift.assignment_status || 'open',

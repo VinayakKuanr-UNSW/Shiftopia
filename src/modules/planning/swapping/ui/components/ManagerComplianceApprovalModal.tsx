@@ -35,6 +35,7 @@ import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
+import { fetchScopedContractBasis } from '@/modules/availability/api/contract-basis.api';
 
 // =============================================================================
 // TYPES
@@ -281,19 +282,29 @@ export function ManagerComplianceApprovalModal({
                 if (ids.length === 0) return;
                 const { data: rows } = await supabase
                     .from('shifts')
-                    .select('id, shift_date, start_time, end_time')
+                    .select('id, shift_date, start_time, end_time, sub_department_id')
                     .in('id', ids);
                 const reqShift = (rows as any[] || []).find((s) => s.id === requesterV8ShiftId);
                 const offShift = offererV8ShiftId ? (rows as any[] || []).find((s) => s.id === offererV8ShiftId) : null;
                 const warns: string[] = [];
                 if (offShift) {
-                    const slots = await getAvailabilitySlots(requesterEmployeeId, offShift.shift_date, offShift.shift_date);
-                    const a = evaluateShiftAvailabilityFromSlots(slots, offShift.shift_date, offShift.start_time, offShift.end_time);
+                    const [slots, basis] = await Promise.all([
+                        getAvailabilitySlots(requesterEmployeeId, offShift.shift_date, offShift.shift_date, offShift.sub_department_id),
+                        fetchScopedContractBasis(requesterEmployeeId, { subDepartmentId: offShift.sub_department_id ?? null }),
+                    ]);
+                    const a = evaluateShiftAvailabilityFromSlots(
+                        slots, offShift.shift_date, offShift.start_time, offShift.end_time, basis.availabilityMode,
+                    );
                     if (a.isWarning) warns.push(`${requesterName}: ${a.message}`);
                 }
                 if (offererEmployeeId && reqShift) {
-                    const slots = await getAvailabilitySlots(offererEmployeeId, reqShift.shift_date, reqShift.shift_date);
-                    const a = evaluateShiftAvailabilityFromSlots(slots, reqShift.shift_date, reqShift.start_time, reqShift.end_time);
+                    const [slots, basis] = await Promise.all([
+                        getAvailabilitySlots(offererEmployeeId, reqShift.shift_date, reqShift.shift_date, reqShift.sub_department_id),
+                        fetchScopedContractBasis(offererEmployeeId, { subDepartmentId: reqShift.sub_department_id ?? null }),
+                    ]);
+                    const a = evaluateShiftAvailabilityFromSlots(
+                        slots, reqShift.shift_date, reqShift.start_time, reqShift.end_time, basis.availabilityMode,
+                    );
                     if (a.isWarning) warns.push(`${offererName}: ${a.message}`);
                 }
                 if (!cancelled) setAvailWarnings(warns);

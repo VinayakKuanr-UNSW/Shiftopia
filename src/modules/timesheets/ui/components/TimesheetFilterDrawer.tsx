@@ -272,6 +272,89 @@ export const FilterContent: React.FC<FilterContentProps> = ({
     );
 };
 
+/**
+ * The filter body on its own, with no trigger and no chrome.
+ *
+ * `TimesheetFilterDrawer` owns a button, a Popover and a Drawer, which was
+ * right when each page hung its own filter control off the function bar.
+ * `EmployeeFunctionBar` now supplies all three of those, so what it needs is
+ * the contents — the categorical chips plus, where a page has one, the status
+ * choice that used to sit in a separate tab row.
+ */
+export const TimesheetFilterPanel: React.FC<{
+    entries: TimesheetRow[];
+    appliedFilters: ActiveFilters;
+    onApply: (f: ActiveFilters) => void;
+    statusFilter?: string;
+    onStatusFilterChange?: (status: string) => void;
+    statusCounts?: Record<string, number>;
+    statusOptions?: { id: string; label: string }[];
+    statusSectionLabel?: string;
+}> = ({
+    entries,
+    appliedFilters,
+    onApply,
+    statusFilter,
+    onStatusFilterChange,
+    statusCounts,
+    statusOptions = DEFAULT_STATUS_OPTIONS,
+    statusSectionLabel = 'Status',
+}) => {
+    const [draftFilters, setDraftFilters] = useState<ActiveFilters>(appliedFilters);
+
+    // Re-seed the draft whenever the applied set changes underneath (a Reset
+    // elsewhere, a scope change) so the panel never shows a stale draft.
+    useEffect(() => setDraftFilters(appliedFilters), [appliedFilters]);
+
+    return (
+        <div className="flex flex-col gap-4">
+            {statusFilter && onStatusFilterChange && statusCounts && (
+                <fieldset className="m-0 border-none p-0" role="radiogroup" aria-label={`Filter by ${statusSectionLabel.toLowerCase()}`}>
+                    <legend className="mb-2 p-0 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                        {statusSectionLabel}
+                    </legend>
+                    <div className="flex flex-wrap gap-1.5">
+                        {statusOptions.map(tab => {
+                            const isActive = statusFilter === tab.id;
+                            const count = statusCounts[tab.id] ?? 0;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={isActive}
+                                    aria-label={`${statusSectionLabel}: ${tab.label}, ${count} shifts`}
+                                    onClick={() => onStatusFilterChange(tab.id)}
+                                    className={cn(
+                                        'flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors active:scale-95 touch-manipulation',
+                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                        isActive
+                                            ? 'border-primary bg-primary/15 text-primary'
+                                            : 'border-border/60 bg-muted/40 text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    {isActive && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                                    <span>{tab.label}</span>
+                                    <span className="text-[11px] font-bold tabular-nums opacity-70" aria-hidden="true">{count}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </fieldset>
+            )}
+
+            <FilterContent
+                draftFilters={draftFilters}
+                setDraftFilters={setDraftFilters}
+                entries={entries}
+                onApply={onApply}
+                onReset={() => setDraftFilters(EMPTY_FILTERS)}
+                compact
+            />
+        </div>
+    );
+};
+
 // ── Mobile bottom drawer ──────────────────────────────────────────────────────
 
 interface TimesheetFilterDrawerProps {
@@ -288,8 +371,6 @@ interface TimesheetFilterDrawerProps {
     statusOptions?: { id: string; label: string }[];
     statusSectionLabel?: string;
     /** View type selector (folded into drawer on mobile) */
-    viewType?: string;
-    onViewTypeChange?: (view: string) => void;
 }
 
 const DEFAULT_STATUS_OPTIONS = [
@@ -311,8 +392,6 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
     statusCounts,
     statusOptions = DEFAULT_STATUS_OPTIONS,
     statusSectionLabel = 'Shift Status',
-    viewType,
-    onViewTypeChange,
 }) => {
     const isMobile = useBreakpoint() === 'mobile';
     const [open, setOpen] = useState(false);
@@ -393,8 +472,16 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
         );
     }
 
-    // ── Mobile: bottom-sheet drawer — folds in View Range + Status too, ────
-    // since mobile has no room for separate navigator/tab-row controls.
+    // ── Mobile: bottom-sheet drawer — folds in the Status tabs, which have no
+    // room of their own on a phone.
+    //
+    // View Range used to live here too, on the same reasoning. It does not
+    // belong: it is what the page is showing, not a filter on it, and it
+    // changes far more often than anything else in this sheet — putting it
+    // behind a funnel icon, a scroll and an Apply made the commonest action on
+    // the screen the most expensive one. It is now `MobileViewRangeToggle`,
+    // sitting beside the date navigator in the function bar. Do not re-add it
+    // here: two controls for one piece of state is how they drift apart.
     return (
         <Drawer open={open} onOpenChange={setOpen}>
             <DrawerTrigger asChild>
@@ -427,7 +514,7 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
                     <DrawerTitle className="text-[15px] font-black tracking-tight text-foreground">
                         Filters
                     </DrawerTitle>
-                    <DrawerDescription className="sr-only">Filter timesheet entries by group, role, view duration, or status</DrawerDescription>
+                    <DrawerDescription className="sr-only">Filter timesheet entries by group, role, or status</DrawerDescription>
                     <DrawerClose asChild>
                         <button 
                             type="button"
@@ -441,43 +528,6 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
 
                 {/* Scrollable body */}
                 <div className="overflow-y-auto px-5 py-5 flex-1">
-                    {/* View Type Selector (folded from header on mobile) */}
-                    {viewType && onViewTypeChange && (
-                        <fieldset className="mb-5 pb-4 border-b border-border/20 border-none p-0 m-0" role="radiogroup" aria-label="Select view range">
-                            <legend className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/75 mb-2 p-0">
-                                View Range
-                            </legend>
-                            <div className="flex gap-1.5">
-                                {[
-                                    { id: 'day', label: 'Day' },
-                                    { id: '3day', label: '3-Day' },
-                                    { id: 'week', label: 'Week' },
-                                    { id: 'month', label: 'Month' },
-                                ].map(v => {
-                                    const isActive = viewType === v.id;
-                                    return (
-                                        <button
-                                            key={v.id}
-                                            type="button"
-                                            role="radio"
-                                            aria-checked={isActive}
-                                            aria-label={`${v.label} view`}
-                                            onClick={() => onViewTypeChange(v.id)}
-                                            className={cn(
-                                                'flex-1 h-9 rounded-lg text-[11px] font-black transition-all active:scale-95 touch-manipulation',
-                                                isActive
-                                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                                    : 'bg-muted/40 text-muted-foreground/70 hover:text-foreground hover:bg-muted/60'
-                                            )}
-                                        >
-                                            {v.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </fieldset>
-                    )}
-
                     {/* Quick Status Filter (folded from status tabs) */}
                     {statusFilter && onStatusFilterChange && statusCounts && (
                         <fieldset className="mb-5 pb-4 border-b border-border/20 border-none p-0 m-0" role="radiogroup" aria-label={`Filter by ${statusSectionLabel.toLowerCase()}`}>

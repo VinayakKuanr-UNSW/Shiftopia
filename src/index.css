@@ -728,6 +728,18 @@ body {
   box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05) !important;
 }
 
+/* Flat-embedded cards keep the glass tint but drop the frame.
+   `.dept-card-glass-base` sets `border` (1px) with !important and each
+   `.dept-card-glass-<group>` colours it, so a card embedded inside another
+   container drew a coloured hairline that followed its OWN radius instead of
+   the container's — the red line down the left and along the bottom of the
+   shift-details dialog. A Tailwind `border-0` cannot win this: unlayered rules
+   in this file are emitted after the utilities layer, so at equal specificity
+   the glass rule is simply later. Hence the compound selector. */
+.dept-card-glass-base.dept-card-glass-flat {
+  border-width: 0 !important;
+}
+
 /* -- Glass: Convention (Blue) -- */
 .light .dept-card-glass-convention {
   @apply bg-blue-500/15 border-blue-500/40 shadow-blue-500/20 text-blue-950 !important;

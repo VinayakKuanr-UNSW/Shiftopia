@@ -172,9 +172,10 @@ export const BidOpportunityCard: React.FC<Props> = ({
                 hideActualClocking={true}
                 hidePayrollSection={true}
                 defaultExpandedSections={{ scheduled: true }}
+                identityGrid
                 organization={opp.organization}
                 department={opp.department}
-                subGroup={opp.subGroup}
+                subDepartment={opp.subGroup}
                 role={opp.role}
                 shiftDate={opp.date}
                 startTime={opp.startTime}

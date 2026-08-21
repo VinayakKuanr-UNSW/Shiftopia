@@ -51,6 +51,8 @@ import {
 } from '@/modules/rosters/utils/gps';
 
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { EmployeeFunctionBar, type EmployeeViewRange } from '@/modules/core/ui/components/EmployeeFunctionBar';
+import { sortRows, DEFAULT_ROW_SORT, type RowSort } from '@/modules/core/lib/row-sorting';
 import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
@@ -59,7 +61,7 @@ import {
   computeRange, navigateDate, formatRangeLabel,
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import {
-  TimesheetFilterDrawer,
+  TimesheetFilterPanel,
   type ActiveFilters,
   EMPTY_FILTERS,
   countActiveFilters,
@@ -156,7 +158,32 @@ function getShiftTiming(shift: Shift, now: Date): ShiftTiming {
  * module scope so both AttendanceCard's per-shift render AND the page-level
  * filter/Group By pipeline use the exact same mapping.
  */
-function shiftToTimesheetRow(shift: Shift, employmentType: string | null): TimesheetRow {
+/**
+ * The employment basis this shift is PAID on.
+ *
+ * `shifts.target_employment_type` — NOT NULL since 20260806120100 — is the
+ * shift's own basis, and it is the only correct pricing input. The profile
+ * scalar is a person-level summary that cannot describe someone holding more
+ * than one contract, which is the normal case here: one prod employee holds a
+ * Full-Time Security L7 contract alongside four Casual ones, so their profile
+ * reads "Full-Time" while their Casual Team Leader shift must be paid at the
+ * loaded casual rate. Pricing that shift off the profile charged the permanent
+ * Level 4 rate ($30.26/h) instead of the casual one ($37.82/h) — the 25%
+ * casual loading silently dropped, a ~20% underpay on the estimate.
+ *
+ * The cost engine already reads the shift's target (see
+ * `cost/index.ts::resolveEmploymentType`); this is about the callers that
+ * hand-build a row and never gave it the chance.
+ *
+ * The profile remains a last-resort fallback for synthetic/preview rows that
+ * have no persisted shift behind them.
+ */
+function resolvePayEmploymentType(shift: Shift, profileFallback: string | null): string | null {
+  return shift.target_employment_type ?? profileFallback;
+}
+
+function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null): TimesheetRow {
+  const employmentType = resolvePayEmploymentType(shift, profileEmploymentType);
   const finished = isShiftFinishedForBillable(
     shift.shift_date,
     shift.start_time,
@@ -279,14 +306,21 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
   const gpsIndicator = (canClockIn || canClockOut) ? (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="flex items-center gap-1 focus:outline-none" aria-label="GPS status">
+        <button
+          type="button"
+          className="h-12 min-w-11 shrink-0 flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-muted/30 px-3 transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`GPS signal: ${gpsCapturing ? 'locating' : gpsAnalysis ? gpsAnalysis.confidence : 'no signal'}. Open details.`}
+        >
           {gpsCapturing ? (
-            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
           ) : (
-            <MapPin className={`h-3 w-3 ${gpsAnalysis ? confidenceColor(gpsAnalysis.confidence) : 'text-muted-foreground/40'}`} />
+            <MapPin className={`h-4 w-4 ${gpsAnalysis ? confidenceColor(gpsAnalysis.confidence) : 'text-muted-foreground'}`} aria-hidden="true" />
           )}
-          <span className={`text-[9px] font-mono font-bold uppercase ${gpsAnalysis ? confidenceColor(gpsAnalysis.confidence) : 'text-muted-foreground/40'}`}>
-            {gpsCapturing ? 'locating…' : gpsAnalysis ? gpsAnalysis.confidence : 'no gps'}
+          <span
+            className={`text-[11px] font-bold uppercase tracking-[0.12em] ${gpsAnalysis ? confidenceColor(gpsAnalysis.confidence) : 'text-muted-foreground'}`}
+            aria-hidden="true"
+          >
+            {gpsCapturing ? 'Locating' : gpsAnalysis ? gpsAnalysis.confidence : 'No GPS'}
           </span>
         </button>
       </PopoverTrigger>
@@ -357,33 +391,47 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
     );
   }
 
+  /**
+   * The clock action row.
+   *
+   * Full width, 48px tall. It used to be a `size="sm"` button hugging its own
+   * label with the GPS state as a 9px caption beside it — the single most
+   * important control on the page, and the smallest target on it. The GPS
+   * readout is a real button (it opens a popover) so it now carries its own
+   * 48px box rather than borrowing the row's.
+   */
+  const actionButtonCls =
+    'flex-1 h-12 rounded-xl border-0 shadow-none bg-purple-600 hover:bg-purple-700 text-white ' +
+    'dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white text-sm font-bold ' +
+    'disabled:opacity-60 transition-colors';
+
   const footerActions = (canClockIn || canClockOut) ? (
-    <div className="px-4 pb-4 pt-1 flex items-center gap-3">
-      <div className="flex-1 flex gap-2">
-        {canClockIn && (
-          <Button size="sm"
-            onClick={() => clockIn.mutate({ shiftId: shift.id, preCapture: gpsCapture })}
-            disabled={clockIn.isPending || gpsCapturing || !gpsCapture}
-            title={!gpsCapture && !gpsCapturing ? 'Waiting for GPS fix…' : undefined}
-            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white border-0 shadow-none rounded-xl font-bold text-xs disabled:opacity-50 transition-colors">
-            {clockIn.isPending
-              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />In…</>
-              : gpsCapturing
-              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Locating…</>
-              : <><LogIn className="h-3.5 w-3.5 mr-1.5" />Clock In</>}
-          </Button>
-        )}
-        {canClockOut && (
-          <Button size="sm"
-            onClick={() => clockOut.mutate({ shiftId: shift.id })}
-            disabled={clockOut.isPending}
-            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white border-0 shadow-none rounded-xl font-bold text-xs disabled:opacity-50 transition-colors">
-            {clockOut.isPending
-              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Out…</>
-              : <><LogOut className="h-3.5 w-3.5 mr-1.5" />Clock Out</>}
-          </Button>
-        )}
-      </div>
+    <div className="px-4 pb-4 pt-1 flex items-stretch gap-2 w-full">
+      {canClockIn && (
+        <Button
+          onClick={() => clockIn.mutate({ shiftId: shift.id, preCapture: gpsCapture })}
+          disabled={clockIn.isPending || gpsCapturing || !gpsCapture}
+          title={!gpsCapture && !gpsCapturing ? 'Waiting for GPS fix…' : undefined}
+          aria-label={gpsCapturing ? 'Waiting for GPS fix before clocking in' : 'Clock in'}
+          className={actionButtonCls}>
+          {clockIn.isPending
+            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Clocking In…</>
+            : gpsCapturing
+            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Locating…</>
+            : <><LogIn className="h-4 w-4 mr-2" aria-hidden="true" />Clock In</>}
+        </Button>
+      )}
+      {canClockOut && (
+        <Button
+          onClick={() => clockOut.mutate({ shiftId: shift.id })}
+          disabled={clockOut.isPending}
+          aria-label="Clock out"
+          className={actionButtonCls}>
+          {clockOut.isPending
+            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Clocking Out…</>
+            : <><LogOut className="h-4 w-4 mr-2" aria-hidden="true" />Clock Out</>}
+        </Button>
+      )}
       {gpsIndicator}
     </div>
   ) : null;
@@ -474,6 +522,7 @@ const AttendancePage: React.FC = () => {
   const [range, setRange] = useState<DateRange>(() => computeRange(new Date(), 'week'));
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [groupBy, setGroupBy] = useState<RowGroupBy>('date');
+  const [sort, setSort] = useState<RowSort>(DEFAULT_ROW_SORT);
   const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
   const { isDark } = useTheme();
@@ -608,9 +657,19 @@ const AttendancePage: React.FC = () => {
     return rows;
   }, [scopedLogs, categoryFilteredIds, statusFilter]);
 
+  // Sorted before grouping: `groupRows` preserves first-seen order, so the
+  // bucket sequence follows the row order it is handed.
+  const sortedLogs = useMemo(
+    () => sortRows(filteredLogs, sort, (shift) => ({
+      ...extractAttendanceGroupFields(shift),
+      startTime: shift.start_time ?? undefined,
+    })),
+    [filteredLogs, sort],
+  );
+
   const groupedBuckets = useMemo(
-    () => groupRows(filteredLogs, groupBy, extractAttendanceGroupFields, attendanceGroupLabelFor),
-    [filteredLogs, groupBy],
+    () => groupRows(sortedLogs, groupBy, extractAttendanceGroupFields, attendanceGroupLabelFor),
+    [sortedLogs, groupBy],
   );
 
   // Attendance scorecard — same 9 metrics/definitions as Timesheets + Insights.
@@ -638,72 +697,34 @@ const AttendancePage: React.FC = () => {
         mode="personal"
         className="p-0"
         functionBar={
-          <UnifiedModuleFunctionBar
-            transparent
-            hideViewModeToggle
-            onRefresh={() => refetch()}
-            isLoading={logsLoading}
-            className="mt-1"
-            leftContent={
-              <>
-                {/* Mobile: compact prev/next + label */}
-                <div className="md:hidden flex items-center gap-1.5" role="region" aria-label="Date period selector">
-                  <button
-                    type="button"
-                    onClick={handleMobilePrev}
-                    aria-label="Previous date period"
-                    className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
-                  >
-                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <span
-                    className="text-[11px] font-black text-foreground whitespace-nowrap min-w-[65px] text-center"
-                    aria-label={`Current date period: ${mobileDateLabel}`}
-                  >
-                    {mobileDateLabel}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleMobileNext}
-                    aria-label="Next date period"
-                    className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
-                  >
-                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-                {/* Desktop: full Day/3-Day/Week/Month navigator */}
-                <div className="hidden md:block">
-                  <UnifiedRosterNavigator
-                    variant="full"
-                    date={selectedDate}
-                    viewType={viewType}
-                    onChange={(date, newRange) => { setSelectedDate(date); setRange(newRange); }}
-                    onViewTypeChange={handleViewTypeChange}
-                  />
-                </div>
-              </>
+          <EmployeeFunctionBar
+            view={viewType as EmployeeViewRange}
+            onViewChange={(v) => handleViewTypeChange(v as ViewType)}
+            selectedDate={selectedDate}
+            onDateChange={(d) => { setSelectedDate(d); setRange(computeRange(d, viewType)); }}
+            rangeLabel={mobileDateLabel}
+            onPrevious={handleMobilePrev}
+            onNext={handleMobileNext}
+            sort={sort}
+            onSortChange={setSort}
+            sortOptions={['date', 'startTime', 'role', 'group', 'status']}
+            activeFilterCount={activeFilterCount}
+            filterContent={
+              <TimesheetFilterPanel
+                entries={filterRows}
+                appliedFilters={appliedFilters}
+                onApply={setAppliedFilters}
+                statusFilter={statusFilter}
+                onStatusFilterChange={(st) => setStatusFilter(st as StatusFilter)}
+                statusCounts={statusCounts}
+                statusOptions={ATTENDANCE_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
+                statusSectionLabel="Attendance Status"
+              />
             }
-            filters={
-              <>
-                <TimesheetFilterDrawer
-                  entries={filterRows}
-                  appliedFilters={appliedFilters}
-                  onApply={setAppliedFilters}
-                  activeCount={activeFilterCount}
-                  statusFilter={statusFilter}
-                  onStatusFilterChange={(s) => setStatusFilter(s as StatusFilter)}
-                  statusCounts={statusCounts}
-                  statusOptions={ATTENDANCE_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
-                  statusSectionLabel="Attendance Status"
-                  viewType={viewType}
-                  onViewTypeChange={(v) => handleViewTypeChange(v as ViewType)}
-                />
-                <GroupBySelector value={groupBy} onChange={setGroupBy} options={ATTENDANCE_GROUP_BY_OPTIONS} />
-              </>
-            }
-          >
-
-          </UnifiedModuleFunctionBar>
+            groupBy={groupBy}
+            onGroupByChange={setGroupBy}
+            groupByOptions={ATTENDANCE_GROUP_BY_OPTIONS}
+          />
         }
       />
 

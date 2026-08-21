@@ -104,25 +104,27 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
       {isVertical ? (
         <div className="flex flex-col h-full min-w-0 w-full">
           <div className="flex items-center justify-between gap-1 mb-1">
-            <span className={cn("text-[10px] font-black font-mono shrink-0", theme.time)}>
+            <span className={cn("text-[11px] font-bold font-mono tabular-nums shrink-0", theme.time)}>
               {startTime} - {endTime}
             </span>
           </div>
-          <span className={cn("text-[13px] font-black leading-tight break-words uppercase tracking-tight", theme.text)}>
+          <span className={cn("text-[13px] font-bold leading-tight break-words uppercase tracking-tight", theme.text)}>
             {shift.roles?.name || 'Shift'}
           </span>
 
           {/* Only show more info if there is enough height */}
           {parseInt(style?.height as string) > 70 && (
             <div className="mt-auto pt-3 flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 opacity-50">
+              <div className="flex items-center gap-1.5 opacity-80">
                 <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                <span className="text-[10px] font-black uppercase tracking-widest truncate">
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em] truncate">
                   {groupName}
                 </span>
               </div>
               {subGroupName && (
-                <span className="pl-3 text-[9px] font-bold text-muted-foreground/30 truncate uppercase tracking-wider">
+                // Was 9px at 30% opacity — nominally present, effectively
+                // invisible, and nowhere near 4.5:1 in either theme.
+                <span className="pl-3 text-[11px] font-medium text-muted-foreground truncate uppercase tracking-wide">
                   {subGroupName}
                 </span>
               )}
@@ -131,10 +133,10 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
         </div>
       ) : (
         <div className="flex items-center gap-1.5 min-w-0 overflow-hidden w-full h-full">
-          <span className={cn("text-[9px] font-black font-mono shrink-0", theme.time)}>
+          <span className={cn("text-[11px] font-bold font-mono tabular-nums shrink-0", theme.time)}>
             {startTime}
           </span>
-          <span className={cn("text-[10px] font-black truncate uppercase tracking-tight flex-1", theme.text)}>
+          <span className={cn("text-[11px] font-bold truncate uppercase tracking-tight flex-1", theme.text)}>
             {shift.roles?.name || 'Shift'}
           </span>
         </div>
@@ -142,15 +144,6 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
 
 
       
-      {/* Subtle Glow on Hover */}
-      <div className={cn(
-        "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none",
-        groupVariant === 'convention' ? 'shadow-[inset_0_0_12px_rgba(59,130,246,0.2)]' :
-        groupVariant === 'exhibition' ? 'shadow-[inset_0_0_12px_rgba(16,185,129,0.2)]' :
-        groupVariant === 'theatre' ? 'shadow-[inset_0_0_12px_rgba(244,63,94,0.2)]' :
-        groupVariant === 'cutaway' ? 'shadow-[inset_0_0_12px_rgba(245,158,11,0.2)]' :
-        'shadow-[inset_0_0_12px_rgba(148,163,184,0.2)]'
-      )} />
     </button>
   );
 };

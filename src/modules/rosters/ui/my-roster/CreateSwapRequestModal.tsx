@@ -1,19 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
-import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerFooter,
+} from '@/modules/core/ui/primitives/drawer';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { Badge } from '@/modules/core/ui/primitives/badge';
-import { Calendar, Clock, AlertTriangle, ArrowRightLeft, Send, Timer, Flame, Zap, Loader2 } from 'lucide-react';
+import { ArrowLeftRight, Loader2, Send, ShieldCheck } from 'lucide-react';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { cn } from '@/modules/core/lib/utils';
-import { motion } from 'framer-motion';
 import { Shift } from '@/modules/rosters';
 import { useSwaps } from '@/modules/planning';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { MobileShiftCard } from './MobileShiftCard';
 
-interface CreateSwapRequestModalProps {
+export interface CreateSwapRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
   shift: Shift;
@@ -23,50 +27,13 @@ interface CreateSwapRequestModalProps {
   groupColor?: string;
 }
 
-const formatTime = (time: string): string => {
-  if (!time) return '';
-  const [h, m] = time.split(':').map(Number);
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-};
-
-const getGradientClass = (color: string): string => {
-  switch (color) {
-    case 'blue':
-    case 'convention':
-      return 'dept-card-glass-base dept-card-glass-convention';
-    case 'green':
-    case 'exhibition':
-      return 'dept-card-glass-base dept-card-glass-exhibition';
-    case 'red':
-    case 'theatre':
-      return 'dept-card-glass-base dept-card-glass-theatre';
-    case 'amber':
-    case 'cutaway':
-      return 'dept-card-glass-base dept-card-glass-cutaway';
-    default:
-      return 'dept-card-glass-base dept-card-glass-default';
-  }
-};
-
-const calculateNetLength = (startTime: string, endTime: string, breakMinutes: number): string => {
-  const [sh, sm] = startTime.split(':').map(Number);
-  const [eh, em] = endTime.split(':').map(Number);
-  let total = eh * 60 + em - (sh * 60 + sm);
-  if (total < 0) total += 24 * 60;
-  const net = total - breakMinutes;
-  const h = Math.floor(net / 60);
-  const m = net % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
-};
-
-const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
+export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
   isOpen,
   onClose,
   shift,
-  shiftDate: _shiftDate,
-  groupName,
+  groupName = '',
   subGroupName,
-  groupColor = 'slate',
+  groupColor = 'blue',
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -75,7 +42,6 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setReason('');
@@ -84,14 +50,6 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
   }, [isOpen]);
 
   if (!shift) return null;
-
-  const netLength = calculateNetLength(
-    shift.start_time,
-    shift.end_time,
-    shift.break_minutes || 0
-  );
-
-  const urgency = computeShiftUrgency(shift.shift_date, shift.start_time, (shift as any).start_at);
 
   const handleSubmit = async () => {
     if (!reason.trim()) {
@@ -108,154 +66,125 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      createSwap({
-        requesterV8ShiftId: shift.id,
-        requestedByEmployeeId: user.id || shift.assigned_employee_id!,
-        swapWithEmployeeId: null, // Always open for now
-        reason: reason.trim(),
-      }, {
-        onSuccess: () => {
-          setIsSubmitting(false);
-          onClose();
+      createSwap(
+        {
+          requesterV8ShiftId: shift.id,
+          requestedByEmployeeId: user.id || shift.assigned_employee_id!,
+          swapWithEmployeeId: null, // Open to all qualified peers
+          reason: reason.trim(),
         },
-        onError: () => {
-          setIsSubmitting(false);
+        {
+          onSuccess: () => {
+            setIsSubmitting(false);
+            onClose();
+          },
+          onError: () => {
+            setIsSubmitting(false);
+          },
         }
-      });
+      );
     } catch (error) {
       console.error(error);
       setIsSubmitting(false);
     }
   };
 
+  return (
+    <Drawer open={isOpen} onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>
+      <DrawerContent
+        className="max-w-lg mx-auto bg-background border-border max-h-[90dvh] flex flex-col rounded-t-[32px] overflow-hidden"
+        aria-labelledby="swap-drawer-title"
+        aria-describedby="swap-drawer-desc"
+      >
+        <DrawerHeader className="px-5 pt-5 pb-2 text-left">
+          <DrawerTitle id="swap-drawer-title" className="flex items-center gap-2 text-lg font-bold text-foreground">
+            <ArrowLeftRight className="h-5 w-5 text-indigo-500" aria-hidden="true" />
+            Request Shift Swap
+          </DrawerTitle>
+          <DrawerDescription id="swap-drawer-desc" className="text-xs text-muted-foreground">
+            Post your shift for eligible team members to swap with.
+          </DrawerDescription>
+        </DrawerHeader>
 
-  // ── Shared content ────────────────────────────────────────────────────────────
-  const shiftCard = (
-    <div className={cn('rounded-2xl p-4 shadow-xl text-foreground', getGradientClass(groupColor))}>
-      <div className="flex items-center gap-2 mb-2 text-[10px] font-black uppercase tracking-widest text-foreground/50">
-        <Calendar className="h-3.5 w-3.5" />
-        Shift to Swap
-      </div>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xl font-black tracking-tight text-foreground">{shift.roles?.name || 'Shift'}</div>
-        <div className="flex items-center gap-1.5">
-          {urgency === 'emergent' && (
-            <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 animate-pulse">
-              <Flame className="h-2.5 w-2.5" />
-              Emergent
-            </Badge>
-          )}
-          {urgency === 'urgent' && (
-            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-              <Zap className="h-2.5 w-2.5" />
-              Urgent
-            </Badge>
-          )}
-        </div>
-      </div>
-      <div className="text-xs font-bold text-foreground/70 mb-4 uppercase tracking-tight">
-        {groupName || shift.departments?.name} | {subGroupName || shift.sub_group_name}
-      </div>
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div className="flex items-center gap-2 bg-muted/40 dark:bg-black/20 rounded-xl p-2.5">
-          <Clock className="h-4 w-4 opacity-60" />
-          <span className="font-bold text-foreground">{formatTime(shift.start_time)}-{formatTime(shift.end_time)}</span>
-        </div>
-        <div className="flex items-center gap-2 bg-muted/40 dark:bg-black/20 rounded-xl p-2.5 text-center justify-center">
-          <Timer className="h-4 w-4 opacity-60" />
-          <span className="font-bold text-foreground">{netLength}</span>
-        </div>
-      </div>
-    </div>
-  );
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-4">
+          {/* 1. Compact Shift Card (Same as Template and MyRoster) */}
+          <div className="rounded-xl overflow-hidden">
+            <MobileShiftCard
+              shiftData={{
+                shift,
+                groupName: groupName || shift.departments?.name || '',
+                groupColor,
+                subGroupName: subGroupName || (shift as any).sub_group_name,
+              }}
+            />
+          </div>
 
-  const formBody = (
-    <div className="space-y-4">
-      {shiftCard}
-      {/* Reason */}
-      <div className="space-y-2">
-        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-          Reason for Swap <span className="text-rose-500">*</span>
-        </Label>
-        <Textarea
-          placeholder="Why do you need to swap?..."
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={3}
-          className="rounded-2xl resize-none"
-        />
-      </div>
-      {/* Compliance Notice */}
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
-          <div className="text-[11px]">
-            <p className="font-black text-amber-500 mb-1 uppercase tracking-wider">Guidelines</p>
-            <ul className="text-amber-500/70 space-y-1 font-medium">
-              <li>• Must be at least 4 hours before the shift</li>
-              <li>• Both employees must be role-qualified</li>
-              <li>• Subject to manager final approval</li>
+          {/* 2. Rules & Compliance Guidelines */}
+          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-3.5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+              <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>Swap Rules & Guidelines</span>
+            </div>
+            <ul className="text-xs space-y-1 text-indigo-700/90 dark:text-indigo-300/90 pl-1 list-disc list-inside">
+              <li>Must be requested at least 4 hours before the shift start.</li>
+              <li>Both employees must hold matching role qualifications and active licences.</li>
+              <li>Swap requests are subject to manager final approval.</li>
             </ul>
           </div>
+
+          {/* 3. Reason for Swap */}
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="swap-shift-reason"
+              className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+            >
+              Reason for Swap <span className="text-rose-500" aria-hidden="true">*</span>
+            </Label>
+            <Textarea
+              id="swap-shift-reason"
+              placeholder="Why do you need to swap this shift?..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              disabled={isSubmitting}
+              aria-required="true"
+              className="rounded-2xl resize-none bg-muted/30 text-sm focus-visible:ring-indigo-500"
+            />
+          </div>
         </div>
-      </div>
-    </div>
-  );
 
-  const actionButtons = (
-    <>
-      <Button
-        variant="ghost"
-        onClick={onClose}
-        className="h-12 rounded-2xl uppercase text-xs font-black"
-      >
-        Keep Shift
-      </Button>
-      <Button
-        onClick={handleSubmit}
-        disabled={!reason.trim() || isSubmitting}
-        className="h-12 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white shadow-xl shadow-purple-950/20 uppercase text-xs font-black"
-      >
-        {isSubmitting ? (
-          <Loader2 className="animate-spin h-5 w-5" />
-        ) : (
-          <>
-            <Send className="h-4 w-4 mr-2" />
-            Create Request
-          </>
-        )}
-      </Button>
-    </>
-  );
-
-  return (
-    <ResponsiveDialog
-      open={isOpen}
-      onOpenChange={onClose}
-      dialogClassName="max-w-md"
-      drawerClassName="bg-background border-border"
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <ResponsiveDialog.Header>
-          <ResponsiveDialog.Title className="flex items-center gap-2 text-xl font-black">
-            <ArrowRightLeft className="h-5 w-5 text-purple-500" />
-            Request Shift Swap
-          </ResponsiveDialog.Title>
-          <ResponsiveDialog.Description>
-            Select a reason and post your shift for swapping.
-          </ResponsiveDialog.Description>
-        </ResponsiveDialog.Header>
-        <ResponsiveDialog.Body className="space-y-4 mt-2">
-          {formBody}
-        </ResponsiveDialog.Body>
-        <ResponsiveDialog.Footer className="mt-6 gap-3">
-          {actionButtons}
-        </ResponsiveDialog.Footer>
-      </motion.div>
-    </ResponsiveDialog>
+        {/* 4. Action Buttons */}
+        <DrawerFooter className="px-5 py-4 border-t border-border/50 bg-card/50 flex flex-row items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex-1 h-12 rounded-2xl uppercase text-xs font-bold border-border/80 hover:bg-muted active:scale-[0.98] transition-all"
+          >
+            Keep Shift
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting || !reason.trim()}
+            className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white uppercase text-xs font-bold shadow-lg shadow-indigo-950/20 active:scale-[0.98] transition-all disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Submitting...
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Send className="h-4 w-4" aria-hidden="true" />
+                Request Swap
+              </span>
+            )}
+          </Button>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 };
 

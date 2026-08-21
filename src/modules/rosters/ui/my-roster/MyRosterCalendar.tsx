@@ -95,7 +95,7 @@ const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
             </motion.div>
           )}
           {view === 'month' && (
-            <motion.div key="month" {...tabTransition} className="h-full">
+            <motion.div key="month" {...tabTransition} className="h-full flex flex-col min-h-0">
               <MonthView
                 date={selectedDate}
                 getShiftsForDate={getShiftsForDate}

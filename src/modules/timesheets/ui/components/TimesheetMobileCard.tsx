@@ -35,6 +35,7 @@ import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MI
 import { validateBillableEdit, billableVarianceVsRoster } from '../../domain/billable-edit';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 
 interface TimesheetMobileCardProps {
     entry: TimesheetRow;
@@ -97,26 +98,15 @@ const DataRow: React.FC<{
     </div>
 );
 
+/**
+ * Sydney-pinned, via the shared formatter.
+ *
+ * This used `new Date(t).getHours()` — the BROWSER's timezone. Correct in
+ * Sydney by coincidence and wrong for every other viewer, which is exactly the
+ * kind of bug no local dev ever sees.
+ */
 function formatTime(t: string | null | undefined): string {
-    if (!t || t === '-') return '—';
-    if (t.includes('AM') || t.includes('PM')) return t;
-    
-    let timeStr = t;
-    if (t.includes('T')) {
-        const d = new Date(t);
-        if (!isNaN(d.getTime())) {
-            const h = d.getHours();
-            const m = d.getMinutes();
-            return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-        }
-    }
-
-    const parts = timeStr.split(':').map(Number);
-    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        const h = parts[0], m = parts[1];
-        return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-    }
-    return timeStr;
+    return formatClockTime(t, 'h:mm a', '—') ?? '—';
 }
 
 function getDisplayStatus(entry: TimesheetRow): { label: string; variant: string; isPrimary: boolean } {
@@ -435,8 +425,11 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             <SharedShiftCard
             variant="timecard"
             hideGlow={hideGlow}
+            identityGrid
             organization={entry.organization}
             department={entry.department}
+            subDepartment={entry.subDepartment}
+            group={entry.group}
             subGroup={entry.subGroup}
             role={entry.role}
             shiftDate={String(entry.date)}

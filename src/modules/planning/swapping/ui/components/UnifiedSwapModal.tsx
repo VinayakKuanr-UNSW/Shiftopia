@@ -361,9 +361,10 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                         <div key={shift.id} className="relative group">
                                             <SharedShiftCard
                                                 variant="timecard"
+                                                identityGrid
                                                 organization={s.organization_name || ''}
                                                 department={s.departments?.name || ''}
-                                                subGroup={s.sub_departments?.name || ''}
+                                                subDepartment={s.sub_departments?.name || ''}
                                                 role={s.roles?.name || 'Shift'}
                                                 shiftDate={format(parse(s.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d')}
                                                 startTime={fmtTime(s.start_time)}

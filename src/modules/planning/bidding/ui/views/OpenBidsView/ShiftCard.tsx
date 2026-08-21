@@ -162,9 +162,10 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         hidePayrollSection={true}
         defaultExpandedSections={{ scheduled: true }}
         groupVariant={groupVariant}
+        identityGrid
         organization={shift.organization || shift.location || 'ICC Sydney'}
         department={shift.department}
-        subGroup={shift.subDepartment}
+        subDepartment={shift.subDepartment}
         role={shift.role}
         employeeName={assignedName}
         estimatedPay={costBreakdown?.formattedPay || (shift as any).estimatedPay || (shift as any).estimated_pay}

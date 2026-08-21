@@ -6,13 +6,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/modules/core/ui/primitives/select';
+import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { DayAvailability, TimeSlot } from '../../model/availability.types';
 import { translateDatabaseError } from '../../utils/validation.utils';
@@ -445,22 +439,18 @@ export default function DayInteractionModal({
 
                     {/* Status Select */}
                     <div className="flex-1">
-                      <Label className="text-xs text-muted-foreground">Status</Label>
-                      <Select
+                      <GlobalStyleSelect
+                        label="Status"
                         value={slot.status}
-                        onValueChange={(value: 'Available' | 'Unavailable') =>
-                          updateTimeSlot(slot.id, 'status', value)
-                        }
+                        onChange={(value) => updateTimeSlot(slot.id, 'status', value as 'Available' | 'Unavailable')}
+                        options={[
+                          { id: 'Available', name: 'Available', description: 'Can be scheduled during this slot' },
+                          { id: 'Unavailable', name: 'Unavailable', description: 'Cannot work during this slot' },
+                        ]}
                         disabled={isLocked}
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Available">Available</SelectItem>
-                          <SelectItem value="Unavailable">Unavailable</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        showSearch={false}
+                        compact
+                      />
                     </div>
 
                     {/* Remove Button */}

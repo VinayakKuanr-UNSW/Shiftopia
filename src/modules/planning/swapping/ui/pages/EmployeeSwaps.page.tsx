@@ -388,7 +388,6 @@ export const EmployeeSwapsPage: React.FC = () => {
 
     // State
     const [activeTab, setActiveTab] = useState<TabType>('available-swaps');
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [priorityFilter, setPriorityFilter] = useState<ShiftUrgency | 'all'>('all');
     // Default to the current week (Mon–Sun) preset on every load.
     const [startDate, setStartDate] = useState<Date>(() => startOfWeekAU(new Date()));
@@ -417,17 +416,6 @@ export const EmployeeSwapsPage: React.FC = () => {
     React.useEffect(() => {
         setSelectedSwapIds([]);
     }, [activeTab, isBulkModeActive]);
-
-    // Handle refresh
-    const handleRefresh = useCallback(async () => {
-        setIsRefreshing(true);
-        await Promise.all([refetchMySwaps(), refetchAvailable()]);
-        setIsRefreshing(false);
-        toast({
-            title: 'Refreshed',
-            description: 'Swap requests have been updated.',
-        });
-    }, [refetchMySwaps, refetchAvailable, toast]);
 
     // Sorting
     const availableSort = useTableSorting(availableSwaps, { key: 'created_at', direction: 'desc' });
@@ -651,9 +639,11 @@ export const EmployeeSwapsPage: React.FC = () => {
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
                 <SharedShiftCard
                     variant="timecard"
+                    identityGrid
                     organization={shift?.organizations?.name || ''}
                     department={shift?.departments?.name || ''}
-                    subGroup={shift?.sub_departments?.name}
+                    subDepartment={shift?.sub_departments?.name}
+                    subGroup={(shift as any)?.sub_group_name}
                     role={shift?.roles?.name || 'Unknown Role'}
                     shiftDate={formatShiftDate(shift, 'EEE, MMM d', shift?.shift_date || '')}
                     startTime={formatShiftTime(shift, 'start', 'HH:mm')}
@@ -717,9 +707,11 @@ export const EmployeeSwapsPage: React.FC = () => {
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
                 <SharedShiftCard
                     variant="timecard"
+                    identityGrid
                     organization={shift?.organizations?.name || 'ICC Sydney'}
                     department={shift?.departments?.name || 'Department'}
-                    subGroup={shift?.sub_departments?.name}
+                    subDepartment={shift?.sub_departments?.name}
+                    subGroup={(shift as any)?.sub_group_name}
                     role={shift?.roles?.name || 'Shift'}
                     shiftDate={formatShiftDate(shift, 'EEEE, MMM d, yyyy', 'Unknown')}
                     startTime={formatShiftTime(shift, 'start', 'HH:mm', '00:00')}
@@ -823,9 +815,11 @@ export const EmployeeSwapsPage: React.FC = () => {
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
                 <SharedShiftCard
                 variant="timecard"
+                identityGrid
                 organization={shift?.organizations?.name || 'ICC Sydney'}
                 department={shift?.departments?.name || 'Department'}
-                subGroup={shift?.sub_departments?.name}
+                subDepartment={shift?.sub_departments?.name}
+                subGroup={(shift as any)?.sub_group_name}
                 role={shift?.roles?.name || 'Shift'}
                 shiftDate={formatShiftDate(shift, 'EEE, MMM d', 'Unknown')}
                 startTime={formatShiftTime(shift, 'start', 'HH:mm', '00:00')}
@@ -988,8 +982,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                     setStartDate(start);
                     setEndDate(end);
                 }}
-                onRefresh={handleRefresh}
-                isLoading={isLoading || isRefreshing}
+                isLoading={isLoading}
                 subFunctionBar={isBulkModeActive ? (
                     <SwapSelectionToolbar
                         selectedIds={selectedSwapIds}
@@ -1040,52 +1033,12 @@ export const EmployeeSwapsPage: React.FC = () => {
                         <span className="hidden md:inline">Bulk Mode</span>
                     </Button>
                 }
-                leftContent={
-                    <div className={cn(
-                        "flex items-center gap-1 p-1 rounded-xl",
-                        isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
-                    )}>
-                        {([
-                            { id: 'available-swaps' as TabType, label: 'Available', mobileLabel: 'Available', icon: ArrowLeftRight, count: filteredAvailableSwaps.length },
-                            { id: 'my-offers'       as TabType, label: 'My Offers', mobileLabel: 'Offers',    icon: ThumbsUp,       count: filteredMyOffers.length },
-                            { id: 'my-swaps'        as TabType, label: 'My Swaps',  mobileLabel: 'Mine',      icon: Calendar,       count: filteredMySwaps.length },
-                        ] as const).map(tab => {
-                            const isActive = activeTab === tab.id;
-                            const Icon = tab.icon;
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={cn(
-                                        'flex items-center gap-1.5 px-3 h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all',
-                                        isActive
-                                            ? 'bg-[#7b61ff] text-white shadow-sm'
-                                            : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
-                                    )}
-                                >
-                                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                                    <span className="hidden sm:inline">{tab.label}</span>
-                                    <span className="sm:hidden">{tab.mobileLabel}</span>
-                                    <span className={cn(
-                                        "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black tabular-nums",
-                                        isActive
-                                            ? "bg-white/20 text-white"
-                                            : (isDark ? "bg-white/5 text-white/40" : "bg-slate-900/5 text-slate-900/40")
-                                    )}>
-                                        {tab.count}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                }
-
             />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
             <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col">
-                {/* Mobile Tabs Switcher */}
-                <div className="lg:hidden mb-3 p-1 rounded-2xl bg-slate-100/85 dark:bg-[#1c2333]/85 border border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-1 shadow-sm shrink-0">
+                {/* Tabs Switcher */}
+                <div className="mb-3 p-1 rounded-2xl bg-slate-100/85 dark:bg-[#1c2333]/85 border border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-1 shadow-sm shrink-0">
                     {([
                         { id: 'available-swaps' as TabType, label: 'Available', mobileLabel: 'Available', icon: ArrowLeftRight, count: filteredAvailableSwaps.length },
                         { id: 'my-offers'       as TabType, label: 'My Offers', mobileLabel: 'Offers',    icon: ThumbsUp,       count: filteredMyOffers.length },
@@ -1105,7 +1058,8 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 )}
                             >
                                 <Icon className="h-3.5 w-3.5 shrink-0" />
-                                <span className="xs:inline">{tab.mobileLabel}</span>
+                                <span className="hidden sm:inline">{tab.label}</span>
+                                <span className="sm:hidden">{tab.mobileLabel}</span>
                                 <span className={cn(
                                     "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black tabular-nums",
                                     isActive
@@ -1887,9 +1841,11 @@ export const EmployeeSwapsPage: React.FC = () => {
                                     
                                     <SharedShiftCard
                                         variant="timecard"
+                                        identityGrid
                                         organization={shift?.organizations?.name || '—'}
                                         department={shift?.departments?.name || '—'}
-                                        subGroup={shift?.sub_departments?.name}
+                                        subDepartment={shift?.sub_departments?.name}
+                                        subGroup={(shift as any)?.sub_group_name}
                                         role={shift?.roles?.name || 'Unknown Role'}
                                         shiftDate={formatShiftDate(shift, 'EEE, MMM d', shift?.shift_date || '')}
                                         startTime={formatShiftTime(shift, 'start', 'HH:mm')}

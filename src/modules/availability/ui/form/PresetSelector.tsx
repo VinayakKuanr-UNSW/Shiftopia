@@ -20,6 +20,7 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAvailability } from '../../state/useAvailability';
 import { cn } from '@/modules/core/lib/utils';
 import { addDays, format } from 'date-fns';
+import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
 
 /* ----------------- Types ----------------- */
 interface AvailabilityPreset {
@@ -115,58 +116,20 @@ const PresetComboBox: FC<PresetComboBoxProps> = ({
   selectedPresetId,
   onSelectPreset,
 }) => {
-  const [open, setOpen] = useState(false);
-
-  // Find the current preset object by ID
-  const selectedPreset = presets.find((p) => p.id === selectedPresetId);
-  const displayedName = selectedPreset ? selectedPreset.name : 'Select Preset';
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-label="Select an availability preset"
-          className="w-full justify-between"
-        >
-          {displayedName}
-          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent className="w-full p-0" side="bottom">
-        <Command>
-          <CommandInput placeholder="Search presets..." />
-          <CommandEmpty>No presets found.</CommandEmpty>
-          <CommandList>
-            <CommandGroup>
-              {presets.map((preset) => (
-                <CommandItem
-                  key={preset.id}
-                  value={preset.id}
-                  onSelect={() => {
-                    onSelectPreset(preset.id);
-                    setOpen(false);
-                  }}
-                >
-                  <div>
-                    <div className="font-medium">{preset.name}</div>
-                    {preset.description && (
-                      <div className="text-xs opacity-70">
-                        {preset.description}
-                      </div>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            <CommandSeparator />
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <GlobalStyleSelect
+      label="Preset"
+      value={selectedPresetId || ''}
+      onChange={onSelectPreset}
+      options={presets.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+      }))}
+      placeholder="Select Preset"
+      searchPlaceholder="Search presets..."
+      compact
+    />
   );
 };
 

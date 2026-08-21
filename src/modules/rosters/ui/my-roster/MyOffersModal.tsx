@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { formatCalendarDate, getShiftInstant } from '@/modules/core/lib/date.utils';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -24,16 +23,29 @@ import {
 } from '@/modules/rosters/state/useRosterShifts';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
+import { text, touch } from '@/modules/core/ui/typography';
 import {
     Inbox,
     CheckCircle,
     XCircle,
     Loader2,
+    AlertTriangle,
+    RotateCw,
     X,
 } from 'lucide-react';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
+import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
+import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
-import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/modules/core/ui/primitives/dialog';
 
 /* ═══════════════════════════════════════════════════════════════════════
    TYPES
@@ -95,7 +107,22 @@ function computeNetLength(shift: OfferData['shift']): number {
     return Math.max(0, gross - (shift.unpaid_break_minutes ?? 0));
 }
 
-function parseExpiry(raw: any): number | null {
+/**
+ * Parse `offer_expires_at`, which is a timestamptz and so arrives from PostgREST
+ * with an offset already attached. The `+ 'Z'` branch is only a fallback for a
+ * value that somehow reaches here naive.
+ *
+ * This must NOT be used on shift_date/start_time. Those are Sydney wall-clock
+ * and belong to `getShiftInstant`. Passing them here looks like it works and
+ * does not: the guard regex `[+-]\d{2}` matches the hyphens inside the DATE, so
+ * "2026-08-20T05:30:00" is mistaken for a string that already carries an offset,
+ * no Z is appended, and `new Date` parses it in the VIEWER's timezone. On a
+ * Sydney machine that lands on the right instant by coincidence — which is
+ * exactly why the wrong reading survived — but for anyone else the 4h offer
+ * window, the countdown and the auto-expire write it triggers all move by their
+ * local offset.
+ */
+function parseExpiry(raw: unknown): number | null {
     if (!raw) return null;
     const s = typeof raw === 'string' ? raw.trim() : String(raw);
     const normalised = s.includes(' ') && !s.includes('T') ? s.replace(' ', 'T') : s;
@@ -104,35 +131,44 @@ function parseExpiry(raw: any): number | null {
     return isNaN(t) ? null : t;
 }
 
+/** The instant an offer stops being actionable, or null when it never does. */
+function resolveOfferDeadline(offer: OfferData): number | null {
+    const stated = parseExpiry(offer.offer_expires_at ?? offer.shift.offer_expires_at);
+
+    // TTS rule: an offer must close at least 4h before the shift starts,
+    // whatever the stated expiry says.
+    const start = getShiftInstant(offer.shift, 'start');
+    const ttsDeadline = start ? start.getTime() - 4 * 60 * 60 * 1000 : null;
+
+    if (stated == null) return ttsDeadline;
+    if (ttsDeadline == null) return stated;
+    return Math.min(stated, ttsDeadline);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    OFFER ITEM — wraps SharedShiftCard with live expiry countdown
    ═══════════════════════════════════════════════════════════════════════ */
 
 const OfferItem: React.FC<{
     offer: OfferData;
+    recipientName?: string;
     showActions: boolean;
     processingId: string | null;
     onAccept: (shiftId: string) => void;
     onDeclineRequest: (shiftId: string) => void;
     onExpire: (shiftId: string) => void;
-}> = ({ offer, showActions, processingId, onAccept, onDeclineRequest, onExpire }) => {
+}> = ({ offer, recipientName, showActions, processingId, onAccept, onDeclineRequest, onExpire }) => {
     const [timerText, setTimerText] = useState<string | null>(null);
     const [isExpired, setIsExpired] = useState(false);
     const expiredRef = React.useRef(false);
 
-    const expiresRaw = offer.offer_expires_at || (offer.shift as any).offer_expires_at;
-    const expiryMs = parseExpiry(expiresRaw);
-
-    // TTS-aware expiry: Must expire at least 4h before start
-    const startMs = parseExpiry(`${offer.shift.shift_date}T${offer.shift.start_time}`);
-    const autoExpiryMs = startMs ? startMs - (4 * 60 * 60 * 1000) : null;
-    const finalExpiryMs = autoExpiryMs ? Math.min(expiryMs ?? Infinity, autoExpiryMs) : expiryMs;
+    const deadlineMs = resolveOfferDeadline(offer);
 
     useEffect(() => {
-        if (!finalExpiryMs) return;
+        if (!deadlineMs) return;
 
         const tick = () => {
-            const diff = Math.max(0, Math.floor((finalExpiryMs - Date.now()) / 1000));
+            const diff = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
             if (diff === 0) {
                 setIsExpired(true);
                 setTimerText(null);
@@ -150,28 +186,43 @@ const OfferItem: React.FC<{
         tick();
         const id = setInterval(tick, 30_000);
         return () => clearInterval(id);
-    }, [finalExpiryMs, offer.shift_id, onExpire]);
+    }, [deadlineMs, offer.shift_id, onExpire]);
 
     const isLocked = isShiftLocked(offer.shift.shift_date, offer.shift.start_time);
     const isActionDisabled = !!processingId || isLocked || isExpired;
     const isProcessingThis = processingId === offer.shift_id;
     const netLength = computeNetLength(offer.shift);
+    const roleLabel = offer.shift.roles?.name || 'Shift';
+
+    const groupName =
+        GROUP_DISPLAY_NAMES[offer.shift.group_type as keyof typeof GROUP_DISPLAY_NAMES] ||
+        offer.shift.departments?.name ||
+        '';
+
+    const urgency = computeShiftUrgency(offer.shift.shift_date, offer.shift.start_time);
 
     const footerActions = showActions ? (
-        <div className="flex gap-4 p-4 mt-auto">
+        <div className="flex gap-3 p-4 mt-auto">
             <Button
                 size="lg"
                 className={cn(
-                    'flex-1 h-12 rounded-2xl font-black text-sm uppercase tracking-[0.1em] transition-all shadow-xl active:scale-[0.98]',
+                    text.label,
+                    touch.target,
+                    'flex-1 h-12 rounded-2xl uppercase transition-colors active:scale-[0.98]',
                     isActionDisabled
                         ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                        : 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-emerald-500/20',
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white',
                 )}
                 onClick={() => !isActionDisabled && onAccept(offer.shift_id)}
                 disabled={isActionDisabled}
+                aria-label={
+                    isLocked
+                        ? `Response window closed for ${roleLabel}`
+                        : `Accept ${roleLabel} on ${offer.shift.shift_date}`
+                }
             >
                 {isProcessingThis ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                 ) : isLocked ? (
                     'Window Closed'
                 ) : (
@@ -181,9 +232,14 @@ const OfferItem: React.FC<{
             <Button
                 size="lg"
                 variant="outline"
-                className="flex-1 h-12 rounded-2xl font-black text-sm uppercase tracking-[0.1em] text-destructive border-destructive/20 hover:bg-destructive/10 transition-all active:scale-[0.98]"
+                className={cn(
+                    text.label,
+                    touch.target,
+                    'flex-1 h-12 rounded-2xl uppercase text-destructive border-destructive/30 hover:bg-destructive/10 transition-colors active:scale-[0.98]',
+                )}
                 onClick={() => !isActionDisabled && onDeclineRequest(offer.shift_id)}
                 disabled={isActionDisabled}
+                aria-label={`Decline ${roleLabel} on ${offer.shift.shift_date}`}
             >
                 Decline
             </Button>
@@ -193,16 +249,17 @@ const OfferItem: React.FC<{
             <Badge
                 variant="outline"
                 className={cn(
-                    'h-10 px-6 rounded-full text-[11px] uppercase tracking-widest font-black flex items-center gap-2',
+                    text.overlineBare,
+                    'h-10 px-6 rounded-full flex items-center gap-2',
                     offer.status === 'Accepted'
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                        : 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400',
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400',
                 )}
             >
                 {offer.status === 'Accepted' ? (
-                    <CheckCircle className="h-4 w-4" />
+                    <CheckCircle className="h-4 w-4" aria-hidden="true" />
                 ) : (
-                    <XCircle className="h-4 w-4" />
+                    <XCircle className="h-4 w-4" aria-hidden="true" />
                 )}
                 {offer.status}
             </Badge>
@@ -210,28 +267,41 @@ const OfferItem: React.FC<{
     );
 
     return (
-        <SharedShiftCard
-            variant="timecard"
-            organization={offer.shift.organizations?.name || ''}
-            department={offer.shift.departments?.name || ''}
-            subGroup={offer.shift.sub_departments?.name}
-            role={offer.shift.roles?.name || 'Shift'}
-            shiftDate={formatCalendarDate(offer.shift.shift_date, 'EEE, MMM d, yyyy')}
-            startTime={offer.shift.start_time.slice(0, 5)}
-            endTime={offer.shift.end_time.slice(0, 5)}
-            netLength={netLength}
-            paidBreak={offer.shift.paid_break_minutes ?? offer.shift.break_minutes ?? 0}
-            unpaidBreak={offer.shift.unpaid_break_minutes ?? 0}
-            timerText={(showActions && !isProcessingThis && offer.status === 'Pending') ? timerText : null}
-            isExpired={isExpired || isLocked}
-            groupVariant={
-                offer.shift.group_type === 'convention_centre' ? 'convention' :
-                offer.shift.group_type === 'exhibition_centre' ? 'exhibition' :
-                offer.shift.group_type === 'theatre' ? 'theatre' :
-                offer.shift.group_type === 'the_cutaway' ? 'cutaway' : 'default'
-            }
-            footerActions={footerActions}
-        />
+        <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/40">
+            <SharedShiftCard
+                variant="timecard"
+                isFlat={true}
+                identityGrid
+                // Every row here is `assigned_employee_id = me` — that IS the
+                // query — so the Employee cell is the viewer, never "Unassigned".
+                employeeName={recipientName}
+                organization={offer.shift.organizations?.name || ''}
+                department={offer.shift.departments?.name || ''}
+                subDepartment={offer.shift.sub_departments?.name}
+                group={groupName}
+                subGroup={(offer.shift as any).sub_group_name}
+                role={roleLabel}
+                shiftDate={formatCalendarDate(offer.shift.shift_date, 'EEE, MMM d, yyyy')}
+                startTime={offer.shift.start_time.slice(0, 5)}
+                endTime={offer.shift.end_time.slice(0, 5)}
+                netLength={netLength}
+                paidBreak={offer.shift.paid_break_minutes ?? offer.shift.break_minutes ?? 0}
+                unpaidBreak={offer.shift.unpaid_break_minutes ?? 0}
+                timerText={(showActions && !isProcessingThis && offer.status === 'Pending') ? timerText : null}
+                isExpired={isExpired || isLocked}
+                urgency={urgency}
+                shiftData={offer.shift as any}
+                hideGlow
+                groupVariant={
+                    offer.shift.group_type === 'convention_centre' ? 'convention' :
+                    offer.shift.group_type === 'exhibition_centre' ? 'exhibition' :
+                    offer.shift.group_type === 'theatre' ? 'theatre' :
+                    offer.shift.group_type === 'the_cutaway' ? 'cutaway' :
+                    resolveGroupVariant(offer.shift as any, offer.shift.departments?.name, offer.shift.sub_departments?.name)
+                }
+                footerActions={footerActions}
+            />
+        </div>
     );
 };
 
@@ -251,44 +321,45 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [showDeclineConfirm, setShowDeclineConfirm] = useState<string | null>(null);
 
-    const { data: pendingOffers = [], isLoading: isLoadingPending } = useMyOffers(
-        isOpen && user?.id ? user.id : null,
-        filters,
-    );
-    const { data: acceptedOffers = [], isLoading: isLoadingAccepted } = useMyOffersHistory(
-        isOpen && user?.id ? user.id : null,
-        'Accepted',
-        filters,
-    );
-    const { data: declinedOffers = [], isLoading: isLoadingDeclined } = useMyOffersHistory(
-        isOpen && user?.id ? user.id : null,
-        'Declined',
-        filters,
-    );
+    const employeeId = isOpen && user?.id ? user.id : null;
+    const recipientName = user?.fullName || user?.name || undefined;
+
+    const pendingQuery = useMyOffers(employeeId, filters);
+    const acceptedQuery = useMyOffersHistory(employeeId, 'Accepted', filters);
+    const declinedQuery = useMyOffersHistory(employeeId, 'Declined', filters);
 
     const acceptOfferMutation = useAcceptOffer();
     const declineOfferMutation = useDeclineOffer();
     const expireOfferMutation = useExpireOffer();
 
     // Silently exclude expired pending offers from the list
-    const activePending = (pendingOffers as OfferData[]).filter((o) => {
-        const expiryMs = parseExpiry(o.offer_expires_at || (o.shift as any).offer_expires_at);
-        return !expiryMs || expiryMs > Date.now();
+    const activePending = ((pendingQuery.data ?? []) as OfferData[]).filter((o) => {
+        const deadline = resolveOfferDeadline(o);
+        return !deadline || deadline > Date.now();
     });
+
+    const activeQuery =
+        activeTab === 'Pending'
+            ? pendingQuery
+            : activeTab === 'Accepted'
+              ? acceptedQuery
+              : declinedQuery;
 
     const currentOffers: OfferData[] =
         activeTab === 'Pending'
             ? activePending
-            : activeTab === 'Accepted'
-              ? (acceptedOffers as OfferData[])
-              : (declinedOffers as OfferData[]);
+            : ((activeQuery.data ?? []) as OfferData[]);
 
-    const isLoading =
-        activeTab === 'Pending'
-            ? isLoadingPending
-            : activeTab === 'Accepted'
-              ? isLoadingAccepted
-              : isLoadingDeclined;
+    /**
+     * A disabled query is neither loading nor loaded — React Query reports
+     * `isLoading: false` for it — so keying the empty state off `isLoading`
+     * alone rendered "Nothing Here" while the query had not run yet, and again
+     * whenever it failed. An expired token or a rejected select looked
+     * identical to a genuinely empty inbox, which is the one thing this screen
+     * must never get wrong.
+     */
+    const isFetchingFirstPage = activeQuery.isLoading || (!!employeeId && activeQuery.isPending);
+    const hasFailed = activeQuery.isError;
 
     const handleAccept = async (shiftId: string) => {
         setProcessingId(shiftId);
@@ -342,106 +413,154 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
 
     const tabs: { label: OfferStatus; count: number }[] = [
         { label: 'Pending', count: activePending.length },
-        { label: 'Accepted', count: (acceptedOffers as OfferData[]).length },
-        { label: 'Declined', count: (declinedOffers as OfferData[]).length },
+        { label: 'Accepted', count: ((acceptedQuery.data ?? []) as OfferData[]).length },
+        { label: 'Declined', count: ((declinedQuery.data ?? []) as OfferData[]).length },
     ];
+
+    const panelId = `offers-panel-${activeTab.toLowerCase()}`;
 
     return (
         <>
-            <ResponsiveDialog
+            <Dialog
                 open={isOpen}
                 onOpenChange={(open) => !open && onClose()}
-                dialogClassName="sm:max-w-[480px] max-h-[82vh] p-0 overflow-hidden flex flex-col rounded-2xl [&>button]:hidden z-[150]"
-                drawerClassName="bg-background border-border h-[85vh] flex flex-col overflow-hidden rounded-t-[32px]"
             >
-                <ResponsiveDialog.Header className="sr-only">
-                    <ResponsiveDialog.Title>My Shift Offers</ResponsiveDialog.Title>
-                    <ResponsiveDialog.Description>
-                        Review and respond to shift offers assigned to you.
-                    </ResponsiveDialog.Description>
-                </ResponsiveDialog.Header>
+                <DialogContent
+                    // The header below lays out its own close button, aligned
+                    // with the title and sized for a thumb, so the primitive's
+                    // would be a second control for the same action sitting
+                    // over the first.
+                    hideClose
+                    className="max-w-md w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] p-0 overflow-hidden bg-card/95 backdrop-blur-2xl border border-border shadow-2xl rounded-[28px] flex flex-col z-[150]"
+                >
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>My Shift Offers</DialogTitle>
+                        <DialogDescription>
+                            Review and respond to shift offers assigned to you.
+                        </DialogDescription>
+                    </DialogHeader>
 
-                {/* Header */}
-                <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
-                    <div className="h-8 w-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                        <Inbox className="h-4 w-4 text-blue-500" />
+                    {/* Header */}
+                    <div className="flex items-center gap-3 px-5 py-4 border-b border-border/40 shrink-0">
+                        <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                            <Inbox className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h2 className={cn(text.title, 'text-foreground leading-none')}>
+                                Shift Offers
+                            </h2>
+                            <p className={cn(text.overline, 'mt-1')}>My Inbox</p>
+                        </div>
+                        <DialogClose asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(touch.target, 'rounded-xl shrink-0')}
+                                aria-label="Close shift offers"
+                            >
+                                <X className="h-5 w-5" aria-hidden="true" />
+                            </Button>
+                        </DialogClose>
                     </div>
-                    <div className="flex-1">
-                        <h2 className="font-black text-foreground tracking-tight leading-none">
-                            Shift Offers
-                        </h2>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
-                            My Inbox
-                        </p>
-                    </div>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-lg"
-                        onClick={onClose}
-                    >
-                        <X className="h-4 w-4" />
-                    </Button>
-                </div>
 
-                {/* Tab Selector */}
-                <div className="flex gap-1.5 px-5 pt-4 pb-2 shrink-0">
-                    {tabs.map(({ label, count }) => (
-                        <button
-                            key={label}
-                            onClick={() => setActiveTab(label)}
-                            className={cn(
-                                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all min-h-[44px]',
-                                activeTab === label
-                                    ? 'bg-foreground text-background'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                            )}
-                        >
-                            {label}
-                            {count > 0 && (
-                                <span
+                    {/* Tab Selector */}
+                    <div className="flex gap-2 px-5 pt-4 pb-2 shrink-0" role="tablist" aria-label="Offer status">
+                        {tabs.map(({ label, count }) => {
+                            const isActive = activeTab === label;
+                            return (
+                                <button
+                                    key={label}
+                                    type="button"
+                                    role="tab"
+                                    id={`offers-tab-${label.toLowerCase()}`}
+                                    aria-selected={isActive}
+                                    aria-controls={`offers-panel-${label.toLowerCase()}`}
+                                    onClick={() => setActiveTab(label)}
                                     className={cn(
-                                        'h-4 min-w-[1rem] rounded-full text-[9px] flex items-center justify-center px-1 font-black',
-                                        activeTab === label
-                                            ? 'bg-background/20 text-background'
-                                            : 'bg-muted-foreground/20 text-muted-foreground',
+                                        text.label,
+                                        touch.target,
+                                        'flex items-center justify-center gap-2 px-4 rounded-xl uppercase transition-colors',
+                                        isActive
+                                            ? 'bg-foreground text-background'
+                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                                     )}
                                 >
-                                    {count}
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                </div>
+                                    {label}
+                                    {count > 0 && (
+                                        <span
+                                            className={cn(
+                                                'h-5 min-w-[1.25rem] rounded-full text-[11px] leading-none flex items-center justify-center px-1.5 font-bold tabular-nums',
+                                                isActive
+                                                    ? 'bg-background/20 text-background'
+                                                    : 'bg-muted-foreground/20 text-muted-foreground',
+                                            )}
+                                        >
+                                            {count}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
 
-                {/* Offer List */}
-                <ResponsiveDialog.Body className="flex-1 overflow-y-auto px-5 pb-5 space-y-3 min-h-0">
-                    {isLoading ? (
-                        [1, 2, 3].map((i) => (
-                            <Skeleton key={i} className="h-52 w-full rounded-xl" />
-                        ))
-                    ) : currentOffers.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center opacity-30">
-                            <Inbox className="h-8 w-8 mb-3 stroke-[1]" />
-                            <p className="text-xs font-black uppercase tracking-widest">
-                                Nothing Here
-                            </p>
-                        </div>
-                    ) : (
-                        currentOffers.map((offer) => (
-                            <OfferItem
-                                key={offer.id}
-                                offer={offer}
-                                showActions={activeTab === 'Pending'}
-                                processingId={processingId}
-                                onAccept={handleAccept}
-                                onDeclineRequest={(id) => setShowDeclineConfirm(id)}
-                                onExpire={handleExpire}
-                            />
-                        ))
-                    )}
-                </ResponsiveDialog.Body>
-            </ResponsiveDialog>
+                    {/* Offer List */}
+                    <div
+                        className="flex-1 overflow-y-auto px-5 pb-5 space-y-3 min-h-0"
+                        role="tabpanel"
+                        id={panelId}
+                        aria-labelledby={`offers-tab-${activeTab.toLowerCase()}`}
+                    >
+                        {isFetchingFirstPage ? (
+                            [1, 2, 3].map((i) => (
+                                <Skeleton key={i} className="h-52 w-full rounded-xl" />
+                            ))
+                        ) : hasFailed ? (
+                            <div className="flex flex-col items-center justify-center py-14 text-center gap-3">
+                                <AlertTriangle className="h-8 w-8 text-amber-500" aria-hidden="true" />
+                                <div>
+                                    <p className={cn(text.body, 'text-foreground')}>
+                                        Couldn’t load your offers
+                                    </p>
+                                    <p className={cn(text.caption, 'mt-1 max-w-[16rem]')}>
+                                        {(activeQuery.error as Error)?.message ||
+                                            'Something went wrong reaching the server.'}
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => void activeQuery.refetch()}
+                                    className={cn(text.label, touch.target, 'rounded-xl uppercase gap-2')}
+                                >
+                                    <RotateCw className="h-4 w-4" aria-hidden="true" />
+                                    Try again
+                                </Button>
+                            </div>
+                        ) : currentOffers.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                <Inbox className="h-8 w-8 stroke-[1.5] text-muted-foreground" aria-hidden="true" />
+                                <p className={text.overline}>
+                                    {activeTab === 'Pending'
+                                        ? 'No offers waiting'
+                                        : `No ${activeTab.toLowerCase()} offers`}
+                                </p>
+                            </div>
+                        ) : (
+                            currentOffers.map((offer) => (
+                                <OfferItem
+                                    key={offer.id}
+                                    offer={offer}
+                                recipientName={recipientName}
+                                    showActions={activeTab === 'Pending'}
+                                    processingId={processingId}
+                                    onAccept={handleAccept}
+                                    onDeclineRequest={(id) => setShowDeclineConfirm(id)}
+                                    onExpire={handleExpire}
+                                />
+                            ))
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Decline Confirmation */}
             <AlertDialog
@@ -450,27 +569,31 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
             >
                 <AlertDialogContent className="bg-background border border-border rounded-2xl p-6 max-w-sm z-[200] shadow-2xl" aria-describedby={undefined}>
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="font-black text-foreground tracking-tight">
+                        <AlertDialogTitle className={cn(text.title, 'text-foreground')}>
                             Decline Shift?
                         </AlertDialogTitle>
-                        <AlertDialogDescription className="text-muted-foreground text-sm">
+                        <AlertDialogDescription className={text.bodyMuted}>
                             This shift will be returned to the pool for bidding. This cannot be
                             undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="mt-6 gap-3">
-                        <AlertDialogCancel className="font-black text-xs uppercase tracking-wider rounded-xl">
+                        <AlertDialogCancel className={cn(text.label, touch.target, 'uppercase rounded-xl')}>
                             Cancel
                         </AlertDialogCancel>
                         <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground font-black text-xs uppercase tracking-wider rounded-xl"
+                            className={cn(
+                                text.label,
+                                touch.target,
+                                'bg-destructive text-destructive-foreground uppercase rounded-xl',
+                            )}
                             onClick={() =>
                                 showDeclineConfirm && handleDecline(showDeclineConfirm)
                             }
                             disabled={!!processingId}
                         >
                             {processingId ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
                             ) : null}
                             Decline
                         </AlertDialogAction>

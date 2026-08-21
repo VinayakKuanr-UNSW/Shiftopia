@@ -213,13 +213,33 @@ export function useShiftDetail(shiftId: string | null) {
   });
 }
 
+/**
+ * Offer freshness.
+ *
+ * An offer is a countdown someone else started, so a cached answer ages badly:
+ * a shift offered a minute ago must appear the moment the inbox is opened, and
+ * one that has expired must stop appearing. These three hooks therefore treat
+ * their data as stale on arrival and refetch on every mount rather than
+ * trusting the window-focus refetch, which is the default revalidation trigger
+ * and does not fire at all inside the Capacitor WebView — see the focusManager
+ * wiring in `CapacitorBridge`. Opening the inbox on a phone used to replay a
+ * cache up to five minutes old with nothing to invalidate it.
+ */
+const OFFER_FRESHNESS = {
+  staleTime: 0,
+  refetchOnMount: 'always',
+} as const;
+
 export function usePendingOfferCount(employeeId: string | null) {
   return useQuery({
     queryKey: shiftKeys.offerCount(employeeId ?? ''),
     queryFn: () => shiftsQueries.getPendingOfferCount(employeeId!),
     enabled: !!employeeId,
-    staleTime: 60_000,
+    ...OFFER_FRESHNESS,
     refetchInterval: 60_000,
+    // The badge is the only cue that an offer arrived while the app sat open,
+    // so it has to keep counting when the WebView reports itself unfocused.
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -231,7 +251,7 @@ export function useMyOffers(
     queryKey: [...shiftKeys.offers(employeeId ?? ''), filters ?? null],
     queryFn: () => shiftsQueries.getMyOffers(employeeId!, filters),
     enabled: !!employeeId,
-    staleTime: 5 * 60_000,
+    ...OFFER_FRESHNESS,
   });
 }
 
@@ -244,7 +264,7 @@ export function useMyOffersHistory(
     queryKey: [...shiftKeys.offers(employeeId ?? ''), 'history', status, filters ?? null],
     queryFn: () => shiftsQueries.getMyOfferHistory(employeeId!, status, filters),
     enabled: !!employeeId,
-    staleTime: 5 * 60_000,
+    ...OFFER_FRESHNESS,
   });
 }
 
@@ -1139,7 +1159,22 @@ export function useAcceptOffer() {
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      // Accept/decline REFETCH the lists rather than only marking them stale.
+      //
+      // Everywhere else in this file `refetchType: 'none'` is right: the
+      // optimistic `patchLists` above has already applied the change, and the
+      // planner has a dozen cached weeks it should not re-download to confirm
+      // one field. Two things make an offer response different.
+      //
+      // First, the shift CROSSES A VISIBILITY BOUNDARY rather than changing a
+      // field in place — `useMyRoster` hides `Published + assigned + outcome
+      // NULL` (a pending offer), so accepting is what makes the row appear on
+      // My Roster at all. Second, "stale" only becomes "fresh" when something
+      // triggers a refetch, and in the Capacitor WebView nothing does: there is
+      // no window-focus event (see the focusManager wiring in CapacitorBridge),
+      // and My Roster stays mounted behind the sheet, so it never remounts
+      // either. The accepted shift simply never arrived on a phone.
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
     },
@@ -1184,7 +1219,22 @@ export function useDeclineOffer() {
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      // Accept/decline REFETCH the lists rather than only marking them stale.
+      //
+      // Everywhere else in this file `refetchType: 'none'` is right: the
+      // optimistic `patchLists` above has already applied the change, and the
+      // planner has a dozen cached weeks it should not re-download to confirm
+      // one field. Two things make an offer response different.
+      //
+      // First, the shift CROSSES A VISIBILITY BOUNDARY rather than changing a
+      // field in place — `useMyRoster` hides `Published + assigned + outcome
+      // NULL` (a pending offer), so accepting is what makes the row appear on
+      // My Roster at all. Second, "stale" only becomes "fresh" when something
+      // triggers a refetch, and in the Capacitor WebView nothing does: there is
+      // no window-focus event (see the focusManager wiring in CapacitorBridge),
+      // and My Roster stays mounted behind the sheet, so it never remounts
+      // either. The accepted shift simply never arrived on a phone.
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
     },

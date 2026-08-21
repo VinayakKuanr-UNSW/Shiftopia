@@ -28,6 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/modules/core/lib/utils";
+import { text, touch } from "@/modules/core/ui/typography";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   useEmployeeBroadcastGroups,
@@ -136,10 +137,10 @@ const MobileNavItem = ({
     aria-label={item.label}
     className={({ isActive }) =>
       cn(
-        "relative flex items-center justify-center h-full rounded-full transition-all duration-300 ease-out flex-shrink-0 overflow-hidden",
+        "relative flex items-center justify-center h-full min-h-11 rounded-full transition-all duration-300 ease-out flex-shrink-0 overflow-hidden",
         isActive
-          ? "text-background px-4 max-w-[150px] nav-item-active"
-          : "w-[48px] max-w-[48px] px-0 text-muted-foreground hover:bg-muted/50",
+          ? "text-background px-4 max-w-[160px] nav-item-active"
+          : "w-[52px] max-w-[52px] px-0 text-muted-foreground hover:bg-muted/50",
       )
     }
   >
@@ -158,15 +159,16 @@ const MobileNavItem = ({
             <div className="relative">
               <item.icon
                 className={cn(
-                  "h-5 w-5 flex-shrink-0 transition-colors",
+                  "h-6 w-6 flex-shrink-0 transition-colors",
                   isActive ? "text-background" : "text-muted-foreground",
                 )}
-                strokeWidth={isActive ? 2.5 : 2}
+                strokeWidth={isActive ? 2.4 : 1.9}
+                aria-hidden="true"
               />
               {badgeCount > 0 && (
                 <span
                   className={cn(
-                    "absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[8px] font-black border-2",
+                    "absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] leading-none font-bold tabular-nums border-2",
                     isActive
                       ? "bg-red-500 text-white border-foreground"
                       : "bg-red-500 text-white border-card",
@@ -183,7 +185,7 @@ const MobileNavItem = ({
                 isActive ? "max-w-[100px] opacity-100" : "max-w-0 opacity-0",
               )}
             >
-              <span className="text-[11px] font-black uppercase tracking-[0.15em] whitespace-nowrap pt-[1px] block">
+              <span className={cn(text.overlineBare, "whitespace-nowrap pt-[1px] block")}>
                 {item.label}
               </span>
             </div>
@@ -319,19 +321,23 @@ const BottomNavbar: React.FC = () => {
             <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-white/0 dark:from-white/10 dark:to-white/0 pointer-events-none" />
             <div className="relative p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="ml-1 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60">
-                  Management & Tools
+                <h3 className={cn(text.overline, "ml-1")}>
+                  Management &amp; Tools
                 </h3>
                 <button
                   type="button"
                   onClick={toggleTheme}
                   aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
-                  className="flex h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/70 px-3 text-[9px] font-black uppercase tracking-widest text-foreground shadow-sm transition-all active:scale-95"
+                  className={cn(
+                    text.overlineBare,
+                    touch.target,
+                    "flex items-center gap-2 rounded-2xl border border-border/50 bg-background/70 px-3 text-foreground shadow-sm transition-transform active:scale-95",
+                  )}
                 >
                   {isDark ? (
-                    <Sun className="h-4 w-4 text-amber-400" />
+                    <Sun className="h-5 w-5 text-amber-500" aria-hidden="true" />
                   ) : (
-                    <Moon className="h-4 w-4 text-indigo-500" />
+                    <Moon className="h-5 w-5 text-indigo-500" aria-hidden="true" />
                   )}
                   <span>{isDark ? "Light" : "Dark"}</span>
                 </button>
@@ -345,30 +351,23 @@ const BottomNavbar: React.FC = () => {
                       to={path}
                       className={({ isActive }) =>
                         cn(
-                          "flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl transition-all duration-300",
+                          "flex min-h-[76px] flex-col items-center justify-center gap-2 p-3.5 rounded-2xl transition-colors duration-200",
                           isActive
-                            ? "bg-foreground text-background shadow-xl scale-105 rotate-1"
+                            ? "bg-foreground text-background shadow-lg"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
                         )
                       }
                     >
-                      <div
-                        className={cn(
-                          "transition-all duration-300",
-                          isActive && "scale-110 -translate-y-0.5",
-                        )}
-                      >
-                        <Icon
-                          className="h-6 w-6"
-                          strokeWidth={isActive ? 2.5 : 2}
-                        />
-                      </div>
+                      <Icon
+                        className="h-7 w-7"
+                        strokeWidth={isActive ? 2.3 : 1.9}
+                        aria-hidden="true"
+                      />
                       <span
                         className={cn(
-                          "text-[9px] font-black uppercase tracking-widest text-center leading-tight mt-1",
-                          isActive
-                            ? "text-background"
-                            : "text-muted-foreground/80",
+                          text.overlineBare,
+                          "text-center leading-tight",
+                          isActive ? "text-background" : "text-muted-foreground",
                         )}
                       >
                         {label}
@@ -398,13 +397,14 @@ const BottomNavbar: React.FC = () => {
                   void logout();
                 }}
                 className={cn(
-                  "mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98]",
+                  text.label,
+                  "mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border uppercase transition-colors active:scale-[0.98]",
                   confirmSignOut
                     ? "border-rose-500/50 bg-rose-500/15 text-rose-500"
                     : "border-border/50 bg-background/70 text-muted-foreground hover:text-foreground",
                 )}
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-4 w-4" aria-hidden="true" />
                 <span>{confirmSignOut ? "Tap again to confirm" : "Sign out"}</span>
               </button>
             </div>
@@ -443,7 +443,7 @@ const BottomNavbar: React.FC = () => {
             }
             aria-expanded={moreOpen}
             className={cn(
-              "relative flex items-center justify-center h-full w-[48px] rounded-full transition-all duration-300 flex-shrink-0 z-10 overflow-hidden",
+              "relative flex items-center justify-center h-full min-h-11 w-[52px] rounded-full transition-colors duration-200 flex-shrink-0 z-10 overflow-hidden",
               moreOpen || isMoreRouteActive
                 ? "text-background"
                 : "bg-card text-foreground shadow-sm hover:bg-muted",
@@ -469,7 +469,7 @@ const BottomNavbar: React.FC = () => {
                   transition={{ duration: 0.16, ease: "easeOut" }}
                   className="relative z-10"
                 >
-                  <X className="h-5 w-5" strokeWidth={2.5} />
+                  <X className="h-6 w-6" strokeWidth={2.3} aria-hidden="true" />
                 </motion.span>
               ) : (
                 <motion.span
@@ -481,8 +481,9 @@ const BottomNavbar: React.FC = () => {
                   className="relative z-10"
                 >
                   <Menu
-                    className="h-5 w-5"
-                    strokeWidth={isMoreRouteActive ? 2.5 : 2}
+                    className="h-6 w-6"
+                    strokeWidth={isMoreRouteActive ? 2.3 : 1.9}
+                    aria-hidden="true"
                   />
                 </motion.span>
               )}
