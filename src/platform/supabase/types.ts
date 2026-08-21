@@ -744,6 +744,7 @@ export type Database = {
           responded_at: string | null
           responded_rule_id: string | null
           status: string
+          sub_department_id: string | null
         }
         Insert: {
           cancelled_at?: string | null
@@ -757,6 +758,7 @@ export type Database = {
           responded_at?: string | null
           responded_rule_id?: string | null
           status?: string
+          sub_department_id?: string | null
         }
         Update: {
           cancelled_at?: string | null
@@ -770,6 +772,7 @@ export type Database = {
           responded_at?: string | null
           responded_rule_id?: string | null
           status?: string
+          sub_department_id?: string | null
         }
         Relationships: []
       }
@@ -784,6 +787,7 @@ export type Database = {
           repeat_type: string
           start_date: string
           start_time: string
+          sub_department_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -796,6 +800,7 @@ export type Database = {
           repeat_type?: string
           start_date: string
           start_time: string
+          sub_department_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -808,6 +813,7 @@ export type Database = {
           repeat_type?: string
           start_date?: string
           start_time?: string
+          sub_department_id?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -821,6 +827,7 @@ export type Database = {
           rule_id: string | null
           slot_date: string
           start_time: string
+          sub_department_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -830,6 +837,7 @@ export type Database = {
           rule_id?: string | null
           slot_date: string
           start_time: string
+          sub_department_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -839,6 +847,7 @@ export type Database = {
           rule_id?: string | null
           slot_date?: string
           start_time?: string
+          sub_department_id?: string | null
         }
         Relationships: [
           {

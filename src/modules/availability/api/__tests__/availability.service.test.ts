@@ -6,7 +6,7 @@ import * as availabilityApi from '../availability.api';
 import { supabase } from '@/platform/supabase/client';
 
 vi.mock('../contract-basis.api', () => ({
-  fetchContractBasis: vi.fn(),
+  fetchScopedContractBasis: vi.fn(),
 }));
 
 vi.mock('../availability.api', () => ({
@@ -29,7 +29,7 @@ describe('Full-Time Availability Guard', () => {
   });
 
   it('rejects createAvailabilityFromForm for Full-Time employees', async () => {
-    vi.mocked(contractBasisApi.fetchContractBasis).mockResolvedValue({
+    vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'FT',
       isFullTime: true,
       contractedWeeklyHours: 38,
@@ -56,7 +56,7 @@ describe('Full-Time Availability Guard', () => {
   });
 
   it('permits createAvailabilityFromForm for Casual employees', async () => {
-    vi.mocked(contractBasisApi.fetchContractBasis).mockResolvedValue({
+    vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'CASUAL',
       isFullTime: false,
       contractedWeeklyHours: undefined,
@@ -93,7 +93,7 @@ describe('Full-Time Availability Guard', () => {
   });
 
   it('rejects createAvailabilityException for Full-Time employees', async () => {
-    vi.mocked(contractBasisApi.fetchContractBasis).mockResolvedValue({
+    vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'FT',
       isFullTime: true,
       contractedWeeklyHours: 38,

@@ -32,7 +32,8 @@ import {
 
 import { format } from "date-fns";
 
-import { fetchContractBasis } from "./contract-basis.api";
+import { fetchScopedContractBasis } from "./contract-basis.api";
+import type { AvailabilityScopeRef } from "../domain/contract-basis";
 
 // ============================================================================
 // CREATE OPERATIONS
@@ -59,11 +60,22 @@ export const FT_AVAILABILITY_ERROR =
  * legitimate work for the 101 casuals to guard 17 full-timers the database
  * already guards.
  */
-async function assertNotFullTime(profileId: string): Promise<string> {
+async function assertCanDeclareFor(
+  profileId: string,
+  subDepartmentId?: string | null
+): Promise<string> {
   const resolvedProfileId = await resolveProfileId(profileId);
-  const basis = await fetchContractBasis(resolvedProfileId);
+  const scope: AvailabilityScopeRef = { subDepartmentId: subDepartmentId ?? null };
+  const basis = await fetchScopedContractBasis(resolvedProfileId, scope);
   // `isFullTime` IS `contractType === 'FT'` (see domain/contract-basis.ts), so
   // one test is the whole test.
+  //
+  // SCOPED, so the question is "is THIS JOB Full-Time" rather than "does this
+  // person hold a Full-Time contract anywhere". An UNSCOPED write still asks
+  // the person-wide question, because `resolveScopedBasis` treats a null
+  // sub-department as every contract — the same NULL branch
+  // `sm_holds_active_ft_contract_in` uses in SQL. Those two must agree or the
+  // page offers a declaration the database then refuses.
   if (basis.isFullTime) throw new Error(FT_AVAILABILITY_ERROR);
   return resolvedProfileId;
 }
@@ -80,7 +92,10 @@ export async function createAvailabilityFromForm(
   profileId: string,
   payload: AvailabilityFormPayload
 ): Promise<AvailabilityRule> {
-  const resolvedProfileId = await assertNotFullTime(profileId);
+  const resolvedProfileId = await assertCanDeclareFor(
+    profileId,
+    payload.sub_department_id
+  );
   return insertRuleFromForm(resolvedProfileId, payload);
 }
 
@@ -111,6 +126,11 @@ async function insertRuleFromForm(
       payload.repeat_type === "none"
         ? null
         : format(payload.repeat_end_date!, "yyyy-MM-dd"),
+    // Undefined becomes an explicit null: an unscoped rule covers every job,
+    // which is the pre-scoping behaviour and what the database guards read a
+    // null as. Never omit the key — a missing column and a null column mean the
+    // same thing here only by luck.
+    sub_department_id: payload.sub_department_id ?? null,
   };
 
   return createAvailabilityRule(rulePayload);
@@ -138,7 +158,10 @@ export async function batchCreateAvailabilityRules(
   payload: AvailabilityFormPayload
 ): Promise<AvailabilityRule[]> {
   // Resolved and guarded ONCE for the whole range — see `insertRuleFromForm`.
-  const resolvedProfileId = await assertNotFullTime(profileId);
+  const resolvedProfileId = await assertCanDeclareFor(
+    profileId,
+    payload.sub_department_id
+  );
 
   const start = payload.start_date;
   const end = payload.repeat_end_date ?? payload.start_date;
@@ -183,7 +206,10 @@ export async function editAvailabilityRule(
   // BEFORE the delete. This is delete-then-create with no transaction, so a
   // guard that fired after the delete would take the rule away and put nothing
   // back.
-  const resolvedProfileId = await assertNotFullTime(profileId);
+  const resolvedProfileId = await assertCanDeclareFor(
+    profileId,
+    payload.sub_department_id
+  );
 
   await deleteAvailabilityRule(ruleId);
 
@@ -209,7 +235,10 @@ export async function replaceAvailabilityInRange(
 ): Promise<AvailabilityRule[]> {
   // BEFORE the range delete — same reasoning as `editAvailabilityRule`, with a
   // wider blast radius: this one clears every rule in the range.
-  const resolvedProfileId = await assertNotFullTime(profileId);
+  const resolvedProfileId = await assertCanDeclareFor(
+    profileId,
+    payload.sub_department_id
+  );
 
   const startDate = format(payload.start_date, "yyyy-MM-dd");
   const endDate = format(
@@ -217,7 +246,16 @@ export async function replaceAvailabilityInRange(
     "yyyy-MM-dd"
   );
 
-  await deleteAvailabilityRulesInRange(resolvedProfileId, startDate, endDate);
+  // SCOPED, and this is the line where getting it wrong is unrecoverable:
+  // replacing a Set-up preset must not delete the same person's Front of House
+  // declarations. An unscoped call still clears the range across every job,
+  // which is what an unscoped replace means.
+  await deleteAvailabilityRulesInRange(
+    resolvedProfileId,
+    startDate,
+    endDate,
+    payload.sub_department_id
+  );
 
   return batchCreateAvailabilityRules(resolvedProfileId, payload);
 }

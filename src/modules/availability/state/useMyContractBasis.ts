@@ -11,8 +11,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { fetchContractBasis, type ContractBasisRead } from '../api/contract-basis.api';
-import { resolveComplianceBasis } from '../domain/contract-basis';
+import { fetchScopedContractBasis, type ContractBasisRead } from '../api/contract-basis.api';
+import { resolveComplianceBasis, type AvailabilityScopeRef } from '../domain/contract-basis';
 
 export interface MyContractBasis {
     basis: ContractBasisRead;
@@ -22,7 +22,20 @@ export interface MyContractBasis {
 
 const EMPTY: ContractBasisRead = { ...resolveComplianceBasis([]), roleIds: [], isError: false };
 
-export function useMyContractBasis(userId: string | null | undefined): MyContractBasis {
+/**
+ * @param scope Which JOB to resolve against. OMIT IT for the person-wide basis
+ *   — hours caps, leave pricing, the ordinary-hours ledger — which is what
+ *   every existing caller wants and gets unchanged. Pass a scope on the
+ *   availability page, where the question is per-job: the same person can be a
+ *   full-timer in one sub-department and a casual in another, and only the
+ *   scoped basis decides whether THIS calendar should show an editor.
+ */
+export function useMyContractBasis(
+    userId: string | null | undefined,
+    scope?: AvailabilityScopeRef,
+): MyContractBasis {
+    const subDepartmentId = scope?.subDepartmentId ?? null;
+    const departmentId = scope?.departmentId ?? null;
     const [basis, setBasis] = useState<ContractBasisRead>(EMPTY);
     const [loading, setLoading] = useState(true);
 
@@ -34,11 +47,11 @@ export function useMyContractBasis(userId: string | null | undefined): MyContrac
         }
         setLoading(true);
         try {
-            setBasis(await fetchContractBasis(userId));
+            setBasis(await fetchScopedContractBasis(userId, { subDepartmentId, departmentId }));
         } finally {
             setLoading(false);
         }
-    }, [userId]);
+    }, [userId, subDepartmentId, departmentId]);
 
     useEffect(() => {
         let cancelled = false;
@@ -48,7 +61,7 @@ export function useMyContractBasis(userId: string | null | undefined): MyContrac
                 return;
             }
             setLoading(true);
-            const next = await fetchContractBasis(userId);
+            const next = await fetchScopedContractBasis(userId, { subDepartmentId, departmentId });
             // The user can switch (impersonation, a fast re-auth) while this is
             // in flight; without the guard a stale response overwrites the
             // current person's basis and the page describes someone else's
@@ -56,7 +69,9 @@ export function useMyContractBasis(userId: string | null | undefined): MyContrac
             if (!cancelled) { setBasis(next); setLoading(false); }
         })();
         return () => { cancelled = true; };
-    }, [userId]);
+        // Scope is a dependency: switching job must re-resolve the basis, or the
+        // page keeps rendering the previous job's verdict about this one.
+    }, [userId, subDepartmentId, departmentId]);
 
     return { basis, loading, refresh };
 }

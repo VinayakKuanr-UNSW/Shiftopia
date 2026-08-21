@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Phone,
   Plus,
-  RefreshCw,
   CalendarCheck2,
   ArrowRight,
   ShieldCheck,
@@ -25,14 +24,22 @@ import { format } from 'date-fns';
 import { AvailabilityScreen } from '../ui/AvailabilityScreen';
 import { pageVariants } from '@/modules/core/ui/motion/presets';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
-import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useAvailabilityScope } from '../state/useAvailabilityScope';
+import { AvailabilityScopePicker } from '../ui/header/AvailabilityScopePicker';
+import { resolveComplianceBasis, type ContractBasis } from '../domain/contract-basis';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-import { useMyContractBasis } from '../state/useMyContractBasis';
 import { formatEnvelopeDaysClause, formatEnvelopeTime } from '../ui/envelope-format';
 import { ContractBasisBanner } from '../ui/header/ContractBasisBanner';
 import { ExceptionsPanel } from '../ui/exceptions/ExceptionsPanel';
+
+/**
+ * The basis for someone holding NO Active contract. Computed once — it is a
+ * constant, and rebuilding it per render would hand `ContractBasisBanner` a new
+ * object identity on every pass.
+ */
+const NO_CONTRACT_BASIS: ContractBasis = resolveComplianceBasis([]);
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
@@ -67,26 +74,44 @@ function useBreakpoint(): Breakpoint {
 export const AvailabilityPage: React.FC = () => {
   const breakpoint = useBreakpoint();
   const navigate = useNavigate();
-  const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
   const { user } = useAuth();
   const { isDark } = useTheme();
   const { toast } = useToast();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // What an ABSENT declaration means for this person.
-  // For FT employees, availability is contract-obligation based; unavailabilities are managed via Leave.
-  const { basis: contractBasis, loading: basisLoading } = useMyContractBasis(user?.id);
+  // WHICH JOB is being declared for. One at a time: the same person can be
+  // Full-Time in Security (availability contract-based, declaring refused) and
+  // Casual in Set-up (silence means unavailable). There is no single answer
+  // correct for both, which is why this replaced the old multi-select.
+  const {
+    scopes,
+    selected: selectedScope,
+    select: selectScope,
+    isLoading: scopesLoading,
+    isSingleScope,
+  } = useAvailabilityScope(user?.id);
+
+  // The SELECTED JOB is the page's basis — not a second read of the person.
+  // Deriving it from one place is what stops the header, the editor and the
+  // write guard disagreeing about the same employee.
+  const contractBasis: ContractBasis = selectedScope ?? NO_CONTRACT_BASIS;
+  const basisLoading = scopesLoading;
 
   // `isFullTime` IS `contractType === 'FT'` (domain/contract-basis.ts), so
-  // testing both was one test written twice. While the basis is still loading it
-  // is false, which renders the declaration editor for a beat — the safe way
+  // testing both was one test written twice. While the scopes are still loading
+  // it is false, which renders the declaration editor for a beat — the safe way
   // round, since the FT card is the one that asserts something.
-  const isFullTime = contractBasis.isFullTime;
+  const isFullTime = !scopesLoading && contractBasis.isFullTime;
 
-  // A full-timer has no rules and no slots to load. Passing `enabled` rather
-  // than calling conditionally keeps the hook order stable.
-  const availabilityData = useAvailability({ month: currentMonth, enabled: !isFullTime });
+  // A full-timer has no rules and no slots to load, and neither does someone
+  // with no job selected yet. Passing `enabled` rather than calling
+  // conditionally keeps the hook order stable.
+  const availabilityData = useAvailability({
+    month: currentMonth,
+    enabled: !isFullTime && !!selectedScope,
+    subDepartmentId: selectedScope?.subDepartmentId ?? null,
+  });
   const editingData = useAvailabilityEditing();
   const reserveListOptIn = useReserveListOptIn();
 
@@ -111,14 +136,6 @@ export const AvailabilityPage: React.FC = () => {
     }
   };
 
-  const handleRefresh = async () => {
-    await Promise.all([availabilityData.refreshRules(), availabilityData.refreshSlots()]);
-    toast({
-      title: 'Refreshed',
-      description: 'Availability data has been refreshed.',
-    });
-  };
-
   const handleAddAvailability = () => {
     editingData.startCreate();
   };
@@ -129,15 +146,27 @@ export const AvailabilityPage: React.FC = () => {
       <GoldStandardHeader
         title="My Availabilities"
         Icon={CalendarDays}
-        scope={scope}
-        setScope={setScope}
-        isGammaLocked={isGammaLocked}
         functionBar={
           <div className={cn(
             "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden",
             isDark ? "bg-[#111827]/60" : "bg-slate-100"
           )}>
             <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
+              {/* WHICH JOB. First in the bar because every control after it is
+                  scoped by it — the month you are paging and the availability
+                  you are adding both belong to the job named here. */}
+              <AvailabilityScopePicker
+                scopes={scopes}
+                selected={selectedScope}
+                onSelect={selectScope}
+                isSingleScope={isSingleScope}
+                isDark={isDark}
+              />
+
+              {scopes.length > 0 && (
+                <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+              )}
+
               {/* Month Navigation — a calendar control, so it goes where the
                   calendar goes. A full-timer has no month-scoped view below,
                   and paging a month that changes nothing on screen reads as a
@@ -195,27 +224,6 @@ export const AvailabilityPage: React.FC = () => {
                     <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
                     <span className="hidden sm:inline">Add Availability</span>
                     <span className="sm:hidden text-[8px]">Add</span>
-                  </Button>
-                </>
-              )}
-
-              {/* Refresh — refreshes the rules and slots, which a full-timer has
-                  none of and no view onto. */}
-              {!isFullTime && (
-                <>
-                  <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleRefresh}
-                    className={cn(
-                        "h-9 w-9 lg:h-11 lg:w-11 rounded-xl flex-shrink-0 transition-all",
-                        isDark
-                            ? "bg-[#111827]/60 text-muted-foreground hover:text-white"
-                            : "bg-slate-200/50 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
-                    )}
-                  >
-                    <RefreshCw className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
                   </Button>
                 </>
               )}
@@ -288,13 +296,17 @@ export const AvailabilityPage: React.FC = () => {
                   </div>
                   <h2 className="text-xl md:text-2xl font-black tracking-tight">
                     Full-Time Availability
+                    {selectedScope ? ` — ${selectedScope.subDepartmentName}` : ''}
                   </h2>
                   <p className={cn(
                     "text-sm leading-relaxed max-w-2xl",
                     isDark ? "text-slate-400" : "text-slate-600"
                   )}>
-                    Full Time employees are rostered according to their contracted working arrangements ({contractBasis.contractedWeeklyHours ?? 38}h/week ordinary hours).
-                    You do not need to submit weekly availability. All rosterable blocks within your contractual envelope are available by default.
+                    You hold this job on a Full Time contract ({contractBasis.contractedWeeklyHours ?? 38}h/week ordinary hours), so you are rostered
+                    according to your contracted working arrangements and do not submit weekly availability for it.
+                    {scopes.some((s) => s.canDeclare)
+                      ? ' Your other jobs are declared separately — switch job above.'
+                      : ' All rosterable blocks within your contractual envelope are available by default.'}
                   </p>
                 </div>
               </div>
@@ -387,7 +399,10 @@ export const AvailabilityPage: React.FC = () => {
           /* ── CASUAL & PART-TIME AVAILABILITY SCREEN ── */
           <>
             {!basisLoading && contractBasis.availabilityMode === 'OPT_OUT' && user?.id && (
-              <ExceptionsPanel profileId={user.id} />
+              <ExceptionsPanel
+                profileId={user.id}
+                subDepartmentId={selectedScope?.subDepartmentId ?? null}
+              />
             )}
 
             <div className="flex-1 min-h-0">

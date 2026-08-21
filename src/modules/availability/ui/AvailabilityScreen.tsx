@@ -150,7 +150,11 @@ export function AvailabilityScreen({
 
   const handleSubmit = useCallback(
     async (payload: AvailabilityFormPayload) => {
-      const result = await submitEdit('current-user', payload);
+      const scopedPayload: AvailabilityFormPayload = {
+        ...payload,
+        sub_department_id: payload.sub_department_id ?? availabilityData.subDepartmentId ?? null,
+      };
+      const result = await submitEdit('current-user', scopedPayload);
       if (result.success) {
         toast({
           title: 'Saved',
@@ -175,7 +179,7 @@ export function AvailabilityScreen({
         });
       }
     },
-    [submitEdit, editState.mode, refreshRules, refreshSlots, layout, toast]
+    [submitEdit, editState.mode, refreshRules, refreshSlots, layout, toast, availabilityData.subDepartmentId]
   );
 
   const handleCancel = useCallback(() => {

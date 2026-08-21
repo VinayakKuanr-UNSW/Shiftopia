@@ -49,6 +49,19 @@ export interface ContractBasisInput {
     ordinarySpanStart?: string | null;
     ordinarySpanEnd?: string | null;
     ordinaryDays?: number[] | null;
+    /**
+     * WHICH JOB this contract is — `user_contracts.sub_department_id` and
+     * `.department_id`.
+     *
+     * Optional because most readers of this module ask the person-wide question
+     * and have never selected them. A contract with no `subDepartmentId` is
+     * DEPARTMENT-WIDE: in scope for every sub-department beneath its
+     * department. That is the same rule `sm_holds_active_contract_in`
+     * (migration 20260821090000) applies in SQL, and the two must not diverge —
+     * `contractsInScope` below is the TypeScript half of that pair.
+     */
+    subDepartmentId?: string | null;
+    departmentId?: string | null;
 }
 
 /**
@@ -221,4 +234,97 @@ export function resolveComplianceBasis(contracts: readonly ContractBasisInput[])
         // carries no known obligation, so it stays OPT_IN here.
         availabilityMode: contractType === 'FT' || contractType === 'PT' ? 'OPT_OUT' : 'OPT_IN',
     };
+}
+
+// ============================================================================
+// SCOPED BASIS — the same precedence, asked of ONE JOB
+// ============================================================================
+
+/**
+ * WHY THERE ARE TWO OF THESE, AND WHY THE ONE ABOVE MUST NOT CHANGE.
+ *
+ * `resolveComplianceBasis` answers "how many hours may this HUMAN work" — the
+ * rolling ordinary-hours caps in `compliance/v8/rules/ordinary-hours-avg.ts`
+ * apply across every contract a person holds, so collapsing them to one basis
+ * is not a simplification there, it is the rule. Its casual-last ordering also
+ * exists so a dual-status person can never be exempted from those caps by an
+ * accident of array order. Leave it, its callers, and its tests alone.
+ *
+ * Availability is the opposite kind of question. It is asked of a JOB: when
+ * will you turn up for Set-up. Production holds one employee with a Full-Time
+ * contract in Building Services · Security and four Casual contracts across
+ * Event Delivery · Set-up and Live Events · Front of House. Ask the person-wide
+ * question and the Full-Time contract wins, the page hides the editor, and
+ * their four casual jobs can never declare anything — which under
+ * `availability_mode = 'OPT_IN'` leaves them hard-filtered out of every casual
+ * shift with no reason emitted.
+ *
+ * So: same precedence, applied to a filtered list. Not a second ordering.
+ */
+
+/**
+ * A job to resolve against. `subDepartmentId: null` means UNSCOPED — every
+ * contract the person holds — which is what makes
+ * `resolveScopedBasis(cs, { subDepartmentId: null })` identical to
+ * `resolveComplianceBasis(cs)`, and mirrors the NULL branch of
+ * `sm_holds_active_ft_contract_in` in SQL.
+ */
+export interface AvailabilityScopeRef {
+    subDepartmentId: string | null;
+    /**
+     * Needed only to admit DEPARTMENT-WIDE contracts (those with no
+     * sub-department of their own). Omit it and such a contract is treated as
+     * out of scope — the conservative reading, and correct for production,
+     * where no Active contract is in that shape today.
+     */
+    departmentId?: string | null;
+}
+
+/**
+ * The contracts that bear on one job.
+ *
+ * The TypeScript half of `sm_holds_active_contract_in` /
+ * `sm_holds_active_ft_contract_in` (migrations 20260821090000 / 20260821090100).
+ * Both halves must admit exactly the same rows or the page will offer someone a
+ * declaration the database then refuses — so the three branches below are the
+ * three branches of that SQL, in the same order.
+ */
+export function contractsInScope<T extends ContractBasisInput>(
+    contracts: readonly T[],
+    scope: AvailabilityScopeRef,
+): T[] {
+    // Unscoped covers every job.
+    if (!scope.subDepartmentId) return [...contracts];
+
+    return contracts.filter((c) => {
+        if (c.subDepartmentId === scope.subDepartmentId) return true;
+        // Department-wide contract, in scope for every sub-department beneath it.
+        return (
+            (c.subDepartmentId === null || c.subDepartmentId === undefined)
+            && !!c.departmentId
+            && !!scope.departmentId
+            && c.departmentId === scope.departmentId
+        );
+    });
+}
+
+/**
+ * The compliance basis for ONE job.
+ *
+ * Returns the same `ContractBasis` shape as `resolveComplianceBasis`, so every
+ * consumer reads the same fields and a caller can swap one for the other
+ * without learning a second vocabulary.
+ *
+ * A scope the person holds NO contract in resolves to the empty basis, whose
+ * `isFullTime` is false and whose mode is the strict 'OPT_IN'. That is safe
+ * rather than correct-looking: the page only ever offers scopes derived from
+ * the person's own contracts (`fetchAvailabilityScopes`), and
+ * `trg_availability_scope_is_contracted` refuses the write regardless. It is
+ * not a licence to pass arbitrary scopes in.
+ */
+export function resolveScopedBasis(
+    contracts: readonly ContractBasisInput[],
+    scope: AvailabilityScopeRef,
+): ContractBasis {
+    return resolveComplianceBasis(contractsInScope(contracts, scope));
 }

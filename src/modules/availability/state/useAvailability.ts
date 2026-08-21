@@ -41,12 +41,38 @@ import { translateDatabaseError } from "../utils/validation.utils";
 // QUERY KEYS
 // ============================================================================
 
+/**
+ * THE SCOPE IS PART OF THE KEY, not just the query.
+ *
+ * Without it, switching from Set-up to Front of House serves Set-up's slots
+ * from cache — and on the Capacitor WebView it would never self-correct,
+ * because `refetchOnWindowFocus` hangs off `visibilitychange`, which that
+ * WebView never fires. Every `staleTime` becomes cache-forever there, so a key
+ * that omits a dimension is not a stale-data risk on mobile, it is a permanent
+ * one.
+ *
+ * `?? 'all'` rather than leaving undefined in the tuple: an undefined array
+ * member and an absent one serialise the same way, which would collapse the
+ * unscoped key onto whichever scope was requested first.
+ */
 const QUERY_KEYS = {
-  rules: (profileId: string) =>
-    ["availability", "rules", profileId] as const,
+  rules: (profileId: string, subDepartmentId?: string | null) =>
+    ["availability", "rules", profileId, subDepartmentId ?? "all"] as const,
 
-  slots: (profileId: string, startDate: string, endDate: string) =>
-    ["availability", "slots", profileId, startDate, endDate] as const,
+  slots: (
+    profileId: string,
+    startDate: string,
+    endDate: string,
+    subDepartmentId?: string | null
+  ) =>
+    [
+      "availability",
+      "slots",
+      profileId,
+      startDate,
+      endDate,
+      subDepartmentId ?? "all",
+    ] as const,
 };
 
 // ============================================================================
@@ -64,6 +90,11 @@ export interface UseAvailabilityOptions {
    * re-query two tables on every month change to render nothing.
    */
   enabled?: boolean;
+  /**
+   * WHICH JOB this page is showing. Omit for the person-wide view — every
+   * declaration the profile holds — which is what this hook did before scoping.
+   */
+  subDepartmentId?: string | null;
 }
 
 export interface UseAvailabilityResult {
@@ -88,6 +119,7 @@ export interface UseAvailabilityResult {
   endDate: string;
   month: Date;
   getDayAvailability: (date: Date) => AvailabilitySlot[];
+  subDepartmentId?: string | null;
 }
 
 // ============================================================================
@@ -97,7 +129,12 @@ export interface UseAvailabilityResult {
 export function useAvailability(
   options: UseAvailabilityOptions = {}
 ): UseAvailabilityResult {
-  const { profileId = "current-user", month = new Date(), enabled = true } = options;
+  const {
+    profileId = "current-user",
+    month = new Date(),
+    enabled = true,
+    subDepartmentId = null,
+  } = options;
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -114,10 +151,10 @@ export function useAvailability(
     isLoading: isLoadingRules,
     refetch: refetchRules,
   } = useQuery({
-    queryKey: QUERY_KEYS.rules(profileId),
+    queryKey: QUERY_KEYS.rules(profileId, subDepartmentId),
     queryFn: async () => {
       const resolvedProfileId = await resolveProfileId(profileId);
-      return getAvailabilityRules(resolvedProfileId);
+      return getAvailabilityRules(resolvedProfileId, subDepartmentId);
     },
     enabled,
     staleTime: 1000 * 60 * 5,
@@ -133,10 +170,15 @@ export function useAvailability(
     isLoading: isLoadingSlots,
     refetch: refetchSlots,
   } = useQuery({
-    queryKey: QUERY_KEYS.slots(profileId, startDate, endDate),
+    queryKey: QUERY_KEYS.slots(profileId, startDate, endDate, subDepartmentId),
     queryFn: async () => {
       const resolvedProfileId = await resolveProfileId(profileId);
-      return getAvailabilitySlots(resolvedProfileId, startDate, endDate);
+      return getAvailabilitySlots(
+        resolvedProfileId,
+        startDate,
+        endDate,
+        subDepartmentId
+      );
     },
     enabled,
     staleTime: 1000 * 60 * 2,
@@ -150,7 +192,14 @@ export function useAvailability(
   const createRuleMutation = useMutation({
     mutationFn: async (payload: AvailabilityFormPayload) => {
       const resolvedProfileId = await resolveProfileId(profileId);
-      return createAvailabilityFromForm(resolvedProfileId, payload);
+      // The VIEW's scope wins unless the payload names one explicitly. A form
+      // that forgot to carry the scope would otherwise write an unscoped rule
+      // — one covering every job — while the page showed a single job's
+      // calendar, and the DB would accept it because unscoped is legal.
+      return createAvailabilityFromForm(resolvedProfileId, {
+        ...payload,
+        sub_department_id: payload.sub_department_id ?? subDepartmentId,
+      });
     },
 
     onSuccess: async () => {
@@ -158,11 +207,11 @@ export function useAvailability(
       // Rules are immediately consistent
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.rules(profileId),
+          queryKey: QUERY_KEYS.rules(profileId, subDepartmentId),
         }),
         // Slots may be eventually consistent
         queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.slots(profileId, startDate, endDate),
+          queryKey: QUERY_KEYS.slots(profileId, startDate, endDate, subDepartmentId),
         })
       ]);
 
@@ -193,10 +242,10 @@ export function useAvailability(
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.rules(profileId),
+          queryKey: QUERY_KEYS.rules(profileId, subDepartmentId),
         }),
         queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.slots(profileId, startDate, endDate),
+          queryKey: QUERY_KEYS.slots(profileId, startDate, endDate, subDepartmentId),
         })
       ]);
 
@@ -251,5 +300,6 @@ export function useAvailability(
       const dateStr = format(date, "yyyy-MM-dd");
       return slots.filter((s) => s.slot_date === dateStr);
     },
+    subDepartmentId: subDepartmentId ?? null,
   };
 }
