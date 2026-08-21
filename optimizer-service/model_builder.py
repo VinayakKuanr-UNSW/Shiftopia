@@ -341,6 +341,9 @@ class ShiftInput:
     is_saturday: bool = False
     is_public_holiday: bool = False
     shift_type: str = 'NORMAL'  # 'NORMAL' or 'MULTI_HIRE'
+    # WHICH JOB this shift belongs to — see `_slot_in_scope`. None is unscoped
+    # and matches every slot, which is what every caller sent before scoping.
+    sub_department_id: Optional[str] = None
     level: int = 0
     target_employment_type: Optional[str] = None
     # Narrows a 'PT' target to FLEXIBLE part-timers. This cannot be expressed by
@@ -501,6 +504,8 @@ class AvailabilitySlotInput:
     slot_date: str
     start_time: str
     end_time: str
+    # WHICH JOB this was declared for. None means every job the employee holds.
+    sub_department_id: Optional[str] = None
 
 
 @dataclass
@@ -924,6 +929,36 @@ def _slot_covers_shift(slot: AvailabilitySlotInput, s0: int, s1: int) -> bool:
     return a0 <= s0 and a1 >= s1
 
 
+def _slot_in_scope(slot: AvailabilitySlotInput, shift: ShiftInput) -> bool:
+    """Does this declared slot apply to the job this shift belongs to?
+
+    Employment is a property of the CONTRACT, not the person, and one employee
+    can hold several — Full-Time in Security, Casual in Set-up and Front of
+    House. Availability is declared per job for exactly that reason, so a
+    declaration made for Set-up says nothing about whether they can work
+    Security, and reading it as if it did is what let one job's declaration
+    satisfy another job's shift.
+
+    A solve is NOT scoped to one sub-department — it spans them — so this cannot
+    be a filter applied when the slots are fetched. It has to be a per-(slot,
+    shift) match at the point of use, which is here.
+
+    Both NULLs are deliberately permissive, and for different reasons:
+
+      * a slot with no sub-department applies to EVERY job the employee holds.
+        That is what every row carried before scoping and what a
+        department-wide contract still produces;
+      * a shift with no sub-department is unscoped, and there is no job to
+        match against. Matching everything keeps the pre-scoping behaviour for
+        any caller that has not started sending it, which matters because the
+        alternative — matching nothing — would silently make every employee
+        ineligible for every shift and read as an infeasible model.
+    """
+    if slot.sub_department_id is None or shift.sub_department_id is None:
+        return True
+    return slot.sub_department_id == shift.sub_department_id
+
+
 def envelope_excludes_shift(emp: EmployeeInput, shift: ShiftInput) -> bool:
     """HC-5e: does the contract ordinary-hours envelope put this shift out of
     bounds for this employee?
@@ -1074,9 +1109,14 @@ def employee_eligible(
         # Approved leave already is — `unavailable_dates`, checked at the top of
         # this function and unaffected by any of this — and non-leave blocks go
         # through `availability_overrides` at HARD severity just above.
+        # Scoped as well as dated. A part-timer who narrowed their Set-up
+        # availability on a date has said nothing about Security that day, and
+        # under OPT_OUT silence means available — so letting the Set-up
+        # declaration into this list would turn their narrowing into a block on
+        # a job they never spoke about.
         declared_today = [
             slot for slot in emp.availability_slots
-            if slot.slot_date == shift.shift_date
+            if slot.slot_date == shift.shift_date and _slot_in_scope(slot, shift)
         ]
         if declared_today:
             s0, s1 = shift_window(shift)
@@ -1100,6 +1140,11 @@ def employee_eligible(
         covered = False
         for slot in emp.availability_slots:
             if slot.slot_date != shift.shift_date:
+                continue
+            # The casual half of the defect: under OPT_IN a slot is what makes
+            # an employee eligible at all, so an out-of-scope slot counted here
+            # rosters someone onto a job they never declared for.
+            if not _slot_in_scope(slot, shift):
                 continue
             if _slot_covers_shift(slot, s0, s1):
                 covered = True

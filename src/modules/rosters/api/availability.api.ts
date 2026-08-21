@@ -85,7 +85,21 @@ function toEmployeeAvailability(
 export async function getResolvedAvailabilities(
     profileIds: string[],
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    /**
+     * WHICH JOB is being asked about (`availability_slots.sub_department_id`,
+     * migration 20260821090000).
+     *
+     * Omit it and the answer is person-wide — every declaration the profile
+     * holds, which is exactly today's behaviour and what every caller that has
+     * not yet resolved a scope gets.
+     *
+     * Pass one and the read narrows to declarations for THAT sub-department
+     * plus UNSCOPED ones, which cover every job by definition. That OR-NULL is
+     * not optional: 85 of the 90 production rules are scoped but the remaining
+     * five are not, and dropping them would silently un-declare those people.
+     */
+    subDepartmentId?: string | null,
 ): Promise<Map<string, Map<string, EmployeeAvailability>>> {
     const result = new Map<string, Map<string, EmployeeAvailability>>();
 
@@ -99,13 +113,21 @@ export async function getResolvedAvailabilities(
     const startStr = format(startDate, 'yyyy-MM-dd');
     const endStr = format(endDate, 'yyyy-MM-dd');
 
+    // `sub_department_id.eq.X,sub_department_id.is.null` — the scoped
+    // declarations for this job PLUS the unscoped ones that cover every job.
+    const scopeFilter = subDepartmentId
+        ? `sub_department_id.eq.${subDepartmentId},sub_department_id.is.null`
+        : null;
+
     // 1. Materialized slots in the visible window (the available windows).
-    const { data: slotRows, error: slotErr } = await supabase
+    let slotQuery = supabase
         .from('availability_slots')
         .select('profile_id,slot_date,start_time,end_time')
         .in('profile_id', validIds)
         .gte('slot_date', startStr)
         .lte('slot_date', endStr);
+    if (scopeFilter) slotQuery = slotQuery.or(scopeFilter);
+    const { data: slotRows, error: slotErr } = await slotQuery;
 
     if (slotErr) {
         console.error('Error fetching availability_slots:', slotErr);
@@ -115,10 +137,18 @@ export async function getResolvedAvailabilities(
     // 2. Which profiles have declared ANY availability rule. This distinguishes
     //    "off that day" (has rules, no slot → unavailable) from "never set
     //    availability" (no rules → we show nothing / universally unknown).
-    const { data: ruleRows, error: ruleErr } = await supabase
+    //
+    //    THE PROBE IS SCOPED TOO, and getting this wrong is the whole trap.
+    //    Someone who declared for Security but not for Set-up would otherwise
+    //    read as "has declared" while holding zero Set-up slots — and every day
+    //    of their Set-up roster would render as a positive "unavailable" rather
+    //    than the honest "never declared for this job".
+    let ruleQuery = supabase
         .from('availability_rules')
         .select('profile_id')
         .in('profile_id', validIds);
+    if (scopeFilter) ruleQuery = ruleQuery.or(scopeFilter);
+    const { data: ruleRows, error: ruleErr } = await ruleQuery;
 
     if (ruleErr) {
         console.error('Error fetching availability_rules:', ruleErr);
@@ -167,9 +197,11 @@ export async function getResolvedAvailabilities(
  */
 export async function getEmployeeAvailabilityForDate(
     profileId: string,
-    date: Date
+    date: Date,
+    /** See `getResolvedAvailabilities`. Omit for the person-wide answer. */
+    subDepartmentId?: string | null,
 ): Promise<EmployeeAvailability | null> {
-    const result = await getResolvedAvailabilities([profileId], date, date);
+    const result = await getResolvedAvailabilities([profileId], date, date, subDepartmentId);
     const profileMap = result.get(profileId);
 
     if (!profileMap) return null;

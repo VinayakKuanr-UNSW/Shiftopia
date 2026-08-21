@@ -45,6 +45,7 @@ from model_builder import (
     envelope_excludes_shift,
     shift_window,
     _slot_covers_shift,
+    _slot_in_scope,
     _time_to_abs_minutes,
 )
 from security import (
@@ -126,6 +127,14 @@ class ShiftReq(BaseModel):
     # MULTI_HIRE handling is currently approximated by AddNoOverlap with
     # the 600m pad; flag is here for forward-compat.
     shift_type: str = 'NORMAL'
+    # WHICH JOB this shift belongs to. Availability is declared per job now, so
+    # HC-5d cannot decide whether a slot applies without it: a run spans several
+    # sub-departments, and a Set-up declaration must not satisfy a Security
+    # shift. Declared HERE as well as on the dataclass because pydantic drops
+    # undeclared keys silently — the same wire-boundary omission that once made
+    # `is_sunday` and `is_security_role` inert. None means unscoped, which
+    # matches every slot (legacy behaviour).
+    sub_department_id: Optional[str] = None
 
 
 class ExistingShiftReq(BaseModel):
@@ -153,6 +162,10 @@ class AvailabilitySlotReq(BaseModel):
     slot_date: str
     start_time: str
     end_time: str
+    # WHICH JOB the employee declared this for. None means every job they hold —
+    # that is what every pre-scoping slot carries, so omitting it preserves the
+    # old behaviour exactly. See `_slot_in_scope` in model_builder.
+    sub_department_id: Optional[str] = None
 
 
 class EmployeeReq(BaseModel):
@@ -704,15 +717,26 @@ def _explain_eligibility(
     # was reported to the manager as OUTSIDE_DECLARED_AVAILABILITY. That is the
     # failure this function's own header warns about, inverted: the audit
     # claiming someone is ineligible when the solver knows they are not.
+    #
+    # Scoped by JOB as well, on both halves — `_slot_in_scope` is imported from
+    # the same module the solver uses rather than reimplemented here, because
+    # the two drifting apart is precisely the failure the paragraph above
+    # describes: an audit that disagrees with the model tells the manager a
+    # confident story about a decision that was never made.
     s0, s1 = shift_window(shift)
     covered = any(
-        slot.slot_date == shift.shift_date and _slot_covers_shift(slot, s0, s1)
+        slot.slot_date == shift.shift_date
+        and _slot_in_scope(slot, shift)
+        and _slot_covers_shift(slot, s0, s1)
         for slot in emp.availability_slots
     )
 
     if emp.availability_mode == 'OPT_OUT':
         # Per-date: a declaration on this date binds it; silence leaves it open.
-        declared_today = any(s.slot_date == shift.shift_date for s in emp.availability_slots)
+        declared_today = any(
+            s.slot_date == shift.shift_date and _slot_in_scope(s, shift)
+            for s in emp.availability_slots
+        )
         if declared_today and not covered:
             reasons.append('OUTSIDE_DECLARED_AVAILABILITY')
     elif c.enforce_availability or emp.has_availability_data:

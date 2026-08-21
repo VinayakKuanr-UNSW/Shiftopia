@@ -66,6 +66,13 @@ const SHIFT_FIELDS = fieldSet<Required<OptimizerShift>>({
     target_requires_flexible: 0, level: 0,
     is_sunday: 0, is_saturday: 0, is_public_holiday: 0, is_training: 0,
     unpaid_break_minutes: 0, paid_break_minutes: 0, shift_type: 0,
+    // The job this shift belongs to — HC-5d matches declared availability
+    // against it. Declared on the pydantic ShiftReq AND the ShiftInput
+    // dataclass: the request is filtered through `__dataclass_fields__`, so a
+    // field missing from either side is dropped silently, and a dropped scope
+    // fails OPEN — every slot matches every shift again, which is the
+    // pre-scoping behaviour and looks like nothing is wrong.
+    sub_department_id: 0,
 });
 
 const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({
@@ -112,6 +119,10 @@ const STRATEGY_FIELDS = fieldSet<Required<OptimizerStrategy>>({
 
 const AVAILABILITY_SLOT_FIELDS = fieldSet<Required<AvailabilitySlotRef>>({
     slot_date: 0, start_time: 0, end_time: 0,
+    // Which job the employee declared this for. Same two-drop-point hazard as
+    // the shift's own scope above — and this is the half that decides whether
+    // a Set-up declaration can satisfy a Security shift.
+    sub_department_id: 0,
 });
 
 const EXISTING_SHIFT_FIELDS = fieldSet<Required<ExistingShiftRef>>({

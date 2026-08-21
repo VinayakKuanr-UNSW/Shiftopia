@@ -24,6 +24,7 @@ import type { AvailabilityOverrideRef, ExistingShiftRef, OptimizerEmployee } fro
 import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 import { isFullTimeEmployee } from '@/modules/core/model/employment.types';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 // =============================================================================
 // SHARED UTILITIES — pure functions, no I/O
@@ -61,7 +62,13 @@ export function durationMinutes(start: string, end: string): number {
 // =============================================================================
 
 export interface AvailabilityResult {
-    slots: Array<{ slot_date: string; start_time: string; end_time: string }>;
+    slots: Array<{
+        slot_date: string;
+        start_time: string;
+        end_time: string;
+        /** Which job this was declared for; null = every job. */
+        sub_department_id: string | null;
+    }>;
     hasAnyData: boolean;
 }
 
@@ -206,6 +213,24 @@ export class RosterFetcher {
      *   - "has declared availability" (records exist somewhere) → only
      *     available where slots cover the shift
      *
+     * PERSON-WIDE, DELIBERATELY. The solver plans across sub-departments (a
+     * single run can contain shifts in Set-up AND Front of House AND Security),
+     * and `ShiftMeta` does not carry `sub_department_id`. Scoping the slots
+     * read to a single sub-department would silently un-declare everyone whose
+     * availability was filed under a different job, and those people would then
+     * be hard-filtered out of every shift.
+     *
+     * The per-job question IS answered elsewhere in the pipeline:
+     *   - `EligibilityService` scopes `employment_status` to the sub-department
+     *     of the shift being filled (lines ~195-210)
+     *   - The controller derives `availability_mode` from that scoped status
+     *   - The DB trigger `trg_prevent_ft_availability_rule` guards the write
+     *
+     * If the solver DOES need per-job availability in the future, the right
+     * shape is: extend `ShiftMeta` with `sub_department_id`, partition the
+     * slots by shift scope, and feed each `employee_eligible` check its own
+     * sub-department's slots rather than the flat list.
+     *
      * Returns a Map keyed by employee id with { slots, hasAnyData }.
      */
     async fetchAvailability(
@@ -248,9 +273,13 @@ export class RosterFetcher {
         const windowEnd = dates[dates.length - 1];
 
         // Slots in the window for non-FT employees
+        // NOT filtered by sub-department, deliberately. One solve spans several
+        // of them, so narrowing here would un-declare every employee whose job
+        // is not the one we narrowed to. The scope travels WITH each slot and is
+        // matched against the shift's own job inside the solver (`_slot_in_scope`).
         const { data: slotRows, error: slotErr } = await this.supabase
             .from('availability_slots')
-            .select('profile_id,slot_date,start_time,end_time')
+            .select('profile_id,slot_date,start_time,end_time,sub_department_id')
             .in('profile_id', nonFtEmployeeIds)
             .gte('slot_date', windowStart)
             .lte('slot_date', windowEnd);
@@ -284,13 +313,14 @@ export class RosterFetcher {
             (hasDataRows ?? []).map(r => (r as any).profile_id as string),
         );
 
-        const slotsByEmp = new Map<string, Array<{ slot_date: string; start_time: string; end_time: string }>>();
+        const slotsByEmp = new Map<string, AvailabilityResult['slots']>();
         for (const r of (slotRows ?? []) as any[]) {
             const list = slotsByEmp.get(r.profile_id) ?? [];
             list.push({
                 slot_date: r.slot_date,
                 start_time: normalizeTime(r.start_time),
                 end_time: normalizeTime(r.end_time),
+                sub_department_id: (r.sub_department_id as string | null) ?? null,
             });
             slotsByEmp.set(r.profile_id, list);
         }

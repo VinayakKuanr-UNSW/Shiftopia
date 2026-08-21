@@ -57,6 +57,16 @@ export interface DndAssignModalProps {
   shiftDate: string;      // YYYY-MM-DD
   shiftStartTime?: string | null; // HH:mm
   shiftEndTime?: string | null;   // HH:mm
+  /**
+   * Which job the shift belongs to. OPTIONAL, and normally omitted — the modal
+   * resolves it from the shift row itself (see `resolvedSubDeptId`), because
+   * both call sites hand this component a display object rather than the DB row
+   * and neither of them carried the sub-department. Pass it only to override.
+   *
+   * `undefined` means "look it up"; an explicit `null` means "person-wide" and
+   * is honoured as given.
+   */
+  subDepartmentId?: string | null;
 }
 
 // =============================================================================
@@ -75,9 +85,44 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   shiftDate,
   shiftStartTime = '',
   shiftEndTime = '',
+  subDepartmentId,
 }) => {
   const autoRanRef = useRef(false);
   const [availAck, setAvailAck] = useState(false);
+
+  // WHICH JOB THIS SHIFT IS FOR — read from the shift row rather than taken on
+  // trust from the caller.
+  //
+  // Availability is per-job now: the same person can be Full-Time in Security
+  // (silence means available) and Casual in Set-up (silence means unavailable),
+  // so answering "is this employee available?" without knowing which job the
+  // shift belongs to gives the wrong answer for one of them. Neither call site
+  // passes it — GroupModeView hands over a `ShiftDisplay` and RostersPlannerPage
+  // a loosely-typed drag payload, and adding the prop to both would leave the
+  // next caller free to forget it again. A missing scope does not fail loudly;
+  // it silently reverts to the person-wide answer this workstream exists to
+  // remove, so the safe default is to look it up.
+  const needsLookup = subDepartmentId === undefined;
+  const { data: lookedUpSubDeptId, isLoading: scopeLoading } = useQuery({
+    queryKey: ['shift', 'sub-department', shiftId],
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('sub_department_id')
+        .eq('id', shiftId)
+        .single();
+      if (error) throw error;
+      return (data?.sub_department_id as string | null) ?? null;
+    },
+    enabled: open && !!shiftId && needsLookup,
+    staleTime: 5 * 60_000,
+  });
+
+  const resolvedSubDeptId = needsLookup ? (lookedUpSubDeptId ?? null) : subDepartmentId;
+  // Until the lookup lands, `resolvedSubDeptId` is null — which reads as
+  // "person-wide", the very answer we are trying not to give. So the reads below
+  // wait for it rather than evaluating against a scope that is about to change.
+  const scopeReady = !needsLookup || !scopeLoading;
 
   // Warn-only declared-availability check for this MANUAL assignment. It never
   // blocks (that's the Auto Scheduler's job) — it just surfaces a notice, gated
@@ -85,14 +130,18 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   // full-containment rule as the optimizer so the manual warning and the hard
   // constraint agree.
   const { data: availSlots } = useQuery({
-    queryKey: ['availability', 'slots', 'assign-modal', employeeId, shiftDate],
-    queryFn: () => getAvailabilitySlots(employeeId, shiftDate, shiftDate),
-    enabled: open && !!employeeId && !!shiftDate,
+    queryKey: ['availability', 'slots', 'assign-modal', employeeId, shiftDate, resolvedSubDeptId],
+    queryFn: () => getAvailabilitySlots(employeeId, shiftDate, shiftDate, resolvedSubDeptId),
+    enabled: open && !!employeeId && !!shiftDate && scopeReady,
     staleTime: 30_000,
   });
   // …and what an EMPTY slot list means for this person. FT/PT hold no slots by
   // design, so without the mode every permanent would warn here.
-  const { mode: availMode } = useAvailabilityMode(employeeId, open);
+  const { mode: availMode } = useAvailabilityMode(
+    employeeId,
+    open && scopeReady,
+    resolvedSubDeptId != null ? { subDepartmentId: resolvedSubDeptId } : undefined,
+  );
   const availResult = useMemo(
     () => evaluateShiftAvailabilityFromSlots(
       availSlots ?? [], shiftDate, shiftStartTime || '', shiftEndTime || '', availMode,
@@ -122,7 +171,17 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
     const [employeeCtx, existingShifts, availSlots, assignedShifts] = await Promise.all([
       fetchV8EmployeeContext(employeeId),
       fetchEmployeeShiftsV2(employeeId, shift?.shift_date ?? shiftDate, 35, shiftId),
-      getAvailabilitySlots(employeeId, shift?.shift_date ?? shiftDate, shift?.shift_date ?? shiftDate),
+      // SAME SCOPE as the warn-only banner above. These were divergent: the
+      // banner read the employee's Set-up slots while the compliance engine
+      // read every slot they hold anywhere, so for a multi-contract employee
+      // the dialog could show "outside declared availability" over a panel that
+      // had just passed them — two answers to one question, on one screen.
+      getAvailabilitySlots(
+        employeeId,
+        shift?.shift_date ?? shiftDate,
+        shift?.shift_date ?? shiftDate,
+        resolvedSubDeptId,
+      ),
       getAssignedShiftsForAvailability(employeeId, shift?.shift_date ?? shiftDate, shift?.shift_date ?? shiftDate),
     ]);
 
@@ -171,13 +230,20 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
     });
 
     return [input];
-  }, [shiftId, employeeId, shiftDate, shiftStartTime, shiftEndTime]);
+  }, [shiftId, employeeId, shiftDate, shiftStartTime, shiftEndTime, resolvedSubDeptId]);
 
   const panel = useCompliancePanel({ buildInputs, stage: 'PUBLISH' });
 
-  // Auto-run compliance when the modal opens
+  // Auto-run compliance when the modal opens — but not before we know which job
+  // the shift is for.
+  //
+  // `panel.run()` fires ONCE per open, and `buildInputs` reads
+  // `resolvedSubDeptId` at call time. Running on the first render would capture
+  // the pre-lookup null, evaluate the whole engine against person-wide
+  // availability, and then never re-run to correct itself — a stale verdict that
+  // looks authoritative because the panel renders it as a finished result.
   useEffect(() => {
-    if (open && !autoRanRef.current) {
+    if (open && scopeReady && !autoRanRef.current) {
       autoRanRef.current = true;
       panel.run();
     }
@@ -185,7 +251,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
       autoRanRef.current = false;
       setAvailAck(false);
     }
-  }, [open]); // intentionally excluding panel.run to avoid re-trigger loops
+  }, [open, scopeReady]); // intentionally excluding panel.run to avoid re-trigger loops
 
   // Format display values
   const formatTime = (t: string | undefined | null) => {

@@ -112,11 +112,31 @@ export async function getReserveListCandidates(shiftId: string): Promise<Reserve
 
   // 3. Declared availability for this date (unset = unavailable — advisory,
   //    surfaced in the panel, not a hard exclusion by itself).
-  const { data: slotRows } = await supabase
+  //
+  //    SCOPED to the shift's sub-department so a declaration for Security is
+  //    not counted as availability for a Set-up shift. The OR-NULL arm
+  //    includes UNSCOPED declarations (85/90 rules migrated, 5 still NULL),
+  //    which by definition cover every job.
+  //
+  //    The `contract_type` used below in `availabilityModeForEmploymentStatus`
+  //    is already scoped by EligibilityService (line ~200), so only the SLOTS
+  //    read was person-wide — and the mismatch meant a Casual in Set-up whose
+  //    FT Security contract happened to carry slots would be reported as
+  //    "available" even though none of those slots named Set-up.
+  const shiftSubDeptId = shift.sub_department_id;
+  let slotQuery = supabase
     .from('availability_slots')
     .select('profile_id, slot_date, start_time, end_time')
     .in('profile_id', shortlistIds)
     .eq('slot_date', shift.shift_date);
+
+  if (shiftSubDeptId) {
+    slotQuery = slotQuery.or(
+      `sub_department_id.eq.${shiftSubDeptId},sub_department_id.is.null`,
+    );
+  }
+
+  const { data: slotRows } = await slotQuery;
 
   const slotsByProfile = new Map<string, DeclaredSlot[]>();
   (slotRows ?? []).forEach((s: { profile_id: string; slot_date: string; start_time: string; end_time: string }) => {

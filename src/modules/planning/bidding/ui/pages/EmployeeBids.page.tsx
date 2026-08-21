@@ -29,6 +29,7 @@ import { BidComplianceModal } from '../components/BidComplianceModal';
 import { BidConfirmComplianceDialog } from '../components/BidConfirmComplianceDialog';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
+import { fetchScopedContractBasis } from '@/modules/availability/api/contract-basis.api';
 import { BidOpportunityDrawer } from '../components/BidOpportunityDrawer';
 import { BidOpportunityCard } from '../components/BidOpportunityCard';
 import { BidOpportunityListItem } from '../components/BidOpportunityListItem';
@@ -254,6 +255,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 organization: (s as any).organizations?.name || 'MCEC',
                 department: s.departments?.name || 'Unknown',
                 subDepartment: s.sub_departments?.name || 'General',
+                subDepartmentId: (s as any).sub_department_id ?? null,
                 group: (() => {
                     const t = s.group_type;
                     if (!t) return 'General';
@@ -469,10 +471,24 @@ export const EmployeeBidsPage: React.FC = () => {
             // Warn-only availability self-check — never blocks a bid, but if the
             // shift falls outside the bidder's declared availability we route
             // through the same confirmation dialog so they acknowledge it.
+            //
+            // TWO BUGS FIXED HERE (sub-department scoping work):
+            //   1. `evaluateShiftAvailabilityFromSlots` defaults to OPT_IN when
+            //      mode is omitted, so every FT/PT bidder got a spurious "no
+            //      declared availability" warning — the most reliable staff
+            //      saw a warning on every bid.
+            //   2. The slots read was PERSON-WIDE: a FT Security employee's
+            //      slots were counted as coverage for a Set-up bid shift.
             let availWarn: string | null = null;
             try {
-                const slots = await getAvailabilitySlots(user.id, shift.date, shift.date);
-                const a = evaluateShiftAvailabilityFromSlots(slots, shift.date, shift.startTime + ':00', shift.endTime + ':00');
+                const [slots, basis] = await Promise.all([
+                    getAvailabilitySlots(user.id, shift.date, shift.date, shift.subDepartmentId),
+                    fetchScopedContractBasis(user.id, { subDepartmentId: shift.subDepartmentId ?? null }),
+                ]);
+                const a = evaluateShiftAvailabilityFromSlots(
+                    slots, shift.date, shift.startTime + ':00', shift.endTime + ':00',
+                    basis.availabilityMode,
+                );
                 if (a.isWarning) availWarn = a.message;
             } catch { /* availability lookup never blocks a bid */ }
 
@@ -625,10 +641,6 @@ export const EmployeeBidsPage: React.FC = () => {
                     setStartDate(start);
                     setEndDate(end);
                 }}
-                onRefresh={() => {
-                    queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
-                    queryClient.invalidateQueries({ queryKey: ['myBids'] });
-                }}
                 isLoading={eligibilityLoading}
                 subFunctionBar={isBulkModeActive ? (
                     <BidSelectionToolbar
@@ -683,37 +695,57 @@ export const EmployeeBidsPage: React.FC = () => {
                                         "h-11 w-full rounded-xl", // Mobile: uniform 44px, full width
                                         "md:h-9 md:w-9 md:rounded-xl", // Desktop
                                         isSettingsOpen
-                                            ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
+                                            ? "bg-primary/20 text-primary border border-primary/30"
                                             : isDark ? "bg-[#111827]/60 hover:bg-[#111827]/80 text-muted-foreground" : "bg-slate-100 hover:bg-slate-200 text-muted-foreground"
                                     )}
                                 >
                                     <Settings2 className="h-5 w-5 md:h-4 md:w-4" />
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className={cn(
-                                "rounded-xl border border-border shadow-2xl p-4 w-60 z-50",
-                                isDark ? "bg-[#1c2333] text-white" : "bg-white text-slate-900"
-                            )}>
+                            <PopoverContent 
+                                className={cn(
+                                    "rounded-2xl border border-slate-200 dark:border-white/10 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] p-4 w-72 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300",
+                                    isDark ? "bg-[#1a2333] text-white" : "bg-white text-slate-900"
+                                )}
+                                sideOffset={10}
+                                align="end"
+                            >
                                 <h4 className="font-black uppercase tracking-widest text-[10px] text-muted-foreground/80 mb-3 select-none">Bidding Settings</h4>
                                 <div className="space-y-3">
-                                    <label className="flex items-center gap-3 cursor-pointer group select-none">
+                                    <label className="flex items-start gap-3 cursor-pointer group select-none p-2 rounded-xl hover:bg-primary/5 transition-colors">
+                                        <div className={cn(
+                                            "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0 mt-0.5",
+                                            showIneligible
+                                                ? "bg-primary border-primary text-primary-foreground"
+                                                : "border-muted-foreground/30 group-hover:border-primary/40"
+                                        )}>
+                                            {showIneligible && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                        </div>
                                         <input
                                             type="checkbox"
                                             checked={showIneligible}
                                             onChange={(e) => setShowIneligible(e.target.checked)}
-                                            className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
+                                            className="sr-only"
                                         />
                                         <div className="flex flex-col">
                                             <span className="text-[11px] font-black uppercase tracking-wider group-hover:text-primary transition-colors">Show Ineligible</span>
                                             <span className="text-[9px] text-muted-foreground/60 leading-tight">Display shifts for which qualification is missing</span>
                                         </div>
                                     </label>
-                                    <label className="flex items-center gap-3 cursor-pointer group select-none">
+                                    <label className="flex items-start gap-3 cursor-pointer group select-none p-2 rounded-xl hover:bg-primary/5 transition-colors">
+                                        <div className={cn(
+                                            "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0 mt-0.5",
+                                            showExpired
+                                                ? "bg-primary border-primary text-primary-foreground"
+                                                : "border-muted-foreground/30 group-hover:border-primary/40"
+                                        )}>
+                                            {showExpired && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                        </div>
                                         <input
                                             type="checkbox"
                                             checked={showExpired}
                                             onChange={(e) => setShowExpired(e.target.checked)}
-                                            className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
+                                            className="sr-only"
                                         />
                                         <div className="flex flex-col">
                                             <span className="text-[11px] font-black uppercase tracking-wider group-hover:text-primary transition-colors">Show Expired</span>

@@ -1170,6 +1170,11 @@ export class AutoSchedulerController {
                 demand_source: s.demand_source,
                 target_employment_type: s.target_employment_type,
                 target_requires_flexible: s.target_requires_flexible ?? false,
+                // Carried to the wire so HC-5d can tell which job the shift is
+                // for. A solve spans sub-departments, so the slot list cannot be
+                // narrowed when it is fetched — the match has to happen per
+                // (slot, shift) inside the solver, and it needs both sides.
+                sub_department_id: s.sub_department_id ?? null,
                 level: s.level ?? 0,
                 is_training: (s as any).is_training ?? false,
                 unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
