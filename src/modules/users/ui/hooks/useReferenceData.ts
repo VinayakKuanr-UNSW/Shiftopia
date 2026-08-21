@@ -31,7 +31,7 @@ export const useReferenceData = (shouldLoad: boolean = false) => {
                 (supabase as any).schema('hr').from('organizations').select('id, name').order('name'),
                 (supabase as any).schema('hr').from('departments').select('id, name, organization_id').order('name'),
                 (supabase as any).schema('hr').from('subdepartments').select('id, name, department_id').order('name'),
-                (supabase as any).schema('hr').from('roles').select('id, name, subdepartment_id, remuneration_level').order('name'),
+                (supabase as any).schema('hr').from('roles').select('id, name, subdepartment_id, remuneration_level, employment_type').order('name'),
                 (supabase as any).schema('hr').from('remuneration_levels').select('level_number, level_name, hourly_rate_min').order('level_number'),
             ]);
 
@@ -44,6 +44,12 @@ export const useReferenceData = (shouldLoad: boolean = false) => {
                     name: r.name,
                     sub_department_id: r.subdepartment_id,
                     remuneration_level: r.remuneration_level,
+                    // Selected AND projected. The column was in the table all
+                    // along but neither the query nor this map carried it, so
+                    // any consumer reading `role.employment_type` silently got
+                    // undefined — the same one-line silent drop that made the
+                    // shift employment target inert.
+                    employment_type: r.employment_type ?? null,
                 })),
                 remLevels: remLevelsRes.data || [],
             });

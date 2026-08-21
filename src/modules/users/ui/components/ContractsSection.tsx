@@ -81,6 +81,46 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
         enabled: !!employeeId
     });
 
+    /**
+     * Which contracts are really ONE appointment.
+     *
+     * `position_id` (migration 20260821110000) groups the rows written from a
+     * single position form: same person, same sub-department, same employment
+     * type, differing only in which role they name. In production 122 contracts
+     * are 107 positions, 9 of which hold more than one role.
+     *
+     * The card stays PER ROW rather than per position, deliberately. Half of
+     * what a card shows is a per-contract fact — casual-conversion eligibility
+     * turns on that row's own start date, and the SWS trial cap on its own
+     * flags — so collapsing three rows into one card would have to pick one
+     * row's compliance state to show and silently drop the others. Instead the
+     * siblings are sorted together and each card says what it belongs to.
+     */
+    const positions = React.useMemo(() => {
+        const byPosition = new Map<string, any[]>();
+        for (const c of contracts ?? []) {
+            // Older rows predate the column; a row without one is a position of
+            // one, keyed on its own id so it can never collide with a real
+            // position_id or pool with other unkeyed rows.
+            const key = c.position_id ?? `solo:${c.id}`;
+            byPosition.set(key, [...(byPosition.get(key) ?? []), c]);
+        }
+        return byPosition;
+    }, [contracts]);
+
+    /** Siblings adjacent, so one appointment reads as a run of cards. */
+    const orderedContracts = React.useMemo(() => {
+        const seen = new Set<string>();
+        const out: any[] = [];
+        for (const c of contracts ?? []) {
+            const key = c.position_id ?? `solo:${c.id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push(...(positions.get(key) ?? []));
+        }
+        return out;
+    }, [contracts, positions]);
+
     const handleDelete = async (id: string) => {
         if (!confirm('Are you sure you want to remove this contract?')) return;
         
@@ -106,6 +146,11 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                             <Briefcase className="w-4 h-4" aria-hidden="true" />
                         </div>
                         Employment Contracts ({contracts?.length || 0})
+                        {positions.size > 0 && positions.size !== (contracts?.length || 0) && (
+                            <span className="text-xs font-semibold normal-case tracking-normal text-muted-foreground">
+                                across {positions.size} position{positions.size === 1 ? '' : 's'}
+                            </span>
+                        )}
                     </CardTitle>
                 </div>
                 {isAuthorizedAdmin && (
@@ -124,7 +169,7 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                             <p className="text-xs font-bold">No active contracts found</p>
                         </div>
                     ) : (
-                        contracts?.map((contract) => {
+                        orderedContracts.map((contract) => {
                             // Fair Work Act s15A / cl 12.5(g) — a casual with 6+ months on
                             // this contract may request conversion to full/part-time.
                             const conversion = getCasualConversionStatus({
@@ -138,6 +183,9 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                 isSwsTrial: contract.is_sws_trial,
                                 swsTrialStartDate: contract.sws_trial_start_date,
                             });
+                            // The other roles this same appointment covers.
+                            const siblings = (positions.get(contract.position_id ?? `solo:${contract.id}`) ?? [])
+                                .filter((c: any) => c.id !== contract.id);
                             return (
                             <motion.div
                                 key={contract.id}
@@ -154,6 +202,15 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 rounded-lg">
                                                 {contract.employment_status || 'Casual'}
                                             </Badge>
+                                            {siblings.length > 0 && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="bg-muted text-muted-foreground border-border rounded-lg"
+                                                    title={`One appointment covering ${siblings.length + 1} roles: ${[contract, ...siblings].map((c: any) => c.roles?.name ?? 'Unknown').join(', ')}`}
+                                                >
+                                                    +{siblings.length} more role{siblings.length === 1 ? '' : 's'} here
+                                                </Badge>
+                                            )}
                                             {conversion.eligible && (
                                                 <Badge
                                                     variant="outline"

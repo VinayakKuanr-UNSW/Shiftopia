@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { Plus, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil, Clock, GraduationCap, Award, School, BookOpen, Trophy, Info, Accessibility, Scale, CalendarClock, AlertTriangle } from 'lucide-react';
+import { Plus, Check, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil, Clock, GraduationCap, Award, School, BookOpen, Trophy, Info, Accessibility, Scale, CalendarClock, AlertTriangle } from 'lucide-react';
 import { useReferenceData } from '../hooks/useReferenceData';
 import { useContractForm, FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../hooks/useContractForm';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
@@ -41,7 +41,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
     } = useReferenceData(open);
 
     const {
-        formData, isSubmitting, updateField, updateRole, submit, setFormData
+        formData, isSubmitting, updateField, toggleRole, submit, setFormData
     } = useContractForm(employeeId, () => {
         setOpen(false);
         if (onSuccess) onSuccess();
@@ -57,7 +57,11 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 organization_id: existingContract.organization_id || '',
                 department_id: existingContract.department_id || '',
                 sub_department_id: existingContract.sub_department_id || '',
-                role_id: existingContract.role_id,
+                // Edit mode still edits ONE row. The multi-select is for creating a
+                // position; changing an existing appointment's role set means adding
+                // and removing rows, which is a different action with different
+                // consequences (a removed role may be on a published roster).
+                role_ids: [existingContract.role_id],
                 remuneration_level: existingContract.remuneration_level || '',
                 employment_status: (existingContract.employment_status as any) || 'Casual',
                 contracted_weekly_hours: (existingContract as any).contracted_weekly_hours || 0,
@@ -85,7 +89,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 organization_id: '',
                 department_id: '',
                 sub_department_id: '',
-                role_id: '',
+                role_ids: [],
                 remuneration_level: '',
                 employment_status: '',
                 contracted_weekly_hours: 0,
@@ -193,7 +197,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     organization_id: formData.organization_id,
                     department_id: formData.department_id,
                     sub_department_id: formData.sub_department_id,
-                    role_id: formData.role_id,
+                    role_id: formData.role_ids[0],
                     remuneration_level: formData.remuneration_level === '' ? undefined : formData.remuneration_level,
                     employment_status: formData.employment_status as any,
                     contracted_weekly_hours: formData.contracted_weekly_hours,
@@ -231,7 +235,10 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
             setOpen(false);
             if (onSuccess) onSuccess();
         } else {
-            await submit();
+            // `roleLevels` is what makes each row take its OWN level. Omit it
+            // and every role in the position would be written at whatever the
+            // single `remuneration_level` field happens to hold.
+            await submit(roleLevels);
         }
     };
 
@@ -239,21 +246,59 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
     const isOrgSelected = !!formData.organization_id;
     const isDeptSelected = !!formData.department_id;
     const isSubDeptSelected = !!formData.sub_department_id;
-    const isRoleSelected = !!formData.role_id;
+    const isRoleSelected = formData.role_ids.length > 0;
 
-    const selectedRole = roles.find(r => r.id === formData.role_id);
+    /** role id → its remuneration level, handed to `submit` so each row takes its own. */
+    const roleLevels = React.useMemo(
+        () => Object.fromEntries(
+            roles.map(r => [r.id, r.remuneration_level as number | null | undefined]),
+        ),
+        [roles],
+    );
+
+    const selectedRoles = React.useMemo(
+        () => formData.role_ids
+            .map(id => roles.find(r => r.id === id))
+            .filter((r): r is NonNullable<typeof r> => !!r),
+        [formData.role_ids, roles],
+    );
+
+    // Edit mode still edits one row, so the single remuneration field it shows
+    // stays meaningful there. In add mode the level is per role and the field
+    // is not rendered at all.
+    const selectedRole = selectedRoles[0];
     const selectedRemLevel = remLevels.find(rl => rl.level_number === formData.remuneration_level);
-    const isRemLocked = !!formData.role_id && !!selectedRole?.remuneration_level;
+    const isRemLocked = isRoleSelected && !!selectedRole?.remuneration_level;
 
-    // Auto-populate remuneration level when role changes
+    // Auto-populate the single remuneration level in EDIT mode only. In add
+    // mode this would be actively wrong: it would pin the whole position to the
+    // first role's level, which is the value L2 and L4 do not share.
     React.useEffect(() => {
-        if (formData.role_id && formData.remuneration_level === '') {
-            const role = roles.find(r => r.id === formData.role_id);
-            if (role?.remuneration_level) {
-                updateField('remuneration_level', role.remuneration_level);
-            }
+        if (!isEditMode) return;
+        if (selectedRole?.remuneration_level && formData.remuneration_level === '') {
+            updateField('remuneration_level', selectedRole.remuneration_level);
         }
-    }, [formData.role_id, roles, formData.remuneration_level, updateField]);
+    }, [isEditMode, selectedRole, formData.remuneration_level, updateField]);
+
+    /**
+     * Roles whose own `employment_type` disagrees with the position's.
+     *
+     * Surfaced, not enforced. `roles.employment_type` is near-vestigial — it
+     * knows only 'Casual' and 'Full-Time' in production, cannot express
+     * Part-Time or Flexible Part-Time at all, and disagrees with the contract
+     * actually written in 8 of 122 cases. The contract is what the pay engine,
+     * the shape gate and the availability guards all read, so the person filling
+     * this form decides. This just says so out loud instead of silently
+     * disagreeing with the role catalogue.
+     */
+    const employmentTypeMismatches = React.useMemo(() => {
+        if (!formData.employment_status) return [];
+        return selectedRoles.filter(r => {
+            const t = (r.employment_type ?? '').toLowerCase();
+            if (!t) return false;
+            return !formData.employment_status.toLowerCase().startsWith(t.split(' ')[0]);
+        });
+    }, [selectedRoles, formData.employment_status]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -315,7 +360,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                     updateField('organization_id', val);
                                     updateField('department_id', '');
                                     updateField('sub_department_id', '');
-                                    updateField('role_id', '');
+                                    updateField('role_ids', []);
                                 }}
                                 icon={<Building2 className="w-5 h-5" />}
                             />
@@ -337,7 +382,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                             onValueChange={(val) => {
                                                 updateField('department_id', val);
                                                 updateField('sub_department_id', '');
-                                                updateField('role_id', '');
+                                                updateField('role_ids', []);
                                             }}
                                             icon={<Users className="w-5 h-5" />}
                                         />
@@ -361,7 +406,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                             options={filteredSubDepartments.map(sd => ({ id: sd.id, name: sd.name }))}
                                             onValueChange={(val) => {
                                                 updateField('sub_department_id', val);
-                                                updateField('role_id', '');
+                                                updateField('role_ids', []);
                                             }}
                                             icon={<ChevronRight className="w-5 h-5" />}
                                         />
@@ -369,9 +414,13 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                 )}
                             </AnimatePresence>
 
-                            {/* 4. Role */}
+                            {/* 4. Roles — one position, every role it covers.
+                                 EDIT mode keeps the single-select: it edits one
+                                 existing row, and changing which roles a live
+                                 appointment covers means adding and removing
+                                 rows, which is a different action. */}
                             <AnimatePresence mode="wait">
-                                {isSubDeptSelected && (
+                                {isSubDeptSelected && isEditMode && (
                                     <motion.div
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
@@ -381,14 +430,100 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                         <CommandSelector
                                             label="Position / Role"
                                             placeholder="Select role"
-                                            value={formData.role_id}
+                                            value={formData.role_ids[0] ?? ''}
                                             options={filteredRoles.map(r => ({ id: r.id, name: r.name }))}
-                                            onValueChange={(val) => {
-                                            const role = roles.find(r => r.id === val);
-                                            updateRole(val, role?.remuneration_level);
-                                        }}
+                                            onValueChange={(val) => updateField('role_ids', [val])}
                                             icon={<Briefcase className="w-5 h-5" />}
                                         />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            <AnimatePresence mode="wait">
+                                {isSubDeptSelected && !isEditMode && (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: 20 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="space-y-2"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                                <Briefcase className="w-5 h-5" />
+                                                Roles this position covers
+                                            </label>
+                                            <span className="text-xs text-muted-foreground tabular-nums">
+                                                {formData.role_ids.length} selected
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Tick every role they can be rostered as here. One appointment, one set of hours — a row is written per role.
+                                        </p>
+
+                                        {filteredRoles.length === 0 ? (
+                                            <p className="text-sm text-muted-foreground py-3">
+                                                No roles are configured for this sub-department.
+                                            </p>
+                                        ) : (
+                                            <div className="max-h-64 overflow-y-auto rounded-xl border border-border divide-y divide-border">
+                                                {filteredRoles.map(r => {
+                                                    const checked = formData.role_ids.includes(r.id);
+                                                    return (
+                                                        <button
+                                                            key={r.id}
+                                                            type="button"
+                                                            onClick={() => toggleRole(r.id, r.employment_type)}
+                                                            aria-pressed={checked}
+                                                            className={cn(
+                                                                'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                                                                checked ? 'bg-primary/10' : 'hover:bg-muted/50',
+                                                            )}
+                                                        >
+                                                            <span
+                                                                className={cn(
+                                                                    'w-4 h-4 rounded border flex items-center justify-center flex-shrink-0',
+                                                                    checked
+                                                                        ? 'bg-primary border-primary text-primary-foreground'
+                                                                        : 'border-muted-foreground/40',
+                                                                )}
+                                                            >
+                                                                {checked && <Check className="w-3 h-3" />}
+                                                            </span>
+                                                            <span className="flex-1 min-w-0">
+                                                                <span className="block text-sm font-medium text-foreground truncate">
+                                                                    {r.name}
+                                                                </span>
+                                                                {r.employment_type && (
+                                                                    <span className="block text-xs text-muted-foreground">
+                                                                        Catalogued as {r.employment_type}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                            {r.remuneration_level != null && (
+                                                                <span className="text-xs font-semibold text-muted-foreground tabular-nums flex-shrink-0">
+                                                                    L{r.remuneration_level}
+                                                                </span>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+
+                                        {/* Said out loud rather than enforced — see
+                                            `employmentTypeMismatches`. The contract is
+                                            what every downstream rule reads; the role
+                                            catalogue is a hint that is wrong 8 times
+                                            in 122. */}
+                                        {employmentTypeMismatches.length > 0 && (
+                                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                                                {employmentTypeMismatches.map(r => r.name).join(', ')}
+                                                {employmentTypeMismatches.length === 1 ? ' is' : ' are'} catalogued
+                                                differently to {formData.employment_status}. The contract wins — this is
+                                                only worth a second look.
+                                            </p>
+                                        )}
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -407,12 +542,29 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
                                                 <DollarSign className="w-3 h-3" /> Remuneration
                                             </Label>
-                                            <div className="text-sm font-semibold text-primary/90 flex items-center gap-2">
-                                                {selectedRemLevel ? (
-                                                    <>
-                                                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-xs">L{selectedRemLevel.level_number}</span>
-                                                        <span>{selectedRemLevel.level_name}</span>
-                                                    </>
+                                            {/* Add mode shows the levels of every selected
+                                                role, because there is no single one: L2 Team
+                                                Member and L4 Team Leader sit in one position
+                                                at different levels. Edit mode edits one row
+                                                and keeps the single value. */}
+                                            <div className="text-sm font-semibold text-primary/90 flex items-center gap-2 flex-wrap">
+                                                {isEditMode ? (
+                                                    selectedRemLevel ? (
+                                                        <>
+                                                            <span className="px-1.5 py-0.5 rounded bg-primary/10 text-xs">L{selectedRemLevel.level_number}</span>
+                                                            <span>{selectedRemLevel.level_name}</span>
+                                                        </>
+                                                    ) : '—'
+                                                ) : selectedRoles.length > 0 ? (
+                                                    selectedRoles.map(r => (
+                                                        <span
+                                                            key={r.id}
+                                                            className="px-1.5 py-0.5 rounded bg-primary/10 text-xs"
+                                                            title={r.name}
+                                                        >
+                                                            {r.remuneration_level != null ? `L${r.remuneration_level}` : '—'}
+                                                        </span>
+                                                    ))
                                                 ) : '—'}
                                             </div>
                                         </div>
