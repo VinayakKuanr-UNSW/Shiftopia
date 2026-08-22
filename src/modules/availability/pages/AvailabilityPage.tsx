@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { addMonths, subMonths } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Phone,
   Plus,
   CalendarCheck2,
   ArrowRight,
@@ -18,16 +17,15 @@ import { useAvailability } from '../state/useAvailability';
 import { useAvailabilityEditing } from '../state/useAvailabilityEditing';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Switch } from '@/modules/core/ui/primitives/switch';
-import { useReserveListOptIn } from '@/modules/reserve-list/state/useReserveListOptIn';
 import { format } from 'date-fns';
 import { AvailabilityScreen } from '../ui/AvailabilityScreen';
 import { pageVariants } from '@/modules/core/ui/motion/presets';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useAvailabilityScope } from '../state/useAvailabilityScope';
-import { AvailabilityScopePicker } from '../ui/header/AvailabilityScopePicker';
 import { resolveComplianceBasis, type ContractBasis } from '../domain/contract-basis';
 import { useAuth } from '@/platform/auth/useAuth';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import type { ScopeSelection } from '@/platform/auth/types';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { formatEnvelopeDaysClause, formatEnvelopeTime } from '../ui/envelope-format';
@@ -80,17 +78,25 @@ export const AvailabilityPage: React.FC = () => {
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // WHICH JOB is being declared for. One at a time: the same person can be
-  // Full-Time in Security (availability contract-based, declaring refused) and
-  // Casual in Set-up (silence means unavailable). There is no single answer
-  // correct for both, which is why this replaced the old multi-select.
+  // WHICH JOB is being declared for, taken from the SAME global scope control
+  // every other page uses — with the sub-department level forced to a single
+  // choice. One at a time is not a stylistic preference here: the same person
+  // can be Full-Time in Security (availability is contract-based, declaring is
+  // refused) and Casual in Set-up (silence means unavailable), and there is no
+  // single declaration that is correct for both.
+  const { scope, setScope } = useScopeFilter('personal');
+
+  // `subdept_ids` is an array because the shared control is multi-select
+  // everywhere else. Under `singleSelectLevels={['subdept']}` it holds at most
+  // one, and reading [0] is the whole adaptation.
+  const selectedSubDeptId = scope?.subdept_ids?.[0] ?? null;
+
   const {
     scopes,
     selected: selectedScope,
-    select: selectScope,
+    isContracted,
     isLoading: scopesLoading,
-    isSingleScope,
-  } = useAvailabilityScope(user?.id);
+  } = useAvailabilityScope(user?.id, selectedSubDeptId);
 
   // The SELECTED JOB is the page's basis — not a second read of the person.
   // Deriving it from one place is what stops the header, the editor and the
@@ -104,6 +110,19 @@ export const AvailabilityPage: React.FC = () => {
   // round, since the FT card is the one that asserts something.
   const isFullTime = !scopesLoading && contractBasis.isFullTime;
 
+  /**
+   * May this person add a declaration for the job on screen?
+   *
+   * Three conditions, and each one fails differently if dropped. A full-timer
+   * has nothing to declare (leave governs them). A selection outside their
+   * contracts would be refused by
+   * `trg_availability_scope_is_contracted` — the button has to be gone before
+   * the database says no in trigger language. And with nothing selected there
+   * is no job to attach the declaration to.
+   */
+  const canDeclare =
+    !scopesLoading && !isFullTime && isContracted && !!selectedScope;
+
   // A full-timer has no rules and no slots to load, and neither does someone
   // with no job selected yet. Passing `enabled` rather than calling
   // conditionally keeps the hook order stable.
@@ -113,28 +132,9 @@ export const AvailabilityPage: React.FC = () => {
     subDepartmentId: selectedScope?.subDepartmentId ?? null,
   });
   const editingData = useAvailabilityEditing();
-  const reserveListOptIn = useReserveListOptIn();
 
   const handlePrevMonth = () => setCurrentMonth((prev) => subMonths(prev, 1));
   const handleNextMonth = () => setCurrentMonth((prev) => addMonths(prev, 1));
-
-  const handleReserveListToggle = async (checked: boolean) => {
-    try {
-      await reserveListOptIn.setOptIn(checked);
-      toast({
-        title: checked ? 'Reserve List: opted in' : 'Reserve List: opted out',
-        description: checked
-          ? 'You may now be contacted for emergency replacement shifts.'
-          : 'You will no longer appear in emergency replacement searches.',
-      });
-    } catch {
-      toast({
-        title: 'Could not update Reserve List preference',
-        description: 'Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
 
   const handleAddAvailability = () => {
     editingData.startCreate();
@@ -146,26 +146,23 @@ export const AvailabilityPage: React.FC = () => {
       <GoldStandardHeader
         title="My Availabilities"
         Icon={CalendarDays}
+        scope={scope}
+        setScope={setScope}
+        mode="personal"
+        // Venue and Department stay multi-select, exactly as on every other
+        // page. Only the sub-department is constrained, because that is the
+        // level that names the JOB being declared for rather than narrowing a
+        // list — see `singleSelectLevels` on GlobalScopeFilterProps.
+        singleSelectLevels={['subdept']}
         functionBar={
           <div className={cn(
             "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden",
             isDark ? "bg-[#111827]/60" : "bg-slate-100"
           )}>
             <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
-              {/* WHICH JOB. First in the bar because every control after it is
-                  scoped by it — the month you are paging and the availability
-                  you are adding both belong to the job named here. */}
-              <AvailabilityScopePicker
-                scopes={scopes}
-                selected={selectedScope}
-                onSelect={selectScope}
-                isSingleScope={isSingleScope}
-                isDark={isDark}
-              />
-
-              {scopes.length > 0 && (
-                <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-              )}
+              {/* The JOB is named one row above, in the global scope filter.
+                  Everything in this bar is scoped by it — the month being paged
+                  and the availability being added both belong to that job. */}
 
               {/* Month Navigation — a calendar control, so it goes where the
                   calendar goes. A full-timer has no month-scoped view below,
@@ -208,48 +205,29 @@ export const AvailabilityPage: React.FC = () => {
               </div>
               )}
 
-              {/* Add Availability Button — only for Non-FT staff (Casuals / PT who declare availability) */}
-              {!isFullTime && (
+              {/* Add Availability — DESKTOP ONLY. On mobile it is the floating
+                  action button below: the function bar is already a horizontal
+                  scroller on a phone, and the page's primary action was the
+                  thing scrolling out of sight. Same treatment as My Roster's
+                  offers button. */}
+              {canDeclare && (
                 <>
-                  <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+                  <div className="hidden md:block h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
                   <Button
                     onClick={handleAddAvailability}
                     className={cn(
-                      "flex-shrink-0 gap-2 h-9 lg:h-11 px-3 lg:px-6 rounded-xl font-black uppercase text-[9px] lg:text-[10px] tracking-wider transition-all shadow-sm",
-                      isDark 
-                        ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20" 
+                      "hidden md:flex flex-shrink-0 gap-2 h-9 lg:h-11 px-3 lg:px-6 rounded-xl font-black uppercase text-[9px] lg:text-[10px] tracking-wider transition-all shadow-sm",
+                      isDark
+                        ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20"
                         : "bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100"
                     )}
                   >
                     <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-                    <span className="hidden sm:inline">Add Availability</span>
-                    <span className="sm:hidden text-[8px]">Add</span>
+                    Add Availability
                   </Button>
                 </>
               )}
 
-              <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-
-              {/* Reserve List opt-in. Kept for FT: an emergency replacement call
-                  is a genuine choice they make, and independent of availability. */}
-              <div
-                className={cn(
-                  "flex items-center gap-2 flex-shrink-0 h-9 lg:h-11 px-3 lg:px-4 rounded-xl transition-all",
-                  isDark ? "bg-[#111827]/60" : "bg-white shadow-sm"
-                )}
-                title="When on, you may be contacted for emergency replacement shifts (starting within 4 hours)."
-              >
-                <Phone className={cn("h-3.5 w-3.5 lg:h-4 lg:w-4 flex-shrink-0", isDark ? "text-muted-foreground" : "text-slate-500")} />
-                <span className="hidden sm:inline text-[9px] lg:text-[10px] font-black uppercase tracking-wider text-foreground whitespace-nowrap">
-                  Reserve List
-                </span>
-                <Switch
-                  checked={reserveListOptIn.optIn}
-                  onCheckedChange={handleReserveListToggle}
-                  disabled={reserveListOptIn.loading || reserveListOptIn.saving}
-                  aria-label="Reserve List opt-in"
-                />
-              </div>
             </div>
           </div>
         }
@@ -267,7 +245,30 @@ export const AvailabilityPage: React.FC = () => {
             exceptions" — advice about a calendar and an exceptions panel that no
             longer exist on this page for them. The card below carries the same
             hours/leave facts in a form that matches what they can actually do. */}
-        {!isFullTime && <ContractBasisBanner basis={contractBasis} loading={basisLoading} />}
+        {/* The certificate tree and the contract set are DIFFERENT things, and
+            they disagree in production. The global filter offers what you may
+            SEE; `trg_availability_scope_is_contracted` refuses a declaration
+            for a sub-department you hold no active contract in. Without this
+            card the calendar would render, the save would be rejected by a
+            trigger, and the message would be in Postgres's words. */}
+        {!scopesLoading && !isContracted && (
+          <div className={cn(
+            "flex items-start gap-3 rounded-2xl border px-4 py-3",
+            isDark
+              ? "bg-amber-500/10 border-amber-500/20 text-amber-200"
+              : "bg-amber-50 border-amber-200 text-amber-900",
+          )}>
+            <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <p className="text-[13px] leading-relaxed">
+              <span className="font-semibold">You don’t hold a contract in this sub-department.</span>{' '}
+              {scopes.length > 0
+                ? `Availability is declared per job — switch the sub-department above to ${scopes.map((sc) => sc.subDepartmentName).join(', ')}.`
+                : 'You have no active contracts on file, so there is nothing to declare against yet.'}
+            </p>
+          </div>
+        )}
+
+        {!isFullTime && isContracted && <ContractBasisBanner basis={contractBasis} loading={basisLoading} />}
 
         {isFullTime ? (
           /* ── FULL-TIME INFORMATIONAL STATE ── */
@@ -416,6 +417,45 @@ export const AvailabilityPage: React.FC = () => {
           </>
         )}
       </motion.div>
+
+      {/* Mobile FAB — the page's primary action, floating clear of the bottom
+          navigation. The header's function bar scrolls horizontally on a phone,
+          which is exactly where "Add Availability" used to disappear to. Same
+          placement and clearance variables as My Roster's offers button, so the
+          two never collide with the nav or with each other. */}
+      <AnimatePresence>
+        {canDeclare && (
+          <motion.div
+            key="add-availability-fab"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            className="md:hidden fixed bottom-[var(--mobile-floating-action-bottom,calc(var(--mobile-bottom-nav-clearance,96px)+1.5rem))] right-[calc(env(safe-area-inset-right,0px)+1.25rem)] z-50"
+          >
+            <button
+              onClick={(e) => {
+                e.currentTarget.blur();
+                handleAddAvailability();
+              }}
+              aria-label={
+                selectedScope
+                  ? `Add availability for ${selectedScope.subDepartmentName}`
+                  : 'Add availability'
+              }
+              className={cn(
+                "h-14 w-14 rounded-full flex items-center justify-center",
+                "bg-indigo-500 hover:bg-indigo-400 active:scale-95 transition-colors",
+                // A plain elevation shadow, no pulse. A permanently animating
+                // halo in the corner is a WCAG 2.2.2 problem and was removed
+                // from the offers button for the same reason.
+                "shadow-lg shadow-black/25",
+              )}
+            >
+              <Plus size={26} className="text-white" aria-hidden="true" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

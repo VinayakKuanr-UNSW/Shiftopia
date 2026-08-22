@@ -1,75 +1,59 @@
 /**
- * Which JOB the availability page is currently showing.
+ * The JOB the availability page is showing, resolved from the global scope
+ * filter's sub-department selection.
  *
- * WHY THIS IS NOT `useScopeFilter('personal')`. That hook reads and writes
- * `ScopeFilterContext.personalScope` — a SINGLE selection shared by My Roster,
- * My Bids, My Swaps, My Broadcasts and Attendance, and persisted to
- * `localStorage['superman_scope_filters']`. Narrowing it here to one
- * sub-department would silently collapse the scope on all five of those pages,
- * and it would survive a reload. The availability scope is a property of THIS
- * page, so it lives here.
+ * CONTROLLED, not self-owning. The page uses the same Org → Department →
+ * Sub-Department control every other page uses, with the sub-department level
+ * forced to a single choice (`singleSelectLevels={['subdept']}`), because
+ * availability is declared FOR a sub-department and "these three
+ * sub-departments" is not a job anyone can declare for.
  *
- * It also could not use that hook's OPTIONS even if the state were local:
- * `buildPersonalScopeTree` derives them from Type X certificates, and in
- * production three (user, department, sub-department) contract scopes have no
- * matching certificate while two people hold none at all — including one who is
- * Casual in TWO sub-departments and would be offered exactly one of his two
- * jobs. Certificates govern what you may SEE. Contracts govern what you may
- * DECLARE. This reads contracts.
+ * This hook therefore does NOT own the selection or persist it. It used to do
+ * both, with its own `localStorage` key, and that had to go the moment the
+ * global filter arrived: two components persisting the same choice under
+ * different keys is one of them silently winning on reload.
+ *
+ * WHAT IT STILL OWNS is the part the global filter cannot answer. The scope
+ * tree is built from Type X certificates — what you may SEE — while declaring
+ * availability is governed by CONTRACTS: `trg_availability_scope_is_contracted`
+ * refuses a declaration for a sub-department you hold no active contract in.
+ * The two disagree in production: three contract scopes have no matching
+ * certificate. So the selection comes from the filter and is checked here, and
+ * a selection with no contract behind it is reported rather than being allowed
+ * to fail at the database with a raw trigger error.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     fetchAvailabilityScopes,
     type AvailabilityScope,
 } from '../api/contract-basis.api';
 
-/** Deliberately NOT `superman_scope_filters` — see the note above. */
-const STORAGE_KEY = 'superman_availability_scope';
-
-function readStored(userId: string): string | null {
-    if (typeof window === 'undefined') return null;
-    try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (!raw) return null;
-        return (JSON.parse(raw) as Record<string, string>)[userId] ?? null;
-    } catch {
-        // A corrupt entry must not take the page down — it only costs the user
-        // their remembered tab.
-        return null;
-    }
-}
-
-function writeStored(userId: string, subDepartmentId: string | null): void {
-    if (typeof window === 'undefined') return;
-    try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        const all = raw ? (JSON.parse(raw) as Record<string, string | null>) : {};
-        all[userId] = subDepartmentId;
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
-    } catch {
-        /* storage full or blocked — the selection just will not be remembered */
-    }
-}
-
 export interface UseAvailabilityScopeResult {
-    /** Every job this person may hold a declaration for, declarable ones first. */
+    /** Every job this person holds a contract in, declarable ones first. */
     scopes: AvailabilityScope[];
-    /** The one being shown. Null only while loading or when there are no jobs. */
+    /**
+     * The selected job, when the chosen sub-department is one they hold a
+     * contract in. Null when nothing is selected yet, or when the selection is
+     * outside their contracts — `isContracted` separates those two.
+     */
     selected: AvailabilityScope | null;
-    select: (subDepartmentId: string | null) => void;
+    /**
+     * False when a sub-department IS selected but no contract backs it. The
+     * page shows this rather than an editor, because the write would be
+     * refused by the database and the calendar would look broken instead of
+     * explained.
+     */
+    isContracted: boolean;
     isLoading: boolean;
     isError: boolean;
-    /**
-     * True when there is exactly one job. The page renders a static label
-     * rather than a picker — a dropdown with one option reads as broken.
-     */
-    isSingleScope: boolean;
 }
 
 export function useAvailabilityScope(
     userId: string | null | undefined,
+    /** From the global scope filter. Null while it is still resolving. */
+    selectedSubDepartmentId: string | null,
 ): UseAvailabilityScopeResult {
     const { data, isLoading } = useQuery({
         queryKey: ['availability', 'scopes', userId] as const,
@@ -80,51 +64,24 @@ export function useAvailabilityScope(
     });
 
     const scopes = useMemo(() => data?.scopes ?? [], [data]);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [restored, setRestored] = useState(false);
-
-    // Restore the remembered job once the list arrives, and only once — after
-    // that the user's clicks own the selection.
-    useEffect(() => {
-        if (restored || !userId || scopes.length === 0) return;
-
-        const stored = readStored(userId);
-        const storedStillHeld = stored
-            ? scopes.some((s) => s.subDepartmentId === stored)
-            : false;
-
-        // A remembered job the person no longer holds must not be selected —
-        // their contract ended, and showing that calendar would invite a
-        // declaration the database now refuses.
-        setSelectedId(
-            storedStillHeld
-                ? stored
-                // Otherwise the first DECLARABLE job. `fetchAvailabilityScopes`
-                // sorts those first, so a multi-contract employee never lands
-                // on their Full-Time job — the one scope where there is nothing
-                // for them to do.
-                : scopes[0]?.subDepartmentId ?? null,
-        );
-        setRestored(true);
-    }, [userId, scopes, restored]);
-
-    const select = useCallback((subDepartmentId: string | null) => {
-        setSelectedId(subDepartmentId);
-        if (userId) writeStored(userId, subDepartmentId);
-    }, [userId]);
 
     const selected = useMemo(
-        () => scopes.find((s) => s.subDepartmentId === selectedId) ?? null,
-        [scopes, selectedId],
+        () =>
+            selectedSubDepartmentId
+                ? scopes.find((s) => s.subDepartmentId === selectedSubDepartmentId) ?? null
+                : null,
+        [scopes, selectedSubDepartmentId],
     );
 
     return {
         scopes,
         selected,
-        select,
+        // Nothing selected is not "not contracted" — it is "not chosen yet",
+        // and conflating them would flash a "you have no contract here" card
+        // at everyone on first paint.
+        isContracted: !selectedSubDepartmentId || !!selected,
         isLoading,
         isError: data?.isError ?? false,
-        isSingleScope: scopes.length === 1,
     };
 }
 

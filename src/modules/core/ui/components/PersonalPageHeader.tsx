@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { LucideIcon } from 'lucide-react';
 import { ScopeFilterBanner } from './ScopeFilterBanner';
+import type { ScopeLevel } from './GlobalScopeFilter';
 import { ScopeSelection } from '@/platform/auth/types';
 import { itemVariants } from '../motion/presets';
 import { cn } from '@/modules/core/lib/utils';
@@ -15,6 +16,8 @@ interface PersonalPageHeaderProps {
     isGammaLocked?: boolean;
     mode?: 'personal' | 'managerial';
     multiSelect?: boolean;
+    /** Levels forced to a single choice — see `GlobalScopeFilterProps`. */
+    singleSelectLevels?: ScopeLevel[];
     rightActions?: React.ReactNode;
     className?: string;
     /** Opt-in denser mobile treatment for control-heavy planner pages. */
@@ -35,6 +38,7 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
     isGammaLocked = false,
     mode = 'personal',
     multiSelect,
+    singleSelectLevels,
     rightActions,
     className,
     compactOnMobile = false,
@@ -120,6 +124,7 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
                         mode={mode}
                         onScopeChange={setScope}
                         multiSelect={multiSelect}
+                        singleSelectLevels={singleSelectLevels}
                         hidden={isGammaLocked}
                         compactOnMobile={compactOnMobile}
                     />

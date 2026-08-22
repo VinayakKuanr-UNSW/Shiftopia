@@ -4,6 +4,7 @@
 import React, { useContext } from 'react';
 import { AuthContext } from '@/platform/auth/AuthProvider';
 import { PersonalScopeFilter } from './PersonalScopeFilter';
+import type { ScopeLevel } from './GlobalScopeFilter';
 import { ManagerialScopeFilter } from './ManagerialScopeFilter';
 import type { ScopeSelection } from '@/platform/auth/types';
 import type { ScopeMode } from '@/platform/auth/useScopeFilter';
@@ -17,6 +18,11 @@ interface ScopeFilterBannerProps {
     /** If true, the filter is fully locked (gamma) and should be hidden */
     hidden?: boolean;
     multiSelect?: boolean;
+    /**
+     * Levels forced to a single choice even in multi-select mode. Only
+     * meaningful for `personal`; see `GlobalScopeFilterProps`.
+     */
+    singleSelectLevels?: ScopeLevel[];
     /** Additional CSS classes */
     className?: string;
     compactOnMobile?: boolean;
@@ -33,6 +39,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
     onScopeChange,
     hidden = false,
     multiSelect,
+    singleSelectLevels,
     className,
     compactOnMobile = false,
 }) => {
@@ -65,6 +72,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
                 <PersonalScopeFilter
                     onScopeChange={onScopeChange}
                     multiSelect={effectiveMultiSelect}
+                    singleSelectLevels={singleSelectLevels}
                 />
             ) : (
                 <ManagerialScopeFilter

@@ -25,13 +25,11 @@ import { itemVariants, tabTransition } from '@/modules/core/ui/motion/presets';
 import {
   ChevronLeft,
   ChevronRight,
-  Plus,
   RefreshCw,
   Calendar,
   ClipboardList,
   Settings,
 } from 'lucide-react';
-import { Button } from '@/modules/core/ui/primitives/button';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
@@ -104,7 +102,6 @@ export function AvailabilityScreen({
 
   const {
     editState,
-    startCreate,
     startEdit,
     cancelEdit,
     submitEdit,
@@ -350,22 +347,23 @@ export function AvailabilityScreen({
       initial="hidden"
       animate="show"
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
-      className="h-full w-full overflow-hidden"
+      className="h-full w-full overflow-hidden flex flex-col gap-3"
     >
-      <div
+      {/* Sub-navigation tabs — a DISCONNECTED pill above the card, matching My
+          Swaps. They used to sit inside the card under a border, which read as
+          a title bar belonging to the calendar rather than as a switch between
+          three sibling views; on a phone that cost a row of vertical space to a
+          divider that said nothing. */}
+      <motion.div
+        variants={itemVariants}
         className={cn(
-          "h-full flex flex-col overflow-hidden rounded-[20px] border transition-all relative",
+          "flex-shrink-0 p-1 rounded-2xl border shadow-sm flex items-center gap-1",
           isDark
-            ? "bg-[#1c2333]/40 border-white/10 shadow-2xl shadow-black/20"
-            : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
+            ? "bg-[#1c2333]/85 border-white/5"
+            : "bg-slate-100/85 border-slate-200/50"
         )}
       >
-        {/* Sub-navigation Tabs at the Top - Text Only Toggle */}
-        <motion.div 
-          variants={itemVariants}
-          className="flex-shrink-0 px-4 py-3 border-b border-border/50 z-10"
-        >
-          <div className="flex bg-muted/60 p-1.5 rounded-[16px] max-w-sm mx-auto">
+          <div className="flex flex-1 p-0.5 rounded-[14px]">
             <button
               onClick={() => setActiveTab('calendar')}
               className={cn(
@@ -402,8 +400,16 @@ export function AvailabilityScreen({
               </span>
             </button>
           </div>
-        </motion.div>
+      </motion.div>
 
+      <div
+        className={cn(
+          "flex-1 min-h-0 flex flex-col overflow-hidden rounded-[20px] border transition-all relative",
+          isDark
+            ? "bg-[#1c2333]/40 border-white/10 shadow-2xl shadow-black/20"
+            : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
+        )}
+      >
         {/* Tab Content */}
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} {...tabTransition} className="flex-1 overflow-hidden">
@@ -435,21 +441,12 @@ export function AvailabilityScreen({
           </motion.div>
         </AnimatePresence>
 
-        {/* Floating Action Button (Mobile Only) */}
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.5, type: 'spring' }}
-          className="fixed bottom-24 right-6 z-50 md:hidden"
-        >
-          <Button
-            onClick={startCreate}
-            size="icon"
-            className="h-16 w-16 rounded-full shadow-2xl bg-primary text-primary-foreground hover:scale-110 active:scale-95 transition-all duration-300"
-          >
-            <Plus className="h-8 w-8 stroke-[3]" />
-          </Button>
-        </motion.div>
+        {/* The mobile "add" FAB lives on the PAGE, not here. Two reasons it
+            could not stay: this one was ungated, so it offered to add a
+            declaration for a job the person holds no contract in — a write the
+            database refuses — and `bottom-24 right-6` is a guess at where the
+            bottom navigation is, rather than the shared clearance variables
+            every other floating action uses. */}
       </div>
     </motion.div>
   );

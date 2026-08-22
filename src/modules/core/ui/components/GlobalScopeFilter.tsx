@@ -50,9 +50,26 @@ export interface GlobalScopeFilterProps {
     mode?: 'personal' | 'managerial';
     /** Enable multi-select (checkboxes + select all). Default true for personal, false for managerial */
     multiSelect?: boolean;
+    /**
+     * Levels that must be a SINGLE choice even when `multiSelect` is on.
+     *
+     * `multiSelect` is one flag for all three levels, which is right for the
+     * pages that filter a list. It is wrong wherever a level identifies one
+     * thing rather than narrowing a view: My Availabilities declares
+     * availability FOR a sub-department, and "these three sub-departments" is
+     * not a job you can declare for. Those pages keep the familiar
+     * venue/department pickers and constrain only the level that carries the
+     * identity.
+     *
+     * Defaults to none, so every existing caller is unchanged.
+     */
+    singleSelectLevels?: ScopeLevel[];
     className?: string;
     compactOnMobile?: boolean;
 }
+
+/** A level of the scope tree. */
+export type ScopeLevel = 'org' | 'dept' | 'subdept';
 
 // =============================================
 // Multi-Select Dropdown Component
@@ -320,10 +337,17 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     hidden = false,
     mode,
     multiSelect = true,
+    singleSelectLevels,
     className,
     compactOnMobile = false,
 }) => {
     const orgs = allowedScopeTree?.organizations || [];
+
+    // Per-level multi-select. A level named in `singleSelectLevels` is single
+    // whatever `multiSelect` says; every other level keeps today's behaviour.
+    const orgMulti = multiSelect && !singleSelectLevels?.includes('org');
+    const deptMulti = multiSelect && !singleSelectLevels?.includes('dept');
+    const subDeptMulti = multiSelect && !singleSelectLevels?.includes('subdept');
     const breakpoint = useBreakpoint();
     const isMobile = breakpoint === 'mobile';
 
@@ -332,16 +356,16 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
         const initial = defaultSelection?.org_ids || [];
         if (initial.length > 0) return initial;
         if (orgs.length === 0) return [];
-        return multiSelect ? orgs.map(o => o.id) : [orgs[0].id];
+        return orgMulti ? orgs.map(o => o.id) : [orgs[0].id];
     });
     const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>(() => {
         const initial = defaultSelection?.dept_ids || [];
-        if (initial.length > 0) return multiSelect ? initial : [initial[0]];
+        if (initial.length > 0) return deptMulti ? initial : [initial[0]];
         return [];
     });
     const [selectedSubDeptIds, setSelectedSubDeptIds] = useState<string[]>(() => {
         const initial = defaultSelection?.subdept_ids || [];
-        if (initial.length > 0) return multiSelect ? initial : [initial[0]];
+        if (initial.length > 0) return subDeptMulti ? initial : [initial[0]];
         return [];
     });
 
@@ -354,15 +378,15 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
     useEffect(() => {
         if (defaultSelection?.dept_ids?.length && selectedDeptIds.length === 0) {
-            setSelectedDeptIds(multiSelect ? defaultSelection.dept_ids : [defaultSelection.dept_ids[0]]);
+            setSelectedDeptIds(deptMulti ? defaultSelection.dept_ids : [defaultSelection.dept_ids[0]]);
         }
-    }, [defaultSelection?.dept_ids, selectedDeptIds.length, multiSelect]);
+    }, [defaultSelection?.dept_ids, selectedDeptIds.length, deptMulti]);
 
     useEffect(() => {
         if (defaultSelection?.subdept_ids?.length && selectedSubDeptIds.length === 0) {
-            setSelectedSubDeptIds(multiSelect ? defaultSelection.subdept_ids : [defaultSelection.subdept_ids[0]]);
+            setSelectedSubDeptIds(subDeptMulti ? defaultSelection.subdept_ids : [defaultSelection.subdept_ids[0]]);
         }
-    }, [defaultSelection?.subdept_ids, selectedSubDeptIds.length, multiSelect]);
+    }, [defaultSelection?.subdept_ids, selectedSubDeptIds.length, subDeptMulti]);
 
     // Derive available departments based on selected orgs
     const availableDepts = useMemo(() => {
@@ -399,7 +423,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
             setSelectedDeptIds(prev => {
                 // Keep only valid selections
                 const valid = prev.filter(id => allDeptIds.includes(id));
-                if (multiSelect) {
+                if (deptMulti) {
                     return valid.length > 0 ? valid : allDeptIds;
                 } else {
                     // Single select fallback: first available
@@ -407,7 +431,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                 }
             });
         }
-    }, [availableDepts, lockConfig.deptLocked, multiSelect]);
+    }, [availableDepts, lockConfig.deptLocked, deptMulti]);
 
     // Auto-select all sub-depts when depts change (for unlocked sub-depts)
     useEffect(() => {
@@ -415,7 +439,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
             const allSubDeptIds = availableSubDepts.map(sd => sd.id);
             setSelectedSubDeptIds(prev => {
                 const valid = prev.filter(id => allSubDeptIds.includes(id));
-                if (multiSelect) {
+                if (subDeptMulti) {
                     return valid.length > 0 ? valid : allSubDeptIds;
                 } else {
                     // Single select fallback: first available
@@ -423,7 +447,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                 }
             });
         }
-    }, [availableSubDepts, lockConfig.subDeptLocked, multiSelect]);
+    }, [availableSubDepts, lockConfig.subDeptLocked, subDeptMulti]);
 
     // Emit scope changes
     const emitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -542,7 +566,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                                     selected={selectedOrgIds}
                                     onChange={setSelectedOrgIds}
                                     locked={lockConfig.orgLocked}
-                                    multiSelect={multiSelect}
+                                    multiSelect={orgMulti}
                                     isMobile={true}
                                 />
 
@@ -554,7 +578,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                                     onChange={setSelectedDeptIds}
                                     locked={lockConfig.deptLocked}
                                     disabled={selectedOrgIds.length === 0}
-                                    multiSelect={multiSelect}
+                                    multiSelect={deptMulti}
                                     isMobile={true}
                                 />
 
@@ -566,7 +590,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                                     onChange={setSelectedSubDeptIds}
                                     locked={lockConfig.subDeptLocked}
                                     disabled={selectedDeptIds.length === 0}
-                                    multiSelect={multiSelect}
+                                    multiSelect={subDeptMulti}
                                     isMobile={true}
                                 />
                             </div>
@@ -591,7 +615,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                         selected={selectedOrgIds}
                         onChange={setSelectedOrgIds}
                         locked={lockConfig.orgLocked}
-                        multiSelect={multiSelect}
+                        multiSelect={orgMulti}
                     />
                 </div>
 
@@ -604,7 +628,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                         onChange={setSelectedDeptIds}
                         locked={lockConfig.deptLocked}
                         disabled={selectedOrgIds.length === 0}
-                        multiSelect={multiSelect}
+                        multiSelect={deptMulti}
                     />
                 </div>
 
@@ -617,7 +641,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                         onChange={setSelectedSubDeptIds}
                         locked={lockConfig.subDeptLocked}
                         disabled={selectedDeptIds.length === 0}
-                        multiSelect={multiSelect}
+                        multiSelect={subDeptMulti}
                     />
                 </div>
             </div>
