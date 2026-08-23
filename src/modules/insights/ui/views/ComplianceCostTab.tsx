@@ -37,7 +37,7 @@ export default function ComplianceCostTab({ filters }: ComplianceCostTabProps) {
     const { data: depts,    isLoading: loadingDepts  } = useDeptBreakdown(filters);
     const { data: trend,    isLoading: loadingTrend  } = useInsightsTrend(filters);
 
-    const s       = summary ?? { compliance_failures: 0, compliance_overrides: 0, estimated_cost: 0, scheduled_hours: 0 };
+    const s       = summary ?? { compliance_overrides: 0, estimated_cost: 0, scheduled_hours: 0 };
     const deptRows = depts   ?? [];
     const chartData = trend?.chart     ?? [];
     const deptNames = trend?.deptNames ?? [];
@@ -63,23 +63,7 @@ export default function ComplianceCostTab({ filters }: ComplianceCostTabProps) {
     return (
         <div className="space-y-8">
             {/* ── Compliance KPI row ─────────────────────────────────── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className={`bg-card border-border ${!loadingSum && s.compliance_failures > 0 ? 'border-amber-500/40' : ''}`}>
-                    <CardContent className="pt-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <p className="text-xs text-muted-foreground">Compliance Failures</p>
-                            {!loadingSum && s.compliance_failures > 0
-                                ? <AlertTriangle size={14} className="text-amber-500" />
-                                : <CheckCircle2  size={14} className="text-emerald-500" />}
-                        </div>
-                        {loadingSum ? <Skeleton className="h-7 w-12" /> :
-                            <p className={`text-2xl font-bold ${s.compliance_failures > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                {s.compliance_failures}
-                            </p>}
-                        <p className="text-xs text-muted-foreground mt-1">Unresolved violations</p>
-                    </CardContent>
-                </Card>
-
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <Card className={`bg-card border-border ${!loadingSum && s.compliance_overrides > 0 ? 'border-rose-500/30' : ''}`}>
                     <CardContent className="pt-4">
                         <div className="flex items-center justify-between mb-2">
@@ -122,24 +106,13 @@ export default function ComplianceCostTab({ filters }: ComplianceCostTabProps) {
             </div>
 
             {/* ── Compliance explanation ──────────────────────────────── */}
-            {!loadingSum && (s.compliance_failures > 0 || s.compliance_overrides > 0) && (
+            {!loadingSum && s.compliance_overrides > 0 && (
                 <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
                     <div className="flex items-center gap-2">
                         <AlertTriangle size={16} className="text-amber-500" />
                         <p className="text-sm font-medium text-foreground">Compliance Notes</p>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-3">
-                        {s.compliance_failures > 0 && (
-                            <div className="flex items-start gap-2">
-                                <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400 shrink-0">
-                                    {s.compliance_failures} Failed
-                                </Badge>
-                                <p className="text-xs text-muted-foreground">
-                                    Shifts have compliance snapshots showing rule violations that were not overridden.
-                                    These may include rest gap, max hours, or visa hour breaches.
-                                </p>
-                            </div>
-                        )}
                         {s.compliance_overrides > 0 && (
                             <div className="flex items-start gap-2">
                                 <Badge variant="outline" className="border-rose-500/50 text-rose-600 dark:text-rose-400 shrink-0">
@@ -173,11 +146,11 @@ export default function ComplianceCostTab({ filters }: ComplianceCostTabProps) {
                             <div className="h-52">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={costBarData} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
-                                        <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
+                                        <XAxis type="number" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false}
                                             tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`} />
-                                        <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
+                                        <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                                         <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}
+                                            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
                                             formatter={(v: number) => [fmt$(v), 'Cost']}
                                         />
                                         <Bar dataKey="cost" radius={[0, 4, 4, 0]}>
@@ -206,11 +179,11 @@ export default function ComplianceCostTab({ filters }: ComplianceCostTabProps) {
                             <div className="h-52">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={costTrendData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                                        <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
+                                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                                        <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false}
                                             tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`} />
                                         <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}
+                                            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
                                             formatter={(v: number) => [fmt$(v), 'Daily Cost']}
                                         />
                                         <Line type="monotone" dataKey="total" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} connectNulls />

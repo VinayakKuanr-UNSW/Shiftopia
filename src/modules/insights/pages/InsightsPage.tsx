@@ -80,7 +80,7 @@ const InsightsPage: React.FC = () => {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
                 {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
                 <GoldStandardHeader
-                    title="My Insights"
+                    title="KPI"
                     Icon={BarChart3}
                     mode="managerial"
                     scope={scope}
@@ -115,7 +115,7 @@ const InsightsPage: React.FC = () => {
                     </TabsContent>
 
                     <TabsContent value="workforce" className="mt-0 outline-none">
-                        <WorkforceTab filters={filters} scope={scope} />
+                        <WorkforceTab scope={scope} />
                     </TabsContent>
 
                     <TabsContent value="compliance" className="mt-0 outline-none">

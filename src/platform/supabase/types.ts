@@ -8315,6 +8315,7 @@ export type Database = {
           p_end_date: string
           p_org_ids?: string[]
           p_start_date: string
+          p_subdept_ids?: string[]
         }
         Returns: {
           dept_id: string
@@ -8414,6 +8415,7 @@ export type Database = {
           p_end_date: string
           p_org_ids?: string[]
           p_start_date: string
+          p_subdept_ids?: string[]
         }
         Returns: {
           dept_id: string
@@ -9270,7 +9272,12 @@ export type Database = {
             Returns: Json
           }
       sm_employee_drop_shift: {
-        Args: { p_employee_id?: string; p_reason?: string; p_shift_id: string }
+        Args: {
+          p_employee_id?: string
+          p_reason?: string
+          p_reason_code?: string
+          p_shift_id: string
+        }
         Returns: Json
       }
       sm_expire_offer_now: { Args: { p_shift_id: string }; Returns: Json }

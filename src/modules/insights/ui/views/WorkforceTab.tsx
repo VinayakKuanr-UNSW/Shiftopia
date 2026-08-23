@@ -18,12 +18,9 @@ import {
     getReportCellStatus,
     type QuarterlyReportRow,
 } from '@/modules/users/hooks/usePerformanceMetrics';
-import { useInsightsSummary } from '../../hooks/useInsightsSummary';
-import type { InsightsFilters } from '../../model/metric.types';
 import type { ScopeSelection } from '@/platform/auth/types';
 
 interface WorkforceTabProps {
-    filters: InsightsFilters;
     scope: ScopeSelection;
 }
 
@@ -51,20 +48,9 @@ function RateCell({ value, metric }: { value: number; metric: string }) {
     );
 }
 
-export default function WorkforceTab({ filters, scope }: WorkforceTabProps) {
+export default function WorkforceTab({ scope }: WorkforceTabProps) {
     const { year, quarter } = getCurrentQuarter();
     const { data: report, isLoading: loadingReport } = useQuarterlyReport(year, quarter, scope);
-    const { data: summary, isLoading: loadingSum } = useInsightsSummary(filters);
-
-    const s = summary ?? {
-        avg_reliability_score: 0,
-        avg_swap_rate: 0,
-        no_show_rate: 0,
-        shifts_emergency: 0,
-        shifts_assigned: 0,
-        shifts_total: 0,
-        shift_fill_rate: 0,
-    };
 
     const rows = report ?? [];
 
@@ -182,10 +168,10 @@ export default function WorkforceTab({ filters, scope }: WorkforceTabProps) {
                             <div className="h-48">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={reliabilityBuckets} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                                        <XAxis dataKey="range" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                                        <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
+                                        <XAxis dataKey="range" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                                        <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                                         <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}
+                                            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
                                             formatter={(v: number) => [v, 'Employees']}
                                         />
                                         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
@@ -217,8 +203,8 @@ export default function WorkforceTab({ filters, scope }: WorkforceTabProps) {
                             <div className="h-48">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <RadarChart data={radarData}>
-                                        <PolarGrid stroke="var(--border)" />
-                                        <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} />
+                                        <PolarGrid stroke="hsl(var(--border))" />
+                                        <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
                                         <Radar
                                             name="Org Avg"
                                             dataKey="value"
@@ -227,7 +213,7 @@ export default function WorkforceTab({ filters, scope }: WorkforceTabProps) {
                                             fillOpacity={0.25}
                                         />
                                         <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}
+                                            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
                                             formatter={(v: number) => [`${v.toFixed(1)}%`, '']}
                                         />
                                     </RadarChart>

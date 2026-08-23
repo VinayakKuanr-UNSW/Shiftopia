@@ -92,9 +92,8 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
     const s = summary ?? {
         shifts_total: 0, shifts_published: 0, shifts_assigned: 0, shifts_unassigned: 0,
         shifts_cancelled: 0, shifts_completed: 0, shifts_no_show: 0, shifts_emergency: 0,
-        scheduled_hours: 0, estimated_cost: 0, shift_fill_rate: 0, last_minute_changes: 0,
-        compliance_failures: 0, compliance_overrides: 0, no_show_rate: 0,
-        avg_reliability_score: 100, avg_swap_rate: 0,
+        scheduled_hours: 0, estimated_cost: 0, shift_fill_rate: 0,
+        compliance_overrides: 0, no_show_rate: 0,
     };
 
     const chartData  = trend?.chart     ?? [];
@@ -120,7 +119,7 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
                     index={0}
                     title="Shift Fill Rate"
                     value={loadingSum ? '—' : `${s.shift_fill_rate}%`}
-                    sub={`${s.shifts_assigned} / ${s.shifts_published} published`}
+                    sub={`${s.shifts_assigned} / ${s.shifts_total} shifts`}
                     icon={<ChartBar size={16} className="text-blue-500" />}
                     accent="bg-blue-500/10"
                     trend={s.shift_fill_rate >= 90 ? 'up' : s.shift_fill_rate >= 70 ? 'stable' : 'down'}
@@ -149,23 +148,21 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
                 />
                 <KpiCard
                     index={3}
-                    title="Compliance Failures"
-                    value={loadingSum ? '—' : s.compliance_failures}
-                    sub={`${s.compliance_overrides} override(s) approved`}
-                    icon={<CheckCircle2 size={16} className={s.compliance_failures > 0 ? 'text-amber-500' : 'text-emerald-500'} />}
-                    accent={s.compliance_failures > 0 ? 'bg-amber-500/10' : 'bg-emerald-500/10'}
-                    trend={s.compliance_failures === 0 ? 'down' : 'up'}
+                    title="Compliance Overrides"
+                    value={loadingSum ? '—' : s.compliance_overrides}
+                    sub="Approved despite a rule breach"
+                    icon={<CheckCircle2 size={16} className={s.compliance_overrides > 0 ? 'text-amber-500' : 'text-emerald-500'} />}
+                    accent={s.compliance_overrides > 0 ? 'bg-amber-500/10' : 'bg-emerald-500/10'}
                     trendGoodDir="down"
                     loading={loadingSum}
                 />
                 <KpiCard
                     index={4}
-                    title="Last-Minute Changes"
-                    value={loadingSum ? '—' : s.last_minute_changes}
-                    sub="Edits/unassigns within 24h"
+                    title="Emergency Assignments"
+                    value={loadingSum ? '—' : s.shifts_emergency}
+                    sub="Filled under short-lead conditions"
                     icon={<Clock size={16} className="text-orange-500" />}
                     accent="bg-orange-500/10"
-                    trend={s.last_minute_changes <= 5 ? 'down' : 'up'}
                     trendGoodDir="down"
                     loading={loadingSum}
                 />
@@ -178,29 +175,6 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="grid grid-cols-2 md:grid-cols-4 gap-4"
             >
-                <Card className="modern-card">
-                    <CardContent className="pt-4">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Emergency Assignments</p>
-                        {loadingSum ? <Skeleton className="h-7 w-16 bg-primary/5" /> :
-                            <p className="text-xl font-black text-foreground tracking-tight">{s.shifts_emergency}</p>}
-                    </CardContent>
-                </Card>
-                <Card className="modern-card">
-                    <CardContent className="pt-4">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Avg Reliability Score</p>
-                        {loadingSum ? <Skeleton className="h-7 w-16 bg-primary/5" /> :
-                            <p className={`text-xl font-black tracking-tight ${s.avg_reliability_score >= 85 ? 'text-emerald-500' : s.avg_reliability_score >= 70 ? 'text-amber-500' : 'text-rose-500'}`}>
-                                {s.avg_reliability_score}%
-                            </p>}
-                    </CardContent>
-                </Card>
-                <Card className="modern-card">
-                    <CardContent className="pt-4">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Avg Swap Rate</p>
-                        {loadingSum ? <Skeleton className="h-7 w-16 bg-primary/5" /> :
-                            <p className="text-xl font-black text-foreground tracking-tight">{s.avg_swap_rate}%</p>}
-                    </CardContent>
-                </Card>
                 <Card className="modern-card">
                     <CardContent className="pt-4">
                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Shifts Completed</p>

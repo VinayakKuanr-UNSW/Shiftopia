@@ -104,7 +104,18 @@ export interface InsightsFilters {
     subdeptIds?: string[];
 }
 
-/** Returned by get_insights_summary RPC */
+/**
+ * Returned by get_insights_summary RPC.
+ *
+ * Four fields were removed in migration 20260823090000 because none of them
+ * described anything real:
+ *   compliance_failures    — the RPC returned the literal 0
+ *   last_minute_changes    — was the SAME value as shifts_emergency
+ *   avg_reliability_score  — averaged employee_performance_metrics, a snapshot
+ *   avg_swap_rate            table last written 2026-07-30 by a Refresh button
+ *                            that no longer exists
+ * The live reliability/swap figures come from get_quarterly_performance_report.
+ */
 export interface InsightsSummary {
     shifts_total: number;
     shifts_published: number;
@@ -116,13 +127,10 @@ export interface InsightsSummary {
     shifts_emergency: number;
     scheduled_hours: number;
     estimated_cost: number;
+    /** assigned / shifts_total. Label the denominator as TOTAL, not published. */
     shift_fill_rate: number;
-    last_minute_changes: number;
-    compliance_failures: number;
     compliance_overrides: number;
     no_show_rate: number;
-    avg_reliability_score: number;
-    avg_swap_rate: number;
 }
 
 /** One row from get_insights_trend RPC — one dept per day */

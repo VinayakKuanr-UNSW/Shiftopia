@@ -38,6 +38,8 @@ export const PERSONAL_PAGES: Record<string, AccessLevel> = {
     'my_swaps': 'alpha',
     'my_broadcasts': 'alpha',
     'timesheets_view': 'beta', // Beta has read-only timesheets
+    // Employee-facing KPI page — everyone can see their own numbers.
+    'performance': 'alpha',
 };
 
 /** Managerial pages — accessible via Type Y certificates */
@@ -51,7 +53,10 @@ export const MANAGERIAL_PAGES: Record<string, AccessLevel> = {
     'broadcasts': 'gamma',
     'configs': 'delta',
     'users': 'epsilon',
-    'insights': 'delta',
+    // KPI (managerial roll-up). Gamma holds sub-department scope, and
+    // `is_manager_or_above()` in the DB already admits gamma — this gate
+    // was stricter than the RPCs it guards.
+    'insights': 'gamma',
 };
 
 /**

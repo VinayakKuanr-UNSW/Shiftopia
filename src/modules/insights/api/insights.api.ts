@@ -33,10 +33,14 @@ export const insightsApi = {
      */
     async getTrend(filters: InsightsFilters): Promise<TrendRow[]> {
         const { data, error } = await supabase.rpc('get_insights_trend', {
-            p_start_date: filters.startDate,
-            p_end_date:   filters.endDate,
-            p_org_ids:    filters.orgIds?.length  ? filters.orgIds  : undefined,
-            p_dept_ids:   filters.deptIds?.length ? filters.deptIds : undefined,
+            p_start_date:  filters.startDate,
+            p_end_date:    filters.endDate,
+            p_org_ids:     filters.orgIds?.length     ? filters.orgIds     : undefined,
+            p_dept_ids:    filters.deptIds?.length    ? filters.deptIds    : undefined,
+            // Added in 20260823090100. The RPC used to ignore sub-department
+            // scope entirely, so narrowing the scope filter moved the KPI cards
+            // but not the trend chart sitting beside them.
+            p_subdept_ids: filters.subdeptIds?.length ? filters.subdeptIds : undefined,
         });
         if (error) throw error;
         return (data ?? []) as TrendRow[];
@@ -48,10 +52,12 @@ export const insightsApi = {
      */
     async getDeptBreakdown(filters: InsightsFilters): Promise<DeptBreakdownRow[]> {
         const { data, error } = await supabase.rpc('get_dept_insights_breakdown', {
-            p_start_date: filters.startDate,
-            p_end_date:   filters.endDate,
-            p_org_ids:    filters.orgIds?.length  ? filters.orgIds  : undefined,
-            p_dept_ids:   filters.deptIds?.length ? filters.deptIds : undefined,
+            p_start_date:  filters.startDate,
+            p_end_date:    filters.endDate,
+            p_org_ids:     filters.orgIds?.length     ? filters.orgIds     : undefined,
+            p_dept_ids:    filters.deptIds?.length    ? filters.deptIds    : undefined,
+            // See get_insights_trend above — same fix, same migration.
+            p_subdept_ids: filters.subdeptIds?.length ? filters.subdeptIds : undefined,
         });
         if (error) throw error;
         return (data ?? []) as DeptBreakdownRow[];

@@ -553,7 +553,7 @@ const AppSidebar: React.FC = () => {
                   iconColor={iconColorMap.insights}
                   label={t('nav.insights')}
                   isActive={isRouteActive('/insights')}
-                  description="Analytics & reports"
+                  description="Attendance, bids, swaps & cancellations"
                 />
               )}
 
