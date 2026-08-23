@@ -13,6 +13,8 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import { AlertTriangle, Loader2, UserX } from 'lucide-react';
 import { Shift } from '@/modules/rosters';
 import { MobileShiftCard } from './MobileShiftCard';
+import { cn } from '@/modules/core/lib/utils';
+import { useCancellationReasons } from '@/modules/insights/hooks/useCancellationReasons';
 
 export interface DropShiftDrawerProps {
   isOpen: boolean;
@@ -23,7 +25,12 @@ export interface DropShiftDrawerProps {
   subGroupName?: string;
   groupColor?: string;
   isWithinLockoutPeriod?: boolean;
-  onConfirmDrop: (reason: string) => Promise<void> | void;
+  /**
+   * `reasonCode` is the structured pick; `note` is the free text. The note is
+   * mandatory only when the chosen reason says so (currently "Other"), and the
+   * RPC re-validates both — the UI is a convenience, not the guard.
+   */
+  onConfirmDrop: (note: string, reasonCode: string) => Promise<void> | void;
   isDropping: boolean;
 }
 
@@ -39,18 +46,28 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
   isDropping,
 }) => {
   const [reason, setReason] = useState('');
+  const [reasonCode, setReasonCode] = useState<string>('');
+  const { data: reasons = [], isLoading: loadingReasons } = useCancellationReasons();
 
   useEffect(() => {
     if (isOpen) {
       setReason('');
+      setReasonCode('');
     }
   }, [isOpen]);
 
   if (!shift) return null;
 
+  const selected = reasons.find((r) => r.code === reasonCode);
+  // A note is only required when the reason says so. Before this, every drop
+  // demanded free text and then discarded it — sm_employee_drop_shift accepted
+  // p_reason and never wrote it anywhere.
+  const noteRequired = selected?.requires_note ?? false;
+  const canConfirm = !!reasonCode && (!noteRequired || reason.trim().length > 0);
+
   const handleConfirm = async () => {
-    if (!reason.trim() || isDropping) return;
-    await onConfirmDrop(reason.trim());
+    if (!canConfirm || isDropping) return;
+    await onConfirmDrop(reason.trim(), reasonCode);
   };
 
   return (
@@ -102,25 +119,65 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
             )}
           </div>
 
-          {/* 3. Reason for Drop */}
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="drop-shift-reason"
-              className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
-            >
+          {/* 3. Reason for Drop — a pick, then an optional note */}
+          <fieldset className="space-y-2" disabled={isDropping}>
+            <legend className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
               Reason for Drop <span className="text-rose-500" aria-hidden="true">*</span>
-            </Label>
-            <Textarea
-              id="drop-shift-reason"
-              placeholder="Please explain why you cannot work this shift..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              disabled={isDropping}
-              aria-required="true"
-              className="rounded-2xl resize-none bg-muted/30 text-sm focus-visible:ring-rose-500"
-            />
-          </div>
+            </legend>
+            {loadingReasons ? (
+              <p className="text-xs text-muted-foreground">Loading reasons…</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Reason for dropping this shift">
+                {reasons.map((r) => {
+                  const active = r.code === reasonCode;
+                  return (
+                    <button
+                      key={r.code}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setReasonCode(r.code)}
+                      title={r.description ?? undefined}
+                      className={cn(
+                        'min-h-11 rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500',
+                        active
+                          ? 'border-rose-500/60 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                          : 'border-border bg-muted/30 text-foreground hover:bg-muted/60',
+                      )}
+                    >
+                      {r.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="space-y-1.5 pt-1">
+              <Label
+                htmlFor="drop-shift-reason"
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+              >
+                {noteRequired ? (
+                  <>Tell us more <span className="text-rose-500" aria-hidden="true">*</span></>
+                ) : (
+                  <>Anything to add <span className="font-normal normal-case tracking-normal">(optional)</span></>
+                )}
+              </Label>
+              <Textarea
+                id="drop-shift-reason"
+                placeholder={noteRequired
+                  ? 'A short note is required for this reason…'
+                  : 'Add context for your manager…'}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                disabled={isDropping}
+                aria-required={noteRequired}
+                className="rounded-2xl resize-none bg-muted/30 text-sm focus-visible:ring-rose-500"
+              />
+            </div>
+          </fieldset>
         </div>
 
         {/* 4. Action Buttons */}
@@ -138,7 +195,7 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
             type="button"
             variant="destructive"
             onClick={handleConfirm}
-            disabled={isDropping || !reason.trim()}
+            disabled={isDropping || !canConfirm}
             className="flex-1 h-12 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white uppercase text-xs font-bold shadow-lg shadow-rose-950/20 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {isDropping ? (
