@@ -401,6 +401,18 @@ const AppSidebar: React.FC = () => {
             badge={unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : undefined}
             description="View workspace updates"
           />
+
+          {/* Employee-facing half of the KPI split. No permission gate — every
+              access level sees their own numbers, and the RPC behind it already
+              enforces `p_employee_id = auth.uid() OR is_manager_or_above()`. */}
+          <NavigationItem
+            to="/performance"
+            icon={TrendingUp}
+            iconColor={iconColorMap.insights}
+            label={t('nav.performance', 'Performance')}
+            isActive={isRouteActive('/performance')}
+            description="Your attendance, bids, swaps & cancellations"
+          />
         </CollapsibleSection>
 
         {/* ---------- Rostering Section ---------- */}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -16,6 +17,7 @@ import {
   Hourglass,
   CheckCircle2,
   TrendingUp,
+  ChevronRight,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -39,36 +41,11 @@ const cardInteractive = {
   whileTap: { scale: 0.98, transition: { duration: 0.1 } },
 };
 
-// Utility function for shift-completion percentage
-const calcShiftCompletion = (completed: number, total: number) => {
-  if (total === 0) return 0;
-  return ((completed / total) * 100).toFixed(0);
-};
-
 const ProfilePage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { isDark } = useTheme();
 
-  // Basic user stats
-  const userStats = {
-    totalShifts: 156,
-    completedShifts: 148,
-    upcomingShifts: 8,
-    joinDate: '2023-01-15',
-    lastActive: 'Today at 2:30 PM',
-  };
-
-  // Monthly metrics data
-  const monthlyStats = {
-    offered: 40,
-    accepted: 32,
-    rejected: 8,
-    upcoming: 5,
-    swapped: { success: 2, fail: 1 },
-    cancelled: { normal: 4, late: 2, lateLate: 1 },
-    bidded: { success: 3, fail: 1 },
-  };
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -83,12 +60,6 @@ const ProfilePage: React.FC = () => {
     });
     setIsEditing(false);
   };
-
-  // Compute shift completion percentage for optional progress bar
-  const completionPercent = calcShiftCompletion(
-    userStats.completedShifts,
-    userStats.totalShifts
-  );
 
   return (
     <motion.div
@@ -209,23 +180,6 @@ const ProfilePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Quick Stats Row */}
-                <div className="flex items-center justify-center md:justify-start gap-8 mt-6 pt-6 border-t border-border/10">
-                  <div className="text-center md:text-left">
-                    <div className="text-2xl font-black text-foreground">{userStats.totalShifts}</div>
-                    <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-muted-foreground font-semibold">Total Shifts</div>
-                  </div>
-                  <div className="w-px h-10 bg-border/10" />
-                  <div className="text-center md:text-left">
-                    <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{userStats.completedShifts}</div>
-                    <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-muted-foreground font-semibold">Completed</div>
-                  </div>
-                  <div className="w-px h-10 bg-border/10" />
-                  <div className="text-center md:text-left">
-                    <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{userStats.upcomingShifts}</div>
-                    <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-muted-foreground font-semibold">Upcoming</div>
-                  </div>
-                </div>
               </div>
             </div>
           </motion.div>
@@ -269,7 +223,7 @@ const ProfilePage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 gap-6">
                 {/* CONTACT INFO COLUMN */}
                 <motion.div
                   variants={itemVariants}
@@ -293,13 +247,6 @@ const ProfilePage: React.FC = () => {
                       </div>
                       <div className="space-y-2 text-foreground">
                         <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                          <span>
-                            Member Since{' '}
-                            {new Date(userStats.joinDate).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center">
                           <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
                           <span>Currently Active</span>
                         </div>
@@ -308,189 +255,38 @@ const ProfilePage: React.FC = () => {
                   </div>
                 </motion.div>
 
-                {/* SHIFT STATS + PROGRESS BAR COLUMN */}
-                <motion.div variants={itemVariants}>
-                  <div className="grid grid-cols-2 gap-4">
-                    <motion.div {...cardInteractive}>
-                      <Card className="bg-card border border-border rounded-2xl min-h-[120px] flex flex-col justify-center hover:shadow-md transition-shadow">
-                        <CardHeader>
-                          <CardTitle className="text-lg text-foreground">Total Shifts</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-3xl font-black text-foreground">
-                            {userStats.totalShifts}
-                          </div>
-                          <div className="text-muted-foreground text-sm">
-                            Shifts overall
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-
-                    <motion.div {...cardInteractive}>
-                      <Card className="bg-card border border-border rounded-2xl min-h-[120px] flex flex-col justify-center hover:shadow-md transition-shadow">
-                        <CardHeader>
-                          <CardTitle className="text-lg text-foreground">Upcoming</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-3xl font-black text-foreground">
-                            {userStats.upcomingShifts}
-                          </div>
-                          <div className="text-muted-foreground text-sm">
-                            Scheduled shifts
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </div>
-
-                  {/* Example progress bar for completed vs total */}
-                  <div className="mt-6">
-                    <div className="mb-1 text-sm text-muted-foreground">
-                      Shift Completion
-                    </div>
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                      <motion.div
-                        className="h-2 bg-indigo-500 rounded-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${completionPercent}%` }}
-                        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
-                      />
-                    </div>
-                    <div className="mt-1 text-xs text-foreground">
-                      {completionPercent}% completed
-                    </div>
-                  </div>
-                </motion.div>
               </div>
             )}
 
-            {/* MONTHLY METRICS */}
-            <motion.div
-              variants={itemVariants}
-              className="mt-8"
-            >
-              <h3 className="text-xl font-black tracking-tight text-foreground mb-6 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-primary" />
-                Monthly Overview
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                <motion.div variants={itemVariants} {...cardInteractive}>
-                  <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-colors group">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 group-hover:scale-110 transition-transform">
-                          <CheckCircle2 className="w-6 h-6" />
-                        </div>
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
-                          {monthlyStats.accepted} Accepted
-                        </Badge>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-black tracking-tight text-foreground mb-1">Shift Activity</h4>
-                        <div className="space-y-1 text-sm text-muted-foreground">
-                          <div className="flex justify-between">
-                            <span>Offered</span>
-                            <span className="text-foreground font-semibold">{monthlyStats.offered}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Rejected</span>
-                            <span className="text-foreground font-semibold">{monthlyStats.rejected}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                <motion.div variants={itemVariants} {...cardInteractive}>
-                  <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-colors group">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 rounded-xl bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400 group-hover:scale-110 transition-transform">
-                          <Shuffle className="w-6 h-6" />
-                        </div>
-                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20">
-                          {monthlyStats.swapped.success} Swapped
-                        </Badge>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-black tracking-tight text-foreground mb-1">Swaps</h4>
-                        <div className="space-y-1 text-sm text-muted-foreground">
-                          <div className="flex justify-between">
-                            <span>Requested</span>
-                            <span className="text-foreground font-semibold">{monthlyStats.swapped.success + monthlyStats.swapped.fail}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Failed</span>
-                            <span className="text-foreground font-semibold">{monthlyStats.swapped.fail}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                <motion.div variants={itemVariants} {...cardInteractive}>
-                  <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-colors group">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 rounded-xl bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 group-hover:scale-110 transition-transform">
-                          <X className="w-6 h-6" />
-                        </div>
-                        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20">
-                          {monthlyStats.cancelled.normal} Cancelled
-                        </Badge>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-black tracking-tight text-foreground mb-1">Cancellations</h4>
-                        <div className="space-y-1 text-sm text-muted-foreground">
-                          <div className="flex justify-between">
-                            <span>Late Notice</span>
-                            <span className="text-rose-600 dark:text-rose-400 font-semibold">{monthlyStats.cancelled.late}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>No Show</span>
-                            <span className="text-rose-700 dark:text-rose-300 font-semibold">{monthlyStats.cancelled.lateLate}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                <motion.div variants={itemVariants} {...cardInteractive}>
-                  <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-colors group">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 group-hover:scale-110 transition-transform">
-                          <Hourglass className="w-6 h-6" />
-                        </div>
-                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20">
-                          {monthlyStats.bidded.success} Won
-                        </Badge>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-black tracking-tight text-foreground mb-1">Bidding</h4>
-                        <div className="space-y-1 text-sm text-muted-foreground">
-                          <div className="flex justify-between">
-                            <span>Total Bids</span>
-                            <span className="text-foreground font-semibold">{monthlyStats.bidded.success + monthlyStats.bidded.fail}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Success Rate</span>
-                            <span className="text-foreground font-semibold">
-                              {Math.round((monthlyStats.bidded.success / (monthlyStats.bidded.success + monthlyStats.bidded.fail || 1)) * 100)}%
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </div>
+            {/* ACTIVITY — real numbers live on /performance.
+                What stood here was twelve hardcoded literals: monthlyStats =
+                { offered: 40, accepted: 32, rejected: 8, swapped: {2,1},
+                  cancelled: {4,2,1}, bidded: {3,1} }. Every figure in the
+                Shift Activity, Trading, Cancellations and Bidding panels was
+                invented, including the derived "success rate" percentage.
+                Rather than migrate fiction into the KPI work, the panels are
+                replaced by a link to the page that computes them for real from
+                get_employee_quarterly_performance. */}
+            <motion.div variants={itemVariants} className="mt-8">
+              <Link
+                to="/performance"
+                className="group flex items-center justify-between gap-4 rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="rounded-xl bg-primary/10 p-3 text-primary">
+                    <TrendingUp className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black tracking-tight text-foreground">My Performance</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Attendance, bids, swaps and cancellations for the quarter.
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </Link>
             </motion.div>
+
           </CardContent>
         </div>
       </div>

@@ -26,6 +26,7 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   '/my-swaps',
   '/my-broadcasts',
   '/my-notifications',
+  '/performance',
   // Both leave routes render LeavePage, which is inside this guard. They were
   // never allowlisted, so the bottom nav's Leave button landed on the
   // "Desktop Only" screen on every phone.
