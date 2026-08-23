@@ -6,9 +6,9 @@
  * safe: `p_employee_id = auth.uid() OR is_manager_or_above()`.
  *
  * The four sections mirror the manager KPI tabs, so the two pages describe the
- * same world in the same words — a person who is told their urgent
- * cancellation rate is high can find the same metric, defined the same way, on
- * their manager's dashboard.
+ * same world in the same words — a person told their critical cancellation
+ * rate is high finds the same metric, defined the same way and graded by the
+ * same bands, on their manager's dashboard.
  *
  * This also replaces the Profile page's activity panels, which rendered twelve
  * hardcoded literals (offered: 40, accepted: 32, swapped: {2,1}, …). None of
@@ -167,24 +167,24 @@ const PerformancePage: React.FC = () => {
 
                             <KpiBand
                                 title="Cancellations"
-                                description="Two kinds, split by how much notice you gave. Under four hours is urgent, because it is too late to backfill normally."
+                                description="Two kinds, split by how much notice you gave. Twenty-four hours or less is critical, because it leaves little time to find cover."
                             >
                                 <KpiTileGrid>
                                     <KpiTile
                                         label={labelFor('standard_cancel_rate')}
                                         value={isLoading ? null : formatMetric('standard_cancel_rate', m?.cancellation_rate_standard)}
                                         status={statusFor('standard_cancel_rate', m?.cancellation_rate_standard ?? 0)}
-                                        denominator="4 hours notice or more"
+                                        denominator="More than 24 hours notice"
                                         tooltip={METRIC_REGISTRY.standard_cancel_rate.description}
                                         loading={isLoading}
                                         icon={CalendarX}
                                     />
                                     <KpiTile
-                                        label={labelFor('urgent_cancel_rate')}
-                                        value={isLoading ? null : formatMetric('urgent_cancel_rate', m?.cancellation_rate_late)}
-                                        status={statusFor('urgent_cancel_rate', m?.cancellation_rate_late ?? 0)}
-                                        denominator="Less than 4 hours notice"
-                                        tooltip={METRIC_REGISTRY.urgent_cancel_rate.description}
+                                        label={labelFor('critical_cancel_rate')}
+                                        value={isLoading ? null : formatMetric('critical_cancel_rate', m?.cancellation_rate_late)}
+                                        status={statusFor('critical_cancel_rate', m?.cancellation_rate_late ?? 0)}
+                                        denominator="24 hours notice or less"
+                                        tooltip={METRIC_REGISTRY.critical_cancel_rate.description}
                                         loading={isLoading}
                                     />
                                     <KpiTile

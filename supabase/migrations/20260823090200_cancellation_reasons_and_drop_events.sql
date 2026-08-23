@@ -31,18 +31,19 @@
 --   3. fn_capture_shift_event — suppresses its UNASSIGNED branch for that one
 --      write, so a drop produces exactly one closing event.
 --
--- STANDARD vs URGENT
--- ------------------
--- There are exactly two kinds. The discriminator is notice, not intent, and
--- the boundary is the 4-hour late_cancel_threshold already hard-coded in
--- v_shift_assignment_episodes:
+-- STANDARD vs CRITICAL
+-- --------------------
+-- There are exactly two kinds and the discriminator is notice, not intent.
 --
---   notice >= 4h  -> CANCELLED       -> cancelled_standard -> "standard"
---   notice <  4h  -> LATE_CANCELLED  -> cancelled_late     -> "urgent"
+-- NOTE: this migration originally used the 4-hour late_cancel_threshold from
+-- v_shift_assignment_episodes. That was the wrong line — 4h is the
+-- urgent/emergent boundary, where the app blocks exchange operations outright,
+-- so it put the cancellation split inside the window where an employee cannot
+-- cancel at all. Migration 20260823100000 moves it to 24h and
+-- 20260823100100 renames the kinds:
 --
--- The employee-facing drop button is itself blocked inside 4 hours
--- (ShiftDetailsDialog), so urgent cancellations can only arise from a
--- manager-side or override path. That is a product gap, not a bug here.
+--   notice >  24h  -> CANCELLED       -> cancelled_standard -> "standard"
+--   notice <= 24h  -> LATE_CANCELLED  -> cancelled_late     -> "critical"
 -- ============================================================================
 
 -- ── 1. Reason catalogue ─────────────────────────────────────────────────────

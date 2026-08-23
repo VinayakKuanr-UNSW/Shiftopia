@@ -108,6 +108,7 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
             </div>
             <ul className="text-xs space-y-1 text-amber-700/90 dark:text-amber-300/90 pl-1 list-disc list-inside">
               <li>Dropped shifts return to the open marketplace pool for replacement.</li>
+              <li>Dropping with 24 hours notice or less counts as a <strong>critical</strong> cancellation on your record.</li>
               <li>Dropping shifts within 4 hours of start time enters an emergent state and requires supervisor escalation.</li>
               <li>Repeated unworked drops may impact scheduling reliability scores.</li>
             </ul>

@@ -138,19 +138,38 @@ describe('registry agrees with the tables it absorbed', () => {
     });
 });
 
-describe('cancellations are exactly two kinds', () => {
-    it('grades urgent more strictly than standard', () => {
-        // 4 % notice-less cancellation is acceptable-ish as standard, and is
-        // already a warning when it happened inside the 4-hour window.
+describe('cancellations are exactly two kinds, split at 24h', () => {
+    it('grades critical more strictly than standard', () => {
+        // The same 4% reads as acceptable when the shift was released with more
+        // than a day's notice, and as a warning when it was released inside it.
         expect(statusFor('standard_cancel_rate', 4)).toBe('good');
-        expect(statusFor('urgent_cancel_rate', 4)).toBe('warn');
+        expect(statusFor('critical_cancel_rate', 4)).toBe('warn');
+    });
+
+    it('names the boundary as 24 hours, not the 4h emergent lockout', () => {
+        // 4h is the urgent/emergent boundary — where the app blocks exchange
+        // operations outright. Using it as the cancellation split put the line
+        // inside the window where an employee cannot cancel at all, so every
+        // self-service cancellation graded 'standard'.
+        expect(METRIC_REGISTRY.standard_cancel_rate.description).toMatch(/more than 24 hours/);
+        expect(METRIC_REGISTRY.critical_cancel_rate.description).toMatch(/24 hours notice or less/);
+        // \b matters: "24 hours" contains "4 hours" as a substring.
+        expect(METRIC_REGISTRY.standard_cancel_rate.description).not.toMatch(/\b4 hours/);
+        expect(METRIC_REGISTRY.critical_cancel_rate.description).not.toMatch(/\b4 hours/);
+    });
+
+    it('has no metric called "urgent" — that word belongs to the urgency bands', () => {
+        expect(METRIC_REGISTRY.urgent_cancel_rate).toBeUndefined();
+        for (const spec of Object.values(METRIC_REGISTRY)) {
+            expect(spec.label).not.toMatch(/urgent/i);
+        }
     });
 
     it('labels the legacy RPC column names as the two canonical kinds', () => {
         expect(labelFor('standard_drop_rate')).toBe('Standard cancellation rate');
-        expect(labelFor('urgent_drop_rate')).toBe('Urgent cancellation rate');
+        expect(labelFor('urgent_drop_rate')).toBe('Critical cancellation rate');
         expect(labelFor('cancellation_rate_standard')).toBe('Standard cancellation rate');
-        expect(labelFor('cancellation_rate_late')).toBe('Urgent cancellation rate');
+        expect(labelFor('cancellation_rate_late')).toBe('Critical cancellation rate');
     });
 });
 

@@ -226,18 +226,28 @@ export const METRIC_REGISTRY: Record<string, MetricSpec> = {
     }),
 
     // ── Cancellations ───────────────────────────────────────────────────────
-    // Exactly two kinds, and the discriminator is notice, not intent:
-    // >= 4h standard, < 4h urgent. The RPC still returns the older
-    // cancel_rate / late_cancel_rate names for the same two numbers.
+    // Exactly TWO kinds, split by notice at 24 HOURS:
+    //   > 24h   standard
+    //   <= 24h  critical
+    //
+    // Do not confuse that line with the three shift URGENCY bands, which are a
+    // different question and split at BOTH 24h and 4h:
+    //   TTS > 24h        normal
+    //   4h < TTS <= 24h  urgent
+    //   TTS <= 4h        emergent   (self-service exchange blocked entirely)
+    //
+    // 4h is the urgent/emergent boundary, not a cancellation boundary. Using it
+    // as one put the split inside the window where an employee cannot cancel at
+    // all, so every self-service cancellation graded as 'standard'.
     standard_cancel_rate: spec({
         id: 'standard_cancel_rate', label: 'Standard cancellation rate', format: 'percent',
         direction: 'lower', good: 5, warn: 15,
-        description: 'Shifts dropped with 4 hours notice or more.',
+        description: 'Shifts dropped with more than 24 hours notice.',
     }),
-    urgent_cancel_rate: spec({
-        id: 'urgent_cancel_rate', label: 'Urgent cancellation rate', format: 'percent',
+    critical_cancel_rate: spec({
+        id: 'critical_cancel_rate', label: 'Critical cancellation rate', format: 'percent',
         direction: 'lower', good: 3, warn: 10,
-        description: 'Shifts dropped with less than 4 hours notice — too late to backfill normally.',
+        description: 'Shifts dropped with 24 hours notice or less — little time to find cover.',
     }),
     cancel_rate: spec({
         id: 'cancel_rate', label: 'Cancellation rate', format: 'percent',
@@ -249,11 +259,11 @@ export const METRIC_REGISTRY: Record<string, MetricSpec> = {
         direction: 'lower', good: 5, warn: 15,
     }),
     urgent_drop_rate: spec({
-        id: 'urgent_drop_rate', label: 'Urgent cancellation rate', format: 'percent',
+        id: 'urgent_drop_rate', label: 'Critical cancellation rate', format: 'percent',
         direction: 'lower', good: 3, warn: 10,
     }),
     late_cancel_rate: spec({
-        id: 'late_cancel_rate', label: 'Urgent cancellation rate', format: 'percent',
+        id: 'late_cancel_rate', label: 'Critical cancellation rate', format: 'percent',
         direction: 'lower', good: 5, warn: 15,
     }),
     drop_rate: spec({
@@ -265,7 +275,7 @@ export const METRIC_REGISTRY: Record<string, MetricSpec> = {
         direction: 'lower', good: 5, warn: 15,
     }),
     cancellation_rate_late: spec({
-        id: 'cancellation_rate_late', label: 'Urgent cancellation rate', format: 'percent',
+        id: 'cancellation_rate_late', label: 'Critical cancellation rate', format: 'percent',
         direction: 'lower', good: 3, warn: 10,
     }),
 

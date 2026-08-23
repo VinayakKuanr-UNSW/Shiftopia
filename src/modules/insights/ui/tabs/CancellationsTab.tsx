@@ -2,8 +2,12 @@
  * KPI › Cancellations — what is falling out of the roster, and how late?
  *
  * There are exactly two kinds, and the discriminator is notice, not intent:
- *   standard  4 hours notice or more   (assignment_snapshots 'dropped_std')
- *   urgent    less than 4 hours        (assignment_snapshots 'dropped_late')
+ *   standard  more than 24 hours notice  (assignment_snapshots 'dropped_std')
+ *   critical  24 hours notice or less    (assignment_snapshots 'dropped_late')
+ *
+ * 24h, not 4h. 4h is the urgent/emergent boundary — where the app blocks
+ * exchange operations outright — and using it as the cancellation split put
+ * the line inside the window where an employee cannot cancel at all.
  *
  * Three other things in the product share the word and are named apart, so no
  * number on this tab is ambiguous: a manager cancelling the whole shift is a
@@ -61,7 +65,7 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
     const k = current.data ?? EMPTY_BEHAVIOUR;
     const p = comparison ? prior.data : undefined;
     const loading = current.isLoading;
-    const totalCancellations = k.standard_cancellations + k.urgent_cancellations;
+    const totalCancellations = k.standard_cancellations + k.critical_cancellations;
 
     // Zero cancellations is a GOOD outcome. It must not read like an error, and
     // it must be distinguishable from "no shifts at all this quarter".
@@ -117,12 +121,12 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
                         href="/insights/cancel_rate"
                     />
                     <KpiTile
-                        label={labelFor('urgent_cancel_rate')}
-                        value={loading ? null : formatMetric('urgent_cancel_rate', k.urgent_cancel_rate)}
-                        status={statusFor('urgent_cancel_rate', k.urgent_cancel_rate)}
-                        denominator={`${k.urgent_cancellations} inside 4 hours`}
-                        tooltip={METRIC_REGISTRY.urgent_cancel_rate.description}
-                        delta={delta(k.urgent_cancel_rate, p?.urgent_cancel_rate)}
+                        label={labelFor('critical_cancel_rate')}
+                        value={loading ? null : formatMetric('critical_cancel_rate', k.critical_cancel_rate)}
+                        status={statusFor('critical_cancel_rate', k.critical_cancel_rate)}
+                        denominator={`${k.critical_cancellations} with 24h notice or less`}
+                        tooltip={METRIC_REGISTRY.critical_cancel_rate.description}
+                        delta={delta(k.critical_cancel_rate, p?.critical_cancel_rate)}
                         deltaGoodDirection="down"
                         icon={AlertTriangle}
                         loading={loading}
@@ -131,7 +135,7 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
                         label={labelFor('standard_cancel_rate')}
                         value={loading ? null : formatMetric('standard_cancel_rate', k.standard_cancel_rate)}
                         status={statusFor('standard_cancel_rate', k.standard_cancel_rate)}
-                        denominator={`${k.standard_cancellations} with 4+ hours notice`}
+                        denominator={`${k.standard_cancellations} with more than 24h notice`}
                         tooltip={METRIC_REGISTRY.standard_cancel_rate.description}
                         delta={delta(k.standard_cancel_rate, p?.standard_cancel_rate)}
                         deltaGoodDirection="down"

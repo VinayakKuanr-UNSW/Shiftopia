@@ -17,7 +17,7 @@ export interface BehaviourSummary {
     worked: number;
     no_show: number;
     standard_cancellations: number;
-    urgent_cancellations: number;
+    critical_cancellations: number;
     swapped_out: number;
     reassigned: number;
     emergency_assigned: number;
@@ -43,19 +43,19 @@ export interface BehaviourSummary {
     auto_clock_out_rate: number;
     attendance_compliance_rate: number;
     standard_cancel_rate: number;
-    urgent_cancel_rate: number;
+    critical_cancel_rate: number;
     total_cancel_rate: number;
 }
 
 export const EMPTY_BEHAVIOUR: BehaviourSummary = {
-    held: 0, worked: 0, no_show: 0, standard_cancellations: 0, urgent_cancellations: 0,
+    held: 0, worked: 0, no_show: 0, standard_cancellations: 0, critical_cancellations: 0,
     swapped_out: 0, reassigned: 0, emergency_assigned: 0, on_time_in: 0, on_time_out: 0,
     early_clock_in: 0, late_clock_in: 0, early_clock_out: 0, late_clock_out: 0,
     auto_clock_out: 0, attendance_compliant: 0, employees: 0,
     no_show_rate: 0, on_time_in_rate: 0, on_time_out_rate: 0, early_clock_in_rate: 0,
     late_clock_in_rate: 0, early_clock_out_rate: 0, late_clock_out_rate: 0,
     auto_clock_out_rate: 0, attendance_compliance_rate: 0,
-    standard_cancel_rate: 0, urgent_cancel_rate: 0, total_cancel_rate: 0,
+    standard_cancel_rate: 0, critical_cancel_rate: 0, total_cancel_rate: 0,
 };
 
 export const useBehaviourSummary = (from: string, to: string, scope: ScopeSelection) =>
