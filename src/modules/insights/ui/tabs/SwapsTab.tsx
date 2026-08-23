@@ -12,10 +12,13 @@ import React from 'react';
 import { ArrowLeftRight, Inbox, Timer, XCircle } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
+import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { useMarketplaceKpis } from '../../hooks/useMarketplaceKpis';
 import { EMPTY_KPIS } from '../../model/marketplace-kpis.types';
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
+import { useQuarterlyReport } from '@/modules/users/hooks/usePerformanceMetrics';
+import { KpiDetailTable } from '../components/KpiDetailTable';
 import { KpiBand, KpiTileGrid } from '../components/KpiBand';
 import type { ScopeSelection } from '@/platform/auth/types';
 
@@ -33,6 +36,9 @@ export default function SwapsTab({ filters, scope }: SwapsTabProps) {
         comparison?.endDate ?? '',
         scope,
     );
+    // Per-employee detail. Same query key as every other tab and the Overview
+    // report, so React Query serves one request no matter how many tabs read it.
+    const report = useQuarterlyReport(period.year, period.quarter, scope);
 
     if (current.isError) {
         return (
@@ -178,6 +184,46 @@ export default function SwapsTab({ filters, scope }: SwapsTabProps) {
                         loading={loading}
                     />
                 </KpiTileGrid>
+            </KpiBand>
+
+            <KpiBand
+                title="Who is trading"
+                description="Offer behaviour and trade activity per employee."
+            >
+                {report.isError ? (
+                    <PageState
+                        state="error"
+                        scope="inline"
+                        title="Couldn't load the per-employee breakdown"
+                        onRetry={() => report.refetch()}
+                    />
+                ) : report.isLoading ? (
+                    <Skeleton className="h-48 w-full" />
+                ) : (
+                    <KpiDetailTable
+                        caption={`${(report.data ?? []).length} people · ${period.label}`}
+                        defaultSort={{ key: 'trade_requests', dir: 'desc' }}
+                        emptyMessage="No swap or offer activity by anyone in this quarter."
+                        columns={[
+                            { key: 'trade_requests', header: 'Swaps requested', graded: false },
+                            { key: 'swap_rate' },
+                            { key: 'acceptance_rate' },
+                            { key: 'rejection_rate' },
+                            { key: 'ignorance_rate' },
+                        ]}
+                        rows={(report.data ?? []).map((r) => ({
+                            id: r.employee_id,
+                            name: r.employee_name,
+                            values: {
+                            trade_requests: r.trade_requests ?? 0,
+                            swap_rate: r.swap_rate,
+                            acceptance_rate: r.acceptance_rate,
+                            rejection_rate: r.rejection_rate,
+                            ignorance_rate: r.ignorance_rate,
+                            },
+                        }))}
+                    />
+                )}
             </KpiBand>
         </div>
     );

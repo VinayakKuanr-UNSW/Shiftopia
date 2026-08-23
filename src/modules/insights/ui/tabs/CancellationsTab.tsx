@@ -30,6 +30,8 @@ import { useCancellationReasonBreakdown } from '../../hooks/useCancellationReaso
 import { ReasonBreakdown } from '../components/ReasonBreakdown';
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
+import { useQuarterlyReport } from '@/modules/users/hooks/usePerformanceMetrics';
+import { KpiDetailTable } from '../components/KpiDetailTable';
 import { KpiBand, KpiTileGrid, CountStrip } from '../components/KpiBand';
 import { text } from '@/modules/core/ui/typography';
 import { cn } from '@/modules/core/lib/utils';
@@ -49,6 +51,9 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
         comparison?.endDate ?? '',
         scope,
     );
+    // Per-employee detail. Same query key as every other tab and the Overview
+    // report, so React Query serves one request no matter how many tabs read it.
+    const report = useQuarterlyReport(period.year, period.quarter, scope);
     const reasons = useCancellationReasonBreakdown(period.startDate, period.endDate, scope);
 
     if (current.isError) {
@@ -194,6 +199,48 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
                             { label: 'Swapped out', value: k.swapped_out },
                             { label: 'Reassigned', value: k.reassigned },
                         ]}
+                    />
+                )}
+            </KpiBand>
+
+            <KpiBand
+                title="Who is cancelling"
+                description="Sorted by critical cancellation rate — the cancellations that leave least time to find cover."
+            >
+                {report.isError ? (
+                    <PageState
+                        state="error"
+                        scope="inline"
+                        title="Couldn't load the per-employee breakdown"
+                        onRetry={() => report.refetch()}
+                    />
+                ) : report.isLoading ? (
+                    <Skeleton className="h-48 w-full" />
+                ) : (
+                    <KpiDetailTable
+                        caption={`${(report.data ?? []).length} people · ${period.label}`}
+                        defaultSort={{ key: 'urgent_drop_rate', dir: 'desc' }}
+                        emptyMessage="Nobody cancelled a shift in this quarter."
+                        columns={[
+                            { key: 'shifts_worked', header: 'Worked', graded: false },
+                            { key: 'cancel_standard', header: 'Standard', graded: false },
+                            { key: 'cancel_late', header: 'Critical', graded: false },
+                            { key: 'standard_drop_rate' },
+                            { key: 'urgent_drop_rate' },
+                            { key: 'reliability_score' },
+                        ]}
+                        rows={(report.data ?? []).map((r) => ({
+                            id: r.employee_id,
+                            name: r.employee_name,
+                            values: {
+                            shifts_worked: r.completed,
+                            cancel_standard: r.cancel_standard,
+                            cancel_late: r.cancel_late,
+                            standard_drop_rate: r.standard_drop_rate ?? 0,
+                            urgent_drop_rate: r.urgent_drop_rate ?? 0,
+                            reliability_score: r.reliability_score,
+                            },
+                        }))}
                     />
                 )}
             </KpiBand>
