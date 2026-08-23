@@ -21,12 +21,13 @@
  */
 
 import React from 'react';
-import { CalendarX, Clock, AlertTriangle, Ban } from 'lucide-react';
+import { CalendarX, Clock, AlertTriangle } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { useBehaviourSummary, EMPTY_BEHAVIOUR } from '../../hooks/useBehaviourSummary';
-import { useCancellationReasons } from '../../hooks/useCancellationReasons';
+import { useCancellationReasonBreakdown } from '../../hooks/useCancellationReasonBreakdown';
+import { ReasonBreakdown } from '../components/ReasonBreakdown';
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
 import { KpiBand, KpiTileGrid, CountStrip } from '../components/KpiBand';
@@ -48,7 +49,7 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
         comparison?.endDate ?? '',
         scope,
     );
-    const reasons = useCancellationReasons();
+    const reasons = useCancellationReasonBreakdown(period.startDate, period.endDate, scope);
 
     if (current.isError) {
         return (
@@ -155,16 +156,30 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
 
             <KpiBand
                 title="Why people cancelled"
-                description="Chosen by the employee at the moment they drop the shift."
+                description="Chosen by the employee at the moment they drop the shift. Each bar is split by how much notice the reason usually comes with."
             >
                 {loading || reasons.isLoading ? (
-                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-40 w-full" />
+                ) : reasons.isError ? (
+                    <PageState
+                        state="error"
+                        scope="inline"
+                        title="Couldn't load the reason breakdown"
+                        onRetry={() => reasons.refetch()}
+                    />
                 ) : totalCancellations === 0 ? (
                     <p className={cn(text.bodyMuted, 'rounded-2xl border border-border bg-muted/30 p-4')}>
                         No cancellations to break down in {period.label}.
                     </p>
+                ) : (reasons.data ?? []).length === 0 ? (
+                    /* Cancellations exist but none carries a reason — they predate
+                       reason capture. Say which, rather than showing an empty chart. */
+                    <p className={cn(text.bodyMuted, 'rounded-2xl border border-dashed border-border bg-muted/20 p-4')}>
+                        {totalCancellations} cancellation{totalCancellations === 1 ? '' : 's'} in {period.label},
+                        none with a recorded reason. Reasons are captured on every drop from this release onward.
+                    </p>
                 ) : (
-                    <ReasonBreakdownPlaceholder count={totalCancellations} />
+                    <ReasonBreakdown rows={reasons.data ?? []} />
                 )}
             </KpiBand>
 
@@ -182,25 +197,6 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
                     />
                 )}
             </KpiBand>
-        </div>
-    );
-}
-
-/**
- * The reason distribution needs a per-reason aggregate over shift_events
- * metadata, which is the next slice of work. Until then the tab says what it
- * is waiting for rather than rendering an empty chart that looks broken.
- */
-function ReasonBreakdownPlaceholder({ count }: { count: number }) {
-    return (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4">
-            <p className={cn(text.body, 'text-foreground')}>
-                {count} cancellation{count === 1 ? '' : 's'} recorded with a reason.
-            </p>
-            <p className={cn(text.caption, 'mt-1')}>
-                Reasons are captured on every drop from this release. The distribution chart
-                lands with the per-reason aggregate.
-            </p>
         </div>
     );
 }
