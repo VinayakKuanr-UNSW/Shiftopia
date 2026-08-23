@@ -37,6 +37,7 @@ import BidsTab from '../ui/tabs/BidsTab';
 import SwapsTab from '../ui/tabs/SwapsTab';
 import AttendanceTab from '../ui/tabs/AttendanceTab';
 import CancellationsTab from '../ui/tabs/CancellationsTab';
+import ManagerScorecardBand from '../ui/tabs/ManagerScorecardBand';
 
 const TABS: KpiTabDef[] = [
     { value: 'overview',      label: 'Overview',      Icon: LayoutGrid },
@@ -129,6 +130,7 @@ const InsightsPage: React.FC = () => {
                                         deptIds: filters.deptIds,
                                         subdeptIds: filters.subdeptIds,
                                     }} />
+                                    <ManagerScorecardBand filters={filters} scope={scope} />
                                     <PerformanceTab
                                         scope={scope}
                                         selectedYear={period.year}

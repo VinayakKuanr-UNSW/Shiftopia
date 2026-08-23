@@ -23,7 +23,6 @@ export { MyBroadcastsScreen } from './ui/screens/MyBroadcastsScreen';
 export { EmployeeSelector } from '@/modules/core/ui/components/EmployeeSelector';
 export { GroupsList } from './ui/components/GroupsList';
 export { GroupMembers } from './ui/components/GroupMembers';
-export { StatCard } from './ui/components/StatCard';
 export { GroupCard } from './ui/components/GroupCard';
 export { RichTextEditor } from './ui/components/RichTextEditor';
 export { BroadcastItem } from './ui/components/BroadcastItem';
