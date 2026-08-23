@@ -41,6 +41,12 @@ BEGIN
 
     EXECUTE 'CREATE OR REPLACE VIEW public.v_shift_assignment_episodes AS '
             || replace(v_def, '''04:00:00''::interval', '''24:00:00''::interval');
+
+    -- pg_get_viewdef() returns only the SELECT — it does NOT carry reloptions —
+    -- and CREATE OR REPLACE VIEW resets any option not restated. Without this
+    -- line the `security_invoker = on` set by 20260719000200 is silently
+    -- dropped and the view stops enforcing the caller's RLS.
+    EXECUTE 'ALTER VIEW public.v_shift_assignment_episodes SET (security_invoker = on)';
 END $$;
 
 COMMENT ON VIEW public.v_shift_assignment_episodes IS

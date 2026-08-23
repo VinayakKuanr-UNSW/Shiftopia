@@ -20,6 +20,8 @@ import { useBehaviourSummary, EMPTY_BEHAVIOUR } from '../../hooks/useBehaviourSu
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
 import { useQuarterlyReport } from '@/modules/users/hooks/usePerformanceMetrics';
+import { useBehaviourTrend, formatBucket } from '../../hooks/useBehaviourTrend';
+import { KpiTrendChart, SERIES_COLORS } from '../components/KpiTrendChart';
 import { KpiDetailTable } from '../components/KpiDetailTable';
 import { KpiBand, KpiTileGrid } from '../components/KpiBand';
 import { RateStrip } from '../components/RateStrip';
@@ -42,6 +44,9 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
     // Per-employee detail. Same query key as every other tab and the Overview
     // report, so React Query serves one request no matter how many tabs read it.
     const report = useQuarterlyReport(period.year, period.quarter, scope);
+    // Weekly series. Sums back to the headline exactly — same aggregate
+    // expressions as get_kpi_behaviour_summary, grouped instead of collapsed.
+    const trend = useBehaviourTrend(period.startDate, period.endDate, scope);
 
     if (current.isError) {
         return (
@@ -131,6 +136,43 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
                         loading={loading}
                     />
                 </KpiTileGrid>
+            </KpiBand>
+
+            <KpiBand
+                title="How attendance moved"
+                description="Every shift held, by what happened to it. Weekly, because a quarter is thirteen weeks and a daily line for a small roster is mostly noise."
+            >
+                {trend.isError ? (
+                    <PageState
+                        state="error"
+                        scope="inline"
+                        title="Couldn't load the attendance trend"
+                        onRetry={() => trend.refetch()}
+                    />
+                ) : trend.isLoading ? (
+                    <Skeleton className="h-[280px] w-full" />
+                ) : (
+                    <KpiTrendChart
+                        data={(trend.data ?? []).map((r) => ({
+                            bucket: formatBucket(r.bucket_start),
+                            'On time': r.on_time_in,
+                            'Late in': r.late_clock_in,
+                            'Early out': r.early_clock_out,
+                            'No-show': r.no_show,
+                            'Compliance %': r.attendance_compliance_rate,
+                        }))}
+                        xKey="bucket"
+                        caption={`Attendance by week, ${period.label}`}
+                        emptyMessage={`No shifts ended in ${period.label}.`}
+                        series={[
+                            { key: 'On time',   label: 'On time',   color: SERIES_COLORS.good,  type: 'bar' },
+                            { key: 'Late in',   label: 'Late in',   color: SERIES_COLORS.warn,  type: 'bar' },
+                            { key: 'Early out', label: 'Early out', color: SERIES_COLORS.muted, type: 'bar' },
+                            { key: 'No-show',   label: 'No-show',   color: SERIES_COLORS.bad,   type: 'bar' },
+                            { key: 'Compliance %', label: 'Compliance %', color: SERIES_COLORS.primary, type: 'line', rightAxis: true, unit: '%' },
+                        ]}
+                    />
+                )}
             </KpiBand>
 
             <KpiBand

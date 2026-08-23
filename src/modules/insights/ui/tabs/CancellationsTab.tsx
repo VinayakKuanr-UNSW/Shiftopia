@@ -31,6 +31,8 @@ import { ReasonBreakdown } from '../components/ReasonBreakdown';
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
 import { useQuarterlyReport } from '@/modules/users/hooks/usePerformanceMetrics';
+import { useBehaviourTrend, formatBucket } from '../../hooks/useBehaviourTrend';
+import { KpiTrendChart, SERIES_COLORS } from '../components/KpiTrendChart';
 import { KpiDetailTable } from '../components/KpiDetailTable';
 import { KpiBand, KpiTileGrid, CountStrip } from '../components/KpiBand';
 import { text } from '@/modules/core/ui/typography';
@@ -54,6 +56,9 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
     // Per-employee detail. Same query key as every other tab and the Overview
     // report, so React Query serves one request no matter how many tabs read it.
     const report = useQuarterlyReport(period.year, period.quarter, scope);
+    // Weekly series. Sums back to the headline exactly — same aggregate
+    // expressions as get_kpi_behaviour_summary, grouped instead of collapsed.
+    const trend = useBehaviourTrend(period.startDate, period.endDate, scope);
     const reasons = useCancellationReasonBreakdown(period.startDate, period.endDate, scope);
 
     if (current.isError) {
@@ -157,6 +162,39 @@ export default function CancellationsTab({ filters, scope }: CancellationsTabPro
                         loading={loading}
                     />
                 </KpiTileGrid>
+            </KpiBand>
+
+            <KpiBand
+                title="How cancellations moved"
+                description="Standard and critical per week, with the critical share as a line. Weekly rather than daily — cancellations are sparse, and a daily line would be mostly zero."
+            >
+                {trend.isError ? (
+                    <PageState
+                        state="error"
+                        scope="inline"
+                        title="Couldn't load the cancellation trend"
+                        onRetry={() => trend.refetch()}
+                    />
+                ) : trend.isLoading ? (
+                    <Skeleton className="h-[280px] w-full" />
+                ) : (
+                    <KpiTrendChart
+                        data={(trend.data ?? []).map((r) => ({
+                            bucket: formatBucket(r.bucket_start),
+                            Standard: r.standard_cancellations,
+                            Critical: r.critical_cancellations,
+                            'Critical %': r.critical_cancel_rate,
+                        }))}
+                        xKey="bucket"
+                        caption={`Cancellations by week, ${period.label}`}
+                        emptyMessage={`No cancellations in ${period.label}.`}
+                        series={[
+                            { key: 'Standard',   label: 'Standard',   color: SERIES_COLORS.muted, type: 'bar' },
+                            { key: 'Critical',   label: 'Critical',   color: SERIES_COLORS.bad,   type: 'bar' },
+                            { key: 'Critical %', label: 'Critical %', color: SERIES_COLORS.accent, type: 'line', rightAxis: true, unit: '%' },
+                        ]}
+                    />
+                )}
             </KpiBand>
 
             <KpiBand

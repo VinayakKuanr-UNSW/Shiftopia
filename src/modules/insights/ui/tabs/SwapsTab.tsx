@@ -18,6 +18,9 @@ import { EMPTY_KPIS } from '../../model/marketplace-kpis.types';
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
 import { useQuarterlyReport } from '@/modules/users/hooks/usePerformanceMetrics';
+import { useMarketplaceTrend } from '../../hooks/useMarketplaceTrend';
+import { formatBucket } from '../../hooks/useBehaviourTrend';
+import { KpiTrendChart, SERIES_COLORS } from '../components/KpiTrendChart';
 import { KpiDetailTable } from '../components/KpiDetailTable';
 import { KpiBand, KpiTileGrid } from '../components/KpiBand';
 import type { ScopeSelection } from '@/platform/auth/types';
@@ -39,6 +42,7 @@ export default function SwapsTab({ filters, scope }: SwapsTabProps) {
     // Per-employee detail. Same query key as every other tab and the Overview
     // report, so React Query serves one request no matter how many tabs read it.
     const report = useQuarterlyReport(period.year, period.quarter, scope);
+    const trend = useMarketplaceTrend(period.startDate, period.endDate, scope);
 
     if (current.isError) {
         return (
@@ -135,6 +139,41 @@ export default function SwapsTab({ filters, scope }: SwapsTabProps) {
                         loading={loading}
                     />
                 </KpiTileGrid>
+            </KpiBand>
+
+            <KpiBand
+                title="How swapping moved"
+                description="Swaps initiated each week and what became of them, with the completion rate as a line."
+            >
+                {trend.isError ? (
+                    <PageState
+                        state="error"
+                        scope="inline"
+                        title="Couldn't load the swap trend"
+                        onRetry={() => trend.refetch()}
+                    />
+                ) : trend.isLoading ? (
+                    <Skeleton className="h-[280px] w-full" />
+                ) : (
+                    <KpiTrendChart
+                        data={(trend.data ?? []).map((r) => ({
+                            bucket: formatBucket(r.bucket_start),
+                            Completed: r.swaps_completed,
+                            Rejected: r.swaps_rejected,
+                            Withdrawn: r.swaps_cancelled,
+                            'Completion %': r.swap_completion_rate,
+                        }))}
+                        xKey="bucket"
+                        caption={`Swaps by week, ${period.label}`}
+                        emptyMessage={`No swaps initiated in ${period.label}.`}
+                        series={[
+                            { key: 'Completed',    label: 'Completed',    color: SERIES_COLORS.good,  type: 'bar' },
+                            { key: 'Rejected',     label: 'Rejected',     color: SERIES_COLORS.bad,   type: 'bar' },
+                            { key: 'Withdrawn',    label: 'Withdrawn',    color: SERIES_COLORS.muted, type: 'bar' },
+                            { key: 'Completion %', label: 'Completion %', color: SERIES_COLORS.accent, type: 'line', rightAxis: true, unit: '%' },
+                        ]}
+                    />
+                )}
             </KpiBand>
 
             <KpiBand

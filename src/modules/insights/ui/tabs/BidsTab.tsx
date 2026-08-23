@@ -16,6 +16,9 @@ import { EMPTY_BIDDING_KPIS } from '../../model/bidding-kpis.types';
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
 import { useQuarterlyReport } from '@/modules/users/hooks/usePerformanceMetrics';
+import { useMarketplaceTrend } from '../../hooks/useMarketplaceTrend';
+import { formatBucket } from '../../hooks/useBehaviourTrend';
+import { KpiTrendChart, SERIES_COLORS } from '../components/KpiTrendChart';
 import { KpiDetailTable } from '../components/KpiDetailTable';
 import { KpiBand, KpiTileGrid, CountStrip } from '../components/KpiBand';
 import type { ScopeSelection } from '@/platform/auth/types';
@@ -39,6 +42,7 @@ export default function BidsTab({ filters, scope }: BidsTabProps) {
     // Per-employee detail. Same query key as every other tab and the Overview
     // report, so React Query serves one request no matter how many tabs read it.
     const report = useQuarterlyReport(period.year, period.quarter, scope);
+    const trend = useMarketplaceTrend(period.startDate, period.endDate, scope);
 
     if (current.isError) {
         return (
@@ -133,6 +137,39 @@ export default function BidsTab({ filters, scope }: BidsTabProps) {
                         loading={loading}
                     />
                 </KpiTileGrid>
+            </KpiBand>
+
+            <KpiBand
+                title="How bidding moved"
+                description="Open shifts published each week against the share that found a winner. A dip in awards with flat supply is a demand problem; a dip in both is not."
+            >
+                {trend.isError ? (
+                    <PageState
+                        state="error"
+                        scope="inline"
+                        title="Couldn't load the bidding trend"
+                        onRetry={() => trend.refetch()}
+                    />
+                ) : trend.isLoading ? (
+                    <Skeleton className="h-[280px] w-full" />
+                ) : (
+                    <KpiTrendChart
+                        data={(trend.data ?? []).map((r) => ({
+                            bucket: formatBucket(r.bucket_start),
+                            'Open shifts': r.open_shifts,
+                            'Bids placed': r.bids_placed,
+                            'Award rate': r.award_rate,
+                        }))}
+                        xKey="bucket"
+                        caption={`Bidding by week, ${period.label}`}
+                        emptyMessage={`No open shifts in ${period.label}.`}
+                        series={[
+                            { key: 'Open shifts', label: 'Open shifts', color: SERIES_COLORS.primary, type: 'bar' },
+                            { key: 'Bids placed', label: 'Bids placed', color: SERIES_COLORS.muted,   type: 'bar' },
+                            { key: 'Award rate',  label: 'Award rate',  color: SERIES_COLORS.good,    type: 'line', rightAxis: true, unit: '%' },
+                        ]}
+                    />
+                )}
             </KpiBand>
 
             <KpiBand title="Volume" description="The counts behind the rates above.">
