@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   Megaphone,
   BarChart3,
+  TrendingUp,
   Grid3x3,
   Users,
   ShieldCheck,
@@ -111,7 +112,9 @@ const toolMoreItems: MoreNavItem[] = [
   { label: "Timesheets", Icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
   { label: "Templates", Icon: LayoutTemplate, path: "/templates", requiredPermission: "templates" },
   { label: "Broadcast", Icon: Megaphone, path: "/broadcast", requiredPermission: "broadcast" },
-  { label: "Insights", Icon: BarChart3, path: "/insights", requiredPermission: "insights" },
+  { label: "KPI", Icon: BarChart3, path: "/insights", requiredPermission: "insights" },
+  // Employee-facing: everyone sees their own numbers, so no permission gate.
+  { label: "Performance", Icon: TrendingUp, path: "/performance" },
   // Replaced the old "Grid" entry. Same matrix, now inside the Availability
   // Manager and with a phone composition, so it is allowlisted again.
   // `requiredPermission` takes one value; the route itself admits `insights`

@@ -89,6 +89,9 @@ export const useAuth = () => {
       'my-swaps': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
       'my-broadcasts': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
       profile: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      // Employee-facing KPI page. Every level sees their OWN numbers;
+      // the managerial roll-up lives behind `insights` (gamma+).
+      performance: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
 
       // Beta and above
       'timesheet-view': ['beta', 'gamma', 'delta', 'epsilon', 'zeta'],

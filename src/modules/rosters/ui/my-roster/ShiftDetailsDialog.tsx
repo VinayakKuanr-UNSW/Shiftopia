@@ -316,9 +316,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const handleDropShift = () => setIsCancelConfirmOpen(true);
   const handleSwapShift = () => setIsSwapModalOpen(true);
 
-  const confirmDrop = async (reason: string) => {
-    if (!reason.trim()) {
-      toast({ title: 'Reason Required', description: 'Please provide a reason for dropping this shift.', variant: 'destructive' });
+  const confirmDrop = async (note: string, reasonCode: string) => {
+    if (!reasonCode) {
+      toast({ title: 'Reason Required', description: 'Please choose a reason for dropping this shift.', variant: 'destructive' });
       return;
     }
     if (isWithinLockoutPeriod) {
@@ -326,7 +326,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
       return;
     }
     dropShiftMutation.mutate(
-      { shiftId: shift.id, reason: reason.trim() },
+      { shiftId: shift.id, reason: note.trim(), reasonCode },
       {
         onSuccess: () => {
           toast({ title: 'Shift Dropped', description: 'You have successfully dropped this shift. It is now available for bidding.' });

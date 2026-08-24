@@ -1056,8 +1056,8 @@ export function useDropShift() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shiftId, reason }: { shiftId: string; reason: string }) =>
-      shiftsCommands.employeeDropShift(shiftId, reason),
+    mutationFn: ({ shiftId, reason, reasonCode }: { shiftId: string; reason: string; reasonCode?: string }) =>
+      shiftsCommands.employeeDropShift(shiftId, reason, reasonCode),
 
     onMutate: async ({ shiftId }) => {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });

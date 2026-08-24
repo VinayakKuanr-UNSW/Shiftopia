@@ -26,6 +26,7 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   '/my-swaps',
   '/my-broadcasts',
   '/my-notifications',
+  '/performance',
   // Both leave routes render LeavePage, which is inside this guard. They were
   // never allowlisted, so the bottom nav's Leave button landed on the
   // "Desktop Only" screen on every phone.
@@ -56,7 +57,7 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
 
 const DESKTOP_FEATURES = [
   { icon: Layout,   label: 'Roster Planner',    desc: 'Drag-and-drop scheduling across teams' },
-  { icon: BarChart3, label: 'Insights & Analytics', desc: 'Rich charts and workforce reports' },
+  { icon: BarChart3, label: 'KPI Dashboard', desc: 'Attendance, bids, swaps & cancellations' },
   { icon: Users,    label: 'Team Management',   desc: 'Contracts, permissions, and user admin' },
   { icon: Settings, label: 'Configuration',     desc: 'Org settings, templates, and integrations' },
 ];

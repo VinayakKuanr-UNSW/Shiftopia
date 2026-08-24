@@ -49,6 +49,9 @@ const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/Br
 
 // Features
 const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage.tsx'));
+// Employee-facing half of the KPI split — every access level sees their own
+// numbers. The managerial roll-up is /insights, gated on `insights`.
+const PerformancePage = lazy(() => import('@/modules/insights/pages/PerformancePage.tsx'));
 const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage.tsx'));
 const ComplianceRejectionsPage = lazy(() => import('@/modules/compliance/ui/pages/RejectionsPage.tsx'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage.tsx'));
@@ -166,6 +169,7 @@ const AppRouter: React.FC = () => {
                     <Route path="/my-bids" element={<EmployeeBidsPage />} />
                     <Route path="/my-swaps" element={<EmployeeSwapsPage />} />
                     <Route path="/my-notifications" element={<MyNotificationsPage />} />
+                    <Route path="/performance" element={<PerformancePage />} />
                     <Route path="/my-leave" element={<LeavePage />} />
 
                     <Route element={<FeatureGate feature="my-broadcasts" />}>

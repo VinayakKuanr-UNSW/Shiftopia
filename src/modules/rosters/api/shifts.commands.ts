@@ -1188,10 +1188,21 @@ export const shiftsCommands = {
      * - 4-24h before start: on_bidding_urgent (S6)
      * - <4h before start: Blocked (RPC returns success=false with error message)
      */
-    async employeeDropShift(shiftId: string, reason?: string) {
+    /**
+     * `reasonCode` is a code from `cancellation_reasons`; `reason` is the
+     * optional free-text note. Both are persisted onto the CANCELLED /
+     * LATE_CANCELLED shift_event the RPC writes — before migration
+     * 20260823090200 the reason was accepted and silently discarded.
+     */
+    async employeeDropShift(shiftId: string, reason?: string, reasonCode?: string) {
         const result = await callAuthenticatedRpc(
             'sm_employee_drop_shift',
-            (userId) => ({ p_shift_id: shiftId, p_employee_id: userId, p_reason: reason ?? 'Employee dropped shift' }),
+            (userId) => ({
+                p_shift_id: shiftId,
+                p_employee_id: userId,
+                p_reason: reason ?? null,
+                p_reason_code: reasonCode ?? null,
+            }),
             EmployeeDropResponseSchema,
         );
 

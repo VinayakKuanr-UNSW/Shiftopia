@@ -1,98 +1,11 @@
-export type MetricId =
-    | "SHIFT_FILL_RATE"
-    | "EMPLOYEE_UTILIZATION"
-    | "NO_SHOW_RATE"
-    | "PUNCTUALITY_RATE"
-    | "UNDERUTILIZED_STAFF_COUNT"
-    | "SHIFT_DEMAND"
-    | "SHIFT_SUPPLY"
-    | "ROLE_COVERAGE"
-    | "EVENT_CONFLICTS"
-    | "LABOUR_COST"
-    | "BUDGET_ADHERENCE";
-
-export interface MetricDefinition {
-    id: MetricId;
-    label: string;
-    description: string;
-    unit: "%" | "hours" | "count" | "currency" | "string";
-}
-
-export const METRIC_DEFINITIONS: Record<MetricId, MetricDefinition> = {
-    SHIFT_FILL_RATE: {
-        id: "SHIFT_FILL_RATE",
-        label: "Shift Fill Rate",
-        description: "Percentage of planned shifts filled",
-        unit: "%",
-    },
-    EMPLOYEE_UTILIZATION: {
-        id: "EMPLOYEE_UTILIZATION",
-        label: "Employee Utilization",
-        description: "Rostered vs. available hours",
-        unit: "%",
-    },
-    NO_SHOW_RATE: {
-        id: "NO_SHOW_RATE",
-        label: "No-show Rate",
-        description: "Missed shifts/assignments",
-        unit: "%",
-    },
-    PUNCTUALITY_RATE: {
-        id: "PUNCTUALITY_RATE",
-        label: "Punctuality",
-        description: "Late start and early finish irregularities",
-        unit: "count",
-    },
-    UNDERUTILIZED_STAFF_COUNT: {
-        id: "UNDERUTILIZED_STAFF_COUNT",
-        label: "Underutilized Staff",
-        description: "Number of staff consistently not rostered",
-        unit: "count",
-    },
-    SHIFT_DEMAND: {
-        id: "SHIFT_DEMAND",
-        label: "Shift Demand",
-        description: "Required number of shifts",
-        unit: "count",
-    },
-    SHIFT_SUPPLY: {
-        id: "SHIFT_SUPPLY",
-        label: "Shift Supply",
-        description: "Available staff count",
-        unit: "count",
-    },
-    ROLE_COVERAGE: {
-        id: "ROLE_COVERAGE",
-        label: "Role Coverage",
-        description: "Percentage of critical roles filled",
-        unit: "%",
-    },
-    EVENT_CONFLICTS: {
-        id: "EVENT_CONFLICTS",
-        label: "Event Conflicts",
-        description: "Number of overlapping event conflicts",
-        unit: "count",
-    },
-    LABOUR_COST: {
-        id: "LABOUR_COST",
-        label: "Labour Cost",
-        description: "Total estimated labour cost",
-        unit: "currency",
-    },
-    BUDGET_ADHERENCE: {
-        id: "BUDGET_ADHERENCE",
-        label: "Budget Adherence",
-        description: "Actual vs. budgeted cost",
-        unit: "%",
-    },
-};
-
-export interface MetricValue {
-    metricId: MetricId;
-    value: string | number;
-    timestamp: string;
-    trend?: "up" | "down" | "stable";
-}
+/**
+ * Shapes returned by the insights RPCs.
+ *
+ * The 11-entry MetricId union and METRIC_DEFINITIONS that used to head this
+ * file are gone: metric-registry.ts superseded them, and keeping a second
+ * catalogue of metric names alongside it was how "one metric, two
+ * definitions" kept happening. The registry is the only catalogue.
+ */
 
 // ── Real analytics types ──────────────────────────────────────────────────────
 
@@ -104,7 +17,18 @@ export interface InsightsFilters {
     subdeptIds?: string[];
 }
 
-/** Returned by get_insights_summary RPC */
+/**
+ * Returned by get_insights_summary RPC.
+ *
+ * Four fields were removed in migration 20260823090000 because none of them
+ * described anything real:
+ *   compliance_failures    — the RPC returned the literal 0
+ *   last_minute_changes    — was the SAME value as shifts_emergency
+ *   avg_reliability_score  — averaged employee_performance_metrics, a snapshot
+ *   avg_swap_rate            table last written 2026-07-30 by a Refresh button
+ *                            that no longer exists
+ * The live reliability/swap figures come from get_quarterly_performance_report.
+ */
 export interface InsightsSummary {
     shifts_total: number;
     shifts_published: number;
@@ -116,13 +40,10 @@ export interface InsightsSummary {
     shifts_emergency: number;
     scheduled_hours: number;
     estimated_cost: number;
+    /** assigned / shifts_total. Label the denominator as TOTAL, not published. */
     shift_fill_rate: number;
-    last_minute_changes: number;
-    compliance_failures: number;
     compliance_overrides: number;
     no_show_rate: number;
-    avg_reliability_score: number;
-    avg_swap_rate: number;
 }
 
 /** One row from get_insights_trend RPC — one dept per day */
@@ -154,5 +75,9 @@ export interface DeptBreakdownRow {
     emergency_count: number;
 }
 
-/** Date-range preset labels */
-export type DatePreset = "THIS_WEEK" | "THIS_MONTH" | "LAST_30" | "LAST_90" | "CUSTOM";
+/**
+ * Date-range presets. Retired with useDateRange when the KPI surface went
+ * quarter-only: the presets derived "today" from the device clock, so a
+ * manager overseas got a different week than the roster used. Quarter
+ * boundaries now come from the Sydney-anchored getCurrentQuarter().
+ */

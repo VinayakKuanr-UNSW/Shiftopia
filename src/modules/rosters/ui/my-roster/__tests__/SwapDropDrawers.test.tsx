@@ -21,6 +21,19 @@ vi.mock('@/modules/planning', () => ({
   }),
 }));
 
+// The drop drawer reads the seeded reason catalogue. Mocked here so the test
+// exercises the picker without a QueryClient.
+vi.mock('@/modules/insights/hooks/useCancellationReasons', () => ({
+  useCancellationReasons: vi.fn().mockReturnValue({
+    isLoading: false,
+    data: [
+      { code: 'ILLNESS', label: 'Illness', description: null, requires_note: false, sort_order: 10 },
+      { code: 'TRANSPORT', label: 'Transport problem', description: null, requires_note: false, sort_order: 40 },
+      { code: 'OTHER', label: 'Other', description: null, requires_note: true, sort_order: 999 },
+    ],
+  }),
+}));
+
 vi.mock('@/modules/core/hooks/use-toast', () => ({
   useToast: vi.fn().mockReturnValue({
     toast: vi.fn(),
@@ -54,10 +67,9 @@ describe('Swap and Drop Bottom Sheet Drawers', () => {
   } as any;
 
   describe('DropShiftDrawer', () => {
-    it('renders the compact shift card, rules, reason input, and accessible actions', () => {
+    const renderDrawer = (overrides: Record<string, unknown> = {}) => {
       const onClose = vi.fn();
       const onConfirmDrop = vi.fn();
-
       render(
         <DropShiftDrawer
           isOpen={true}
@@ -69,10 +81,15 @@ describe('Swap and Drop Bottom Sheet Drawers', () => {
           isWithinLockoutPeriod={false}
           onConfirmDrop={onConfirmDrop}
           isDropping={false}
+          {...overrides}
         />
       );
+      return { onClose, onConfirmDrop };
+    };
 
-      // Drawer Title
+    it('renders the compact shift card, rules and accessible actions', () => {
+      const { onClose } = renderDrawer();
+
       expect(screen.getByText('Drop Shift Assignment')).toBeInTheDocument();
 
       // Compact Shift Card elements
@@ -86,26 +103,60 @@ describe('Swap and Drop Bottom Sheet Drawers', () => {
       expect(screen.getByText('Drop Rules & Guidelines')).toBeInTheDocument();
       expect(screen.getByText(/Dropped shifts return to the open marketplace/)).toBeInTheDocument();
 
-      // Reason input
-      const reasonInput = screen.getByLabelText(/Reason for Drop/);
-      expect(reasonInput).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Keep Shift' }));
+      expect(onClose).toHaveBeenCalled();
+    });
 
-      // Action Buttons
-      const keepBtn = screen.getByRole('button', { name: 'Keep Shift' });
+    it('offers the seeded reasons as a radio group', () => {
+      renderDrawer();
+      const group = screen.getByRole('radiogroup', { name: /Reason for dropping this shift/ });
+      expect(group).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Illness' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Transport problem' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Other' })).toBeInTheDocument();
+    });
+
+    it('requires a reason to be chosen before the drop can be confirmed', () => {
+      const { onConfirmDrop } = renderDrawer();
       const dropBtn = screen.getByRole('button', { name: 'Confirm Drop' });
-      expect(keepBtn).toBeInTheDocument();
+
+      // A typed note alone is not enough — the structured code is what the
+      // manager dashboard aggregates.
+      fireEvent.change(screen.getByLabelText(/Anything to add/), { target: { value: 'car broke down' } });
       expect(dropBtn).toBeDisabled();
 
-      // Enter reason and confirm
-      fireEvent.change(reasonInput, { target: { value: 'Unable to attend due to family commitment' } });
+      fireEvent.click(screen.getByRole('radio', { name: 'Transport problem' }));
       expect(dropBtn).toBeEnabled();
 
       fireEvent.click(dropBtn);
-      expect(onConfirmDrop).toHaveBeenCalledWith('Unable to attend due to family commitment');
+      expect(onConfirmDrop).toHaveBeenCalledWith('car broke down', 'TRANSPORT');
+    });
 
-      // Dismiss with Keep Shift
-      fireEvent.click(keepBtn);
-      expect(onClose).toHaveBeenCalled();
+    it('sends the code with an empty note when no note is typed', () => {
+      const { onConfirmDrop } = renderDrawer();
+      fireEvent.click(screen.getByRole('radio', { name: 'Illness' }));
+
+      const dropBtn = screen.getByRole('button', { name: 'Confirm Drop' });
+      expect(dropBtn).toBeEnabled();
+      fireEvent.click(dropBtn);
+      expect(onConfirmDrop).toHaveBeenCalledWith('', 'ILLNESS');
+    });
+
+    it('demands a note only for a reason that requires one', () => {
+      const { onConfirmDrop } = renderDrawer();
+      const dropBtn = screen.getByRole('button', { name: 'Confirm Drop' });
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Other' }));
+      expect(dropBtn).toBeDisabled();
+
+      // Whitespace is not a note.
+      fireEvent.change(screen.getByLabelText(/Tell us more/), { target: { value: '   ' } });
+      expect(dropBtn).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText(/Tell us more/), { target: { value: 'jury duty' } });
+      expect(dropBtn).toBeEnabled();
+      fireEvent.click(dropBtn);
+      expect(onConfirmDrop).toHaveBeenCalledWith('jury duty', 'OTHER');
     });
   });
 

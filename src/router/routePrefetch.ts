@@ -43,6 +43,7 @@ const routeImporters: Record<string, () => Promise<unknown>> = {
 
   // ── Insights ──
   '/insights':           () => import('@/modules/insights/pages/InsightsPage.tsx'),
+  '/performance':        () => import('@/modules/insights/pages/PerformancePage.tsx'),
 
   // ── Other ──
   '/compliance/rejections': () => import('@/modules/compliance/ui/pages/RejectionsPage.tsx'),
