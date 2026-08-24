@@ -32,11 +32,11 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 **Note:** `src/modules/auth/contexts/AuthContext.tsx` defines a second, near-duplicate `Role`/`AuthContext` explicitly labeled `// DEBUG VERSION` — confirmed unused (nothing imports it). Dead code.
 
 ### 2.2 `availability`
-**Purpose:** Employees declare recurring/one-off availability windows and reserve-list opt-in, consumed downstream by scheduling/compliance when assigning shifts.
+**Purpose:** Employees declare recurring/one-off availability windows, consumed downstream by scheduling/compliance when assigning shifts.
 **Structure:** `api/`, `layout/` (responsive desktop/tablet/mobile), `model/`, `pages/`, `state/`, `ui/{calendar,form,header,list,modals,navigation,panes}`, `utils/`.
 **Entry points:** `pages/AvailabilityPage.tsx`, `ui/AvailabilityScreen.tsx`, `api/availability.service.ts`, `state/useAvailability.ts`.
 **DB:** `availability_rules`, `availability_slots`, `shifts` (read-only, for assigned-shift overlay). No RPCs.
-**Depends on:** `core`, `reserve-list` (opt-in toggle).
+**Depends on:** `core`.
 **Core types:** `AvailabilityRule`, `AvailabilitySlot`, `RepeatType`, `AvailabilityStatus`.
 
 ### 2.3 `broadcasts`
@@ -96,23 +96,15 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 **Depends on:** `rosters` (shift entities), `compliance` (V8 orchestrator + `swap-engine`, which physically lives inside `compliance/v8/swap-engine/` — planning only consumes it), `availability`, `payroll`, `core`.
 **Core types:** `PlanningRequest(Status|Type)` (`OPEN→MANAGER_PENDING→APPROVED/REJECTED/BLOCKED/CANCELLED/EXPIRED`), `BidComplianceSnapshot`/`SwapComplianceSnapshot`, `Bid(Status)`, `SwapRequest(Status)`.
 
-### 2.10 `reserve-list`
-**Purpose:** Lets managers instantly find and assign a qualified, available, compliant "reserve" employee to an unfilled/emergency shift — a fast-path staffing tool layered on existing eligibility/availability/compliance subsystems, not a new engine.
-**Structure:** Flat and small — `api/`, `model/`, `state/`, `ui/`.
-**Entry points:** `api/reserveList.api.ts` (`getReserveListCandidates`, `assignFromReserveList`), `ui/ReserveListPanel.tsx` (manager-only overlay, mounted once in `RostersPlannerPage`).
-**DB:** `availability_slots`, `profiles`, `roles`. RPCs (via a `callRpc` wrapper): `check_shift_overlap`, `sm_apply_shift_op` (assign, then publish).
-**Depends on:** `rosters` (`EligibilityService`, `compliance.service`), `core`.
-**Core types:** `ReserveListCandidate`, `ReserveListAssignResult(FailureReason)`.
-
-### 2.11 `rosters`
+### 2.10 `rosters`
 **Purpose:** The core scheduling module — creating, structuring, publishing, and mutating rosters and shifts (groups/subgroups, templates, bulk assignment, cost/fairness projections, attendance, labor-demand forecasting). The largest and most heavily-depended-upon module.
 **Structure:** Full DDD layering — `domain/` (commands/queries/policies/projections with cache/pipeline/projectors/worker/cost), `bulk-assignment/` (engine + tests), `api/`, `services/`, `state/`, `hooks/`, `infra/`, `contexts/`, `model/`, `pages/`, `ui/` (dialogs, modes, my-roster, presence, views), `utils/`.
 **Entry points:** `pages/RostersPlannerPage.tsx`, `MyRosterPage.tsx`, `AttendancePage.tsx`, `LaborDemandForecastingPage.tsx`, `ShiftFormPage.tsx`; `bulk-assignment/bulk-assignment.controller.ts` + `engine/assignment-committer.ts` (consumed by `scheduling`'s auto-scheduler); `services/compliance.service.ts`, `eligibility.service.ts`.
 **DB:** the largest surface of any module — `rosters`, `shifts`, `roster_groups/subgroups/templates`, `template_shifts`, `shift_templates`, `shift_subgroups`, `shift_events`, `shift_bids`, `demand_forecasts/rules/templates/tensor`, `autoschedule_sessions`, `synthesis_runs`, `fairness_ledger`, `supervisor_feedback`, `availability_rules/slots`, `leave_requests`, `employee_licenses`, `licenses`, `skills`, `remuneration_levels`, `user_contracts`, `work_rules`, `departments`, `organizations`, `profiles`, `roles`, `events`, `venueops_events`, `v_template_full`. RPCs: `sm_apply_shift_op`, `sm_move_shift`, `sm_unassign_shift`, `sm_emergency_assign`, `sm_expire_offer_now`, `get_shift_lifecycle`, `add_roster_subgroup_range`, `toggle_roster_lock_for_range`, plus `sm_create_shift`, `check_in_shift`, `sm_clock_out_shift`.
-**Depends on:** `planning`, `reserve-list`, `templates`, `timesheets`, `users`, `settings`, `availability`, `compliance`, `payroll`, `core` — the most-depended-upon module in the codebase.
+**Depends on:** `planning`, `templates`, `timesheets`, `users`, `settings`, `availability`, `compliance`, `payroll`, `core` — the most-depended-upon module in the codebase.
 **Core types:** `Shift`, `Roster`, `LifecycleStatus`/`ShiftFlag`, `RosterAssignment`, `AssignmentStatus`.
 
-### 2.12 `scheduling`
+### 2.11 `scheduling`
 **Purpose:** Automated, AI-assisted shift-filling — a two-layer pipeline sending unassigned shifts/employees to an OR-Tools CP-SAT optimizer microservice for proposed assignments, validated through the compliance engine before a manager commits.
 **Structure:** `audit/`, `data/`, `optimizer/`, `ui/`. No `domain/`/`api/`/`pages/` — logic centers on the controller file.
 **Entry points:** `auto-scheduler.controller.ts` (1,479 lines — `.run()` optimize+validate preview, `.commit()` concurrency-rechecked write, falls back to `rosters/bulk-assignment` greedy engine on optimizer failure), `optimizer/optimizer.client.ts`/`solution-parser.ts`, `ui/AutoSchedulerPanel.tsx`/`Modal.tsx`/`Insights.tsx`/`WhyThisPerson.tsx`.
@@ -120,21 +112,21 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 **Depends on:** `rosters` (heavy — bulk-assignment engine, cost/fatigue/fairness projections, fairness-ledger, bidding-urgency), `core`.
 **Core types:** `OptimizeRequest/Response`, `AssignmentProposal`/`ValidatedProposal`, `AutoSchedulerResult`, `PillarScores`/`ParetoAlternative`/`AssignmentRationale`.
 
-### 2.13 `search`
+### 2.12 `search`
 **Purpose:** App-wide global search UI (rosters, templates, timesheets, bids, etc.) — a thin presentation layer with no data-access logic of its own.
 **Structure:** Minimal — `pages/`, `index.ts`.
 **Entry points:** `pages/SearchPage.tsx` — consumes `useSearch()` from `core/contexts/SearchContext`.
 **DB:** None directly — delegated to `core`'s `SearchContext`.
 **Depends on:** `core` only.
 
-### 2.14 `settings`
+### 2.13 `settings`
 **Purpose:** User/org-level preferences (appearance/theme, locale, notifications, account) plus an embedded pay-rate administration panel for org admins.
 **Structure:** Small — `hooks/`, `pages/`, `ui/components/`.
 **Entry points:** `pages/SettingsPage.tsx` (tabs), `hooks/useSettings.ts`.
 **DB:** `organizations`, `profiles`.
 **Depends on:** `payroll` (embeds `PayRatesSettings`), `core`.
 
-### 2.15 `templates`
+### 2.14 `templates`
 **Purpose:** Reusable roster templates (recurring shift patterns per department/subgroup), capturable from a live roster, versioned, and published to generate future rosters in bulk.
 **Structure:** `api/`, `hooks/` (+queries), `model/`, `pages/`, `state/`, `ui/` (editor, dialogs), `utils/`.
 **Entry points:** `pages/TemplatesPage.tsx`, `api/templates.service.ts`, `state/useTemplateEditor.ts` (+legacy `useTemplates`).
@@ -142,7 +134,7 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 **Depends on:** `rosters` (`Shift` type), `users`, `core`.
 **Core types:** `Template`, `TemplateShift`, `Group`/`SubGroup`, `TemplateBatch`, `SaveTemplateInput/Result`.
 
-### 2.16 `timesheets`
+### 2.15 `timesheets`
 **Purpose:** Tracks actual worked time against scheduled shifts, supports approval workflow and an audit trail, feeding payroll.
 **Structure:** `api/`, `domain/`, `model/`, `state/`, `ui/components/`.
 **Entry points:** `ui/TimesheetPage.tsx`; `api/timesheets.{read,write,supabase}.api.ts`; `state/TimesheetContext.tsx` + `timesheet.hooks.ts`.
@@ -150,7 +142,7 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 **Depends on:** `rosters`, `planning`, `payroll`, `core`.
 **Core types:** `Timesheet(Status)`, `TimesheetRow`/`Entry`.
 
-### 2.17 `users`
+### 2.16 `users`
 **Purpose:** Employee/user profiles, contracts, roles, skills, licenses, and performance — the HR/org-structure system of record other modules reference for eligibility and identity.
 **Structure:** `api/`, `domain/` (`casualConversion.ts`, `swsTrial.ts` — business-rule calculators), `hooks/`, `model/`, `pages/`, `ui/`.
 **Entry points:** `pages/UsersPage.tsx` (admin roster), `pages/ProfilePage.tsx`, `api/employee.service.ts`.
