@@ -315,7 +315,9 @@ export const swapsApi = {
                     swap_with:profiles!target_id(*)
                 ),
                 offered_shift:shifts!offered_shift_id(
-                    id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes, lifecycle_status, group_type,
+                    id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
+                    scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
+                    target_employment_type, remuneration_rate, remuneration_level,
                     roles(name),
                     remuneration_levels(hourly_rate_min),
                     departments(name),
@@ -586,7 +588,9 @@ export const swapsApi = {
                 *,
                 offerer:profiles!offerer_id(*),
                 offered_shift:shifts!offered_shift_id(
-                    id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes, lifecycle_status, group_type,
+                    id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
+                    scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
+                    target_employment_type, remuneration_rate, remuneration_level,
                     roles(name),
                     remuneration_levels(hourly_rate_min),
                     departments(name),
@@ -656,7 +660,10 @@ export const swapsApi = {
                     offered_shift_id,
                     offerer_id,
                     offered_shift:shifts!offered_shift_id(
-                        id, shift_date, start_time, end_time, unpaid_break_minutes, lifecycle_status, group_type,
+                        id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes,
+                        net_length_minutes, scheduled_length_minutes, is_overnight, is_training, sub_group_name,
+                        lifecycle_status, group_type,
+                        target_employment_type, remuneration_rate, remuneration_level,
                         roles(name),
                         departments(name),
                         sub_departments(name),

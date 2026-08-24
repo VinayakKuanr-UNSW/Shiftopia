@@ -94,6 +94,21 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           : undefined;
 
         return {
+          // Spread the raw row FIRST (same idiom as swaps' `mapDbShift`).
+          //
+          // This mapper used to hand-pick its fields, and the ones it did not
+          // pick were gone for good — even though the query is `select('*')`
+          // and the database had already returned them. Three casualties:
+          //   • `target_employment_type` / `remuneration_level` /
+          //     `remuneration_rate` — so the cost engine had nothing to price
+          //     from and fell back to a flat $33.70 default on every card;
+          //   • `sub_group_name` — so `SharedShiftCard`'s Sub-Group cell, which
+          //     reads `shiftData.sub_group_name`, rendered "—" here while My
+          //     Bids (which passes the raw row) showed it correctly.
+          // Keeping the row intact means `shiftData` stays a real shift, and
+          // the camelCase view fields below are additive sugar rather than a
+          // lossy replacement.
+          ...s,
           id: s.id,
           role: s.roles?.name || 'Shift',
           roleId: s.role_id || undefined,

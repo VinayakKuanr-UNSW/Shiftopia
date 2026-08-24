@@ -21,13 +21,7 @@ import { cn } from '@/modules/core/lib/utils';
 
 import type { ManagerBidShift, OpenShift, TimeRemaining } from './types';
 import { formatTimeRemaining } from './utils';
-// `.../utils/cost` resolves to cost.ts — the LEGACY positional-argument
-// variant. This file calls the object-options form, so it must import the
-// barrel explicitly (same as auto-scheduler.controller.ts). Resolution
-// preferring cost.ts over cost/index.ts made this a silent mismatch.
-import { estimateDetailedShiftCost } from '@/modules/rosters/domain/projections/utils/cost/index';
-import type { EarningsLine } from '@/modules/payroll/model/gross-pay.types';
-import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { buildShiftCardPay } from '../../../../ui/components/shift-card-pay';
 
 interface ShiftCardProps {
   /** `group.items` is `ManagerBidShift[]`; this card only reads `group` and
@@ -73,62 +67,14 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   const assignedName = shift.assignedEmployeeName || (shift as any).assigned_employee_name || (shift as any).employeeName;
   const isAssigned = !!(shift.assignedEmployeeId || assignedName);
 
-  const costBreakdown = React.useMemo(() => {
-    try {
-      const detailed = estimateDetailedShiftCost({
-        netMinutes: netMins,
-        start_time: shift.startTime,
-        end_time: shift.endTime,
-        rate: (shift as any).remuneration_rate ?? (shift as any).hourlyRate ?? null,
-        scheduled_length_minutes: durationMins,
-        is_overnight: (shift as any).is_overnight ?? false,
-        is_cancelled: false,
-        shift_date: shift.date,
-        unpaid_break_minutes: shift.unpaidBreak,
-        isSecurityRole: isSecurityRoleName(shift.role),
-      });
-      if (!detailed || !detailed.totalCost) return null;
-
-      const lines: EarningsLine[] = [];
-      if (detailed.ordinaryCost > 0) {
-        lines.push({
-          code: 'ordinary',
-          description: 'Ordinary Rate',
-          hours: detailed.ordinaryHours,
-          amount: detailed.ordinaryCost,
-        });
-      }
-      if (detailed.overtimeCost > 0) {
-        lines.push({
-          code: 'overtime',
-          description: 'Overtime Rate',
-          hours: detailed.overtimeHours,
-          amount: detailed.overtimeCost,
-        });
-      }
-      if (detailed.penaltyCost > 0) {
-        lines.push({
-          code: 'penalty',
-          description: 'Penalty Rates',
-          amount: detailed.penaltyCost,
-        });
-      }
-      if (detailed.allowanceCost && detailed.allowanceCost > 0) {
-        lines.push({
-          code: 'other_allowance',
-          description: 'Meal Allowance',
-          amount: detailed.allowanceCost,
-        });
-      }
-
-      return {
-        formattedPay: `$${detailed.totalCost.toFixed(2)}`,
-        lines,
-      };
-    } catch {
-      return null;
-    }
-  }, [netMins, durationMins, shift.startTime, shift.endTime, shift.date, shift.unpaidBreak, shift.role, (shift as any).remuneration_rate, (shift as any).hourlyRate]);
+  // Priced through the shared adapter, from the RAW shift row.
+  //
+  // This used to call `estimateDetailedShiftCost` directly with a hand-built
+  // options object that carried no `employmentType` and no
+  // `classificationLevel`, and a `rate` the mapper had already dropped — so
+  // every card in the venue priced at the engine's $33.70 default instead of
+  // the shift's own level and employment target. See `shift-card-pay.ts`.
+  const cardPay = React.useMemo(() => buildShiftCardPay(shift), [shift]);
 
   const footerActions = (
     <div className="flex flex-col gap-2 mt-2 w-full">
@@ -168,8 +114,8 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         subDepartment={shift.subDepartment}
         role={shift.role}
         employeeName={assignedName}
-        estimatedPay={costBreakdown?.formattedPay || (shift as any).estimatedPay || (shift as any).estimated_pay}
-        estimatedPayBreakdown={costBreakdown?.lines}
+        estimatedPay={cardPay.estimatedPay ?? (shift as any).estimatedPay ?? (shift as any).estimated_pay}
+        estimatedPayBreakdown={cardPay.estimatedPayBreakdown}
         shiftDate={shift.date}
         startTime={shift.startTime}
         endTime={shift.endTime}

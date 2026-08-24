@@ -6,9 +6,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
-import { CostBreakdownTooltip } from '@/modules/rosters/ui/my-roster/ShiftDetailsDialog';
+import { buildShiftCardPay } from '../../../ui/components/shift-card-pay';
 import type { ShiftOpportunity } from '../types';
 
 const listItemSpring = {
@@ -165,6 +163,13 @@ export const BidOpportunityCard: React.FC<Props> = ({
 
     const isPast = shiftStart.getTime() < Date.now();
 
+    // Sched. Pay rendered as "—" on every My Bids card: this file imported the
+    // cost engine and then never passed `estimatedPay`, so the estimate was
+    // computed nowhere and shown nowhere. `rawShift` is the full `select('*')`
+    // row from `getOpenBidShifts`, so it already carries everything the engine
+    // needs to price the shift properly.
+    const cardPay = React.useMemo(() => buildShiftCardPay(rawShift), [rawShift]);
+
     return (
         <motion.div key={opp.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
             <SharedShiftCard
@@ -188,6 +193,8 @@ export const BidOpportunityCard: React.FC<Props> = ({
                 isUrgent={opp.isUrgent}
                 isPast={isPast}
                 lifecycleStatus={opp.lifecycleStatus || 'Published'}
+                estimatedPay={cardPay.estimatedPay}
+                estimatedPayBreakdown={cardPay.estimatedPayBreakdown}
                 groupVariant={
                     opp.groupType === 'convention_centre' ? 'convention' :
                     opp.groupType === 'exhibition_centre' ? 'exhibition' :

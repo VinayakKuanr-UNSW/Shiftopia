@@ -36,8 +36,8 @@ const warnedUnclassifiedRoles = new Set<string>();
 export function extractLevel(roleName?: string | null): string | undefined {
   if (!roleName) return undefined;
 
-  // 1. Check for explicit level shorthand L1, L2, etc.
-  const match = roleName.match(/(?:L|Level\s*)(\d)/i);
+  // 1. Check for explicit level shorthand L1, L2, TM1..7, etc.
+  const match = roleName.match(/(?:L|Level\s*|TM\s*)(\d)/i);
   if (match) return `LEVEL_${match[1]}`;
 
   // 2. Trainee detection (Maps to WAGE_RATES.TRAINEE)
