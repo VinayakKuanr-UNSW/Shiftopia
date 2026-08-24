@@ -200,12 +200,19 @@ export interface ShiftFormDrawerContentProps {
     isEmployeeLocked?: boolean;
     isScheduleDefined: boolean;
 
-    /** Active wizard step (1 Details · 2 Assignment · 3 Compliance) */
-    currentStep: number;
-    /** Jump to a step (used by the in-drawer stepper rail) */
+    /** Active wizard step (1..5) */
+    currentStep?: number;
+    /** Jump to a step (used by the top tabs / stepper) */
     onStepChange?: (step: number) => void;
     /** Which steps the user has completed (for the stepper checkmarks) */
     completedSteps?: Set<number>;
+
+    // Form actions & submission status
+    onCancel?: () => void;
+    onSubmit?: (values: any) => void;
+    canSave?: boolean;
+    isLoading?: boolean;
+    saveBlockReason?: string | null;
 }
 
 /**
