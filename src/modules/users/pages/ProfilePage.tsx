@@ -26,6 +26,13 @@ import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHea
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { motion, type Variants } from 'framer-motion';
+import {
+  usePerformanceMetrics,
+  getCurrentQuarter,
+  type EmployeeMetricsSnapshot,
+} from '@/modules/users/hooks/usePerformanceMetrics';
+import { statusFor, formatMetric, METRIC_REGISTRY } from '@/modules/insights/model/metric-registry';
+import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 
 // ── Motion variants ────────────────────────────────────────────────────────────
 const pageVariants: Variants = {
@@ -98,7 +105,7 @@ const ProfilePage: React.FC = () => {
                 isDark ? "bg-[#111827]/60" : "bg-white shadow-sm border border-slate-200/50"
               )}>
                 <Mail className="h-4 w-4 text-primary" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
                   {user?.email}
                 </span>
               </div>
@@ -109,7 +116,7 @@ const ProfilePage: React.FC = () => {
               <Button
                 onClick={() => setIsEditing(!isEditing)}
                 className={cn(
-                  "flex-shrink-0 gap-2 h-10 lg:h-11 px-6 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all shadow-sm",
+                  "flex-shrink-0 gap-2 h-10 lg:h-11 px-6 rounded-xl font-bold uppercase text-[11px] tracking-wider transition-all shadow-sm",
                   isDark 
                     ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20" 
                     : "bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100"
@@ -230,7 +237,7 @@ const ProfilePage: React.FC = () => {
                 >
                   <div className="space-y-6">
                     <div>
-                      <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-muted-foreground mb-2">
+                      <div className="font-mono uppercase tracking-[0.2em] text-[11px] text-muted-foreground mb-2">
                         Personal Information
                       </div>
                       <div className="space-y-2 text-foreground">
@@ -242,7 +249,7 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     <div>
-                      <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-muted-foreground mb-2">
+                      <div className="font-mono uppercase tracking-[0.2em] text-[11px] text-muted-foreground mb-2">
                         Account Details
                       </div>
                       <div className="space-y-2 text-foreground">
@@ -258,15 +265,9 @@ const ProfilePage: React.FC = () => {
               </div>
             )}
 
-            {/* ACTIVITY — real numbers live on /performance.
-                What stood here was twelve hardcoded literals: monthlyStats =
-                { offered: 40, accepted: 32, rejected: 8, swapped: {2,1},
-                  cancelled: {4,2,1}, bidded: {3,1} }. Every figure in the
-                Shift Activity, Trading, Cancellations and Bidding panels was
-                invented, including the derived "success rate" percentage.
-                Rather than migrate fiction into the KPI work, the panels are
-                replaced by a link to the page that computes them for real from
-                get_employee_quarterly_performance. */}
+            {/* ACTIVITY — live numbers from get_employee_quarterly_performance via usePerformanceMetrics */}
+            <ProfilePerformanceSection userId={user?.id} />
+
             <motion.div variants={itemVariants} className="mt-8">
               <Link
                 to="/performance"
@@ -286,10 +287,94 @@ const ProfilePage: React.FC = () => {
                 <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
               </Link>
             </motion.div>
-
           </CardContent>
         </div>
       </div>
+    </motion.div>
+  );
+};
+
+/**
+ * A four-tile snapshot of the signed-in person's own quarter, linking to the
+ * full scorecard on /performance.
+ *
+ * Grades through `statusFor` rather than inline comparisons. The first draft of
+ * this section hard-coded its own bands and got punctuality wrong — 90/75 here
+ * against the registry's 95/85 — which would have made this the sixth rival
+ * threshold table in the codebase, three commits after the other five were
+ * consolidated. It also imported statusFor and formatMetric without using them.
+ *
+ * Reading the registry means this snapshot, the Performance page and the
+ * manager's KPI dashboard cannot disagree about whether a number is healthy.
+ */
+const PROFILE_TILES = [
+    {
+        metricId: 'shifts_worked',
+        label: 'Shifts worked',
+        value: (m: EmployeeMetricsSnapshot) => m.shifts_worked,
+        denominator: (m: EmployeeMetricsSnapshot) => `${m.shifts_assigned} assigned`,
+    },
+    {
+        metricId: 'punctuality_rate',
+        label: 'Attendance',
+        value: (m: EmployeeMetricsSnapshot) => m.punctuality_rate,
+        denominator: () => 'On time in and out',
+    },
+    {
+        metricId: 'reliability_score',
+        label: 'Reliability',
+        value: (m: EmployeeMetricsSnapshot) => m.reliability_score,
+        denominator: () => 'Composite score',
+    },
+    {
+        metricId: 'acceptance_rate',
+        label: 'Offer accept',
+        value: (m: EmployeeMetricsSnapshot) => m.acceptance_rate,
+        denominator: (m: EmployeeMetricsSnapshot) => `${m.shifts_accepted} of ${m.total_offers} offers`,
+    },
+] as const;
+
+const ProfilePerformanceSection: React.FC<{ userId?: string }> = ({ userId }) => {
+  const { year, quarter } = getCurrentQuarter();
+  const { data, isLoading } = usePerformanceMetrics(userId || '', `Q${quarter}_${year}`);
+
+  return (
+    <motion.div variants={itemVariants} className="mt-8 space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-bold tracking-tight text-foreground">Performance overview</h3>
+          <p className="text-xs text-muted-foreground">Live snapshot for Q{quarter} {year}</p>
+        </div>
+        <Link
+          to="/performance"
+          className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        >
+          Detailed scorecard <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      {!isLoading && !data ? (
+        <div className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+          No shifts worked or recorded in Q{quarter} {year} yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {PROFILE_TILES.map((tile) => {
+            const raw = data ? tile.value(data) : undefined;
+            return (
+              <KpiTile
+                key={tile.metricId}
+                label={tile.label}
+                value={isLoading || raw === undefined ? null : formatMetric(tile.metricId, raw)}
+                status={statusFor(tile.metricId, raw ?? Number.NaN)}
+                denominator={data ? tile.denominator(data) : undefined}
+                tooltip={METRIC_REGISTRY[tile.metricId]?.description}
+                loading={isLoading}
+              />
+            );
+          })}
+        </div>
+      )}
     </motion.div>
   );
 };
