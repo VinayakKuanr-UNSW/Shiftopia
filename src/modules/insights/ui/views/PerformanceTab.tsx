@@ -9,6 +9,8 @@ import {
 import type { ScopeSelection } from '@/platform/auth/types';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
+import { PerformanceReportCards } from '@/modules/users/ui/components/PerformanceReportCards';
 import {
     Tooltip,
     TooltipContent,
@@ -87,6 +89,10 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
     const [searchTerm, setSearchTerm] = useState('');
     const { isDark } = useTheme();
     const { t } = useTranslation();
+    // A 28-column table needs two-dimensional scrolling at 320px, which
+    // SC 1.4.10 forbids. PerformanceReportCards is the card composition of the
+    // same rows and columns — it existed with zero importers until now.
+    const isMobile = useIsMobile();
 
     const row1Ref = React.useRef<HTMLTableRowElement>(null);
     const [row1Height, setRow1Height] = useState(29);
@@ -245,7 +251,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                     )}
                                 >
                                     <div className="flex items-center justify-between mb-1.5">
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-60">{s.label}</p>
+                                        <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-black opacity-60">{s.label}</p>
                                         {s.key === 'performance_score' && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
@@ -253,7 +259,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                                 </TooltipTrigger>
                                                 <TooltipContent side="top" className="max-w-[280px] text-[11px] p-3 leading-relaxed">
                                                     <p className="font-bold mb-1">Performance Score Formula</p>
-                                                    <div className="space-y-1 font-mono text-[10px]">
+                                                    <div className="space-y-1 font-mono text-[11px]">
                                                         <p>• Reliability: 35% (Cancel/No-Show)</p>
                                                         <p>• Acceptance: 25% (Offer Response)</p>
                                                         <p>• Attendance: 20% (Punctuality)</p>
@@ -267,7 +273,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                     <p className={cn('text-3xl font-black tabular-nums tracking-tight', statusTextColor[st])}>
                                         {s.value.toFixed(1)}%
                                     </p>
-                                    <p className="text-[10px] text-muted-foreground/50 mt-1 font-medium">Team Average · Selected Scope</p>
+                                    <p className="text-[11px] text-muted-foreground mt-1 font-medium">Team Average · Selected Scope</p>
                                 </div>
                             );
                         })}
@@ -286,7 +292,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                 {!isLoading && rows.length > 0 && (
                     <div className="p-4 border-b border-border/30 flex items-center bg-muted/5">
                         <div className="relative w-full max-w-xs">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/75" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <input
                                 type="text"
                                 placeholder="Search users..."
@@ -295,7 +301,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                 className={cn(
                                     "w-full pl-9 pr-4 py-1.5 bg-background border border-border/40 rounded-xl text-xs transition-all",
                                     "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40",
-                                    "placeholder:text-muted-foreground/50 font-medium"
+                                    "placeholder:text-muted-foreground font-medium"
                                 )}
                             />
                         </div>
@@ -327,6 +333,15 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                 : 'No users match your search query.'}
                         </p>
                     </div>
+                ) : isMobile ? (
+                    <div className="p-3">
+                        <PerformanceReportCards
+                            rows={sortedRows}
+                            columns={columns}
+                            isLoading={isLoading}
+                            sort={{ key: sortKey, direction: sortDir, onChange: handleSort }}
+                        />
+                    </div>
                 ) : (
                     <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
                         <table className="w-full text-sm border-collapse">
@@ -337,7 +352,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                             key={g.name}
                                             colSpan={g.span}
                                             className={cn(
-                                                'px-3 py-2 text-[9px] font-black uppercase tracking-widest text-center border-r border-border/30 last:border-r-0',
+                                                'px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-center border-r border-border/30 last:border-r-0',
                                                 index === 0
                                                     ? 'sticky left-0 top-0 z-30 border-r-2 border-r-border/80 border-b border-b-border/30 w-48 min-w-[12rem] px-4 text-left'
                                                     : 'sticky top-0 z-20 border-b border-b-border/30',
@@ -357,7 +372,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                                 onClick={() => handleSort(col.key)}
                                                 style={{ top: `${row1Height - 0.5}px` }}
                                                 className={cn(
-                                                    "px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20 last:border-r-0",
+                                                    "px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20 last:border-r-0",
                                                     isDark ? groupBgColorsDark[col.group] : groupBgColorsLight[col.group],
                                                     cIdx === 0
                                                         ? "sticky left-0 z-30 border-r-2 border-r-border/80 border-b-2 border-b-border/80 w-48 min-w-[12rem] px-4 text-left shadow-[4px_0_8px_-3px_rgba(0,0,0,0.15)]"
@@ -369,7 +384,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                                     {col.key === 'performance_score' && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Info className="h-3 w-3 text-muted-foreground/50 hover:text-foreground cursor-help ml-0.5" />
+                                                                <Info className="h-3 w-3 text-muted-foreground hover:text-foreground cursor-help ml-0.5" />
                                                             </TooltipTrigger>
                                                             <TooltipContent className="text-[11px] p-2">
                                                                 Weighted: Reliability (35%), Acceptance (25%), Attendance (20%), Bid Success (20%)
@@ -423,7 +438,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
 
             {/* ═══ FOOTER ═══ */}
             <div className="flex justify-end pt-2">
-                <p className="text-[10px] text-muted-foreground/60 font-black uppercase tracking-widest">
+                <p className="text-[11px] text-muted-foreground font-black uppercase tracking-widest">
                     {rows.length} {rows.length === 1 ? 'Employee' : 'Employees'} &bull; Q{selectedQuarter} {selectedYear}
                 </p>
             </div>

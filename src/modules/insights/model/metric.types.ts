@@ -162,5 +162,9 @@ export interface DeptBreakdownRow {
     emergency_count: number;
 }
 
-/** Date-range preset labels */
-export type DatePreset = "THIS_WEEK" | "THIS_MONTH" | "LAST_30" | "LAST_90" | "CUSTOM";
+/**
+ * Date-range presets. Retired with useDateRange when the KPI surface went
+ * quarter-only: the presets derived "today" from the device clock, so a
+ * manager overseas got a different week than the roster used. Quarter
+ * boundaries now come from the Sydney-anchored getCurrentQuarter().
+ */

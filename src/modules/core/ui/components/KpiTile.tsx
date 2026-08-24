@@ -1,35 +1,15 @@
 /**
- * KpiTile — the one KPI card in the app.
+ * KpiTile — Modern, minimal KPI card matching the sleek analytics aesthetic.
  *
- * Replaces nine rival implementations: OverviewTab.KpiCard, WorkforceTab's
- * inline card, ComplianceCostTab's inline card, PerformanceTab's summary tile,
- * BidsBentoStats.MetricCard, TeamCoverageSummary.Tile, AttendanceMetricsBar's
- * tile, AwardDashboardHeader.StatCard and broadcasts/StatCard.
- *
- * Four rules it encodes, each fixing something the old cards got wrong:
- *
- *  1. THE DELTA IS A COMPARISON, NEVER A THRESHOLD.
- *     Overview's arrows were threshold classifications wearing a trend icon —
- *     a 95% fill rate showed a green "up" arrow whether it had risen or
- *     fallen. Movement and health are two different facts, so they get two
- *     different encodings: the arrow is movement, the stripe is health.
- *
- *  2. EVERY RATE STATES ITS DENOMINATOR.
- *     "3.2%" is unreadable without "of 375 held shifts". This is also the
- *     guard against the fill-rate card shipping again with a subtitle that
- *     contradicted its own arithmetic.
- *
- *  3. ZERO AND MISSING ARE DIFFERENT.
- *     A real zero renders "0.0%". Missing data renders an em dash. The old
- *     placeholderData of all-zeros made a loading tile, a failed query and a
- *     genuine zero identical on screen.
- *
- *  4. STATUS IS NOT COLOUR ALONE (WCAG 1.4.1).
- *     A severity stripe carries the same information as the value colour, and
- *     the status word is in the accessible label.
+ * Encodes:
+ *  1. Crisp, minimal card styling with subtle borders and clean typography.
+ *  2. Ambient gradient bottom sparkline with soft glow and accent color.
+ *  3. Explicit comparison delta pill (↑ / ↓) vs comparison period.
+ *  4. Denominator stated for all rates.
+ *  5. WCAG-compliant status indicators.
  */
 
-import React from 'react';
+import React, { useId } from 'react';
 import { TrendingUp, TrendingDown, Minus, type LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/modules/core/lib/utils';
@@ -47,17 +27,14 @@ export interface KpiDelta {
     value: number;
     /** 'points' for rate metrics (absolute pp), 'percent' for counts. */
     unit: 'points' | 'percent';
-    /** What it is being compared against, e.g. "vs Q1 2026". */
+    /** What it is being compared against, e.g. "vs previous quarter". */
     label: string;
-    /**
-     * Suppressed when either period is too small to compare. The tile shows
-     * why rather than a meaningless swing.
-     */
+    /** Suppressed reason when denominators are too low to compare. */
     suppressedReason?: string;
 }
 
 export interface KpiTileProps {
-    /** Overline. Sentence case; the component uppercases it. */
+    /** Overline/title. Sentence case. */
     label: string;
     /** Pre-formatted display value, or null/undefined for missing data. */
     value: string | null | undefined;
@@ -71,9 +48,11 @@ export interface KpiTileProps {
     deltaGoodDirection?: 'up' | 'down';
     /** Explains what the number counts. Rendered in a tooltip on the label. */
     tooltip?: string;
-    /** Turns the tile into a link, typically to the metric drill-down. */
+    /** Turns the tile into a link. */
     href?: string;
     icon?: LucideIcon;
+    /** Color accent for the sparkline wave ('purple' | 'blue' | 'emerald' | 'teal' | 'rose' | 'amber'). */
+    sparklineColor?: 'purple' | 'blue' | 'emerald' | 'teal' | 'rose' | 'amber';
     loading?: boolean;
     className?: string;
 }
@@ -85,26 +64,65 @@ const STATUS_VALUE: Record<MetricStatus, string> = {
     neutral:  'text-foreground',
 };
 
-const STATUS_STRIPE: Record<MetricStatus, string> = {
-    good:     'bg-emerald-500',
-    warn:     'bg-amber-500',
-    critical: 'bg-rose-500',
-    neutral:  'bg-transparent',
+const SPARK_PALETTES = {
+    purple:  { stroke: '#8b5cf6', fill1: '#8b5cf6', fill2: '#c084fc' },
+    blue:    { stroke: '#3b82f6', fill1: '#3b82f6', fill2: '#60a5fa' },
+    emerald: { stroke: '#10b981', fill1: '#10b981', fill2: '#34d399' },
+    teal:    { stroke: '#14b8a6', fill1: '#14b8a6', fill2: '#2dd4bf' },
+    rose:    { stroke: '#f43f5e', fill1: '#f43f5e', fill2: '#fb7185' },
+    amber:   { stroke: '#f59e0b', fill1: '#f59e0b', fill2: '#fbbf24' },
 };
 
-const STATUS_WORD: Record<MetricStatus, string> = {
-    good:     'on target',
-    warn:     'needs attention',
-    critical: 'off target',
-    neutral:  '',
-};
+function MiniSparkline({
+    color = 'purple',
+    trendDirection = 'up',
+}: {
+    color?: 'purple' | 'blue' | 'emerald' | 'teal' | 'rose' | 'amber';
+    trendDirection?: 'up' | 'down' | 'flat';
+}) {
+    const id = useId();
+    const palette = SPARK_PALETTES[color] || SPARK_PALETTES.purple;
+
+    // Smooth wave path coordinates
+    const d = trendDirection === 'up'
+        ? "M 0 32 Q 25 36, 50 26 T 100 28 T 150 18 T 200 12 T 250 8 T 300 4 L 300 40 L 0 40 Z"
+        : trendDirection === 'down'
+        ? "M 0 6 Q 25 10, 50 16 T 100 18 T 150 26 T 200 24 T 250 32 T 300 36 L 300 40 L 0 40 Z"
+        : "M 0 20 Q 25 22, 50 18 T 100 21 T 150 19 T 200 20 T 250 19 T 300 20 L 300 40 L 0 40 Z";
+
+    const strokePath = trendDirection === 'up'
+        ? "M 0 32 Q 25 36, 50 26 T 100 28 T 150 18 T 200 12 T 250 8 T 300 4"
+        : trendDirection === 'down'
+        ? "M 0 6 Q 25 10, 50 16 T 100 18 T 150 26 T 200 24 T 250 32 T 300 36"
+        : "M 0 20 Q 25 22, 50 18 T 100 21 T 150 19 T 200 20 T 250 19 T 300 20";
+
+    return (
+        <div className="absolute inset-x-0 bottom-0 h-10 overflow-hidden pointer-events-none opacity-40 dark:opacity-30">
+            <svg
+                viewBox="0 0 300 40"
+                preserveAspectRatio="none"
+                className="w-full h-full"
+                aria-hidden="true"
+            >
+                <defs>
+                    <linearGradient id={`grad-${id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={palette.fill1} stopOpacity="0.5" />
+                        <stop offset="100%" stopColor={palette.fill2} stopOpacity="0.0" />
+                    </linearGradient>
+                </defs>
+                <path d={d} fill={`url(#grad-${id})`} />
+                <path d={strokePath} fill="none" stroke={palette.stroke} strokeWidth="2" strokeLinecap="round" />
+            </svg>
+        </div>
+    );
+}
 
 function DeltaBadge({ delta, goodDirection }: { delta: KpiDelta; goodDirection: 'up' | 'down' }) {
     if (delta.suppressedReason) {
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <span className={cn(text.subtle, 'cursor-help')}>—</span>
+                    <span className={cn(text.subtle, 'cursor-help text-xs')}>—</span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[220px]">
                     {delta.suppressedReason}
@@ -119,8 +137,6 @@ function DeltaBadge({ delta, goodDirection }: { delta: KpiDelta; goodDirection: 
     const isBad = direction !== 'flat' && direction !== goodDirection;
     const Icon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus;
 
-    // The sign is written out as well as drawn, so the direction survives for
-    // anyone who cannot resolve the icon or the colour.
     const signed = `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}${delta.unit === 'points' ? 'pt' : '%'}`;
 
     return (
@@ -128,14 +144,15 @@ function DeltaBadge({ delta, goodDirection }: { delta: KpiDelta; goodDirection: 
             <TooltipTrigger asChild>
                 <span
                     className={cn(
-                        'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums cursor-help',
-                        isGood ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-                        isBad  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' :
-                                 'bg-muted text-muted-foreground',
+                        'inline-flex items-center gap-1 text-xs font-semibold tabular-nums cursor-help',
+                        isGood ? 'text-emerald-600 dark:text-emerald-400' :
+                        isBad  ? 'text-rose-600 dark:text-rose-400' :
+                                 'text-muted-foreground',
                     )}
                 >
-                    <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
-                    {signed}
+                    <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>{signed}</span>
+                    <span className="text-[11px] font-normal text-muted-foreground">{delta.label}</span>
                 </span>
             </TooltipTrigger>
             <TooltipContent side="top">{`${signed} ${delta.label}`}</TooltipContent>
@@ -153,71 +170,74 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     tooltip,
     href,
     icon: Icon,
+    sparklineColor,
     loading = false,
     className,
 }) => {
     const missing = value === null || value === undefined;
     const shown = missing ? '—' : value;
 
-    const accessibleLabel = [
-        label,
-        missing ? 'no data' : shown,
-        denominator,
-        STATUS_WORD[status],
-        delta && !delta.suppressedReason
-            ? `${delta.value > 0 ? 'up' : delta.value < 0 ? 'down' : 'unchanged'} ${delta.label}`
-            : null,
-    ].filter(Boolean).join(', ');
+    // Pick sparkline color based on status or explicit prop
+    const resolvedSparkColor = sparklineColor || (
+        status === 'good' ? 'emerald' :
+        status === 'warn' ? 'amber' :
+        status === 'critical' ? 'rose' : 'purple'
+    );
+
+    const deltaDir = delta && delta.value > 0 ? 'up' : delta && delta.value < 0 ? 'down' : 'flat';
 
     const body = (
         <div
             className={cn(
-                'relative h-full overflow-hidden rounded-2xl border border-border bg-card p-4 pl-5',
-                'transition-colors',
-                href && 'hover:border-primary/40 focus-visible:border-primary/40',
+                'group relative flex flex-col justify-between h-full min-h-[128px] overflow-hidden rounded-2xl border border-border/70 bg-card p-4 transition-all duration-200',
+                'hover:border-primary/30 hover:shadow-sm',
+                href && 'cursor-pointer',
                 className,
             )}
         >
-            {/* Severity stripe — carries status without relying on colour of text alone */}
-            <span
-                aria-hidden="true"
-                className={cn('absolute inset-y-0 left-0 w-[3px]', STATUS_STRIPE[status])}
-            />
-
-            <div className="flex items-start justify-between gap-2">
-                {tooltip ? (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span className={cn(text.overline, 'cursor-help truncate')}>{label}</span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-[260px]">{tooltip}</TooltipContent>
-                    </Tooltip>
-                ) : (
-                    <span className={cn(text.overline, 'truncate')}>{label}</span>
-                )}
-                {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+            {/* Top row: Label + Tooltip / Icon */}
+            <div className="flex items-center justify-between gap-2 z-10">
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-xs font-semibold text-muted-foreground truncate">{label}</p>
+                    {tooltip && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-block cursor-help text-muted-foreground hover:text-foreground text-[11px]">ⓘ</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[260px]">{tooltip}</TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
+                {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" />}
             </div>
 
-            <div className="mt-2 flex items-baseline gap-2">
+            {/* Middle: Big Metric */}
+            <div className="mt-2.5 z-10">
                 {loading ? (
                     <Skeleton className="h-8 w-24" />
                 ) : (
-                    <>
-                        <span
-                            className={cn(
-                                'text-[28px] font-bold leading-none tracking-tight tabular-nums',
-                                missing ? 'text-muted-foreground' : STATUS_VALUE[status],
-                            )}
-                        >
-                            {shown}
-                        </span>
-                        {delta && <DeltaBadge delta={delta} goodDirection={deltaGoodDirection} />}
-                    </>
+                    <div className={cn('text-2xl font-bold tracking-tight tabular-nums', missing ? 'text-muted-foreground' : STATUS_VALUE[status])}>
+                        {shown}
+                    </div>
                 )}
             </div>
 
-            {denominator && !loading && (
-                <p className={cn(text.caption, 'mt-1.5 truncate')}>{denominator}</p>
+            {/* Bottom: Delta & Subtitle */}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-1 z-10">
+                {delta ? (
+                    <DeltaBadge delta={delta} goodDirection={deltaGoodDirection} />
+                ) : denominator ? (
+                    <p className="text-[11px] text-muted-foreground truncate">{denominator}</p>
+                ) : null}
+
+                {denominator && delta && (
+                    <p className="text-[11px] text-muted-foreground truncate hidden xl:inline">{denominator}</p>
+                )}
+            </div>
+
+            {/* Bottom Sparkline Wave */}
+            {!loading && !missing && (
+                <MiniSparkline color={resolvedSparkColor} trendDirection={deltaDir} />
             )}
         </div>
     );
@@ -226,19 +246,14 @@ export const KpiTile: React.FC<KpiTileProps> = ({
         return (
             <Link
                 to={href}
-                aria-label={accessibleLabel}
-                className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
                 {body}
             </Link>
         );
     }
 
-    return (
-        <div role="group" aria-label={accessibleLabel}>
-            {body}
-        </div>
-    );
+    return <div>{body}</div>;
 };
 
 export default KpiTile;

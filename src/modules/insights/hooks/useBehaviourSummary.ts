@@ -62,10 +62,7 @@ export const useBehaviourSummary = (from: string, to: string, scope: ScopeSelect
     useQuery({
         queryKey: ['kpi_behaviour_summary', from, to, scope],
         queryFn: async (): Promise<BehaviourSummary> => {
-            // Cast through any: get_kpi_behaviour_summary is newer than the
-            // generated RPC registry in platform/supabase/types.ts.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data, error } = await (supabase as any).rpc('get_kpi_behaviour_summary', {
+            const { data, error } = await supabase.rpc('get_kpi_behaviour_summary', {
                 p_from: from,
                 p_to: to,
                 p_org_ids: scope.org_ids.length ? scope.org_ids : undefined,

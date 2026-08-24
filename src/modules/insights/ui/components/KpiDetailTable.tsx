@@ -45,6 +45,8 @@ interface KpiDetailTableProps {
     /** Shown above the table, e.g. "12 employees · Q3 2026". */
     caption: string;
     emptyMessage: string;
+    /** Opens the per-employee drill-down. Rows become buttons when supplied. */
+    onSelect?: (row: KpiDetailRow) => void;
 }
 
 const STATUS_CELL: Record<MetricStatus, string> = {
@@ -60,6 +62,7 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
     defaultSort,
     caption,
     emptyMessage,
+    onSelect,
 }) => {
     const isMobile = useIsMobile();
     const [query, setQuery] = useState('');
@@ -131,7 +134,21 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
                 <ul className="flex flex-col gap-2">
                     {sorted.map((r) => (
                         <li key={r.id} className="rounded-2xl border border-border bg-card p-3">
-                            <p className={cn(text.body, 'font-semibold text-foreground')}>{r.name}</p>
+                            {onSelect ? (
+                                <button
+                                    type="button"
+                                    onClick={() => onSelect(r)}
+                                    className={cn(
+                                        text.body,
+                                        'font-semibold text-foreground underline-offset-2 hover:underline',
+                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded',
+                                    )}
+                                >
+                                    {r.name}
+                                </button>
+                            ) : (
+                                <p className={cn(text.body, 'font-semibold text-foreground')}>{r.name}</p>
+                            )}
                             <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
                                 {columns.map((col) => {
                                     const v = r.values[col.key] ?? 0;
@@ -211,7 +228,21 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
                                     scope="row"
                                     className={cn('sticky left-0 z-10 bg-card px-4 py-2.5 text-left font-semibold', text.body)}
                                 >
-                                    {r.name}
+                                    {onSelect ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onSelect(r)}
+                                            className={cn(
+                                                'text-left underline-offset-2 hover:underline',
+                                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded',
+                                            )}
+                                            aria-label={`Open ${r.name}'s performance detail`}
+                                        >
+                                            {r.name}
+                                        </button>
+                                    ) : (
+                                        r.name
+                                    )}
                                 </th>
                                 {columns.map((col) => {
                                     const v = r.values[col.key] ?? 0;

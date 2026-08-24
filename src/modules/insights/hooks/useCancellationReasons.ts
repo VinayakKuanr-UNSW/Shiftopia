@@ -23,8 +23,7 @@ export const useCancellationReasons = () =>
             // Explicit column list, no comments inside it: one unknown name
             // 400s the whole select and react-query then renders the empty
             // state, which looks identical to "no reasons configured".
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('cancellation_reasons')
                 .select('code,label,description,requires_note,sort_order')
                 .eq('is_active', true)

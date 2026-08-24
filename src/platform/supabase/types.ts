@@ -1299,6 +1299,36 @@ export type Database = {
           },
         ]
       }
+      cancellation_reasons: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          is_active: boolean
+          label: string
+          requires_note: boolean
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          label: string
+          requires_note?: boolean
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          is_active?: boolean
+          label?: string
+          requires_note?: boolean
+          sort_order?: number
+        }
+        Relationships: []
+      }
       certifications: {
         Row: {
           created_at: string | null
@@ -8308,6 +8338,115 @@ export type Database = {
       get_broadcast_group_role: {
         Args: { p_group_id: string }
         Returns: string
+      }
+      get_cancellation_reason_breakdown: {
+        Args: {
+          p_dept_ids?: string[]
+          p_from: string
+          p_org_ids?: string[]
+          p_subdept_ids?: string[]
+          p_to: string
+        }
+        Returns: {
+          avg_notice_hours: number
+          critical_count: number
+          emergent_count: number
+          reason_code: string
+          reason_label: string
+          share_pct: number
+          standard_count: number
+          total: number
+        }[]
+      }
+      get_kpi_behaviour_summary: {
+        Args: {
+          p_dept_ids?: string[]
+          p_from: string
+          p_org_ids?: string[]
+          p_subdept_ids?: string[]
+          p_to: string
+        }
+        Returns: {
+          attendance_compliance_rate: number
+          attendance_compliant: number
+          auto_clock_out: number
+          auto_clock_out_rate: number
+          critical_cancel_rate: number
+          critical_cancellations: number
+          early_clock_in: number
+          early_clock_in_rate: number
+          early_clock_out: number
+          early_clock_out_rate: number
+          emergency_assigned: number
+          employees: number
+          held: number
+          late_clock_in: number
+          late_clock_in_rate: number
+          late_clock_out: number
+          late_clock_out_rate: number
+          no_show: number
+          no_show_rate: number
+          on_time_in: number
+          on_time_in_rate: number
+          on_time_out: number
+          on_time_out_rate: number
+          reassigned: number
+          standard_cancel_rate: number
+          standard_cancellations: number
+          swapped_out: number
+          total_cancel_rate: number
+          worked: number
+        }[]
+      }
+      get_kpi_behaviour_trend: {
+        Args: {
+          p_dept_ids?: string[]
+          p_from: string
+          p_grain?: string
+          p_org_ids?: string[]
+          p_subdept_ids?: string[]
+          p_to: string
+        }
+        Returns: {
+          attendance_compliance_rate: number
+          attendance_compliant: number
+          auto_clock_out: number
+          bucket_start: string
+          critical_cancel_rate: number
+          critical_cancellations: number
+          early_clock_out: number
+          held: number
+          late_clock_in: number
+          no_show: number
+          no_show_rate: number
+          on_time_in: number
+          standard_cancel_rate: number
+          standard_cancellations: number
+          swapped_out: number
+          worked: number
+        }[]
+      }
+      get_kpi_marketplace_trend: {
+        Args: {
+          p_dept_ids?: string[]
+          p_from: string
+          p_grain?: string
+          p_org_ids?: string[]
+          p_subdept_ids?: string[]
+          p_to: string
+        }
+        Returns: {
+          award_rate: number
+          bids_placed: number
+          bucket_start: string
+          open_shifts: number
+          swap_completion_rate: number
+          swaps_cancelled: number
+          swaps_completed: number
+          swaps_initiated: number
+          swaps_rejected: number
+          winners_selected: number
+        }[]
       }
       get_dept_insights_breakdown: {
         Args: {

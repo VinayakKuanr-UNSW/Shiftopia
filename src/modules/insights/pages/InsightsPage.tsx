@@ -30,9 +30,8 @@ import { cn } from '@/modules/core/lib/utils';
 
 import { useKpiFilters } from '../hooks/useKpiFilters';
 import { KpiFunctionBar, type KpiTabDef } from '../ui/components/KpiFunctionBar';
-import OverviewTab from '../ui/views/OverviewTab';
+import OverviewKpiTab from '../ui/tabs/OverviewKpiTab';
 import PerformanceTab from '../ui/views/PerformanceTab';
-import ComplianceCostTab from '../ui/views/ComplianceCostTab';
 import BidsTab from '../ui/tabs/BidsTab';
 import SwapsTab from '../ui/tabs/SwapsTab';
 import AttendanceTab from '../ui/tabs/AttendanceTab';
@@ -107,29 +106,16 @@ const InsightsPage: React.FC = () => {
 
                     <div
                         className={cn(
-                            'custom-scrollbar mx-4 mb-4 min-h-0 flex-1 overflow-y-auto rounded-[32px] border p-4 transition-all lg:mx-6 lg:mb-6 lg:p-8',
+                            'custom-scrollbar mx-4 mb-4 min-h-0 flex-1 overflow-y-auto rounded-[28px] border p-4 transition-all lg:mx-6 lg:mb-6 lg:p-6',
                             isDark
-                                ? 'border-white/5 bg-[#1c2333]/40 shadow-2xl shadow-black/20'
-                                : 'border-white bg-white/70 shadow-xl shadow-slate-200/50 backdrop-blur-md',
+                                ? 'border-border/60 bg-background/50 shadow-2xl shadow-black/20'
+                                : 'border-border/60 bg-card/40 shadow-sm backdrop-blur-sm',
                         )}
                     >
                         <TabsContent value="overview" className="mt-0 outline-none">
                             {activeTab === 'overview' && (
                                 <div className="flex flex-col gap-10">
-                                    <OverviewTab filters={{
-                                        startDate: period.startDate,
-                                        endDate: period.endDate,
-                                        orgIds: filters.orgIds,
-                                        deptIds: filters.deptIds,
-                                        subdeptIds: filters.subdeptIds,
-                                    }} />
-                                    <ComplianceCostTab filters={{
-                                        startDate: period.startDate,
-                                        endDate: period.endDate,
-                                        orgIds: filters.orgIds,
-                                        deptIds: filters.deptIds,
-                                        subdeptIds: filters.subdeptIds,
-                                    }} />
+                                    <OverviewKpiTab filters={filters} scope={scope} />
                                     <ManagerScorecardBand filters={filters} scope={scope} />
                                     <PerformanceTab
                                         scope={scope}

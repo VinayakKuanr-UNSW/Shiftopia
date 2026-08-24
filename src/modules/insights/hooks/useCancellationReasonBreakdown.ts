@@ -36,9 +36,7 @@ export const useCancellationReasonBreakdown = (
     useQuery({
         queryKey: ['cancellation_reason_breakdown', from, to, scope],
         queryFn: async (): Promise<CancellationReasonRow[]> => {
-            // Cast through any: newer than the generated RPC registry.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data, error } = await (supabase as any).rpc('get_cancellation_reason_breakdown', {
+            const { data, error } = await supabase.rpc('get_cancellation_reason_breakdown', {
                 p_from: from,
                 p_to: to,
                 p_org_ids: scope.org_ids.length ? scope.org_ids : undefined,

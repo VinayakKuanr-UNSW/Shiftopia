@@ -384,3 +384,45 @@ export function formatMetric(metricId: string, value: number | null | undefined)
         default:         return String(Math.round(value));
     }
 }
+
+/**
+ * Registry id → the id `get_metric_detailed_analysis` actually branches on.
+ *
+ * The RPC keys on KEBAB-case ids of its own, which are not the registry's
+ * snake_case ids. Six headline tiles previously linked with the registry id
+ * and every one fell through to the RPC's "pending full database migration"
+ * fallback — including shift_fill_rate, which had a working branch it simply
+ * never reached.
+ *
+ * Anything absent from this map has no branch, so `analysisHref` returns null
+ * and the tile renders unlinked rather than leading somewhere empty.
+ */
+const ANALYSIS_METRIC_IDS: Readonly<Record<string, string>> = {
+    shift_fill_rate:            'shift-fill-rate',
+    fill_rate:                  'shift-fill-rate',
+    no_show_rate:               'no-show-rate',
+    estimated_cost:             'estimated-cost',
+    attendance_compliance_rate: 'attendance-compliance-rate',
+    cancel_rate:                'cancellation-rate',
+    total_cancel_rate:          'cancellation-rate',
+    open_shift_fill_rate:       'open-shift-award-rate',
+    trade_completion_rate:      'swap-completion-rate',
+};
+
+/** The RPC id for a registry metric, or null when it has no analysis branch. */
+export function analysisMetricId(metricId: string): string | null {
+    return ANALYSIS_METRIC_IDS[metricId] ?? null;
+}
+
+/**
+ * Drill-down URL for a metric, carrying the period so the analysis covers the
+ * same quarter as the tile that opened it. Null when there is no branch —
+ * pass it straight to KpiTile's `href`, which renders unlinked on null.
+ */
+export function analysisHref(metricId: string, periodLabel?: string): string | undefined {
+    const id = analysisMetricId(metricId);
+    if (!id) return undefined;
+    return periodLabel
+        ? `/insights/${id}?period=${encodeURIComponent(periodLabel)}`
+        : `/insights/${id}`;
+}

@@ -1,30 +1,29 @@
 /**
  * KPI › Attendance — did the people who were rostered actually turn up, on time?
  *
- * The nine metrics are the same nine AttendanceMetricsBar renders for one
- * employee on My Attendance and Timesheets. Same definitions, same 7.5-minute
- * grace window, different scope — so the org view and the personal view are
- * visibly the same object and their numbers reconcile.
- *
- * A no-show lives here, not under Cancellations: it is a failure to attend a
- * shift the employee still holds, where a cancellation releases the shift in
- * time for someone else to be found. One leaves a hole on the night.
+ * Implements the minimal, consistent analytics dashboard aesthetic with:
+ *  - Top sparkline KPI cards with ambient wave gradients
+ *  - Attendance Trend Over Time + Smart Attendance Insights AI card
+ *  - Clock Behaviour rate strip with ±7.5 min grace window
+ *  - Who needs attention detail table
  */
 
-import React from 'react';
-import { Activity, CheckCircle2, Clock, UserX } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, CheckCircle2, Clock, UserX, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { useBehaviourSummary, EMPTY_BEHAVIOUR } from '../../hooks/useBehaviourSummary';
-import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../../model/metric-registry';
+import { statusFor, formatMetric, labelFor, METRIC_REGISTRY, analysisHref } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
 import { useQuarterlyReport } from '@/modules/users/hooks/usePerformanceMetrics';
 import { useBehaviourTrend, formatBucket } from '../../hooks/useBehaviourTrend';
 import { KpiTrendChart, SERIES_COLORS } from '../components/KpiTrendChart';
-import { KpiDetailTable } from '../components/KpiDetailTable';
-import { KpiBand, KpiTileGrid } from '../components/KpiBand';
+import { KpiDetailTable, type KpiDetailRow } from '../components/KpiDetailTable';
+import { EmployeeDrillDown } from '../components/EmployeeDrillDown';
+import { KpiBand } from '../components/KpiBand';
 import { RateStrip } from '../components/RateStrip';
+import { KpiSmartInsights, type InsightItem } from '../components/KpiSmartInsights';
 import type { ScopeSelection } from '@/platform/auth/types';
 
 interface AttendanceTabProps {
@@ -41,11 +40,8 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
         comparison?.endDate ?? '',
         scope,
     );
-    // Per-employee detail. Same query key as every other tab and the Overview
-    // report, so React Query serves one request no matter how many tabs read it.
     const report = useQuarterlyReport(period.year, period.quarter, scope);
-    // Weekly series. Sums back to the headline exactly — same aggregate
-    // expressions as get_kpi_behaviour_summary, grouped instead of collapsed.
+    const [selected, setSelected] = useState<KpiDetailRow | null>(null);
     const trend = useBehaviourTrend(period.startDate, period.endDate, scope);
 
     if (current.isError) {
@@ -64,7 +60,6 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
     const p = comparison ? prior.data : undefined;
     const loading = current.isLoading;
 
-    // Attendance is only computable once a shift has ended.
     if (!loading && k.held === 0) {
         return (
             <PageState
@@ -87,100 +82,155 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
             })
             : null;
 
+    // Smart Attendance Insights
+    const attendanceInsights: InsightItem[] = [];
+    if (k.no_show_rate > 3) {
+        attendanceInsights.push({
+            id: 'noshow-alert',
+            type: 'alert',
+            title: `High No-Show Rate (${k.no_show_rate}%)`,
+            description: `${k.no_show} unexcused missed shifts recorded. Follow up with employees via Timesheets.`,
+            actionLabel: 'Review timesheets',
+            actionHref: '/timesheets',
+        });
+    } else {
+        attendanceInsights.push({
+            id: 'noshow-good',
+            type: 'highlight',
+            title: 'Reliable Attendance Record',
+            description: `${k.attendance_compliance_rate}% attendance compliance across ${k.worked} completed shifts.`,
+        });
+    }
+
+    if (k.late_clock_in_rate > 10) {
+        attendanceInsights.push({
+            id: 'late-in-opp',
+            type: 'opportunity',
+            title: 'Late Clock-Ins Outside Grace Window',
+            description: `${k.late_clock_in_rate}% of shifts clocked in >7.5 min late. Consider automated broadcast shift reminders.`,
+        });
+    }
+
+    if (k.on_time_in_rate >= 85) {
+        attendanceInsights.push({
+            id: 'ontime-high',
+            type: 'info',
+            title: 'High Punctuality Standard',
+            description: `${k.on_time_in_rate}% on-time clock-in rate within standard ±7.5m grace window.`,
+        });
+    }
+
     return (
         <div className="flex flex-col gap-8">
-            <KpiBand
-                title="Headline"
-                description={`Across ${k.employees} ${k.employees === 1 ? 'employee' : 'employees'} in ${period.label}.`}
-            >
-                <KpiTileGrid>
-                    <KpiTile
-                        label={labelFor('attendance_compliance_rate')}
-                        value={loading ? null : formatMetric('attendance_compliance_rate', k.attendance_compliance_rate)}
-                        status={statusFor('attendance_compliance_rate', k.attendance_compliance_rate)}
-                        denominator={`${k.attendance_compliant} of ${k.worked} shifts worked`}
-                        tooltip={METRIC_REGISTRY.attendance_compliance_rate.description}
-                        delta={delta(k.attendance_compliance_rate, p?.attendance_compliance_rate)}
-                        deltaGoodDirection="up"
-                        icon={CheckCircle2}
-                        loading={loading}
-                        href="/insights/attendance_compliance_rate"
-                    />
-                    <KpiTile
-                        label={labelFor('no_show_rate')}
-                        value={loading ? null : formatMetric('no_show_rate', k.no_show_rate)}
-                        status={statusFor('no_show_rate', k.no_show_rate)}
-                        denominator={`${k.no_show} of ${k.held} shifts held`}
-                        tooltip={METRIC_REGISTRY.no_show_rate.description}
-                        delta={delta(k.no_show_rate, p?.no_show_rate)}
-                        deltaGoodDirection="down"
-                        icon={UserX}
-                        loading={loading}
-                    />
-                    <KpiTile
-                        label={labelFor('on_time_in_rate')}
-                        value={loading ? null : formatMetric('on_time_in_rate', k.on_time_in_rate)}
-                        status={statusFor('on_time_in_rate', k.on_time_in_rate)}
-                        denominator={`${k.on_time_in} of ${k.worked} worked`}
-                        tooltip={METRIC_REGISTRY.on_time_in_rate.description}
-                        delta={delta(k.on_time_in_rate, p?.on_time_in_rate)}
-                        deltaGoodDirection="up"
-                        icon={Clock}
-                        loading={loading}
-                    />
-                    <KpiTile
-                        label={labelFor('shifts_worked')}
-                        value={loading ? null : formatMetric('shifts_worked', k.worked)}
-                        status="neutral"
-                        denominator="The denominator for every rate here"
-                        loading={loading}
-                    />
-                </KpiTileGrid>
-            </KpiBand>
+            {/* ── Band A: 4-Card Top Headline Grid with Ambient Sparklines ── */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <KpiTile
+                    label={labelFor('attendance_compliance_rate')}
+                    value={loading ? null : formatMetric('attendance_compliance_rate', k.attendance_compliance_rate)}
+                    status={statusFor('attendance_compliance_rate', k.attendance_compliance_rate)}
+                    denominator={`${k.attendance_compliant} of ${k.worked} shifts worked`}
+                    tooltip={METRIC_REGISTRY.attendance_compliance_rate.description}
+                    delta={delta(k.attendance_compliance_rate, p?.attendance_compliance_rate)}
+                    deltaGoodDirection="up"
+                    icon={CheckCircle2}
+                    sparklineColor="emerald"
+                    loading={loading}
+                    href={analysisHref('attendance_compliance_rate', period.label)}
+                />
+                <KpiTile
+                    label={labelFor('no_show_rate')}
+                    value={loading ? null : formatMetric('no_show_rate', k.no_show_rate)}
+                    status={statusFor('no_show_rate', k.no_show_rate)}
+                    denominator={`${k.no_show} of ${k.held} shifts held`}
+                    tooltip={METRIC_REGISTRY.no_show_rate.description}
+                    delta={delta(k.no_show_rate, p?.no_show_rate)}
+                    deltaGoodDirection="down"
+                    icon={UserX}
+                    sparklineColor="rose"
+                    loading={loading}
+                />
+                <KpiTile
+                    label={labelFor('on_time_in_rate')}
+                    value={loading ? null : formatMetric('on_time_in_rate', k.on_time_in_rate)}
+                    status={statusFor('on_time_in_rate', k.on_time_in_rate)}
+                    denominator={`${k.on_time_in} of ${k.worked} worked`}
+                    tooltip={METRIC_REGISTRY.on_time_in_rate.description}
+                    delta={delta(k.on_time_in_rate, p?.on_time_in_rate)}
+                    deltaGoodDirection="up"
+                    icon={Clock}
+                    sparklineColor="teal"
+                    loading={loading}
+                />
+                <KpiTile
+                    label={labelFor('shifts_worked')}
+                    value={loading ? null : formatMetric('shifts_worked', k.worked)}
+                    status="neutral"
+                    denominator="Total shifts completed"
+                    sparklineColor="blue"
+                    loading={loading}
+                />
+            </div>
 
-            <KpiBand
-                title="How attendance moved"
-                description="Every shift held, by what happened to it. Weekly, because a quarter is thirteen weeks and a daily line for a small roster is mostly noise."
-            >
-                {trend.isError ? (
-                    <PageState
-                        state="error"
-                        scope="inline"
-                        title="Couldn't load the attendance trend"
-                        onRetry={() => trend.refetch()}
-                    />
-                ) : trend.isLoading ? (
-                    <Skeleton className="h-[280px] w-full" />
-                ) : (
-                    <KpiTrendChart
-                        data={(trend.data ?? []).map((r) => ({
-                            bucket: formatBucket(r.bucket_start),
-                            'On time': r.on_time_in,
-                            'Late in': r.late_clock_in,
-                            'Early out': r.early_clock_out,
-                            'No-show': r.no_show,
-                            'Compliance %': r.attendance_compliance_rate,
-                        }))}
-                        xKey="bucket"
-                        caption={`Attendance by week, ${period.label}`}
-                        emptyMessage={`No shifts ended in ${period.label}.`}
-                        series={[
-                            { key: 'On time',   label: 'On time',   color: SERIES_COLORS.good,  type: 'bar' },
-                            { key: 'Late in',   label: 'Late in',   color: SERIES_COLORS.warn,  type: 'bar' },
-                            { key: 'Early out', label: 'Early out', color: SERIES_COLORS.muted, type: 'bar' },
-                            { key: 'No-show',   label: 'No-show',   color: SERIES_COLORS.bad,   type: 'bar' },
-                            { key: 'Compliance %', label: 'Compliance %', color: SERIES_COLORS.primary, type: 'line', rightAxis: true, unit: '%' },
-                        ]}
-                    />
-                )}
-            </KpiBand>
+            {/* ── Band B: Middle Row (Trend Chart 2/3 + Smart Insights 1/3) ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+                <div className="lg:col-span-2">
+                    <KpiBand
+                        title="Attendance Trend Over Time"
+                        description="Weekly composition of on-time, late, early and missed shifts with compliance rate."
+                        className="h-full justify-between"
+                    >
+                        {trend.isError ? (
+                            <PageState
+                                state="error"
+                                scope="inline"
+                                title="Couldn't load the attendance trend"
+                                onRetry={() => trend.refetch()}
+                            />
+                        ) : trend.isLoading ? (
+                            <Skeleton className="h-[280px] w-full rounded-2xl" />
+                        ) : (
+                            <KpiTrendChart
+                                data={(trend.data ?? []).map((r) => ({
+                                    bucket: formatBucket(r.bucket_start),
+                                    'On time': r.on_time_in,
+                                    'Late in': r.late_clock_in,
+                                    'Early out': r.early_clock_out,
+                                    'No-show': r.no_show,
+                                    'Compliance %': r.attendance_compliance_rate,
+                                }))}
+                                xKey="bucket"
+                                caption={`Attendance by week, ${period.label}`}
+                                emptyMessage={`No shifts ended in ${period.label}.`}
+                                series={[
+                                    { key: 'On time',   label: 'On time',   color: SERIES_COLORS.good,  type: 'bar' },
+                                    { key: 'Late in',   label: 'Late in',   color: SERIES_COLORS.warn,  type: 'bar' },
+                                    { key: 'Early out', label: 'Early out', color: SERIES_COLORS.muted, type: 'bar' },
+                                    { key: 'No-show',   label: 'No-show',   color: SERIES_COLORS.bad,   type: 'bar' },
+                                    { key: 'Compliance %', label: 'Compliance %', color: SERIES_COLORS.primary, type: 'line', rightAxis: true, unit: '%' },
+                                ]}
+                                height={260}
+                            />
+                        )}
+                    </KpiBand>
+                </div>
 
+                <div className="lg:col-span-1 flex flex-col">
+                    <KpiSmartInsights
+                        title="Attendance Insights"
+                        badgeLabel="AI"
+                        insights={attendanceInsights}
+                        className="h-full"
+                    />
+                </div>
+            </div>
+
+            {/* ── Band C: Clock Behaviour Rate Strip ── */}
             <KpiBand
-                title="Clock behaviour"
-                description="The same nine measures the personal scorecard shows on My Attendance and Timesheets, at org scope. Grace window is ±7.5 minutes."
+                title="Clock Behaviour Dimensions"
+                description="The same nine measures the personal scorecard shows on My Attendance and Timesheets, at org scope (grace window is ±7.5 minutes)."
             >
                 {loading ? (
-                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full rounded-2xl" />
                 ) : (
                     <RateStrip
                         items={[
@@ -197,9 +247,10 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
                 )}
             </KpiBand>
 
+            {/* ── Band D: Employee Detail Table ── */}
             <KpiBand
-                title="Who needs attention"
-                description="Sorted by attendance compliance ascending — the people furthest from target come first."
+                title="Employee Attendance Breakdown"
+                description="Sorted by attendance compliance ascending — highlights individuals who may require scheduling support."
             >
                 {report.isError ? (
                     <PageState
@@ -209,10 +260,11 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
                         onRetry={() => report.refetch()}
                     />
                 ) : report.isLoading ? (
-                    <Skeleton className="h-48 w-full" />
+                    <Skeleton className="h-48 w-full rounded-2xl" />
                 ) : (
                     <KpiDetailTable
-                        caption={`${(report.data ?? []).length} people · ${period.label}`}
+                        caption={`${(report.data ?? []).length} employees · ${period.label}`}
+                        onSelect={setSelected}
                         defaultSort={{ key: 'attendance_compliance_rate', dir: 'asc' }}
                         emptyMessage="No one worked a shift in this quarter."
                         columns={[
@@ -227,17 +279,26 @@ export default function AttendanceTab({ filters, scope }: AttendanceTabProps) {
                             id: r.employee_id,
                             name: r.employee_name,
                             values: {
-                            shifts_worked: r.completed,
-                            attendance_compliance_rate: r.attendance_compliance_rate ?? 0,
-                            on_time_in_rate: r.on_time_in_rate ?? 0,
-                            late_clock_in_rate: r.late_clock_in_rate,
-                            early_clock_out_rate: r.early_clock_out_rate,
-                            no_show_rate: r.no_show_rate,
+                                shifts_worked: r.completed,
+                                attendance_compliance_rate: r.attendance_compliance_rate ?? 0,
+                                on_time_in_rate: r.on_time_in_rate ?? 0,
+                                late_clock_in_rate: r.late_clock_in_rate,
+                                early_clock_out_rate: r.early_clock_out_rate,
+                                no_show_rate: r.no_show_rate,
                             },
                         }))}
                     />
                 )}
             </KpiBand>
+
+            <EmployeeDrillDown
+                employeeId={selected?.id ?? null}
+                employeeName={selected?.name ?? ''}
+                periodLabel={period.label}
+                year={period.year}
+                quarter={period.quarter}
+                onClose={() => setSelected(null)}
+            />
         </div>
     );
 }

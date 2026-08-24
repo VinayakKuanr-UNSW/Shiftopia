@@ -33,9 +33,7 @@ export const useMarketplaceTrend = (
     useQuery({
         queryKey: ['kpi_marketplace_trend', from, to, grain, scope],
         queryFn: async (): Promise<MarketplaceTrendRow[]> => {
-            // Cast through any: newer than the generated RPC registry.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data, error } = await (supabase as any).rpc('get_kpi_marketplace_trend', {
+            const { data, error } = await supabase.rpc('get_kpi_marketplace_trend', {
                 p_from: from,
                 p_to: to,
                 p_grain: grain,
