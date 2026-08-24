@@ -349,65 +349,55 @@ export function AvailabilityScreen({
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
       className="h-full w-full overflow-hidden flex flex-col gap-3"
     >
-      {/* Sub-navigation tabs — a DISCONNECTED pill above the card, matching My
-          Swaps. They used to sit inside the card under a border, which read as
-          a title bar belonging to the calendar rather than as a switch between
-          three sibling views; on a phone that cost a row of vertical space to a
-          divider that said nothing. */}
+      {/* Sub-navigation tabs — matching My Swaps tab pill height, width, style, font, and active states */}
       <motion.div
         variants={itemVariants}
         className={cn(
-          "flex-shrink-0 p-1 rounded-2xl border shadow-sm flex items-center gap-1",
-          isDark
-            ? "bg-[#1c2333]/85 border-white/5"
-            : "bg-slate-100/85 border-slate-200/50"
+          "p-1 rounded-2xl bg-slate-100/85 dark:bg-[#1c2333]/85 border border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-1 shadow-sm shrink-0"
         )}
       >
-          <div className="flex flex-1 p-0.5 rounded-[14px]">
+        {([
+          { id: 'calendar'  as TabType, label: 'Calendar', mobileLabel: 'Calendar', icon: Calendar,      count: undefined },
+          { id: 'logs'      as TabType, label: 'Rules',    mobileLabel: 'Rules',    icon: ClipboardList, count: rules.length },
+          { id: 'configure' as TabType, label: 'Config',   mobileLabel: 'Config',   icon: Settings,      count: editState.mode ? '*' : undefined },
+        ] as const).map(tab => {
+          const isActive = activeTab === tab.id;
+          const Icon = tab.icon;
+          return (
             <button
-              onClick={() => setActiveTab('calendar')}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
-                activeTab === 'calendar'
-                  ? 'bg-background shadow-md text-foreground scale-[1.02]'
-                  : 'text-muted-foreground hover:text-foreground'
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-[0.98]',
+                isActive
+                  ? 'bg-[#7b61ff] text-white shadow-sm'
+                  : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
               )}
             >
-              <span className="text-[12px] font-black uppercase tracking-widest font-heading">Calendar</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('logs')}
-              className={cn(
-                'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
-                activeTab === 'logs' 
-                  ? 'bg-background shadow-md text-foreground scale-[1.02]' 
-                  : 'text-muted-foreground hover:text-foreground'
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.mobileLabel}</span>
+              {tab.count !== undefined && (
+                <span className={cn(
+                  "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black tabular-nums",
+                  isActive
+                    ? "bg-white/20 text-white"
+                    : (isDark ? "bg-white/5 text-white/40" : "bg-slate-900/5 text-slate-900/40")
+                )}>
+                  {tab.count}
+                </span>
               )}
-            >
-              <span className="text-[12px] font-black uppercase tracking-widest font-heading">Rules</span>
             </button>
-            <button
-              onClick={() => setActiveTab('configure')}
-              className={cn(
-                'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
-                activeTab === 'configure'
-                  ? 'bg-background shadow-md text-foreground scale-[1.02]'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <span className="text-[12px] font-black uppercase tracking-widest font-heading">
-                Config{editState.mode && <span className="text-primary ml-1">*</span>}
-              </span>
-            </button>
-          </div>
+          );
+        })}
       </motion.div>
 
       <div
         className={cn(
-          "flex-1 min-h-0 flex flex-col overflow-hidden rounded-[20px] border transition-all relative",
+          "flex-1 min-h-0 flex flex-col overflow-hidden rounded-[32px] border transition-all relative",
           isDark
-            ? "bg-[#1c2333]/40 border-white/10 shadow-2xl shadow-black/20"
-            : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
         )}
       >
         {/* Tab Content */}

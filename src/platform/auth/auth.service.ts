@@ -35,10 +35,56 @@ export class AuthSessionError extends Error {
  * deliberately falls through as "not a rejection" — a wider test would sign
  * people out on any network blip.
  */
-function isRejectedCredential(err: unknown): boolean {
+export function isRejectedCredential(err: unknown): boolean {
     if (!err || typeof err !== 'object') return false;
-    const e = err as { status?: number; code?: string };
-    return e.status === 401 || e.status === 403 || e.code === 'PGRST301';
+    const e = err as {
+        status?: number | string;
+        statusCode?: number | string;
+        code?: string;
+        message?: string;
+        name?: string;
+        error?: string;
+        error_description?: string;
+    };
+
+    if (e.name === 'AuthSessionError') return true;
+
+    const status = Number(e.status || e.statusCode);
+    if (status === 401 || status === 403) return true;
+
+    const code = String(e.code || '').toUpperCase();
+    if (
+        code === 'PGRST300' ||
+        code === 'PGRST301' ||
+        code === 'PGRST302' ||
+        code === '401' ||
+        code === '403' ||
+        code === '42501' ||
+        code === 'INVALID_JWT' ||
+        code === 'JWT_EXPIRED'
+    ) {
+        return true;
+    }
+
+    const msg = `${e.message || ''} ${e.error || ''} ${e.error_description || ''}`.toLowerCase();
+    if (
+        msg.includes('jwt') ||
+        msg.includes('token is expired') ||
+        msg.includes('invalid claim') ||
+        msg.includes('unauthorized') ||
+        msg.includes('forbidden') ||
+        msg.includes('bad signature') ||
+        msg.includes('signature verification') ||
+        msg.includes('session expired') ||
+        msg.includes('invalid token') ||
+        msg.includes('jwserror') ||
+        msg.includes('refresh_token_not_found') ||
+        msg.includes('invalid refresh token')
+    ) {
+        return true;
+    }
+
+    return false;
 }
 
 export const authService = {
@@ -91,7 +137,15 @@ export const authService = {
                 .eq('user_id', userId)
                 .eq('status', 'Active');
 
-            if (contractsErr) console.error('[AuthService] Contracts fetch error:', contractsErr);
+            if (contractsErr) {
+                console.error('[AuthService] Contracts fetch error:', contractsErr);
+                if (isRejectedCredential(contractsErr)) {
+                    throw new AuthSessionError(
+                        'Your session is no longer valid.',
+                        (contractsErr as { status?: number } | null)?.status,
+                    );
+                }
+            }
 
             const contracts: UserContract[] = (contractsData || []).map(c => ({
                 id: c.id,
@@ -118,7 +172,15 @@ export const authService = {
                 .eq('user_id', userId)
                 .eq('is_active', true);
 
-            if (certsErr) console.error('[AuthService] Certificates fetch error:', certsErr);
+            if (certsErr) {
+                console.error('[AuthService] Certificates fetch error:', certsErr);
+                if (isRejectedCredential(certsErr)) {
+                    throw new AuthSessionError(
+                        'Your session is no longer valid.',
+                        (certsErr as { status?: number } | null)?.status,
+                    );
+                }
+            }
 
             const certificates: AccessCertificate[] = (certsData || []).map(c => ({
                 id: c.id,

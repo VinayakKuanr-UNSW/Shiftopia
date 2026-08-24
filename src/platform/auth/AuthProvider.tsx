@@ -4,7 +4,7 @@
 import React, { createContext, useEffect, useState } from 'react';
 import { supabase } from '@/platform/supabase/client';
 import { User, AccessLevel, Role, UserContract, AccessCertificate, PermissionObject } from './types';
-import { authService, AuthSessionError } from './auth.service';
+import { authService, AuthSessionError, isRejectedCredential } from './auth.service';
 import { hasAccess as checkAccess } from './access.policy';
 
 // Re-export types for backward compatibility with existing imports
@@ -187,7 +187,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         if (!mounted) return;
 
+        if (sessionErr && isRejectedCredential(sessionErr)) {
+          await endRejectedSession();
+          return;
+        }
+
         if (session?.user) {
+          // If the stored access token has expired (expires_at is in seconds), refresh it
+          if (session.expires_at && session.expires_at * 1000 <= Date.now()) {
+            console.warn('[Auth] Stored session expired, refreshing token...');
+            const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+            if (refreshErr || !refreshData.session) {
+              console.warn('[Auth] Stored session refresh failed:', refreshErr?.message);
+              if (isRejectedCredential(refreshErr)) {
+                await endRejectedSession();
+                return;
+              }
+            }
+          }
+
           const profile = await fetchProfile(session.user.id);
 
           if (mounted) {

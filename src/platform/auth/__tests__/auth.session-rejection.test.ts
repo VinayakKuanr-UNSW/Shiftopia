@@ -46,7 +46,12 @@ describe('getUserProfile — rejected credential vs unreachable server', () => {
   it.each([
     ['a 401', { status: 401, message: 'Unauthorized' }],
     ['a 403', { status: 403, message: 'Forbidden' }],
+    ['a string status 401', { statusCode: '401', message: 'Unauthorized' }],
     ['PostgREST PGRST301 (JWT expired)', { code: 'PGRST301', message: 'JWT expired' }],
+    ['PostgREST PGRST300 (JWT claims error)', { code: 'PGRST300', message: 'JWT claim and role mismatch' }],
+    ['PostgREST PGRST302 (JWT invalid)', { code: 'PGRST302', message: 'JWSError' }],
+    ['Postgres 42501 (insufficient privilege)', { code: '42501', message: 'permission denied' }],
+    ['JWT message without code', { message: 'token is expired by 5m' }],
   ])('throws AuthSessionError on %s', async (_label, error) => {
     profileResult({ data: null, error });
     await expect(authService.getUserProfile('u1')).rejects.toBeInstanceOf(AuthSessionError);

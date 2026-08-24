@@ -156,10 +156,10 @@ export const AvailabilityPage: React.FC = () => {
         singleSelectLevels={['subdept']}
         functionBar={
           <div className={cn(
-            "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden",
+            "flex flex-row items-center justify-center md:justify-start gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden",
             isDark ? "bg-[#111827]/60" : "bg-slate-100"
           )}>
-            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
+            <div className="flex items-center justify-center md:justify-start gap-2 flex-1 min-w-0 py-0.5">
               {/* The JOB is named one row above, in the global scope filter.
                   Everything in this bar is scoped by it — the month being paged
                   and the availability being added both belong to that job. */}
@@ -169,13 +169,14 @@ export const AvailabilityPage: React.FC = () => {
                   and paging a month that changes nothing on screen reads as a
                   broken control rather than an absent one. */}
               {!isFullTime && (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center justify-center gap-1.5 w-full md:w-auto flex-shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={handlePrevMonth}
+                  aria-label="Previous month"
                   className={cn(
-                    "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all",
+                    "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all flex-shrink-0",
                     isDark ? "bg-[#111827]/60 text-muted-foreground hover:text-white" : "bg-white shadow-sm"
                   )}
                 >
@@ -183,10 +184,10 @@ export const AvailabilityPage: React.FC = () => {
                 </Button>
 
                 <div className={cn(
-                  "h-9 lg:h-11 px-4 lg:px-6 rounded-xl flex items-center justify-center min-w-[120px] md:min-w-[180px]",
+                  "h-9 lg:h-11 px-4 lg:px-6 rounded-xl flex items-center justify-center min-w-[140px] md:min-w-[180px]",
                   isDark ? "bg-[#111827]/60" : "bg-white shadow-sm"
                 )}>
-                  <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-[0.2em] text-foreground">
+                  <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-[0.2em] text-foreground text-center">
                     {format(currentMonth, 'MMMM yyyy')}
                   </span>
                 </div>
@@ -195,8 +196,9 @@ export const AvailabilityPage: React.FC = () => {
                   variant="ghost"
                   size="icon"
                   onClick={handleNextMonth}
+                  aria-label="Next month"
                   className={cn(
-                    "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all",
+                    "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all flex-shrink-0",
                     isDark ? "bg-[#111827]/60 text-muted-foreground hover:text-white" : "bg-white shadow-sm"
                   )}
                 >
