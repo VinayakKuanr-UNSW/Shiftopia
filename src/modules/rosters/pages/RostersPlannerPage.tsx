@@ -31,7 +31,6 @@ import { BulkActionsToolbar, type BulkActionResult, type BulkPublishValidationRe
 import { RosterModals, type RosterModalsHandle } from '@/modules/rosters/ui/components/RosterModals';
 import { ShiftWizardModal } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal/ShiftWizardModal';
 import { useShiftFormModalStore } from '@/modules/rosters/state/useShiftFormModalStore';
-import { ReserveListPanel } from '@/modules/reserve-list';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
@@ -1495,9 +1494,6 @@ const NewRostersPage: React.FC = () => {
 
       {/* Add/Edit Shift wizard — centered modal overlay (opened via useShiftFormNav store) */}
       <ShiftWizardModal />
-
-      {/* Reserve List — manager-only emergency staffing (opened via useReserveListPanelStore) */}
-      <ReserveListPanel />
 
       {/* DnD Assignment Modal */}
       {pendingDndAssign && (
