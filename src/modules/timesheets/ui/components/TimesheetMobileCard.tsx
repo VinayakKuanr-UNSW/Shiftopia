@@ -173,6 +173,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 start_time: entry.scheduledStart,
                 end_time: entry.scheduledEnd,
                 roles: { name: entry.role },
+                remuneration_level: entry.remunerationLevel,
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
@@ -181,7 +182,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         } catch {
             return null;
         }
-    }, [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.role, entry.employmentType, entry.isTraining, entry.unpaidBreak]);
+    }, [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.role, entry.remunerationLevel, entry.employmentType, entry.isTraining, entry.unpaidBreak]);
     const scheduledPay = scheduledCost ? `$${scheduledCost.totalCost.toFixed(2)}` : null;
     const scheduledPayLines = useMemo(
         () => scheduledCost
