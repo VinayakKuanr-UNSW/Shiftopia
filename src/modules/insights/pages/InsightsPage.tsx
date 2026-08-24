@@ -31,7 +31,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { useKpiFilters } from '../hooks/useKpiFilters';
 import { KpiFunctionBar, type KpiTabDef } from '../ui/components/KpiFunctionBar';
 import OverviewKpiTab from '../ui/tabs/OverviewKpiTab';
-import PerformanceTab from '../ui/views/PerformanceTab';
+import EmployeePerformanceTable from '../ui/tabs/EmployeePerformanceTable';
 import BidsTab from '../ui/tabs/BidsTab';
 import SwapsTab from '../ui/tabs/SwapsTab';
 import AttendanceTab from '../ui/tabs/AttendanceTab';
@@ -138,7 +138,7 @@ const InsightsPage: React.FC = () => {
                                 <div className="flex flex-col gap-10">
                                     <OverviewKpiTab filters={filters} scope={scope} />
                                     <ManagerScorecardBand filters={filters} scope={scope} />
-                                    <PerformanceTab
+                                    <EmployeePerformanceTable
                                         scope={scope}
                                         selectedYear={period.year}
                                         selectedQuarter={period.quarter}

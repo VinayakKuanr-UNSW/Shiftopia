@@ -1,3 +1,12 @@
+/**
+ * The manager's per-employee performance table — 28 columns in seven groups,
+ * rendered as a band on KPI > Overview.
+ *
+ * Named for what it is. It was `PerformanceTab`, which was wrong twice over:
+ * it is not a tab (it is a band inside one), and it sat one letter from
+ * `PerformancePage`, the employee-facing page showing a person their OWN
+ * numbers. Two different audiences, near-identical names.
+ */
 import React, { useState, useMemo } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, Info, Search } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
@@ -77,13 +86,13 @@ interface ColumnDef {
     thresholdKey?: string;
 }
 
-interface PerformanceTabProps {
+interface EmployeePerformanceTableProps {
     scope: ScopeSelection;
     selectedYear: number;
     selectedQuarter: number;
 }
 
-export default function PerformanceTab({ scope, selectedYear, selectedQuarter }: PerformanceTabProps) {
+export default function EmployeePerformanceTable({ scope, selectedYear, selectedQuarter }: EmployeePerformanceTableProps) {
     const [sortKey, setSortKey] = useState<SortKey>('employee_name');
     const [sortDir, setSortDir] = useState<SortDir>('asc');
     const [searchTerm, setSearchTerm] = useState('');

@@ -207,6 +207,11 @@ export const METRIC_REGISTRY: Record<string, MetricSpec> = {
         direction: 'lower', good: 10, warn: 20,
         description: 'Held shifts an employee traded away.',
     }),
+    /** Snapshot-era alias for swap_rate — same metric, same bands. */
+    swap_ratio: spec({
+        id: 'swap_ratio', label: 'Swap rate', format: 'percent',
+        direction: 'lower', good: 10, warn: 20,
+    }),
     acceptance_rate: spec({
         id: 'acceptance_rate', label: 'Acceptance rate', format: 'percent',
         // 70/40 (REPORT), not 80/50 (METRIC) — see the header note.

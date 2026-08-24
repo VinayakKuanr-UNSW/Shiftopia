@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/platform/supabase/client';
+import { insightsApi } from '../api/insights.api';
 
 /**
  * The pre-populated reasons an employee picks from when dropping a shift.
@@ -19,18 +19,8 @@ export interface CancellationReason {
 export const useCancellationReasons = () =>
     useQuery({
         queryKey: ['cancellation_reasons'],
-        queryFn: async (): Promise<CancellationReason[]> => {
-            // Explicit column list, no comments inside it: one unknown name
-            // 400s the whole select and react-query then renders the empty
-            // state, which looks identical to "no reasons configured".
-            const { data, error } = await supabase
-                .from('cancellation_reasons')
-                .select('code,label,description,requires_note,sort_order')
-                .eq('is_active', true)
-                .order('sort_order', { ascending: true });
-            if (error) throw error;
-            return (data ?? []) as CancellationReason[];
-        },
+        queryFn: async (): Promise<CancellationReason[]> =>
+            (await insightsApi.getCancellationReasons()) as CancellationReason[],
         // A seeded lookup table. No reason to refetch it on a schedule.
         staleTime: 60 * 60 * 1000,
         gcTime: 24 * 60 * 60 * 1000,

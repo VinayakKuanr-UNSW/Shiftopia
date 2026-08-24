@@ -37,16 +37,9 @@ hookKeys.useQuarterlyReport =
     read(join(process.cwd(), 'src', 'modules', 'users', 'hooks', 'usePerformanceMetrics.ts'))
         .match(/queryKey:\s*\[\s*'(quarterly_performance_report)'/)?.[1] ?? 'quarterly_performance_report';
 
-/** Which tab component backs each tab value in TAB_QUERY_KEYS. */
-const VIEWS = join(ROOT, 'ui', 'views');
-
-/** Tab components live in ui/tabs; PerformanceTab is rendered on Overview from ui/views. */
-function tabSource(file: string): string {
-    try { return read(join(TABS, file)); } catch { return read(join(VIEWS, file)); }
-}
-
+/** Which components back each tab value in TAB_QUERY_KEYS. */
 const TAB_FILES: Record<string, string[]> = {
-    overview:      ['OverviewKpiTab.tsx', 'ManagerScorecardBand.tsx', 'PerformanceTab.tsx'],
+    overview:      ['OverviewKpiTab.tsx', 'ManagerScorecardBand.tsx', 'EmployeePerformanceTable.tsx'],
     attendance:    ['AttendanceTab.tsx'],
     bids:          ['BidsTab.tsx'],
     swaps:         ['SwapsTab.tsx'],
@@ -57,7 +50,7 @@ const TAB_FILES: Record<string, string[]> = {
 function hooksUsedBy(files: string[]): string[] {
     const used = new Set<string>();
     for (const f of files) {
-        const src = tabSource(f);
+        const src = read(join(TABS, f));
         for (const name of Object.keys(hookKeys)) {
             // Called, not merely imported.
             if (new RegExp(`\\b${name}\\s*\\(`).test(src)) used.add(name);

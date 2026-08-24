@@ -201,3 +201,32 @@ describe('formatMetric', () => {
         expect(formatMetric('no_show_rate', 0)).toBe('0.0%');
     });
 });
+
+describe('the legacy status functions delegate here', () => {
+    it('getMetricStatus and getReportCellStatus agree with statusFor', async () => {
+        const { getMetricStatus, getReportCellStatus } =
+            await import('@/modules/users/hooks/usePerformanceMetrics');
+
+        // reliability_score is the one that used to differ: 85/70 in
+        // METRIC_THRESHOLDS, 90/75 in REPORT_THRESHOLDS. A per-employee dialog
+        // painted 87% green while the table row that opened it painted amber.
+        for (const v of [95, 87, 60]) {
+            expect(getMetricStatus('reliability_score', v)).toBe(statusFor('reliability_score', v));
+            expect(getReportCellStatus('reliability_score', v)).toBe(statusFor('reliability_score', v));
+        }
+        expect(getMetricStatus('reliability_score', 87)).toBe('warn');
+    });
+
+    it('folds neutral into good, because the legacy colour maps have no neutral slot', () => {
+        // New code should call statusFor and handle 'neutral' properly.
+        expect(statusFor('total_bids', 5)).toBe('neutral');
+    });
+
+    it('covers every key both legacy tables define', () => {
+        for (const table of [METRIC_THRESHOLDS, REPORT_THRESHOLDS]) {
+            for (const key of Object.keys(table)) {
+                expect(METRIC_REGISTRY[key], `${key} has no registry entry`).toBeDefined();
+            }
+        }
+    });
+});

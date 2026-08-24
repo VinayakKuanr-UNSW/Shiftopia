@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/platform/supabase/client';
+import { insightsApi } from '../api/insights.api';
 import type { ScopeSelection } from '@/platform/auth/types';
 import type { TrendGrain } from './useBehaviourTrend';
 
@@ -33,16 +33,7 @@ export const useMarketplaceTrend = (
     useQuery({
         queryKey: ['kpi_marketplace_trend', from, to, grain, scope],
         queryFn: async (): Promise<MarketplaceTrendRow[]> => {
-            const { data, error } = await supabase.rpc('get_kpi_marketplace_trend', {
-                p_from: from,
-                p_to: to,
-                p_grain: grain,
-                p_org_ids: scope.org_ids.length ? scope.org_ids : undefined,
-                p_dept_ids: scope.dept_ids.length ? scope.dept_ids : undefined,
-                p_subdept_ids: scope.subdept_ids.length ? scope.subdept_ids : undefined,
-            });
-            if (error) throw error;
-            return (data ?? []) as MarketplaceTrendRow[];
+            return (await insightsApi.getMarketplaceTrend(from, to, scope, grain)) as MarketplaceTrendRow[];
         },
         enabled: !!from && !!to && !!scope,
         staleTime: 5 * 60 * 1000,
