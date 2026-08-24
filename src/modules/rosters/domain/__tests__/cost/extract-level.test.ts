@@ -18,6 +18,10 @@ describe('extractLevel — Schedule 1 keyword mapping', () => {
   it('resolves explicit level shorthand', () => {
     expect(extractLevel('Steward (L1)')).toBe('LEVEL_1');
     expect(extractLevel('Level 6 Control Room Operator')).toBe('LEVEL_6');
+    expect(extractLevel('TM3')).toBe('LEVEL_3');
+    expect(extractLevel('TM 3')).toBe('LEVEL_3');
+    expect(extractLevel('Event Setup TM3')).toBe('LEVEL_3');
+    expect(extractLevel('TM1')).toBe('LEVEL_1');
   });
 
   it('resolves the common ICC Sydney keyword mappings', () => {
