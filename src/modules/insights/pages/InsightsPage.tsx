@@ -46,13 +46,34 @@ const TABS: KpiTabDef[] = [
     { value: 'cancellations', label: 'Cancellations', Icon: CalendarX },
 ];
 
-/** Query keys each tab owns, so Refresh invalidates exactly what is on screen. */
-const TAB_QUERY_KEYS: Record<string, string[]> = {
-    overview:      ['insights_summary', 'insights_trend', 'insights_dept_breakdown', 'marketplace_kpis', 'manager_scorecard', 'quarterly_performance_report'],
-    attendance:    ['quarterly_performance_report'],
-    bids:          ['bidding_kpis', 'quarterly_performance_report'],
-    swaps:         ['marketplace_kpis', 'quarterly_performance_report'],
-    cancellations: ['quarterly_performance_report', 'cancellation_reasons'],
+/**
+ * Query keys each tab owns, so Refresh invalidates exactly what is on screen.
+ *
+ * Exported because it is load-bearing rather than cosmetic: inside the
+ * Capacitor WebView this is the ONLY invalidation path. `refetchOnWindowFocus`
+ * hangs off `visibilitychange`, which the WebView never fires, so every
+ * staleTime is effectively infinite there. A key missing from this map is a
+ * tab that silently cannot be refreshed on a phone — which is why a test pins
+ * it against the hooks each tab actually calls.
+ */
+export const TAB_QUERY_KEYS: Record<string, string[]> = {
+    overview: [
+        'insights_summary', 'insights_trend', 'insights_dept_breakdown',
+        'manager_scorecard', 'quarterly_performance_report',
+    ],
+    attendance: [
+        'kpi_behaviour_summary', 'kpi_behaviour_trend', 'quarterly_performance_report',
+    ],
+    bids: [
+        'bidding_kpis', 'kpi_marketplace_trend', 'quarterly_performance_report',
+    ],
+    swaps: [
+        'marketplace_kpis', 'kpi_marketplace_trend', 'quarterly_performance_report',
+    ],
+    cancellations: [
+        'kpi_behaviour_summary', 'kpi_behaviour_trend',
+        'cancellation_reason_breakdown', 'quarterly_performance_report',
+    ],
 };
 
 const InsightsPage: React.FC = () => {
