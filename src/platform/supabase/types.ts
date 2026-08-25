@@ -10244,7 +10244,6 @@ export type Database = {
         Args: { _requester_shift_id: string; _user_id: string }
         Returns: boolean
       }
-      user_has_action: { Args: { p_action_code: string }; Returns: boolean }
       user_has_action_in_scope: {
         Args: {
           p_action_code: string
