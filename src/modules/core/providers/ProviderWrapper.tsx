@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { AuthProvider } from '@/platform/auth/AuthProvider';
+import { PersonaProvider } from '@/platform/auth/PersonaProvider';
 import { ScopeFilterProvider } from '@/platform/auth/ScopeFilterContext';
 import { SearchProvider } from '@/modules/core/contexts/SearchContext';
 import { ThemeProvider } from '@/modules/core/contexts/ThemeContext';
@@ -69,6 +70,8 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
+          {/* Persona reads the user's certificates, so it must sit inside auth. */}
+          <PersonaProvider>
           <ScopeFilterProvider>
             <OrgSelectionProvider>
               <LocaleProvider>
@@ -97,6 +100,7 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
               </LocaleProvider>
             </OrgSelectionProvider>
           </ScopeFilterProvider>
+          </PersonaProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
