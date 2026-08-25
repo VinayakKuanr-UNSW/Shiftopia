@@ -40,6 +40,10 @@ export function runV8ComplexBridge(
         // from contract_type, which comes from the global profile and collapses
         // 'Flexible Part-Time' onto a single part-time member.
         employment_statuses: input.employee_context.employment_statuses,
+        // ...and the contracts those statuses came from. Without this the rule
+        // sees `undefined`, silently falls back to person-wide matching, and
+        // the scoping added alongside it never runs at all.
+        contracts: input.employee_context.contracts,
         // V8_STUDENT_VISA_LIMIT — its own axis, never read off contract_type.
         is_student_visa: input.employee_context.is_student_visa ?? false,
     };
@@ -63,6 +67,17 @@ export function runV8ComplexBridge(
             is_sunday: s.is_sunday ?? isSunday(dateStr),
             is_public_holiday: s.is_public_holiday ?? isPublicHoliday(parseLocalDateStr(dateStr)),
             is_candidate: candidateIds.has(s.id),
+            // WHICH JOB this shift is for. Both were dropped here, and both are
+            // read downstream:
+            //   - V8_EMPLOYMENT_TARGET narrows to the contract governing this
+            //     role in this sub-department; without them it silently falls
+            //     back to matching ANY contract the person holds.
+            //   - V8_MULTI_HIRE_ELIGIBILITY compares `a.role_id !== b.role_id`
+            //     and bails when either is missing, so it could never fire.
+            // Neither failure raises anything — the rules just quietly stop
+            // asking the narrower question.
+            role_id: s.role_id ?? undefined,
+            sub_department_id: (s as any).sub_department_id ?? null,
             // V8_EMPLOYMENT_TARGET. Absent on callers that don't carry it, in
             // which case the rule stays silent and the DB trigger guards it.
             target_employment_type: (s as any).target_employment_type ?? null,

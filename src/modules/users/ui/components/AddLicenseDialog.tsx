@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Input } from '@/modules/core/ui/primitives/input';
-import { Plus, Award, Shield, Loader2, Calendar } from 'lucide-react';
+import { Plus, Award, Shield, Loader2 } from 'lucide-react';
 import { supabase } from '@/platform/supabase/client';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { CommandSelector } from './CommandSelector';
 
 interface AddLicenseDialogProps {
     employeeId: string;
@@ -136,8 +135,6 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
         }
     };
 
-    const selectedLicense = licenses.find(l => l.id === formData.license_id);
-
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -155,50 +152,41 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-                    {/* License Selection */}
-                    <div className="space-y-2">
-                        <Label className="text-muted-foreground flex items-center gap-2">
-                            {isVisa ? <Shield className="w-4 h-4" /> : <Award className="w-4 h-4" />}
-                            {isVisa ? 'Visa Type' : 'License Name'}
-                        </Label>
-                        <Select
-                            value={formData.license_id}
-                            onValueChange={(val) => setFormData({ ...formData, license_id: val })}
-                        >
-                            <SelectTrigger className="bg-muted/30 border-border">
-                                <SelectValue placeholder={`Select ${isVisa ? 'visa' : 'license'}...`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {licenses.map(license => (
-                                    <SelectItem key={license.id} value={license.id}>
-                                        {license.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {/* License Selection — Global Scope Style via CommandSelector */}
+                    <CommandSelector
+                        label={isVisa ? 'Visa Type' : 'License Name'}
+                        placeholder={`Select ${isVisa ? 'visa' : 'license'}...`}
+                        value={formData.license_id}
+                        onValueChange={(val) => setFormData({ ...formData, license_id: val })}
+                        options={licenses.map(l => ({ 
+                            id: l.id, 
+                            name: l.name, 
+                            subtitle: l.category 
+                        }))}
+                        icon={isVisa ? <Shield className="w-4 h-4 text-primary" /> : <Award className="w-4 h-4 text-primary" />}
+                    />
 
                     {/* Dates Grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label className="text-muted-foreground">Issue Date <span className="text-red-500">*</span></Label>
+                            <Label className="text-muted-foreground text-xs font-bold">Issue Date <span className="text-red-500">*</span></Label>
                             <div className="relative">
                                 <Input
                                     type="date"
                                     required
-                                    className="bg-muted/30 border-border"
+                                    className="bg-muted/30 border-border rounded-xl"
                                     value={formData.issue_date}
                                     onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
                                 />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-muted-foreground">Expiry Date <span className="text-red-500">*</span></Label>
+                            <Label className="text-muted-foreground text-xs font-bold">Expiry Date <span className="text-red-500">*</span></Label>
                             <div className="relative">
                                 <Input
                                     type="date"
                                     required
-                                    className="bg-muted/30 border-border"
+                                    className="bg-muted/30 border-border rounded-xl"
                                     value={formData.expiration_date}
                                     onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}
                                 />
@@ -208,7 +196,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                 </div>
 
                 <div className="pt-2">
-                    <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingRefs} className="w-full">
+                    <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingRefs} className="w-full rounded-xl">
                         {isSubmitting ? (
                             <>
                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

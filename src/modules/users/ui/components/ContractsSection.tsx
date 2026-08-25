@@ -14,6 +14,7 @@ import {
     CheckCircle2, 
     AlertCircle,
     User,
+    Users,
     Crown,
     Globe,
     Zap,
@@ -25,6 +26,7 @@ import { AddContractDialog } from './AddContractDialog';
 import { AccessCertificateDialog } from './AddAccessCertificateDialog';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
+import { text } from '@/modules/core/ui/typography';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCasualConversionStatus } from '../../domain/casualConversion';
 import { getSwsTrialStatus } from '../../domain/swsTrial';
@@ -41,7 +43,7 @@ interface SectionProps {
 export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, employeeName }) => {
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuth();
-    const isAuthorizedAdmin = ['epsilon', 'zeta'].includes(currentUser?.highestAccessLevel || '');
+    const isAuthorizedAdmin = currentUser?.highestAccessLevel === 'epsilon';
 
     const { data: contracts, isLoading } = useQuery({
         queryKey: ['user_contracts', employeeId],
@@ -61,226 +63,297 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
             const roleIds = [...new Set(rows.map(r => r.role_id).filter(Boolean))];
             const orgIds = [...new Set(rows.map(r => r.organization_id).filter(Boolean))];
             const deptIds = [...new Set(rows.map(r => r.department_id).filter(Boolean))];
+            const subDeptIds = [...new Set(rows.map(r => r.sub_department_id).filter(Boolean))];
 
-            const [rolesRes, orgsRes, deptsRes] = await Promise.all([
+            const [rolesRes, orgsRes, deptsRes, subDeptsRes] = await Promise.all([
                 roleIds.length ? supabase.from('roles').select('id, name').in('id', roleIds) : Promise.resolve({ data: [] as any[] }),
                 orgIds.length ? supabase.from('organizations').select('id, name').in('id', orgIds) : Promise.resolve({ data: [] as any[] }),
                 deptIds.length ? supabase.from('departments').select('id, name').in('id', deptIds) : Promise.resolve({ data: [] as any[] }),
+                subDeptIds.length ? supabase.from('sub_departments').select('id, name').in('id', subDeptIds) : Promise.resolve({ data: [] as any[] }),
             ]);
             const roleById = new Map((rolesRes.data ?? []).map((r: any) => [r.id, r]));
             const orgById = new Map((orgsRes.data ?? []).map((o: any) => [o.id, o]));
             const deptById = new Map((deptsRes.data ?? []).map((d: any) => [d.id, d]));
+            const subDeptById = new Map((subDeptsRes.data ?? []).map((sd: any) => [sd.id, sd]));
 
             return rows.map(c => ({
                 ...c,
                 roles: c.role_id ? roleById.get(c.role_id) ?? null : null,
                 organizations: c.organization_id ? orgById.get(c.organization_id) ?? null : null,
                 departments: c.department_id ? deptById.get(c.department_id) ?? null : null,
+                sub_departments: c.sub_department_id ? subDeptById.get(c.sub_department_id) ?? null : null,
             }));
         },
         enabled: !!employeeId
     });
 
     /**
-     * Which contracts are really ONE appointment.
+     * ONE CARD PER SUB-DEPARTMENT.
      *
-     * `position_id` (migration 20260821110000) groups the rows written from a
-     * single position form: same person, same sub-department, same employment
-     * type, differing only in which role they name. In production 122 contracts
-     * are 107 positions, 9 of which hold more than one role.
+     * Not per row, and not per `position_id` either. A person can hold several
+     * positions in one sub-department — Full-Time as a Supervisor and Casual as
+     * an Usher in Set-up is exactly the arrangement EBA cl 13 (Multi-Hiring)
+     * contemplates — and splitting those across cards repeats the organisation,
+     * department and sub-department three times to say one thing: where this
+     * person works. The sub-department is the place; the roles are what they do
+     * there; the employment type belongs to each role, which is why it sits on
+     * the role row rather than on the card.
      *
-     * The card stays PER ROW rather than per position, deliberately. Half of
-     * what a card shows is a per-contract fact — casual-conversion eligibility
-     * turns on that row's own start date, and the SWS trial cap on its own
-     * flags — so collapsing three rows into one card would have to pick one
-     * row's compliance state to show and silently drop the others. Instead the
-     * siblings are sorted together and each card says what it belongs to.
+     * Keyed on the full org/dept/sub-dept triple rather than sub-department
+     * alone: a null sub-department is a DEPARTMENT-WIDE engagement, and two of
+     * those under different departments are different places.
      */
-    const positions = React.useMemo(() => {
-        const byPosition = new Map<string, any[]>();
+    const scopes = React.useMemo(() => {
+        const byScope = new Map<string, any[]>();
         for (const c of contracts ?? []) {
-            // Older rows predate the column; a row without one is a position of
-            // one, keyed on its own id so it can never collide with a real
-            // position_id or pool with other unkeyed rows.
-            const key = c.position_id ?? `solo:${c.id}`;
-            byPosition.set(key, [...(byPosition.get(key) ?? []), c]);
+            const key = [c.organization_id ?? '-', c.department_id ?? '-', c.sub_department_id ?? '-'].join('|');
+            byScope.set(key, [...(byScope.get(key) ?? []), c]);
         }
-        return byPosition;
+        // Roles highest level first, so a card reads as the ladder it covers.
+        return [...byScope.entries()].map(([key, rows]) => ({
+            key,
+            rows: [...rows].sort((a, b) => (b.remuneration_level ?? -1) - (a.remuneration_level ?? -1)),
+        }));
     }, [contracts]);
 
-    /** Siblings adjacent, so one appointment reads as a run of cards. */
-    const orderedContracts = React.useMemo(() => {
-        const seen = new Set<string>();
-        const out: any[] = [];
-        for (const c of contracts ?? []) {
-            const key = c.position_id ?? `solo:${c.id}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push(...(positions.get(key) ?? []));
-        }
-        return out;
-    }, [contracts, positions]);
+    /**
+     * Remove an entire engagement — every role held in that sub-department.
+     *
+     * There is no per-role delete on the card by design: a role is removed by
+     * unticking it in the edit dialog, which is the same control that added it.
+     * Two ways to do one thing invites the pair to drift.
+     */
+    const handleDeleteScope = async (rows: any[], placeName: string) => {
+        const ids = rows.map(r => r.id);
+        const roleNames = rows.map(r => r.roles?.name ?? 'Unknown role').join(', ');
+        if (!confirm(
+            `Remove ${employeeName}'s engagement in ${placeName}?\n\n`
+            + `This deletes ${ids.length} contract${ids.length === 1 ? '' : 's'}: ${roleNames}.`
+        )) return;
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to remove this contract?')) return;
-        
-        const { error } = await supabase
-            .from('user_contracts')
-            .delete()
-            .eq('id', id);
-
+        const { error } = await supabase.from('user_contracts').delete().in('id', ids);
         if (error) {
             console.error('Delete error:', error);
             return;
         }
-
         queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
     };
 
     return (
-        <Card className="border-border/30 bg-card rounded-2xl shadow-xs overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-border/20 pb-4">
-                <div>
-                    <CardTitle className="text-lg font-black uppercase tracking-wider text-foreground flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                            <Briefcase className="w-4 h-4" aria-hidden="true" />
-                        </div>
-                        Employment Contracts ({contracts?.length || 0})
-                        {positions.size > 0 && positions.size !== (contracts?.length || 0) && (
-                            <span className="text-xs font-semibold normal-case tracking-normal text-muted-foreground">
-                                across {positions.size} position{positions.size === 1 ? '' : 's'}
-                            </span>
-                        )}
-                    </CardTitle>
-                </div>
+        <Card className="border-border/40 bg-card/50 backdrop-blur-sm shadow-xl rounded-[2rem] overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/10 pb-5 px-6 pt-6">
+                <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-primary/10 text-primary shadow-inner">
+                        <Briefcase className="w-5 h-5" />
+                    </div>
+                    Employment Contracts
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border ml-1">
+                        {contracts?.length ?? 0} role{(contracts?.length ?? 0) === 1 ? '' : 's'}
+                        {scopes.length > 0 && ` across ${scopes.length} sub-department${scopes.length === 1 ? '' : 's'}`}
+                    </span>
+                </CardTitle>
                 {isAuthorizedAdmin && (
                     <AddContractDialog employeeId={employeeId} employeeName={employeeName} existingContracts={contracts ?? []} />
                 )}
             </CardHeader>
-            <CardContent className="p-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {isLoading ? (
-                        Array.from({ length: 2 }).map((_, i) => (
-                            <div key={i} className="h-32 rounded-xl bg-muted/20 animate-pulse" />
-                        ))
-                    ) : contracts?.length === 0 ? (
-                        <div className="col-span-full py-10 flex flex-col items-center text-muted-foreground">
-                            <Briefcase className="w-10 h-10 mb-2 opacity-20" aria-hidden="true" />
-                            <p className="text-xs font-bold">No active contracts found</p>
-                        </div>
-                    ) : (
-                        orderedContracts.map((contract) => {
-                            // Fair Work Act s15A / cl 12.5(g) — a casual with 6+ months on
-                            // this contract may request conversion to full/part-time.
-                            const conversion = getCasualConversionStatus({
-                                employmentStatus: contract.employment_status,
-                                contractStatus: contract.status,
-                                startDate: contract.start_date,
-                            });
-                            // Schedule 6 §1.10 — SWS trial period is capped at 12 weeks (audit M-3).
-                            const swsTrial = getSwsTrialStatus({
-                                isSws: contract.is_sws,
-                                isSwsTrial: contract.is_sws_trial,
-                                swsTrialStartDate: contract.sws_trial_start_date,
-                            });
-                            // The other roles this same appointment covers.
-                            const siblings = (positions.get(contract.position_id ?? `solo:${contract.id}`) ?? [])
-                                .filter((c: any) => c.id !== contract.id);
+
+            <CardContent className="p-6">
+                {isLoading ? (
+                    <div className="space-y-4">
+                        {Array.from({ length: 2 }).map((_, i) => (
+                            <div key={i} className="h-44 rounded-2xl bg-muted/20 animate-pulse border border-border" />
+                        ))}
+                    </div>
+                ) : scopes.length === 0 ? (
+                    <div className="py-12 flex flex-col items-center text-muted-foreground text-center">
+                        <Briefcase className="w-12 h-12 mb-4 opacity-10" />
+                        <p className="text-sm font-medium">No contracts configured</p>
+                        <p className="text-xs max-w-xs mt-1">Add organizational role contracts to assign departments and positions.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        {scopes.map(({ key, rows }) => {
+                            const head = rows[0];
+                            const placeName = head.sub_departments?.name
+                                ?? `${head.departments?.name ?? 'Unknown department'} (department-wide)`;
+                            const conversion = rows
+                                .map((c: any) => getCasualConversionStatus({
+                                    employmentStatus: c.employment_status,
+                                    contractStatus: c.status,
+                                    startDate: c.start_date,
+                                }))
+                                .find((r: any) => r.eligible);
+                            const swsOverrun = rows
+                                .map((c: any) => getSwsTrialStatus({
+                                    isSws: c.is_sws,
+                                    isSwsTrial: c.is_sws_trial,
+                                    swsTrialStartDate: c.sws_trial_start_date,
+                                }))
+                                .find((r: any) => r.overrun);
+
+                            const created = rows
+                                .map((c: any) => c.created_at)
+                                .filter(Boolean)
+                                .sort()[0];
+                            const anyActive = rows.some((c: any) => c.status === 'Active');
+
                             return (
-                            <motion.div
-                                key={contract.id}
-                                initial={{ opacity: 0, scale: 0.98 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="group relative p-4 rounded-xl border border-border/20 bg-muted/20 hover:border-primary/30 transition-colors shadow-xs"
-                            >
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="space-y-1">
-                                        <h4 className="font-bold text-lg text-foreground capitalize">
-                                            {contract.roles?.name || 'Unknown Role'}
-                                        </h4>
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 rounded-lg">
-                                                {contract.employment_status || 'Casual'}
-                                            </Badge>
-                                            {siblings.length > 0 && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="bg-muted text-muted-foreground border-border rounded-lg"
-                                                    title={`One appointment covering ${siblings.length + 1} roles: ${[contract, ...siblings].map((c: any) => c.roles?.name ?? 'Unknown').join(', ')}`}
-                                                >
-                                                    +{siblings.length} more role{siblings.length === 1 ? '' : 's'} here
-                                                </Badge>
-                                            )}
-                                            {conversion.eligible && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 rounded-lg"
-                                                    title={`${conversion.tenureMonths} months' continuous service — eligible to request conversion to full-time or part-time (Fair Work Act s15A / cl 12.5(g))`}
-                                                >
-                                                    Conversion eligible
-                                                </Badge>
-                                            )}
-                                            {swsTrial.overrun && (
-                                                <Badge
-                                                    variant="destructive"
-                                                    className="rounded-lg"
-                                                    title={`${swsTrial.weeksElapsed} weeks into an SWS trial — the 12-week cap (Schedule 6 §1.10) has been reached; convert to a permanent SWS assessment or remove the trial flag`}
-                                                >
-                                                    SWS trial overrun
-                                                </Badge>
-                                            )}
+                                <section
+                                    key={key}
+                                    aria-label={`Engagement in ${placeName}`}
+                                    className="rounded-2xl border border-border bg-card p-6 shadow-md backdrop-blur-xl group hover:border-primary/40 transition-all duration-300 relative space-y-5"
+                                >
+                                    {/* ── Header: Hierarchy Breadcrumb & Admin Actions ── */}
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="space-y-1.5 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                                                <span className="flex items-center gap-1.5 text-foreground font-semibold">
+                                                    <Building2 className="w-3.5 h-3.5 text-primary" />
+                                                    {head.organizations?.name || 'Organisation'}
+                                                </span>
+                                                <ChevronRight className="w-3 h-3 text-muted-foreground/40" />
+                                                <span className="flex items-center gap-1.5 text-foreground font-semibold">
+                                                    <Users className="w-3.5 h-3.5 text-primary" />
+                                                    {head.departments?.name || 'Department'}
+                                                </span>
+                                            </div>
+                                            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                                                <span>{head.sub_departments?.name ?? 'Department-wide'}</span>
+                                            </h3>
                                         </div>
+
+                                        {isAuthorizedAdmin && (
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                <AddContractDialog
+                                                    employeeId={employeeId}
+                                                    employeeName={employeeName}
+                                                    existingScope={rows}
+                                                    existingContracts={contracts ?? []}
+                                                    trigger={
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 px-3 rounded-xl border-border bg-background hover:bg-primary/15 hover:text-primary text-xs font-bold transition-all"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                                                            Edit
+                                                        </Button>
+                                                    }
+                                                    onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] })}
+                                                />
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    aria-label={`Remove engagement in ${placeName}`}
+                                                    onClick={() => handleDeleteScope(rows, placeName)}
+                                                    className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                                                >
+                                                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
-                                    {isAuthorizedAdmin && (
-                                        <div className="flex gap-1">
-                                            <AddContractDialog 
-                                                employeeId={employeeId} 
-                                                employeeName={employeeName} 
-                                                existingContract={contract}
-                                                existingContracts={contracts ?? []}
-                                                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] })}
-                                            />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDelete(contract.id)}
-                                                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
+
+                                    {/* ── Roles Table ── */}
+                                    <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+                                        <table className="w-full border-collapse">
+                                            <caption className="sr-only">Roles held in {placeName}</caption>
+                                            <thead>
+                                                <tr className="border-b border-border bg-muted/40">
+                                                    <th scope="col" className="w-14 px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Lvl</th>
+                                                    <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Role</th>
+                                                    <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Type</th>
+                                                    <th scope="col" className="px-3.5 py-2.5 text-right text-[10px] font-black uppercase tracking-wider text-muted-foreground">Hours</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-border">
+                                                {rows.map((c: any) => {
+                                                    const weekly = Number(c.contracted_weekly_hours) || 0;
+                                                    const annual = Number(c.annual_guaranteed_hours) || 0;
+                                                    const levelNumber = c.remuneration_level != null ? Number(c.remuneration_level) : -1;
+                                                    const status = c.employment_status || '';
+
+                                                    return (
+                                                        <tr key={c.id} className="hover:bg-muted/30 transition-colors">
+                                                            <td className="px-3.5 py-2.5">
+                                                                <span className={cn(
+                                                                    "px-2 py-0.5 rounded-md text-[11px] font-black font-mono border inline-block",
+                                                                    levelNumber === 7 ? "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30" :
+                                                                    levelNumber === 6 ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
+                                                                    levelNumber === 5 ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30" :
+                                                                    levelNumber === 4 ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30" :
+                                                                    levelNumber === 3 ? "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30" :
+                                                                    levelNumber === 2 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" :
+                                                                    levelNumber === 1 ? "bg-teal-500/15 text-teal-600 dark:text-teal-300 border-teal-500/30" :
+                                                                    "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30"
+                                                                )}>
+                                                                    {levelNumber >= 0 ? `L${levelNumber}` : '—'}
+                                                                </span>
+                                                            </td>
+                                                            <th scope="row" className="px-3.5 py-2.5 text-left font-bold text-sm text-foreground">
+                                                                {c.roles?.name || 'Unknown role'}
+                                                            </th>
+                                                            <td className="px-3.5 py-2.5">
+                                                                <span className={cn(
+                                                                    "px-2 py-0.5 rounded-lg text-[11px] font-bold border inline-block",
+                                                                    status === 'Full-Time' ? "bg-primary/15 text-primary border-primary/30" :
+                                                                    status === 'Part-Time' ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30" :
+                                                                    status === 'Flexible Part-Time' ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
+                                                                    "bg-muted text-muted-foreground border-border"
+                                                                )}>
+                                                                    {status || '—'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3.5 py-2.5 text-right font-mono font-bold text-xs text-foreground">
+                                                                {weekly > 0 ? `${weekly} h/wk`
+                                                                    : annual > 0 ? `${annual} h/yr`
+                                                                        : <span className="text-muted-foreground/40 font-normal">—</span>}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* ── Footer Tags ── */}
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <span className={cn(
+                                                "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5",
+                                                anyActive 
+                                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" 
+                                                    : "bg-muted text-muted-foreground border-border"
+                                            )}>
+                                                <span className={cn("w-1.5 h-1.5 rounded-full", anyActive ? "bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-muted-foreground/40")} />
+                                                {anyActive ? 'Active' : (head.status ?? 'Inactive')}
+                                            </span>
+                                            <span className="text-muted-foreground text-[11px]">
+                                                Created {created ? format(parseISO(created), 'd MMM yyyy') : '—'}
+                                            </span>
                                         </div>
-                                    )}
-                                </div>
 
-                                <div className="space-y-3">
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <Building2 className="w-4 h-4 text-primary/40" />
-                                        <span className="font-medium">{contract.organizations?.name}</span>
-                                        <ChevronRight className="w-3 h-3 text-muted-foreground/30" />
-                                        <span>{contract.departments?.name}</span>
+                                        {conversion && (
+                                            <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-semibold">
+                                                Conversion eligible ({conversion.tenureMonths} mo)
+                                            </span>
+                                        )}
+                                        {swsOverrun && (
+                                            <span className="px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-semibold">
+                                                SWS trial overrun ({swsOverrun.weeksElapsed} wks)
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-black text-muted-foreground/60">
-                                        <Clock className="w-3 h-3" />
-                                        Created: {contract.created_at ? format(parseISO(contract.created_at), 'MMM d, yyyy') : 'N/A'}
-                                    </div>
-                                </div>
-
-                                <div className="absolute top-5 right-5 flex gap-2">
-                                    {contract.status === 'Active' ? (
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                    ) : (
-                                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-                                    )}
-                                </div>
-                            </motion.div>
+                                </section>
                             );
-                        })
-                    )}
-                </div>
+                        })}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );
 };
+
 
 // =============================================
 // 2. Access Certificates Section
@@ -289,7 +362,7 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
 export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, employeeName }) => {
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuth();
-    const isAuthorizedAdmin = ['epsilon', 'zeta'].includes(currentUser?.highestAccessLevel || '');
+    const isAuthorizedAdmin = currentUser?.highestAccessLevel === 'epsilon';
 
     const { data: certificates, isLoading } = useQuery({
         queryKey: ['access_certificates', employeeId],
@@ -329,7 +402,6 @@ export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, 
 
     const getIcon = (level: string) => {
         switch (level?.toLowerCase()) {
-            case 'zeta': return <Zap className="w-5 h-5 text-rose-400" />;
             case 'epsilon': return <Globe className="w-5 h-5 text-emerald-400" />;
             case 'delta': return <Crown className="w-5 h-5 text-amber-400" />;
             case 'gamma': return <Building2 className="w-5 h-5 text-purple-400" />;

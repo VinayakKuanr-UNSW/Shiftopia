@@ -1427,6 +1427,37 @@ export class AutoSchedulerController {
             };
         });
 
+        // ── Multi-engagement staff: what this solve CANNOT see ───────────────
+        //
+        // `EmployeeInput.employment_type` is ONE scalar per person, and a solve
+        // spans sub-departments. HC-5c then hard-filters on
+        // `emp.employment_type != shift.target_employment_type`
+        // (`ortools_runner.py`), so someone who is Full-Time as an Event Setups
+        // Manager and Casual as an Usher — a shape EBA cl 13 (Multi-Hiring)
+        // allows and migrations 20260824130000/130100 accept — is silently
+        // ineligible for every shift targeting whichever type the scalar did
+        // NOT take.
+        //
+        // This is deliberately a REPORT, not a fix. No scalar can be right, and
+        // choosing one would move the error somewhere quieter; the wire needs
+        // per-engagement types before the solver can place these people
+        // correctly. Meanwhile the failure is an under-assignment — shifts left
+        // uncovered with no reason attached to the person who could have taken
+        // them — which is precisely the kind that goes unnoticed. So: name them.
+        const multiEngagement = input.employees.filter(
+            (e) => (e as { has_multiple_engagement_types?: boolean }).has_multiple_engagement_types,
+        );
+        if (multiEngagement.length > 0) {
+            console.warn(
+                `[AutoScheduler] ${multiEngagement.length} employee(s) hold more than one employment `
+                + `type across their active contracts. The solver carries one employment_type per `
+                + `employee, so each is only considered for shifts targeting the type resolved for `
+                + `this run — shifts targeting their other type will read as uncovered rather than `
+                + `as "nobody eligible". Affected: `
+                + multiEngagement.map(e => `${e.name} (${e.employment_status ?? 'unknown'})`).join(', '),
+            );
+        }
+
         // HC-7 obligation summary. The solver cannot report an obligation it is
         // unable to discharge — it absorbs the Tier-1 slack silently — so the
         // only place the shape of that obligation is visible is here. `capped`

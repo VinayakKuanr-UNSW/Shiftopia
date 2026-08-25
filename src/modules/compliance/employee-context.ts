@@ -164,6 +164,13 @@ export async function fetchV8EmployeeContext(
             department_id:     c.department_id as string,
             sub_department_id: (c.sub_department_id as string | null) ?? null,
             role_id:           c.role_id as string,
+            // Kept WITH its scope, not just in the flat list below. The two were
+            // built from the same rows and split apart — `contracts` held the
+            // scope without the status, `employment_statuses` the status without
+            // the scope — so V8_EMPLOYMENT_TARGET could not tell which contract
+            // a status belonged to. That is the whole reason it had to match
+            // person-wide.
+            employment_status: (c.employment_status as string | null) ?? null,
         }));
 
     // Derive assigned_role_ids from contracts for backward compat.

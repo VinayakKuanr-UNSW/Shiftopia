@@ -169,3 +169,112 @@ describe('employmentTargetRule — scoping', () => {
         expect(hits.flatMap(h => h.affected_shifts)).toEqual(['a', 'b']);
     });
 });
+
+/**
+ * Scoped matching — one person, several engagements.
+ *
+ * EBA cl 13 (Multi-Hiring) lets a permanent Team Member also be engaged
+ * casually on work outside their usual job description. Once the contract form
+ * can write that, "does ANY of their contracts match?" stops being the right
+ * question: the answer is yes for almost every shift, and the write then fails
+ * at `fn_enforce_shift_employment_target`, which asks about the contract for
+ * THIS role.
+ *
+ * The failure mode being pinned is a UI that promises an assignment the
+ * database refuses — silent until a manager hits Save.
+ */
+describe('employmentTargetRule — scoped to the shift’s job', () => {
+    const EVENTS = 'sd-events';
+    const OPS = 'sd-operations';
+    const MANAGER = 'role-setups-manager';
+    const USHER = 'role-usher';
+
+    /** FT as a setups manager, Casual as an usher — both in Events. */
+    const multiEngagement: Partial<V8Employee> = {
+        employment_statuses: ['Full-Time', 'Casual'],
+        contracts: [
+            { organization_id: 'o1', department_id: 'd1', sub_department_id: EVENTS, role_id: MANAGER, employment_status: 'Full-Time' },
+            { organization_id: 'o1', department_id: 'd1', sub_department_id: EVENTS, role_id: USHER, employment_status: 'Casual' },
+        ],
+    };
+
+    it('blocks an FT-targeted shift on the role they hold casually', () => {
+        const hits = employmentTargetRule(ctx(multiEngagement, [
+            shift({ target_employment_type: 'FT', sub_department_id: EVENTS, role_id: USHER }),
+        ]));
+        expect(hits).toHaveLength(1);
+        expect(hits[0].rule_id).toBe('V8_EMPLOYMENT_TARGET');
+        // The message must name what they are HERE, not everything they hold.
+        expect(hits[0].details).toContain('Casual');
+        expect(hits[0].details).not.toContain('Full-Time, Casual');
+    });
+
+    it('allows the same shift on the role they hold full-time', () => {
+        const hits = employmentTargetRule(ctx(multiEngagement, [
+            shift({ target_employment_type: 'FT', sub_department_id: EVENTS, role_id: MANAGER }),
+        ]));
+        expect(hits).toHaveLength(0);
+    });
+
+    it('allows a Casual-targeted shift on the usher role', () => {
+        const hits = employmentTargetRule(ctx(multiEngagement, [
+            shift({ target_employment_type: 'Casual', sub_department_id: EVENTS, role_id: USHER }),
+        ]));
+        expect(hits).toHaveLength(0);
+    });
+
+    it('blocks a Casual-targeted shift on the manager role', () => {
+        const hits = employmentTargetRule(ctx(multiEngagement, [
+            shift({ target_employment_type: 'Casual', sub_department_id: EVENTS, role_id: MANAGER }),
+        ]));
+        expect(hits).toHaveLength(1);
+    });
+
+    // ── The permissive fallbacks, unchanged ──────────────────────────────────
+    // Each of these is a shape some caller still produces; narrowing to "no
+    // contract found" there would block people the database accepts.
+
+    it('falls back to person-wide when the shift names no sub-department', () => {
+        const hits = employmentTargetRule(ctx(multiEngagement, [
+            shift({ target_employment_type: 'FT', role_id: USHER }),
+        ]));
+        expect(hits).toHaveLength(0); // matched against 'Full-Time' held elsewhere
+    });
+
+    it('falls back to the sub-department when no contract names the role', () => {
+        const hits = employmentTargetRule(ctx(multiEngagement, [
+            shift({ target_employment_type: 'FT', sub_department_id: EVENTS, role_id: 'role-not-held' }),
+        ]));
+        expect(hits).toHaveLength(0); // both Events contracts considered
+    });
+
+    it('falls back to person-wide in a sub-department they hold no contract in', () => {
+        const hits = employmentTargetRule(ctx(multiEngagement, [
+            shift({ target_employment_type: 'FT', sub_department_id: OPS, role_id: USHER }),
+        ]));
+        expect(hits).toHaveLength(0);
+    });
+
+    it('falls back to person-wide when contracts carry no employment_status', () => {
+        const hits = employmentTargetRule(ctx({
+            employment_statuses: ['Full-Time', 'Casual'],
+            // The pre-migration hydration shape: scope without status.
+            contracts: [
+                { organization_id: 'o1', department_id: 'd1', sub_department_id: EVENTS, role_id: USHER },
+            ],
+        }, [shift({ target_employment_type: 'FT', sub_department_id: EVENTS, role_id: USHER })]));
+        expect(hits).toHaveLength(0);
+    });
+
+    // A department-wide contract (no sub-department of its own) is in scope for
+    // every sub-department beneath it — the same rule the SQL applies.
+    it('honours a department-wide contract inside a sub-department', () => {
+        const hits = employmentTargetRule(ctx({
+            employment_statuses: ['Part-Time'],
+            contracts: [
+                { organization_id: 'o1', department_id: 'd1', sub_department_id: null, role_id: USHER, employment_status: 'Part-Time' },
+            ],
+        }, [shift({ target_employment_type: 'PT', sub_department_id: EVENTS, role_id: USHER })]));
+        expect(hits).toHaveLength(0);
+    });
+});

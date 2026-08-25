@@ -43,7 +43,7 @@ export const DeleteUserDialog: React.FC<DeleteUserDialogProps> = ({
             onSuccess();
         } catch (error: any) {
             console.error('[DeleteUserDialog] Deletion failed:', error);
-            toast.error(error.message || 'Failed to delete user. Ensure you have Zeta access.');
+            toast.error(error.message || 'Failed to delete user. Ensure you have Admin access.');
         } finally {
             setIsLoading(false);
         }

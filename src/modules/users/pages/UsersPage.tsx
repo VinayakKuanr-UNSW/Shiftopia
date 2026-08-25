@@ -28,7 +28,7 @@ interface Profile {
 const UsersPage: React.FC = () => {
     const { user: currentUser } = useAuth();
     const { isDark } = useTheme();
-    const isAuthorizedAdmin = ['epsilon', 'zeta'].includes(currentUser?.highestAccessLevel || '');
+    const isAuthorizedAdmin = currentUser?.highestAccessLevel === 'epsilon';
 
     // State
     const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -87,7 +87,7 @@ const UsersPage: React.FC = () => {
                         profiles={profiles}
                         selectedUserId={selectedUserId}
                         onUserSelect={setSelectedUserId}
-                        isZeta={isAuthorizedAdmin}
+                        isAdmin={isAuthorizedAdmin}
                         transparent
                     />
                 </div>

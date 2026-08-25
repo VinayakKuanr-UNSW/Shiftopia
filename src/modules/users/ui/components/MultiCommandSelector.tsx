@@ -9,64 +9,77 @@ import {
   CommandList,
   CommandShortcut 
 } from '@/modules/core/ui/primitives/command';
-import { Check, ChevronDown, Lock } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
-export interface CommandSelectorOption {
+export interface MultiCommandOption {
     id: string;
     name: string;
-    description?: string;
     subtitle?: string;
+    badge?: string;
+    description?: string;
     icon?: React.ReactNode;
 }
 
-interface CommandSelectorProps {
+interface MultiCommandSelectorProps {
     label: string;
-    placeholder: string;
-    value: string;
-    onValueChange: (value: string) => void;
-    options: CommandSelectorOption[];
+    placeholder?: string;
+    selected: string[];
+    onToggle: (id: string) => void;
+    onToggleAll?: () => void;
+    options: MultiCommandOption[];
     disabled?: boolean;
     icon?: React.ReactNode;
-    locked?: boolean;
     className?: string;
 }
 
-export const CommandSelector: React.FC<CommandSelectorProps> = ({
+export const MultiCommandSelector: React.FC<MultiCommandSelectorProps> = ({
     label,
-    placeholder,
-    value,
-    onValueChange,
+    placeholder = 'Select options...',
+    selected,
+    onToggle,
+    onToggleAll,
     options,
     disabled = false,
     icon,
-    locked = false,
-    className
+    className,
 }) => {
     const { isDark } = useTheme();
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const selectedOption = options.find(opt => opt.id === value);
-    const isDisabled = disabled || locked;
 
-    // Reset search query when closed
+    const selectedCount = selected.length;
+    const allSelected = options.length > 0 && selectedCount === options.length;
+
+    // Reset search query when popover closes
     useEffect(() => {
         if (!open) {
             setSearchQuery('');
         }
     }, [open]);
 
-    // Filter while strictly preserving the provided sorting order
+    // Filter options while strictly preserving the provided sorting order (e.g. L7 -> L0)
     const filteredOptions = useMemo(() => {
         if (!searchQuery.trim()) return options;
         const q = searchQuery.toLowerCase();
         return options.filter(option =>
             option.name.toLowerCase().includes(q) ||
             (option.subtitle && option.subtitle.toLowerCase().includes(q)) ||
+            (option.badge && option.badge.toLowerCase().includes(q)) ||
             (option.description && option.description.toLowerCase().includes(q))
         );
     }, [options, searchQuery]);
+
+    const displayText = useMemo(() => {
+        if (selectedCount === 0) return placeholder;
+        if (allSelected && options.length > 1) return `All ${label} (${options.length})`;
+        if (selectedCount === 1) {
+            const item = options.find(o => o.id === selected[0]);
+            return item?.name || `1 ${label} selected`;
+        }
+        return `${selectedCount} ${label} selected`;
+    }, [selected, options, label, selectedCount, allSelected, placeholder]);
 
     // Keyboard Escape listener
     useEffect(() => {
@@ -80,34 +93,6 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [open]);
 
-    if (locked) {
-        return (
-            <div className={cn("flex flex-col gap-1.5 w-full opacity-60", className)}>
-                <div
-                    className={cn(
-                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium w-full h-14 border",
-                        "bg-muted/10 border-border/40 text-muted-foreground cursor-not-allowed select-none"
-                    )}
-                >
-                    {icon && (
-                        <div className="p-2 rounded-lg bg-muted/30 text-muted-foreground/60 shrink-0">
-                            {icon}
-                        </div>
-                    )}
-                    <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1 text-left">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/40 leading-none">
-                            {label}
-                        </span>
-                        <span className="truncate max-w-[240px] text-xs sm:text-sm font-semibold">
-                            {selectedOption?.name || value || placeholder}
-                        </span>
-                    </div>
-                    <Lock className="w-3.5 h-3.5 text-amber-500/70 flex-shrink-0" />
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className={cn("flex flex-col gap-1.5 w-full", className)}>
             <Popover open={open} onOpenChange={setOpen}>
@@ -117,13 +102,13 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                         role="combobox"
                         aria-expanded={open}
                         aria-label={`Select ${label}`}
-                        disabled={isDisabled}
+                        disabled={disabled}
                         className={cn(
                             "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
                             "border justify-between w-full h-14",
                             "hover:scale-[1.01] active:scale-[0.99] relative z-30",
                             open ? "ring-2 ring-primary bg-primary/5 shadow-primary/20 border-primary/40" : "",
-                            isDisabled
+                            disabled
                                 ? "bg-muted/10 border-border/30 text-muted-foreground cursor-not-allowed opacity-40 grayscale"
                                 : isDark
                                     ? "bg-[#1c2333] text-white/90 hover:bg-[#252d40] border-white/10 shadow-lg shadow-black/10"
@@ -140,14 +125,21 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                                 </div>
                             )}
                             <div className="flex flex-col items-start gap-0.5 min-w-0 text-left">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/40 leading-none">
-                                    {label}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/40 leading-none">
+                                        {label}
+                                    </span>
+                                    {selectedCount > 0 && (
+                                        <span className="px-1.5 py-0.2 rounded-md bg-primary/10 text-primary text-[9px] font-black leading-tight">
+                                            {selectedCount}
+                                        </span>
+                                    )}
+                                </div>
                                 <span className={cn(
                                     "truncate max-w-[220px] sm:max-w-[320px] text-xs sm:text-sm font-semibold",
-                                    !selectedOption && "text-muted-foreground font-medium"
+                                    selectedCount === 0 && "text-muted-foreground font-medium"
                                 )}>
-                                    {selectedOption ? selectedOption.name : placeholder}
+                                    {displayText}
                                 </span>
                             </div>
                         </div>
@@ -163,9 +155,7 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                     sideOffset={8}
                     align="start"
                     avoidCollisions={false}
-                    onWheel={(e) => e.stopPropagation()}
-                    onTouchMove={(e) => e.stopPropagation()}
-                    className="w-[var(--radix-popover-trigger-width)] border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
+                    className="w-[var(--radix-popover-trigger-width)] min-w-[280px] max-w-[420px] border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
                 >
                     <Command 
                         shouldFilter={false}
@@ -191,35 +181,50 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
 
                             {/* Results Container */}
                             <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
-                                <CommandList 
-                                    className="max-h-[260px] p-1.5 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-muted-foreground/30 hover:scrollbar-thumb-muted-foreground/50 overflow-x-hidden touch-pan-y pointer-events-auto select-none"
-                                    onWheel={(e) => e.stopPropagation()}
-                                    onTouchMove={(e) => e.stopPropagation()}
-                                >
+                                <CommandList className="max-h-[220px] p-1.5 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 overflow-x-hidden">
                                     {filteredOptions.length === 0 && (
                                         <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-sm">
                                             No {label.toLowerCase()} found.
                                         </CommandEmpty>
                                     )}
                                     <CommandGroup heading={label} className="px-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+                                        {/* Select All Option */}
+                                        {options.length > 1 && onToggleAll && !searchQuery.trim() && (
+                                            <CommandItem
+                                                onSelect={onToggleAll}
+                                                className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
+                                            >
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                                    allSelected 
+                                                        ? "bg-primary border-primary text-primary-foreground group-aria-selected:bg-white group-aria-selected:border-white group-aria-selected:text-primary" 
+                                                        : "border-muted-foreground/30 group-aria-selected:border-white/40"
+                                                )}>
+                                                    {allSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                                </div>
+                                                <span className="font-semibold text-xs sm:text-sm flex-1">
+                                                    {allSelected ? 'Deselect All' : 'Select All'}
+                                                </span>
+                                                <CommandShortcut className="group-aria-selected:text-white/60">⌘A</CommandShortcut>
+                                            </CommandItem>
+                                        )}
+
+                                        {/* Option Items */}
                                         {filteredOptions.map((option) => {
-                                            const isSelected = option.id === value;
+                                            const isSelected = selected.includes(option.id);
                                             return (
                                                 <CommandItem
                                                     key={option.id}
                                                     value={option.id}
-                                                    onSelect={() => {
-                                                        onValueChange(option.id);
-                                                        setOpen(false);
-                                                    }}
+                                                    onSelect={() => onToggle(option.id)}
                                                     className={cn(
                                                         "flex items-center gap-3 px-3.5 py-2.5 rounded-xl mb-1 cursor-pointer transition-all",
                                                         "aria-selected:bg-primary aria-selected:text-primary-foreground group"
                                                     )}
                                                 >
-                                                    {/* Circle Check Indicator */}
+                                                    {/* Checkbox indicator */}
                                                     <div className={cn(
-                                                        "w-5 h-5 rounded-full border flex items-center justify-center transition-all shrink-0",
+                                                        "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0",
                                                         isSelected 
                                                             ? "bg-primary border-primary text-primary-foreground group-aria-selected:bg-white group-aria-selected:border-white group-aria-selected:text-primary" 
                                                             : "border-muted-foreground/30 group-aria-selected:border-white/40"
@@ -243,6 +248,12 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                                                             </span>
                                                         )}
                                                     </div>
+
+                                                    {option.badge && (
+                                                        <span className="px-1.5 py-0.5 rounded bg-muted/60 group-aria-selected:bg-white/20 text-[10px] font-bold shrink-0">
+                                                            {option.badge}
+                                                        </span>
+                                                    )}
 
                                                     <CommandShortcut className="group-aria-selected:text-white/60">↵</CommandShortcut>
                                                 </CommandItem>
@@ -274,4 +285,4 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
     );
 };
 
-export default CommandSelector;
+export default MultiCommandSelector;
