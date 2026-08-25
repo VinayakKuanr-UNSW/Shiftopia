@@ -389,36 +389,6 @@ const BottomNavbar: React.FC = () => {
                   <span>{isDark ? "Light" : "Dark"}</span>
                 </button>
               </div>
-              {/* The only way to change persona on a phone — there is no
-                  sidebar here. Full-width and labelled with the destination
-                  rather than the current state, so it reads as an action. */}
-              {canSwitch && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    togglePersona();
-                    setMoreOpen(false);
-                  }}
-                  aria-label={
-                    persona === "employee"
-                      ? "Switch to employer view"
-                      : "Switch to employee view"
-                  }
-                  className={cn(
-                    touch.target,
-                    "mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border/50 bg-background/70 px-3 text-foreground shadow-sm transition-transform active:scale-95",
-                  )}
-                >
-                  {persona === "employee" ? (
-                    <Briefcase className="h-5 w-5 text-indigo-500" aria-hidden="true" />
-                  ) : (
-                    <UserRound className="h-5 w-5 text-emerald-500" aria-hidden="true" />
-                  )}
-                  <span className={text.overlineBare}>
-                    {persona === "employee" ? "Employer view" : "Employee view"}
-                  </span>
-                </button>
-              )}
               <div className="grid grid-cols-3 gap-2">
                 {accessibleMoreItems.map(({ label, Icon, path }) => {
                   const isActive = location.pathname.startsWith(path);
@@ -453,6 +423,42 @@ const BottomNavbar: React.FC = () => {
                   );
                 })}
               </div>
+
+              {/* The only way to change persona on a phone — there is no
+                  sidebar here. It sits directly above Sign out rather than
+                  above the grid: both are ACTIONS on the session, not routes,
+                  so they belong together beneath the destinations. Labelled
+                  with the destination rather than the current state, and the
+                  accessible name is the visible text verbatim (SC 2.5.3). */}
+              {canSwitch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    togglePersona();
+                    setMoreOpen(false);
+                  }}
+                  aria-label={
+                    persona === "employee"
+                      ? "Switch to employer view"
+                      : "Switch to employee view"
+                  }
+                  className={cn(
+                    touch.target,
+                    "mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border/50 bg-background/70 px-3 text-foreground shadow-sm transition-transform active:scale-95",
+                  )}
+                >
+                  {persona === "employee" ? (
+                    <Briefcase className="h-5 w-5 text-indigo-500" aria-hidden="true" />
+                  ) : (
+                    <UserRound className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+                  )}
+                  <span className={text.overlineBare}>
+                    {persona === "employee"
+                      ? "Switch to employer view"
+                      : "Switch to employee view"}
+                  </span>
+                </button>
+              )}
 
               {/* Sign out. Every other entry here is a route; this is the one
                   action, so it sits apart and asks once before committing —

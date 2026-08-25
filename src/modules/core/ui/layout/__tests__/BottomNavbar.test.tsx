@@ -115,6 +115,36 @@ describe('BottomNavbar', () => {
     expect(personaMocks.togglePersona).toHaveBeenCalledOnce();
   });
 
+  // Both are actions on the session rather than destinations, so they sit
+  // together beneath the grid. Placement regresses silently, so it is pinned.
+  it('places the persona switch directly above sign out', () => {
+    personaMocks.canSwitch = true;
+    renderNavbar();
+    openMoreNavigation();
+
+    const lastGridLink = screen.getByRole('link', { name: 'Search' });
+    const persona = screen.getByRole('button', { name: 'Switch to employer view' });
+    const signOut = screen.getByRole('button', { name: 'Sign out' });
+
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4. BOTH assertions are needed:
+    // "before sign out" alone is satisfied by sitting above the grid too, which
+    // is where this button used to be — so that half proves nothing on its own.
+    expect(lastGridLink.compareDocumentPosition(persona) & 4).toBeTruthy();
+    expect(persona.compareDocumentPosition(signOut) & 4).toBeTruthy();
+  });
+
+  // The visible text must BE the accessible name (WCAG SC 2.5.3), or a voice
+  // user saying what they can see fails to activate it.
+  it('names the switch with its visible text', () => {
+    personaMocks.canSwitch = true;
+    renderNavbar();
+    openMoreNavigation();
+
+    expect(
+      screen.getByRole('button', { name: 'Switch to employer view' }),
+    ).toHaveTextContent('Switch to employer view');
+  });
+
   it('keeps the remote two-step sign-out behaviour', () => {
     renderNavbar();
     openMoreNavigation();
