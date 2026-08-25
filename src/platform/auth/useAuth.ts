@@ -42,7 +42,7 @@ export const useAuth = () => {
     }
 
     // 2. Superuser Fallback (delta+)
-    if (['delta', 'epsilon', 'zeta'].includes(user?.highestAccessLevel || '')) {
+    if (['delta', 'epsilon'].includes(user?.highestAccessLevel || '')) {
       return user!.highestAccessLevel;
     }
 
@@ -50,17 +50,17 @@ export const useAuth = () => {
     return activeContract?.accessLevel || 'alpha';
   };
 
-  // Check if active contract OR certificate is delta, epsilon or zeta
+  // Check if active contract OR certificate is delta or epsilon
   const isAdmin = (): boolean =>
-    ['delta', 'epsilon', 'zeta'].includes(getEffectiveLevel());
+    ['delta', 'epsilon'].includes(getEffectiveLevel());
 
   // Check if active contract OR certificate is gamma or above
   const isManagerOrAbove = (): boolean =>
-    ['gamma', 'delta', 'epsilon', 'zeta'].includes(getEffectiveLevel());
+    ['gamma', 'delta', 'epsilon'].includes(getEffectiveLevel());
 
   // Check if active contract OR certificate is beta or above
   const isTeamLeadOrAbove = (): boolean =>
-    ['beta', 'gamma', 'delta', 'epsilon', 'zeta'].includes(getEffectiveLevel());
+    ['beta', 'gamma', 'delta', 'epsilon'].includes(getEffectiveLevel());
 
   /* ============================================================
      Role-aware Landing Page
@@ -83,48 +83,48 @@ export const useAuth = () => {
     // Define feature permissions based on AccessLevel
     const permissions: Record<string, AccessLevel[]> = {
       // Everyone (alpha+)
-      'my-roster': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
-      availabilities: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
-      bids: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
-      'my-swaps': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
-      'my-broadcasts': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
-      profile: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      'my-roster': ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
+      availabilities: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
+      bids: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
+      'my-swaps': ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
+      'my-broadcasts': ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
+      profile: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
       // Employee-facing KPI page. Every level sees their OWN numbers;
       // the managerial roll-up lives behind `insights` (gamma+).
-      performance: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      performance: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
 
       // Beta and above
-      'timesheet-view': ['beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      'timesheet-view': ['beta', 'gamma', 'delta', 'epsilon'],
 
       // Gamma and above
-      templates: ['gamma', 'delta', 'epsilon', 'zeta'],
-      rosters: ['gamma', 'delta', 'epsilon', 'zeta'],
-      'timesheet-edit': ['gamma', 'delta', 'epsilon', 'zeta'],
-      management: ['gamma', 'delta', 'epsilon', 'zeta'],
-      broadcast: ['gamma', 'delta', 'epsilon', 'zeta'],
-      insights: ['gamma', 'delta', 'epsilon', 'zeta'],
+      templates: ['gamma', 'delta', 'epsilon'],
+      rosters: ['gamma', 'delta', 'epsilon'],
+      'timesheet-edit': ['gamma', 'delta', 'epsilon'],
+      management: ['gamma', 'delta', 'epsilon'],
+      broadcast: ['gamma', 'delta', 'epsilon'],
+      insights: ['gamma', 'delta', 'epsilon'],
 
       // Delta and above (Managers)
-      audit: ['delta', 'epsilon', 'zeta'],
-      configurations: ['delta', 'epsilon', 'zeta'],
+      audit: ['delta', 'epsilon'],
+      configurations: ['delta', 'epsilon'],
 
-      // Epsilon and above
-      users: ['epsilon', 'zeta'],
+      // Epsilon
+      users: ['epsilon'],
 
-      read: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
-      create: ['gamma', 'delta', 'epsilon', 'zeta'],
-      update: ['gamma', 'delta', 'epsilon', 'zeta'],
-      delete: ['delta', 'epsilon', 'zeta'],
+      read: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
+      create: ['gamma', 'delta', 'epsilon'],
+      update: ['gamma', 'delta', 'epsilon'],
+      delete: ['delta', 'epsilon'],
     };
 
     const allowedLevels = permissions[feature];
 
     if (!allowedLevels) {
-      // Unknown feature - default to delta/epsilon/zeta only
+      // Unknown feature - default to delta/epsilon only
       console.warn(
-        `[Auth] Unknown feature: ${feature}, defaulting to delta/epsilon/zeta only`
+        `[Auth] Unknown feature: ${feature}, defaulting to delta/epsilon only`
       );
-      return ['delta', 'epsilon', 'zeta'].includes(level);
+      return ['delta', 'epsilon'].includes(level);
     }
 
     return allowedLevels.includes(level);

@@ -1,4 +1,4 @@
-export type AccessLevel = 'alpha' | 'beta' | 'gamma' | 'delta' | 'epsilon' | 'zeta';
+export type AccessLevel = 'alpha' | 'beta' | 'gamma' | 'delta' | 'epsilon';
 export type CertificateType = 'X' | 'Y';
 export type Role = 'admin' | 'manager' | 'teamlead' | 'member';
 

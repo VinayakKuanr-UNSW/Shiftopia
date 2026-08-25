@@ -89,7 +89,7 @@ const corsHeaders = {
 };
 
 // Manager cert levels that authorize an org/dept-scoped run (00 §8, project memory).
-const MANAGER_CERT_LEVELS = ['gamma', 'delta', 'epsilon', 'zeta'];
+const MANAGER_CERT_LEVELS = ['gamma', 'delta', 'epsilon'];
 
 // =============================================================================
 // HTTP HELPERS
@@ -1220,7 +1220,7 @@ async function resolveCaller(req: Request): Promise<{ id: string } | null> {
 
 /**
  * Cert-based authorization (00 §8): the caller must hold an ACTIVE manager cert
- * (gamma/delta/epsilon/zeta) for the requested org (and dept/sub-dept when given).
+ * (gamma/delta/epsilon) for the requested org (and dept/sub-dept when given).
  * `is_manager_or_above()` is broken in prod, so we read the cert table directly.
  */
 async function isManagerForScope(

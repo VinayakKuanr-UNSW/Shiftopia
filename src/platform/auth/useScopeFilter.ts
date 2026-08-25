@@ -132,7 +132,7 @@ export function useScopeFilter(
         if (mode === 'personal') {
             const tree = buildPersonalScopeTree(permissionObject.typeX);
             // If admin has no Type X certs, they might still want to see everything
-            if (tree.organizations.length === 0 && context?.user?.highestAccessLevel === 'zeta') {
+            if (tree.organizations.length === 0 && context?.user?.highestAccessLevel === 'epsilon') {
                 return permissionObject.allowed_scope_tree ?? null;
             }
             return tree;

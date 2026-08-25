@@ -135,7 +135,7 @@ export const authService = {
             }));
 
             // 4. Calculate Highest Access Level (Using Certificates and Contracts)
-            const levels: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
+            const levels: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
             let highest: AccessLevel = 'alpha' as AccessLevel;
 
             // Gather all candidate levels
@@ -151,7 +151,7 @@ export const authService = {
             });
 
             let derivedRole: Role = 'member';
-            if (highest === 'zeta' || highest === 'epsilon') derivedRole = 'admin';
+            if (highest === 'epsilon') derivedRole = 'admin';
             else if (highest === 'delta') derivedRole = 'manager';
             else if (highest === 'gamma') derivedRole = 'manager';
             else if (highest === 'beta') derivedRole = 'teamlead';

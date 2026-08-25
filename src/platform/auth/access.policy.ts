@@ -21,10 +21,10 @@ export const mapRole = (r: string | null): Role => {
 const TYPE_X_LEVELS: AccessLevel[] = ['alpha', 'beta'];
 
 /** Type Y (Managerial) levels, ordered by privilege */
-const TYPE_Y_LEVELS: AccessLevel[] = ['gamma', 'delta', 'epsilon', 'zeta'];
+const TYPE_Y_LEVELS: AccessLevel[] = ['gamma', 'delta', 'epsilon'];
 
 /** All levels ordered by privilege (for backwards compat) */
-const ALL_ACCESS_LEVELS: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
+const ALL_ACCESS_LEVELS: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
 
 // =============================================
 // Page Classification

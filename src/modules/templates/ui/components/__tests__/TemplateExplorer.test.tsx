@@ -37,7 +37,7 @@ const mockTemplates: ExplorerTemplate[] = [
   },
   {
     id: 'tpl-3',
-    name: 'Zeta Ready Template',
+    name: 'Gamma Ready Template',
     description: 'Published template',
     status: 'published',
     version: 3,
@@ -74,7 +74,7 @@ describe('TemplateExplorer', () => {
     expect(screen.getByText('Alpha Setup')).toBeInTheDocument();
     expect(screen.getByText('Beta Event Baseline')).toBeInTheDocument();
     // Published template should not be displayed in draft view
-    expect(screen.queryByText('Zeta Ready Template')).not.toBeInTheDocument();
+    expect(screen.queryByText('Gamma Ready Template')).not.toBeInTheDocument();
   });
 
   it('selects a template on single click', () => {
