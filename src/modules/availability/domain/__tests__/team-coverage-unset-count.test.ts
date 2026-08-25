@@ -91,23 +91,50 @@ describe('summarise — the "Not declared" chase-list', () => {
     // on a chase-list with nothing to chase.
     it('never counts a contract-rostered permanent, declared or not', () => {
         const i = inputs({
-            members: [member({ profileId: 'ft1', contractType: 'FT', employmentStatus: 'Full-Time' })],
+            members: [member({
+                profileId: 'ft1',
+                contractType: 'FT',
+                isWhollyFullTime: true,
+                employmentStatus: 'Full-Time',
+            })],
         });
         expect(summaryOf(i).unsetCount).toBe(0);
     });
 
     // The multi-job employee, which is what the scoping work is for. Under a
-    // Security filter their scoped contractType is FT, so they are a fact;
-    // under Set-up it is Casual, so they are a chase.
+    // Security filter every contract in scope is FT, so they are a fact; under
+    // Set-up it is Casual, so they are a chase.
     it('counts the same person under their casual job and not under their full-time one', () => {
         const asSecurity = inputs({
-            members: [member({ profileId: 'multi', contractType: 'FT', employmentStatus: 'Full-Time' })],
+            members: [member({
+                profileId: 'multi',
+                contractType: 'FT',
+                isWhollyFullTime: true,
+                employmentStatus: 'Full-Time',
+            })],
         });
         const asSetup = inputs({
             members: [member({ profileId: 'multi', contractType: 'CASUAL' })],
         });
         expect(summaryOf(asSecurity).unsetCount).toBe(0);
         expect(summaryOf(asSetup).unsetCount).toBe(1);
+    });
+
+    // The MULTI-HIRED employee — Full-Time and Casual in the SAME
+    // sub-department (EBA cl 13). The scoped basis resolves to FT, so the old
+    // `contractType === 'FT'` test excused them from the chase-list; their
+    // casual engagement is opt-in and had declared nothing, so the solver would
+    // not place them on a single casual shift there. They ARE a chase.
+    it('counts a multi-hired member whose scope is not WHOLLY full-time', () => {
+        const i = inputs({
+            members: [member({
+                profileId: 'mixed',
+                contractType: 'FT',
+                isWhollyFullTime: false,
+                employmentStatus: 'Full-Time, Casual',
+            })],
+        });
+        expect(summaryOf(i).unsetCount).toBe(1);
     });
 
     it('still honours an explicit hasDeclared: false', () => {

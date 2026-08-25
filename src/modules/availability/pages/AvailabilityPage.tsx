@@ -108,7 +108,10 @@ export const AvailabilityPage: React.FC = () => {
   // testing both was one test written twice. While the scopes are still loading
   // it is false, which renders the declaration editor for a beat — the safe way
   // round, since the FT card is the one that asserts something.
-  const isFullTime = !scopesLoading && contractBasis.isFullTime;
+  // Named for what it gates: whether the availability editor is withheld.
+  // Only a WHOLLY Full-Time scope withholds it — a scope mixing a Full-Time
+  // and a Casual engagement must stay declarable for the casual side.
+  const isFullTime = !scopesLoading && contractBasis.isWhollyFullTime;
 
   /**
    * May this person add a declaration for the job on screen?

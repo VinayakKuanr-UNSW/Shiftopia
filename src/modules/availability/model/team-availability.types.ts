@@ -77,6 +77,19 @@ export interface TeamDayCell {
     windows: Array<{ start: string; end: string }>;
     /** Shifts the person is rostered onto that day. */
     shifts: Array<{ id: string; start: string; end: string; roleName: string | null }>;
+    /**
+     * Why this cell reads the way it does, when the state alone would mislead.
+     *
+     * Set for exactly one case today: a member whose GOVERNING contract here is
+     * Full-Time but who also holds a non-Full-Time engagement in the same scope
+     * (EBA cl 13 Multi-Hiring). They render 'unset', because the casual half of
+     * their employment is OPT_IN and has declared nothing — but a manager
+     * reading a FULL-TIME chip against "Not declared" has no way to know that
+     * without being told.
+     *
+     * Presentational only. Nothing counts, filters, or sorts on it.
+     */
+    note?: string;
 }
 
 export interface MemberContractInfo {
@@ -109,6 +122,29 @@ export interface TeamMember {
     employmentStatus: string | null;
     /** False when the member has no availability_rules rows at all. */
     hasDeclared?: boolean;
+    /**
+     * Is EVERY contract in scope Full-Time?
+     *
+     * The predicate that decides whether an absent declaration is a FACT
+     * ('contract') or a GAP ('unset') — see `isContractRostered`. It is the
+     * TeamMember-shaped carrier for `ContractBasis.isWhollyFullTime`, which
+     * mirrors `sm_all_active_contracts_ft_in` (migration 20260824130200).
+     *
+     * `contractType` cannot answer this and must not be used for it. That field
+     * reports the GOVERNING contract, and the governing contract of a mixed
+     * scope is the Full-Time one — correctly, since Full-Time is the stricter
+     * basis for "how many hours may this person work". But someone who is
+     * Full-Time Supervisor and Casual Team Leader in the same sub-department
+     * still owes a declaration for the casual work: Casual is OPT_IN, silence
+     * means UNAVAILABLE, and the solver hard-filters them off every casual
+     * shift there without emitting a reason.
+     *
+     * UNDEFINED IS READ AS FALSE, deliberately. A producer that has not
+     * resolved the basis has not established that the scope is wholly
+     * Full-Time, and the safe failure is a name on the chase-list rather than a
+     * silent addition to AVAILABLE — the shape of the HC-5d 0/144 incident.
+     */
+    isWhollyFullTime?: boolean;
     /**
      * Compliance basis — which contract's terms the hours rules are applied
      * against, resolved by `resolveComplianceBasis`. Held SEPARATELY from

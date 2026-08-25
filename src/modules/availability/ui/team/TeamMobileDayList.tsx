@@ -290,6 +290,23 @@ export const TeamMobileDayList: React.FC<Props> = ({
                                                   ? `${cell.windows[0].start}–${cell.windows[0].end}`
                                                   : '—'}
                                         </Fact>
+                                        {/* The desktop grid carries this as a
+                                            tooltip. There is no hover here, so
+                                            the one thing that explains a
+                                            FULL-TIME member reading "Not
+                                            declared" has to be text or it is
+                                            not shown at all. Spans both columns
+                                            and wraps — it is a sentence. */}
+                                        {cell?.note && (
+                                            <div className="col-span-2 flex flex-col gap-0.5 min-w-0">
+                                                <dt className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                                                    Why
+                                                </dt>
+                                                <dd className="text-[11px] font-semibold text-muted-foreground leading-snug">
+                                                    {cell.note}
+                                                </dd>
+                                            </div>
+                                        )}
                                     </>
                                 )}
 

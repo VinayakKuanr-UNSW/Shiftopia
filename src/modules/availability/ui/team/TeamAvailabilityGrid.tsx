@@ -771,7 +771,12 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
             <div
                 tabIndex={0}
                 role="img"
-                aria-label={`${member.fullName}, ${when}: ${TEAM_DAY_STATE_LABELS[cell.state]}${detail}`}
+                // `cell.note` is carried into the accessible name as well as the
+                // tooltip: it is the only thing on screen that explains why a
+                // member chipped FULL-TIME is sitting on the chase-list, and a
+                // screen-reader user cannot hover to find out.
+                aria-label={`${member.fullName}, ${when}: ${TEAM_DAY_STATE_LABELS[cell.state]}${detail}${cell.note ? `. ${cell.note}` : ''}`}
+                title={cell.note}
                 className={cn(base, soft.dashed && 'border-dashed')}
                 style={{
                     backgroundColor: soft.bg,

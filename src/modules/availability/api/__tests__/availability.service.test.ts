@@ -32,6 +32,7 @@ describe('Full-Time Availability Guard', () => {
     vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'FT',
       isFullTime: true,
+      isWhollyFullTime: true,
       contractedWeeklyHours: 38,
       employmentStatus: 'Full-Time',
       envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
@@ -59,6 +60,7 @@ describe('Full-Time Availability Guard', () => {
     vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'CASUAL',
       isFullTime: false,
+      isWhollyFullTime: false,
       contractedWeeklyHours: undefined,
       employmentStatus: 'Casual',
       envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
@@ -96,6 +98,7 @@ describe('Full-Time Availability Guard', () => {
     vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'FT',
       isFullTime: true,
+      isWhollyFullTime: true,
       contractedWeeklyHours: 38,
       employmentStatus: 'Full-Time',
       envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },

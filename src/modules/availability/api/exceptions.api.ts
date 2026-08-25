@@ -120,7 +120,8 @@ export async function createAvailabilityException(
     const basis = await fetchScopedContractBasis(resolvedProfileId, {
         subDepartmentId: input.subDepartmentId ?? null,
     });
-    if (basis.isFullTime) throw new Error(FT_AVAILABILITY_ERROR);
+    // Same predicate as the DB guard — see availability.service.ts.
+    if (basis.isWhollyFullTime) throw new Error(FT_AVAILABILITY_ERROR);
 
     const { data, error } = await (supabase as any)
         .from('availability_exceptions')

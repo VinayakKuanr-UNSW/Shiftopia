@@ -201,12 +201,12 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
                 return userContracts[0] ?? null;
             })();
 
-            // When a SINGLE sub-department is selected, the contractType must be
-            // the SCOPED one, not the person-wide winner. This is the sharpest
+            // When a SINGLE sub-department is selected, the basis must be the
+            // SCOPED one, not the person-wide winner. This is the sharpest
             // end-to-end test of the whole feature: `isContractRostered` in
-            // `team-coverage.ts` reads `contractType === 'FT'` to decide whether
-            // a cell renders as 'contract' (a permanent, no declaration expected)
-            // or 'unset' (a casual who owes a declaration). For the multi-job
+            // `team-coverage.ts` reads `isWhollyFullTime` to decide whether a
+            // cell renders as 'contract' (a permanent, no declaration expected)
+            // or 'unset' (someone who owes a declaration). For the multi-job
             // employee the SAME PERSON on the SAME DAY must read 'contract' under
             // Security and 'unset' under Set-up.
             const scopeRef: AvailabilityScopeRef | null =
@@ -244,6 +244,14 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
                 // sub-department is selected, and the person-wide one otherwise.
                 contractType: scopedBasis.contractType,
                 contractedWeeklyHours: scopedBasis.contractedWeeklyHours,
+                // NOT derivable from `contractType` — that is the governing
+                // contract, and the governing contract of a Full-Time +
+                // Casual sub-department is the Full-Time one. This is the
+                // "every contract in scope is Full-Time" question, and it is
+                // what decides whether an absent declaration is a fact or a
+                // gap. Producing a TeamMember without it is a silent vote for
+                // "gap" (see the field comment).
+                isWhollyFullTime: scopedBasis.isWhollyFullTime,
             } satisfies TeamMember;
         })
         .sort((a, b) => a.fullName.localeCompare(b.fullName));

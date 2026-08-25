@@ -126,6 +126,12 @@ async function readActiveContracts(employeeId: string): Promise<ActiveContractsR
             ordinaryDays: (row.ordinary_days as number[] | null) ?? null,
             subDepartmentId: (row.sub_department_id as string | null) ?? null,
             departmentId: (row.department_id as string | null) ?? null,
+            // Carried so a caller that names a role gets the contract for THAT
+            // role rather than whichever of several in the sub-department the
+            // casual-last ordering happens to prefer. `role_id` is already in
+            // BASE_COLUMNS for `roleIds` below; this just stops it being
+            // dropped on the way into the resolver.
+            roleId: (row.role_id as string | null) ?? null,
         })),
         roleIds: rows
             .map((row) => row.role_id as string | null)
@@ -285,7 +291,8 @@ export async function fetchAvailabilityScopes(employeeId: string): Promise<{
             departmentId: ref.departmentId ?? null,
             departmentName: deptName,
             roleIds: roleIdsByScope.get(key) ?? [],
-            canDeclare: !basis.isFullTime,
+            // Wholly-FT scopes cannot declare; mixed ones can (cl 13).
+            canDeclare: !basis.isWhollyFullTime,
         };
     });
 

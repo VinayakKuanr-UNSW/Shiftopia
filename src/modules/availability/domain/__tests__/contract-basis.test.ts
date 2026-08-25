@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     contractsInScope,
+    contractsInRoleScope,
+    hasConflictingEmploymentTypes,
     resolveComplianceBasis,
     resolveScopedBasis,
     sortByComplianceBasis,
@@ -56,6 +58,10 @@ describe('resolveComplianceBasis', () => {
             employmentStatus: null,
             envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
             isFullTime: false,
+            // Not "wholly Full-Time" either: someone with no contract in scope
+            // is UNCLASSIFIED, and must stay able to declare. The SQL guard
+            // requires the same EXISTS before it blocks.
+            isWhollyFullTime: false,
             // Nobody we can read a contract for stays on the STRICT reading —
             // the same default the solver applies — so the page never tells
             // someone they are available when the solver will not place them.
@@ -410,5 +416,111 @@ describe('resolveScopedBasis — scope semantics', () => {
         });
         expect(resolveScopedBasis([ftSecurity, ptSetup], SETUP).envelope.spanStart).toBe('09:00:00');
         expect(resolveComplianceBasis([ftSecurity, ptSetup]).envelope.spanStart).toBe('06:00:00');
+    });
+});
+
+/**
+ * Role grain — one sub-department, two engagements.
+ *
+ * Sub-department scoping was enough while a sub-department meant one
+ * appointment. EBA cl 13 (Multi-Hiring) and migrations 20260824130000/130100
+ * made "Full-Time Event Setups Manager AND Casual Usher, both in Events" a
+ * shape the database accepts, and the casual-last ordering answers that with
+ * Full-Time — right for "how many hours may this human work", wrong for "what
+ * are they engaged as when they usher".
+ */
+describe('contractsInRoleScope / resolveScopedBasis — role grain', () => {
+    const EVENTS = 'sd-events';
+    const OPS = 'sd-ops';
+    const DEPT = 'd1';
+    const MANAGER = 'role-manager';
+    const USHER = 'role-usher';
+
+    const c = (over: Partial<ContractBasisInput>): ContractBasisInput => ({
+        employmentStatus: 'Casual',
+        contractedWeeklyHours: null,
+        startDate: null,
+        subDepartmentId: EVENTS,
+        departmentId: DEPT,
+        roleId: USHER,
+        ...over,
+    });
+
+    const mixed: ContractBasisInput[] = [
+        c({ employmentStatus: 'Full-Time', contractedWeeklyHours: 38, roleId: MANAGER }),
+        c({ employmentStatus: 'Casual', roleId: USHER }),
+    ];
+
+    it('resolves the usher role to Casual, not to the Full-Time contract beside it', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: USHER });
+        expect(basis.contractType).toBe('CASUAL');
+        expect(basis.employmentStatus).toBe('Casual');
+        expect(basis.isFullTime).toBe(false);
+        expect(basis.availabilityMode).toBe('OPT_IN');
+    });
+
+    it('resolves the manager role to Full-Time', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: MANAGER });
+        expect(basis.contractType).toBe('FT');
+        expect(basis.isFullTime).toBe(true);
+        expect(basis.availabilityMode).toBe('OPT_OUT');
+    });
+
+    // Without a role the question is job-wide, and the strict reading still
+    // wins — this is the behaviour every existing caller relies on.
+    it('keeps the casual-last precedence when no role is named', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT });
+        expect(basis.contractType).toBe('FT');
+    });
+
+    // Falling back rather than narrowing to empty is load-bearing: an empty
+    // basis reads as unclassified, flips to the strict OPT_IN, and hard-filters
+    // the person off every shift.
+    it('falls back to the sub-department when no contract names the role', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: 'role-not-held' });
+        expect(basis.contractType).toBe('FT');
+        expect(basis.employmentStatus).toBeTruthy();
+    });
+
+    it('narrows within the sub-department only', () => {
+        const spanning: ContractBasisInput[] = [
+            c({ employmentStatus: 'Full-Time', contractedWeeklyHours: 38, subDepartmentId: OPS, roleId: USHER }),
+            c({ employmentStatus: 'Casual', subDepartmentId: EVENTS, roleId: USHER }),
+        ];
+        expect(resolveScopedBasis(spanning, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: USHER }).contractType).toBe('CASUAL');
+        expect(resolveScopedBasis(spanning, { subDepartmentId: OPS, departmentId: DEPT, roleId: USHER }).contractType).toBe('FT');
+    });
+});
+
+/** The TS mirror of `sm_all_active_contracts_ft_in` (migration 20260824130200). */
+describe('isWhollyFullTime — what the availability editor is gated on', () => {
+    const base: ContractBasisInput = {
+        employmentStatus: 'Full-Time',
+        contractedWeeklyHours: 38,
+        startDate: null,
+        subDepartmentId: 'sd1',
+        departmentId: 'd1',
+    };
+
+    it('is true when every contract in scope is Full-Time', () => {
+        expect(resolveComplianceBasis([base]).isWhollyFullTime).toBe(true);
+        expect(resolveComplianceBasis([base, { ...base, roleId: 'r2' }]).isWhollyFullTime).toBe(true);
+    });
+
+    it('is FALSE for a mixed scope, even though isFullTime is true', () => {
+        const mixed = [base, { ...base, employmentStatus: 'Casual', contractedWeeklyHours: null }];
+        const basis = resolveComplianceBasis(mixed);
+        expect(basis.isFullTime).toBe(true);         // governing contract
+        expect(basis.isWhollyFullTime).toBe(false);  // ...but still declarable
+    });
+
+    it('is false for an empty scope — unclassified is not Full-Time', () => {
+        expect(resolveComplianceBasis([]).isWhollyFullTime).toBe(false);
+    });
+
+    it('is false when the scope is wholly Part-Time', () => {
+        expect(resolveComplianceBasis([
+            { ...base, employmentStatus: 'Part-Time', contractedWeeklyHours: 20 },
+        ]).isWhollyFullTime).toBe(false);
     });
 });

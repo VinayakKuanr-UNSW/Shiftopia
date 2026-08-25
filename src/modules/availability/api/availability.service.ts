@@ -76,7 +76,13 @@ async function assertCanDeclareFor(
   // sub-department as every contract — the same NULL branch
   // `sm_holds_active_ft_contract_in` uses in SQL. Those two must agree or the
   // page offers a declaration the database then refuses.
-  if (basis.isFullTime) throw new Error(FT_AVAILABILITY_ERROR);
+  // Mirrors `sm_all_active_contracts_ft_in` (migration 20260824130200):
+  // blocked only when the WHOLE scope is Full-Time. A sub-department
+  // holding both a Full-Time and a Casual engagement stays declarable,
+  // because the casual side is OPT_IN and silence there means
+  // unavailable. Was `basis.isFullTime`, which reports the governing
+  // contract and so blocked the mixed case the database now accepts.
+  if (basis.isWhollyFullTime) throw new Error(FT_AVAILABILITY_ERROR);
   return resolvedProfileId;
 }
 
