@@ -61,8 +61,18 @@ capstone-project-26t2-9900-t17b-almond/
 # Claude Code agent worktrees — transient; never commit as gitlinks
 .claude/worktrees/
 
-# graphify: keep the graph.json data artifact (tracked by convention), but ignore
-# machine-local pointers and the large regenerable HTML viewer
+# graphify: keep graph.json / manifest.json (the data artifacts, tracked by
+# convention) and ignore everything the tool regenerates from them.
+#
+# graphify-out/cache/ is why this block matters. It is 1,103 content-addressed
+# AST files, 15MB, keyed by the SHA-256 of the source file each was parsed from
+# and rewritten on every run — worthless in a checkout, since any other machine
+# regenerates it from its own working tree. Untracked, it made the editor's SCM
+# badge read "1K+" and buried the pending work that was actually real.
+graphify-out/cache/
 graphify-out/.graphify_root
 graphify-out/.graphify_python
+graphify-out/.graphify_labels.json
+graphify-out/.graphify_analysis.json
+graphify-out/GRAPH_REPORT.md
 graphify-out/graph.html
