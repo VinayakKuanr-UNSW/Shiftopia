@@ -27,6 +27,7 @@
     "android:sync:live": "npx cap sync android",
     "android:open": "npx cap open android",
     "android:run": "npm run android:build:web && npx cap run android",
+    "db:types": "node scripts/gen-types.mjs",
     "seed:generate": "npx tsx scripts/generate-venueops-seed.ts > supabase/seed.sql",
     "gen:eba-rates": "node scripts/gen-eba-rate-schedule.mjs",
     "graph:diff": "node scripts/graph-diff.js"

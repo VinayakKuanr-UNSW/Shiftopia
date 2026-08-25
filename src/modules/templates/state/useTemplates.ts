@@ -1138,6 +1138,12 @@ export function useTemplates(): UseTemplatesReturn {
                 day_of_week: s.dayOfWeek ?? null,
                 assigned_employee_id: s.assignedEmployeeId || null,
                 assigned_employee_name: s.assignedEmployeeName || null,
+                // NOT NULL with no default and NO trigger on template_shifts —
+                // duplicating a template with shifts failed on a 23502 before
+                // this line existed. The stale generated types hid it by not
+                // marking the column required. Same `?? 'Casual'` mapping
+                // `templateShape.ts` uses on the save path.
+                target_employment_type: s.targetEmploymentType ?? 'Casual',
               }));
 
               await supabase.from('template_shifts').insert(shiftsToInsert);

@@ -92,20 +92,21 @@ export interface ContractedStaffMember {
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
-export const EligibilityService = {
-    /**
-     * Returns deduplicated list of employees who have an Active contract
-     * matching the given context (org/dept/sub-dept/role).
-     */
-    async getEligibleEmployees(context: EligibilityContext): Promise<EligibleEmployee[]> {
-        try {
-            // We start from profiles to ensure we can find all users, 
-            // but we use an inner join on user_contracts to maintain organizational scoping.
-            // By removing the .eq('status', 'Active') filter, we include all members 
-            // regardless of their current contract state (Expired, Pending, etc).
-            let query = supabase
-                .from('profiles')
-                .select(`
+/**
+ * Annotated `string` rather than left as a template LITERAL, deliberately.
+ *
+ * supabase-js parses the select string at the TYPE level against the entire
+ * schema to infer the row shape. This three-level nested select against a
+ * 125-table schema exceeds TypeScript's instantiation depth limit and fails
+ * the build with TS2589 — which only surfaced once the generated types were
+ * regenerated from the live database and stopped being six tables short.
+ *
+ * Widening to `string` skips that type-level parse. Nothing is lost: the rows
+ * are consumed as `(data as any[])` with `(c: any)` accessors immediately
+ * below, so the inferred shape was never actually being checked against
+ * anything.
+ */
+const PROFILE_ELIGIBILITY_SELECT: string = `
                     id,
                     first_name,
                     last_name,
@@ -129,7 +130,22 @@ export const EligibilityService = {
                         status,
                         verification_status
                     )
-                `);
+                `;
+
+export const EligibilityService = {
+    /**
+     * Returns deduplicated list of employees who have an Active contract
+     * matching the given context (org/dept/sub-dept/role).
+     */
+    async getEligibleEmployees(context: EligibilityContext): Promise<EligibleEmployee[]> {
+        try {
+            // We start from profiles to ensure we can find all users, 
+            // but we use an inner join on user_contracts to maintain organizational scoping.
+            // By removing the .eq('status', 'Active') filter, we include all members 
+            // regardless of their current contract state (Expired, Pending, etc).
+            let query = supabase
+                .from('profiles')
+                .select(PROFILE_ELIGIBILITY_SELECT);
 
             // Org filter
             if (context.organizationId && isValidUuid(context.organizationId)) {

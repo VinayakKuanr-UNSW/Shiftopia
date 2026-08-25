@@ -7,6 +7,31 @@ import { Employee } from '../model/employee.types';
  * 
  * Fetches employee data from the profiles table.
  */
+/**
+ * Widened to `string` for the same reason as `PROFILE_ELIGIBILITY_SELECT` in
+ * rosters/services/eligibility.service.ts: supabase-js parses the select at the
+ * TYPE level against the whole schema, and this nested select now exceeds
+ * TypeScript's instantiation depth (TS2589). `user_contracts` became a VIEW
+ * over `hr.user_contracts` in production, which the regenerated types finally
+ * reflect — views nest one level deeper than the table this file was written
+ * against. Rows are consumed as `(p: any)` below, so no real checking is lost.
+ */
+const EMPLOYEE_PROFILE_SELECT: string = `
+                id,
+                first_name,
+                last_name,
+                full_name,
+                email,
+                avatar_url,
+                user_contracts (
+                    id,
+                    organization_id,
+                    department_id,
+                    sub_department_id,
+                    status
+                )
+            `;
+
 export const employeeService = {
     getAllEmployees: async (orgIds?: string[], deptIds?: string[]): Promise<Employee[]> => {
         // When scope filters are provided, resolve matching user IDs via contracts first
@@ -22,21 +47,7 @@ export const employeeService = {
 
         let query = supabase
             .from('profiles')
-            .select(`
-                id,
-                first_name,
-                last_name,
-                full_name,
-                email,
-                avatar_url,
-                user_contracts (
-                    id,
-                    organization_id,
-                    department_id,
-                    sub_department_id,
-                    status
-                )
-            `)
+            .select(EMPLOYEE_PROFILE_SELECT)
             .order('full_name');
 
         if (filteredUserIds !== null) {
