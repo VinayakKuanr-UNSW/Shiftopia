@@ -85,6 +85,21 @@ describe('BottomNavbar', () => {
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
   });
 
+  it('puts the four employee tabs in the bar', () => {
+    renderNavbar();
+    for (const label of ['Roster', 'Avail', 'Requests', 'Leave']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('keeps the shared surfaces reachable in the employee persona', () => {
+    renderNavbar();
+    openMoreNavigation();
+    for (const label of ['Notif', 'Profile', 'Settings', 'Search']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+  });
+
   it('does not offer the persona switch to someone who cannot switch', () => {
     renderNavbar();
     openMoreNavigation();
@@ -121,13 +136,27 @@ describe('BottomNavbar — employer persona', () => {
     personaMocks.togglePersona.mockReset();
   });
 
-  it('shows employer surfaces and drops the employee ones', () => {
+  // The four employer tabs, per the agreed layout:
+  // Roster / Team / Requests / Insights, then More.
+  it('puts the four employer tabs in the bar', () => {
     authMocks.hasPermission.mockReturnValue(true);
     renderNavbar();
 
-    expect(screen.getByRole('link', { name: 'Rosters' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Roster' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Atten' })).not.toBeInTheDocument();
+    for (const label of ['Roster', 'Team', 'Requests', 'Insights']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    // Employee-only surfaces are gone from the bar entirely.
+    expect(screen.queryByRole('link', { name: 'Avail' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Leave' })).not.toBeInTheDocument();
+  });
+
+  // /management/payroll is in the router but NOT in ALLOWED_MOBILE_ROUTES, so
+  // offering it here would land on the Desktop Only screen.
+  it('never offers payroll on mobile', () => {
+    authMocks.hasPermission.mockReturnValue(true);
+    renderNavbar();
+    openMoreNavigation();
+    expect(screen.queryByRole('link', { name: /Payroll/i })).not.toBeInTheDocument();
   });
 
   // The one that matters: permission filtering must happen BEFORE the first
@@ -137,16 +166,22 @@ describe('BottomNavbar — employer persona', () => {
     authMocks.hasPermission.mockImplementation((p: string) => p === 'insights');
     renderNavbar();
 
-    expect(screen.getByRole('link', { name: 'KPI' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Rosters' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Insights' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Roster' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
   });
 
-  it('keeps Settings reachable from either persona', () => {
+  // Notifications, Profile, Settings and Search belong to the application, not
+  // to either persona. Reachable even when the user holds no employer
+  // permission at all.
+  it('keeps the shared surfaces reachable from either persona', () => {
     authMocks.hasPermission.mockReturnValue(false);
     renderNavbar();
     openMoreNavigation();
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
+
+    for (const label of ['Notif', 'Profile', 'Settings', 'Search']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
   });
 });

@@ -19,9 +19,12 @@ import {
   Menu,
   Moon,
   Palmtree,
+  Plus,
   Radio,
   RefreshCw,
+  Search,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Sun,
   TrendingUp,
@@ -91,10 +94,14 @@ const activeIndicatorTransition = {
  */
 const employeeItems: BottomNavItem[] = [
   { label: "Roster", icon: Calendar, path: "/my-roster" },
-  { label: "Atten", icon: Fingerprint, path: "/my-attendance" },
   { label: "Avail", icon: CalendarDays, path: "/my-availabilities" },
-  { label: "Bids", icon: BadgeCheck, path: "/my-bids" },
+  // "Requests" is one slot for the bids/swaps pair. Bids is the entry point;
+  // Swaps sits beside it in More rather than spending a second tab on a pair.
+  { label: "Requests", icon: BadgeCheck, path: "/my-bids" },
+  { label: "Leave", icon: Palmtree, path: "/my-leave" },
   { label: "Swaps", icon: RefreshCw, path: "/my-swaps" },
+  { label: "Atten", icon: Fingerprint, path: "/my-attendance" },
+  { label: "Performance", icon: TrendingUp, path: "/performance" },
   {
     label: "Radio",
     icon: Radio,
@@ -102,40 +109,42 @@ const employeeItems: BottomNavItem[] = [
     badgeKey: "broadcasts",
     requiredPermission: "my-broadcasts",
   },
-  { label: "Leave", icon: Palmtree, path: "/my-leave" },
-  {
-    label: "Notif",
-    icon: BellRing,
-    path: "/my-notifications",
-    badgeKey: "notifications",
-  },
 ];
 
 /** Manager surfaces, in tab-priority order. All permission-gated. */
 const employerItems: BottomNavItem[] = [
-  { label: "Rosters", icon: LayoutGrid, path: "/rosters", requiredPermission: "rosters" },
-  { label: "Bids", icon: Gavel, path: "/management/bids", requiredPermission: "management" },
+  { label: "Roster", icon: LayoutGrid, path: "/rosters", requiredPermission: "rosters" },
+  // The team's availability, not the user's own.
+  { label: "Team", icon: CalendarDays, path: "/team-availability", requiredPermission: "management" },
+  { label: "Requests", icon: Gavel, path: "/management/bids", requiredPermission: "management" },
+  // A destination in its own right, and more useful held permanently than
+  // Broadcast or Compliance, which sit comfortably in More.
+  { label: "Insights", icon: BarChart3, path: "/insights", requiredPermission: "insights" },
   { label: "Swaps", icon: ArrowLeftRight, path: "/management/swaps", requiredPermission: "management" },
-  { label: "Times", icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
+  { label: "Leave Appr", icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
   { label: "Templates", icon: LayoutTemplate, path: "/templates", requiredPermission: "templates" },
+  { label: "New Shift", icon: Plus, path: "/rosters/shift/new", requiredPermission: "rosters" },
+  { label: "Demand", icon: TrendingUp, path: "/labor-demand", requiredPermission: "rosters" },
+  { label: "Times", icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
   { label: "Broadcast", icon: Megaphone, path: "/broadcast", requiredPermission: "broadcast" },
-  { label: "KPI", icon: BarChart3, path: "/insights", requiredPermission: "insights" },
-  // `requiredPermission` takes one value; the route itself admits `insights`
-  // too, and those users reach it from the sidebar. "Avail" on the employee
-  // side is the user's OWN availability; this is the team's.
-  { label: "Team Avail", icon: CalendarDays, path: "/team-availability", requiredPermission: "management" },
-  { label: "Leave Mgmt", icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
+  { label: "Compliance", icon: ShieldAlert, path: "/compliance/rejections", requiredPermission: "management" },
   { label: "Users", icon: Users, path: "/users", requiredPermission: "users" },
+  // /management/payroll is deliberately ABSENT. It is in the router but NOT in
+  // ALLOWED_MOBILE_ROUTES, so a tab or drawer entry for it would land on the
+  // Desktop Only screen — the same failure the Leave button used to have.
+  // Allowlisting a wide payroll table is a design decision, not a nav one.
 ];
 
 /**
- * Reachable from either persona. Performance is employee-facing but carries no
- * permission gate — every level sees their own numbers — and Settings is not a
- * persona surface at all, so hiding either behind the toggle would strand it.
+ * Reachable from either persona, because none of them is persona work.
+ * Notifications is workspace-wide; Profile, Settings and Search belong to the
+ * application. Hiding any of them behind the toggle would strand it.
  */
 const sharedMoreItems: MoreNavItem[] = [
-  { label: "Performance", Icon: TrendingUp, path: "/performance" },
+  { label: "Notif", Icon: BellRing, path: "/my-notifications" },
+  { label: "Profile", Icon: UserRound, path: "/profile" },
   { label: "Settings", Icon: Settings, path: "/settings" },
+  { label: "Search", Icon: Search, path: "/search" },
 ];
 
 const toMoreItem = ({ label, icon: Icon, path, requiredPermission }: BottomNavItem): MoreNavItem => ({

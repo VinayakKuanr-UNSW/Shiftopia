@@ -400,16 +400,6 @@ const AppSidebar: React.FC = () => {
             description="View announcements"
           />
 
-          <NavigationItem
-            to="/my-notifications"
-            icon={BellRing}
-            iconColor={iconColorMap.notifications}
-            label={t('nav.my_notifications')}
-            isActive={isRouteActive('/my-notifications')}
-            badge={unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : undefined}
-            description="View workspace updates"
-          />
-
           {/* Employee-facing half of the KPI split. No permission gate — every
               access level sees their own numbers, and the RPC behind it already
               enforces `p_employee_id = auth.uid() OR is_manager_or_above()`. */}
@@ -423,6 +413,30 @@ const AppSidebar: React.FC = () => {
           />
         </CollapsibleSection>
         </>)}
+
+        {/* ---------- Shared: belongs to neither persona ----------
+            Notifications is workspace-wide, not employer or employee work. It
+            was inside the employee block, which meant switching to the employer
+            persona hid the unread badge — the one entry a manager most needs to
+            keep seeing. Settings lives in the footer below and is already
+            persona-independent; Profile and Search are reached from the header,
+            so neither needs a nav entry here. */}
+        <CollapsibleSection
+          icon={BellRing}
+          title={t('nav.shared', 'Workspace')}
+          color={iconColorMap.notifications}
+          defaultOpen={true}
+        >
+          <NavigationItem
+            to="/my-notifications"
+            icon={BellRing}
+            iconColor={iconColorMap.notifications}
+            label={t('nav.my_notifications')}
+            isActive={isRouteActive('/my-notifications')}
+            badge={unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : undefined}
+            description="View workspace updates"
+          />
+        </CollapsibleSection>
 
         {/* ---------- Rostering Section (employer persona) ---------- */}
         {isEmployer && (hasPermission('templates') ||
