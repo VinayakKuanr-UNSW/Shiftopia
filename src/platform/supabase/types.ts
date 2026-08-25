@@ -9746,7 +9746,7 @@ export type Database = {
       }
     }
     Enums: {
-      access_level: "alpha" | "beta" | "gamma" | "delta" | "epsilon"
+      access_level: "alpha" | "beta" | "gamma" | "delta" | "epsilon" | "zeta"
       actor_type: "USER" | "SYSTEM"
       assignment_method: "manual" | "template" | "bid" | "trade" | "auto"
       assignment_status:
@@ -10055,7 +10055,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      access_level: ["alpha", "beta", "gamma", "delta", "epsilon"],
+      access_level: ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"],
       actor_type: ["USER", "SYSTEM"],
       assignment_method: ["manual", "template", "bid", "trade", "auto"],
       assignment_status: [

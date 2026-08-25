@@ -66,6 +66,12 @@ const TYPE_Y_LEVELS: { level: AccessLevel; label: string; description: string; i
         description: 'Full organization access',
         icon: <Globe className="w-4 h-4 text-emerald-400" />,
     },
+    {
+        level: 'zeta',
+        label: 'Zeta (Super Admin)',
+        description: 'Unrestricted global access across all organizations',
+        icon: <Zap className="w-4 h-4 text-rose-400" />,
+    },
 ];
 
 // Combined for backward compat lookup
@@ -75,6 +81,7 @@ const ACCESS_LEVEL_CONFIG: Record<AccessLevel, { label: string; description: str
     gamma: TYPE_Y_LEVELS[0],
     delta: TYPE_Y_LEVELS[1],
     epsilon: TYPE_Y_LEVELS[2],
+    zeta: TYPE_Y_LEVELS[3],
 };
 
 export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = ({
@@ -108,7 +115,7 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
     // Check if user already has an active Type Y certificate
     const hasExistingTypeY = useMemo(() => {
         return existingCertificates.some(c =>
-            (c.certificate_type === 'Y' || ['gamma', 'delta', 'epsilon'].includes(c.access_level)) &&
+            (c.certificate_type === 'Y' || ['gamma', 'delta', 'epsilon', 'zeta'].includes(c.access_level)) &&
             c.is_active !== false &&
             c.id !== certificateToEdit?.id
         );
@@ -137,7 +144,7 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
     useEffect(() => {
         if (certificateType === 'X' && !['alpha', 'beta'].includes(accessLevel)) {
             setAccessLevel('alpha');
-        } else if (certificateType === 'Y' && !['gamma', 'delta', 'epsilon'].includes(accessLevel)) {
+        } else if (certificateType === 'Y' && !['gamma', 'delta', 'epsilon', 'zeta'].includes(accessLevel)) {
             setAccessLevel('gamma');
         }
     }, [certificateType]);
@@ -169,10 +176,11 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
     };
 
     // Scope requirements per level (per PRD §5.3)
+    // Zeta → org, dept, subdept must be null (all global)
     // Epsilon → org required, dept/subdept null (all depts/subdepts)
     // Delta → org+dept required, subdept null (all subdepts)
     // Gamma, Alpha, Beta → all required
-    const needsOrganization = true;
+    const needsOrganization = accessLevel !== 'zeta';
     const needsDepartment = ['alpha', 'beta', 'gamma', 'delta'].includes(accessLevel);
     const needsSubDepartment = ['alpha', 'beta', 'gamma'].includes(accessLevel);
 

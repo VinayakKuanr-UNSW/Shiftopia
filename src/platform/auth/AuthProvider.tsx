@@ -340,7 +340,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     // 2. Fallback to highest access level certificate
-    const levels: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
+    const levels: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
 
     let highest: AccessCertificate | null = null;
     let highestIdx = -1;
@@ -375,7 +375,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     // 2. Secondary source: Fallback to first organization in permission tree (for administrative global access)
-    // Only if the user has Epsilon permissions (Type Y equivalents)
+    // Only if the user has Zeta/Epsilon permissions (Type Y equivalents)
     const firstOrg = permissionObject?.allowed_scope_tree?.organizations?.[0];
     if (firstOrg && (permissionObject?.typeY || (permissionObject?.typeX?.length ?? 0) > 0)) {
       return {
