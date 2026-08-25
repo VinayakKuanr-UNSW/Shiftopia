@@ -1,31 +1,33 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  Calendar,
-  Fingerprint,
-  CalendarDays,
-  BadgeCheck,
-  RefreshCw,
-  Radio,
-  BellRing,
-  Menu,
-  X,
-  Gavel,
   ArrowLeftRight,
-  ClipboardList,
-  LayoutTemplate,
-  LayoutGrid,
-  Megaphone,
+  BadgeCheck,
   BarChart3,
-  TrendingUp,
+  BellRing,
+  Briefcase,
+  Calendar,
+  CalendarDays,
+  ClipboardList,
+  Fingerprint,
+  Gavel,
   Grid3x3,
-  Users,
-  ShieldCheck,
-  Settings,
+  LayoutGrid,
+  LayoutTemplate,
   LogOut,
+  Megaphone,
+  Menu,
   Moon,
-  Sun,
   Palmtree,
+  Radio,
+  RefreshCw,
+  Settings,
+  ShieldCheck,
+  Sun,
+  TrendingUp,
+  UserRound,
+  Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/modules/core/lib/utils";
@@ -36,6 +38,7 @@ import {
   useBroadcastNotifications,
 } from "@/modules/broadcasts/state/useBroadcasts";
 import { useAuth } from "@/platform/auth/useAuth";
+import { usePersona } from "@/platform/auth/PersonaProvider";
 import { useTheme } from "@/modules/core/contexts/ThemeContext";
 
 type MoreNavPermission =
@@ -72,7 +75,21 @@ const activeIndicatorTransition = {
   damping: 34,
 } as const;
 
-const middleItems: BottomNavItem[] = [
+/**
+ * The mobile nav is split by persona, the same way the sidebar is. A phone has
+ * four tab slots and one drawer, so mixing an employee's "My Roster" with a
+ * manager's "Timesheets" in one undifferentiated list cost more here than it
+ * did on the desktop: the four most valuable slots on the screen were always
+ * spent on employee pages, whichever hat the user was wearing.
+ *
+ * Employer entries all carry a `requiredPermission` and are filtered BEFORE the
+ * first four are taken, so a user who holds only `insights` gets KPI in a tab
+ * rather than three inaccessible tabs and one real one.
+ *
+ * Every path below is in ALLOWED_MOBILE_ROUTES, so no tab can land on the
+ * Desktop Only screen — which is exactly what the Leave button used to do.
+ */
+const employeeItems: BottomNavItem[] = [
   { label: "Roster", icon: Calendar, path: "/my-roster" },
   { label: "Atten", icon: Fingerprint, path: "/my-attendance" },
   { label: "Avail", icon: CalendarDays, path: "/my-availabilities" },
@@ -94,39 +111,39 @@ const middleItems: BottomNavItem[] = [
   },
 ];
 
-const visibleItems = middleItems.slice(0, 4);
-
-const workspaceMoreItems: MoreNavItem[] = middleItems
-  .slice(4)
-  .map(({ label, icon: Icon, path, requiredPermission }) => ({
-    label,
-    Icon,
-    path,
-    requiredPermission,
-  }));
-
-const toolMoreItems: MoreNavItem[] = [
-  { label: "Rosters", Icon: LayoutGrid, path: "/rosters", requiredPermission: "rosters" },
-  { label: "Manager Bids", Icon: Gavel, path: "/management/bids", requiredPermission: "management" },
-  { label: "Manager Swaps", Icon: ArrowLeftRight, path: "/management/swaps", requiredPermission: "management" },
-  { label: "Timesheets", Icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
-  { label: "Templates", Icon: LayoutTemplate, path: "/templates", requiredPermission: "templates" },
-  { label: "Broadcast", Icon: Megaphone, path: "/broadcast", requiredPermission: "broadcast" },
-  { label: "KPI", Icon: BarChart3, path: "/insights", requiredPermission: "insights" },
-  // Employee-facing: everyone sees their own numbers, so no permission gate.
-  { label: "Performance", Icon: TrendingUp, path: "/performance" },
-  // Replaced the old "Grid" entry. Same matrix, now inside the Availability
-  // Manager and with a phone composition, so it is allowlisted again.
+/** Manager surfaces, in tab-priority order. All permission-gated. */
+const employerItems: BottomNavItem[] = [
+  { label: "Rosters", icon: LayoutGrid, path: "/rosters", requiredPermission: "rosters" },
+  { label: "Bids", icon: Gavel, path: "/management/bids", requiredPermission: "management" },
+  { label: "Swaps", icon: ArrowLeftRight, path: "/management/swaps", requiredPermission: "management" },
+  { label: "Times", icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
+  { label: "Templates", icon: LayoutTemplate, path: "/templates", requiredPermission: "templates" },
+  { label: "Broadcast", icon: Megaphone, path: "/broadcast", requiredPermission: "broadcast" },
+  { label: "KPI", icon: BarChart3, path: "/insights", requiredPermission: "insights" },
   // `requiredPermission` takes one value; the route itself admits `insights`
-  // too, and those users reach it from the sidebar.
-  // "Avail" above is the employee's own availability; this is the team's.
-  { label: "Team Avail", Icon: CalendarDays, path: "/team-availability", requiredPermission: "management" },
-  { label: "Users", Icon: Users, path: "/users", requiredPermission: "users" },
-  { label: "Settings", Icon: Settings, path: "/settings" },
-  { label: "Leave Mgmt", Icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
+  // too, and those users reach it from the sidebar. "Avail" on the employee
+  // side is the user's OWN availability; this is the team's.
+  { label: "Team Avail", icon: CalendarDays, path: "/team-availability", requiredPermission: "management" },
+  { label: "Leave Mgmt", icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
+  { label: "Users", icon: Users, path: "/users", requiredPermission: "users" },
 ];
 
-const moreItems = [...workspaceMoreItems, ...toolMoreItems];
+/**
+ * Reachable from either persona. Performance is employee-facing but carries no
+ * permission gate — every level sees their own numbers — and Settings is not a
+ * persona surface at all, so hiding either behind the toggle would strand it.
+ */
+const sharedMoreItems: MoreNavItem[] = [
+  { label: "Performance", Icon: TrendingUp, path: "/performance" },
+  { label: "Settings", Icon: Settings, path: "/settings" },
+];
+
+const toMoreItem = ({ label, icon: Icon, path, requiredPermission }: BottomNavItem): MoreNavItem => ({
+  label,
+  Icon,
+  path,
+  requiredPermission,
+});
 
 const MobileNavItem = ({
   item,
@@ -270,6 +287,7 @@ const BottomNavbar: React.FC = () => {
 
   // UNREAD COUNTS INTEGRATION
   const { logout, hasPermission } = useAuth();
+  const { persona, canSwitch, togglePersona } = usePersona();
   const { groups: broadcastGroups } = useEmployeeBroadcastGroups();
   const { unreadCount: notificationsUnread } = useBroadcastNotifications();
 
@@ -284,8 +302,25 @@ const BottomNavbar: React.FC = () => {
     return 0;
   };
 
-  const accessibleMoreItems = moreItems.filter(
-    (item) => !item.requiredPermission || hasPermission(item.requiredPermission),
+  // Filter BEFORE slicing: an employer holding only `insights` must get KPI in
+  // a tab, not three dead tabs and one real one.
+  const accessiblePersonaItems = useMemo(() => {
+    const source = persona === "employer" ? employerItems : employeeItems;
+    return source.filter(
+      (item) => !item.requiredPermission || hasPermission(item.requiredPermission),
+    );
+  }, [persona, hasPermission]);
+
+  const visibleItems = accessiblePersonaItems.slice(0, 4);
+
+  const accessibleMoreItems = useMemo(
+    () => [
+      ...accessiblePersonaItems.slice(4).map(toMoreItem),
+      ...sharedMoreItems.filter(
+        (item) => !item.requiredPermission || hasPermission(item.requiredPermission),
+      ),
+    ],
+    [accessiblePersonaItems, hasPermission],
   );
 
   const isMoreRouteActive = accessibleMoreItems.some((item) =>
@@ -325,7 +360,7 @@ const BottomNavbar: React.FC = () => {
             <div className="relative p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className={cn(text.overline, "ml-1")}>
-                  Management &amp; Tools
+                  {persona === "employer" ? "Management & Tools" : "My Workspace"}
                 </h3>
                 <button
                   type="button"
@@ -345,6 +380,36 @@ const BottomNavbar: React.FC = () => {
                   <span>{isDark ? "Light" : "Dark"}</span>
                 </button>
               </div>
+              {/* The only way to change persona on a phone — there is no
+                  sidebar here. Full-width and labelled with the destination
+                  rather than the current state, so it reads as an action. */}
+              {canSwitch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    togglePersona();
+                    setMoreOpen(false);
+                  }}
+                  aria-label={
+                    persona === "employee"
+                      ? "Switch to employer view"
+                      : "Switch to employee view"
+                  }
+                  className={cn(
+                    touch.target,
+                    "mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-border/50 bg-background/70 px-3 text-foreground shadow-sm transition-transform active:scale-95",
+                  )}
+                >
+                  {persona === "employee" ? (
+                    <Briefcase className="h-5 w-5 text-indigo-500" aria-hidden="true" />
+                  ) : (
+                    <UserRound className="h-5 w-5 text-emerald-500" aria-hidden="true" />
+                  )}
+                  <span className={text.overlineBare}>
+                    {persona === "employee" ? "Employer view" : "Employee view"}
+                  </span>
+                </button>
+              )}
               <div className="grid grid-cols-3 gap-2">
                 {accessibleMoreItems.map(({ label, Icon, path }) => {
                   const isActive = location.pathname.startsWith(path);
