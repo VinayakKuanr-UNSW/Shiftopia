@@ -1,5 +1,10 @@
 import { V8Hit, V8RuleEvaluator } from '../types';
 import { shiftDurationMinutes } from '../utils/time';
+import {
+    cycleBoundsFor,
+    cycleIndexFor,
+    normaliseCycleAnchor,
+} from '../../ordinary-hours-cycle';
 
 /**
  * V8 Rule: Ordinary Hours Averaging (ICC EBA cl. 35)
@@ -79,13 +84,51 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     // Sch 3 §3 — Full-Time Security: 42h/week over an 8-week cycle instead
     // of the general 38h/week over a 4-week cycle.
     const weeklyLimit = isFtSecurity ? config.security_ord_avg_weekly_limit : config.ord_avg_weekly_limit;
-    const cycleWeeks = isFtSecurity ? config.security_ord_avg_cycle_weeks : config.ord_avg_cycle_weeks;
+    // The general population's cycle is DECLARED per engagement — cl 35.x(a) is a
+    // disjunction over "a work cycle of up to four (4) weeks" (cl 12.2(b)), not
+    // four caps at once. Full-time security instead run Schedule 3 §3.1's fixed
+    // eight-week even-time cycle, which §1.1 makes prevail. The config value
+    // survives only as the fallback for a context built without a contract read.
+    const cycleWeeks = isFtSecurity
+        ? config.security_ord_avg_cycle_weeks
+        : (employee.ordinary_hours_cycle_weeks ?? config.ord_avg_cycle_weeks);
+    const cycleAnchor = normaliseCycleAnchor(employee.ordinary_hours_cycle_anchor);
     const cycleDays = cycleWeeks * 7;                  // 28 general / 56 security
     const cycleLimit = cycleWeeks * weeklyLimit;       // 152h general / 336h security
 
-    // 3. HARD CAP — declared work cycle. BLOCKING dominates; return it alone.
-    const cycle = worstWindow(cycleDays);
-    if (cycle.hours > cycleLimit) {
+    // 3. HARD CAP — the declared work cycle, ANCHORED rather than rolling.
+    //
+    // cl 35.x(a) caps the CYCLE. A rolling window instead caps every N
+    // consecutive days, which is strictly stricter: it sums across a cycle
+    // boundary and reports a breach on a roster that satisfies both cycles it
+    // straddles. cl 42.6 ("during the work cycle") and cl 35.1(e) ("during each
+    // work cycle") both presuppose a period with edges, so the hours are bucketed
+    // by which cycle each date falls in and each bucket tested on its own.
+    //
+    // A bucket at the edge of the loaded window is PARTIAL, and therefore only
+    // ever under-counts. That is the safe direction: a partial cycle can miss a
+    // breach that the next evaluation catches, where a rolling window invents one
+    // that never existed.
+    const byCycle = new Map<number, { hours: number; anyDate: string }>();
+    for (const [dateStr, hrs] of dailyHours) {
+        const idx = cycleIndexFor(dateStr, cycleAnchor, cycleWeeks);
+        const bucket = byCycle.get(idx);
+        if (bucket) bucket.hours += hrs;
+        else byCycle.set(idx, { hours: hrs, anyDate: dateStr });
+    }
+
+    let worstCycle: { hours: number; anyDate: string } | null = null;
+    for (const bucket of byCycle.values()) {
+        if (!worstCycle || bucket.hours > worstCycle.hours) worstCycle = bucket;
+    }
+
+    if (worstCycle && worstCycle.hours > cycleLimit) {
+        const bounds = cycleBoundsFor(worstCycle.anyDate, cycleAnchor, cycleWeeks);
+        const cycle = {
+            hours: worstCycle.hours,
+            start: bounds.start,
+            end: bounds.endInclusive,
+        };
         const avg = cycle.hours / cycleWeeks;
         return [{
             rule_id: 'V8_ORD_HOURS_AVG',

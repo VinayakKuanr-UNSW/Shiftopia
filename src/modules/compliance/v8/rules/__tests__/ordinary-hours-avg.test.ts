@@ -32,8 +32,38 @@ describe('ordinaryHoursAvgRule', () => {
     expect(ordinaryHoursAvgRule(ctx)).toEqual([]);
   });
 
-  it('flags an extreme over-average across consecutive weeks (BLOCKING)', () => {
-    // 28 consecutive 10h days = 280h far above the 152h 4-week cycle limit
+  it('flags an extreme over-average WITHIN one cycle (BLOCKING)', () => {
+    // 2026-05-18 opens a four-week cycle (anchor 2024-01-01), so all 28 of
+    // these 10h days land in it: 280h against the 152h ceiling.
+    resetIdCounter();
+    const ctx = buildContext({
+      employee: { contract_type: 'FULL_TIME', contracted_weekly_hours: 38 },
+      shifts: buildConsecutiveShifts(28, '2026-05-18', {
+        start_time: '08:00',
+        end_time: '18:00',
+      }),
+    });
+    const hits = ordinaryHoursAvgRule(ctx);
+    const blocking = hits.find(h => h.blocking);
+    expect(blocking).toBeDefined();
+    expect(blocking!.rule_id).toBe('V8_ORD_HOURS_AVG');
+  });
+
+  /**
+   * The behaviour change in the move from rolling windows to anchored cycles,
+   * pinned deliberately.
+   *
+   * The identical 28-day block shifted two weeks later straddles the boundary
+   * between cycles 31 and 32, putting 140h in each — under the 152h ceiling
+   * both times. cl 35.x(a) caps the CYCLE, not every 28 consecutive days, so
+   * this is not an ordinary-hours breach.
+   *
+   * It is still an unlawful roster, and it is still blocked: 28 consecutive
+   * worked days breaches cl 35.1(e)'s 20-in-28, which `V8_20_IN_28` in
+   * consecutive-days.ts enforces as BLOCKING. The rolling window here was doing
+   * that rule's job and calling it by the wrong clause.
+   */
+  it('does NOT flag the same block straddling two cycles — that shape is V8_20_IN_28', () => {
     resetIdCounter();
     const ctx = buildContext({
       employee: { contract_type: 'FULL_TIME', contracted_weekly_hours: 38 },
@@ -43,9 +73,7 @@ describe('ordinaryHoursAvgRule', () => {
       }),
     });
     const hits = ordinaryHoursAvgRule(ctx);
-    const blocking = hits.find(h => h.blocking);
-    expect(blocking).toBeDefined();
-    expect(blocking!.rule_id).toBe('V8_ORD_HOURS_AVG');
+    expect(hits.find(h => h.blocking)).toBeUndefined();
   });
 
   it('a single 45h week that averages out over the cycle WARNS, does not block', () => {

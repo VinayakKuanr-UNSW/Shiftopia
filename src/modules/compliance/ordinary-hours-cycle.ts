@@ -110,11 +110,17 @@ export function normaliseCycleAnchor(raw: unknown): string {
 /**
  * Which cycle a date falls in, counted from the anchor. Negative before it.
  *
+ * Takes a plain `number` of weeks, not `OrdinaryCycleWeeks`: the narrow type
+ * belongs to the DECLARED column (cl 35.x(a) enumerates 1-4), while the
+ * arithmetic also has to serve Schedule 3 §3.1's eight-week security cycle,
+ * which is "even time" over the cycle and therefore anchored in exactly the
+ * same way.
+ *
  * This integer IS the cycle's identity — two dates share a cycle exactly when
  * they return the same index, which is what makes bucketing possible without
  * materialising boundaries.
  */
-export function cycleIndexFor(dateISO: string, anchorISO: string, weeks: OrdinaryCycleWeeks): number {
+export function cycleIndexFor(dateISO: string, anchorISO: string, weeks: number): number {
     const span = weeks * 7;
     const delta = toEpochDay(dateISO) - toEpochDay(anchorISO);
     if (!Number.isFinite(delta)) return 0;
@@ -125,7 +131,7 @@ export function cycleIndexFor(dateISO: string, anchorISO: string, weeks: Ordinar
 export function cycleBoundsFor(
     dateISO: string,
     anchorISO: string,
-    weeks: OrdinaryCycleWeeks,
+    weeks: number,
 ): { start: string; endExclusive: string; endInclusive: string } {
     const span = weeks * 7;
     const idx = cycleIndexFor(dateISO, anchorISO, weeks);
@@ -145,7 +151,7 @@ export function cycleBoundsFor(
  * "an average of 38", and cl 12.3(b) engages them for "a predetermined number of
  * hours less than" that). Falls back to the 38h basis the ladder is built from.
  */
-export function cycleCeilingHours(weeks: OrdinaryCycleWeeks, weeklyHours?: number | null): number {
+export function cycleCeilingHours(weeks: number, weeklyHours?: number | null): number {
     const basis = typeof weeklyHours === 'number' && weeklyHours > 0
         ? weeklyHours
         : ORD_WEEKLY_LIMIT_DEFAULT;
@@ -153,7 +159,7 @@ export function cycleCeilingHours(weeks: OrdinaryCycleWeeks, weeklyHours?: numbe
 }
 
 /** Human label for a cycle, e.g. "76h in 2 weeks" — used in badges and hits. */
-export function cycleLabel(weeks: OrdinaryCycleWeeks, weeklyHours?: number | null): string {
+export function cycleLabel(weeks: number, weeklyHours?: number | null): string {
     const ceiling = cycleCeilingHours(weeks, weeklyHours);
     const hrs = Number.isInteger(ceiling) ? String(ceiling) : ceiling.toFixed(1);
     return `${hrs}h in ${weeks} week${weeks === 1 ? '' : 's'}`;

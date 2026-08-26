@@ -14,7 +14,12 @@ import type { RosterShift } from '../types';
  */
 
 // N consecutive 10h days (net) starting at startDate. 28 × 10h = 280h ≫ 152h cap.
-function consecutive(nDays: number, startDate = '2026-06-01'): RosterShift[] {
+//
+// 2026-05-18 is deliberate: it OPENS a four-week cycle (anchor 2024-01-01), so
+// all 28 days fall inside one cycle. cl 35.x(a) caps the cycle rather than every
+// 28 consecutive days, and a block that straddles the boundary would split
+// 140h/140h and lawfully pass.
+function consecutive(nDays: number, startDate = '2026-05-18'): RosterShift[] {
     const out: RosterShift[] = [];
     const base = new Date(`${startDate}T00:00:00Z`);
     for (let i = 0; i < nDays; i++) {
