@@ -21,7 +21,9 @@ import {
  *     hours is permitted by written agreement at ordinary rates (cl. 12.3(d)),
  *     so it is a warning — NOT a block on the contracted figure.
  *
- * Casuals have no ordinary-hours contract and are excluded.
+ * Casuals are IN SCOPE: cl 35.4(a) caps their ordinary hours in the same words
+ * as full-timers'. They default to the four-week rung, having no clause that
+ * declares a cycle length of their own.
  *
  * Full-Time SECURITY (EBA Schedule 3 §3) is a discriminated exception: they
  * run a 42h/week average (38 ordinary + 4 "reasonable additional") over an
@@ -32,7 +34,19 @@ import {
 export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     const { employee, shifts, config } = ctx;
 
-    if (employee.contract_type === 'CASUAL') return [];
+    // NO CASUAL EXEMPTION. cl 35.4(a) states the ordinary-hours ladder for
+    // casuals in the same words 35.1(a) uses for full-timers — "will not exceed
+    // an average of 38 ordinary hours per week within work cycles based on the
+    // following: 38 / 76 / 114 / 152". The 2026-07-05 exemption was a fix for
+    // the WRONG divergence: the wall of false badges it removed came from
+    // applying every rung of the ladder as a rolling window, not from casuals
+    // being in scope. Now that the cap is one declared, anchored cycle, they
+    // belong in it.
+    //
+    // Casuals have no clause declaring a cycle LENGTH (there is no 12.5
+    // counterpart to 12.2(b)), so they default to the four-week rung — the most
+    // permissive the Agreement enumerates, and consistent with "up to four (4)
+    // weeks" everywhere else.
 
     const isFtSecurity = !!employee.is_security_role && employee.contract_type === 'FULL_TIME';
 

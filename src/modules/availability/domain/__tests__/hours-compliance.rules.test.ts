@@ -39,11 +39,11 @@ const byWeek = { '2026-W11': 40, '2026-W12': 38 };
 const weekKeys = ['2026-W11', '2026-W12'];
 const FORTNIGHT = 2;
 
-describe('computeEmpComp — casual exemption + contracted-hours basis', () => {
-    it('exempts CASUAL from the rolling-window caps (no violation for a 78h fortnight)', () => {
+describe('computeEmpComp — declared cycle + contracted-hours basis', () => {
+    it('holds a CASUAL to the same ceiling — cl 35.4(a) is worded like 35.1(a)', () => {
         const r = computeEmpComp(byWeek, {}, weekKeys, 'CASUAL', undefined, FORTNIGHT);
-        expect(r.overallV8Severity).toBe('ok');
-        expect(r.weeks['2026-W12'].windows).toHaveLength(0);
+        expect(r.overallV8Severity).toBe('violation');
+        expect(r.weeks['2026-W12'].windows.some(w => w.kind === 'cycle')).toBe(true);
     });
 
     it('flags FT for the same 78h fortnight (over the 76h 2-week cap)', () => {
@@ -128,8 +128,9 @@ describe('computeEmpComp — the cycle needs its lookback', () => {
         expect(r.weeks['2026-W29'].windows).toHaveLength(0);
     });
 
-    it('still exempts a casual over the same four weeks', () => {
-        expect(computeEmpComp(fourWeeks, {}, widened, 'CASUAL').overallV8Severity).toBe('ok');
+    it('holds a casual to the same four-week cycle', () => {
+        expect(computeEmpComp(fourWeeks, {}, widened, 'CASUAL').overallV8Severity)
+            .toBe('violation');
     });
 });
 

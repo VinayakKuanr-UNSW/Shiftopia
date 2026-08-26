@@ -65,11 +65,18 @@ describe('assignmentEvaluator — V8_ORD_HOURS_AVG reachability', () => {
         expect(hasOrdHours({ contract_type: 'PT' })).toBe(true);
     });
 
-    it('stays EXEMPT for a CASUAL employee (same schedule)', () => {
-        expect(hasOrdHours({ contract_type: 'CASUAL' })).toBe(false);
+    it('FIRES for a CASUAL employee too — cl 35.4(a) caps them in the same words', () => {
+        expect(hasOrdHours({ contract_type: 'CASUAL' })).toBe(true);
     });
 
-    it('defaults to CASUAL (exempt) when no employee_context is supplied — unchanged legacy behaviour', () => {
-        expect(hasOrdHours(undefined)).toBe(false);
+    /**
+     * A missing context used to default to CASUAL and therefore to no check at
+     * all. With cl 35.4(a) in scope that default now means "evaluated against
+     * the general four-week ceiling", which is the fail-CLOSED direction: an
+     * employee whose contract could not be read is checked rather than waved
+     * through.
+     */
+    it('checks an employee with no context rather than waving them through', () => {
+        expect(hasOrdHours(undefined)).toBe(true);
     });
 });

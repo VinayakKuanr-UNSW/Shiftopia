@@ -20,7 +20,13 @@ from model_builder import (
     SPLIT_SHIFT_SPREAD_MINUTES,
 )
 
-D0 = date(2026, 5, 1)
+# 2026-05-18 OPENS a four-week ordinary-hours cycle against the shared
+# 2024-01-01 Monday anchor, and also sits inside one eight-week Schedule 3 cycle
+# (2026-04-20 .. 2026-06-14). That alignment is load-bearing now that the cap is
+# anchored rather than rolling: from 2026-05-01 the same 20 worked days split
+# 136h/24h across two cycles and lawfully breach neither, which is the whole
+# difference between capping a cycle and capping every 28 consecutive days.
+D0 = date(2026, 5, 18)
 
 
 def day(n: int) -> str:

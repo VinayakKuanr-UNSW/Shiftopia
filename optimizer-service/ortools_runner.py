@@ -215,6 +215,12 @@ class EmployeeReq(BaseModel):
     is_student: bool = False
     visa_limit: int = 2880
     contract_weekly_minutes: int = 2280
+    # ICC EBA cl 35.x(a) / 12.2(b) — the DECLARED ordinary-hours work cycle.
+    # MUST be declared here and not only on the dataclass: pydantic silently
+    # drops undeclared keys, which is precisely how is_security_role went
+    # missing at the wire and left Sch 3 unenforced on every run.
+    ordinary_hours_cycle_weeks: int = 4
+    ordinary_hours_cycle_anchor: str = '2024-01-01'
     # EBA Schedule 3 — Security. Sch 3 §1.1 makes the schedule PREVAIL over the
     # Agreement wherever they conflict, and §3.1 conflicts with cl 35 directly:
     # full-time Security work an "even time" 8-week cycle averaging 42h/week

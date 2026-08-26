@@ -92,6 +92,8 @@ def make_employee(
     ordinary_span_start: str | None = None,
     ordinary_span_end: str | None = None,
     ordinary_days: list[int] | None = None,
+    ordinary_hours_cycle_weeks: int = 4,
+    ordinary_hours_cycle_anchor: str = "2024-01-01",
 ) -> EmployeeInput:
     return EmployeeInput(
         id=eid, name=f"Emp-{eid}",
@@ -115,6 +117,8 @@ def make_employee(
         ordinary_span_start=ordinary_span_start,
         ordinary_span_end=ordinary_span_end,
         ordinary_days=ordinary_days or [],
+        ordinary_hours_cycle_weeks=ordinary_hours_cycle_weeks,
+        ordinary_hours_cycle_anchor=ordinary_hours_cycle_anchor
     )
 
 

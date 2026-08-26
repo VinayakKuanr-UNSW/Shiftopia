@@ -221,7 +221,14 @@ export function computeEmpComp(
     cycleWeeks: number = ORD_CYCLE_WEEKS_DEFAULT,
     cycleAnchor: string = ORD_CYCLE_ANCHOR_DEFAULT,
 ): EmpComp {
-    const isCasual = contractType === 'CASUAL';
+    // cl 35.4(a) caps casual ordinary hours in the same words as 35.1(a) caps a
+    // full-timer's, so there is no exemption to compute. Kept as a named
+    // constant rather than deleted so the rationale has somewhere to live:
+    // casuals were exempted on 2026-07-05 to stop a wall of false badges, but
+    // those came from stacking every rung of the ladder as a rolling window.
+    // With one declared, anchored cycle the false positives are gone and the
+    // exemption is no longer paying for itself.
+    const isExemptFromOrdinaryHours = false;
     const weeklyLimit = contractedWeeklyHours && contractedWeeklyHours > 0
         ? contractedWeeklyHours
         : EBA_WEEKLY_LIMIT;
@@ -253,7 +260,7 @@ export function computeEmpComp(
     }
 
     // 4. Ordinary-hours checks. Casuals are EXEMPT — skip entirely.
-    if (!isCasual) {
+    if (!isExemptFromOrdinaryHours) {
         const anchor = normaliseCycleAnchor(cycleAnchor);
         const bump = (key: string, severity: CompV8Severity) => {
             if (severity === 'violation') weekComps[key].worstV8Severity = 'violation';
