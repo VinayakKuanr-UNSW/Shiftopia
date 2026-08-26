@@ -186,12 +186,14 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
     }
 
     const surface = isReadOnly
-        ? 'bg-[#0a0a0c] border-slate-800/50'
+        ? 'bg-card dark:bg-[#0a0a0c] border-slate-200 dark:border-slate-800/50'
         : isPublished
-            ? 'bg-[#0c0512] border-purple-900/30 shadow-2xl'
-            : 'bg-card dark:bg-[#0a0c10] border-border/50 shadow-2xl';
+            ? 'bg-card dark:bg-[#0c0512] border-purple-300/40 dark:border-purple-900/30 shadow-2xl'
+            : 'bg-card dark:bg-[#0c0e14] border-slate-200 dark:border-white/10 shadow-2xl';
 
-    const primaryLabel = editMode ? 'Update Shift' : isPublished ? 'Publish Shift' : 'Create Shift';
+    const subtitleText = editMode && props.existingShift?.id
+        ? `#${props.existingShift.id.slice(0, 8).toUpperCase()}`
+        : resolvedContext.date || 'New shift specification';
 
     return (
         <>
@@ -201,106 +203,67 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                 role="dialog"
                 aria-modal="true"
                 aria-label={editMode ? 'Edit Shift' : 'Create Shift'}
-                // Radix stamps this on its own dialogs; CapacitorBridge's
-                // dismissTopOverlay selects on it to route Android back here
-                // instead of navigating the router out from under an open form.
                 data-state="open"
             >
                 <div
                     ref={dialogRef}
                     className={cn(
-                        'relative flex w-full max-w-[1040px] max-h-[90vh] flex-col overflow-hidden rounded-3xl border shadow-2xl shadow-black/40 transition-all animate-in zoom-in-95 duration-200',
+                        'relative flex w-full max-w-[960px] max-h-[92vh] flex-col overflow-hidden rounded-2xl sm:rounded-3xl border shadow-2xl transition-all animate-in zoom-in-95 duration-200',
                         surface,
                     )}
                 >
-                    {/* ── MODAL ACTION BAR ── */}
+                    {/* ── CLEAN TOP HEADER ── */}
                     <div className={cn(
-                        'flex flex-shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5 sm:px-5',
-                        isDark ? 'border-white/5 bg-[#0c0e14]/80' : 'border-border/50 bg-card/80',
+                        'flex flex-shrink-0 items-center justify-between gap-3 border-b px-5 py-3.5 sm:px-6',
+                        isDark ? 'border-white/10 bg-[#0c0e14]/90' : 'border-border/60 bg-card/90',
                         'backdrop-blur-xl',
                     )}>
-                        <div className="flex items-center gap-2.5">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-500">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                                 {editMode ? <CalendarCheck className="h-4 w-4" /> : <CalendarPlus className="h-4 w-4" />}
                             </div>
-                            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-foreground/90">
-                                {editMode ? 'Edit Shift' : 'Create Shift'}
-                            </h2>
+                            <div>
+                                <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
+                                    {editMode ? 'Edit Shift' : 'Create Shift'}
+                                </h2>
+                                <p className="text-xs text-muted-foreground font-mono">
+                                    {subtitleText}
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                             {canUnpublish && (
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     onClick={handleUnpublish}
-                                    className="h-9 gap-1.5 rounded-xl border border-purple-500/20 px-3 text-xs font-bold text-purple-400 transition-all hover:bg-purple-500/10 hover:text-purple-300"
+                                    className="h-8 gap-1.5 rounded-lg border border-purple-500/20 px-3 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
                                 >
-                                    <Undo2 className="h-4 w-4" />
+                                    <Undo2 className="h-3.5 w-3.5" />
                                     <span className="hidden sm:inline">Unpublish</span>
                                 </Button>
                             )}
-
-                            {/* The primary action disables on six different conditions.
-                                Without a stated reason it is a dead end, so the next
-                                required action is rendered beside it and wired to the
-                                button via aria-describedby. */}
-                            <div className="flex items-center gap-2">
-                                {!canSave && saveBlockReason && !isLoading && (
-                                    <p
-                                        id="save-block-reason"
-                                        className="hidden max-w-[22rem] truncate text-right text-[11px] font-medium text-muted-foreground md:block"
-                                        title={saveBlockReason}
-                                    >
-                                        {saveBlockReason}
-                                    </p>
-                                )}
-                                <Button
-                                    type="button"
-                                    onClick={() => handleSubmit(form.getValues())}
-                                    disabled={!canSave || isLoading}
-                                    aria-describedby={!canSave && saveBlockReason ? 'save-block-reason' : undefined}
-                                    title={!canSave && saveBlockReason ? saveBlockReason : undefined}
-                                    className={cn(
-                                        'flex h-9 items-center gap-2 rounded-xl px-4 text-[10px] font-black uppercase tracking-[0.12em] shadow-sm transition-all sm:px-6 sm:text-xs',
-                                        canSave
-                                            ? 'border border-purple-400/20 bg-purple-600 text-white shadow-purple-500/20 hover:bg-purple-500 active:bg-purple-700 focus-visible:ring-2 focus-visible:ring-purple-400'
-                                            : 'cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-60',
-                                    )}
-                                >
-                                    {isLoading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : editMode ? (
-                                        <Save className="h-3.5 w-3.5" />
-                                    ) : (
-                                        <Plus className="h-3.5 w-3.5" />
-                                    )}
-                                    <span className="hidden sm:inline">{primaryLabel}</span>
-                                </Button>
-                            </div>
-
-                            <div className="mx-0.5 h-6 w-px bg-border/30" />
 
                             <Button
                                 type="button"
                                 variant="ghost"
                                 onClick={handleCancel}
-                                aria-label="Close"
-                                className="h-9 w-9 rounded-xl p-0 text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
+                                aria-label="Close dialog"
+                                className="h-8 w-8 rounded-full p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                             >
                                 <X className="h-4 w-4" />
                             </Button>
                         </div>
                     </div>
 
-                    {/* ── BODY ── */}
+                    {/* ── BODY FORM ── */}
                     <Form {...form}>
                         <form
                             id="shift-form"
                             onSubmit={form.handleSubmit(handleSubmit)}
                             className="flex min-h-0 flex-1 flex-col overflow-hidden"
                         >
-                            {/* ── Card grid ── */}
                             <ShiftFormDrawerContent
                                 form={form}
                                 isReadOnly={isReadOnly}
@@ -341,6 +304,11 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                 isEmployeeLocked={isEmployeeLocked}
                                 isScheduleDefined={isScheduleDefined}
                                 currentStep={1}
+                                onCancel={handleCancel}
+                                onSubmit={handleSubmit}
+                                canSave={canSave}
+                                isLoading={isLoading}
+                                saveBlockReason={saveBlockReason}
                             />
                         </form>
                     </Form>
