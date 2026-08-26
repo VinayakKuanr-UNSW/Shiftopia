@@ -149,6 +149,8 @@ export function useTeamHours(
                     hours.sortedWeekKeys,
                     member.contractType ?? null,
                     member.contractedWeeklyHours,
+                    member.cycleWeeks,
+                    member.cycleAnchor,
                 ),
             );
         }

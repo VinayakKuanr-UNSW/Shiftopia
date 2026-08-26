@@ -29,7 +29,15 @@
  * @see docs/architecture/availability-manager-grid-merge-plan.md §2
  */
 
-import { getISOWeek, getISOWeekYear, parseISO } from 'date-fns';
+import { format, getISOWeek, getISOWeekYear, parseISO } from 'date-fns';
+import {
+    ORD_CYCLE_ANCHOR_DEFAULT,
+    ORD_CYCLE_WEEKS_DEFAULT,
+    cycleCeilingHours,
+    cycleIndexFor,
+    cycleLabel,
+    normaliseCycleAnchor,
+} from '@/modules/compliance/ordinary-hours-cycle';
 import { calculateMinutesBetweenTimes } from '@/modules/rosters/domain/shift.entity';
 import type {
     RawTeamShift,
@@ -93,6 +101,17 @@ export function resolveNetMinutes(shift: NetMinutesInput): number {
  * `yyyy-Www` sorts lexicographically in true chronological order, which is the
  * property the sweep actually depends on.
  */
+/**
+ * The Monday of an ISO week key, as `yyyy-MM-dd`.
+ *
+ * Cycles are anchored on Mondays and ISO weeks start on Mondays, so every ISO
+ * week sits wholly inside one cycle — which is what lets the cycle be bucketed
+ * from week keys rather than from individual dates.
+ */
+export function mondayOfWeekKey(key: string): string {
+    return format(parseISO(`${key}-1`), 'yyyy-MM-dd');
+}
+
 export function isoWeekKey(date: Date): string {
     return `${getISOWeekYear(date)}-W${String(getISOWeek(date)).padStart(2, '0')}`;
 }
@@ -123,10 +142,21 @@ export interface ShiftHours {
 export type CompV8Severity = 'violation' | 'warning' | 'ok';
 
 export interface WindowViolation {
-    weeks: 2 | 3 | 4;
+    /**
+     * Widened from `2 | 3 | 4`: the declared cycle may be 1 week, and Schedule 3
+     * runs 8 for full-time security.
+     */
+    weeks: number;
     hours: number;
     limit: number;
     severity: CompV8Severity;
+    /**
+     * `cycle` is the ordinary-hours ceiling cl 35.x(a) actually imposes, and is
+     * the only kind that can be a violation. `peak` is a shorter window inside
+     * a compliant cycle — lawful under cl 35.x(a), which is indifferent to how
+     * hours are distributed within the cycle, so it never exceeds `warning`.
+     */
+    kind: 'cycle' | 'peak';
 }
 
 export interface WeekComp {
@@ -188,6 +218,8 @@ export function computeEmpComp(
     sortedWeekKeys: string[],
     contractType: TeamContractType,
     contractedWeeklyHours?: number,
+    cycleWeeks: number = ORD_CYCLE_WEEKS_DEFAULT,
+    cycleAnchor: string = ORD_CYCLE_ANCHOR_DEFAULT,
 ): EmpComp {
     const isCasual = contractType === 'CASUAL';
     const weeklyLimit = contractedWeeklyHours && contractedWeeklyHours > 0
@@ -220,43 +252,91 @@ export function computeEmpComp(
             weekComps[key].worstV8Severity = 'warning';
     }
 
-    // 4. Rolling-window checks. Casuals are EXEMPT — skip entirely.
+    // 4. Ordinary-hours checks. Casuals are EXEMPT — skip entirely.
     if (!isCasual) {
+        const anchor = normaliseCycleAnchor(cycleAnchor);
+        const bump = (key: string, severity: CompV8Severity) => {
+            if (severity === 'violation') weekComps[key].worstV8Severity = 'violation';
+            else if (weekComps[key].worstV8Severity === 'ok') weekComps[key].worstV8Severity = 'warning';
+        };
+
+        // ── 4a. THE CEILING — the declared cycle, ANCHORED ──────────────────
+        //
+        // cl 35.x(a) caps the work CYCLE. This page used to apply the 2-, 3- AND
+        // 4-week rungs of that ladder simultaneously as rolling windows, which is
+        // the strictest possible reading of a clause whose rungs are joined by
+        // "or" — and it is what painted violations on rosters the Agreement
+        // permits. One cycle, chosen by the contract, tested on its own edges.
+        //
+        // A cycle only partly inside the loaded range UNDER-counts, which is the
+        // safe direction. `useTeamHours` widens the fetch by COMPLIANCE_LOOKBACK_DAYS
+        // (21 = three weeks) precisely so a four-week cycle reaching back before
+        // the visible range is still whole.
+        const ceiling = cycleCeilingHours(cycleWeeks, weeklyLimit);
+        const warnCeiling = ceiling * NEAR_LIMIT_RATIO;
+
+        const byCycle = new Map<number, { hours: number; lastKey: string }>();
+        for (const key of sortedWeekKeys) {
+            const idx = cycleIndexFor(mondayOfWeekKey(key), anchor, cycleWeeks);
+            const bucket = byCycle.get(idx);
+            if (bucket) {
+                bucket.hours += byWeek[key] || 0;
+                bucket.lastKey = key;           // keys are ascending — keep the latest
+            } else {
+                byCycle.set(idx, { hours: byWeek[key] || 0, lastKey: key });
+            }
+        }
+
+        for (const bucket of byCycle.values()) {
+            if (bucket.hours <= warnCeiling) continue;
+            if (!weekComps[bucket.lastKey]) continue;
+            const severity: CompV8Severity = bucket.hours > ceiling ? 'violation' : 'warning';
+            weekComps[bucket.lastKey].windows.push({
+                weeks: cycleWeeks,
+                hours: parseFloat(bucket.hours.toFixed(1)),
+                limit: ceiling,
+                severity,
+                kind: 'cycle',
+            });
+            bump(bucket.lastKey, severity);
+        }
+
+        // ── 4b. PEAKS — shorter windows, WARNING ONLY ───────────────────────
+        //
+        // A burst inside a compliant cycle is lawful: cl 35.x(a) caps the cycle
+        // total and says nothing about distribution within it. Managers still
+        // want to see one coming, so it is surfaced — but as information, never
+        // as a breach. Windows at or beyond the cycle length are skipped; that
+        // is the cycle itself, already tested above.
         for (const win of ROLLING_WINDOWS) {
-            const limit = weeklyLimit * win.weeks;
-            const warnLimit = limit * NEAR_LIMIT_RATIO;
+            if (win.weeks >= cycleWeeks) continue;
+            const peakLimit = weeklyLimit * win.weeks;
 
             for (let endIdx = win.weeks - 1; endIdx < sortedWeekKeys.length; endIdx++) {
                 let sum = 0;
                 for (let i = endIdx - win.weeks + 1; i <= endIdx; i++) {
                     sum += byWeek[sortedWeekKeys[i]] || 0;
                 }
-                if (sum <= warnLimit) continue;
+                if (sum <= peakLimit) continue;
 
-                const severity: CompV8Severity = sum > limit ? 'violation' : 'warning';
                 const endKey = sortedWeekKeys[endIdx];
                 if (!weekComps[endKey]) continue;
 
-                const existing = weekComps[endKey].windows.find(w => w.weeks === win.weeks);
+                const existing = weekComps[endKey].windows.find(
+                    w => w.kind === 'peak' && w.weeks === win.weeks,
+                );
                 if (existing) {
-                    if (sum > existing.hours) {
-                        existing.hours = parseFloat(sum.toFixed(1));
-                        existing.severity = severity;
-                    }
+                    if (sum > existing.hours) existing.hours = parseFloat(sum.toFixed(1));
                 } else {
                     weekComps[endKey].windows.push({
                         weeks: win.weeks,
                         hours: parseFloat(sum.toFixed(1)),
-                        limit,
-                        severity,
+                        limit: peakLimit,
+                        severity: 'warning',
+                        kind: 'peak',
                     });
                 }
-
-                if (severity === 'violation') {
-                    weekComps[endKey].worstV8Severity = 'violation';
-                } else if (severity === 'warning' && weekComps[endKey].worstV8Severity === 'ok') {
-                    weekComps[endKey].worstV8Severity = 'warning';
-                }
+                bump(endKey, 'warning');
             }
         }
     }
@@ -267,12 +347,18 @@ export function computeEmpComp(
 
     for (const comp of Object.values(weekComps)) {
         for (const win of comp.windows) {
+            // Name the clause the reader is actually being held to. "80h in 2w
+            // window" was true but unattributable; "80h against 76h in 2 weeks"
+            // is the ceiling the contract declares.
+            const against = cycleLabel(win.weeks, weeklyLimit);
             if (win.severity === 'violation' && overallV8Severity !== 'violation') {
                 overallV8Severity = 'violation';
-                worstDesc = `${win.hours}h in ${win.weeks}w window (limit ${win.limit}h)`;
+                worstDesc = `${win.hours}h in this cycle — over ${against}`;
             } else if (win.severity === 'warning' && overallV8Severity === 'ok') {
                 overallV8Severity = 'warning';
-                worstDesc = `Near limit: ${win.hours}h in ${win.weeks}w window`;
+                worstDesc = win.kind === 'peak'
+                    ? `Peak: ${win.hours}h over ${win.weeks}w — averages out across the cycle`
+                    : `Near limit: ${win.hours}h against ${against}`;
             }
         }
     }

@@ -156,6 +156,13 @@ export interface TeamMember {
     contractType?: TeamContractType;
     contractedWeeklyHours?: number;
     /**
+     * Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)) and the
+     * Monday it counts from. Optional only because a TeamMember can be built
+     * without a contract read; `computeEmpComp` defaults both.
+     */
+    cycleWeeks?: number;
+    cycleAnchor?: string;
+    /**
      * Holds an active work-limited visa (student / temporary graduate), so
      * their hours carry a legal ceiling this app does not itself enforce.
      */
