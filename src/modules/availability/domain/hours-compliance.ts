@@ -177,8 +177,18 @@ export interface EmpComp {
 // ── EBA constants ────────────────────────────────────────────────────────────
 
 export const EBA_WEEKLY_LIMIT = 38;   // h/week — default weekly basis (fallback)
-export const DAILY_CAP_HARD = 12;     // h — violation
-export const DAILY_CAP_SOFT = 10;     // h — warning
+/** cl 35.1(d)/35.2(d)/35.3(d)/35.4(c) — "up to twelve (12) ordinary hours on any one day". */
+export const DAILY_CAP_HARD = 12;
+
+/**
+ * HOUSE POLICY, not the Agreement.
+ *
+ * Clause 35's only daily figure is the twelve-hour maximum above; there is no
+ * ten-hour rung anywhere in it. This is an internal early-warning threshold, and
+ * it is warning-only, so it costs nothing — but it was sitting unlabelled beside
+ * genuine EBA rules, which invites a manager to defend it as one.
+ */
+export const DAILY_CAP_SOFT = 10;
 export const NEAR_LIMIT_RATIO = 0.90; // 90 % of limit triggers warning badge
 
 export const ROLLING_WINDOWS = [
@@ -374,7 +384,9 @@ export function computeEmpComp(
         worstDesc = `Daily cap exceeded on ${dailyViolations.size} day(s) (>${DAILY_CAP_HARD}h)`;
     } else if (dailyWarnings.size > 0 && overallV8Severity === 'ok') {
         overallV8Severity = 'warning';
-        worstDesc = `Near daily cap on ${dailyWarnings.size} day(s) (>${DAILY_CAP_SOFT}h)`;
+        // Named as house policy in the copy too — the EBA cap is 12h, and a
+        // reader should be able to tell which of the two they are looking at.
+        worstDesc = `Over the ${DAILY_CAP_SOFT}h house guideline on ${dailyWarnings.size} day(s)`;
     }
 
     return { overallV8Severity, worstDesc, weeks: weekComps, dailyViolations, dailyWarnings };
