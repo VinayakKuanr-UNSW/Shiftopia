@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import ShiftCard from '../ShiftCard';
 import { TemplateShift } from '@/modules/templates/model/templates.types';
 
@@ -29,6 +30,47 @@ describe('ShiftCard', () => {
     sortOrder: 0,
     targetEmploymentType: 'FT',
   };
+
+
+  // Regression: the 2026-08-17 a11y pass replaced the old icon button with an
+  // aria-labelled one and deleted the <DropdownMenuTrigger asChild> wrapper with
+  // it, leaving TooltipTrigger as the only wrapper. The button rendered, was
+  // focusable and named — and opened nothing. Assert on the menu, not the button.
+  it('opens the actions menu when the ... button is clicked', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+
+    render(
+      <ShiftCard
+        shift={mockShift}
+        isReadOnly={false}
+        groupColor="blue"
+        onEdit={onEdit}
+        onDelete={vi.fn()}
+        onClone={vi.fn()}
+      />
+    );
+
+    const trigger = screen.getByRole('button', { name: /actions for/i });
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+
+    await user.click(trigger);
+
+    const menu = await screen.findByRole('menu');
+    expect(menu).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /edit shift/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /clone shift/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: /delete shift/i })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('menuitem', { name: /edit shift/i }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
 
   it('renders role and remuneration level together on row 1', () => {
     render(
