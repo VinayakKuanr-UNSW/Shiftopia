@@ -4,6 +4,7 @@
  * Unified type contract for simulation, orchestration, and aggregation.
  */
 
+import type { OrdinaryCycleWeeks } from '@/modules/compliance/ordinary-hours-cycle';
 import { V8ShiftId, V8EmpId, V8RoleId, V8ContractType, V8Status, V8Hit, V8Config, V8Shift, V8Employee } from '../types';
 
 export type { V8ShiftId, V8EmpId, V8RoleId, V8ContractType, V8Status, V8Hit, V8Config, V8Shift, V8Employee };
@@ -40,6 +41,14 @@ export interface V8EmployeeContext {
     employee_id:              V8EmpId;
     contract_type:            V8ContractType;
     contracted_weekly_hours:  number;
+    /**
+     * Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)).
+     * Always resolved — see `ordinary-hours-cycle.ts` for why there is no
+     * "no cycle" case.
+     */
+    ordinary_hours_cycle_weeks:  OrdinaryCycleWeeks;
+    /** The Monday those cycles count from, `yyyy-MM-dd`. */
+    ordinary_hours_cycle_anchor: string;
     skill_ids?:               string[];
     license_ids?:             string[];
     assigned_role_ids?:       string[];

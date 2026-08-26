@@ -13,6 +13,7 @@
  * spreads these values into its JSX.
  */
 
+import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { isEqual } from 'lodash';
 import { useForm } from 'react-hook-form';
@@ -561,6 +562,8 @@ export function useShiftFormOrchestrator({
                 employee_id:             watchEmployeeId || 'unassigned',
                 contract_type:           'CASUAL',
                 contracted_weekly_hours: 0,
+                ordinary_hours_cycle_weeks:  ORD_CYCLE_WEEKS_DEFAULT,
+                ordinary_hours_cycle_anchor: ORD_CYCLE_ANCHOR_DEFAULT,
                 assigned_role_ids:       [],
                 contracts:               [],
                 qualifications:          [],
@@ -629,6 +632,8 @@ export function useShiftFormOrchestrator({
                         employee_id: watchEmployeeId || 'incomplete',
                         contract_type: 'CASUAL',
                         contracted_weekly_hours: 0,
+                        ordinary_hours_cycle_weeks:  ORD_CYCLE_WEEKS_DEFAULT,
+                        ordinary_hours_cycle_anchor: ORD_CYCLE_ANCHOR_DEFAULT,
                         assigned_role_ids: [],
                         contracts: [],
                         qualifications: [],

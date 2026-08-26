@@ -1,3 +1,4 @@
+import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -389,6 +390,8 @@ export function ManagerComplianceApprovalModal({
                 employee_id:             '',
                 contract_type:           'CASUAL',
                 contracted_weekly_hours: 0,
+                ordinary_hours_cycle_weeks:  ORD_CYCLE_WEEKS_DEFAULT,
+                ordinary_hours_cycle_anchor: ORD_CYCLE_ANCHOR_DEFAULT,
                 assigned_role_ids:       [],
                 contracts:               [],
                 qualifications:          [],

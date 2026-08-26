@@ -55,6 +55,11 @@ describe('resolveComplianceBasis', () => {
         expect(resolveComplianceBasis([])).toEqual({
             contractType: null,
             contractedWeeklyHours: undefined,
+            // Defaults, not absences. cl 12.2(b) engages everyone on a cycle, so
+            // "no contract read" still resolves to the Agreement's own outer
+            // bound rather than leaving the ceiling undefined.
+            cycleWeeks: 4,
+            cycleAnchor: '2024-01-01',
             employmentStatus: null,
             envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
             isFullTime: false,

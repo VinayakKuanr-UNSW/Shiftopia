@@ -7385,6 +7385,8 @@ export type Database = {
           is_training_on_job: boolean | null
           notes: string | null
           ordinary_days: number[] | null
+          ordinary_hours_cycle_anchor: string | null
+          ordinary_hours_cycle_weeks: number | null
           ordinary_span_end: string | null
           ordinary_span_start: string | null
           organization_id: string | null
@@ -7429,6 +7431,8 @@ export type Database = {
           is_training_on_job?: boolean | null
           notes?: string | null
           ordinary_days?: number[] | null
+          ordinary_hours_cycle_anchor?: string | null
+          ordinary_hours_cycle_weeks?: number | null
           ordinary_span_end?: string | null
           ordinary_span_start?: string | null
           organization_id?: string | null
@@ -7473,6 +7477,8 @@ export type Database = {
           is_training_on_job?: boolean | null
           notes?: string | null
           ordinary_days?: number[] | null
+          ordinary_hours_cycle_anchor?: string | null
+          ordinary_hours_cycle_weeks?: number | null
           ordinary_span_end?: string | null
           ordinary_span_start?: string | null
           organization_id?: string | null

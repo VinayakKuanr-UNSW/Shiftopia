@@ -27,6 +27,13 @@
  */
 
 import type { TeamContractType } from '../model/team-availability.types';
+import {
+    ORD_CYCLE_ANCHOR_DEFAULT,
+    ORD_CYCLE_WEEKS_DEFAULT,
+    normaliseCycleAnchor,
+    resolveGoverningCycleWeeks,
+    type OrdinaryCycleWeeks,
+} from '@/modules/compliance/ordinary-hours-cycle';
 
 export interface ContractBasisInput {
     employmentStatus: string | null;
@@ -48,6 +55,14 @@ export interface ContractBasisInput {
      */
     ordinarySpanStart?: string | null;
     ordinarySpanEnd?: string | null;
+    /**
+     * Declared ordinary-hours work cycle (migration 20260826090000). Optional
+     * for the same reason as the envelope above — a database without the
+     * migration reads as null, which `resolveComplianceBasis` turns into the
+     * four-week default that every layer already assumed.
+     */
+    ordinaryHoursCycleWeeks?: number | string | null;
+    ordinaryHoursCycleAnchor?: string | null;
     ordinaryDays?: number[] | null;
     /**
      * WHICH JOB this contract is — `user_contracts.sub_department_id` and
@@ -98,6 +113,16 @@ export interface ContractBasis {
     contractType: TeamContractType;
     /** Undefined when the chosen contract records no usable weekly basis. */
     contractedWeeklyHours: number | undefined;
+    /**
+     * The governing ordinary-hours cycle (ICC EBA cl 35.x(a) / 12.2(b)).
+     *
+     * Always defined — unlike `contractedWeeklyHours` there is no such thing as
+     * "no cycle", because cl 12.2(b) engages everyone on one and the four-week
+     * rung is the Agreement's own outer bound.
+     */
+    cycleWeeks: OrdinaryCycleWeeks;
+    /** The Monday those cycles are counted from. */
+    cycleAnchor: string;
     employmentStatus: string | null;
     envelope: OrdinaryHoursEnvelope;
     /**
@@ -241,6 +266,8 @@ export function resolveComplianceBasis(contracts: readonly ContractBasisInput[])
         return {
             contractType: null,
             contractedWeeklyHours: undefined,
+            cycleWeeks: ORD_CYCLE_WEEKS_DEFAULT,
+            cycleAnchor: ORD_CYCLE_ANCHOR_DEFAULT,
             employmentStatus: null,
             envelope: UNRESTRICTED_ENVELOPE,
             isFullTime: false,
@@ -261,6 +288,12 @@ export function resolveComplianceBasis(contracts: readonly ContractBasisInput[])
     return {
         contractType,
         contractedWeeklyHours: hours > 0 ? hours : undefined,
+        // The SHORTEST cycle across every contract in scope, not the winner's.
+        // Cycle length is a smoothing allowance rather than a rate — all four
+        // rungs average 38h/week — so the shortest is the strictest, and the
+        // strictest is the safe answer when one person's engagements disagree.
+        cycleWeeks: resolveGoverningCycleWeeks(contracts.map(c => c.ordinaryHoursCycleWeeks)),
+        cycleAnchor: normaliseCycleAnchor(winner.ordinaryHoursCycleAnchor),
         employmentStatus: winner.employmentStatus,
         envelope: toEnvelope(winner),
         isFullTime,

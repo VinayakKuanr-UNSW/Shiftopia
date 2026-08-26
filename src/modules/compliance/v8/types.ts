@@ -5,6 +5,7 @@
  * Replaces all V1/V2/Solver types.
  */
 
+import type { OrdinaryCycleWeeks } from '../ordinary-hours-cycle';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 export type ComplianceCheckInput = any; // Legacy alias
@@ -82,6 +83,16 @@ export interface V8Employee {
     name:                    string;
     contract_type:           V8ContractType;
     contracted_weekly_hours: number;
+    /**
+     * Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)).
+     *
+     * Optional on the RULE input, unlike on the context: plenty of callers build
+     * a V8Employee by hand for a single-shift check that no cycle rule reads,
+     * and `ordinaryHoursAvgRule` falls back to the config default. A required
+     * field here would force every one of them to invent a value.
+     */
+    ordinary_hours_cycle_weeks?:  OrdinaryCycleWeeks;
+    ordinary_hours_cycle_anchor?: string;
     skill_ids?:              string[];
     license_ids?:            string[];
     /** Rich qualification records with expiry dates. When present, the

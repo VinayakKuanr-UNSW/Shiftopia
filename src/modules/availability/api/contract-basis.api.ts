@@ -58,6 +58,27 @@ const BASE_COLUMNS =
  */
 const ENVELOPE_COLUMNS = 'ordinary_span_start,ordinary_span_end,ordinary_days';
 
+/**
+ * The declared ordinary-hours work cycle, added by migration 20260826090000.
+ *
+ * Same reasoning as ENVELOPE_COLUMNS, and the same self-healing fallback — but
+ * they need their OWN rung on the ladder below rather than joining the envelope
+ * list. An environment carrying 20260817000000 but not 20260826090000 is a real
+ * state, and folding both into one attempt would drop that environment all the
+ * way back to the base list, silently losing an envelope it actually has.
+ */
+const CYCLE_COLUMNS = 'ordinary_hours_cycle_weeks,ordinary_hours_cycle_anchor';
+
+/**
+ * Column lists to try, richest first. The first that PostgREST accepts wins;
+ * each rung is a migration state that genuinely exists somewhere.
+ */
+const COLUMN_LADDER = [
+    `${BASE_COLUMNS},${ENVELOPE_COLUMNS},${CYCLE_COLUMNS}`,
+    `${BASE_COLUMNS},${ENVELOPE_COLUMNS}`,
+    BASE_COLUMNS,
+] as const;
+
 export interface ContractBasisRead extends ContractBasis {
     /** Role ids across the person's Active contracts — used for the Schedule 3 check. */
     roleIds: string[];
@@ -98,19 +119,27 @@ async function readActiveContracts(employeeId: string): Promise<ActiveContractsR
             .eq('user_id', employeeId)
             .eq('status', 'Active');
 
-    let { data, error } = await read(`${BASE_COLUMNS},${ENVELOPE_COLUMNS}`);
+    // Walk the ladder — see COLUMN_LADDER. Only failing the LAST rung is a real
+    // error; every earlier failure just means this database has fewer migrations.
+    let data: unknown = null;
+    let error: unknown = null;
+    let rung = 0;
+    for (; rung < COLUMN_LADDER.length; rung++) {
+        ({ data, error } = await read(COLUMN_LADDER[rung]));
+        if (!error) break;
+    }
 
     if (error) {
-        // Retry without the envelope columns — see ENVELOPE_COLUMNS. Only the
-        // second failure is a real one.
-        ({ data, error } = await read(BASE_COLUMNS));
-        if (error) {
-            console.error('[contract-basis.api] readActiveContracts failed', error);
-            return { inputs: [], roleIds: [], rows: [], isError: true };
-        }
+        console.error('[contract-basis.api] readActiveContracts failed', error);
+        return { inputs: [], roleIds: [], rows: [], isError: true };
+    }
+
+    if (rung > 0) {
         console.info(
-            '[contract-basis.api] ordinary-hours envelope columns unavailable — '
-            + 'treating every contract as unrestricted (migration 20260817000000 not applied here)',
+            `[contract-basis.api] fell back to column list ${rung} of `
+            + `${COLUMN_LADDER.length - 1} — some ordinary-hours columns are unavailable `
+            + 'here (migrations 20260817000000 / 20260826090000). Envelope reads as '
+            + 'unrestricted; work cycle reads as the four-week default.',
         );
     }
 
@@ -124,6 +153,8 @@ async function readActiveContracts(employeeId: string): Promise<ActiveContractsR
             ordinarySpanStart: (row.ordinary_span_start as string | null) ?? null,
             ordinarySpanEnd: (row.ordinary_span_end as string | null) ?? null,
             ordinaryDays: (row.ordinary_days as number[] | null) ?? null,
+            ordinaryHoursCycleWeeks: (row.ordinary_hours_cycle_weeks as number | string | null) ?? null,
+            ordinaryHoursCycleAnchor: (row.ordinary_hours_cycle_anchor as string | null) ?? null,
             subDepartmentId: (row.sub_department_id as string | null) ?? null,
             departmentId: (row.department_id as string | null) ?? null,
             // Carried so a caller that names a role gets the contract for THAT
