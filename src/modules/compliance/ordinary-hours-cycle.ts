@@ -67,14 +67,21 @@ const MS_PER_DAY = 86_400_000;
  * Deliberately parsed field-by-field into `Date.UTC` rather than `new Date(iso)`:
  * cycle boundaries are calendar facts, and letting the runtime's local zone into
  * the arithmetic shifts every boundary by a day for half the year in Sydney.
+ *
+ * EXPORTED so callers that reason about the same calendar — the Baseline FT
+ * requirement calculator counts a contract's active days inside a cycle — do
+ * not write a second date implementation. A second one would be a second place
+ * for the local-timezone bug above to reappear, which is exactly the class of
+ * duplication this file was created to end.
  */
-function toEpochDay(iso: string): number {
+export function toEpochDay(iso: string): number {
     const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
     if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return NaN;
     return Math.floor(Date.UTC(y, m - 1, d) / MS_PER_DAY);
 }
 
-function fromEpochDay(day: number): string {
+/** Inverse of {@link toEpochDay}. Exported for the same reason. */
+export function fromEpochDay(day: number): string {
     return new Date(day * MS_PER_DAY).toISOString().slice(0, 10);
 }
 

@@ -39,8 +39,41 @@ export const LEAVE_TYPE_LABELS: Record<LeaveTypeCode, string> = {
   gender_affirmation: 'Gender Affirmation Leave',
 };
 
+/**
+ * Does a day of this leave type discharge a permanent's contracted ordinary
+ * hours, for the purposes of reconciling a roster against a contract?
+ *
+ * This is a SEPARATE question from `paidForCasual` (which asks whether a casual
+ * is paid at all) and from `balanceTracked` (which asks whether we hold a
+ * running balance). It exists because the Baseline FT generator has to answer
+ * "how many hours does this employee still owe" and a leave day either counts
+ * toward that or it does not.
+ *
+ *   'CREDITS'  — a paid absence. The employee is treated as having worked
+ *                their ordinary hours for that day (cl 44.7, 45.2, 46.6, …),
+ *                so the day is NOT rostered and NOT counted as a shortfall.
+ *   'BLOCKS'   — an unpaid absence. Nothing may be rostered on the day, but
+ *                the day discharges nothing either: cl 57.5 says authorised
+ *                unpaid leave does not count toward continuous service, so it
+ *                SUSPENDS the exchange rather than completing it. The result
+ *                is a visible variance, which is the honest answer.
+ *   'ELECTION' — the Agreement gives the Team Member a CHOICE between the two
+ *                above, and we do not record which they made. Never guessed;
+ *                the generator computes the requirement both ways and reports
+ *                a WARNING so a human resolves it.
+ */
+export type OrdinaryHoursCredit = 'CREDITS' | 'BLOCKS' | 'ELECTION';
+
 export interface LeavePolicy {
   leaveType: LeaveTypeCode;
+  /**
+   * Effect on a permanent's contracted ordinary hours. See
+   * {@link OrdinaryHoursCredit}. Consumed by the Baseline FT requirement
+   * calculator; deliberately NOT derived from `accrualRateHoursPerYear`,
+   * because a type can be paid without accruing (compassionate, parental)
+   * and tracked without being paid from a balance at all.
+   */
+  ordinaryHoursCredit: OrdinaryHoursCredit;
   /** Hours accrued per year of continuous service; null = no accrual (unpaid, community). */
   accrualRateHoursPerYear: number | null;
   /** Maximum balance cap in hours; null = no cap (accumulates indefinitely). */

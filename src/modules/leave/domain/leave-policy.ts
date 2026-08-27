@@ -29,6 +29,7 @@ const SECURITY_PERSONAL_HOURS_PER_YEAR = 84;
 export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   annual: {
     leaveType: 'annual',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: 152,  // 4 weeks × 38h (cl 44 / NES s87)
     maxBalanceHours: null,         // accumulates indefinitely
     requiresCertificate: false,
@@ -40,6 +41,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   personal: {
     leaveType: 'personal',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: 76,   // 10 days × 7.6h (cl 45 / NES s96)
     maxBalanceHours: null,         // accumulates indefinitely
     requiresCertificate: true,
@@ -51,6 +53,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   carer: {
     leaveType: 'carer',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // draws from personal leave balance
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -62,6 +65,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   compassionate: {
     leaveType: 'compassionate',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // per-occasion entitlement
     maxBalanceHours: null,
     requiresCertificate: false,
@@ -73,6 +77,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   parental: {
     leaveType: 'parental',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // one-off entitlement
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -84,6 +89,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   long_service: {
     leaveType: 'long_service',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // state-specific; NSW: 2 months after 10 years
     maxBalanceHours: null,
     requiresCertificate: false,
@@ -95,6 +101,9 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   jury_duty: {
     leaveType: 'jury_duty',
+    // cl 53.2 pays make-up pay for the ordinary hours of the period, so the
+    // day is discharged even though the employer funds only the difference.
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null,
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -106,6 +115,10 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   fdv: {
     leaveType: 'fdv',
+    // cl 46.6 anti-detriment: a Team Member taking FDV leave 'will not be
+    // prejudiced or disadvantaged in the allocation of shifts or rostered
+    // hours'. Crediting is therefore mandatory, not a policy choice.
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: 76,   // 10 days × 7.6h (NES Div 11) — granted up front
     maxBalanceHours: 76,
     requiresCertificate: false,    // privacy: cert MUST NOT appear on payslip
@@ -118,6 +131,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   supporting_carer: {
     leaveType: 'supporting_carer',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // per-occasion entitlement, no accruing balance
     maxBalanceHours: null,
     requiresCertificate: false,
@@ -129,6 +143,8 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   community_service: {
     leaveType: 'community_service',
+    // NES ss108-112 — unpaid. Jury duty is the carve-out and has its own type.
+    ordinaryHoursCredit: 'BLOCKS',
     accrualRateHoursPerYear: null,
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -140,6 +156,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   unpaid: {
     leaveType: 'unpaid',
+    ordinaryHoursCredit: 'BLOCKS',
     accrualRateHoursPerYear: null,
     maxBalanceHours: null,
     requiresCertificate: false,
@@ -151,6 +168,12 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   religious_cultural: {
     leaveType: 'religious_cultural',
+    // DIVERGENCE (2026-08-26). cl 55.1 gives the Team Member a choice: apply to
+    // use up to five days of accrued paid ANNUAL leave, or be absent up to five
+    // days UNPAID. It creates no separate paid entitlement -- yet the balance
+    // fields below model one (38h, granted up front). Until the election is
+    // recorded, the credit is genuinely unknown and must not be guessed.
+    ordinaryHoursCredit: 'ELECTION',
     accrualRateHoursPerYear: null, // capped, granted up front — not progressively accrued
     maxBalanceHours: 38,           // 5 days × 7.6h
     requiresCertificate: false,
@@ -163,6 +186,9 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   gender_affirmation: {
     leaveType: 'gender_affirmation',
+    // DIVERGENCE (2026-08-26). cl 58.2 is the same construction as cl 55.1 at
+    // ten days. See the note on religious_cultural above.
+    ordinaryHoursCredit: 'ELECTION',
     accrualRateHoursPerYear: null,
     maxBalanceHours: 76,           // 10 days × 7.6h
     requiresCertificate: false,
