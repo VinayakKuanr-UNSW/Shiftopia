@@ -88,6 +88,10 @@ export interface LeavePolicy {
    * NES Div 11 semantics: the full entitlement is AVAILABLE UP FRONT and
    * resets on the service anniversary — it does not accrue progressively.
    * projectBalance must not add daily accrual for these types.
+   *
+   * FDV is the only type this describes. Religious/cultural and
+   * gender-affirmation leave used to carry it, on the strength of dedicated
+   * balances cl 55.1 and cl 58.2 do not grant — see `ordinaryHoursCredit`.
    */
   grantedUpFront?: boolean;
   /** Whether balance is tracked (false for per-occasion types like compassionate). */
@@ -109,10 +113,34 @@ export interface LeaveBalance {
 
 export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
+/**
+ * Which of the two things cl 55.1 / cl 58.2 offer the Team Member did they
+ * choose for this absence?
+ *
+ * Both clauses read the same way: apply to use up to N days of accrued paid
+ * ANNUAL leave, OR be absent for up to N days UNPAID. Neither creates a
+ * separate paid entitlement, so the leave type alone cannot say whether the
+ * day is paid — only the election can.
+ *
+ * `null` means not yet recorded, which is a real state rather than an error:
+ * every request predating the election column has one, and the Baseline FT
+ * calculator reports both readings instead of guessing.
+ */
+export type LeaveElectionMode = 'annual' | 'unpaid';
+
+/** Leave types that require an election before their pay effect is known. */
+export const ELECTION_LEAVE_TYPES: readonly LeaveTypeCode[] =
+    Object.freeze(['religious_cultural', 'gender_affirmation']);
+
 export interface LeaveRequest {
   id: string;
   employeeId: string;
   leaveType: LeaveTypeCode;
+  /**
+   * cl 55.1 / cl 58.2 only. Null for every other type, and null on an
+   * election-type request whose choice has not been recorded.
+   */
+  electionMode: LeaveElectionMode | null;
   startDate: string;  // YYYY-MM-DD
   endDate: string;    // YYYY-MM-DD
   requestedHours: number;
@@ -129,6 +157,12 @@ export interface LeaveRequest {
 /** Input shape for creating a leave request. */
 export interface CreateLeaveRequestInput {
   leaveType: LeaveTypeCode;
+  /**
+   * Required for cl 55.1 / cl 58.2 leave, ignored for everything else. The
+   * request form must ask, because the leave type alone cannot say whether the
+   * absence is paid.
+   */
+  electionMode?: LeaveElectionMode;
   startDate: string;
   endDate: string;
   requestedHours: number;

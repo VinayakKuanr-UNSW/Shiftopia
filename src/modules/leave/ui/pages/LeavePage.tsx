@@ -26,6 +26,7 @@ import {
   UserMinus,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
+import { useScopeFilter, type ScopeMode } from '@/platform/auth/useScopeFilter';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
@@ -93,6 +94,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const { user, hasPermission } = useAuth();
   const isManager = hasPermission('management');
   const [activeTab, setActiveTab] = useState<Tab>(initialTab ?? 'balances');
+  const scopeMode: ScopeMode = isManager && activeTab === 'approvals' ? 'managerial' : 'personal';
+  const { scope, setScope, isGammaLocked } = useScopeFilter(scopeMode);
 
   // Data state
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
@@ -147,10 +150,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
     if (!employeeId) return;
     setLoading(true);
     try {
+      const deptFilter = isManager && activeTab === 'approvals' && scope.dept_ids?.length === 1 ? scope.dept_ids[0] : undefined;
       const [bals, reqs, team, ftSecurity] = await Promise.all([
         getLeaveBalances(employeeId),
         getLeaveRequests(employeeId),
-        isManager ? getTeamLeaveRequests({ status: 'pending' }) : Promise.resolve([]),
+        isManager ? getTeamLeaveRequests({ status: 'pending', departmentId: deptFilter }) : Promise.resolve([]),
         isFullTimeSecurityEmployee(employeeId),
       ]);
       setBalances(bals);
@@ -162,7 +166,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
     } finally {
       setLoading(false);
     }
-  }, [employeeId, isManager]);
+  }, [employeeId, isManager, activeTab, scope.dept_ids]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -329,6 +333,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
       <GoldStandardHeader
         title="Leave"
         Icon={Palmtree}
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        mode={scopeMode}
         functionBar={
           <div className="flex gap-1 rounded-2xl bg-slate-100/80 p-1 dark:bg-white/5 w-full">
             {tabs.map(({ key, label, icon }) => (

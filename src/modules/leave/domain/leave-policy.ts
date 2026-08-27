@@ -8,7 +8,10 @@
  * Hours are based on a 38-hour week / 7.6-hour day (cl 36).
  */
 
-import type { LeavePolicy, LeaveTypeCode, LeaveBalance, LeaveRequest } from '../model/leave.types';
+import type {
+  LeavePolicy, LeaveTypeCode, LeaveBalance, LeaveRequest,
+  LeaveElectionMode, OrdinaryHoursCredit,
+} from '../model/leave.types';
 import { isPublicHoliday } from '@/modules/core/lib/holidays';
 
 const HOURS_PER_DAY = 7.6;   // 38h / 5 days
@@ -168,36 +171,33 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   religious_cultural: {
     leaveType: 'religious_cultural',
-    // DIVERGENCE (2026-08-26). cl 55.1 gives the Team Member a choice: apply to
-    // use up to five days of accrued paid ANNUAL leave, or be absent up to five
-    // days UNPAID. It creates no separate paid entitlement -- yet the balance
-    // fields below model one (38h, granted up front). Until the election is
-    // recorded, the credit is genuinely unknown and must not be guessed.
+    // cl 55.1 grants an ELECTION, not an entitlement: apply to use up to five
+    // days of accrued paid ANNUAL leave, or be absent up to five days UNPAID.
+    // Which one applies is recorded per request on leave_requests.election_mode
+    // and resolved by resolveOrdinaryHoursCredit(); until it is recorded the
+    // credit is genuinely unknown and must not be guessed.
     ordinaryHoursCredit: 'ELECTION',
-    accrualRateHoursPerYear: null, // capped, granted up front — not progressively accrued
-    maxBalanceHours: 38,           // 5 days × 7.6h
+    accrualRateHoursPerYear: null, // no accrual: there is no dedicated entitlement
+    maxBalanceHours: null,
     requiresCertificate: false,
     certificateThresholdDays: null,
     paidForCasual: false,
-    balanceTracked: true,
-    grantedUpFront: true,          // resets to the full 38h every 1 January, not on accrual
-    clause: 'cl 55',
-    description: 'Religious, cultural & ceremonial leave (incl. NAIDOC) — up to 5 days paid per calendar year, drawn from this dedicated balance. An unpaid alternative is also available via a general Unpaid Leave request.',
+    balanceTracked: false,         // draws on ANNUAL leave, or is unpaid
+    clause: 'cl 55.1',
+    description: 'Religious, cultural & ceremonial leave (incl. NAIDOC) — up to 5 days per calendar year, taken EITHER as accrued paid annual leave OR as unpaid leave, at the Team Member\u2019s election.',
   },
   gender_affirmation: {
     leaveType: 'gender_affirmation',
-    // DIVERGENCE (2026-08-26). cl 58.2 is the same construction as cl 55.1 at
-    // ten days. See the note on religious_cultural above.
+    // cl 58.2 is the same construction as cl 55.1, at ten days.
     ordinaryHoursCredit: 'ELECTION',
-    accrualRateHoursPerYear: null,
-    maxBalanceHours: 76,           // 10 days × 7.6h
+    accrualRateHoursPerYear: null, // no accrual: there is no dedicated entitlement
+    maxBalanceHours: null,
     requiresCertificate: false,
     certificateThresholdDays: null,
     paidForCasual: false,
-    balanceTracked: true,
-    grantedUpFront: true,          // resets to the full 76h every 1 January
-    clause: 'cl 58',
-    description: 'Gender affirmation leave — up to 10 days paid per calendar year, drawn from this dedicated balance. An unpaid alternative is also available via a general Unpaid Leave request.',
+    balanceTracked: false,         // draws on ANNUAL leave, or is unpaid
+    clause: 'cl 58.2',
+    description: 'Gender affirmation leave — up to 10 days per calendar year, taken EITHER as accrued paid annual leave OR as unpaid leave, at the Team Member\u2019s election.',
   },
 };
 
@@ -351,3 +351,23 @@ export const BALANCE_TRACKED_TYPES: LeaveTypeCode[] = (
 )
   .filter((p) => p.balanceTracked)
   .map((p) => p.leaveType);
+
+
+/**
+ * Resolve what a day of leave actually does to contracted ordinary hours.
+ *
+ * Most types answer from the policy alone. The two election types (cl 55.1,
+ * cl 58.2) cannot: the Agreement offers the Team Member a choice between
+ * accrued paid annual leave and unpaid leave, and only the request knows which
+ * was taken. An unrecorded election stays 'ELECTION' rather than defaulting,
+ * because defaulting either way would invent a fact about someone's pay.
+ */
+export function resolveOrdinaryHoursCredit(
+    policy: Pick<LeavePolicy, 'ordinaryHoursCredit'>,
+    electionMode: LeaveElectionMode | null | undefined,
+): OrdinaryHoursCredit {
+    if (policy.ordinaryHoursCredit !== 'ELECTION') return policy.ordinaryHoursCredit;
+    if (electionMode === 'annual') return 'CREDITS';
+    if (electionMode === 'unpaid') return 'BLOCKS';
+    return 'ELECTION';
+}

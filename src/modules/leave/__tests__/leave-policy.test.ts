@@ -41,19 +41,19 @@ describe('projectBalance', () => {
   it('deducts only pending requests in the projection window', () => {
     const reqs: LeaveRequest[] = [
       {
-        id: 'r1', employeeId: 'e1', leaveType: 'annual', status: 'approved',
+        id: 'r1', employeeId: 'e1', leaveType: 'annual', electionMode: null, status: 'approved',
         startDate: '2026-06-01', endDate: '2026-06-05', requestedHours: 38,
         reason: null, certificateUrl: null, approvedBy: null, approvalDate: null,
         createdAt: '', updatedAt: null, rejectionReason: null,
       },
       {
-        id: 'r2', employeeId: 'e1', leaveType: 'annual', status: 'pending',
+        id: 'r2', employeeId: 'e1', leaveType: 'annual', electionMode: null, status: 'pending',
         startDate: '2026-08-01', endDate: '2026-08-02', requestedHours: 15.2,
         reason: null, certificateUrl: null, approvedBy: null, approvalDate: null,
         createdAt: '', updatedAt: null, rejectionReason: null,
       },
       {
-        id: 'r3', employeeId: 'e1', leaveType: 'annual', status: 'rejected', // should be ignored
+        id: 'r3', employeeId: 'e1', leaveType: 'annual', electionMode: null, status: 'rejected', // should be ignored
         startDate: '2026-07-01', endDate: '2026-07-01', requestedHours: 7.6,
         reason: null, certificateUrl: null, approvedBy: null, approvalDate: null,
         createdAt: '', updatedAt: null, rejectionReason: null,

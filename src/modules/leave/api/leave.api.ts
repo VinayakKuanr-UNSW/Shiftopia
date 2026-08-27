@@ -6,12 +6,13 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { ELECTION_LEAVE_TYPES } from '../model/leave.types';
 import type {
   LeaveBalance,
   LeaveRequest,
   LeaveRequestStatus,
   CreateLeaveRequestInput,
-  LeaveTypeCode,
+  LeaveTypeCode, LeaveElectionMode,
 } from '../model/leave.types';
 import { LEAVE_POLICIES } from '../domain/leave-policy';
 import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
@@ -173,6 +174,9 @@ function mapRequestRow(row: any): LeaveRequest {
     id: row.id,
     employeeId: row.employee_id,
     leaveType: row.leave_type as LeaveTypeCode,
+    // Null for every non-election type, and for an election-type request whose
+    // choice has not been recorded — see LeaveElectionMode.
+    electionMode: (row.election_mode as LeaveElectionMode | null) ?? null,
     startDate: row.start_date?.split('T')[0] ?? '',
     endDate: row.end_date?.split('T')[0] ?? '',
     requestedHours: Number(row.requested_hours ?? 0),
@@ -298,6 +302,11 @@ export async function createLeaveRequest(
     .insert({
       employee_id: employeeId,
       leave_type: input.leaveType,
+      // cl 55.1 / cl 58.2 only; the DB CHECK rejects an election on any other
+      // type, so it is normalised to null here rather than passed through.
+      election_mode: ELECTION_LEAVE_TYPES.includes(input.leaveType)
+        ? (input.electionMode ?? null)
+        : null,
       start_date: input.startDate,
       end_date: input.endDate,
       requested_hours: input.requestedHours,
