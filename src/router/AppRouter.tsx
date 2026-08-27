@@ -182,8 +182,11 @@ const AppRouter: React.FC = () => {
                     <Route element={<FeatureGate feature="rosters" />}>
                         <Route path="/rosters" element={<RostersPlannerPage />} />
                         {/* Creates shifts, so it sits behind the same gate as
-                            the roster planner rather than the template editor. */}
-                        <Route path="/rosters/baseline-ft" element={<BaselineFtPage />} />
+                            the roster planner rather than the template editor.
+                            Top-level rather than nested under /rosters because
+                            isRouteActive() matches on startsWith, so a child
+                            path would light up the Rosters nav item too. */}
+                        <Route path="/baseline-ft" element={<BaselineFtPage />} />
                         <Route path="/rosters/shift/new" element={<ShiftFormPage />} />
                         <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
                     </Route>

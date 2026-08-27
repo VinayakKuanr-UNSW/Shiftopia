@@ -37,7 +37,8 @@
     "leave_approvals": "Approbations de Congés",
     "team_availability": "Disponibilités de l’équipe",
     "gross_pay": "Salaire Brut",
-    "compliance_rejections": "Refus de Conformité"
+    "compliance_rejections": "Refus de Conformité",
+    "baseline_ft": "Base TP"
   },
   "settings": {
     "title": "Mes Paramètres",
