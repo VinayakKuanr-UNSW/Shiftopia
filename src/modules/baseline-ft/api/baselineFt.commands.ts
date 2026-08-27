@@ -22,6 +22,7 @@ import {
     fromEpochDay,
 } from '@/modules/compliance/ordinary-hours-cycle';
 import type { V8Employee } from '@/modules/compliance/v8/types';
+import type { Json } from '@/platform/supabase/types';
 
 import { validatePattern } from '../domain/patternValidator';
 import { computeCycleRequirements } from '../domain/requirementCalculator';
@@ -38,20 +39,6 @@ import {
 } from './baselineFt.loaders';
 import { inputDigest, snapshotVersion } from './digest';
 
-/**
- * Untyped handle for the two Baseline FT tables and `shifts.baseline_run_id`.
- *
- * `platform/supabase/types` is GENERATED from the applied schema, and migration
- * 20260828090000 has not been applied yet, so the generated union of table
- * names does not contain them. One named cast, explained here, is preferable to
- * an `as never` scattered across a dozen call sites where the reason would be
- * invisible.
- *
- * DELETE THIS the moment the migration is applied and the types are
- * regenerated — at that point it stops being a bridge and starts being a hole.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as any;
 
 /* ────────────────────────────────────────────────────────────────────────────
    Types
@@ -365,7 +352,7 @@ export async function generateBaselineRun(input: GenerateRunInput): Promise<Gene
         config: { enforce_ft_days_off: true, min_rest_gap_minutes: 600, referenceDate },
     });
 
-    const { data: run, error } = await db
+    const { data: run, error } = await supabase
         .from('baseline_ft_runs')
         .insert({
             organization_id: organizationId,
@@ -376,7 +363,7 @@ export async function generateBaselineRun(input: GenerateRunInput): Promise<Gene
             period_end: periodEnd,
             snapshot_version: snapshot,
             input_digest: digest,
-            proposal: proposal as unknown as Record<string, unknown>,
+            proposal: proposal as unknown as Json,
             status: 'generated',
             created_by: actorId,
         })
@@ -417,7 +404,7 @@ export async function generateBaselineRun(input: GenerateRunInput): Promise<Gene
     })));
 
     if (rows.length > 0) {
-        const { error: rowsErr } = await db
+        const { error: rowsErr } = await supabase
             .from('baseline_ft_proposed_shifts')
             .insert(rows);
         if (rowsErr) throw rowsErr;
@@ -469,7 +456,7 @@ export async function applyBaselineRun(
         subDepartmentId: string; departmentId: string; organizationId: string; shiftDate: string;
     }) => Promise<{ rosterId: string; rosterSubgroupId: string }>,
 ): Promise<ApplyRunResult> {
-    const { data: run, error: runErr } = await db
+    const { data: run, error: runErr } = await supabase
         .from('baseline_ft_runs')
         .select('id, organization_id, department_id, sub_department_id, period_start, period_end, status, snapshot_version')
         .eq('id', runId)
@@ -487,7 +474,7 @@ export async function applyBaselineRun(
         period_start: string; period_end: string; snapshot_version: string;
     };
 
-    const { data: proposed, error: propErr } = await db
+    const { data: proposed, error: propErr } = await supabase
         .from('baseline_ft_proposed_shifts')
         .select('id, employee_id, user_contract_id, shift_date, start_time, end_time, ' +
                 'unpaid_break_minutes, paid_break_minutes, net_minutes, role_id, ' +
@@ -518,7 +505,7 @@ export async function applyBaselineRun(
 
         const skip = async (reason: string) => {
             skipped.push({ idempotencyKey: key, reason });
-            await db.from('baseline_ft_proposed_shifts')
+            await supabase.from('baseline_ft_proposed_shifts')
                 .update({ status: 'skipped_conflict', skip_reason: reason })
                 .eq('id', String(row.id));
         };
@@ -575,12 +562,12 @@ export async function applyBaselineRun(
                 assignment_source: 'baseline_ft',
             });
 
-            await db.from('baseline_ft_proposed_shifts')
+            await supabase.from('baseline_ft_proposed_shifts')
                 .update({ status: 'applied', created_shift_id: createdShift?.id ?? null })
                 .eq('id', String(row.id));
 
             if (createdShift?.id) {
-                await db.from('shifts')
+                await supabase.from('shifts')
                     .update({ baseline_run_id: runId })
                     .eq('id', createdShift.id);
             }
@@ -594,7 +581,7 @@ export async function applyBaselineRun(
     }
 
     const status: ApplyRunResult['status'] = skipped.length === 0 ? 'applied' : 'partially_applied';
-    await db.from('baseline_ft_runs')
+    await supabase.from('baseline_ft_runs')
         .update({
             status,
             applied_at: new Date().toISOString(),
