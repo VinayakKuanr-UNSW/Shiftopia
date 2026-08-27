@@ -34,6 +34,20 @@ export const formSchema = z.object({
     // Only meaningful with a 'PT' target — mirrors
     // shifts_target_flexible_requires_pt_check.
     target_requires_flexible: z.boolean().optional(),
+    /**
+     * Which weekday a TEMPLATE shift repeats on. 0 = Sunday … 6 = Saturday,
+     * matching `template_shifts.day_of_week` and JavaScript's `getDay()`.
+     *
+     * `null` is the "every day" wildcard, and it is a REAL state rather than an
+     * absence: `apply_template_to_date_range_v2` stamps a null-day shift onto
+     * every date in the range, holidays included. That is occasionally what an
+     * author wants and was, until now, what they always got — the field existed
+     * on the row and in the save RPC, but no control ever set it, so all 26
+     * template shifts in production were null by default rather than by choice.
+     *
+     * Ignored outside template mode, where a shift has a concrete date instead.
+     */
+    day_of_week: z.number().int().min(0).max(6).optional().nullable(),
 });
 
 export type FormValues = z.infer<typeof formSchema>;

@@ -63,6 +63,7 @@ import {
 
 import { MultiSelect } from './MultiSelect';
 import { ShiftBottomSheet } from './ShiftBottomSheet';
+import { TemplateDaySelect } from './TemplateDaySelect';
 import { formatHours, calculateShiftLength } from '../utils';
 import type { ShiftFormSheetProps } from '../types';
 import {
@@ -192,6 +193,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     const watchUnpaidBreak  = form.watch('unpaid_break_minutes');
     const watchStart        = form.watch('start_time');
     const watchEnd          = form.watch('end_time');
+    const watchDayOfWeek = form.watch('day_of_week');
     const watchRoleId       = form.watch('role_id');
     const watchEmployeeId   = form.watch('assigned_employee_id');
     const watchTargetType   = form.watch('target_employment_type');
@@ -322,6 +324,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
         if (!watchGroup) m.push('Group');
         if (!watchSubGroupName) m.push('Sub-group');
         if (!isTemplateMode && !watchShiftDate) m.push('Date');
+        if (isTemplateMode && watchDayOfWeek === undefined) m.push('Repeats on');
         if (!watchStart) m.push('Start time');
         if (!watchEnd) m.push('End time');
         if (!watchRoleId) m.push('Role');
@@ -329,7 +332,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
         return m;
     }, [
         watchGroup, watchSubGroupName, watchShiftDate, watchStart,
-        watchEnd, watchRoleId, watchTargetType, isTemplateMode,
+        watchEnd, watchRoleId, watchTargetType, isTemplateMode, watchDayOfWeek,
         resolvedContext.departmentId,
     ]);
 
@@ -782,6 +785,30 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                     >
                         {!isTemplateMode && (
                             <ReadOnlyField label="Date" value={dateDisplay} icon={Calendar} />
+                        )}
+
+                        {/* A template shift has a WEEKDAY where a roster shift
+                            has a date. Until this control existed the field was
+                            never set, so every template shift repeated on every
+                            date in the range. */}
+                        {isTemplateMode && (
+                            <FormField
+                                control={form.control}
+                                name="day_of_week"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormControl>
+                                            <TemplateDaySelect
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                disabled={isReadOnly}
+                                                id="sheet-day-of-week"
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
                         )}
 
                         {/* Training shift toggle — first so the floor rule (2h vs 3h/4h) is established before entering times */}

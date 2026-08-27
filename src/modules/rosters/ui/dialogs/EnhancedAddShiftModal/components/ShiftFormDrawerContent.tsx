@@ -70,6 +70,7 @@ import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { MultiSelect } from './MultiSelect';
+import { TemplateDaySelect } from './TemplateDaySelect';
 import { SingleSelect } from './SingleSelect';
 import { EmployeeSelect } from './EmployeeSelect';
 import type { ShiftFormDrawerContentProps } from '../types';
@@ -786,6 +787,30 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
 
                             {/* Date Badge & Training Toggle */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* A template shift has a WEEKDAY where a roster
+                                    shift has a date. See TemplateDaySelect for
+                                    why this was missing and what null means. */}
+                                {isTemplateMode && (
+                                    <div className="rounded-xl border border-border/60 bg-card p-3.5">
+                                        <FormField
+                                            control={form.control}
+                                            name="day_of_week"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormControl>
+                                                        <TemplateDaySelect
+                                                            value={field.value}
+                                                            onChange={field.onChange}
+                                                            disabled={isReadOnly}
+                                                            id="drawer-day-of-week"
+                                                        />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                )}
                                 {!isTemplateMode && (
                                     <div className="rounded-xl border border-border/60 bg-card p-3.5 flex items-center gap-3">
                                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">

@@ -108,6 +108,11 @@ export function useShiftFormOrchestrator({
             // may work the shift, and the match is now HARD.
             target_employment_type: undefined,
             target_requires_flexible: false,
+            // Deliberately undefined rather than null. `null` is the "every day"
+            // wildcard and a legitimate choice, but it must be CHOSEN: it was
+            // the silent default that left all 26 production template shifts
+            // stamping onto every date in the range.
+            day_of_week: undefined,
         },
     });
 
@@ -117,6 +122,7 @@ export function useShiftFormOrchestrator({
     const watchUnpaidBreak = form.watch('unpaid_break_minutes');
     const watchPaidBreak = form.watch('paid_break_minutes');
     const watchV8RoleId = form.watch('role_id');
+    const watchDayOfWeek = form.watch('day_of_week');
     const watchSkills = form.watch('required_skills');
     const watchLicenses = form.watch('required_licenses');
     const watchEmployeeId = form.watch('assigned_employee_id');
@@ -466,6 +472,16 @@ export function useShiftFormOrchestrator({
                     existingShift.target_requires_flexible
                     ?? existingShift.targetRequiresFlexible
                     ?? false,
+                // Roster shifts arrive snake_cased, TEMPLATE shifts camelCased --
+                // the same split that blanked target_employment_type on edit.
+                // `?? undefined` rather than `?? null`: a stored null means the
+                // author chose "every day", but a row that predates the control
+                // has no choice recorded, and both read back as null here. The
+                // template branch below re-supplies null explicitly on save.
+                day_of_week:
+                    existingShift.day_of_week
+                    ?? existingShift.dayOfWeek
+                    ?? undefined,
             });
             if (!selectedRosterId && existingShift.roster_id) {
                 setSelectedRosterId(existingShift.roster_id);
@@ -490,6 +506,7 @@ export function useShiftFormOrchestrator({
                 is_training: false,
                 target_employment_type: undefined,
                 target_requires_flexible: false,
+                day_of_week: undefined,
             });
         }// eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, editMode, existingShift, context, isTemplateMode]);
@@ -726,6 +743,12 @@ export function useShiftFormOrchestrator({
         }
         if (!watchV8RoleId)                       return { ok: false, reason: 'Select a role' };
         if (!watchShiftDate && !isTemplateMode)   return { ok: false, reason: 'Pick a shift date' };
+        // A template shift repeats on a WEEKDAY where a roster shift has a date,
+        // so the two are the same gate at different granularity. `undefined` is
+        // "not chosen"; `null` is the explicit "every day" wildcard and passes.
+        if (isTemplateMode && watchDayOfWeek === undefined) {
+            return { ok: false, reason: 'Choose which day this repeats on' };
+        }
         // Keyed on the shape verdict, not on the fields being non-empty, so a
         // half-typed time counts as "not set yet" rather than as a real shift.
         if (shape.status === 'INCOMPLETE')        return { ok: false, reason: 'Set a start and end time' };
@@ -773,7 +796,7 @@ export function useShiftFormOrchestrator({
         return { ok: true, reason: null };
     }, [
         isReadOnly, isPublished, watchV8RoleId, watchShiftDate, watchStart, watchEnd,
-        hasDepartment, isTemplateMode, watchEmployeeId, hardValidation,
+        hasDepartment, isTemplateMode, watchDayOfWeek, watchEmployeeId, hardValidation,
         shape.status, shape.blocking, shapeBlockers, compliancePanel.status, compliancePanel.canProceed,
         compliancePanel.result,
     ]);
@@ -1025,6 +1048,14 @@ export function useShiftFormOrchestrator({
                         values.target_employment_type === 'PT'
                             ? (values.target_requires_flexible ?? false)
                             : false,
+                    // The field existed on the row and in save_template_full all
+                    // along; nothing ever SENT it, so TemplateEditor's `?? null`
+                    // always won and every template shift repeated on every day.
+                    // `?? null` here is the explicit "every day" choice, not a
+                    // default -- the save gate requires the author to pick first.
+                    // Both spellings, because TemplateEditor accepts either.
+                    day_of_week: values.day_of_week ?? null,
+                    dayOfWeek: values.day_of_week ?? null,
                 });
 
                 toast({ title: 'Shift Added' });
