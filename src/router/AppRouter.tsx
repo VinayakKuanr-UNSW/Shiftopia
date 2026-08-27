@@ -37,6 +37,7 @@ const GrossPayPage = lazy(() => import('@/modules/payroll/ui/GrossPayPage.tsx'))
 // Rostering
 const TemplatesPage = lazy(() => import('@/modules/templates/pages/TemplatesPage'));
 const RostersPlannerPage = lazy(() => import('@/modules/rosters/pages/RostersPlannerPage'));
+const BaselineFtPage = lazy(() => import('@/modules/baseline-ft/ui/pages/BaselineFtPage'));
 const ShiftFormPage = lazy(() => import('@/modules/rosters/pages/ShiftFormPage'));
 const LaborDemandForecastingPage = lazy(() => import('@/modules/rosters/pages/LaborDemandForecastingPage'));
 const TimesheetPage = lazy(() => import('@/modules/timesheets/ui/TimesheetPage'));
@@ -58,9 +59,6 @@ const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage.tsx'));
 
 
 const SettingsPage = lazy(() => import('@/modules/settings/pages/SettingsPage.tsx'));
-
-// Utility
-const SearchPage = lazy(() => import('@/modules/search/pages/SearchPage.tsx'));
 
 /* =======================
    LOADING FALLBACK
@@ -183,6 +181,9 @@ const AppRouter: React.FC = () => {
 
                     <Route element={<FeatureGate feature="rosters" />}>
                         <Route path="/rosters" element={<RostersPlannerPage />} />
+                        {/* Creates shifts, so it sits behind the same gate as
+                            the roster planner rather than the template editor. */}
+                        <Route path="/rosters/baseline-ft" element={<BaselineFtPage />} />
                         <Route path="/rosters/shift/new" element={<ShiftFormPage />} />
                         <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
                     </Route>
@@ -249,9 +250,6 @@ const AppRouter: React.FC = () => {
 
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/settings/:section" element={<SettingsPage />} />
-
-                    {/* ── Utility ── */}
-                    <Route path="/search" element={<SearchPage />} />
 
                 </Route>{/* /MobileAccessGuard */}
 
