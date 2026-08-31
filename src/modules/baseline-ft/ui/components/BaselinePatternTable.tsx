@@ -1,32 +1,33 @@
 /**
- * Baseline FT — Employee Scheduling Workspace.
+ * The baseline workspace — one line per employee, edited in place.
  *
- * Minimalist, high-clarity Table Structure:
- *   - Column 1: Employee Name (sortable)
- *   - Column 2: Role (sortable)
- *   - Column 3: Day Selector (M T W T F S S)
- *   - Column 4: Start Time
- *   - Column 5: End Time
- *   - Column 6: Gross Length
- *   - Column 7: Paid Break (derived from EBA cl 37.1)
- *   - Column 8: Unpaid Break
- *   - Column 9: Paid Length
- *   - Column 10: Quick Actions & Row Expansion
+ * EIGHT COLUMNS, AND ONLY FIVE ARE DECISIONS. Employee, working days, start,
+ * end and the unpaid break are typed; "Per week" and "Contract" are what those
+ * add up to. Gross and Paid Rest used to sit here at the same visual weight:
+ * gross is end minus start, already on the row twice over, and the paid rest
+ * pause is a legal consequence of length (cl 37.1/37.2) that never varies for a
+ * given net. Both moved into "Shape of each day" in the expansion. Role moved
+ * under the name — it is read from the contract, never chosen.
  *
- * Expandable Row Disclosure:
- *   - 4-week cycle EBA target progress meter
- *   - Secondary variations (+ Add variation)
- *   - The calculation ledger & proposed draft shifts candidates
- *   - Recommendations & compliance diagnostics
+ * THE CONTRACT COLUMN IS THE POINT, and it used to be invisible until a row was
+ * opened. Start and end stay freely typed, because a shift ends when the venue
+ * closes; what stops 08:00-16:30 becoming a standing 40-hour week against a
+ * 38-hour contract is seeing `160.0h / 152.0h · 8h over` while typing it.
+ *
+ * PHONES GET CARDS. Eight columns still do not fit 430px without scrolling in
+ * two directions, which WCAG SC 1.4.10 forbids, and `/baseline-ft` is on
+ * ALLOWED_MOBILE_ROUTES — an entry that is a CLAIM the page reflows.
+ *
+ * The row shows the PATTERN. What happens to a given period — owed, rostered,
+ * proposed, left over — is the expansion's job, and it leads with the answer
+ * rather than with the arithmetic.
  */
 
 import React from 'react';
 import {
-    ArrowUpDown,
     ChevronRight,
     ClipboardPaste,
     Copy,
-    Info,
     Plus,
     Trash2,
     Wand2,
@@ -40,9 +41,6 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
-import {
-    Popover, PopoverContent, PopoverTrigger,
-} from '@/modules/core/ui/primitives/popover';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import {
     DAY_LONG, ISO_WEEK, deriveRow,
@@ -530,72 +528,48 @@ export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
         >
             <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
-                    {/* ── Table Header ────────────────────────────────────────── */}
+                    {/* ── Table Header ──────────────────────────────────────────
+                        Eight columns, down from ten. Gross and Paid Rest were
+                        removed: gross is end minus start, which is already on
+                        the row twice, and the paid rest pause is a legal
+                        consequence of length (cl 37.1/37.2) that never varies
+                        for a given net. Both are spelled out under "Shape of
+                        each day" in the expansion. Role moved under the name —
+                        it is read, never chosen.                          */}
                     <thead>
                         <tr className="border-b border-slate-200 dark:border-border/50 bg-slate-50/80 dark:bg-muted/30 text-muted-foreground font-semibold uppercase tracking-wider text-[11px]">
-                            {/* Column 1: Employee Name */}
-                            <th scope="col" className="py-3 px-4 min-w-[180px]">
-                                <button
-                                    type="button"
-                                    onClick={() => toggleSort('name')}
-                                    className="inline-flex items-center gap-1.5 hover:text-foreground font-semibold cursor-pointer uppercase tracking-wider"
-                                >
-                                    Employee Name
-                                    <ArrowUpDown className="h-3 w-3 opacity-60" aria-hidden="true" />
-                                </button>
+                            <th scope="col" className="py-3 px-4 min-w-[190px]">
+                                <span className="inline-flex items-center gap-2">
+                                    Employee
+                                    <span className="inline-flex items-center gap-1 normal-case tracking-normal font-medium">
+                                        {(['name', 'role'] as const).map(f => (
+                                            <button
+                                                key={f}
+                                                type="button"
+                                                onClick={() => toggleSort(f)}
+                                                aria-label={`Sort by ${f}`}
+                                                aria-pressed={sortField === f}
+                                                className={cn(
+                                                    'rounded px-1 text-[10px] transition-colors cursor-pointer',
+                                                    sortField === f
+                                                        ? 'text-foreground'
+                                                        : 'text-muted-foreground/60 hover:text-muted-foreground',
+                                                )}
+                                            >
+                                                {f}
+                                                {sortField === f && (sortAsc ? ' ↑' : ' ↓')}
+                                            </button>
+                                        ))}
+                                    </span>
+                                </span>
                             </th>
-
-                            {/* Column 2: Role */}
-                            <th scope="col" className="py-3 px-3 min-w-[130px]">
-                                <button
-                                    type="button"
-                                    onClick={() => toggleSort('role')}
-                                    className="inline-flex items-center gap-1.5 hover:text-foreground font-semibold cursor-pointer uppercase tracking-wider"
-                                >
-                                    Role
-                                    <ArrowUpDown className="h-3 w-3 opacity-60" aria-hidden="true" />
-                                </button>
-                            </th>
-
-                            {/* Column 3: Day Selector */}
-                            <th scope="col" className="py-3 px-3 min-w-[220px]">
-                                Working Days
-                            </th>
-
-                            {/* Column 4: Start Time */}
-                            <th scope="col" className="py-3 px-2 min-w-[120px]">
-                                Start Time
-                            </th>
-
-                            {/* Column 5: End Time */}
-                            <th scope="col" className="py-3 px-2 min-w-[120px]">
-                                End Time
-                            </th>
-
-                            {/* Column 6: Gross Length */}
-                            <th scope="col" className="py-3 px-2 text-center min-w-[85px]">
-                                Gross
-                            </th>
-
-                            {/* Column 7: Paid Break */}
-                            <th scope="col" className="py-3 px-2 text-center min-w-[85px]">
-                                Paid Rest
-                            </th>
-
-                            {/* Column 8: Unpaid Break */}
-                            <th scope="col" className="py-3 px-2 min-w-[110px]">
-                                Unpaid Break
-                            </th>
-
-                            {/* Column 9: Paid Length / Total */}
-                            <th scope="col" className="py-3 px-3 text-right min-w-[110px]">
-                                Paid Length
-                            </th>
-
-                            {/* Column 10: Actions & Expand */}
-                            <th scope="col" className="py-3 px-3 text-right min-w-[90px]">
-                                Actions
-                            </th>
+                            <th scope="col" className="py-3 px-3 min-w-[230px]">Working days</th>
+                            <th scope="col" className="py-3 px-2 min-w-[120px]">Start</th>
+                            <th scope="col" className="py-3 px-2 min-w-[120px]">End</th>
+                            <th scope="col" className="py-3 px-2 min-w-[110px]">Unpaid break</th>
+                            <th scope="col" className="py-3 px-3 text-right min-w-[110px]">Per week</th>
+                            <th scope="col" className="py-3 px-3 min-w-[150px]">Contract</th>
+                            <th scope="col" className="py-3 px-3 text-right min-w-[90px]">Actions</th>
                         </tr>
                     </thead>
 
@@ -609,9 +583,6 @@ export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
                             const totalWeeklyPaidHours = totalWeeklyPaidMinutes / 60;
 
                             const hasIssues = emp.verdict.status === 'over' || (emp.ledger && emp.ledger.findings.some(f => f.severity === 'BLOCKING'));
-                            const targetPercentage = emp.verdict.ceilingHours > 0
-                                ? Math.min(100, Math.round((emp.verdict.cycleHours / emp.verdict.ceilingHours) * 100))
-                                : 0;
 
                             const initials = emp.name
                                 .split(' ')
@@ -655,23 +626,14 @@ export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
                                                         )}
                                                     </div>
                                                     <span className="text-[11px] text-muted-foreground block truncate">
-                                                        {emp.contractedWeeklyHours}h Contract
+                                                        {emp.roleName || (
+                                                            <span className="italic text-amber-600 dark:text-amber-400">
+                                                                No role on contract
+                                                            </span>
+                                                        )} · {emp.contractedWeeklyHours}h
                                                     </span>
                                                 </div>
                                             </div>
-                                        </td>
-
-                                        {/* Column 2: Role */}
-                                        <td className="py-3 px-3 text-muted-foreground text-xs font-medium">
-                                            {emp.roleName || (
-                                                // NOT "Full-time" — that is an employment type,
-                                                // not a role, and this column drives the pay rate
-                                                // and BFT_PATTERN_ROLE_MISMATCH. A missing role is
-                                                // a contract gap and has to read as one.
-                                                <span className="italic text-amber-600 dark:text-amber-400">
-                                                    No role on contract
-                                                </span>
-                                            )}
                                         </td>
 
                                         {/* Column 3: Day Selector */}
@@ -709,22 +671,6 @@ export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
                                             )}
                                         </td>
 
-                                        {/* Column 6: Gross Length */}
-                                        <td className="py-3 px-2 text-center font-mono text-muted-foreground tabular-nums">
-                                            {d ? fmtMinutes(d.grossMinutes) : '—'}
-                                        </td>
-
-                                        {/* Column 7: Paid Rest Break */}
-                                        <td className="py-3 px-2 text-center font-mono text-muted-foreground tabular-nums">
-                                            {d && d.paidBreakMinutes > 0 ? (
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                                                    +{d.paidBreakMinutes}m
-                                                </span>
-                                            ) : (
-                                                '—'
-                                            )}
-                                        </td>
-
                                         {/* Column 8: Unpaid Break */}
                                         <td className="py-3 px-2">
                                             {primaryRow && (
@@ -737,13 +683,32 @@ export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
                                             )}
                                         </td>
 
-                                        {/* Column 9: Paid Length */}
+                                        {/* Per week: the one derived figure the row keeps.
+                                            Net per shift is what the manager typed towards;
+                                            the weekly total is what it adds up to. */}
                                         <td className="py-3 px-3 text-right tabular-nums">
                                             <div className="font-bold text-foreground text-xs">
-                                                {d ? fmtMinutes(d.netMinutes) : '0h'} / shift
+                                                {fmtHours(totalWeeklyPaidHours)}
                                             </div>
                                             <span className="text-[10px] text-muted-foreground">
-                                                {fmtHours(totalWeeklyPaidHours)} wk
+                                                {d ? fmtMinutes(d.netMinutes) : '—'} / shift
+                                            </span>
+                                        </td>
+
+                                        {/* Contract: does the pattern fit the DECLARED cycle?
+                                            Promoted out of the expansion, because it is the
+                                            question the row exists to answer and it was
+                                            previously only visible once opened. */}
+                                        <td className="py-3 px-3">
+                                            <Badge
+                                                variant="outline"
+                                                className={cn('text-[10px] font-semibold', VERDICT_STYLE[emp.verdict.status])}
+                                            >
+                                                {verdictLabel(emp.verdict)}
+                                            </Badge>
+                                            <span className="mt-0.5 block font-mono text-[10px] tabular-nums text-muted-foreground">
+                                                {fmtHours(emp.verdict.cycleHours)} / {fmtHours(emp.verdict.ceilingHours)}
+                                                {' over '}{emp.cycleWeeks}wk
                                             </span>
                                         </td>
 
@@ -812,98 +777,20 @@ export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
                                     {/* ── Expandable Details Row ──────────────────────────── */}
                                     {isExpanded && (
                                         <tr className="bg-slate-100/80 dark:bg-[#0b0e17] border-y-2 border-slate-300 dark:border-white/15">
-                                            <td colSpan={10} className="p-5 sm:p-6 space-y-5">
-                                                {/* Card 1: EBA cycle target & inline add variation.
-                                                    The cycle length is DECLARED per contract
-                                                    (`ordinary_hours_cycle_weeks`, 1-4), so it is read
-                                                    from the employee rather than written as 4. Every
-                                                    contract in production declares 4 today, which is
-                                                    exactly what would keep a hardcoded 4 invisible. */}
-                                                <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#161c2b] shadow-xs">
-                                                    <div className="flex flex-wrap items-center gap-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true" />
-                                                            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                                                                EBA {emp.cycleWeeks}-Week Cycle Target
-                                                            </h4>
-                                                        </div>
-                                                        <span className="font-mono text-xs font-bold text-foreground tabular-nums ml-1">
-                                                            {fmtHours(emp.verdict.cycleHours)} / {fmtHours(emp.verdict.ceilingHours)}
-                                                        </span>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={cn('text-[10px] font-semibold py-0 shadow-none', VERDICT_STYLE[emp.verdict.status])}
-                                                        >
-                                                            {verdictLabel(emp.verdict)}
-                                                        </Badge>
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <button
-                                                                    type="button"
-                                                                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer ml-1"
-                                                                >
-                                                                    <Info className="h-3 w-3" aria-hidden="true" />
-                                                                    Why {emp.cycleWeeks} weeks?
-                                                                </button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-80 text-xs leading-relaxed space-y-2 p-4 shadow-none">
-                                                                <p className="font-semibold text-foreground">ICC Sydney EBA cl 35.1</p>
-                                                                <p className="text-muted-foreground">
-                                                                    cl 35.1(a) caps full-time ordinary hours over the cycle the contract
-                                                                    declares — {emp.cycleWeeks} week{emp.cycleWeeks === 1 ? '' : 's'} here,
-                                                                    so {fmtHours(emp.contractedWeeklyHours * emp.cycleWeeks)} in total.
-                                                                </p>
-                                                                <p className="text-muted-foreground">
-                                                                    cl 35.1(c) protects employees: a full-time working day cannot be shorter than 7.6 hours. If leftover cycle hours are below 7.6h, they are left unscheduled as an honest variance.
-                                                                </p>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-36 h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/10">
-                                                                {/* Driven by the SAME verdict as the badge beside it.
-                                                                    The previous ternary only knew about `over`, so a
-                                                                    pattern 8h SHORT of its cycle drew a green bar at
-                                                                    94% next to an amber "8h short" badge. */}
-                                                                <div
-                                                                    className={cn(
-                                                                        'h-full transition-all duration-300',
-                                                                        VERDICT_PROGRESS_COLOR[emp.verdict.status],
-                                                                    )}
-                                                                    style={{ width: `${targetPercentage}%` }}
-                                                                />
-                                                            </div>
-                                                            <span className="font-mono text-xs text-muted-foreground font-semibold tabular-nums">
-                                                                {targetPercentage}%
-                                                            </span>
-                                                        </div>
-
-                                                        {emp.rows.length <= 1 && (
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                size="sm"
-                                                                disabled={disabled}
-                                                                onClick={() => onAddRow(emp.employeeId)}
-                                                                className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground border-dashed"
-                                                            >
-                                                                <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
-                                                                Add variation
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Card 2: Secondary Schedule Variations (only shown if multi-row) */}
-                                                {emp.rows.length > 1 && (
+                                            <td colSpan={8} className="p-5 sm:p-6 space-y-5">
+                                                {/* Variations. Always rendered — it is the only
+                                                    home "Add variation" has now that the cycle card
+                                                    is gone, and a second start time is the one thing
+                                                    the single-line row cannot express. */}
+                                                {(
                                                     <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#161c2b] p-5 shadow-xs space-y-3">
                                                         <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
                                                             <div className="flex items-center gap-2">
                                                                 <span className="h-2 w-2 rounded-full bg-purple-500" aria-hidden="true" />
                                                                 <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                                                                    Schedule Variations ({emp.rows.length})
+                                                                    {emp.rows.length > 1
+                                                                        ? `Schedule variations (${emp.rows.length})`
+                                                                        : 'Schedule variations'}
                                                                 </h4>
                                                             </div>
                                                             <Button
@@ -979,7 +866,7 @@ export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
                                                     </div>
                                                 )}
 
-                                                {/* Card 3: Deep Reconciliation Ledger & Shifts */}
+                                                {/* The reconciliation, answer first. */}
                                                 {emp.ledger && (
                                                     <EmployeeDetail ledger={emp.ledger} />
                                                 )}

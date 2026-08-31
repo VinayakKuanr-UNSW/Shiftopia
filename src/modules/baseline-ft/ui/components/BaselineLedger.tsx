@@ -1,34 +1,30 @@
 /**
- * The reconciliation — what each full-time employee is owed, what already
- * exists, and what the proposal does about the difference.
+ * The reconciliation — what one employee is owed, and what the proposal does
+ * about it.
  *
- * This used to BE the screen. It is now the expanded row of the pattern table:
- * the summary band still sits above it, and `EmployeeDetail` opens underneath
- * whichever person a manager is asking about. The arithmetic did not change,
- * only where it is read.
+ * IT LEADS WITH THE ANSWER. The previous version opened with a five-number
+ * strip ending in "Still Owed 30.4h · Deficit", then listed the four shifts
+ * that discharge exactly that 30.4h in a separate panel underneath. Both
+ * figures were right, and the reader had to do `7.6 + 30.4 = 38` themselves to
+ * discover there was never a problem — so an amber "Deficit" sat on a row about
+ * to be settled perfectly. The deficit is now stated only when the proposal
+ * does NOT clear it, which is the only time it is news.
  *
- * THE VARIANCE COLUMN CARRIES THE PRODUCT'S PHILOSOPHY. A non-zero variance is
- * a CORRECT answer, not a failure: cl 35.1(c) makes a short full-time day
- * unlawful, so when the remainder is smaller than a pattern day the honest
- * result is to leave it unscheduled and say why. The copy has to make that
- * legible, because a column of non-zero numbers otherwise reads as the tool
- * having failed at arithmetic.
+ * THE ARITHMETIC IS ALL STILL HERE, one disclosure down. Nothing left the audit
+ * trail; it stopped being the first thing shown.
  *
- * A NEGATIVE variance is a different fact again — the employee is already
- * rostered beyond their cycle ceiling. Baseline surfaces it and offers no fix,
- * because deleting a shift is outside this feature's authority.
+ * A NON-ZERO REMAINDER IS A CORRECT ANSWER. cl 35.1(c) makes a short full-time
+ * day unlawful, so when what is left is smaller than a working day the honest
+ * result is to leave it unscheduled and say why.
  */
 
 import React from 'react';
-import { Users, CalendarClock, Plane, CalendarPlus, Scale, TrendingUp } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { text } from '@/modules/core/ui/typography';
-import { Badge } from '@/modules/core/ui/primitives/badge';
-import {
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/modules/core/ui/primitives/table';
 import { FindingList } from './FindingList';
-import type { BaselineProposal, EmployeeLedger } from '../../api/baselineFt.commands';
+import type { EmployeeLedger } from '../../api/baselineFt.commands';
+import type { Candidate, CycleRequirement } from '../../domain/types';
 
 /* ────────────────────────────────────────────────────────────────────────────
    Formatting
@@ -50,6 +46,15 @@ export function fmtHm(hours: number): string {
     return `${sign}${h}h ${m}m`;
 }
 
+/** `2026-08-31` → `Mon 31 Aug`. */
+function fmtDate(iso: string): string {
+    try {
+        return format(parseISO(iso), 'EEE d MMM');
+    } catch {
+        return iso;
+    }
+}
+
 /** Below this, a variance is float noise from dividing minutes by 60. */
 export const VARIANCE_EPSILON = 0.05;
 
@@ -64,7 +69,7 @@ export function statusOf(l: EmployeeLedger): LedgerStatus {
 
 export const STATUS_CHIP: Record<LedgerStatus, { label: string; className: string }> = {
     satisfied: {
-        label: 'Fully scheduled',
+        label: 'Settled',
         className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
     },
     variance: {
@@ -82,321 +87,211 @@ export const STATUS_CHIP: Record<LedgerStatus, { label: string; className: strin
 };
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Summary band
+   Disclosure
    ──────────────────────────────────────────────────────────────────────────── */
 
-export const BaselineSummary: React.FC<{
-    proposal: BaselineProposal;
-    dirtyCount?: number;
-}> = ({ proposal, dirtyCount = 0 }) => {
-    const t = proposal.totals;
-
-    return (
-        <section
-            aria-label="Schedule Overview Bento Grid"
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 w-full"
+/**
+ * A quiet toggle. Native `<details>`, so it is keyboard-operable, findable by
+ * find-in-page, and carries no state of its own — three disclosures on a row
+ * would otherwise be three more pieces of component state to keep in sync.
+ */
+const Disclosure: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+    <details className="group min-w-0">
+        <summary
+            className={cn(
+                text.caption,
+                'cursor-pointer list-none select-none rounded -mx-1.5 px-1.5 py-1',
+                'text-muted-foreground hover:text-foreground',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            )}
         >
-            {/* Bento Card 1: To Schedule (Primary) */}
-            <div className="col-span-2 sm:col-span-1 lg:col-span-1 rounded-2xl border border-blue-200/70 dark:border-blue-500/30 bg-gradient-to-br from-blue-50/60 via-white to-white dark:from-blue-950/20 dark:via-card/50 dark:to-card/40 p-4 shadow-xs flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-blue-900 dark:text-blue-300">
-                        To Schedule
-                    </span>
-                    <CalendarPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-                </div>
-                <div className="mt-2.5">
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-extrabold tracking-tight text-foreground tabular-nums">
-                            {fmtHours(t.proposedHours)}
-                        </span>
-                        {t.proposedShiftCount > 0 && (
-                            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/10 px-1.5 py-0.2 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                <TrendingUp className="h-3 w-3" aria-hidden="true" />
-                                {t.proposedShiftCount}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        {t.blockedEmployees > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300 px-2 py-0.2 text-[10px] font-bold">
-                                ● {t.blockedEmployees} Blocked
-                            </span>
-                        )}
-                        {dirtyCount > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 px-2 py-0.2 text-[10px] font-bold">
-                                ● {dirtyCount} Unsaved
-                            </span>
-                        )}
-                        {t.blockedEmployees === 0 && dirtyCount === 0 && (
-                            <span className="text-[11px] text-muted-foreground">
-                                Ready to publish
-                            </span>
-                        )}
-                    </div>
-                </div>
-            </div>
+            <span className="mr-1 inline-block transition-transform group-open:rotate-90">›</span>
+            {label}
+        </summary>
+        <div className="mt-2.5">{children}</div>
+    </details>
+);
 
-            {/* Bento Card 2: Employees */}
-            <div className="rounded-2xl border border-slate-200/80 dark:border-border/60 bg-white/95 dark:bg-card/40 p-4 shadow-xs flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                        Employees
-                    </span>
-                    <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <div className="mt-2.5">
-                    <span className="text-2xl font-extrabold tracking-tight text-foreground tabular-nums">
-                        {t.employees}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground block mt-1">
-                        Full-time active
-                    </span>
-                </div>
-            </div>
+/* ────────────────────────────────────────────────────────────────────────────
+   The sentence
+   ──────────────────────────────────────────────────────────────────────────── */
 
-            {/* Bento Card 3: Contracted */}
-            <div className="rounded-2xl border border-slate-200/80 dark:border-border/60 bg-white/95 dark:bg-card/40 p-4 shadow-xs flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                        Contracted
-                    </span>
-                    <Scale className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <div className="mt-2.5">
-                    <span className="text-2xl font-extrabold tracking-tight text-foreground tabular-nums">
-                        {fmtHours(t.requiredHours)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground block mt-1">
-                        Required demand
-                    </span>
-                </div>
-            </div>
+/**
+ * What the proposal does to one cycle, as a line a person can read.
+ *
+ * The figure that matters is the residual AFTER the proposal, not the deficit
+ * before it. Stating the before-figure on its own is what made a row that was
+ * about to be settled exactly show an amber "Deficit".
+ */
+export function cycleSentence(cycle: CycleRequirement, proposed: readonly Candidate[]): {
+    text: string;
+    residualHours: number;
+} {
+    const proposedHours = proposed.reduce((s, c) => s + c.netMinutes / 60, 0);
+    const residualHours = cycle.deficitHours - proposedHours;
+    const owed = fmtHours(cycle.requiredHours);
 
-            {/* Bento Card 4: Rostered */}
-            <div className="rounded-2xl border border-slate-200/80 dark:border-border/60 bg-white/95 dark:bg-card/40 p-4 shadow-xs flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                        Rostered
-                    </span>
-                    <CalendarClock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <div className="mt-2.5">
-                    <span className="text-2xl font-extrabold tracking-tight text-foreground tabular-nums">
-                        {fmtHours(t.existingHours)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground block mt-1">
-                        Already assigned
-                    </span>
-                </div>
-            </div>
+    if (cycle.deficitHours <= VARIANCE_EPSILON) {
+        return {
+            residualHours: 0,
+            text:
+                `Owed ${owed}. Existing shifts, leave and public holidays already meet that, ` +
+                `so nothing is proposed.`,
+        };
+    }
 
-            {/* Bento Card 5: Leave */}
-            <div className="rounded-2xl border border-slate-200/80 dark:border-border/60 bg-white/95 dark:bg-card/40 p-4 shadow-xs flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground">
-                        Leave
-                    </span>
-                    <Plane className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <div className="mt-2.5">
-                    <span className="text-2xl font-extrabold tracking-tight text-foreground tabular-nums">
-                        {fmtHours(t.leaveHours)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground block mt-1">
-                        Approved absences
-                    </span>
-                </div>
-            </div>
-        </section>
-    );
-};
+    const discharged: string[] = [];
+    if (cycle.existingHours > VARIANCE_EPSILON) {
+        discharged.push(`${fmtHours(cycle.existingHours)} already rostered`);
+    }
+    if (cycle.paidLeaveHours > VARIANCE_EPSILON) {
+        discharged.push(`${fmtHours(cycle.paidLeaveHours)} leave`);
+    }
+    if (cycle.publicHolidayCreditHours > VARIANCE_EPSILON) {
+        discharged.push(`${fmtHours(cycle.publicHolidayCreditHours)} public holidays`);
+    }
+
+    const prefix = discharged.length > 0
+        ? `Owed ${owed}, with ${discharged.join(', ')}.`
+        : `Owed ${owed}.`;
+
+    if (proposed.length === 0) {
+        return { residualHours, text: `${prefix} No shift could be proposed.` };
+    }
+
+    const shifts =
+        `${proposed.length} shift${proposed.length === 1 ? '' : 's'} proposed, ${fmtHours(proposedHours)}`;
+
+    return residualHours <= VARIANCE_EPSILON
+        ? { residualHours: 0, text: `${prefix} ${shifts} — that settles it exactly.` }
+        : {
+            residualHours,
+            text:
+                `${prefix} ${shifts}, leaving ${fmtHm(residualHours)} unscheduled — ` +
+                `a full-time day cannot be shorter than 7.6 hours.`,
+        };
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
    Expanded detail
    ──────────────────────────────────────────────────────────────────────────── */
 
 export const EmployeeDetail: React.FC<{ ledger: EmployeeLedger }> = ({ ledger }) => {
-    const status = statusOf(ledger);
+    // Days the generator deliberately stepped over, said next to the dates it
+    // DID take — "why is Thursday missing" is the question this panel is opened
+    // to answer, and it was previously buried in a generic notes list.
+    const skipped = ledger.findings.filter(
+        f => f.code === 'BFT_DAY_ALREADY_ROSTERED' || f.code === 'BFT_DAY_ON_LEAVE_OR_HOLIDAY',
+    );
+    const notes = ledger.findings.filter(
+        f => f.code !== 'BFT_DAY_ALREADY_ROSTERED' && f.code !== 'BFT_DAY_ON_LEAVE_OR_HOLIDAY',
+    );
 
     return (
-        <div className="space-y-5 w-full">
-            {/* ── 1. The Calculation Card ── */}
-            {ledger.cycles.map(c => (
-                <div
-                    key={c.cycleIndex}
-                    className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#161c2b] p-5 shadow-xs space-y-4"
-                >
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-white/5">
-                        <div className="flex items-center gap-2">
-                            <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true" />
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                                The Calculation
-                            </h4>
-                        </div>
-                        <span className="text-xs text-muted-foreground font-mono">
-                            Cycle: {c.start} – {c.endInclusive}
-                            {c.activeDays < c.cycleDays && ` (${c.activeDays} of ${c.cycleDays} days in scope)`}
-                        </span>
-                    </div>
+        <div className="space-y-5 px-4 py-4 sm:px-5">
+            {ledger.cycles.map(cycle => {
+                const proposed = ledger.proposed.filter(c => c.cycleIndex === cycle.cycleIndex);
+                const { text: sentence, residualHours } = cycleSentence(cycle, proposed);
 
-                    {/* Clean single-layer stat bar without nested boxes */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-white/5">
-                        <div className="pt-2 sm:pt-0 sm:px-3 first:pl-0">
-                            <span className="text-xs font-medium text-muted-foreground block">
-                                Owed
-                            </span>
-                            <span className="text-xl font-bold text-foreground tabular-nums block mt-1">
-                                {fmtHours(c.requiredHours)}
-                            </span>
-                        </div>
+                // One shape for the whole set is the normal case, so it is said
+                // once rather than repeated against every date.
+                const uniform = proposed.length > 0
+                    && proposed.every(c => c.startTime === proposed[0].startTime
+                                        && c.endTime === proposed[0].endTime);
 
-                        <div className="pt-2 sm:pt-0 sm:px-3">
-                            <span className="text-xs font-medium text-muted-foreground block">
-                                Rostered
-                            </span>
-                            <span className="text-xl font-bold text-foreground tabular-nums block mt-1">
-                                {fmtHours(c.existingHours)}
-                            </span>
-                        </div>
+                return (
+                    <section key={cycle.cycleIndex} className="space-y-2.5">
+                        <p className={cn(text.body, 'max-w-prose')}>{sentence}</p>
 
-                        <div className="pt-2 sm:pt-0 sm:px-3">
-                            <span className="text-xs font-medium text-muted-foreground block">
-                                Leave
-                            </span>
-                            <span className="text-xl font-bold text-foreground tabular-nums block mt-1">
-                                {fmtHours(c.paidLeaveHours)}
-                            </span>
-                        </div>
-
-                        <div className="pt-2 sm:pt-0 sm:px-3">
-                            <span className="text-xs font-medium text-muted-foreground block">
-                                Holidays
-                            </span>
-                            <span className="text-xl font-bold text-foreground tabular-nums block mt-1">
-                                {fmtHours(c.publicHolidayCreditHours)}
-                            </span>
-                        </div>
-
-                        <div className="pt-2 sm:pt-0 sm:px-3 last:pr-0">
-                            <span className="text-xs font-bold text-foreground block">
-                                Still Owed
-                            </span>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="text-xl font-extrabold text-foreground tabular-nums">
-                                    {fmtHours(c.deficitHours)}
+                        {proposed.length > 0 && (
+                            <p className={text.bodyMuted}>
+                                <span className="font-mono tabular-nums">
+                                    {proposed.map(c => fmtDate(c.shiftDate)).join(' · ')}
                                 </span>
-                                {c.deficitHours > 0 ? (
-                                    <span className="inline-flex rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold text-[10px] px-1.5 py-0.2">
-                                        Deficit
-                                    </span>
-                                ) : (
-                                    <span className="inline-flex rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-[10px] px-1.5 py-0.2">
-                                        Balanced
+                                {uniform && (
+                                    <span className="ml-2">
+                                        all {proposed[0].startTime}–{proposed[0].endTime}
                                     </span>
                                 )}
-                            </div>
+                            </p>
+                        )}
+
+                        {skipped.length > 0 && (
+                            <ul className="space-y-0.5">
+                                {skipped.map((f, i) => (
+                                    <li key={`${f.code}-${i}`} className={text.caption}>{f.plain}</li>
+                                ))}
+                            </ul>
+                        )}
+
+                        <div className="flex flex-wrap items-start gap-x-6 gap-y-1 pt-0.5">
+                            <Disclosure label="How this was worked out">
+                                <dl className="grid max-w-2xl grid-cols-1 gap-x-8 gap-y-1.5 sm:grid-cols-2">
+                                    {([
+                                        ['Cycle', `${cycle.start} – ${cycle.endInclusive}`],
+                                        ['Days in scope', `${cycle.activeDays} of ${cycle.cycleDays}`],
+                                        ['Owed', fmtHours(cycle.requiredHours)],
+                                        ['Already rostered', fmtHours(cycle.existingHours)],
+                                        ['Leave credit', fmtHours(cycle.paidLeaveHours)],
+                                        ['Public holidays', fmtHours(cycle.publicHolidayCreditHours)],
+                                        ['Owed before this run', fmtHours(cycle.deficitHours)],
+                                        ['Remaining after it', fmtHours(Math.max(0, residualHours))],
+                                    ] as const).map(([label, value]) => (
+                                        <div key={label} className="flex items-baseline justify-between gap-3">
+                                            <dt className={text.subtle}>{label}</dt>
+                                            <dd className={cn(text.metric, 'tabular-nums')}>{value}</dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                                {ledger.hasUnresolvedElection && (
+                                    <p className={cn(text.caption, 'mt-2 max-w-prose')}>
+                                        These figures assume the employee took their religious/cultural
+                                        or gender-affirmation leave as paid annual leave. Taken as
+                                        unpaid leave they would owe more.
+                                    </p>
+                                )}
+                            </Disclosure>
+
+                            {proposed.length > 0 && (
+                                <Disclosure label="Shape of each day">
+                                    <ul className="space-y-1">
+                                        {proposed.map(c => (
+                                            <li key={c.idempotencyKey}
+                                                className={cn(text.caption, 'font-mono tabular-nums')}>
+                                                {fmtDate(c.shiftDate)} · {c.startTime}–{c.endTime} ·{' '}
+                                                {c.unpaidBreakMinutes}m unpaid · {c.paidBreakMinutes}m paid rest ·{' '}
+                                                {fmtHm(c.netMinutes / 60)} net
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </Disclosure>
+                            )}
+
+                            {ledger.rejected.length > 0 && (
+                                <Disclosure label={`${ledger.rejected.length} not proposed`}>
+                                    <ul className="space-y-2">
+                                        {ledger.rejected.map(({ candidate, reasons }) => (
+                                            <li key={candidate.idempotencyKey}>
+                                                <span className={cn(text.caption, 'font-mono')}>
+                                                    {fmtDate(candidate.shiftDate)} ·{' '}
+                                                    {candidate.startTime}–{candidate.endTime}
+                                                </span>
+                                                <FindingList findings={reasons} showCalculation className="mt-1" />
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </Disclosure>
+                            )}
+
+                            {notes.length > 0 && (
+                                <Disclosure label={`${notes.length} note${notes.length === 1 ? '' : 's'}`}>
+                                    <FindingList findings={notes} showCalculation />
+                                </Disclosure>
+                            )}
                         </div>
-                    </div>
-
-                    {ledger.hasUnresolvedElection && (
-                        <p className={cn(text.caption, 'text-xs text-muted-foreground pt-2 border-t border-slate-100 dark:border-white/5')}>
-                            These figures assume the employee took their religious/cultural or
-                            gender-affirmation leave as paid annual leave.
-                        </p>
-                    )}
-                </div>
-            ))}
-
-            {/* ── 2. Proposed Shifts Card ── */}
-            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#161c2b] p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
-                    <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                            Proposed Shifts ({ledger.proposed.length})
-                        </h4>
-                    </div>
-                    {ledger.proposed.length > 0 && (
-                        <span className="text-xs font-medium text-muted-foreground">
-                            {fmtHours(ledger.proposed.reduce((sum, c) => sum + (c.netMinutes / 60), 0))} total
-                        </span>
-                    )}
-                </div>
-
-                {ledger.proposed.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2">
-                        {status === 'satisfied'
-                            ? 'Nothing to add — this employee’s contracted hours are already met.'
-                            : 'No shifts could be proposed. See the notes below.'}
-                    </p>
-                ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                        {ledger.proposed.map(c => (
-                            <div
-                                key={c.idempotencyKey}
-                                className="rounded-xl bg-slate-50 dark:bg-[#1f283d] border border-slate-200/80 dark:border-white/5 p-3.5 flex flex-col justify-between hover:bg-slate-100/80 dark:hover:bg-[#25304a] transition-colors"
-                            >
-                                <span className="font-bold text-xs text-foreground block">
-                                    {c.shiftDate}
-                                </span>
-                                <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-200/60 dark:border-white/10">
-                                    <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                                        {c.startTime}–{c.endTime}
-                                    </span>
-                                    <span className="inline-flex rounded-md bg-slate-200/80 dark:bg-white/10 text-foreground font-bold text-[11px] px-2 py-0.5 tabular-nums">
-                                        {fmtHours(c.netMinutes / 60)}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* ── 3. Rejected Shifts (if any) ── */}
-            {ledger.rejected.length > 0 && (
-                <div className="rounded-2xl border border-amber-200/80 dark:border-amber-500/30 bg-amber-50/20 dark:bg-amber-950/10 p-5 shadow-xs space-y-3">
-                    <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                            Not Proposed ({ledger.rejected.length})
-                        </h4>
-                    </div>
-                    <ul className="space-y-2">
-                        {ledger.rejected.map(({ candidate, reasons }) => (
-                            <li
-                                key={candidate.idempotencyKey}
-                                className="rounded-xl border border-amber-200/80 dark:border-amber-500/30 bg-white dark:bg-[#161c2b] p-3.5"
-                            >
-                                <div className="flex items-baseline gap-2">
-                                    <span className="font-bold text-xs text-foreground">{candidate.shiftDate}</span>
-                                    <span className="font-mono text-xs text-muted-foreground">
-                                        {candidate.startTime}–{candidate.endTime}
-                                    </span>
-                                </div>
-                                <FindingList
-                                    findings={reasons}
-                                    showCalculation
-                                    className="mt-2"
-                                />
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-
-            {/* ── 4. Notes (if any) ── */}
-            {ledger.findings.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#161c2b] p-5 shadow-xs space-y-3">
-                    <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                            Notes & Diagnostics
-                        </h4>
-                    </div>
-                    <FindingList findings={ledger.findings} showCalculation />
-                </div>
-            )}
+                    </section>
+                );
+            })}
         </div>
     );
 };

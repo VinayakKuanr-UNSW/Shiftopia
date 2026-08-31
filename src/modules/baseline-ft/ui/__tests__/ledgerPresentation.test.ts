@@ -8,10 +8,10 @@
  * hide the exact thing the feature exists to police.
  */
 import { describe, expect, it } from 'vitest';
-import { fmtHm, fmtHours, statusOf } from '../components/BaselineLedger';
+import { cycleSentence, fmtHm, fmtHours, statusOf } from '../components/BaselineLedger';
 import { findingKey, sortFindings } from '../components/FindingList';
 import type { EmployeeLedger } from '../../api/baselineFt.commands';
-import type { Finding } from '../../domain/types';
+import type { Candidate, CycleRequirement, Finding } from '../../domain/types';
 
 function ledger(over: Partial<EmployeeLedger> = {}): EmployeeLedger {
     return {
@@ -151,5 +151,102 @@ describe('findingKey', () => {
         const b: Finding = { ...residual('x'), candidateKey: 'bft:sub:emp:2026-09-02:08:00-16:06:role' };
         expect(findingKey(a, 0)).toContain('2026-09-01');
         expect(findingKey(b, 0)).toContain('2026-09-02');
+    });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The sentence that replaced the five-number strip
+   ──────────────────────────────────────────────────────────────────────────── */
+
+function cycle(over: Partial<CycleRequirement> = {}): CycleRequirement {
+    return {
+        cycleIndex: 0,
+        start: '2026-08-10',
+        endInclusive: '2026-09-06',
+        ceilingHours: 152,
+        activeDays: 7,
+        cycleDays: 28,
+        requiredHours: 38,
+        existingHours: 0,
+        paidLeaveHours: 0,
+        publicHolidayCreditHours: 0,
+        blockedDates: [],
+        deficitHours: 38,
+        deficitHoursIfElectionUnpaid: 38,
+        ...over,
+    };
+}
+
+function shift(date: string, netMinutes = 456): Candidate {
+    return {
+        employeeId: 'emp-1',
+        userContractId: 'uc-1',
+        sourceSlotId: `slot-${date}`,
+        shiftDate: date,
+        startTime: '08:00',
+        endTime: '16:06',
+        unpaidBreakMinutes: 30,
+        paidBreakMinutes: 15,
+        netMinutes,
+        roleId: 'role-1',
+        cycleIndex: 0,
+        idempotencyKey: `bft:sub:emp-1:${date}:08:00-16:06:role-1`,
+    };
+}
+
+describe('cycleSentence', () => {
+    it('says a settled period is settled, and never calls it a deficit', () => {
+        // The exact case from the screen that prompted this redesign: owed
+        // 38.0h, 7.6h already rostered, four 7.6h shifts proposed = 30.4h. The
+        // old panel showed "Still Owed 30.4h · Deficit" in amber, and listed the
+        // four shifts that discharge precisely that 30.4h in a separate card
+        // underneath — leaving the reader to do the arithmetic to find out
+        // nothing was wrong.
+        const { text, residualHours } = cycleSentence(
+            cycle({ existingHours: 7.6, deficitHours: 30.4 }),
+            [shift('2026-08-31'), shift('2026-09-01'), shift('2026-09-02'), shift('2026-09-04')],
+        );
+
+        expect(text).toContain('settles it exactly');
+        expect(text).toContain('7.6h already rostered');
+        expect(text).toContain('4 shifts proposed');
+        expect(residualHours).toBe(0);
+        expect(text).not.toMatch(/deficit/i);
+    });
+
+    it('names what is left over, and why, when the proposal does NOT clear it', () => {
+        // A genuine variance IS news, and this is the only time it is stated.
+        const { text, residualHours } = cycleSentence(
+            cycle({ deficitHours: 38 }),
+            [shift('2026-08-31'), shift('2026-09-01'), shift('2026-09-02'), shift('2026-09-04')],
+        );
+
+        expect(residualHours).toBeCloseTo(7.6, 1);
+        expect(text).toContain('leaving 7h 36m unscheduled');
+        // The reason, not just the number — a non-zero remainder is a correct
+        // answer under cl 35.1(c) and has to read as one.
+        expect(text).toContain('cannot be shorter than 7.6 hours');
+    });
+
+    it('reports an already-met cycle without proposing anything', () => {
+        const { text, residualHours } = cycleSentence(
+            cycle({ existingHours: 38, deficitHours: 0 }), []);
+        expect(text).toContain('already meet that');
+        expect(residualHours).toBe(0);
+    });
+
+    it('lists every kind of credit that discharged the obligation', () => {
+        const { text } = cycleSentence(
+            cycle({ existingHours: 7.6, paidLeaveHours: 7.6, publicHolidayCreditHours: 7.6, deficitHours: 15.2 }),
+            [shift('2026-09-01'), shift('2026-09-02')],
+        );
+        expect(text).toContain('7.6h already rostered');
+        expect(text).toContain('7.6h leave');
+        expect(text).toContain('7.6h public holidays');
+    });
+
+    it('says so plainly when nothing could be proposed at all', () => {
+        const { text } = cycleSentence(cycle({ deficitHours: 38 }), []);
+        expect(text).toContain('No shift could be proposed');
     });
 });

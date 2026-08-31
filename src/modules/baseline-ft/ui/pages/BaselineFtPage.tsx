@@ -60,7 +60,7 @@ import {
     copyPatternShape, cycleVerdict, deriveRow, rowsToPattern, seedRow, type PatternRow,
 } from '../../domain/patternRow';
 import type { BaselinePattern } from '../../domain/types';
-import { BaselineSummary, fmtHours } from '../components/BaselineLedger';
+import { fmtHours } from '../components/BaselineLedger';
 import {
     BaselinePatternTable, type EmployeePatternModel,
 } from '../components/BaselinePatternTable';
@@ -527,8 +527,6 @@ const BaselineFtPage: React.FC = () => {
 
                         {proposal && employees.length > 0 && (
                             <>
-                                {/* 1. Schedule Overview */}
-                                <BaselineSummary proposal={proposal} dirtyCount={dirtyCount} />
 
                                 {/* 2. Employee Scheduling Workspace */}
                                 <section aria-label="Team Scheduling Canvas" className="w-full">
@@ -560,16 +558,27 @@ const BaselineFtPage: React.FC = () => {
                             aria-label="Roster publishing actions"
                             className="shrink-0 z-20 border-t border-slate-200/80 dark:border-border/60 bg-white/95 dark:bg-card/95 px-6 py-3.5 backdrop-blur-md flex items-center justify-between gap-4 w-full"
                         >
-                            {/* Left: Shifts Drafted status */}
-                            <div className="flex items-center gap-3 min-w-0">
-                                <span className="font-bold text-sm text-foreground truncate">
-                                    {proposedCount} Shifts Drafted
+                            {/* What the button will do, beside the button.
+                                This replaces a five-tile band that sat ~900px
+                                above it. Every figure there was a TEAM total for
+                                this window while the row beneath showed a PERSON
+                                over a CYCLE, and nothing said which was which —
+                                so correct numbers read as contradictions. One
+                                scope, stated once, next to the action it
+                                describes. */}
+                            <div className="flex min-w-0 items-baseline gap-2">
+                                <span className="truncate text-sm font-bold text-foreground">
+                                    {proposedCount === 0
+                                        ? 'Nothing to create in this window'
+                                        : `${proposedCount} draft shift${proposedCount === 1 ? '' : 's'} · ${fmtHours(proposal.totals.proposedHours)}`}
                                 </span>
-                                {blockedCount > 0 && (
-                                    <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-                                        • {blockedCount} {blockedCount === 1 ? 'Issue' : 'Issues'}
-                                    </span>
-                                )}
+                                <span className={cn(text.caption, 'truncate')}>
+                                    {[
+                                        `${proposal.totals.employees} full-time`,
+                                        dirtyCount > 0 && `${dirtyCount} unsaved`,
+                                        blockedCount > 0 && `${blockedCount} need${blockedCount === 1 ? 's' : ''} attention`,
+                                    ].filter(Boolean).join(' · ')}
+                                </span>
                             </div>
 
                             {/* Right: <alert icon> <save icon> <publish icon> per ARIA and WCAG */}
