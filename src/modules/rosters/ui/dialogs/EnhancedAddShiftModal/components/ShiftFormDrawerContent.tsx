@@ -76,6 +76,7 @@ import { EmployeeSelect } from './EmployeeSelect';
 import type { ShiftFormDrawerContentProps } from '../types';
 import { formatHours } from '../utils';
 import {
+    targetEmploymentTypeOptions,
     TARGET_EMPLOYMENT_TYPES,
     TARGET_EMPLOYMENT_TYPE_LABELS,
     contractMatchesTarget,
@@ -589,7 +590,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 id="target-emp-select"
                                                 label="Target Employment Type"
                                                 required
-                                                options={TARGET_EMPLOYMENT_TYPES.map((t) => ({
+                                                options={targetEmploymentTypeOptions(field.value).map((t) => ({
                                                     id: t,
                                                     name: TARGET_EMPLOYMENT_TYPE_LABELS[t],
                                                 }))}

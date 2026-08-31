@@ -32,12 +32,66 @@ export type EmploymentStatus =
  */
 export type TargetEmploymentType = 'FT' | 'PT' | 'Casual';
 
-/** Iteration order for pickers. `null` ("Any") is modelled by the caller. */
+/**
+ * Every value the column accepts. Iteration order for anything that must be
+ * able to DISPLAY all three — filters, labels, existing shifts.
+ *
+ * NOT the list to offer when creating a shift. See
+ * `CREATABLE_TARGET_EMPLOYMENT_TYPES`.
+ */
 export const TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] = [
     'FT',
     'PT',
     'Casual',
 ] as const;
+
+/**
+ * What a person may CHOOSE when creating a shift by hand.
+ *
+ * 'FT' is absent deliberately. Full-time hours are capped over a declared
+ * multi-week cycle (ICC EBA cl 35.1(a)), and whether one more full-time shift
+ * is lawful depends on what the employee has already worked and been credited
+ * across that whole cycle — a question a single-shift form cannot ask. Adding
+ * them one at a time is how a roster ends up over the ceiling without anything
+ * ever reporting a breach: production carried 160h against a 152h cap on every
+ * full-time employee, and no screen said so.
+ *
+ * Full-time shifts therefore come only from Baseline FT, which reconciles the
+ * contract, the existing roster, leave and public holidays before proposing
+ * anything.
+ *
+ * THIS LIST IS A COURTESY, NOT THE ENFORCEMENT. The database refuses any
+ * `shifts` row with `target_employment_type = 'FT'` whose `creation_source` is
+ * not `'baseline_ft'`, via `enforce_ft_shifts_are_baseline_only()` — a TRIGGER
+ * rather than a check inside `sm_create_shift`, because
+ * `apply_template_to_date_range_v2` inserts into `shifts` directly and would
+ * otherwise walk straight past it.
+ */
+export const CREATABLE_TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] = [
+    'PT',
+    'Casual',
+] as const;
+
+/**
+ * The options a target-employment-type picker should show.
+ *
+ * `CREATABLE_TARGET_EMPLOYMENT_TYPES`, plus whatever the shift already is.
+ *
+ * Editing one of the full-time shifts Baseline FT created must still RENDER as
+ * "Full-Time". Without the current value in the list a Radix Select falls back
+ * to its placeholder, so the field silently reads as unset and the next save
+ * changes the shift's type — turning "open a shift to check it" into an
+ * accidental edit. The DB trigger only blocks BECOMING full-time, so switching
+ * away is still possible; it just has to be deliberate.
+ */
+export function targetEmploymentTypeOptions(
+    current: TargetEmploymentType | null | undefined,
+): readonly TargetEmploymentType[] {
+    if (!current || CREATABLE_TARGET_EMPLOYMENT_TYPES.includes(current)) {
+        return CREATABLE_TARGET_EMPLOYMENT_TYPES;
+    }
+    return [current, ...CREATABLE_TARGET_EMPLOYMENT_TYPES];
+}
 
 export const TARGET_EMPLOYMENT_TYPE_LABELS: Record<TargetEmploymentType, string> = {
     FT: 'Full-Time',

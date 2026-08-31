@@ -67,6 +67,7 @@ import { TemplateDaySelect } from './TemplateDaySelect';
 import { formatHours, calculateShiftLength } from '../utils';
 import type { ShiftFormSheetProps } from '../types';
 import {
+    targetEmploymentTypeOptions,
     TARGET_EMPLOYMENT_TYPES,
     TARGET_EMPLOYMENT_TYPE_LABELS,
     contractMatchesTarget,
@@ -1017,7 +1018,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent className="z-[200]">
-                                            {TARGET_EMPLOYMENT_TYPES.map((t) => (
+                                            {targetEmploymentTypeOptions(field.value).map((t) => (
                                                 <SelectItem key={t} value={t}>
                                                     {TARGET_EMPLOYMENT_TYPE_LABELS[t]}
                                                 </SelectItem>
