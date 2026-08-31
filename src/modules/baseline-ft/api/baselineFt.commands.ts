@@ -426,7 +426,10 @@ export interface ApplyBaselineInput {
     actorId: string;
     resolveTarget: (args: {
         subDepartmentId: string; departmentId: string; organizationId: string; shiftDate: string;
-    }) => Promise<{ rosterId: string; rosterSubgroupId: string }>;
+    }) => Promise<{
+        rosterId: string; rosterSubgroupId: string;
+        groupType: string; subGroupName: string;
+    }>;
 }
 
 /**
@@ -588,7 +591,7 @@ export async function applyBaseline(input: ApplyBaselineInput): Promise<ApplyRun
             continue;
         }
 
-        let target: { rosterId: string; rosterSubgroupId: string };
+        let target: Awaited<ReturnType<typeof resolveTarget>>;
         try {
             target = await resolveTarget({
                 subDepartmentId, departmentId, organizationId, shiftDate: c.shiftDate,
@@ -619,6 +622,12 @@ export async function applyBaseline(input: ApplyBaselineInput): Promise<ApplyRun
                 assigned_employee_id: c.employeeId,
                 creation_source: 'baseline_ft',
                 assignment_source: 'baseline_ft',
+                // The Roster Planner buckets on these, NOT on
+                // `roster_subgroup_id`. Omitting them writes a shift that is
+                // correctly parented and renders in no group — which is what
+                // made the first 39 invisible on /rosters.
+                group_type: target.groupType as never,
+                sub_group_name: target.subGroupName,
             });
 
             await supabase.from('baseline_ft_proposed_shifts')

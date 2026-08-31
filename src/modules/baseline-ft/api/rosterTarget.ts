@@ -31,6 +31,21 @@ export interface RosterTargetArgs {
 export interface RosterTarget {
     rosterId: string;
     rosterSubgroupId: string;
+    /**
+     * The DENORMALISED group, normalised the way `getRosterStructure` does it:
+     * lower-cased with spaces underscored, so "Convention Centre" becomes
+     * "convention_centre".
+     *
+     * Carried because `shifts.roster_subgroup_id` is the structural link but is
+     * NOT what the Roster Planner buckets on — `GroupModeView` filters its
+     * cells with `cell.group_type === group.type`. A shift written with a
+     * correct subgroup and a null `group_type` is parented properly and appears
+     * in no group at all, which is exactly what happened to the first 39 shifts
+     * Baseline created.
+     */
+    groupType: string;
+    /** Matches the subgroup row the Planner draws, e.g. "AM Base". */
+    subGroupName: string;
 }
 
 /** Group a baseline shift belongs to when one has to be created. */
@@ -76,10 +91,26 @@ export async function resolveRosterTarget(args: RosterTargetArgs): Promise<Roste
         );
     }
 
-    return {
-        rosterId: draft.id,
-        rosterSubgroupId: await resolveSubgroup(draft.id),
-    };
+    const subgroup = await resolveSubgroup(draft.id);
+    return { rosterId: draft.id, ...subgroup };
+}
+
+/**
+ * "Convention Centre" -> "convention_centre".
+ *
+ * Must agree with THREE other things, which is why it is exported and tested:
+ *   - `getRosterStructure`, which normalises the same way to build the planner's
+ *     group list;
+ *   - `GroupModeView`, which buckets cells with `cell.group_type === group.type`;
+ *   - the Postgres enum `template_group_type`, whose four labels are exactly
+ *     `convention_centre, exhibition_centre, theatre, the_cutaway`.
+ *
+ * A value that is merely plausible is not enough: `shifts.group_type` is that
+ * enum, so a wrong transform is a 22P02 at write time, and a missing one is a
+ * shift that renders in no group at all.
+ */
+export function normaliseGroupName(name: string): string {
+    return name.toLowerCase().replace(/\s+/g, '_');
 }
 
 /**
@@ -90,7 +121,9 @@ export async function resolveRosterTarget(args: RosterTargetArgs): Promise<Roste
  * manager has chosen to organise their team and a generator should slot into
  * that rather than impose a parallel structure beside it.
  */
-async function resolveSubgroup(rosterId: string): Promise<string> {
+async function resolveSubgroup(
+    rosterId: string,
+): Promise<Omit<RosterTarget, 'rosterId'>> {
     const { data: groups, error } = await supabase
         .from('roster_groups')
         .select('id, name, roster_subgroups(id, name)')
@@ -108,13 +141,25 @@ async function resolveSubgroup(rosterId: string): Promise<string> {
     for (const g of existing) {
         if (g.name !== BASELINE_GROUP_NAME) continue;
         const own = (g.roster_subgroups ?? []).find(s => s.name === BASELINE_SUBGROUP_NAME);
-        if (own) return own.id;
+        if (own) {
+            return {
+                rosterSubgroupId: own.id,
+                groupType: normaliseGroupName(g.name),
+                subGroupName: own.name,
+            };
+        }
     }
 
     // Any subgroup at all. The manager's own structure beats a new one.
     for (const g of existing) {
         const first = (g.roster_subgroups ?? [])[0];
-        if (first) return first.id;
+        if (first) {
+            return {
+                rosterSubgroupId: first.id,
+                groupType: normaliseGroupName(g.name),
+                subGroupName: first.name,
+            };
+        }
     }
 
     // The roster has no subgroups. Make the baseline one.
@@ -139,7 +184,11 @@ async function resolveSubgroup(rosterId: string): Promise<string> {
     if (sErr || !sub) {
         throw new Error(`Could not create a roster subgroup: ${sErr?.message ?? 'unknown error'}`);
     }
-    return String(sub.id);
+    return {
+        rosterSubgroupId: String(sub.id),
+        groupType: normaliseGroupName(BASELINE_GROUP_NAME),
+        subGroupName: BASELINE_SUBGROUP_NAME,
+    };
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
