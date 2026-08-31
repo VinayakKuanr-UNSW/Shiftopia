@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-    attachLeaveCredit, cycleVerdict, deriveRow, grossMinutesBetween,
+    attachLeaveCredit, copyPatternShape, cycleVerdict, deriveRow, grossMinutesBetween,
     patternHoursByWeekday, rowToSlots, rowsToPattern, seedRow,
     type PatternRow,
 } from '../patternRow';
@@ -228,5 +228,81 @@ describe('leave credit comes from the pattern, not from an average', () => {
             { date: '2024-07-20', leaveType: 'annual', credit: 'CREDITS', status: 'approved' },
         ];
         expect(attachLeaveCredit(raw, hours, isoOf)[0].creditHours).toBe(0);
+    });
+});
+
+describe('copyPatternShape', () => {
+    const src = (over: Partial<PatternRow> = {}) => row({
+        rowId: 'src-1', employeeId: 'emp-src', userContractId: 'uc-src',
+        roleId: 'role-manager', ...over,
+    });
+    const tgt = (over: Partial<PatternRow> = {}) => row({
+        rowId: 'tgt-1', employeeId: 'emp-tgt', userContractId: 'uc-tgt',
+        roleId: 'role-supervisor', days: [1, 2], startTime: '06:00', endTime: '14:06',
+        slotIdByDay: { 1: 'db-mon', 2: 'db-tue' }, ...over,
+    });
+    const newId = (i: number) => `new-${i}`;
+
+    it('copies the shape and NOTHING else', () => {
+        const out = copyPatternShape([src(), tgt()], 'emp-src', 'emp-tgt', newId);
+        const moved = out.find(r => r.employeeId === 'emp-tgt')!;
+
+        expect(moved.days).toEqual([1, 2, 3, 4, 5]);
+        expect(moved.startTime).toBe('08:00');
+        expect(moved.endTime).toBe('16:06');
+
+        // The invariant. Role and contract authorise the work; carrying them
+        // across would hand someone a pattern that can never be generated
+        // (BFT_PATTERN_ROLE_MISMATCH is BLOCKING) and change their pay rate.
+        expect(moved.roleId).toBe('role-supervisor');
+        expect(moved.userContractId).toBe('uc-tgt');
+        expect(moved.employeeId).toBe('emp-tgt');
+    });
+
+    it('keeps the target\'s saved database ids so a save updates rather than churns', () => {
+        const out = copyPatternShape([src(), tgt()], 'emp-src', 'emp-tgt', newId);
+        expect(out.find(r => r.employeeId === 'emp-tgt')!.slotIdByDay).toEqual(
+            { 1: 'db-mon', 2: 'db-tue' });
+    });
+
+    it('REPLACES, so a two-line source does not collapse onto one target row', () => {
+        // The bug this function exists to prevent: the old inline version
+        // looped the source's rows and wrote every one to the target's rows[0],
+        // so the first variation was silently lost.
+        const out = copyPatternShape(
+            [
+                src({ rowId: 'src-1', days: [1, 2, 3] }),
+                src({ rowId: 'src-2', days: [4, 5], startTime: '14:00', endTime: '22:06' }),
+                tgt(),
+            ],
+            'emp-src', 'emp-tgt', newId,
+        );
+        const moved = out.filter(r => r.employeeId === 'emp-tgt');
+
+        expect(moved).toHaveLength(2);
+        expect(moved.map(r => r.days)).toEqual([[1, 2, 3], [4, 5]]);
+        expect(moved[1].startTime).toBe('14:00');
+        // The new line still belongs to the target, not the source.
+        expect(moved.every(r => r.roleId === 'role-supervisor')).toBe(true);
+    });
+
+    it('drops the target\'s surplus lines rather than leaving a hybrid', () => {
+        const out = copyPatternShape(
+            [src(), tgt({ rowId: 'tgt-1' }), tgt({ rowId: 'tgt-2', days: [6, 7] })],
+            'emp-src', 'emp-tgt', newId,
+        );
+        expect(out.filter(r => r.employeeId === 'emp-tgt')).toHaveLength(1);
+    });
+
+    it('leaves the draft untouched when either side has no rows', () => {
+        const rows = [src()];
+        expect(copyPatternShape(rows, 'emp-src', 'nobody', newId)).toEqual(rows);
+        expect(copyPatternShape(rows, 'nobody', 'emp-src', newId)).toEqual(rows);
+    });
+
+    it('does not disturb anyone else', () => {
+        const other = row({ rowId: 'o1', employeeId: 'emp-other', days: [3] });
+        const out = copyPatternShape([src(), tgt(), other], 'emp-src', 'emp-tgt', newId);
+        expect(out.find(r => r.employeeId === 'emp-other')).toEqual(other);
     });
 });

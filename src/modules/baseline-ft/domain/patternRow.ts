@@ -258,6 +258,60 @@ export function cycleVerdict(
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
+   Copying a shape between employees
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Put one employee's weekly SHAPE onto another, and nothing else.
+ *
+ * ONLY DAYS, TIMES AND BREAKS TRAVEL. The target keeps their own
+ * `userContractId` and `roleId`, because the contract is what authorises a role
+ * and `BFT_PATTERN_ROLE_MISMATCH` is BLOCKING — carrying the source's role
+ * across would hand somebody a pattern that can never be generated, and would
+ * quietly change what their shifts are paid at.
+ *
+ * IT REPLACES, IT DOES NOT MERGE. Lines the target had beyond the source's
+ * count are dropped, so the result is the source's pattern rather than a hybrid
+ * of the two. Where the shapes line up, the target's existing database ids are
+ * kept, so a later save updates those rows instead of deleting and re-inserting
+ * them.
+ *
+ * Pure, and here rather than in the table component, because the invariant
+ * worth protecting — that identity never travels with the shape — is a domain
+ * rule and needs a test that does not require rendering anything.
+ */
+export function copyPatternShape(
+    allRows: readonly PatternRow[],
+    sourceEmployeeId: string,
+    targetEmployeeId: string,
+    newRowId: (index: number) => string,
+): PatternRow[] {
+    const source = allRows.filter(r => r.employeeId === sourceEmployeeId);
+    const target = allRows.filter(r => r.employeeId === targetEmployeeId);
+
+    // Nothing to copy from, or nobody to copy onto: leave the draft untouched
+    // rather than inventing rows for someone with no contract line.
+    if (source.length === 0 || target.length === 0) return [...allRows];
+
+    const head = target[0];
+    const replacements: PatternRow[] = source.map((src, i) => ({
+        ...(target[i] ?? head),
+        rowId: target[i]?.rowId ?? newRowId(i),
+        employeeId: targetEmployeeId,
+        userContractId: head.userContractId,
+        roleId: head.roleId,
+        slotIdByDay: target[i]?.slotIdByDay ?? {},
+        weekInCycle: src.weekInCycle,
+        days: [...src.days],
+        startTime: src.startTime,
+        endTime: src.endTime,
+        unpaidBreakMinutes: src.unpaidBreakMinutes,
+    }));
+
+    return [...allRows.filter(r => r.employeeId !== targetEmployeeId), ...replacements];
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
    Seeding
    ──────────────────────────────────────────────────────────────────────────── */
 

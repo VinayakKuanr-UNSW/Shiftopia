@@ -31,17 +31,46 @@ describe('Baseline FT on mobile', () => {
         expect(sidebar).toContain('to="/baseline-ft"');
     });
 
-    it('the pattern table carries a phone composition, not just a scrolling table', () => {
+    it('the workspace has BOTH compositions — cards for phones, table from md up', () => {
         const table = read('src/modules/baseline-ft/ui/components/BaselinePatternTable.tsx');
 
-        // Cards below md, table from md up. Both halves must exist: a table
-        // hidden on mobile with nothing in its place is a blank screen, and
-        // cards with no `md:hidden` would double up on desktop.
+        // This is the assertion that matters, and it is deliberately structural
+        // rather than a string match on a label.
         //
-        // Eleven columns is well past what a 430px viewport can hold, so this
-        // is the page's load-bearing responsive decision, not a nicety.
+        // The desktop table's ten columns have a combined minimum width of
+        // 1250px, nearly 3x a 430px viewport, so shipping it alone means
+        // scrolling in two dimensions at once — WCAG SC 1.4.10 (Reflow). Being
+        // on ALLOWED_MOBILE_ROUTES is a CLAIM that this page reflows; these two
+        // classes are the only thing backing it.
+        //
+        // A previous revision of this test asserted an aria-label and the word
+        // "DayToggles" instead. Both were true of a table with no phone
+        // composition at all, so the test passed while the card view was
+        // deleted. Assert the mechanism, not the vocabulary.
         expect(table).toContain('md:hidden');
-        expect(table).toContain('hidden overflow-x-auto rounded-lg border bg-card md:block');
+        expect(table).toContain('hidden md:block');
+    });
+
+    it('the columns really are too wide for a phone — the reason the cards exist', () => {
+        const table = read('src/modules/baseline-ft/ui/components/BaselinePatternTable.tsx');
+        const mins = [...table.matchAll(/min-w-\[(\d+)px\]/g)].map(m => Number(m[1]));
+
+        // If someone slims the table enough that it genuinely fits a phone,
+        // this fails and the cards can be reconsidered on purpose rather than
+        // deleted by accident.
+        expect(mins.length).toBeGreaterThan(0);
+        expect(mins.reduce((a, b) => a + b, 0)).toBeGreaterThan(430);
+    });
+
+    it('controls are thumb-sized where a thumb is used', () => {
+        const table = read('src/modules/baseline-ft/ui/components/BaselinePatternTable.tsx');
+
+        // `touch.target` is min-h-11/min-w-11 (44px). The shared inputs and the
+        // day toggles opt into it below md and release it from md up, where the
+        // table renders for a pointer. Without this the day toggles were 28px.
+        expect(table).toContain("import { text, touch } from '@/modules/core/ui/typography'");
+        expect(table).toMatch(/touch\.target\b/);
+        expect(table).toMatch(/touch\.targetY\b/);
     });
 
     it('every editable control in the table is reachable and labelled', () => {

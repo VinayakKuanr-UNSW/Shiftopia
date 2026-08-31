@@ -1,34 +1,37 @@
 /**
- * The baseline table — one line per working pattern, edited in place.
+ * Baseline FT — Employee Scheduling Workspace.
  *
- * NINE COLUMNS, FIVE OF THEM EDITABLE. Gross, paid break and net are
- * consequences of the other five and are rendered as figures rather than
- * fields. The paid rest pause is the one worth being firm about: cl 37.1/37.2
- * makes it a function of how long somebody works, so offering it as an input
- * would let a manager roster a nine-hour day with no rest pause and hear
- * nothing about it until the shape gate refused the shift days later.
+ * Minimalist, high-clarity Table Structure:
+ *   - Column 1: Employee Name (sortable)
+ *   - Column 2: Role (sortable)
+ *   - Column 3: Day Selector (M T W T F S S)
+ *   - Column 4: Start Time
+ *   - Column 5: End Time
+ *   - Column 6: Gross Length
+ *   - Column 7: Paid Break (derived from EBA cl 37.1)
+ *   - Column 8: Unpaid Break
+ *   - Column 9: Paid Length
+ *   - Column 10: Quick Actions & Row Expansion
  *
- * THE TENTH COLUMN IS THE POINT. Start and end are freely typed, because a
- * shift ends when the venue closes and a tool that refuses to express that is
- * useless. What stops 08:00–16:30 becoming a standing 40-hour week against a
- * 38-hour contract is the CYCLE column, updating as the time is typed:
- * `160 / 152 · 8h over`. That breach is what every full-time employee in this
- * database was carrying, and it is eight minutes a day away from lawful — far
- * too small to notice without the arithmetic on screen.
- *
- * ROLE IS READ-ONLY, and deliberately. The contract authorises the role;
- * `BFT_PATTERN_ROLE_MISMATCH` is BLOCKING for any other, so a picker here would
- * only offer ways to break the row. Changing someone's role is a contract
- * change, and the finding says exactly that.
- *
- * PHONES GET CARDS. Ten columns cannot become a table at 430px without
- * two-dimensional scrolling, which WCAG SC 1.4.10 forbids — so the composition
- * changes rather than shrinking, the same swap `/team-availability` makes for
- * its matrix.
+ * Expandable Row Disclosure:
+ *   - 4-week cycle EBA target progress meter
+ *   - Secondary variations (+ Add variation)
+ *   - The calculation ledger & proposed draft shifts candidates
+ *   - Recommendations & compliance diagnostics
  */
 
 import React from 'react';
-import { ChevronRight, Plus, Trash2, Wand2 } from 'lucide-react';
+import {
+    ArrowUpDown,
+    ChevronRight,
+    ClipboardPaste,
+    Copy,
+    Info,
+    Plus,
+    Trash2,
+    Wand2,
+} from 'lucide-react';
+
 import { cn } from '@/modules/core/lib/utils';
 import { text, touch } from '@/modules/core/ui/typography';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -38,10 +41,11 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
 import {
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/modules/core/ui/primitives/table';
+    Popover, PopoverContent, PopoverTrigger,
+} from '@/modules/core/ui/primitives/popover';
+import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import {
-    DAY_LONG, DAY_SHORT, ISO_WEEK, deriveRow,
+    DAY_LONG, ISO_WEEK, deriveRow,
     type CycleVerdict, type PatternRow,
 } from '../../domain/patternRow';
 import type { IsoWeekday } from '../../domain/types';
@@ -55,13 +59,11 @@ import { EmployeeDetail, fmtHm, fmtHours } from './BaselineLedger';
 export interface EmployeePatternModel {
     employeeId: string;
     name: string;
-    /** From the contract. Displayed, never chosen. */
     roleName: string;
     contractedWeeklyHours: number;
     cycleWeeks: number;
     rows: PatternRow[];
     verdict: CycleVerdict;
-    /** The period reconciliation, once the world has loaded. */
     ledger: EmployeeLedger | null;
     hasUnsavedEdits: boolean;
 }
@@ -71,34 +73,53 @@ export interface BaselinePatternTableProps {
     onChangeRow: (rowId: string, patch: Partial<PatternRow>) => void;
     onAddRow: (employeeId: string) => void;
     onRemoveRow: (rowId: string) => void;
-    /**
-     * Spread the contracted week evenly across every day this employee has
-     * selected, and set the finish times to match.
-     *
-     * Keyed on the EMPLOYEE, not one row: with two lines at different start
-     * times, "make this line fit the contract" has no single answer, while
-     * "make this person's week add up" has exactly one.
-     */
     onFitToContract: (employeeId: string) => void;
+    /**
+     * Copy one employee's shape onto another. REQUIRED, not optional.
+     *
+     * It was optional, with a fallback here that looped the source's rows and
+     * wrote every one of them to the target's `rows[0]` — so a multi-variation
+     * pattern silently collapsed to whichever variation happened to be last,
+     * the target's own variations survived underneath as a hybrid, and the
+     * "Pattern applied" toast fired either way. Only the page can add and
+     * remove rows atomically, so only the page can do this correctly.
+     */
+    onCopyPattern: (sourceEmployeeId: string, targetEmployeeId: string) => void;
     disabled?: boolean;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Formatting
+   Formatting Helpers
    ──────────────────────────────────────────────────────────────────────────── */
 
-/** Minutes as `7h 36`. Never decimalised: 7.6h and 7h 36m are easy to confuse. */
 function fmtMinutes(minutes: number): string {
     const sign = minutes < 0 ? '−' : '';
     const abs = Math.abs(Math.round(minutes));
-    return `${sign}${Math.floor(abs / 60)}h ${String(abs % 60).padStart(2, '0')}`;
+    return `${sign}${Math.floor(abs / 60)}h ${String(abs % 60).padStart(2, '0')}m`;
 }
+
+const DAY_LETTER: Record<IsoWeekday, string> = {
+    1: 'M',
+    2: 'T',
+    3: 'W',
+    4: 'T',
+    5: 'F',
+    6: 'S',
+    7: 'S',
+};
 
 const VERDICT_STYLE: Record<CycleVerdict['status'], string> = {
     balanced: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
     over: 'bg-destructive/10 text-destructive border-destructive/30',
     short: 'bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-500/30',
-    empty: 'bg-muted text-muted-foreground border-border',
+    empty: 'bg-muted text-muted-foreground border-border/40',
+};
+
+const VERDICT_PROGRESS_COLOR: Record<CycleVerdict['status'], string> = {
+    balanced: 'bg-emerald-500',
+    over: 'bg-destructive',
+    short: 'bg-amber-500',
+    empty: 'bg-muted-foreground/30',
 };
 
 function verdictLabel(v: CycleVerdict): string {
@@ -111,7 +132,7 @@ function verdictLabel(v: CycleVerdict): string {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Cells
+   Sub-components
    ──────────────────────────────────────────────────────────────────────────── */
 
 const DayToggles: React.FC<{
@@ -119,10 +140,7 @@ const DayToggles: React.FC<{
     onChange: (days: IsoWeekday[]) => void;
     disabled?: boolean;
 }> = ({ days, onChange, disabled }) => (
-    // Seven toggles rather than a multi-select, because the value of a column
-    // is being able to read the whole team's shape down it. A collapsed
-    // dropdown hides exactly the thing the table exists to show.
-    <div className="flex gap-0.5" role="group" aria-label="Working days">
+    <div className="inline-flex items-center gap-1" role="group" aria-label="Working days">
         {ISO_WEEK.map(d => {
             const on = days.includes(d);
             return (
@@ -132,20 +150,23 @@ const DayToggles: React.FC<{
                     disabled={disabled}
                     aria-pressed={on}
                     aria-label={DAY_LONG[d]}
-                    title={DAY_LONG[d]}
+                    title={`${DAY_LONG[d]}: ${on ? 'Scheduled' : 'Off'}`}
                     onClick={() => onChange(
                         on ? days.filter(x => x !== d) : [...days, d].sort((a, b) => a - b),
                     )}
                     className={cn(
-                        'h-8 w-7 rounded text-[11px] font-bold transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        // 44px thumb target below md, released to the compact
+                        // 32px box where the table renders for a pointer.
+                        touch.target, 'md:min-h-0 md:min-w-0',
+                        'w-9 h-9 md:w-8 md:h-8 rounded-md font-bold text-[11px] flex items-center justify-center transition-all cursor-pointer select-none',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
                         'disabled:opacity-50',
                         on
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'border border-slate-200 dark:border-border/60 bg-white dark:bg-card text-slate-400 dark:text-muted-foreground font-medium hover:bg-slate-50 dark:hover:bg-muted/40',
                     )}
                 >
-                    {DAY_SHORT[d].charAt(0)}
+                    {DAY_LETTER[d]}
                 </button>
             );
         })}
@@ -164,7 +185,10 @@ const TimeInput: React.FC<{
         aria-label={label}
         disabled={disabled}
         onChange={e => onChange(e.target.value)}
-        className="h-9 w-[7.5rem] tabular-nums"
+        className={cn(
+            touch.targetY, 'md:min-h-0',
+            'h-11 md:h-8 px-2 w-28 rounded-lg border border-slate-200 dark:border-border/60 bg-white dark:bg-card text-xs font-medium tabular-nums shadow-xs',
+        )}
     />
 );
 
@@ -178,403 +202,797 @@ const BreakSelect: React.FC<{
         disabled={disabled}
         onValueChange={v => onChange(Number(v))}
     >
-        <SelectTrigger className="h-9 w-[5.5rem]" aria-label="Unpaid meal break">
-            <SelectValue />
+        <SelectTrigger
+            className={cn(
+                touch.targetY, 'md:min-h-0',
+                'h-11 md:h-8 px-2.5 w-24 rounded-lg border border-slate-200 dark:border-border/60 bg-white dark:bg-card text-xs font-medium shadow-xs',
+            )}
+            aria-label="Unpaid meal break"
+        >
+            <SelectValue placeholder="30 min" />
         </SelectTrigger>
-        <SelectContent>
-            {/* cl 36.1 — a day over five hours needs 30–60 minutes unpaid. Zero
-                stays available because a short day legitimately needs none. */}
+        <SelectContent className="shadow-md">
             {[0, 30, 45, 60].map(m => (
-                <SelectItem key={m} value={String(m)}>{m}m</SelectItem>
+                <SelectItem key={m} value={String(m)} className="text-xs font-medium">
+                    {m} min
+                </SelectItem>
             ))}
         </SelectContent>
     </Select>
 );
 
-const Derived: React.FC<{ children: React.ReactNode; strong?: boolean }> = ({ children, strong }) => (
-    <span className={cn(
-        'tabular-nums font-mono text-xs',
-        strong ? 'text-foreground font-semibold' : 'text-muted-foreground',
-    )}>
-        {children}
-    </span>
-);
-
-const VerdictChip: React.FC<{ verdict: CycleVerdict; cycleWeeks: number }> = ({ verdict, cycleWeeks }) => (
-    <div className="flex flex-col items-start gap-1">
-        <span className="tabular-nums font-mono text-xs text-foreground">
-            {fmtHours(verdict.cycleHours)} / {fmtHours(verdict.ceilingHours)}
-        </span>
-        <Badge variant="outline" className={cn(text.label, VERDICT_STYLE[verdict.status])}>
-            {verdictLabel(verdict)}
-        </Badge>
-        <span className={text.subtle}>over {cycleWeeks} week{cycleWeeks === 1 ? '' : 's'}</span>
-    </div>
-);
-
 /* ────────────────────────────────────────────────────────────────────────────
-   Desktop
+   Main Table Component
    ──────────────────────────────────────────────────────────────────────────── */
 
-const HEADERS = [
-    '', 'Employee', 'Role', 'Mon – Sun', 'Start', 'End',
-    'Gross', 'Unpaid', 'Paid', 'Net', 'Cycle', '',
-] as const;
+interface CopiedPattern {
+    employeeId: string;
+    employeeName: string;
+    rows: PatternRow[];
+}
 
-const DesktopTable: React.FC<BaselinePatternTableProps & {
-    expanded: string | null;
-    setExpanded: (id: string | null) => void;
-}> = ({
-    employees, onChangeRow, onAddRow, onRemoveRow, onFitToContract,
-    disabled, expanded, setExpanded,
-}) => (
-    <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    {HEADERS.map((h, i) => (
-                        <TableHead key={i} className={cn(i >= 6 && i <= 9 && 'text-right')}>
-                            {h}
-                        </TableHead>
-                    ))}
-                </TableRow>
-            </TableHeader>
+export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = ({
+    employees, onChangeRow, onAddRow, onRemoveRow, onFitToContract, onCopyPattern, disabled,
+}) => {
+    const { toast } = useToast();
+    const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
+    const [copiedPattern, setCopiedPattern] = React.useState<CopiedPattern | null>(null);
 
-            {employees.map(emp => {
-                const isOpen = expanded === emp.employeeId;
+    // Sort state
+    const [sortField, setSortField] = React.useState<'name' | 'role'>('name');
+    const [sortAsc, setSortAsc] = React.useState<boolean>(true);
 
-                return (
-                    // One tbody per employee: the rows of a multi-line pattern
-                    // belong together, and a browser will not split a tbody
-                    // across a grouping boundary.
-                    <TableBody key={emp.employeeId} className="border-b last:border-b-0">
-                        {emp.rows.map((row, i) => {
-                            const d = deriveRow(row);
-                            const first = i === 0;
+    const toggleSort = (field: 'name' | 'role') => {
+        if (sortField === field) {
+            setSortAsc(!sortAsc);
+        } else {
+            setSortField(field);
+            setSortAsc(true);
+        }
+    };
 
-                            return (
-                                <TableRow key={row.rowId} className="border-0">
-                                    <TableCell className="w-8 pr-0 align-top">
-                                        {first && (
-                                            <button
-                                                type="button"
-                                                aria-expanded={isOpen}
-                                                aria-label={`${isOpen ? 'Hide' : 'Show'} the reconciliation for ${emp.name}`}
-                                                onClick={() => setExpanded(isOpen ? null : emp.employeeId)}
-                                                className={cn(
-                                                    touch.target,
-                                                    'flex items-center justify-center rounded',
-                                                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                                )}
-                                            >
-                                                <ChevronRight
-                                                    className={cn(
-                                                        'h-4 w-4 text-muted-foreground transition-transform',
-                                                        isOpen && 'rotate-90',
-                                                    )}
-                                                    aria-hidden="true"
-                                                />
-                                            </button>
-                                        )}
-                                    </TableCell>
+    const sortedEmployees = React.useMemo(() => {
+        return [...employees].sort((a, b) => {
+            const valA = sortField === 'name' ? a.name : a.roleName;
+            const valB = sortField === 'name' ? b.name : b.roleName;
+            const cmp = valA.localeCompare(valB);
+            return sortAsc ? cmp : -cmp;
+        });
+    }, [employees, sortField, sortAsc]);
 
-                                    <TableCell className="align-top">
-                                        {first && (
-                                            <div className="flex items-center gap-1.5">
-                                                <span className={text.body}>{emp.name}</span>
-                                                {emp.hasUnsavedEdits && (
-                                                    <span
-                                                        aria-label="Unsaved changes"
-                                                        title="Unsaved changes"
-                                                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-                                                    />
-                                                )}
-                                            </div>
-                                        )}
-                                    </TableCell>
+    const toggleExpand = (empId: string) => {
+        setExpandedRows(prev => {
+            const next = new Set(prev);
+            if (next.has(empId)) next.delete(empId);
+            else next.add(empId);
+            return next;
+        });
+    };
 
-                                    <TableCell className="align-top">
-                                        {first && (
-                                            <span className={text.bodyMuted}>{emp.roleName || '—'}</span>
-                                        )}
-                                    </TableCell>
+    const handleCopy = (emp: EmployeePatternModel) => {
+        setCopiedPattern({
+            employeeId: emp.employeeId,
+            employeeName: emp.name,
+            rows: emp.rows,
+        });
+        toast({
+            title: 'Pattern copied',
+            description: `${emp.name}’s weekly pattern copied to clipboard.`,
+        });
+    };
 
-                                    <TableCell className="align-top">
-                                        <DayToggles
-                                            days={row.days}
-                                            disabled={disabled}
-                                            onChange={days => onChangeRow(row.rowId, { days })}
-                                        />
-                                    </TableCell>
+    const handlePaste = (targetEmployeeId: string) => {
+        if (!copiedPattern) return;
+        const targetEmp = employees.find(e => e.employeeId === targetEmployeeId);
+        if (!targetEmp) return;      // nothing happened, so say nothing
 
-                                    <TableCell className="align-top">
-                                        <TimeInput
-                                            value={row.startTime} label={`Start time for ${emp.name}`}
-                                            disabled={disabled}
-                                            onChange={startTime => onChangeRow(row.rowId, { startTime })}
-                                        />
-                                    </TableCell>
+        onCopyPattern(copiedPattern.employeeId, targetEmployeeId);
+        toast({
+            title: 'Pattern applied',
+            description:
+                `${copiedPattern.employeeName}’s days and times copied to ${targetEmp.name}. ` +
+                `Their own role and contract are unchanged.`,
+        });
+    };
 
-                                    <TableCell className="align-top">
-                                        <TimeInput
-                                            value={row.endTime} label={`Finish time for ${emp.name}`}
-                                            disabled={disabled}
-                                            onChange={endTime => onChangeRow(row.rowId, { endTime })}
-                                        />
-                                    </TableCell>
+    if (employees.length === 0) return null;
 
-                                    <TableCell className="text-right align-top">
-                                        <Derived>{fmtMinutes(d.grossMinutes)}</Derived>
-                                    </TableCell>
+    /**
+     * One employee, as a phone card.
+     *
+     * The desktop table's ten columns have a combined minimum width of 1250px —
+     * nearly three times a 430px viewport — so rendering it on a phone means
+     * scrolling in two dimensions at once, which WCAG SC 1.4.10 (Reflow)
+     * forbids. `/baseline-ft` is on ALLOWED_MOBILE_ROUTES, and that entry is a
+     * CLAIM that this page reflows; the claim needs a composition behind it.
+     *
+     * So the shape changes rather than shrinking: the same controls, stacked,
+     * with the derived figures as a strip instead of four columns.
+     */
+    const renderCard = (emp: EmployeePatternModel) => {
+        const isExpanded = expandedRows.has(emp.employeeId);
+        const primaryRow = emp.rows[0];
+        const totalWeeklyHours = emp.rows.reduce((n, r) => n + deriveRow(r).weeklyMinutes, 0) / 60;
+        const targetPercentage = emp.verdict.ceilingHours > 0
+            ? Math.min(100, Math.round((emp.verdict.cycleHours / emp.verdict.ceilingHours) * 100))
+            : 0;
+        const initials = emp.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
-                                    <TableCell className="align-top">
-                                        <BreakSelect
-                                            value={row.unpaidBreakMinutes}
-                                            disabled={disabled}
-                                            onChange={unpaidBreakMinutes =>
-                                                onChangeRow(row.rowId, { unpaidBreakMinutes })}
-                                        />
-                                    </TableCell>
-
-                                    <TableCell className="text-right align-top">
-                                        <Derived>{d.paidBreakMinutes}m</Derived>
-                                    </TableCell>
-
-                                    <TableCell className="text-right align-top">
-                                        <Derived strong>{fmtMinutes(d.netMinutes)}</Derived>
-                                    </TableCell>
-
-                                    <TableCell className="align-top">
-                                        {first && (
-                                            <VerdictChip verdict={emp.verdict} cycleWeeks={emp.cycleWeeks} />
-                                        )}
-                                    </TableCell>
-
-                                    <TableCell className="align-top">
-                                        <div className="flex items-center gap-1">
-                                            <Button
-                                                type="button" variant="ghost" size="sm"
-                                                disabled={disabled}
-                                                onClick={() => onFitToContract(emp.employeeId)}
-                                                title="Set the finish time so the pattern matches the contract exactly"
-                                                className="h-8 px-2"
-                                            >
-                                                <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                                <span className="sr-only">
-                                                    Fit {emp.name}&rsquo;s hours to their contract
-                                                </span>
-                                            </Button>
-                                            {emp.rows.length > 1 && (
-                                                <Button
-                                                    type="button" variant="ghost" size="sm"
-                                                    disabled={disabled}
-                                                    onClick={() => onRemoveRow(row.rowId)}
-                                                    className="h-8 px-2 text-muted-foreground hover:text-destructive"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                                    <span className="sr-only">Remove this line</span>
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-
-                        <TableRow className="border-0">
-                            <TableCell />
-                            <TableCell colSpan={HEADERS.length - 1} className="pt-0">
-                                <Button
-                                    type="button" variant="ghost" size="sm"
-                                    disabled={disabled}
-                                    onClick={() => onAddRow(emp.employeeId)}
-                                    className={cn(text.caption, 'h-7 px-2 text-muted-foreground')}
-                                >
-                                    <Plus className="mr-1 h-3 w-3" aria-hidden="true" />
-                                    Add a different start time for {emp.name.split(' ')[0]}
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-
-                        {isOpen && emp.ledger && (
-                            <TableRow className="border-0">
-                                <TableCell colSpan={HEADERS.length} className="p-0">
-                                    <EmployeeDetail ledger={emp.ledger} />
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                );
-            })}
-        </Table>
-    </div>
-);
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Phone
-   ──────────────────────────────────────────────────────────────────────────── */
-
-const PhoneCards: React.FC<BaselinePatternTableProps & {
-    expanded: string | null;
-    setExpanded: (id: string | null) => void;
-}> = ({
-    employees, onChangeRow, onAddRow, onRemoveRow, onFitToContract,
-    disabled, expanded, setExpanded,
-}) => (
-    <ul className="space-y-2 md:hidden">
-        {employees.map(emp => {
-            const isOpen = expanded === emp.employeeId;
-
-            return (
-                <li key={emp.employeeId} className="overflow-hidden rounded-lg border bg-card">
-                    <div className="flex items-start justify-between gap-2 px-3 pt-3">
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                                <span className={cn(text.body, 'truncate')}>{emp.name}</span>
-                                {emp.hasUnsavedEdits && (
-                                    <span
-                                        aria-label="Unsaved changes"
-                                        className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
-                                    />
-                                )}
-                            </div>
-                            <span className={text.subtle}>{emp.roleName || '—'}</span>
-                        </div>
-                        <Badge
-                            variant="outline"
-                            className={cn(text.label, 'shrink-0', VERDICT_STYLE[emp.verdict.status])}
-                        >
-                            {fmtHours(emp.verdict.cycleHours)} / {fmtHours(emp.verdict.ceilingHours)}
-                        </Badge>
+        return (
+            <li
+                key={emp.employeeId}
+                className="rounded-2xl border border-slate-200 dark:border-border/60 bg-white dark:bg-card/40 shadow-xs overflow-hidden"
+            >
+                {/* Identity + verdict */}
+                <div className="flex items-start gap-2.5 px-3.5 pt-3.5">
+                    <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 dark:border-border/60 bg-slate-100 dark:bg-muted text-xs font-bold text-slate-700 dark:text-foreground"
+                        aria-hidden="true"
+                    >
+                        {initials}
                     </div>
-
-                    {emp.rows.map((row, i) => {
-                        const d = deriveRow(row);
-                        return (
-                            <div
-                                key={row.rowId}
-                                className={cn('space-y-2.5 px-3 py-3', i > 0 && 'border-t border-dashed')}
-                            >
-                                <DayToggles
-                                    days={row.days}
-                                    disabled={disabled}
-                                    onChange={days => onChangeRow(row.rowId, { days })}
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-bold text-foreground">{emp.name}</span>
+                            {emp.hasUnsavedEdits && (
+                                <span
+                                    aria-label="Unsaved changes"
+                                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
                                 />
+                            )}
+                        </div>
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                            {emp.roleName || 'No role on contract'} · {emp.contractedWeeklyHours}h contract
+                        </span>
+                    </div>
+                    <Badge
+                        variant="outline"
+                        className={cn('shrink-0 text-[10px] font-semibold', VERDICT_STYLE[emp.verdict.status])}
+                    >
+                        {verdictLabel(emp.verdict)}
+                    </Badge>
+                </div>
 
-                                <div className="flex flex-wrap items-end gap-2">
-                                    <label className="space-y-1">
-                                        <span className={text.subtle}>Start</span>
-                                        <TimeInput
-                                            value={row.startTime} label={`Start time for ${emp.name}`}
-                                            disabled={disabled}
-                                            onChange={startTime => onChangeRow(row.rowId, { startTime })}
-                                        />
-                                    </label>
-                                    <label className="space-y-1">
-                                        <span className={text.subtle}>End</span>
-                                        <TimeInput
-                                            value={row.endTime} label={`Finish time for ${emp.name}`}
-                                            disabled={disabled}
-                                            onChange={endTime => onChangeRow(row.rowId, { endTime })}
-                                        />
-                                    </label>
-                                    <label className="space-y-1">
-                                        <span className={text.subtle}>Unpaid</span>
-                                        <BreakSelect
-                                            value={row.unpaidBreakMinutes}
-                                            disabled={disabled}
-                                            onChange={unpaidBreakMinutes =>
-                                                onChangeRow(row.rowId, { unpaidBreakMinutes })}
-                                        />
-                                    </label>
-                                </div>
+                {/* Cycle progress — same verdict as the badge above it */}
+                <div className="flex items-center gap-2 px-3.5 pt-2.5">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10">
+                        <div
+                            className={cn('h-full transition-all', VERDICT_PROGRESS_COLOR[emp.verdict.status])}
+                            style={{ width: `${targetPercentage}%` }}
+                        />
+                    </div>
+                    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                        {fmtHours(emp.verdict.cycleHours)} / {fmtHours(emp.verdict.ceilingHours)}
+                    </span>
+                </div>
 
-                                <dl className="grid grid-cols-3 gap-x-3 rounded-md bg-muted/40 px-2.5 py-2">
-                                    {([
-                                        ['Gross', fmtMinutes(d.grossMinutes)],
-                                        ['Paid rest', `${d.paidBreakMinutes}m`],
-                                        ['Net', fmtMinutes(d.netMinutes)],
-                                    ] as const).map(([label, value]) => (
-                                        <div key={label}>
-                                            <dt className={text.subtle}>{label}</dt>
-                                            <dd className={cn(text.metric, 'tabular-nums')}>{value}</dd>
-                                        </div>
-                                    ))}
-                                </dl>
-
-                                <div className="flex items-center gap-2">
+                {/* Every line, primary first */}
+                {emp.rows.map((row, i) => {
+                    const d = deriveRow(row);
+                    return (
+                        <div
+                            key={row.rowId}
+                            className={cn('space-y-2.5 px-3.5 py-3', i > 0 && 'border-t border-dashed border-slate-200 dark:border-border/50')}
+                        >
+                            {i > 0 && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold text-muted-foreground">
+                                        Variation {i + 1}
+                                    </span>
                                     <Button
-                                        type="button" variant="outline" size="sm"
+                                        type="button" variant="ghost" size="sm"
                                         disabled={disabled}
-                                        onClick={() => onFitToContract(emp.employeeId)}
-                                        className={cn(touch.targetY, 'flex-1')}
+                                        onClick={() => onRemoveRow(row.rowId)}
+                                        className={cn(touch.target, 'h-9 px-2 text-muted-foreground hover:text-destructive')}
                                     >
-                                        <Wand2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                                        Fit to contract
+                                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                        <span className="sr-only">Remove variation {i + 1}</span>
                                     </Button>
-                                    {emp.rows.length > 1 && (
-                                        <Button
-                                            type="button" variant="ghost" size="sm"
-                                            disabled={disabled}
-                                            onClick={() => onRemoveRow(row.rowId)}
-                                            className={cn(touch.targetY, 'text-muted-foreground')}
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                            <span className="sr-only">Remove this line</span>
-                                        </Button>
-                                    )}
                                 </div>
-                            </div>
-                        );
-                    })}
+                            )}
 
-                    <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
+                            <DayToggles
+                                days={row.days}
+                                disabled={disabled}
+                                onChange={days => onChangeRow(row.rowId, { days })}
+                            />
+
+                            <div className="flex flex-wrap items-end gap-2">
+                                <label className="space-y-1">
+                                    <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">Start</span>
+                                    <TimeInput
+                                        value={row.startTime || ''}
+                                        label={`Start time for ${emp.name}`}
+                                        disabled={disabled}
+                                        onChange={startTime => onChangeRow(row.rowId, { startTime })}
+                                    />
+                                </label>
+                                <label className="space-y-1">
+                                    <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">End</span>
+                                    <TimeInput
+                                        value={row.endTime || ''}
+                                        label={`Finish time for ${emp.name}`}
+                                        disabled={disabled}
+                                        onChange={endTime => onChangeRow(row.rowId, { endTime })}
+                                    />
+                                </label>
+                                <label className="space-y-1">
+                                    <span className="block text-[10px] uppercase tracking-wider text-muted-foreground">Unpaid</span>
+                                    <BreakSelect
+                                        value={row.unpaidBreakMinutes}
+                                        disabled={disabled}
+                                        onChange={unpaidBreakMinutes =>
+                                            onChangeRow(row.rowId, { unpaidBreakMinutes })}
+                                    />
+                                </label>
+                            </div>
+
+                            {/* Derived, never typed */}
+                            <dl className="grid grid-cols-3 gap-x-3 rounded-lg bg-slate-50 dark:bg-muted/30 px-2.5 py-2">
+                                {([
+                                    ['Gross', fmtMinutes(d.grossMinutes)],
+                                    ['Paid rest', d.paidBreakMinutes > 0 ? `+${d.paidBreakMinutes}m` : '—'],
+                                    ['Paid length', fmtMinutes(d.netMinutes)],
+                                ] as const).map(([label, value]) => (
+                                    <div key={label}>
+                                        <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
+                                        <dd className="font-mono text-xs font-semibold tabular-nums text-foreground">{value}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </div>
+                    );
+                })}
+
+                {/* Actions */}
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 dark:border-border/40 px-3.5 py-2.5">
+                    <Button
+                        type="button" variant="outline" size="sm"
+                        disabled={disabled || !primaryRow}
+                        onClick={() => onFitToContract(emp.employeeId)}
+                        className={cn(touch.targetY, 'flex-1 text-xs')}
+                    >
+                        <Wand2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                        Fit to contract
+                    </Button>
+                    <Button
+                        type="button" variant="outline" size="sm"
+                        disabled={disabled}
+                        onClick={() => onAddRow(emp.employeeId)}
+                        className={cn(touch.targetY, 'text-xs border-dashed')}
+                    >
+                        <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                        Variation
+                    </Button>
+                    <Button
+                        type="button" variant="ghost" size="sm"
+                        disabled={disabled}
+                        onClick={() => handleCopy(emp)}
+                        aria-label={`Copy ${emp.name}'s pattern`}
+                        className={cn(touch.target, 'h-11 w-11 p-0 text-muted-foreground')}
+                    >
+                        <Copy className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    {copiedPattern && copiedPattern.employeeId !== emp.employeeId && (
                         <Button
                             type="button" variant="ghost" size="sm"
                             disabled={disabled}
-                            onClick={() => onAddRow(emp.employeeId)}
-                            className={cn(text.caption, 'text-muted-foreground')}
+                            onClick={() => handlePaste(emp.employeeId)}
+                            aria-label={`Paste ${copiedPattern.employeeName}'s pattern onto ${emp.name}`}
+                            className={cn(touch.target, 'h-11 w-11 p-0 text-blue-600')}
                         >
-                            <Plus className="mr-1 h-3 w-3" aria-hidden="true" />
-                            Add a line
+                            <ClipboardPaste className="h-4 w-4" aria-hidden="true" />
                         </Button>
+                    )}
+                </div>
 
-                        {emp.ledger && (
-                            <button
-                                type="button"
-                                aria-expanded={isOpen}
-                                onClick={() => setExpanded(isOpen ? null : emp.employeeId)}
-                                className={cn(text.caption, touch.targetY, 'flex items-center gap-1 px-1')}
-                            >
-                                <ChevronRight
-                                    className={cn('h-3.5 w-3.5 transition-transform', isOpen && 'rotate-90')}
-                                    aria-hidden="true"
-                                />
-                                {isOpen ? 'Hide' : 'Show'} the reconciliation
-                            </button>
-                        )}
-                    </div>
-
-                    {isOpen && emp.ledger && <EmployeeDetail ledger={emp.ledger} />}
-                </li>
-            );
-        })}
-    </ul>
-);
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Component
-   ──────────────────────────────────────────────────────────────────────────── */
-
-export const BaselinePatternTable: React.FC<BaselinePatternTableProps> = props => {
-    const [expanded, setExpanded] = React.useState<string | null>(null);
-
-    if (props.employees.length === 0) return null;
+                {emp.ledger && (
+                    <>
+                        <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={() => toggleExpand(emp.employeeId)}
+                            className={cn(
+                                touch.targetY,
+                                'flex w-full items-center gap-1.5 border-t border-slate-100 dark:border-border/40 px-3.5 py-2 text-xs text-muted-foreground',
+                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            )}
+                        >
+                            <ChevronRight
+                                className={cn('h-3.5 w-3.5 transition-transform', isExpanded && 'rotate-90')}
+                                aria-hidden="true"
+                            />
+                            {isExpanded ? 'Hide' : 'Show'} the reconciliation
+                        </button>
+                        {isExpanded && <EmployeeDetail ledger={emp.ledger} />}
+                    </>
+                )}
+            </li>
+        );
+    };
 
     return (
         <>
-            <PhoneCards {...props} expanded={expanded} setExpanded={setExpanded} />
-            <DesktopTable {...props} expanded={expanded} setExpanded={setExpanded} />
+        {/* ── Phone: one card per employee ────────────────────────────────── */}
+        <ul
+            className="space-y-3 md:hidden"
+            role="region"
+            aria-label="Employee Scheduling Workspace"
+        >
+            {sortedEmployees.map(renderCard)}
+        </ul>
+
+        {/* ── Tablet and up: the workspace table ──────────────────────────── */}
+        <div
+            className="hidden md:block w-full rounded-2xl border border-slate-200 dark:border-border/60 bg-white dark:bg-card/40 overflow-hidden shadow-xs"
+            role="region"
+            aria-label="Employee Scheduling Workspace"
+        >
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                    {/* ── Table Header ────────────────────────────────────────── */}
+                    <thead>
+                        <tr className="border-b border-slate-200 dark:border-border/50 bg-slate-50/80 dark:bg-muted/30 text-muted-foreground font-semibold uppercase tracking-wider text-[11px]">
+                            {/* Column 1: Employee Name */}
+                            <th scope="col" className="py-3 px-4 min-w-[180px]">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSort('name')}
+                                    className="inline-flex items-center gap-1.5 hover:text-foreground font-semibold cursor-pointer uppercase tracking-wider"
+                                >
+                                    Employee Name
+                                    <ArrowUpDown className="h-3 w-3 opacity-60" aria-hidden="true" />
+                                </button>
+                            </th>
+
+                            {/* Column 2: Role */}
+                            <th scope="col" className="py-3 px-3 min-w-[130px]">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSort('role')}
+                                    className="inline-flex items-center gap-1.5 hover:text-foreground font-semibold cursor-pointer uppercase tracking-wider"
+                                >
+                                    Role
+                                    <ArrowUpDown className="h-3 w-3 opacity-60" aria-hidden="true" />
+                                </button>
+                            </th>
+
+                            {/* Column 3: Day Selector */}
+                            <th scope="col" className="py-3 px-3 min-w-[220px]">
+                                Working Days
+                            </th>
+
+                            {/* Column 4: Start Time */}
+                            <th scope="col" className="py-3 px-2 min-w-[120px]">
+                                Start Time
+                            </th>
+
+                            {/* Column 5: End Time */}
+                            <th scope="col" className="py-3 px-2 min-w-[120px]">
+                                End Time
+                            </th>
+
+                            {/* Column 6: Gross Length */}
+                            <th scope="col" className="py-3 px-2 text-center min-w-[85px]">
+                                Gross
+                            </th>
+
+                            {/* Column 7: Paid Break */}
+                            <th scope="col" className="py-3 px-2 text-center min-w-[85px]">
+                                Paid Rest
+                            </th>
+
+                            {/* Column 8: Unpaid Break */}
+                            <th scope="col" className="py-3 px-2 min-w-[110px]">
+                                Unpaid Break
+                            </th>
+
+                            {/* Column 9: Paid Length / Total */}
+                            <th scope="col" className="py-3 px-3 text-right min-w-[110px]">
+                                Paid Length
+                            </th>
+
+                            {/* Column 10: Actions & Expand */}
+                            <th scope="col" className="py-3 px-3 text-right min-w-[90px]">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+
+                    {/* ── Table Body ──────────────────────────────────────────── */}
+                    <tbody className="divide-y divide-slate-100 dark:divide-border/40">
+                        {sortedEmployees.map(emp => {
+                            const isExpanded = expandedRows.has(emp.employeeId);
+                            const primaryRow = emp.rows[0];
+                            const d = primaryRow ? deriveRow(primaryRow) : null;
+                            const totalWeeklyPaidMinutes = emp.rows.reduce((sum, r) => sum + deriveRow(r).weeklyMinutes, 0);
+                            const totalWeeklyPaidHours = totalWeeklyPaidMinutes / 60;
+
+                            const hasIssues = emp.verdict.status === 'over' || (emp.ledger && emp.ledger.findings.some(f => f.severity === 'BLOCKING'));
+                            const targetPercentage = emp.verdict.ceilingHours > 0
+                                ? Math.min(100, Math.round((emp.verdict.cycleHours / emp.verdict.ceilingHours) * 100))
+                                : 0;
+
+                            const initials = emp.name
+                                .split(' ')
+                                .map(n => n[0])
+                                .join('')
+                                .slice(0, 2)
+                                .toUpperCase();
+
+                            return (
+                                <React.Fragment key={emp.employeeId}>
+                                    <tr
+                                        className={cn(
+                                            'transition-colors hover:bg-slate-50/60 dark:hover:bg-muted/20',
+                                            isExpanded && 'bg-slate-50/40 dark:bg-muted/10',
+                                            hasIssues && 'border-l-4 border-l-orange-500',
+                                        )}
+                                    >
+                                        {/* Column 1: Employee Name */}
+                                        <td className="py-3 px-4 font-medium text-foreground">
+                                            <div className="flex items-center gap-2.5">
+                                                <div
+                                                    className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-muted text-slate-700 dark:text-foreground font-bold text-xs select-none border border-slate-200 dark:border-border/60 shrink-0"
+                                                    aria-hidden="true"
+                                                >
+                                                    {initials}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-bold text-foreground text-xs truncate">
+                                                            {emp.name}
+                                                        </span>
+                                                        {hasIssues && (
+                                                            <span className="inline-flex rounded bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 text-[9px] font-bold px-1.5 py-0.5 uppercase">
+                                                                ⚠ Review
+                                                            </span>
+                                                        )}
+                                                        {emp.hasUnsavedEdits && (
+                                                            <span className="inline-flex rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 text-[9px] font-semibold px-1 py-0.5">
+                                                                ●
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-[11px] text-muted-foreground block truncate">
+                                                        {emp.contractedWeeklyHours}h Contract
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Column 2: Role */}
+                                        <td className="py-3 px-3 text-muted-foreground text-xs font-medium">
+                                            {emp.roleName || (
+                                                // NOT "Full-time" — that is an employment type,
+                                                // not a role, and this column drives the pay rate
+                                                // and BFT_PATTERN_ROLE_MISMATCH. A missing role is
+                                                // a contract gap and has to read as one.
+                                                <span className="italic text-amber-600 dark:text-amber-400">
+                                                    No role on contract
+                                                </span>
+                                            )}
+                                        </td>
+
+                                        {/* Column 3: Day Selector */}
+                                        <td className="py-3 px-3">
+                                            {primaryRow && (
+                                                <DayToggles
+                                                    days={primaryRow.days}
+                                                    disabled={disabled}
+                                                    onChange={days => onChangeRow(primaryRow.rowId, { days })}
+                                                />
+                                            )}
+                                        </td>
+
+                                        {/* Column 4: Start Time */}
+                                        <td className="py-3 px-2">
+                                            {primaryRow && (
+                                                <TimeInput
+                                                    value={primaryRow.startTime || ''}
+                                                    label={`Start time for ${emp.name}`}
+                                                    disabled={disabled}
+                                                    onChange={startTime => onChangeRow(primaryRow.rowId, { startTime })}
+                                                />
+                                            )}
+                                        </td>
+
+                                        {/* Column 5: End Time */}
+                                        <td className="py-3 px-2">
+                                            {primaryRow && (
+                                                <TimeInput
+                                                    value={primaryRow.endTime || ''}
+                                                    label={`Finish time for ${emp.name}`}
+                                                    disabled={disabled}
+                                                    onChange={endTime => onChangeRow(primaryRow.rowId, { endTime })}
+                                                />
+                                            )}
+                                        </td>
+
+                                        {/* Column 6: Gross Length */}
+                                        <td className="py-3 px-2 text-center font-mono text-muted-foreground tabular-nums">
+                                            {d ? fmtMinutes(d.grossMinutes) : '—'}
+                                        </td>
+
+                                        {/* Column 7: Paid Rest Break */}
+                                        <td className="py-3 px-2 text-center font-mono text-muted-foreground tabular-nums">
+                                            {d && d.paidBreakMinutes > 0 ? (
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                                                    +{d.paidBreakMinutes}m
+                                                </span>
+                                            ) : (
+                                                '—'
+                                            )}
+                                        </td>
+
+                                        {/* Column 8: Unpaid Break */}
+                                        <td className="py-3 px-2">
+                                            {primaryRow && (
+                                                <BreakSelect
+                                                    value={primaryRow.unpaidBreakMinutes}
+                                                    disabled={disabled}
+                                                    onChange={unpaidBreakMinutes =>
+                                                        onChangeRow(primaryRow.rowId, { unpaidBreakMinutes })}
+                                                />
+                                            )}
+                                        </td>
+
+                                        {/* Column 9: Paid Length */}
+                                        <td className="py-3 px-3 text-right tabular-nums">
+                                            <div className="font-bold text-foreground text-xs">
+                                                {d ? fmtMinutes(d.netMinutes) : '0h'} / shift
+                                            </div>
+                                            <span className="text-[10px] text-muted-foreground">
+                                                {fmtHours(totalWeeklyPaidHours)} wk
+                                            </span>
+                                        </td>
+
+                                        {/* Column 10: Actions & Expand */}
+                                        <td className="py-3 px-3 text-right">
+                                            <div className="inline-flex items-center justify-end gap-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={disabled}
+                                                    onClick={() => onFitToContract(emp.employeeId)}
+                                                    title="Fit finish time to match contract exactly"
+                                                    className={cn(touch.target, "md:min-h-0 md:min-w-0", "h-9 w-9 md:h-7 md:w-7 p-0 text-muted-foreground hover:text-foreground")}
+                                                >
+                                                    <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                                    <span className="sr-only">Fit to contract</span>
+                                                </Button>
+
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={disabled}
+                                                    onClick={() => handleCopy(emp)}
+                                                    title="Copy pattern"
+                                                    className={cn(touch.target, "md:min-h-0 md:min-w-0", "h-9 w-9 md:h-7 md:w-7 p-0 text-muted-foreground hover:text-foreground")}
+                                                >
+                                                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                                                    <span className="sr-only">Copy pattern</span>
+                                                </Button>
+
+                                                {copiedPattern && copiedPattern.employeeId !== emp.employeeId && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        disabled={disabled}
+                                                        onClick={() => handlePaste(emp.employeeId)}
+                                                        title={`Paste pattern from ${copiedPattern.employeeName}`}
+                                                        className={cn(touch.target, "md:min-h-0 md:min-w-0", "h-9 w-9 md:h-7 md:w-7 p-0 text-blue-600 hover:text-blue-700")}
+                                                    >
+                                                        <ClipboardPaste className="h-3.5 w-3.5" aria-hidden="true" />
+                                                        <span className="sr-only">Paste pattern</span>
+                                                    </Button>
+                                                )}
+
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    aria-expanded={isExpanded}
+                                                    aria-label={`${isExpanded ? 'Hide' : 'Show'} details for ${emp.name}`}
+                                                    onClick={() => toggleExpand(emp.employeeId)}
+                                                    className={cn(touch.target, "md:min-h-0 md:min-w-0", "h-9 w-9 md:h-7 md:w-7 p-0 text-muted-foreground hover:text-foreground")}
+                                                >
+                                                    <ChevronRight
+                                                        className={cn('h-4 w-4 transition-transform duration-200', isExpanded && 'rotate-90')}
+                                                        aria-hidden="true"
+                                                    />
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    {/* ── Expandable Details Row ──────────────────────────── */}
+                                    {isExpanded && (
+                                        <tr className="bg-slate-100/80 dark:bg-[#0b0e17] border-y-2 border-slate-300 dark:border-white/15">
+                                            <td colSpan={10} className="p-5 sm:p-6 space-y-5">
+                                                {/* Card 1: EBA cycle target & inline add variation.
+                                                    The cycle length is DECLARED per contract
+                                                    (`ordinary_hours_cycle_weeks`, 1-4), so it is read
+                                                    from the employee rather than written as 4. Every
+                                                    contract in production declares 4 today, which is
+                                                    exactly what would keep a hardcoded 4 invisible. */}
+                                                <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#161c2b] shadow-xs">
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true" />
+                                                            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                                                                EBA {emp.cycleWeeks}-Week Cycle Target
+                                                            </h4>
+                                                        </div>
+                                                        <span className="font-mono text-xs font-bold text-foreground tabular-nums ml-1">
+                                                            {fmtHours(emp.verdict.cycleHours)} / {fmtHours(emp.verdict.ceilingHours)}
+                                                        </span>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={cn('text-[10px] font-semibold py-0 shadow-none', VERDICT_STYLE[emp.verdict.status])}
+                                                        >
+                                                            {verdictLabel(emp.verdict)}
+                                                        </Badge>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <button
+                                                                    type="button"
+                                                                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer ml-1"
+                                                                >
+                                                                    <Info className="h-3 w-3" aria-hidden="true" />
+                                                                    Why {emp.cycleWeeks} weeks?
+                                                                </button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-80 text-xs leading-relaxed space-y-2 p-4 shadow-none">
+                                                                <p className="font-semibold text-foreground">ICC Sydney EBA cl 35.1</p>
+                                                                <p className="text-muted-foreground">
+                                                                    cl 35.1(a) caps full-time ordinary hours over the cycle the contract
+                                                                    declares — {emp.cycleWeeks} week{emp.cycleWeeks === 1 ? '' : 's'} here,
+                                                                    so {fmtHours(emp.contractedWeeklyHours * emp.cycleWeeks)} in total.
+                                                                </p>
+                                                                <p className="text-muted-foreground">
+                                                                    cl 35.1(c) protects employees: a full-time working day cannot be shorter than 7.6 hours. If leftover cycle hours are below 7.6h, they are left unscheduled as an honest variance.
+                                                                </p>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-36 h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-white/10">
+                                                                {/* Driven by the SAME verdict as the badge beside it.
+                                                                    The previous ternary only knew about `over`, so a
+                                                                    pattern 8h SHORT of its cycle drew a green bar at
+                                                                    94% next to an amber "8h short" badge. */}
+                                                                <div
+                                                                    className={cn(
+                                                                        'h-full transition-all duration-300',
+                                                                        VERDICT_PROGRESS_COLOR[emp.verdict.status],
+                                                                    )}
+                                                                    style={{ width: `${targetPercentage}%` }}
+                                                                />
+                                                            </div>
+                                                            <span className="font-mono text-xs text-muted-foreground font-semibold tabular-nums">
+                                                                {targetPercentage}%
+                                                            </span>
+                                                        </div>
+
+                                                        {emp.rows.length <= 1 && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled={disabled}
+                                                                onClick={() => onAddRow(emp.employeeId)}
+                                                                className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground border-dashed"
+                                                            >
+                                                                <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                                                                Add variation
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Card 2: Secondary Schedule Variations (only shown if multi-row) */}
+                                                {emp.rows.length > 1 && (
+                                                    <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#161c2b] p-5 shadow-xs space-y-3">
+                                                        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/5">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="h-2 w-2 rounded-full bg-purple-500" aria-hidden="true" />
+                                                                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                                                                    Schedule Variations ({emp.rows.length})
+                                                                </h4>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled={disabled}
+                                                                onClick={() => onAddRow(emp.employeeId)}
+                                                                className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground border-dashed"
+                                                            >
+                                                                <Plus className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                                                                Add variation
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="space-y-2.5 pt-1">
+                                                            {emp.rows.slice(1).map((row, idx) => {
+                                                                const rowDeriv = deriveRow(row);
+                                                                return (
+                                                                    <div
+                                                                        key={row.rowId}
+                                                                        className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-200/80 dark:border-white/5 bg-slate-50 dark:bg-[#1f283d]"
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="text-xs font-bold text-muted-foreground">
+                                                                                Var {idx + 2}:
+                                                                            </span>
+                                                                            <DayToggles
+                                                                                days={row.days}
+                                                                                disabled={disabled}
+                                                                                onChange={days => onChangeRow(row.rowId, { days })}
+                                                                            />
+                                                                            <TimeInput
+                                                                                value={row.startTime || ''}
+                                                                                label={`Variation ${idx + 2} start for ${emp.name}`}
+                                                                                disabled={disabled}
+                                                                                onChange={startTime => onChangeRow(row.rowId, { startTime })}
+                                                                            />
+                                                                            <span className="text-slate-400 text-xs">→</span>
+                                                                            <TimeInput
+                                                                                value={row.endTime || ''}
+                                                                                label={`Variation ${idx + 2} finish for ${emp.name}`}
+                                                                                disabled={disabled}
+                                                                                onChange={endTime => onChangeRow(row.rowId, { endTime })}
+                                                                            />
+                                                                            <BreakSelect
+                                                                                value={row.unpaidBreakMinutes}
+                                                                                disabled={disabled}
+                                                                                onChange={unpaidBreakMinutes =>
+                                                                                    onChangeRow(row.rowId, { unpaidBreakMinutes })}
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="font-mono text-xs text-foreground font-semibold tabular-nums">
+                                                                                {fmtMinutes(rowDeriv.netMinutes)} / shift ({fmtHours(rowDeriv.weeklyMinutes / 60)} wk)
+                                                                            </span>
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                disabled={disabled}
+                                                                                onClick={() => onRemoveRow(row.rowId)}
+                                                                                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                                                            >
+                                                                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Card 3: Deep Reconciliation Ledger & Shifts */}
+                                                {emp.ledger && (
+                                                    <EmployeeDetail ledger={emp.ledger} />
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
         </>
     );
 };

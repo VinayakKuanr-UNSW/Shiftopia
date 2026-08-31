@@ -23,7 +23,7 @@
  */
 
 import React from 'react';
-import { CalendarRange, Loader2, Save, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { AlertTriangle, CalendarRange, CheckCircle2, Loader2, Save, ShieldCheck, Sparkles, TriangleAlert } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { cn } from '@/modules/core/lib/utils';
@@ -33,11 +33,18 @@ import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/modules/core/ui/primitives/alert-dialog';
+import {
+    Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
+import {
+    Popover, PopoverContent, PopoverTrigger,
+} from '@/modules/core/ui/primitives/popover';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { getSydneyNow } from '@/modules/core/lib/date.utils';
 import {
     UnifiedRosterNavigator, computeRange, type ViewType,
@@ -51,7 +58,7 @@ import {
 import { computeProposal } from '../../api/baselineFt.commands';
 import { resolveRosterTarget } from '../../api/rosterTarget';
 import {
-    cycleVerdict, deriveRow, rowsToPattern, seedRow, type PatternRow,
+    copyPatternShape, cycleVerdict, deriveRow, rowsToPattern, seedRow, type PatternRow,
 } from '../../domain/patternRow';
 import type { BaselinePattern } from '../../domain/types';
 import { BaselineSummary, fmtHours } from '../components/BaselineLedger';
@@ -273,6 +280,21 @@ const BaselineFtPage: React.FC = () => {
         });
     }, []);
 
+    /**
+     * Copy one employee's weekly shape onto another.
+     *
+     * The rule that matters — identity never travels with the shape — lives in
+     * `copyPatternShape` so it can be tested without rendering a table.
+     */
+    const copyPattern = React.useCallback((sourceEmployeeId: string, targetEmployeeId: string) => {
+        setDraft(prev => copyPatternShape(
+            prev ?? [],
+            sourceEmployeeId,
+            targetEmployeeId,
+            i => `copy:${targetEmployeeId}:${i}:${Date.now()}`,
+        ));
+    }, []);
+
     const removeRow = React.useCallback((rowId: string) => {
         setDraft(prev => (prev ?? []).filter(r => r.rowId !== rowId));
     }, []);
@@ -423,9 +445,10 @@ const BaselineFtPage: React.FC = () => {
     };
 
     const runFindings = proposal?.runFindings.filter(f => f.severity !== 'INFO') ?? [];
+    const { isDark } = useTheme();
 
     return (
-        <div className="flex flex-col">
+        <div className="h-full flex flex-col overflow-hidden bg-background">
             <GoldStandardHeader
                 title="Baseline FT Schedule"
                 Icon={CalendarRange}
@@ -433,9 +456,6 @@ const BaselineFtPage: React.FC = () => {
                 scope={scope}
                 setScope={setScope}
                 isGammaLocked={isGammaLocked}
-                // Baseline writes into ONE team's rosters, so the sub-department
-                // is a single choice. Org and department stay multi so the
-                // picker behaves like every other page above that level.
                 singleSelectLevels={['subdept']}
                 functionBar={
                     <div className="flex flex-wrap items-center gap-3">
@@ -447,8 +467,6 @@ const BaselineFtPage: React.FC = () => {
                             variant="full"
                             showToday
                         />
-                        {/* The window and the cycle are different calendars, and
-                            confusing them is the easiest mistake to make here. */}
                         {cycleLabel && (
                             <span className={cn(text.caption, 'font-mono')}>{cycleLabel}</span>
                         )}
@@ -456,149 +474,203 @@ const BaselineFtPage: React.FC = () => {
                 }
             />
 
-            <div className="flex flex-col gap-4 px-4 pb-6 lg:px-6">
-                {tooManySubDepts && (
-                    <PageState
-                        state="empty" scope="section"
-                        title={`${selectedSubdeptIds.length} sub-departments selected`}
-                        description="Baseline writes into one team's rosters at a time. Narrow the scope above to choose which."
-                    />
-                )}
-
-                {!subDepartmentId && !tooManySubDepts && (
-                    <PageState
-                        state="empty" scope="section"
-                        title="Choose a team"
-                        description="Pick a sub-department in the header to see its full-time employees and their working patterns."
-                    />
-                )}
-
-                {subDepartmentId && world.isError && (
-                    <PageState
-                        state="error" scope="section"
-                        title="Could not load this team"
-                        onRetry={() => void world.refetch()}
-                    />
-                )}
-
-                {subDepartmentId && world.isLoading && !world.data && (
-                    <PageState state="loading" scope="section" title="Reading the roster" />
-                )}
-
-                {proposal && employees.length === 0 && (
-                    <PageState
-                        state="empty" scope="section"
-                        title="No full-time employees to schedule"
-                        description="No wholly full-time contracts are active for this team in this period."
-                    />
-                )}
-
-                {proposal && employees.length > 0 && (
-                    <>
-                        <BaselineSummary proposal={proposal} />
-
-                        <BaselinePatternTable
-                            employees={employees}
-                            onChangeRow={changeRow}
-                            onAddRow={addRow}
-                            onRemoveRow={removeRow}
-                            onFitToContract={fitToContract}
-                            disabled={busy}
-                        />
-
-                        <p className={cn(text.caption, 'max-w-prose')}>
-                            The Cycle column compares each pattern against the hours their contract
-                            allows over a whole {employees[0].cycleWeeks}-week cycle — not against
-                            the window above. A variance is not a failure: when the hours left are
-                            fewer than a full working day, no shift is proposed, because a full-time
-                            day cannot be shorter than 7.6 hours (ICC EBA cl 35.1(c)).
-                        </p>
-
-                        {runFindings.length > 0 && (
-                            <section className="rounded-lg border bg-card p-4">
-                                <h3 className={cn(text.overline, 'mb-2')}>About this period</h3>
-                                <FindingList findings={runFindings} showCalculation />
-                            </section>
+            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col">
+                <div
+                    className={cn(
+                        'h-full rounded-[32px] overflow-hidden border flex flex-col',
+                        isDark
+                            ? 'border-white/5 bg-[#1c2333]/40 shadow-2xl shadow-black/20'
+                            : 'border-white bg-white/70 shadow-xl shadow-slate-200/50 backdrop-blur-md',
+                    )}
+                >
+                    {/* Scrollable Inner Content Area */}
+                    <div className="flex-1 overflow-y-auto p-5 sm:p-7 lg:p-8 space-y-6 custom-scrollbar">
+                        {tooManySubDepts && (
+                            <PageState
+                                state="empty" scope="section"
+                                title={`${selectedSubdeptIds.length} sub-departments selected`}
+                                description="Baseline writes into one team's rosters at a time. Narrow the scope above to choose which."
+                            />
                         )}
 
-                        {/* ── The action bar ──────────────────────────────── */}
-                        <section className="sticky bottom-0 flex flex-wrap items-center gap-3 rounded-lg border bg-card/95 p-4 backdrop-blur">
-                            {blockedCount > 0 ? (
-                                <TriangleAlert className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
-                            ) : (
-                                <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            )}
+                        {!subDepartmentId && !tooManySubDepts && (
+                            <PageState
+                                state="empty" scope="section"
+                                title="Choose a team"
+                                description="Pick a sub-department in the header to see its full-time employees and their working patterns."
+                            />
+                        )}
 
-                            <span className={cn(text.body, 'min-w-0 flex-1')}>
-                                {blockedCount > 0 ? (
-                                    <>
-                                        {blockedCount} employee{blockedCount === 1 ? '' : 's'} cannot
-                                        be scheduled — open their row to see why. The rest can.
-                                    </>
-                                ) : proposedCount === 0 ? (
-                                    'Nothing to create in this window.'
-                                ) : (
-                                    <>
-                                        {proposedCount} shift{proposedCount === 1 ? '' : 's'} for{' '}
-                                        {format(range.start, 'd MMM')} – {format(range.end, 'd MMM')},
-                                        totalling {fmtHours(proposal.totals.proposedHours)}.
-                                    </>
-                                )}
-                                {dirtyCount > 0 && (
-                                    <span className={cn(text.caption, 'ml-2')}>
-                                        {dirtyCount} unsaved pattern{dirtyCount === 1 ? '' : 's'}.
-                                    </span>
-                                )}
-                                {preflight && preflight.noRoster > 0 && (
-                                    <span className={cn(text.caption, 'ml-2 text-amber-600 dark:text-amber-500')}>
-                                        {preflight.noRoster} of {preflight.total} day
-                                        {preflight.total === 1 ? '' : 's'} ha
-                                        {preflight.noRoster === 1 ? 's' : 've'} no draft roster and
-                                        will be skipped — create the roster period first.
-                                    </span>
-                                )}
-                                {preflight && preflight.locked > 0 && (
-                                    <span className={cn(text.caption, 'ml-2 text-amber-600 dark:text-amber-500')}>
-                                        {preflight.locked} day{preflight.locked === 1 ? '' : 's'} fall
-                                        {preflight.locked === 1 ? 's' : ''} on a published or locked
-                                        roster and will be skipped (ICC EBA cl 38.2).
-                                    </span>
-                                )}
-                            </span>
+                        {subDepartmentId && world.isError && (
+                            <PageState
+                                state="error" scope="section"
+                                title="Could not load this team"
+                                onRetry={() => void world.refetch()}
+                            />
+                        )}
 
-                            <div className="flex w-full gap-2 sm:w-auto">
-                                <Button
-                                    variant="outline"
-                                    className={cn(touch.targetY, 'flex-1 sm:flex-none')}
-                                    disabled={dirtyCount === 0 || busy}
-                                    onClick={() => void handleSave()}
-                                >
-                                    {savePatterns.isPending
-                                        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                                        : <Save className="mr-2 h-4 w-4" aria-hidden="true" />}
-                                    Save patterns
-                                </Button>
-                                <Button
-                                    className={cn(touch.targetY, 'flex-1 sm:flex-none')}
-                                    disabled={proposedCount === 0 || busy}
-                                    onClick={() => setConfirmOpen(true)}
-                                >
-                                    {apply.isPending && (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                                    )}
-                                    Apply to rosters
-                                </Button>
+                        {subDepartmentId && world.isLoading && !world.data && (
+                            <PageState state="loading" scope="section" title="Reading the roster" />
+                        )}
+
+                        {proposal && employees.length === 0 && (
+                            <PageState
+                                state="empty" scope="section"
+                                title="No full-time employees to schedule"
+                                description="No wholly full-time contracts are active for this team in this period."
+                            />
+                        )}
+
+                        {proposal && employees.length > 0 && (
+                            <>
+                                {/* 1. Schedule Overview */}
+                                <BaselineSummary proposal={proposal} dirtyCount={dirtyCount} />
+
+                                {/* 2. Employee Scheduling Workspace */}
+                                <section aria-label="Team Scheduling Canvas" className="w-full">
+                                    <BaselinePatternTable
+                                        employees={employees}
+                                        onChangeRow={changeRow}
+                                        onAddRow={addRow}
+                                        onRemoveRow={removeRow}
+                                        onFitToContract={fitToContract}
+                                        onCopyPattern={copyPattern}
+                                        disabled={busy}
+                                    />
+                                </section>
+                            </>
+                        )}
+
+                        {ftProfile.data?.weeklyHoursVaries && (
+                            <p className={text.caption}>
+                                Full-time contracts on this team do not all specify the same weekly hours.
+                                Each row is measured against its own contract.
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Pinned 1-Row Footer Bar — Always at the bottom regardless of scroll */}
+                    {proposal && employees.length > 0 && (
+                        <footer
+                            role="region"
+                            aria-label="Roster publishing actions"
+                            className="shrink-0 z-20 border-t border-slate-200/80 dark:border-border/60 bg-white/95 dark:bg-card/95 px-6 py-3.5 backdrop-blur-md flex items-center justify-between gap-4 w-full"
+                        >
+                            {/* Left: Shifts Drafted status */}
+                            <div className="flex items-center gap-3 min-w-0">
+                                <span className="font-bold text-sm text-foreground truncate">
+                                    {proposedCount} Shifts Drafted
+                                </span>
+                                {blockedCount > 0 && (
+                                    <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                        • {blockedCount} {blockedCount === 1 ? 'Issue' : 'Issues'}
+                                    </span>
+                                )}
                             </div>
-                        </section>
-                    </>
-                )}
 
-                {ftProfile.data?.weeklyHoursVaries && (
-                    <p className={text.caption}>
-                        Full-time contracts on this team do not all specify the same weekly hours.
-                        Each row is measured against its own contract.
-                    </p>
-                )}
+                            {/* Right: <alert icon> <save icon> <publish icon> per ARIA and WCAG */}
+                            <div className="flex items-center gap-2 sm:gap-3">
+                                {/* 1. Period Notice Alert Icon */}
+                                {runFindings.length > 0 && (
+                                    <TooltipProvider delayDuration={150}>
+                                        <Popover>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            aria-label={`View period notices (${runFindings.length} warning${runFindings.length === 1 ? '' : 's'})`}
+                                                            className="h-9 px-3 rounded-lg border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-xs font-medium gap-1.5 focus-visible:ring-2 focus-visible:ring-amber-500 shadow-xs cursor-pointer"
+                                                        >
+                                                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                                                            <span className="hidden sm:inline">Notice</span>
+                                                            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-200 dark:bg-amber-500/30 text-amber-900 dark:text-amber-200 text-[10px] font-bold">
+                                                                {runFindings.length}
+                                                            </span>
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="top" className="max-w-xs text-xs p-2.5 shadow-md">
+                                                    <p className="font-semibold">{runFindings[0]?.plain}</p>
+                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Click to view all notices & rule citations</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                            <PopoverContent side="top" align="end" className="w-96 p-4 shadow-xl border border-slate-200 dark:border-border/60 bg-white dark:bg-card">
+                                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                                                    About this period
+                                                </h4>
+                                                <FindingList findings={runFindings} showCalculation />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </TooltipProvider>
+                                )}
+
+                                {/* 2. Save Pattern Icon / Button */}
+                                <TooltipProvider delayDuration={150}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={dirtyCount === 0 || busy}
+                                                onClick={() => void handleSave()}
+                                                aria-label={dirtyCount > 0 ? `Save ${dirtyCount} modified pattern${dirtyCount === 1 ? '' : 's'}` : 'All patterns saved'}
+                                                className={cn(
+                                                    'h-9 px-3 rounded-lg border-slate-200 dark:border-border/60 bg-white dark:bg-card text-xs font-medium gap-1.5',
+                                                    'hover:bg-slate-50 dark:hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-blue-500 shadow-xs cursor-pointer',
+                                                    dirtyCount > 0 && 'border-amber-400 text-amber-800 dark:text-amber-300',
+                                                )}
+                                            >
+                                                {savePatterns.isPending ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                                ) : (
+                                                    <Save className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                                                )}
+                                                <span className="hidden sm:inline">Save patterns</span>
+                                                {dirtyCount > 0 && (
+                                                    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold">
+                                                        {dirtyCount}
+                                                    </span>
+                                                )}
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="text-xs p-2">
+                                            {dirtyCount > 0 ? `Save ${dirtyCount} unsaved pattern modification(s)` : 'No unsaved pattern modifications'}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                                {/* 3. Apply / Publish Icon / Button */}
+                                <TooltipProvider delayDuration={150}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                size="sm"
+                                                disabled={proposedCount === 0 || busy}
+                                                onClick={() => setConfirmOpen(true)}
+                                                aria-label={`Apply ${proposedCount} draft shift${proposedCount === 1 ? '' : 's'} to live rosters`}
+                                                className="h-9 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 cursor-pointer"
+                                            >
+                                                {apply.isPending ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                                ) : (
+                                                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                                                )}
+                                                <span>Apply to rosters</span>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="text-xs p-2">
+                                            Publish {proposedCount} drafted shift{proposedCount === 1 ? '' : 's'} to live rosters
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
+                        </footer>
+                    )}
+                </div>
             </div>
 
             <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
