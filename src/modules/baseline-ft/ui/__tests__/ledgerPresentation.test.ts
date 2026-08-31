@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { fmtHm, fmtHours, statusOf } from '../components/BaselineLedger';
-import { sortFindings } from '../components/FindingList';
+import { findingKey, sortFindings } from '../components/FindingList';
 import type { EmployeeLedger } from '../../api/baselineFt.commands';
 import type { Finding } from '../../domain/types';
 
@@ -116,5 +116,40 @@ describe('sortFindings', () => {
         const input = [f('INFO', 'c'), f('BLOCKING', 'b')];
         sortFindings(input);
         expect(input.map(x => x.severity)).toEqual(['INFO', 'BLOCKING']);
+    });
+});
+
+describe('findingKey', () => {
+    const residual = (cycleStart: string): Finding => ({
+        severity: 'INFO',
+        code: 'BFT_RESIDUAL_VARIANCE',
+        plain: `2h 24m remains unscheduled from ${cycleStart}.`,
+        employeeId: '3a606351-e93f-44b6-b700-078f108ef80a',
+        overridable: false,
+    });
+
+    it('separates two findings that differ only by cycle', () => {
+        // The real case from production: a Month view straddling two four-week
+        // cycles emits one BFT_RESIDUAL_VARIANCE per cycle, identical in code
+        // and employeeId. React warned about duplicate keys and was free to
+        // drop one — hiding a genuinely unscheduled remainder from the person
+        // reconciling the roster.
+        const findings = [residual('2026-08-10'), residual('2026-09-07')];
+        const keys = findings.map(findingKey);
+
+        expect(new Set(keys).size).toBe(2);
+        expect(keys[0]).not.toBe(keys[1]);
+    });
+
+    it('is unique across a whole list, however alike the findings are', () => {
+        const findings = Array.from({ length: 6 }, () => residual('2026-08-10'));
+        expect(new Set(findings.map(findingKey)).size).toBe(6);
+    });
+
+    it('still distinguishes by candidate and employee, not only by position', () => {
+        const a: Finding = { ...residual('x'), candidateKey: 'bft:sub:emp:2026-09-01:08:00-16:06:role' };
+        const b: Finding = { ...residual('x'), candidateKey: 'bft:sub:emp:2026-09-02:08:00-16:06:role' };
+        expect(findingKey(a, 0)).toContain('2026-09-01');
+        expect(findingKey(b, 0)).toContain('2026-09-02');
     });
 });

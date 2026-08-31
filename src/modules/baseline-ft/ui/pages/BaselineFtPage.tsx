@@ -44,7 +44,6 @@ import { PageState } from '@/modules/core/ui/components/PageState';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { getSydneyNow } from '@/modules/core/lib/date.utils';
 import {
     UnifiedRosterNavigator, computeRange, type ViewType,
@@ -445,9 +444,17 @@ const BaselineFtPage: React.FC = () => {
     };
 
     const runFindings = proposal?.runFindings.filter(f => f.severity !== 'INFO') ?? [];
-    const { isDark } = useTheme();
 
     return (
+        // The card treatment below matches the Rosters Planner deliberately —
+        // this page writes into the rosters that page shows, and two sibling
+        // surfaces with different chrome read as two different products.
+        //
+        // It does NOT copy the Planner's bottom-nav clearance padding. The
+        // Planner needs that because `/rosters` is in NO_PADDING_ROUTES, so
+        // AppLayout gives its <main> `p-0`. `/baseline-ft` is a normal padded
+        // route, and that <main> already carries the clearance — adding it here
+        // too would leave ~180px of dead space under the action bar on a phone.
         <div className="h-full flex flex-col overflow-hidden bg-background">
             <GoldStandardHeader
                 title="Baseline FT Schedule"
@@ -475,14 +482,11 @@ const BaselineFtPage: React.FC = () => {
             />
 
             <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col">
-                <div
-                    className={cn(
-                        'h-full rounded-[32px] overflow-hidden border flex flex-col',
-                        isDark
-                            ? 'border-white/5 bg-[#1c2333]/40 shadow-2xl shadow-black/20'
-                            : 'border-white bg-white/70 shadow-xl shadow-slate-200/50 backdrop-blur-md',
-                    )}
-                >
+                {/* The Planner's card, class for class. Expressed with `dark:`
+                    variants rather than an `isDark` ternary so the two surfaces
+                    cannot drift, and so the card does not re-render on a theme
+                    context change. 24px radius on a phone, 32px from sm. */}
+                <div className="h-full rounded-[24px] sm:rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
                     {/* Scrollable Inner Content Area */}
                     <div className="flex-1 overflow-y-auto p-5 sm:p-7 lg:p-8 space-y-6 custom-scrollbar">
                         {tooManySubDepts && (

@@ -151,6 +151,22 @@ interface FindingListProps {
     className?: string;
 }
 
+/**
+ * A key that is unique even when two findings are otherwise identical.
+ *
+ * `BFT_RESIDUAL_VARIANCE` is emitted once per CYCLE, so an employee whose
+ * window straddles two four-week cycles produces two findings with the same
+ * code AND the same employeeId. Keying on those alone made React warn about
+ * duplicates and left it free to drop one — which would hide a real
+ * unscheduled remainder from the person reconciling the roster.
+ *
+ * The index is part of the key rather than a fallback for it. `sortFindings`
+ * is deterministic, so it is stable across renders.
+ */
+export function findingKey(f: Finding, index: number): string {
+    return `${f.code}-${f.candidateKey ?? f.employeeId ?? ''}-${index}`;
+}
+
 export const FindingList: React.FC<FindingListProps> = ({
     findings, showCalculation, emptyLabel, className,
 }) => {
@@ -164,7 +180,7 @@ export const FindingList: React.FC<FindingListProps> = ({
         <ul className={cn('space-y-1.5', className)}>
             {sorted.map((f, i) => (
                 <FindingRow
-                    key={`${f.code}-${f.candidateKey ?? f.employeeId ?? i}`}
+                    key={findingKey(f, i)}
                     finding={f}
                     showCalculation={showCalculation}
                 />
