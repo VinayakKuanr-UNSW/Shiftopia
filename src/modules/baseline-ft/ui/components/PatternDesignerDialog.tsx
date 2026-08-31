@@ -95,7 +95,10 @@ export const PatternDesignerDialog: React.FC<PatternDesignerDialogProps> = ({
     );
 
     const blocked = design.findings.some(f => f.severity === 'BLOCKING');
-    const canSave = !blocked && design.slots.length > 0 && name.trim().length > 0 && !isSaving;
+    // >= 3, matching the `valid_name_length` CHECK on roster_templates. A
+    // client gate looser than the database turns a fixable form error into an
+    // opaque 400 from the write.
+    const canSave = !blocked && design.slots.length > 0 && name.trim().length >= 3 && !isSaving;
 
     const toggleDay = (iso: IsoWeekday) => {
         setDays(prev => prev.includes(iso) ? prev.filter(d => d !== iso) : [...prev, iso].sort());
@@ -103,7 +106,7 @@ export const PatternDesignerDialog: React.FC<PatternDesignerDialogProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Design a baseline pattern</DialogTitle>
                     <DialogDescription>
@@ -124,7 +127,7 @@ export const PatternDesignerDialog: React.FC<PatternDesignerDialogProps> = ({
 
                     <div className="space-y-1.5">
                         <Label className={text.label}>Working days</Label>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
                             {DAYS.map(d => {
                                 const on = days.includes(d.iso);
                                 return (
@@ -136,7 +139,7 @@ export const PatternDesignerDialog: React.FC<PatternDesignerDialogProps> = ({
                                         aria-label={d.long}
                                         className={cn(
                                             touch.target, text.label,
-                                            'flex-1 min-w-[52px] rounded-md border px-2 transition-colors',
+                                            'rounded-md border px-2 transition-colors',
                                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                             on
                                                 ? 'border-primary bg-primary text-primary-foreground'
@@ -216,7 +219,7 @@ export const PatternDesignerDialog: React.FC<PatternDesignerDialogProps> = ({
                     <FindingList findings={design.findings} showCalculation />
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="gap-2 sm:gap-0">
                     <Button
                         variant="outline"
                         className={touch.targetY}

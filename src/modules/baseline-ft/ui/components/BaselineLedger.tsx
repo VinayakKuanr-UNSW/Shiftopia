@@ -258,13 +258,96 @@ const EmployeeDetail: React.FC<{ ledger: EmployeeLedger }> = ({ ledger }) => {
    Table
    ──────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The phone composition.
+ *
+ * An eight-column ledger cannot become a table on a 430px screen without
+ * two-dimensional scrolling, which WCAG SC 1.4.10 (Reflow) forbids and which is
+ * miserable to use besides. So the shape changes rather than shrinking: one
+ * card per employee, the four figures that answer "what happens to this person"
+ * on a 2x2 grid, and the same detail behind the same disclosure.
+ *
+ * This is the composition swap `/team-availability` already makes for its
+ * people x days matrix, for the same reason.
+ */
+const LedgerCards: React.FC<{
+    proposal: BaselineProposal;
+    expanded: string | null;
+    setExpanded: (id: string | null) => void;
+}> = ({ proposal, expanded, setExpanded }) => (
+    <ul className="space-y-2 md:hidden">
+        {proposal.ledgers.map(l => {
+            const status = statusOf(l);
+            const chip = STATUS_CHIP[status];
+            const isOpen = expanded === l.employeeId;
+
+            return (
+                <li key={l.employeeId} className="rounded-lg border bg-card overflow-hidden">
+                    <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => setExpanded(isOpen ? null : l.employeeId)}
+                        className={cn(
+                            touch.targetY,
+                            'flex w-full items-start gap-2 px-3 py-3 text-left',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        )}
+                    >
+                        <ChevronRight
+                            className={cn(
+                                'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                                isOpen && 'rotate-90',
+                            )}
+                            aria-hidden="true"
+                        />
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                                <span className={cn(text.body, 'truncate')}>{l.name}</span>
+                                <Badge variant="outline" className={cn(text.label, 'shrink-0', chip.className)}>
+                                    {chip.label}
+                                </Badge>
+                            </div>
+
+                            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                {([
+                                    ['Required', fmtHours(l.requiredHours), false],
+                                    ['Existing', fmtHours(l.existingHours), false],
+                                    ['Proposed', fmtHours(l.proposedHours), false],
+                                    [
+                                        'Variance',
+                                        Math.abs(l.varianceHours) <= VARIANCE_EPSILON
+                                            ? '—' : fmtHm(l.varianceHours),
+                                        status === 'over',
+                                    ],
+                                ] as const).map(([label, value, danger]) => (
+                                    <div key={label} className="flex items-baseline justify-between gap-2">
+                                        <dt className={text.subtle}>{label}</dt>
+                                        <dd className={cn(text.metric, danger && 'text-destructive')}>
+                                            {value}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </div>
+                    </button>
+
+                    {isOpen && <EmployeeDetail ledger={l} />}
+                </li>
+            );
+        })}
+    </ul>
+);
+
 export const BaselineLedgerTable: React.FC<{ proposal: BaselineProposal }> = ({ proposal }) => {
     const [expanded, setExpanded] = React.useState<string | null>(null);
 
     if (proposal.ledgers.length === 0) return null;
 
     return (
-        <div className="overflow-x-auto rounded-lg border bg-card">
+        <>
+        <LedgerCards proposal={proposal} expanded={expanded} setExpanded={setExpanded} />
+
+        <div className="hidden md:block overflow-x-auto rounded-lg border bg-card">
             <Table>
                 <TableHeader>
                     <TableRow>
@@ -360,5 +443,6 @@ export const BaselineLedgerTable: React.FC<{ proposal: BaselineProposal }> = ({ 
                 </TableBody>
             </Table>
         </div>
+        </>
     );
 };

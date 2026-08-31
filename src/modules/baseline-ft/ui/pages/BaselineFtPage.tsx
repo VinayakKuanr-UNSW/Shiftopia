@@ -208,7 +208,7 @@ const BaselineFtPage: React.FC = () => {
     const otherFindings = proposal?.runFindings.filter(f => f.severity !== 'BLOCKING') ?? [];
 
     return (
-        <div className="flex flex-col gap-6 p-4 sm:p-6">
+        <div className="flex flex-col gap-5 p-3 sm:gap-6 sm:p-6">
             <GoldStandardHeader
                 title="Baseline FT Schedule"
                 Icon={CalendarRange}
@@ -339,7 +339,7 @@ const BaselineFtPage: React.FC = () => {
                     </p>
                 )}
 
-                <div className="mt-4 flex items-center gap-3">
+                <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
                     <Button
                         onClick={handleGenerate}
                         disabled={!canGenerate || generate.isPending}
@@ -432,7 +432,7 @@ const BaselineFtPage: React.FC = () => {
                                 totalling {fmtHours(proposal.totals.proposedHours)}.
                             </span>
                             <Button
-                                className={cn(touch.targetY, 'ml-auto')}
+                                className={cn(touch.targetY, 'w-full sm:ml-auto sm:w-auto')}
                                 onClick={() => setConfirmOpen(true)}
                                 disabled={apply.isPending || !result?.runId}
                             >

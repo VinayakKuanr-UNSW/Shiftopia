@@ -120,9 +120,15 @@ export async function createBaselinePattern(
         findings.push({
             severity: 'BLOCKING',
             code: 'BFT_CREATE_TEMPLATE_FAILED',
-            plain: 'The pattern could not be saved.',
+            // The database's own words. Swallowing them is how a CHECK
+            // violation reached the user as a bare "could not be saved" with
+            // the actual cause -- an unrecognised `created_from` -- only
+            // visible as a 400 in the network tab.
+            plain: tplErr?.message
+                ? `The pattern could not be saved: ${tplErr.message}`
+                : 'The pattern could not be saved.',
             overridable: false,
-            calculation: { error: tplErr?.message },
+            calculation: { error: tplErr?.message, code: (tplErr as { code?: string } | null)?.code },
         });
         return { templateId: null, findings };
     }
