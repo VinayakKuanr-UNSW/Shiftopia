@@ -301,8 +301,13 @@ export async function loadEligibleEmployees(
             employmentStatus: c.employment_status as string | null,
             contractedWeeklyHours: (c.contracted_weekly_hours as number | null) ?? null,
             startDate: c.start_date as string | null,
-            cycleWeeks: c.ordinary_hours_cycle_weeks as number | null,
-            cycleAnchor: c.ordinary_hours_cycle_anchor as string | null,
+            // NOT `cycleWeeks`/`cycleAnchor` -- those are the names on the
+            // OUTPUT (`ContractBasis`), and passing them on the INPUT is
+            // silently ignored, falling back to the 4-week default. Invisible
+            // in production today because every contract declares exactly that,
+            // which is precisely how a silent-drop hydration gap survives.
+            ordinaryHoursCycleWeeks: c.ordinary_hours_cycle_weeks as number | null,
+            ordinaryHoursCycleAnchor: c.ordinary_hours_cycle_anchor as string | null,
         }));
 
         const basis = resolveComplianceBasis(basisInputs);

@@ -19,7 +19,7 @@
  */
 
 import React from 'react';
-import { CalendarRange, Loader2, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { CalendarRange, Loader2, ShieldCheck, TriangleAlert, Wand2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 
 import { cn } from '@/modules/core/lib/utils';
@@ -42,8 +42,11 @@ import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { getSydneyNow } from '@/modules/core/lib/date.utils';
 
 import {
-    useApplyBaseline, useBaselinePatterns, useGenerateBaseline, useRosterableSubDepartments,
+    useApplyBaseline, useBaselinePatterns, useCreateBaselinePattern, useFtProfile,
+    useGenerateBaseline, useRosterableSubDepartments,
 } from '../../hooks/useBaselineFt';
+import { designPattern } from '../../domain/patternDesigner';
+import { PatternDesignerDialog } from '../components/PatternDesignerDialog';
 import { resolveRosterTarget } from '../../api/rosterTarget';
 import { BaselineLedgerTable, BaselineSummary, fmtHours } from '../components/BaselineLedger';
 import { FindingList } from '../components/FindingList';
@@ -51,7 +54,7 @@ import type { GenerateRunResult } from '../../api/baselineFt.commands';
 
 const BaselineFtPage: React.FC = () => {
     const { user } = useAuth();
-    const { scope } = useScopeFilter('managerial');
+    const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const { toast } = useToast();
 
     // Reference date is resolved ONCE per page load and passed into the run, so
@@ -59,8 +62,8 @@ const BaselineFtPage: React.FC = () => {
     // execute. Sydney, because every roster date in this system is Sydney.
     const today = React.useMemo(() => format(getSydneyNow(), 'yyyy-MM-dd'), []);
 
-    const [subDepartmentId, setSubDepartmentId] = React.useState<string | null>(null);
     const [templateId, setTemplateId] = React.useState<string | null>(null);
+    const [designerOpen, setDesignerOpen] = React.useState(false);
     const [periodStart, setPeriodStart] = React.useState(() =>
         format(addDays(getSydneyNow(), 7), 'yyyy-MM-dd'));
     const [periodEnd, setPeriodEnd] = React.useState(() =>
@@ -68,19 +71,79 @@ const BaselineFtPage: React.FC = () => {
     const [result, setResult] = React.useState<GenerateRunResult | null>(null);
     const [confirmOpen, setConfirmOpen] = React.useState(false);
 
-    const subDepts = useRosterableSubDepartments(scope.subdept_ids ?? []);
+    // The scope header owns the org / department / sub-department choice, so
+    // this page does not carry a second, rival picker. `singleSelectLevels`
+    // constrains sub-department to one, because Baseline generates for one team.
+    //
+    // The selection is read as a SET, not as `[0]`. Reading the first entry of a
+    // scope array is a known defect class here -- thirteen-plus pages silently
+    // show one organisation's data to someone who can see several -- and this
+    // feature writes shifts, so a wrong guess creates real rosters. More than
+    // one selected is reported, never resolved.
+    const selectedSubdeptIds = scope.subdept_ids ?? [];
+    const subDepartmentId = selectedSubdeptIds.length === 1 ? selectedSubdeptIds[0] : null;
+    const tooManySubDepts = selectedSubdeptIds.length > 1;
+
+    const subDepts = useRosterableSubDepartments(selectedSubdeptIds);
     const patterns = useBaselinePatterns(subDepartmentId);
+    const ftProfile = useFtProfile(subDepartmentId);
     const generate = useGenerateBaseline();
     const apply = useApplyBaseline();
+    const createPattern = useCreateBaselinePattern();
 
     const selectedSubDept = subDepts.data?.find(s => s.id === subDepartmentId) ?? null;
     const selectedPattern = patterns.data?.find(p => p.id === templateId) ?? null;
 
     // Changing the team invalidates the pattern and any proposal built on it.
-    const onSubDepartmentChange = (id: string) => {
-        setSubDepartmentId(id);
+    React.useEffect(() => {
         setTemplateId(null);
         setResult(null);
+    }, [subDepartmentId]);
+
+    const handleCreatePattern = async (args: {
+        name: string; days: import('../../domain/types').IsoWeekday[];
+        startTime: string; unpaidBreakMinutes: number; roleId: string;
+    }) => {
+        if (!selectedSubDept || !ftProfile.data) return;
+        const design = designPattern({
+            weeklyHours: ftProfile.data.weeklyHours,
+            days: args.days,
+            startTime: args.startTime,
+            unpaidBreakMinutes: args.unpaidBreakMinutes,
+            roleId: args.roleId,
+        });
+        try {
+            const res = await createPattern.mutateAsync({
+                organizationId: selectedSubDept.organizationId,
+                departmentId: selectedSubDept.departmentId,
+                subDepartmentId: selectedSubDept.id,
+                name: args.name,
+                slots: design.slots,
+                contractedWeeklyHours: ftProfile.data.weeklyHours,
+                cycleWeeks: ftProfile.data.cycleWeeks,
+                roleId: args.roleId,
+            });
+            if (res.templateId) {
+                setDesignerOpen(false);
+                setTemplateId(res.templateId);
+                toast({
+                    title: 'Pattern created',
+                    description: `${design.slots.length} shifts a week at ${design.hoursPerDay.toFixed(1)}h each.`,
+                });
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Could not create the pattern',
+                    description: res.findings.find(f => f.severity === 'BLOCKING')?.plain,
+                });
+            }
+        } catch (err) {
+            toast({
+                variant: 'destructive',
+                title: 'Could not create the pattern',
+                description: err instanceof Error ? err.message : 'Please try again.',
+            });
+        }
     };
 
     const canGenerate = Boolean(
@@ -146,7 +209,18 @@ const BaselineFtPage: React.FC = () => {
 
     return (
         <div className="flex flex-col gap-6 p-4 sm:p-6">
-            <GoldStandardHeader title="Baseline FT Schedule" Icon={CalendarRange} />
+            <GoldStandardHeader
+                title="Baseline FT Schedule"
+                Icon={CalendarRange}
+                mode="managerial"
+                scope={scope}
+                setScope={setScope}
+                isGammaLocked={isGammaLocked}
+                // Baseline generates for ONE team, so the sub-department is a
+                // single choice. Org and department stay multi so the picker
+                // behaves like every other page above that level.
+                singleSelectLevels={['subdept']}
+            />
 
             <p className={cn(text.bodyMuted, 'max-w-prose -mt-3')}>
                 Work out what each full-time employee is contractually owed over a period,
@@ -158,24 +232,7 @@ const BaselineFtPage: React.FC = () => {
             <section className="rounded-lg border bg-card p-4">
                 <h2 className={cn(text.overline, 'mb-3')}>1 · Team and pattern</h2>
 
-                <div className="grid gap-4 lg:grid-cols-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="bft-subdept" className={text.label}>Sub-department</Label>
-                        <Select
-                            value={subDepartmentId ?? undefined}
-                            onValueChange={onSubDepartmentChange}
-                        >
-                            <SelectTrigger id="bft-subdept" className={touch.targetY}>
-                                <SelectValue placeholder="Choose a team" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {(subDepts.data ?? []).map(s => (
-                                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
+                <div className="grid gap-4 lg:grid-cols-3">
                     <div className="space-y-1.5">
                         <Label htmlFor="bft-pattern" className={text.label}>Baseline pattern</Label>
                         <Select
@@ -185,7 +242,7 @@ const BaselineFtPage: React.FC = () => {
                         >
                             <SelectTrigger id="bft-pattern" className={touch.targetY}>
                                 <SelectValue
-                                    placeholder={subDepartmentId ? 'Choose a pattern' : 'Choose a team first'}
+                                    placeholder={subDepartmentId ? 'Choose a pattern' : 'Choose a team above'}
                                 />
                             </SelectTrigger>
                             <SelectContent>
@@ -227,10 +284,58 @@ const BaselineFtPage: React.FC = () => {
                     </div>
                 </div>
 
-                {patterns.data && patterns.data.length === 0 && subDepartmentId && (
+                {tooManySubDepts && (
                     <p className={cn(text.caption, 'mt-3')}>
-                        This team has no roster templates yet. Create one to describe the normal
-                        full-time week before generating a baseline.
+                        {selectedSubdeptIds.length} sub-departments are selected. Baseline generates
+                        for one team at a time — narrow the scope above to choose which.
+                    </p>
+                )}
+
+                {subDepartmentId && ftProfile.data?.employeeCount === 0 && (
+                    <p className={cn(text.caption, 'mt-3')}>
+                        No full-time employees are contracted to this team, so there is no baseline
+                        to generate.
+                    </p>
+                )}
+
+                {/* The pattern is the thing most likely to be missing, because
+                    nothing else in the product creates one shaped for a
+                    full-time contract. Offering to build it here is the
+                    difference between an empty picker and a dead end. */}
+                {subDepartmentId && !patterns.isLoading && (patterns.data ?? []).every(p => !p.eligible) && (
+                    <div className="mt-3 rounded-lg border border-dashed p-3">
+                        <p className={text.body}>
+                            {(patterns.data ?? []).length === 0
+                                ? 'This team has no baseline pattern yet.'
+                                : 'None of this team’s templates can be used as a baseline pattern.'}
+                        </p>
+                        <p className={cn(text.caption, 'mt-0.5')}>
+                            A pattern describes the normal full-time week. The day length is worked
+                            out from the contract, so it adds up exactly.
+                        </p>
+                        <Button
+                            variant="outline"
+                            className={cn(touch.targetY, 'mt-2.5')}
+                            disabled={!ftProfile.data || ftProfile.data.roles.length === 0}
+                            onClick={() => setDesignerOpen(true)}
+                        >
+                            <Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Design a pattern
+                        </Button>
+                        {ftProfile.data && ftProfile.data.roles.length === 0 && (
+                            <p className={cn(text.caption, 'mt-1.5')}>
+                                No full-time contracts here name a role, so there is nothing to
+                                roster yet.
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {ftProfile.data?.weeklyHoursVaries && (
+                    <p className={cn(text.caption, 'mt-3')}>
+                        Full-time contracts on this team do not all specify the same weekly hours.
+                        A designed pattern uses the smallest, {ftProfile.data.weeklyHours}h, so it
+                        cannot over-roster anyone.
                     </p>
                 )}
 
@@ -347,6 +452,18 @@ const BaselineFtPage: React.FC = () => {
                     scope="section"
                     title="Could not load your teams"
                     onRetry={() => void subDepts.refetch()}
+                />
+            )}
+
+            {selectedSubDept && ftProfile.data && (
+                <PatternDesignerDialog
+                    open={designerOpen}
+                    onOpenChange={setDesignerOpen}
+                    roles={ftProfile.data.roles}
+                    contractedWeeklyHours={ftProfile.data.weeklyHours}
+                    subDepartmentName={selectedSubDept.name}
+                    isSaving={createPattern.isPending}
+                    onCreate={handleCreatePattern}
                 />
             )}
 

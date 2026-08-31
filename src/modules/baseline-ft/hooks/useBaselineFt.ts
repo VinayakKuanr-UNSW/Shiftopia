@@ -18,6 +18,9 @@ import {
     type GenerateRunInput,
     type GenerateRunResult,
 } from '../api/baselineFt.commands';
+import { createBaselinePattern, type CreatePatternInput, type CreatePatternResult } from '../api/createPattern';
+import { DEFAULT_WEEKLY_HOURS } from '../domain/requirementCalculator';
+import { resolveComplianceBasis } from '@/modules/availability/domain/contract-basis';
 
 export const baselineFtKeys = {
     all: ['baseline-ft'] as const,
@@ -27,7 +30,98 @@ export const baselineFtKeys = {
         [...baselineFtKeys.all, 'templates', subDepartmentId] as const,
     liveRun: (subDepartmentId: string | null, start: string, end: string) =>
         [...baselineFtKeys.all, 'live-run', subDepartmentId, start, end] as const,
+    ftProfile: (subDepartmentId: string | null) =>
+        [...baselineFtKeys.all, 'ft-profile', subDepartmentId] as const,
 };
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The full-time shape of a sub-department
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export interface FtProfile {
+    /** Wholly-full-time employees contracted here. */
+    employeeCount: number;
+    /** Contracted weekly hours they share, or the 38h default when none say. */
+    weeklyHours: number;
+    /** True when they do NOT all share one figure — the designer can only use one. */
+    weeklyHoursVaries: boolean;
+    cycleWeeks: 1 | 2 | 3 | 4;
+    /** Roles those employees actually hold. A pattern naming any other role is
+     *  refused by BFT_PATTERN_ROLE_MISMATCH, so offering more would be a trap. */
+    roles: Array<{ id: string; name: string }>;
+}
+
+/**
+ * What the pattern designer needs to derive a compliant day length.
+ *
+ * Reads the CONTRACTS rather than asking the author, because the day length is
+ * a consequence of the weekly quota and the number of days, and a human typing
+ * it has no margin: 38 / 5 is 7.6h exactly, which is also the daily floor.
+ */
+export function useFtProfile(subDepartmentId: string | null) {
+    return useQuery({
+        queryKey: baselineFtKeys.ftProfile(subDepartmentId),
+        enabled: Boolean(subDepartmentId),
+        queryFn: async (): Promise<FtProfile> => {
+            const { data, error } = await supabase
+                .from('user_contracts')
+                .select('user_id, role_id, employment_status, contracted_weekly_hours, ' +
+                        'ordinary_hours_cycle_weeks, ordinary_hours_cycle_anchor, start_date')
+                .eq('sub_department_id', subDepartmentId!)
+                .eq('status', 'Active');
+            if (error) throw error;
+
+            const rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+            const ftRows = rows.filter(r => {
+                const basis = resolveComplianceBasis([{
+                    employmentStatus: r.employment_status as string | null,
+                    contractedWeeklyHours: (r.contracted_weekly_hours as number | null) ?? null,
+                    startDate: r.start_date as string | null,
+                    ordinaryHoursCycleWeeks: r.ordinary_hours_cycle_weeks as number | null,
+                    ordinaryHoursCycleAnchor: r.ordinary_hours_cycle_anchor as string | null,
+                }]);
+                return basis.isFullTime;
+            });
+
+            const hours = [...new Set(
+                ftRows.map(r => Number(r.contracted_weekly_hours)).filter(h => Number.isFinite(h) && h > 0),
+            )];
+            const cycles = [...new Set(
+                ftRows.map(r => Number(r.ordinary_hours_cycle_weeks)).filter(Boolean),
+            )];
+
+            const roleIds = [...new Set(ftRows.map(r => String(r.role_id)).filter(Boolean))];
+            let roles: Array<{ id: string; name: string }> = [];
+            if (roleIds.length > 0) {
+                const { data: roleRows } = await supabase
+                    .from('roles').select('id, name').in('id', roleIds);
+                roles = (roleRows ?? [])
+                    .map(r => ({ id: String(r.id), name: String(r.name ?? '') }))
+                    .sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            return {
+                employeeCount: new Set(ftRows.map(r => String(r.user_id))).size,
+                weeklyHours: hours.length > 0 ? Math.min(...hours) : DEFAULT_WEEKLY_HOURS,
+                weeklyHoursVaries: hours.length > 1,
+                // Shortest declared cycle is the strictest, matching
+                // resolveGoverningCycleWeeks.
+                cycleWeeks: (cycles.length > 0 ? Math.min(...cycles) : 4) as 1 | 2 | 3 | 4,
+                roles,
+            };
+        },
+    });
+}
+
+export function useCreateBaselinePattern() {
+    const qc = useQueryClient();
+    return useMutation<CreatePatternResult, Error, CreatePatternInput>({
+        mutationFn: input => createBaselinePattern(input),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: baselineFtKeys.all });
+        },
+    });
+}
 
 /* ────────────────────────────────────────────────────────────────────────────
    Sub-departments the manager may roster
