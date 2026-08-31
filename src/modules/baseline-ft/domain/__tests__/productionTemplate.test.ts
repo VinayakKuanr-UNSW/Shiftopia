@@ -38,7 +38,7 @@ const PROD_ROWS = [
 
 function slotFrom(row: typeof PROD_ROWS[number], day: IsoWeekday | null): PatternSlot {
     return {
-        templateShiftId: row.id,
+        sourceSlotId: row.id,
         dayOfWeek: day as IsoWeekday,
         startTime: row.start,
         endTime: row.end,
@@ -52,7 +52,7 @@ function slotFrom(row: typeof PROD_ROWS[number], day: IsoWeekday | null): Patter
 
 function pattern(slots: PatternSlot[]): BaselinePattern {
     return {
-        templateId: 'prod-baseline-ft',
+        employeeId: 'emp-1', userContractId: 'uc-1',
         subDepartmentId: '6fefad95-9cf9-468c-8724-424cc2f7b640',
         slots,
     };
@@ -86,7 +86,7 @@ describe('the real "Baseline FT" template', () => {
         const fiveDay = pattern(
             ([1, 2, 3, 4, 5] as IsoWeekday[]).map(d => ({
                 ...slotFrom(eightHour[0], d),
-                templateShiftId: `prod-8h-${d}`,
+                sourceSlotId: `prod-8h-${d}`,
                 roleId: ROLE_AV,          // isolate the volume rule from role mismatch
                 sortOrder: d,
             })),
@@ -114,7 +114,7 @@ describe('the real "Baseline FT" template', () => {
         const fiveDay = pattern(
             ([1, 2, 3, 4, 5] as IsoWeekday[]).map(d => ({
                 ...slotFrom(early, d),
-                templateShiftId: `prod-775-${d}`,
+                sourceSlotId: `prod-775-${d}`,
                 sortOrder: d,
             })),
         );
@@ -152,7 +152,7 @@ describe('the real "Baseline FT" template', () => {
         // 08:00-18:00 less 30m unpaid = 9.5h net, with both cl 37 rest pauses.
         const fourDay = pattern(
             ([1, 2, 3, 4] as IsoWeekday[]).map(d => ({
-                templateShiftId: `fixed-${d}`,
+                sourceSlotId: `fixed-${d}`,
                 dayOfWeek: d,
                 startTime: '08:00',
                 endTime: '18:00',

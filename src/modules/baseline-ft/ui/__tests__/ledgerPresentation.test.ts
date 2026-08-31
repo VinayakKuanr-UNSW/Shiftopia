@@ -27,6 +27,7 @@ function ledger(over: Partial<EmployeeLedger> = {}): EmployeeLedger {
         proposed: [],
         rejected: [],
         findings: [],
+        patternBlocked: false,
         ...over,
     };
 }

@@ -26,188 +26,13 @@ import {
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { LEAVE_POLICIES, resolveOrdinaryHoursCredit } from '@/modules/leave/domain/leave-policy';
 import type { LeaveElectionMode, LeaveTypeCode } from '@/modules/leave/model/leave.types';
-import { isoWeekdayOf } from '../domain/requirementCalculator';
 import type { SnapshotShiftRef } from './digest';
 import type {
-    BaselinePattern,
     EmployeeContractFacts,
     ExistingShift,
     Finding,
-    IsoWeekday,
-    LeaveDay,
-    PatternSlot,
+    RawLeaveDay,
 } from '../domain/types';
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Pattern
-   ──────────────────────────────────────────────────────────────────────────── */
-
-export interface PatternLoad {
-    pattern: BaselinePattern | null;
-    findings: Finding[];
-    /** Raw slot rows, fed to `inputDigest` so a template edit changes the digest. */
-    rawSlots: Array<Record<string, unknown>>;
-}
-
-/** Minutes between two `HH:mm[:ss]` times, wrapping past midnight. */
-function grossMinutes(start: string, end: string): number {
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    const s = sh * 60 + sm;
-    let e = eh * 60 + em;
-    if (e <= s) e += 1440;
-    return e - s;
-}
-
-/**
- * Load a template as a baseline pattern.
- *
- * `template_shifts` has no `sub_department_id` — it lives on the template — so
- * one template is one sub-department, and that is read from the parent rather
- * than assumed per row.
- */
-export async function loadPattern(templateId: string): Promise<PatternLoad> {
-    const findings: Finding[] = [];
-
-    const { data: tpl, error: tplErr } = await supabase
-        .from('roster_templates')
-        .select('id, sub_department_id, department_id, organization_id, name, is_active')
-        .eq('id', templateId)
-        .single();
-
-    if (tplErr || !tpl) {
-        findings.push({
-            severity: 'BLOCKING',
-            code: 'BFT_TEMPLATE_NOT_FOUND',
-            plain: 'That template could not be read. It may have been deleted.',
-            overridable: false,
-            calculation: { template_id: templateId, error: tplErr?.message },
-        });
-        return { pattern: null, findings, rawSlots: [] };
-    }
-
-    if (!tpl.sub_department_id) {
-        findings.push({
-            severity: 'BLOCKING',
-            code: 'BFT_TEMPLATE_NO_SUB_DEPARTMENT',
-            plain:
-                `"${tpl.name}" is not tied to a sub-department, so there is no team to generate ` +
-                `a baseline for. Set its sub-department first.`,
-            overridable: false,
-            calculation: { template_id: templateId },
-        });
-        return { pattern: null, findings, rawSlots: [] };
-    }
-
-    // groups -> subgroups -> shifts. Nested rather than three round trips so
-    // the shape cannot half-load.
-    const { data: groups, error: grpErr } = await supabase
-        .from('template_groups')
-        .select(`
-            id,
-            template_subgroups (
-                id,
-                template_shifts (
-                    id, role_id, start_time, end_time,
-                    unpaid_break_minutes, paid_break_minutes, net_length_hours,
-                    day_of_week, sort_order, target_employment_type, target_requires_flexible
-                )
-            )
-        `)
-        .eq('template_id', templateId);
-
-    if (grpErr) {
-        findings.push({
-            severity: 'BLOCKING',
-            code: 'BFT_TEMPLATE_READ_FAILED',
-            plain: 'The template\'s shifts could not be read.',
-            overridable: false,
-            calculation: { template_id: templateId, error: grpErr.message },
-        });
-        return { pattern: null, findings, rawSlots: [] };
-    }
-
-    const rawSlots: Array<Record<string, unknown>> = [];
-    const slots: PatternSlot[] = [];
-    let missingWeekday = 0;
-    let nonFtTarget = 0;
-
-    for (const g of groups ?? []) {
-        for (const sg of ((g as never as { template_subgroups?: unknown[] }).template_subgroups ?? [])) {
-            const shifts = (sg as { template_shifts?: Record<string, unknown>[] }).template_shifts ?? [];
-            for (const row of shifts) {
-                rawSlots.push(row);
-
-                if (row.day_of_week === null || row.day_of_week === undefined) {
-                    missingWeekday++;
-                    continue;
-                }
-                if (row.target_employment_type !== 'FT') {
-                    nonFtTarget++;
-                    continue;
-                }
-
-                const start = String(row.start_time ?? '').slice(0, 5);
-                const end = String(row.end_time ?? '').slice(0, 5);
-                if (!start || !end) continue;
-
-                const unpaid = Number(row.unpaid_break_minutes ?? 0);
-                const paid = Number(row.paid_break_minutes ?? 0);
-
-                slots.push({
-                    templateShiftId: String(row.id),
-                    // `day_of_week` is stored 0-6 with 0 = Sunday, matching
-                    // JavaScript. The domain speaks ISO (1 = Monday), because
-                    // every cycle boundary is anchored to a Monday. Converting
-                    // here keeps that translation in exactly one place.
-                    dayOfWeek: (Number(row.day_of_week) === 0 ? 7 : Number(row.day_of_week)) as IsoWeekday,
-                    startTime: start,
-                    endTime: end,
-                    unpaidBreakMinutes: unpaid,
-                    paidBreakMinutes: paid,
-                    netMinutes: grossMinutes(start, end) - unpaid,
-                    roleId: String(row.role_id ?? ''),
-                    sortOrder: Number(row.sort_order ?? 0),
-                });
-            }
-        }
-    }
-
-    if (missingWeekday > 0) {
-        findings.push({
-            severity: 'BLOCKING',
-            code: 'BFT_PATTERN_NO_WEEKDAY',
-            plain:
-                `${missingWeekday} shift(s) in "${tpl.name}" have no day of the week set, so the ` +
-                `template describes shift shapes but not a weekly pattern. Set a day on each ` +
-                `shift before using it as a baseline.`,
-            overridable: false,
-            calculation: { template_id: templateId, shifts_without_weekday: missingWeekday },
-        });
-    }
-
-    if (nonFtTarget > 0) {
-        findings.push({
-            severity: 'WARNING',
-            code: 'BFT_PATTERN_NON_FT_SHIFTS_IGNORED',
-            plain:
-                `${nonFtTarget} shift(s) in "${tpl.name}" target part-time or casual staff and are ` +
-                `not part of the full-time baseline. They have been ignored.`,
-            overridable: true,
-            calculation: { ignored_count: nonFtTarget },
-        });
-    }
-
-    return {
-        pattern: {
-            templateId,
-            subDepartmentId: String(tpl.sub_department_id),
-            slots,
-        },
-        findings,
-        rawSlots,
-    };
-}
 
 /* ────────────────────────────────────────────────────────────────────────────
    Eligible employees
@@ -216,6 +41,15 @@ export async function loadPattern(templateId: string): Promise<PatternLoad> {
 export interface EligibleEmployee {
     facts: EmployeeContractFacts;
     name: string;
+    /**
+     * The role the CONTRACT authorises, by name.
+     *
+     * Carried so the table can show it without a second lookup. It is displayed
+     * read-only: `BFT_PATTERN_ROLE_MISMATCH` is BLOCKING for any other role, so
+     * offering a choice would be offering a way to break the row. Changing
+     * someone's role is a contract change, and the finding says so.
+     */
+    roleName: string;
     isSecurityRole: boolean;
 }
 
@@ -352,6 +186,7 @@ export async function loadEligibleEmployees(
 
         employees.push({
             name,
+            roleName,
             isSecurityRole: false,
             facts: {
                 employeeId: userId,
@@ -479,23 +314,21 @@ function expandDates(startISO: string, endISO: string): string[] {
  * `resolveOrdinaryHoursCredit` is what turns cl 55.1 / cl 58.2's election into
  * an answer — or leaves it unresolved when the election was never recorded, in
  * which case the calculator reports both readings rather than guessing.
+ *
+ * RETURNS `RawLeaveDay`, WITHOUT `creditHours`. How many hours a leave day
+ * discharges depends on the PATTERN — cl 44.7 pays "the Team Member's ordinary
+ * hours of work in the period", not a weekly average — and patterns are now
+ * per-employee and edited live in the table. Computing the credit here would
+ * mean re-reading leave from the database on every keystroke. It is attached in
+ * the pure layer instead, by `attachLeaveCredit`, where the employee's own
+ * pattern is already in hand.
  */
 export async function loadLeaveDays(
     employeeIds: readonly string[],
     fromDate: string,
     toDate: string,
-    /**
-     * Net ordinary hours the pattern rosters on each weekday.
-     *
-     * A leave day discharges the hours it displaces, so the measure is the
-     * PATTERN's own shape for that weekday — cl 44.7 pays "the Team Member's
-     * ordinary hours of work in the period", not a weekly average. Leave
-     * falling on a day the pattern does not work discharges nothing, which is
-     * correct: there was no obligation there to discharge.
-     */
-    patternHoursByWeekday: ReadonlyMap<IsoWeekday, number>,
-): Promise<Map<string, LeaveDay[]>> {
-    const out = new Map<string, LeaveDay[]>();
+): Promise<Map<string, RawLeaveDay[]>> {
+    const out = new Map<string, RawLeaveDay[]>();
     if (employeeIds.length === 0) return out;
 
     // `election_mode` arrives with migration 20260828100000. A database that
@@ -547,11 +380,10 @@ export async function loadLeaveDays(
 
         for (const date of expandDates(start, end)) {
             if (date < fromDate || date > toDate) continue;
-            const day: LeaveDay = {
+            const day: RawLeaveDay = {
                 date,
                 leaveType,
                 credit,
-                creditHours: patternHoursByWeekday.get(isoWeekdayOf(date)) ?? 0,
                 status: String(row.status) === 'approved' ? 'approved' : 'pending',
             };
             const bucket = out.get(employeeId);

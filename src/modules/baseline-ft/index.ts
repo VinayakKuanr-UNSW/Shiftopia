@@ -9,14 +9,21 @@
  * compliance risk lives.
  *
  * Read the modules in pipeline order:
- *   validatePattern          — is this pattern lawful at all? (aborts the run)
+ *   patternRow               — the editable line, and the derivations under it
+ *   validatePattern          — is this pattern lawful? (drops ONE employee)
  *   computeCycleRequirements — what does the contract owe, per anchored cycle?
  *   generateCandidates       — which shifts would discharge that, and what is left over?
  *   admitCandidates          — which of them survive the compliance engine as a SET?
+ *
+ * A pattern belongs to ONE EMPLOYEE. It was once a shared `roster_templates`
+ * row per sub-department, and a blocking finding aborted the whole run — which
+ * meant a team holding three different roles generated nothing at all, because
+ * a single shared template can only ever name one of them.
  */
 
 export type {
     BaselinePattern,
+    RawLeaveDay,
     Candidate,
     CycleRequirement,
     EmployeeContractFacts,
@@ -53,3 +60,28 @@ export {
     type AdmissionInput,
     type AdmissionResult,
 } from './domain/admissionEngine';
+
+export {
+    ISO_WEEK,
+    DAY_LONG,
+    DAY_SHORT,
+    attachLeaveCredit,
+    cycleVerdict,
+    deriveRow,
+    grossMinutesBetween,
+    patternHoursByWeekday,
+    rowToSlots,
+    rowsToPattern,
+    seedRow,
+    type CycleVerdict,
+    type PatternRow,
+    type RowDerivation,
+} from './domain/patternRow';
+
+export {
+    designPattern,
+    lawfulDayCounts,
+    requiredPaidBreakMinutes,
+    FT_MIN_DAY_MINUTES,
+    FT_MAX_DAY_MINUTES,
+} from './domain/patternDesigner';

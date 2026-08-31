@@ -163,10 +163,10 @@ describe('what the designer produces PASSES the gate that refused production', (
 
         const findings = validatePattern(
             {
-                templateId: 'designed',
+                employeeId: 'emp-1', userContractId: 'uc-1',
                 subDepartmentId: 'sub-1',
                 slots: designed.slots.map((s, i) => ({
-                    templateShiftId: `d-${i}`,
+                    sourceSlotId: `d-${i}`,
                     dayOfWeek: s.dayOfWeek,
                     startTime: s.startTime,
                     endTime: s.endTime,

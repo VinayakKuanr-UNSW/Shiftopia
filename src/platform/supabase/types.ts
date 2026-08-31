@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -1072,6 +1072,98 @@ export type Database = {
         }
         Relationships: []
       }
+      baseline_ft_patterns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          department_id: string
+          employee_id: string
+          end_time: string
+          id: string
+          iso_day_of_week: number
+          net_minutes: number
+          organization_id: string
+          paid_break_minutes: number
+          role_id: string
+          start_time: string
+          sub_department_id: string
+          unpaid_break_minutes: number
+          updated_at: string
+          updated_by: string | null
+          user_contract_id: string
+          week_in_cycle: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          employee_id: string
+          end_time: string
+          id?: string
+          iso_day_of_week: number
+          net_minutes: number
+          organization_id: string
+          paid_break_minutes?: number
+          role_id: string
+          start_time: string
+          sub_department_id: string
+          unpaid_break_minutes?: number
+          updated_at?: string
+          updated_by?: string | null
+          user_contract_id: string
+          week_in_cycle?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          employee_id?: string
+          end_time?: string
+          id?: string
+          iso_day_of_week?: number
+          net_minutes?: number
+          organization_id?: string
+          paid_break_minutes?: number
+          role_id?: string
+          start_time?: string
+          sub_department_id?: string
+          unpaid_break_minutes?: number
+          updated_at?: string
+          updated_by?: string | null
+          user_contract_id?: string
+          week_in_cycle?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "baseline_ft_patterns_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "baseline_ft_patterns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "baseline_ft_patterns_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "baseline_ft_patterns_user_contract_id_fkey"
+            columns: ["user_contract_id"]
+            isOneToOne: false
+            referencedRelation: "user_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       baseline_ft_proposed_shifts: {
         Row: {
           created_at: string
@@ -1086,10 +1178,10 @@ export type Database = {
           run_id: string
           shift_date: string
           skip_reason: string | null
+          source_slot_id: string
           start_time: string
           status: string
           target_employment_type: string
-          template_shift_id: string
           unpaid_break_minutes: number
           user_contract_id: string
         }
@@ -1106,10 +1198,10 @@ export type Database = {
           run_id: string
           shift_date: string
           skip_reason?: string | null
+          source_slot_id: string
           start_time: string
           status?: string
           target_employment_type?: string
-          template_shift_id: string
           unpaid_break_minutes?: number
           user_contract_id: string
         }
@@ -1126,10 +1218,10 @@ export type Database = {
           run_id?: string
           shift_date?: string
           skip_reason?: string | null
+          source_slot_id?: string
           start_time?: string
           status?: string
           target_employment_type?: string
-          template_shift_id?: string
           unpaid_break_minutes?: number
           user_contract_id?: string
         }
@@ -1182,7 +1274,7 @@ export type Database = {
           snapshot_version: string
           status: string
           sub_department_id: string
-          template_id: string
+          template_id: string | null
         }
         Insert: {
           applied_at?: string | null
@@ -1201,7 +1293,7 @@ export type Database = {
           snapshot_version: string
           status?: string
           sub_department_id: string
-          template_id: string
+          template_id?: string | null
         }
         Update: {
           applied_at?: string | null
@@ -1220,7 +1312,7 @@ export type Database = {
           snapshot_version?: string
           status?: string
           sub_department_id?: string
-          template_id?: string
+          template_id?: string | null
         }
         Relationships: [
           {

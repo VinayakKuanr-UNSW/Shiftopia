@@ -1,16 +1,32 @@
 /**
- * Baseline FT — Generate and Apply.
+ * Baseline FT — reading the world, computing a proposal, and applying it.
  *
- * Generate is READ-ONLY with respect to `shifts`. It reads the world, runs the
- * pure domain pipeline, and persists a proposal. Apply is the ONLY write, and
- * it revalidates everything rather than trusting what Generate stored, because
- * the roster can move between the two.
+ * THREE LAYERS, AND THE MIDDLE ONE IS PURE.
  *
- * A BLOCKING finding drops ONE CANDIDATE, not the run. One employee's rest
- * conflict must not discard twenty other people's valid shifts. The single
- * exception is a pattern-level failure, which aborts wholesale — the pattern is
- * common to everyone in the sub-department, so if it is unlawful there is
- * nothing lawful to generate for anybody.
+ *   loadBaselineWorld  — I/O. Contracts, existing shifts, leave, public
+ *                        holidays. Once per team and period.
+ *   computeProposal    — PURE. No clock, no network, no randomness. Runs on
+ *                        every keystroke in the pattern table.
+ *   applyBaseline      — the only write. Creates the run record and the shifts.
+ *
+ * That split is what makes a live-editing table affordable. The expensive part
+ * is reading the world; the part that changes when somebody types a new finish
+ * time is the pure pipeline over data already in memory. The purity discipline
+ * was originally adopted so idempotency could be unit-tested — it pays for
+ * itself a second time here.
+ *
+ * THERE IS NO LONGER A "GENERATE" STEP. It existed to persist a proposal for a
+ * later Apply; with the table recomputing continuously, persisting one per date
+ * change would litter `baseline_ft_runs` and collide on its one-live-per-scope
+ * index every time somebody clicked to the next week. The run record is now
+ * written AT Apply, which is also the only moment it needs to exist as an audit
+ * trail.
+ *
+ * A BLOCKING FINDING DROPS ONE EMPLOYEE, NEVER THE RUN. This changed with the
+ * pattern model: when one template was shared by the whole sub-department, a
+ * pattern-level failure meant nothing lawful could be built for anyone, so
+ * aborting wholesale was right. Patterns are per-employee now, so one person's
+ * unlawful pattern says nothing about their colleagues'.
  */
 
 import { supabase } from '@/platform/supabase/client';
@@ -25,39 +41,34 @@ import type { V8Employee } from '@/modules/compliance/v8/types';
 import type { Json } from '@/platform/supabase/types';
 
 import { validatePattern } from '../domain/patternValidator';
-import { computeCycleRequirements } from '../domain/requirementCalculator';
+import { computeCycleRequirements, isoWeekdayOf } from '../domain/requirementCalculator';
 import { generateCandidates, type RunScope } from '../domain/candidateGenerator';
 import { admitCandidates } from '../domain/admissionEngine';
-import { hasBlocking, type Candidate, type CycleRequirement, type Finding, type IsoWeekday } from '../domain/types';
+import { attachLeaveCredit, patternHoursByWeekday } from '../domain/patternRow';
+import type {
+    BaselinePattern,
+    Candidate,
+    CycleRequirement,
+    ExistingShift,
+    Finding,
+    RawLeaveDay,
+} from '../domain/types';
 
 import {
     loadEligibleEmployees,
     loadExistingShifts,
     loadLeaveDays,
-    loadPattern,
     loadPublicHolidays,
+    type EligibleEmployee,
 } from './baselineFt.loaders';
-import { inputDigest, snapshotVersion } from './digest';
+import { inputDigest, snapshotVersion, type SnapshotShiftRef } from './digest';
 
 
 /* ────────────────────────────────────────────────────────────────────────────
    Types
    ──────────────────────────────────────────────────────────────────────────── */
 
-export interface GenerateRunInput {
-    organizationId: string;
-    departmentId: string;
-    subDepartmentId: string;
-    templateId: string;
-    /** Inclusive, `yyyy-MM-dd`. */
-    periodStart: string;
-    periodEnd: string;
-    /** Reference date for rule evaluation. Passed in so runs are reproducible. */
-    referenceDate: string;
-    actorId: string;
-}
-
-/** One employee's ledger, as the review screen reads it. */
+/** One employee's ledger, as the table's expanded row reads it. */
 export interface EmployeeLedger {
     employeeId: string;
     name: string;
@@ -72,6 +83,13 @@ export interface EmployeeLedger {
     proposed: Candidate[];
     rejected: Array<{ candidate: Candidate; reasons: Finding[] }>;
     findings: Finding[];
+    /**
+     * This employee's pattern is unlawful, so nothing was proposed FOR THEM.
+     *
+     * Surfaced per row rather than as a run-level abort: their colleagues'
+     * proposals stand, and the table shows exactly who is blocked and why.
+     */
+    patternBlocked: boolean;
 }
 
 export interface BaselineProposal {
@@ -92,14 +110,9 @@ export interface BaselineProposal {
         proposedHours: number;
         varianceHours: number;
         proposedShiftCount: number;
+        /** Employees whose pattern is unlawful. Apply refuses while any exist. */
+        blockedEmployees: number;
     };
-}
-
-export interface GenerateRunResult {
-    runId: string | null;
-    proposal: BaselineProposal;
-    /** Present when the pattern is unlawful and nothing was generated. */
-    aborted: boolean;
 }
 
 export class BaselineRunConflictError extends Error {
@@ -109,11 +122,35 @@ export class BaselineRunConflictError extends Error {
     }
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Generate
-   ──────────────────────────────────────────────────────────────────────────── */
+/**
+ * Stated on every run, so nobody has to infer it from the numbers.
+ *
+ * `shifts.is_ordinary_hours` is not a column — it is a TypeScript literal at
+ * every call site in the codebase — so the ordinary/overtime split cannot be
+ * read from the roster. Until it can, every rostered hour counts as ordinary,
+ * and saying so is the difference between a stated assumption and a hidden one.
+ */
+export const AXIOMS: string[] = [
+    'All existing rostered hours are counted as ordinary hours. The system does not ' +
+    'currently record whether a shift was worked as ordinary time or overtime.',
+];
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/* ────────────────────────────────────────────────────────────────────────────
+   1. The world
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export interface BaselineWorld {
+    employees: EligibleEmployee[];
+    shiftsByEmployee: Map<string, ExistingShift[]>;
+    /** Without credit hours — those depend on the pattern. See `attachLeaveCredit`. */
+    leaveByEmployee: Map<string, RawLeaveDay[]>;
+    publicHolidays: string[];
+    snapshotRefs: SnapshotShiftRef[];
+    rawContracts: Array<Record<string, unknown>>;
+    findings: Finding[];
+}
 
 /**
  * Widen a date window to cover the WHOLE cycles it touches.
@@ -121,10 +158,10 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  * Consumption must be counted over complete cycles: hours worked earlier in a
  * cycle fill the same ceiling as hours inside the roster period, so reading
  * only the period would understate what the employee has already done and
- * over-roster them. Uses the widest cycle length in play, which is the safe
- * direction — reading extra days can only ever make the count more complete.
+ * over-roster them. Reading extra days can only ever make the count more
+ * complete, so widening is always the safe direction.
  */
-function widenToCycles(
+export function widenToCycles(
     periodStart: string,
     periodEnd: string,
     anchors: ReadonlyArray<{ anchor: string; weeks: number }>,
@@ -140,46 +177,80 @@ function widenToCycles(
     return { from: fromEpochDay(from), to: fromEpochDay(to) };
 }
 
-export async function generateBaselineRun(input: GenerateRunInput): Promise<GenerateRunResult> {
+/**
+ * Everything the pure pipeline needs, read once for a team and a period.
+ *
+ * Employees are resolved FIRST because their declared cycles determine how far
+ * the shift and leave reads have to be widened; the rest is then one parallel
+ * round trip.
+ */
+export async function loadBaselineWorld(args: {
+    subDepartmentId: string;
+    periodStart: string;
+    periodEnd: string;
+}): Promise<BaselineWorld> {
+    const { subDepartmentId, periodStart, periodEnd } = args;
+
+    const { employees, findings, rawContracts } =
+        await loadEligibleEmployees(subDepartmentId, periodStart, periodEnd);
+
+    if (employees.length === 0) {
+        return {
+            employees: [], shiftsByEmployee: new Map(), leaveByEmployee: new Map(),
+            publicHolidays: [], snapshotRefs: [], rawContracts, findings,
+        };
+    }
+
+    const employeeIds = employees.map(e => e.facts.employeeId);
+    const window = widenToCycles(periodStart, periodEnd,
+        employees.map(e => ({ anchor: e.facts.cycleAnchor, weeks: e.facts.cycleWeeks })));
+
+    const [{ shiftsByEmployee, snapshotRefs }, leaveByEmployee, publicHolidays] = await Promise.all([
+        loadExistingShifts(employeeIds, window.from, window.to),
+        loadLeaveDays(employeeIds, window.from, window.to),
+        loadPublicHolidays(window.from, window.to),
+    ]);
+
+    return {
+        employees, shiftsByEmployee, leaveByEmployee, publicHolidays,
+        snapshotRefs, rawContracts, findings,
+    };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   2. The proposal — PURE
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export interface ComputeProposalInput {
+    world: BaselineWorld;
+    /** One pattern per employee. An employee with none proposes nothing. */
+    patternsByEmployee: ReadonlyMap<string, BaselinePattern>;
+    organizationId: string;
+    departmentId: string;
+    subDepartmentId: string;
+    periodStart: string;
+    periodEnd: string;
+    /** Reference date for rule evaluation. Injected so runs are reproducible. */
+    referenceDate: string;
+    /** Injected rather than read from a clock, so this function stays pure. */
+    generatedAt: string;
+}
+
+/**
+ * Turn patterns plus the world into a proposal.
+ *
+ * PURE — same inputs, byte-identical output, every time. That is asserted
+ * directly in the tests rather than hoped for, and it is what allows the table
+ * to call this on every edit without a network round trip.
+ */
+export function computeProposal(input: ComputeProposalInput): BaselineProposal {
     const {
-        organizationId, departmentId, subDepartmentId, templateId,
-        periodStart, periodEnd, referenceDate, actorId,
+        world, patternsByEmployee, organizationId, departmentId, subDepartmentId,
+        periodStart, periodEnd, referenceDate, generatedAt,
     } = input;
 
-    const runFindings: Finding[] = [];
-
-    // ── 1. Pattern ───────────────────────────────────────────────────────────
-    const { pattern, findings: patternFindings, rawSlots } = await loadPattern(templateId);
-    runFindings.push(...patternFindings);
-
-    const scope: RunScope = { subDepartmentId, periodStart, periodEnd, templateId };
-    const emptyProposal = (): BaselineProposal => ({
-        scope: { ...scope, organizationId, departmentId },
-        periodStart, periodEnd, referenceDate,
-        generatedAt: new Date().toISOString(),
-        axioms: AXIOMS,
-        ledgers: [],
-        runFindings,
-        totals: {
-            employees: 0, requiredHours: 0, existingHours: 0, leaveHours: 0,
-            proposedHours: 0, varianceHours: 0, proposedShiftCount: 0,
-        },
-    });
-
-    if (!pattern || hasBlocking(runFindings)) {
-        return { runId: null, proposal: emptyProposal(), aborted: true };
-    }
-
-    if (pattern.subDepartmentId !== subDepartmentId) {
-        runFindings.push({
-            severity: 'BLOCKING',
-            code: 'BFT_TEMPLATE_WRONG_SUB_DEPARTMENT',
-            plain: 'That template belongs to a different sub-department.',
-            overridable: false,
-            calculation: { template_sub_department: pattern.subDepartmentId, requested: subDepartmentId },
-        });
-        return { runId: null, proposal: emptyProposal(), aborted: true };
-    }
+    const scope: RunScope = { subDepartmentId, periodStart, periodEnd };
+    const runFindings: Finding[] = [...world.findings];
 
     // cl 38.1 — the roster is provided at least seven days ahead. This governs
     // PUBLICATION and Baseline only creates Drafts, so it warns and proceeds.
@@ -198,89 +269,73 @@ export async function generateBaselineRun(input: GenerateRunInput): Promise<Gene
         });
     }
 
-    // ── 2. Eligible employees ────────────────────────────────────────────────
-    const { employees, findings: eligibilityFindings, rawContracts } =
-        await loadEligibleEmployees(subDepartmentId, periodStart, periodEnd);
-    runFindings.push(...eligibilityFindings);
-
-    if (employees.length === 0) {
+    if (world.employees.length === 0) {
         runFindings.push({
             severity: 'INFO',
             code: 'BFT_NO_ELIGIBLE_EMPLOYEES',
             plain: 'No wholly full-time employees are contracted to this sub-department for this period.',
             overridable: false,
         });
-        return { runId: null, proposal: emptyProposal(), aborted: false };
     }
 
-    // ── 3. Pattern vs contract, per distinct contract shape ──────────────────
-    //
-    // Validated against every DISTINCT (weekly hours, cycle, role) the team
-    // holds, because a pattern lawful for a 38h contract may breach a 20h one.
-    const seen = new Set<string>();
-    for (const e of employees) {
-        const key = `${e.facts.contractedWeeklyHours}|${e.facts.cycleWeeks}|${e.facts.roleId}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        runFindings.push(...validatePattern(pattern, e.facts).map(f => ({
-            ...f,
-            employeeId: f.employeeId ?? e.facts.employeeId,
-        })));
-    }
-    if (hasBlocking(runFindings)) {
-        return { runId: null, proposal: emptyProposal(), aborted: true };
-    }
-
-    // ── 4. The world ─────────────────────────────────────────────────────────
-    const patternHoursByWeekday = new Map<IsoWeekday, number>();
-    for (const slot of pattern.slots) {
-        patternHoursByWeekday.set(
-            slot.dayOfWeek,
-            (patternHoursByWeekday.get(slot.dayOfWeek) ?? 0) + slot.netMinutes / 60,
-        );
-    }
-
-    const employeeIds = employees.map(e => e.facts.employeeId);
-    const window = widenToCycles(periodStart, periodEnd,
-        employees.map(e => ({ anchor: e.facts.cycleAnchor, weeks: e.facts.cycleWeeks })));
-
-    const [{ shiftsByEmployee, snapshotRefs }, leaveByEmployee, publicHolidays] = await Promise.all([
-        loadExistingShifts(employeeIds, window.from, window.to),
-        loadLeaveDays(employeeIds, window.from, window.to, patternHoursByWeekday),
-        loadPublicHolidays(window.from, window.to),
-    ]);
-
-    const snapshot = snapshotVersion(snapshotRefs);
-
-    // ── 5. The pure pipeline, per employee ───────────────────────────────────
     const ledgers: EmployeeLedger[] = [];
 
-    for (const e of employees) {
-        const existing = shiftsByEmployee.get(e.facts.employeeId) ?? [];
-        const leaveDays = leaveByEmployee.get(e.facts.employeeId) ?? [];
+    for (const e of world.employees) {
+        const facts = e.facts;
+        const existing = world.shiftsByEmployee.get(facts.employeeId) ?? [];
+        const rawLeave = world.leaveByEmployee.get(facts.employeeId) ?? [];
 
+        const pattern: BaselinePattern = patternsByEmployee.get(facts.employeeId) ?? {
+            employeeId: facts.employeeId,
+            userContractId: facts.userContractId,
+            subDepartmentId,
+            slots: [],
+        };
+
+        // ── The pattern gate, per employee ───────────────────────────────────
+        const patternFindings = validatePattern(pattern, facts, {
+            isSecurityRole: e.isSecurityRole,
+        }).map(f => ({ ...f, employeeId: f.employeeId ?? facts.employeeId }));
+
+        const patternBlocked = patternFindings.some(f => f.severity === 'BLOCKING');
+
+        // Credit hours come from THIS employee's pattern — cl 44.7 pays their
+        // ordinary hours for the period, not a team average.
+        const hoursByWeekday = patternHoursByWeekday(pattern);
+        const leaveDays = attachLeaveCredit(rawLeave, hoursByWeekday, isoWeekdayOf);
+
+        // The requirement is computed even for a blocked employee. What they
+        // are OWED is a fact about their contract and has nothing to do with
+        // whether their pattern is currently lawful — and hiding it would leave
+        // the one row that needs attention as the one row with no numbers.
         const { cycles, findings: reqFindings } = computeCycleRequirements({
-            facts: e.facts,
+            facts,
             periodStart, periodEnd,
             existingShifts: existing,
             leaveDays,
-            publicHolidays,
-            patternHoursByWeekday,
+            publicHolidays: world.publicHolidays,
+            patternHoursByWeekday: hoursByWeekday,
         });
 
-        const { candidates, findings: genFindings } = generateCandidates({
-            facts: e.facts, pattern, cycles,
-            existingShifts: existing,
-            periodStart, periodEnd, scope,
-        });
+        let candidates: Candidate[] = [];
+        let genFindings: Finding[] = [];
+        if (!patternBlocked && pattern.slots.length > 0) {
+            const generated = generateCandidates({
+                facts, pattern, cycles,
+                existingShifts: existing,
+                periodStart, periodEnd, scope,
+            });
+            candidates = generated.candidates;
+            genFindings = generated.findings;
+        }
 
         const v8Employee: V8Employee = {
-            id: e.facts.employeeId,
+            id: facts.employeeId,
             name: e.name,
             contract_type: 'FULL_TIME',
-            contracted_weekly_hours: e.facts.contractedWeeklyHours ?? 38,
-            ordinary_hours_cycle_weeks: e.facts.cycleWeeks,
-            ordinary_hours_cycle_anchor: e.facts.cycleAnchor,
+            contracted_weekly_hours: facts.contractedWeeklyHours ?? 38,
+            ordinary_hours_cycle_weeks: facts.cycleWeeks,
+            ordinary_hours_cycle_anchor: facts.cycleAnchor,
             is_security_role: false,
             leave_days: leaveDays.filter(l => l.status === 'approved').map(l => l.date),
         };
@@ -302,7 +357,7 @@ export async function generateBaselineRun(input: GenerateRunInput): Promise<Gene
         const proposedHours = admitted.reduce((s, c) => s + c.netMinutes / 60, 0);
 
         ledgers.push({
-            employeeId: e.facts.employeeId,
+            employeeId: facts.employeeId,
             name: e.name,
             requiredHours: round1(requiredHours),
             existingHours: round1(existingHours),
@@ -316,9 +371,16 @@ export async function generateBaselineRun(input: GenerateRunInput): Promise<Gene
             cycles,
             proposed: admitted,
             rejected,
-            findings: [...reqFindings, ...genFindings, ...warnings],
+            findings: [...patternFindings, ...reqFindings, ...genFindings, ...warnings],
+            patternBlocked,
         });
     }
+
+    // Stable order: by name, then id. The table renders this directly, and a
+    // list that reorders itself between recomputes is unusable to edit.
+    ledgers.sort((a, b) => (a.name === b.name
+        ? (a.employeeId < b.employeeId ? -1 : 1)
+        : a.name.localeCompare(b.name)));
 
     const totals = ledgers.reduce((t, l) => ({
         employees: t.employees + 1,
@@ -328,106 +390,25 @@ export async function generateBaselineRun(input: GenerateRunInput): Promise<Gene
         proposedHours: round1(t.proposedHours + l.proposedHours),
         varianceHours: round1(t.varianceHours + l.varianceHours),
         proposedShiftCount: t.proposedShiftCount + l.proposed.length,
+        blockedEmployees: t.blockedEmployees + (l.patternBlocked ? 1 : 0),
     }), {
         employees: 0, requiredHours: 0, existingHours: 0, leaveHours: 0,
-        proposedHours: 0, varianceHours: 0, proposedShiftCount: 0,
+        proposedHours: 0, varianceHours: 0, proposedShiftCount: 0, blockedEmployees: 0,
     });
 
-    const proposal: BaselineProposal = {
+    return {
         scope: { ...scope, organizationId, departmentId },
         periodStart, periodEnd, referenceDate,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
         axioms: AXIOMS,
         ledgers,
         runFindings,
         totals,
     };
-
-    // ── 6. Persist. Still nothing written to `shifts`. ───────────────────────
-    const digest = inputDigest({
-        subDepartmentId, periodStart, periodEnd, templateId,
-        patternSlots: rawSlots,
-        employees: rawContracts,
-        snapshotVersion: snapshot,
-        config: { enforce_ft_days_off: true, min_rest_gap_minutes: 600, referenceDate },
-    });
-
-    const { data: run, error } = await supabase
-        .from('baseline_ft_runs')
-        .insert({
-            organization_id: organizationId,
-            department_id: departmentId,
-            sub_department_id: subDepartmentId,
-            template_id: templateId,
-            period_start: periodStart,
-            period_end: periodEnd,
-            snapshot_version: snapshot,
-            input_digest: digest,
-            proposal: proposal as unknown as Json,
-            status: 'generated',
-            created_by: actorId,
-        })
-        .select('id')
-        .single();
-
-    if (error) {
-        // 23505 — the partial unique index fired. Another manager already has a
-        // live proposal for this exact scope. A deterministic conflict, which
-        // is the point: two rival proposals over the same dates would have to
-        // be reconciled by a human.
-        if ((error as { code?: string }).code === '23505') {
-            throw new BaselineRunConflictError(
-                'Someone else has already generated a baseline for this team and period. ' +
-                'Open or discard that proposal before generating another.',
-            );
-        }
-        throw error;
-    }
-
-    const runId = String((run as { id: string }).id);
-
-    const rows = ledgers.flatMap(l => l.proposed.map(c => ({
-        run_id: runId,
-        employee_id: c.employeeId,
-        user_contract_id: c.userContractId,
-        template_shift_id: c.templateShiftId,
-        shift_date: c.shiftDate,
-        start_time: c.startTime,
-        end_time: c.endTime,
-        unpaid_break_minutes: c.unpaidBreakMinutes,
-        paid_break_minutes: c.paidBreakMinutes,
-        net_minutes: c.netMinutes,
-        role_id: c.roleId,
-        target_employment_type: 'FT',
-        idempotency_key: c.idempotencyKey,
-        status: 'proposed',
-    })));
-
-    if (rows.length > 0) {
-        const { error: rowsErr } = await supabase
-            .from('baseline_ft_proposed_shifts')
-            .insert(rows);
-        if (rowsErr) throw rowsErr;
-    }
-
-    return { runId, proposal, aborted: false };
 }
 
-/**
- * Stated on every run, so nobody has to infer it from the numbers.
- *
- * `shifts.is_ordinary_hours` is not a column — it is a TypeScript literal at
- * every call site in the codebase — so the ordinary/overtime split cannot be
- * read from the roster. Until it can, every rostered hour counts as ordinary,
- * and saying so is the difference between a stated assumption and a hidden one.
- */
-const AXIOMS: string[] = [
-    'All existing rostered hours are counted as ordinary hours. The system does not ' +
-    'currently record whether a shift was worked as ordinary time or overtime.',
-];
-
 /* ────────────────────────────────────────────────────────────────────────────
-   Apply
+   3. Apply — the only write
    ──────────────────────────────────────────────────────────────────────────── */
 
 export interface ApplyRunResult {
@@ -437,134 +418,212 @@ export interface ApplyRunResult {
     status: 'applied' | 'partially_applied';
 }
 
+export interface ApplyBaselineInput {
+    proposal: BaselineProposal;
+    world: BaselineWorld;
+    /** The `baseline_ft_patterns` rows behind the proposal, for the input digest. */
+    patternRows: ReadonlyArray<Record<string, unknown>>;
+    actorId: string;
+    resolveTarget: (args: {
+        subDepartmentId: string; departmentId: string; organizationId: string; shiftDate: string;
+    }) => Promise<{ rosterId: string; rosterSubgroupId: string }>;
+}
+
 /**
- * Create the proposed shifts as DRAFTS.
+ * Record the run, then create its shifts as DRAFTS.
  *
- * Everything is re-read. Nothing Generate stored is trusted, because the roster
- * can move in between — and a candidate that has become invalid is DROPPED with
- * a reason rather than forced through or allowed to abort its twenty innocent
- * neighbours.
+ * Everything is re-read at the point of writing. Nothing the proposal holds is
+ * trusted, because the roster can move between the manager reading the table
+ * and pressing the button — and a candidate that has become invalid is DROPPED
+ * with a reason rather than forced through or allowed to abort its twenty
+ * innocent neighbours.
  *
  * Writes go through `shiftsCommands.createShift`, never a raw insert, so the
  * shift-shape gate runs on the way past exactly as it does for every other
  * creation path in the product.
  */
-export async function applyBaselineRun(
-    runId: string,
-    actorId: string,
-    rosterSubgroupResolver: (args: {
-        subDepartmentId: string; departmentId: string; organizationId: string; shiftDate: string;
-    }) => Promise<{ rosterId: string; rosterSubgroupId: string }>,
-): Promise<ApplyRunResult> {
+export async function applyBaseline(input: ApplyBaselineInput): Promise<ApplyRunResult> {
+    const { proposal, world, patternRows, actorId, resolveTarget } = input;
+    const { organizationId, departmentId, subDepartmentId } = proposal.scope;
+
+    const snapshot = snapshotVersion(world.snapshotRefs);
+    const digest = inputDigest({
+        subDepartmentId,
+        periodStart: proposal.periodStart,
+        periodEnd: proposal.periodEnd,
+        patternSlots: patternRows,
+        employees: world.rawContracts,
+        snapshotVersion: snapshot,
+        config: {
+            enforce_ft_days_off: true,
+            min_rest_gap_minutes: 600,
+            referenceDate: proposal.referenceDate,
+        },
+    });
+
+    // ── The run record ───────────────────────────────────────────────────────
     const { data: run, error: runErr } = await supabase
         .from('baseline_ft_runs')
-        .select('id, organization_id, department_id, sub_department_id, period_start, period_end, status, snapshot_version')
-        .eq('id', runId)
+        .insert({
+            organization_id: organizationId,
+            department_id: departmentId,
+            sub_department_id: subDepartmentId,
+            // NULL: this run came from `baseline_ft_patterns`, not a template.
+            template_id: null,
+            period_start: proposal.periodStart,
+            period_end: proposal.periodEnd,
+            snapshot_version: snapshot,
+            input_digest: digest,
+            proposal: proposal as unknown as Json,
+            status: 'generated',
+            created_by: actorId,
+        } as never)
+        .select('id')
         .single();
 
-    if (runErr || !run) throw runErr ?? new Error('Baseline run not found.');
-    if ((run as { status: string }).status !== 'generated') {
-        throw new BaselineRunConflictError(
-            'This proposal has already been applied or discarded.',
-        );
+    if (runErr || !run) {
+        // 23505 — the partial unique index fired. Another manager is applying
+        // the same team and window right now. A deterministic conflict, which
+        // is the point: two rival writes over the same dates need a human.
+        if ((runErr as { code?: string } | null)?.code === '23505') {
+            throw new BaselineRunConflictError(
+                'Someone else is applying a baseline for this team and period. ' +
+                'Reload before trying again.',
+            );
+        }
+        throw runErr ?? new Error('The baseline run could not be recorded.');
     }
 
-    const r = run as unknown as {
-        organization_id: string; department_id: string; sub_department_id: string;
-        period_start: string; period_end: string; snapshot_version: string;
-    };
-
-    const { data: proposed, error: propErr } = await supabase
-        .from('baseline_ft_proposed_shifts')
-        .select('id, employee_id, user_contract_id, shift_date, start_time, end_time, ' +
-                'unpaid_break_minutes, paid_break_minutes, net_minutes, role_id, ' +
-                'idempotency_key, status')
-        .eq('run_id', runId)
-        .eq('status', 'proposed')
-        .order('shift_date', { ascending: true })
-        .order('idempotency_key', { ascending: true });
-
-    if (propErr) throw propErr;
-
-    const rows = (proposed ?? []) as unknown as Array<Record<string, unknown>>;
+    const runId = String((run as { id: string }).id);
+    const candidates = proposal.ledgers.flatMap(l => l.proposed);
     const skipped: ApplyRunResult['skipped'] = [];
-    let created = 0;
 
-    // Re-read the world ONCE for the whole apply, rather than per candidate.
-    const employeeIds = [...new Set(rows.map(x => String(x.employee_id)))];
+    // ── Candidates already applied by an earlier run ─────────────────────────
+    //
+    // `idempotency_key` is globally unique and carries neither the run nor the
+    // period, so a shift proposed from a Week view and again from a Month view
+    // is one row. An already-APPLIED key is excluded rather than overwritten —
+    // overwriting would discard the link to the shift that was really created.
+    const keys = candidates.map(c => c.idempotencyKey);
+    const appliedKeys = new Set<string>();
+    if (keys.length > 0) {
+        const { data: prior } = await supabase
+            .from('baseline_ft_proposed_shifts')
+            .select('idempotency_key, status')
+            .in('idempotency_key', keys)
+            .eq('status', 'applied');
+        for (const row of (prior ?? []) as unknown as Array<Record<string, unknown>>) {
+            appliedKeys.add(String(row.idempotency_key));
+        }
+    }
+
+    const toWrite = candidates.filter(c => !appliedKeys.has(c.idempotencyKey));
+    for (const c of candidates) {
+        if (appliedKeys.has(c.idempotencyKey)) {
+            skipped.push({
+                idempotencyKey: c.idempotencyKey,
+                reason: `A baseline shift for ${c.shiftDate} has already been created.`,
+            });
+        }
+    }
+
+    if (toWrite.length > 0) {
+        const { error: rowsErr } = await supabase
+            .from('baseline_ft_proposed_shifts')
+            .upsert(toWrite.map(c => ({
+                run_id: runId,
+                employee_id: c.employeeId,
+                user_contract_id: c.userContractId,
+                source_slot_id: c.sourceSlotId,
+                shift_date: c.shiftDate,
+                start_time: c.startTime,
+                end_time: c.endTime,
+                unpaid_break_minutes: c.unpaidBreakMinutes,
+                paid_break_minutes: c.paidBreakMinutes,
+                net_minutes: c.netMinutes,
+                role_id: c.roleId,
+                target_employment_type: 'FT',
+                idempotency_key: c.idempotencyKey,
+                status: 'proposed',
+                skip_reason: null,
+                created_shift_id: null,
+            })) as never, { onConflict: 'idempotency_key' });
+        if (rowsErr) throw rowsErr;
+    }
+
+    // ── Re-read the world once, then create ──────────────────────────────────
+    const employeeIds = [...new Set(toWrite.map(c => c.employeeId))];
     const [{ shiftsByEmployee }, { employees }] = await Promise.all([
-        loadExistingShifts(employeeIds, r.period_start, r.period_end),
-        loadEligibleEmployees(r.sub_department_id, r.period_start, r.period_end),
+        loadExistingShifts(employeeIds, proposal.periodStart, proposal.periodEnd),
+        loadEligibleEmployees(subDepartmentId, proposal.periodStart, proposal.periodEnd),
     ]);
     const stillEligible = new Set(employees.map(e => e.facts.employeeId));
 
-    for (const row of rows) {
-        const key = String(row.idempotency_key);
-        const employeeId = String(row.employee_id);
-        const shiftDate = String(row.shift_date);
+    // Days claimed within THIS apply, so two candidates for one person on one
+    // day cannot both be written — the re-read cannot see a shift this loop
+    // created a moment ago.
+    const claimed = new Set<string>();
+    let created = 0;
 
-        const skip = async (reason: string) => {
-            skipped.push({ idempotencyKey: key, reason });
-            await supabase.from('baseline_ft_proposed_shifts')
-                .update({ status: 'skipped_conflict', skip_reason: reason })
-                .eq('id', String(row.id));
-        };
+    const markSkipped = async (key: string, reason: string) => {
+        skipped.push({ idempotencyKey: key, reason });
+        await supabase.from('baseline_ft_proposed_shifts')
+            .update({ status: 'skipped_conflict', skip_reason: reason })
+            .eq('idempotency_key', key);
+    };
 
-        // Contract ended, employee moved, or they are no longer wholly FT.
-        if (!stillEligible.has(employeeId)) {
-            await skip('The employee is no longer a wholly full-time member of this team.');
+    for (const c of toWrite) {
+        const dayKey = `${c.employeeId}|${c.shiftDate}`;
+
+        if (!stillEligible.has(c.employeeId)) {
+            await markSkipped(c.idempotencyKey,
+                'The employee is no longer a wholly full-time member of this team.');
             continue;
         }
 
-        const existing = shiftsByEmployee.get(employeeId) ?? [];
-        if (existing.some(s => s.date === shiftDate)) {
-            await skip(`A shift was created for ${shiftDate} after this proposal was generated.`);
+        const existing = shiftsByEmployee.get(c.employeeId) ?? [];
+        if (existing.some(s => s.date === c.shiftDate) || claimed.has(dayKey)) {
+            await markSkipped(c.idempotencyKey,
+                `A shift already exists for ${c.shiftDate}.`);
             continue;
         }
 
         let target: { rosterId: string; rosterSubgroupId: string };
         try {
-            target = await rosterSubgroupResolver({
-                subDepartmentId: r.sub_department_id,
-                departmentId: r.department_id,
-                organizationId: r.organization_id,
-                shiftDate,
+            target = await resolveTarget({
+                subDepartmentId, departmentId, organizationId, shiftDate: c.shiftDate,
             });
         } catch (err) {
-            await skip(
-                err instanceof Error
-                    ? err.message
-                    : `No draft roster is available for ${shiftDate}.`,
-            );
+            await markSkipped(c.idempotencyKey,
+                err instanceof Error ? err.message : `No draft roster covers ${c.shiftDate}.`);
             continue;
         }
 
         try {
             // The approved gateway. Runs the shape gate; never a raw insert.
             // `shift_subgroup_id` is the DTO's name for what the row stores as
-            // `roster_subgroup_id`, which is NOT NULL — so every proposed shift
-            // needs a resolved subgroup before it can be written.
+            // `roster_subgroup_id`, which is NOT NULL.
             const createdShift = await shiftsCommands.createShift({
                 roster_id: target.rosterId,
                 shift_subgroup_id: target.rosterSubgroupId,
-                organization_id: r.organization_id,
-                department_id: r.department_id,
-                sub_department_id: r.sub_department_id,
-                shift_date: shiftDate,
-                start_time: String(row.start_time),
-                end_time: String(row.end_time),
-                unpaid_break_minutes: Number(row.unpaid_break_minutes ?? 0),
-                paid_break_minutes: Number(row.paid_break_minutes ?? 0),
-                role_id: String(row.role_id),
+                organization_id: organizationId,
+                department_id: departmentId,
+                sub_department_id: subDepartmentId,
+                shift_date: c.shiftDate,
+                start_time: c.startTime,
+                end_time: c.endTime,
+                unpaid_break_minutes: c.unpaidBreakMinutes,
+                paid_break_minutes: c.paidBreakMinutes,
+                role_id: c.roleId,
                 target_employment_type: 'FT',
-                assigned_employee_id: employeeId,
+                assigned_employee_id: c.employeeId,
                 creation_source: 'baseline_ft',
                 assignment_source: 'baseline_ft',
             });
 
             await supabase.from('baseline_ft_proposed_shifts')
                 .update({ status: 'applied', created_shift_id: createdShift?.id ?? null })
-                .eq('id', String(row.id));
+                .eq('idempotency_key', c.idempotencyKey);
 
             if (createdShift?.id) {
                 await supabase.from('shifts')
@@ -572,11 +631,13 @@ export async function applyBaselineRun(
                     .eq('id', createdShift.id);
             }
 
+            claimed.add(dayKey);
             created++;
         } catch (err) {
             // A compliance rejection at the gate is a legitimate outcome, not a
             // crash: the world changed and this candidate no longer fits.
-            await skip(err instanceof Error ? err.message : 'The shift could not be created.');
+            await markSkipped(c.idempotencyKey,
+                err instanceof Error ? err.message : 'The shift could not be created.');
         }
     }
 

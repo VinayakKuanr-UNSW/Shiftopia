@@ -34,7 +34,7 @@ function slot(
     const gross = (eh * 60 + em) - (sh * 60 + sm);
     const net = gross - unpaidBreak;
     return {
-        templateShiftId: `ts-${day}`,
+        sourceSlotId: `ts-${day}`,
         dayOfWeek: day,
         startTime: start,
         endTime: end,
@@ -47,7 +47,7 @@ function slot(
 }
 
 function pattern(slots: PatternSlot[]): BaselinePattern {
-    return { templateId: 'tmpl-1', subDepartmentId: 'sub-1', slots };
+    return { employeeId: 'emp-1', userContractId: 'uc-1', subDepartmentId: 'sub-1', slots };
 }
 
 const FT_FACTS = { contractedWeeklyHours: 38, cycleWeeks: 4 as const, roleId: ROLE };
@@ -190,8 +190,8 @@ describe('validatePattern — structural gates', () => {
 
     it('BLOCKS two shifts on one weekday — full-time may not work a split shift', () => {
         const p = pattern([
-            { ...slot(1, '06:00', '10:00', 0), templateShiftId: 'ts-am', sortOrder: 1 },
-            { ...slot(1, '16:00', '20:00', 0), templateShiftId: 'ts-pm', sortOrder: 2 },
+            { ...slot(1, '06:00', '10:00', 0), sourceSlotId: 'ts-am', sortOrder: 1 },
+            { ...slot(1, '16:00', '20:00', 0), sourceSlotId: 'ts-pm', sortOrder: 2 },
         ]);
 
         const findings = validatePattern(p, FT_FACTS);

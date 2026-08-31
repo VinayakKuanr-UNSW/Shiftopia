@@ -141,3 +141,65 @@ async function resolveSubgroup(rosterId: string): Promise<string> {
     }
     return String(sub.id);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Pre-flight
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export interface RosterCoverage {
+    /** Dates in the window with a draft, unlocked roster — where Apply can write. */
+    writable: Set<string>;
+    /** Dates whose only covering roster is published or locked (cl 38.2). */
+    lockedOut: Set<string>;
+}
+
+/**
+ * Which dates in a window Apply could actually write into.
+ *
+ * Exists so the answer arrives BEFORE the button rather than as forty skip
+ * reasons after it. `resolveRosterTarget` refuses a missing or published
+ * roster — correctly — but discovering that one candidate at a time, after
+ * committing, is the worst moment to learn it. Free date navigation makes
+ * landing on an uncovered window routine rather than exceptional.
+ *
+ * Read-only, and never creates anything.
+ */
+export async function loadRosterCoverage(
+    subDepartmentId: string,
+    fromDate: string,
+    toDate: string,
+): Promise<RosterCoverage> {
+    const { data, error } = await supabase
+        .from('rosters')
+        .select('id, status, is_locked, start_date, end_date')
+        .eq('sub_department_id', subDepartmentId)
+        .lte('start_date', toDate)
+        .gte('end_date', fromDate);
+
+    if (error) throw new Error(`Could not read rosters: ${error.message}`);
+
+    const writable = new Set<string>();
+    const covered = new Set<string>();
+
+    for (const row of (data ?? []) as unknown as Array<Record<string, unknown>>) {
+        const isDraft = !row.is_locked && String(row.status ?? '') === 'draft';
+        // Iterate the intersection of the roster and the window, so a roster
+        // spanning a year does not expand into a year of dates.
+        const from = String(row.start_date) > fromDate ? String(row.start_date) : fromDate;
+        const to = String(row.end_date) < toDate ? String(row.end_date) : toDate;
+
+        for (let d = new Date(`${from}T00:00:00Z`);
+             d <= new Date(`${to}T00:00:00Z`);
+             d = new Date(d.getTime() + 86_400_000)) {
+            const date = d.toISOString().slice(0, 10);
+            covered.add(date);
+            if (isDraft) writable.add(date);
+        }
+    }
+
+    // Covered by SOMETHING, but not by anything writable. A different problem
+    // from "no roster at all", and a different remedy — one needs a roster
+    // created, the other needs 48 hours' notice of a change (cl 38.2).
+    const lockedOut = new Set([...covered].filter(d => !writable.has(d)));
+    return { writable, lockedOut };
+}

@@ -7,29 +7,43 @@
  * thirteen-plus pages silently show one organisation's data to someone who can
  * see several — and a feature that WRITES shifts is the worst place to repeat
  * it. An unpicked sub-department yields no query, not a guess.
+ *
+ * THE WORLD IS A QUERY; THE PROPOSAL IS NOT. `useBaselineWorld` reads contracts,
+ * shifts, leave and holidays for a team and a period. Computing what to propose
+ * from that is pure and synchronous, so it lives in a `useMemo` on the page and
+ * re-runs on every keystroke without touching the network.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 import {
-    applyBaselineRun,
-    generateBaselineRun,
+    applyBaseline,
+    loadBaselineWorld,
+    type ApplyBaselineInput,
     type ApplyRunResult,
-    type GenerateRunInput,
-    type GenerateRunResult,
+    type BaselineWorld,
 } from '../api/baselineFt.commands';
-import { createBaselinePattern, type CreatePatternInput, type CreatePatternResult } from '../api/createPattern';
+import {
+    loadBaselinePatterns,
+    saveBaselinePatterns,
+    type SaveBaselinePatternsInput,
+    type SaveBaselinePatternsResult,
+} from '../api/baselineFtPatterns';
+import { loadRosterCoverage } from '../api/rosterTarget';
 import { DEFAULT_WEEKLY_HOURS } from '../domain/requirementCalculator';
+import type { PatternRow } from '../domain/patternRow';
 import { resolveComplianceBasis } from '@/modules/availability/domain/contract-basis';
 
 export const baselineFtKeys = {
     all: ['baseline-ft'] as const,
     subDepartments: (subdeptIds: readonly string[]) =>
         [...baselineFtKeys.all, 'sub-departments', [...subdeptIds].sort()] as const,
-    templates: (subDepartmentId: string | null) =>
-        [...baselineFtKeys.all, 'templates', subDepartmentId] as const,
-    liveRun: (subDepartmentId: string | null, start: string, end: string) =>
-        [...baselineFtKeys.all, 'live-run', subDepartmentId, start, end] as const,
+    patterns: (subDepartmentId: string | null) =>
+        [...baselineFtKeys.all, 'patterns', subDepartmentId] as const,
+    world: (subDepartmentId: string | null, start: string, end: string) =>
+        [...baselineFtKeys.all, 'world', subDepartmentId, start, end] as const,
+    coverage: (subDepartmentId: string | null, start: string, end: string) =>
+        [...baselineFtKeys.all, 'coverage', subDepartmentId, start, end] as const,
     ftProfile: (subDepartmentId: string | null) =>
         [...baselineFtKeys.all, 'ft-profile', subDepartmentId] as const,
 };
@@ -43,20 +57,19 @@ export interface FtProfile {
     employeeCount: number;
     /** Contracted weekly hours they share, or the 38h default when none say. */
     weeklyHours: number;
-    /** True when they do NOT all share one figure — the designer can only use one. */
+    /** True when they do NOT all share one figure. */
     weeklyHoursVaries: boolean;
     cycleWeeks: 1 | 2 | 3 | 4;
-    /** Roles those employees actually hold. A pattern naming any other role is
-     *  refused by BFT_PATTERN_ROLE_MISMATCH, so offering more would be a trap. */
     roles: Array<{ id: string; name: string }>;
 }
 
 /**
- * What the pattern designer needs to derive a compliant day length.
+ * What seeding a new row needs: the contracted quota a day length is derived
+ * from.
  *
  * Reads the CONTRACTS rather than asking the author, because the day length is
  * a consequence of the weekly quota and the number of days, and a human typing
- * it has no margin: 38 / 5 is 7.6h exactly, which is also the daily floor.
+ * it has no margin: 38 ÷ 5 is 7.6h exactly, which is also the daily floor.
  */
 export function useFtProfile(subDepartmentId: string | null) {
     return useQuery({
@@ -113,16 +126,6 @@ export function useFtProfile(subDepartmentId: string | null) {
     });
 }
 
-export function useCreateBaselinePattern() {
-    const qc = useQueryClient();
-    return useMutation<CreatePatternResult, Error, CreatePatternInput>({
-        mutationFn: input => createBaselinePattern(input),
-        onSuccess: () => {
-            void qc.invalidateQueries({ queryKey: baselineFtKeys.all });
-        },
-    });
-}
-
 /* ────────────────────────────────────────────────────────────────────────────
    Sub-departments the manager may roster
    ──────────────────────────────────────────────────────────────────────────── */
@@ -164,115 +167,86 @@ export function useRosterableSubDepartments(subdeptIds: readonly string[]) {
    Patterns
    ──────────────────────────────────────────────────────────────────────────── */
 
-export interface PatternOption {
-    id: string;
-    name: string;
-    /** Full-time shifts that carry a weekday — the ones a baseline can use. */
-    usableShifts: number;
-    /** Shifts with `day_of_week = NULL`. A template is unusable while any exist. */
-    undatedShifts: number;
-    /** Non-FT shifts, which are ignored rather than disqualifying. */
-    nonFtShifts: number;
-    eligible: boolean;
-    /** Why this template cannot be used, in the words the picker shows. */
-    reason: string | null;
+/**
+ * The saved patterns for a team, grouped into table rows.
+ *
+ * NOT keyed on the period: a standing pattern is the same in every window, so
+ * navigating from one week to the next must not refetch it — and must not
+ * discard unsaved edits by replacing the rows underneath them.
+ */
+export function useBaselinePatternRows(subDepartmentId: string | null) {
+    return useQuery({
+        queryKey: baselineFtKeys.patterns(subDepartmentId),
+        enabled: Boolean(subDepartmentId),
+        queryFn: async (): Promise<PatternRow[]> => {
+            const { rows, findings } = await loadBaselinePatterns(subDepartmentId!);
+            const blocking = findings.find(f => f.severity === 'BLOCKING');
+            if (blocking) throw new Error(blocking.plain);
+            return rows;
+        },
+    });
 }
 
-/**
- * Templates for a sub-department, each carrying whether it can serve as a
- * baseline pattern.
- *
- * Eligibility is computed HERE rather than discovered at Generate, because a
- * disabled option with a stated reason is a fixable problem and a missing
- * option is a support ticket. Every `template_shifts` row in production
- * currently has `day_of_week = NULL`, so without this the picker would look
- * full and every run would fail.
- */
-export function useBaselinePatterns(subDepartmentId: string | null) {
-    return useQuery({
-        queryKey: baselineFtKeys.templates(subDepartmentId),
-        enabled: Boolean(subDepartmentId),
-        queryFn: async (): Promise<PatternOption[]> => {
-            const { data, error } = await supabase
-                .from('roster_templates')
-                .select(`
-                    id, name, is_active,
-                    template_groups (
-                        template_subgroups (
-                            template_shifts ( id, day_of_week, target_employment_type )
-                        )
-                    )
-                `)
-                .eq('sub_department_id', subDepartmentId!)
-                .order('name');
-
-            if (error) throw error;
-
-            return (data ?? []).map(tpl => {
-                let usable = 0, undated = 0, nonFt = 0;
-
-                const groups = (tpl as { template_groups?: unknown[] }).template_groups ?? [];
-                for (const g of groups) {
-                    const subgroups =
-                        (g as { template_subgroups?: unknown[] }).template_subgroups ?? [];
-                    for (const sg of subgroups) {
-                        const shifts =
-                            (sg as { template_shifts?: Record<string, unknown>[] })
-                                .template_shifts ?? [];
-                        for (const s of shifts) {
-                            if (s.day_of_week === null || s.day_of_week === undefined) undated++;
-                            else if (s.target_employment_type !== 'FT') nonFt++;
-                            else usable++;
-                        }
-                    }
-                }
-
-                const reason =
-                    undated > 0
-                        ? `${undated} shift${undated === 1 ? '' : 's'} ${undated === 1 ? 'has' : 'have'} no day of the week set`
-                        : usable === 0
-                            ? 'no full-time shifts'
-                            : null;
-
-                return {
-                    id: String(tpl.id),
-                    name: String(tpl.name ?? ''),
-                    usableShifts: usable,
-                    undatedShifts: undated,
-                    nonFtShifts: nonFt,
-                    eligible: reason === null,
-                    reason,
-                };
-            });
+export function useSaveBaselinePatterns() {
+    const qc = useQueryClient();
+    return useMutation<SaveBaselinePatternsResult, Error, SaveBaselinePatternsInput>({
+        mutationFn: input => saveBaselinePatterns(input),
+        onSuccess: (_res, vars) => {
+            void qc.invalidateQueries({ queryKey: baselineFtKeys.patterns(vars.subDepartmentId) });
         },
     });
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Generate / Apply
+   The world, and applying against it
    ──────────────────────────────────────────────────────────────────────────── */
 
-export function useGenerateBaseline() {
-    const qc = useQueryClient();
-    return useMutation<GenerateRunResult, Error, GenerateRunInput>({
-        mutationFn: input => generateBaselineRun(input),
-        onSuccess: () => {
-            void qc.invalidateQueries({ queryKey: baselineFtKeys.all });
-        },
+/**
+ * Contracts, existing shifts, leave and public holidays for a team and period.
+ *
+ * `keepPreviousData` so stepping from one week to the next keeps the table on
+ * screen while the next window loads. A table that empties and refills on every
+ * arrow press cannot be read, let alone edited.
+ */
+export function useBaselineWorld(
+    subDepartmentId: string | null,
+    periodStart: string,
+    periodEnd: string,
+) {
+    return useQuery({
+        queryKey: baselineFtKeys.world(subDepartmentId, periodStart, periodEnd),
+        enabled: Boolean(subDepartmentId && periodStart && periodEnd),
+        placeholderData: keepPreviousData,
+        queryFn: (): Promise<BaselineWorld> => loadBaselineWorld({
+            subDepartmentId: subDepartmentId!, periodStart, periodEnd,
+        }),
     });
 }
 
-export interface ApplyBaselineInput {
-    runId: string;
-    actorId: string;
-    resolveTarget: Parameters<typeof applyBaselineRun>[2];
+/**
+ * Which dates in the window Apply could actually write into.
+ *
+ * Read up front so "three of these days have no draft roster" appears above the
+ * button rather than as three skip reasons after it. With free date navigation
+ * a manager will routinely land on a window the rosters do not cover.
+ */
+export function useRosterCoverage(
+    subDepartmentId: string | null,
+    periodStart: string,
+    periodEnd: string,
+) {
+    return useQuery({
+        queryKey: baselineFtKeys.coverage(subDepartmentId, periodStart, periodEnd),
+        enabled: Boolean(subDepartmentId && periodStart && periodEnd),
+        placeholderData: keepPreviousData,
+        queryFn: () => loadRosterCoverage(subDepartmentId!, periodStart, periodEnd),
+    });
 }
 
 export function useApplyBaseline() {
     const qc = useQueryClient();
     return useMutation<ApplyRunResult, Error, ApplyBaselineInput>({
-        mutationFn: ({ runId, actorId, resolveTarget }) =>
-            applyBaselineRun(runId, actorId, resolveTarget),
+        mutationFn: input => applyBaseline(input),
         onSuccess: () => {
             // Apply writes real shifts, so every roster view is now stale.
             void qc.invalidateQueries({ queryKey: baselineFtKeys.all });

@@ -33,7 +33,7 @@ function candidate(date: string, start: string, end: string, over: Partial<Candi
     return {
         employeeId: 'emp-1',
         userContractId: 'uc-1',
-        templateShiftId: `ts-${date}`,
+        sourceSlotId: `ts-${date}`,
         shiftDate: date,
         startTime: start,
         endTime: end,

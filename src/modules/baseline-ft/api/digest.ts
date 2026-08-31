@@ -80,8 +80,13 @@ export interface InputDigestParts {
     subDepartmentId: string;
     periodStart: string;
     periodEnd: string;
-    templateId: string;
-    /** Template shift rows, in the shape the pattern was built from. */
+    /**
+     * The `baseline_ft_patterns` rows the proposal was built from.
+     *
+     * There is no `templateId` any more: patterns are per-employee, so the
+     * pattern IS these rows rather than a pointer to a shared template. Sorting
+     * by id below is what keeps two identical reads from digesting differently.
+     */
     patternSlots: ReadonlyArray<Record<string, unknown>>;
     /** One entry per eligible employee: contract facts that steer the result. */
     employees: ReadonlyArray<Record<string, unknown>>;
@@ -111,7 +116,6 @@ export function inputDigest(parts: InputDigestParts): string {
         subDepartmentId: parts.subDepartmentId,
         periodStart: parts.periodStart,
         periodEnd: parts.periodEnd,
-        templateId: parts.templateId,
         patternSlots: [...parts.patternSlots].sort(byId),
         employees: [...parts.employees].sort(byId),
         snapshotVersion: parts.snapshotVersion,

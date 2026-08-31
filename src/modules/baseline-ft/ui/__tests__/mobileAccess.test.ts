@@ -31,22 +31,34 @@ describe('Baseline FT on mobile', () => {
         expect(sidebar).toContain('to="/baseline-ft"');
     });
 
-    it('the ledger carries a phone composition, not just a scrolling table', () => {
-        const ledger = read('src/modules/baseline-ft/ui/components/BaselineLedger.tsx');
+    it('the pattern table carries a phone composition, not just a scrolling table', () => {
+        const table = read('src/modules/baseline-ft/ui/components/BaselinePatternTable.tsx');
 
         // Cards below md, table from md up. Both halves must exist: a table
         // hidden on mobile with nothing in its place is a blank screen, and
         // cards with no `md:hidden` would double up on desktop.
-        expect(ledger).toContain('md:hidden');
-        expect(ledger).toContain('hidden md:block');
+        //
+        // Eleven columns is well past what a 430px viewport can hold, so this
+        // is the page's load-bearing responsive decision, not a nicety.
+        expect(table).toContain('md:hidden');
+        expect(table).toContain('hidden overflow-x-auto rounded-lg border bg-card md:block');
     });
 
-    it('the designer dialog fits a short viewport', () => {
-        const dialog = read('src/modules/baseline-ft/ui/components/PatternDesignerDialog.tsx');
+    it('every editable control in the table is reachable and labelled', () => {
+        const table = read('src/modules/baseline-ft/ui/components/BaselinePatternTable.tsx');
 
-        // Without a max height the footer buttons land below the fold on a
-        // phone in landscape, with nothing indicating they exist.
-        expect(dialog).toMatch(/max-h-\[90dvh\]/);
-        expect(dialog).toContain('overflow-y-auto');
+        // The day toggles are icon-sized buttons showing a single letter, so
+        // "M" is ambiguous between Monday and a truncated month. Each carries
+        // its full day name for assistive technology.
+        expect(table).toContain('aria-label={DAY_LONG[d]}');
+        expect(table).toContain('aria-pressed={on}');
+
+        // Time inputs sit in table cells with no visible label on desktop —
+        // a column header is not programmatically associated with the cells
+        // beneath it, so each input names itself and its owner. Asserted as
+        // the two halves that make it true: the wiring, and both call sites.
+        expect(table).toContain('aria-label={label}');
+        expect(table).toContain('label={`Start time for ${emp.name}`}');
+        expect(table).toContain('label={`Finish time for ${emp.name}`}');
     });
 });

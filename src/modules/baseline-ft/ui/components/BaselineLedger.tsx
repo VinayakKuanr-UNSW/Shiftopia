@@ -1,6 +1,11 @@
 /**
- * The review ledger — what each full-time employee is owed, what already
- * exists, and what the run proposes to do about the difference.
+ * The reconciliation — what each full-time employee is owed, what already
+ * exists, and what the proposal does about the difference.
+ *
+ * This used to BE the screen. It is now the expanded row of the pattern table:
+ * the summary band still sits above it, and `EmployeeDetail` opens underneath
+ * whichever person a manager is asking about. The arithmetic did not change,
+ * only where it is read.
  *
  * THE VARIANCE COLUMN CARRIES THE PRODUCT'S PHILOSOPHY. A non-zero variance is
  * a CORRECT answer, not a failure: cl 35.1(c) makes a short full-time day
@@ -15,9 +20,9 @@
  */
 
 import React from 'react';
-import { ChevronRight, Users, CalendarClock, Plane, CalendarPlus, Scale } from 'lucide-react';
+import { Users, CalendarClock, Plane, CalendarPlus, Scale } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { text, touch } from '@/modules/core/ui/typography';
+import { text } from '@/modules/core/ui/typography';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -46,9 +51,9 @@ export function fmtHm(hours: number): string {
 }
 
 /** Below this, a variance is float noise from dividing minutes by 60. */
-const VARIANCE_EPSILON = 0.05;
+export const VARIANCE_EPSILON = 0.05;
 
-type LedgerStatus = 'satisfied' | 'variance' | 'over' | 'blocked';
+export type LedgerStatus = 'satisfied' | 'variance' | 'over' | 'blocked';
 
 export function statusOf(l: EmployeeLedger): LedgerStatus {
     if (l.findings.some(f => f.severity === 'BLOCKING')) return 'blocked';
@@ -57,7 +62,7 @@ export function statusOf(l: EmployeeLedger): LedgerStatus {
     return 'satisfied';
 }
 
-const STATUS_CHIP: Record<LedgerStatus, { label: string; className: string }> = {
+export const STATUS_CHIP: Record<LedgerStatus, { label: string; className: string }> = {
     satisfied: {
         label: 'Fully scheduled',
         className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
@@ -125,7 +130,7 @@ export const BaselineSummary: React.FC<{ proposal: BaselineProposal }> = ({ prop
    Expanded detail
    ──────────────────────────────────────────────────────────────────────────── */
 
-const EmployeeDetail: React.FC<{ ledger: EmployeeLedger }> = ({ ledger }) => {
+export const EmployeeDetail: React.FC<{ ledger: EmployeeLedger }> = ({ ledger }) => {
     const status = statusOf(ledger);
 
     return (
@@ -251,198 +256,5 @@ const EmployeeDetail: React.FC<{ ledger: EmployeeLedger }> = ({ ledger }) => {
                 </section>
             )}
         </div>
-    );
-};
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Table
-   ──────────────────────────────────────────────────────────────────────────── */
-
-/**
- * The phone composition.
- *
- * An eight-column ledger cannot become a table on a 430px screen without
- * two-dimensional scrolling, which WCAG SC 1.4.10 (Reflow) forbids and which is
- * miserable to use besides. So the shape changes rather than shrinking: one
- * card per employee, the four figures that answer "what happens to this person"
- * on a 2x2 grid, and the same detail behind the same disclosure.
- *
- * This is the composition swap `/team-availability` already makes for its
- * people x days matrix, for the same reason.
- */
-const LedgerCards: React.FC<{
-    proposal: BaselineProposal;
-    expanded: string | null;
-    setExpanded: (id: string | null) => void;
-}> = ({ proposal, expanded, setExpanded }) => (
-    <ul className="space-y-2 md:hidden">
-        {proposal.ledgers.map(l => {
-            const status = statusOf(l);
-            const chip = STATUS_CHIP[status];
-            const isOpen = expanded === l.employeeId;
-
-            return (
-                <li key={l.employeeId} className="rounded-lg border bg-card overflow-hidden">
-                    <button
-                        type="button"
-                        aria-expanded={isOpen}
-                        onClick={() => setExpanded(isOpen ? null : l.employeeId)}
-                        className={cn(
-                            touch.targetY,
-                            'flex w-full items-start gap-2 px-3 py-3 text-left',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        )}
-                    >
-                        <ChevronRight
-                            className={cn(
-                                'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-                                isOpen && 'rotate-90',
-                            )}
-                            aria-hidden="true"
-                        />
-                        <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                                <span className={cn(text.body, 'truncate')}>{l.name}</span>
-                                <Badge variant="outline" className={cn(text.label, 'shrink-0', chip.className)}>
-                                    {chip.label}
-                                </Badge>
-                            </div>
-
-                            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-                                {([
-                                    ['Required', fmtHours(l.requiredHours), false],
-                                    ['Existing', fmtHours(l.existingHours), false],
-                                    ['Proposed', fmtHours(l.proposedHours), false],
-                                    [
-                                        'Variance',
-                                        Math.abs(l.varianceHours) <= VARIANCE_EPSILON
-                                            ? '—' : fmtHm(l.varianceHours),
-                                        status === 'over',
-                                    ],
-                                ] as const).map(([label, value, danger]) => (
-                                    <div key={label} className="flex items-baseline justify-between gap-2">
-                                        <dt className={text.subtle}>{label}</dt>
-                                        <dd className={cn(text.metric, danger && 'text-destructive')}>
-                                            {value}
-                                        </dd>
-                                    </div>
-                                ))}
-                            </dl>
-                        </div>
-                    </button>
-
-                    {isOpen && <EmployeeDetail ledger={l} />}
-                </li>
-            );
-        })}
-    </ul>
-);
-
-export const BaselineLedgerTable: React.FC<{ proposal: BaselineProposal }> = ({ proposal }) => {
-    const [expanded, setExpanded] = React.useState<string | null>(null);
-
-    if (proposal.ledgers.length === 0) return null;
-
-    return (
-        <>
-        <LedgerCards proposal={proposal} expanded={expanded} setExpanded={setExpanded} />
-
-        <div className="hidden md:block overflow-x-auto rounded-lg border bg-card">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead className="w-8" />
-                        <TableHead>Employee</TableHead>
-                        <TableHead className="text-right">Required</TableHead>
-                        <TableHead className="text-right">Existing</TableHead>
-                        <TableHead className="text-right">Leave</TableHead>
-                        <TableHead className="text-right">Proposed</TableHead>
-                        <TableHead className="text-right">Variance</TableHead>
-                        <TableHead>Status</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {proposal.ledgers.map(l => {
-                        const status = statusOf(l);
-                        const chip = STATUS_CHIP[status];
-                        const isOpen = expanded === l.employeeId;
-
-                        return (
-                            <React.Fragment key={l.employeeId}>
-                                <TableRow
-                                    className="cursor-pointer"
-                                    onClick={() => setExpanded(isOpen ? null : l.employeeId)}
-                                >
-                                    <TableCell className="pr-0">
-                                        <button
-                                            type="button"
-                                            aria-expanded={isOpen}
-                                            aria-label={`${isOpen ? 'Hide' : 'Show'} detail for ${l.name}`}
-                                            className={cn(
-                                                touch.target,
-                                                'flex items-center justify-center rounded',
-                                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                            )}
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                setExpanded(isOpen ? null : l.employeeId);
-                                            }}
-                                        >
-                                            <ChevronRight
-                                                className={cn(
-                                                    'h-4 w-4 text-muted-foreground transition-transform',
-                                                    isOpen && 'rotate-90',
-                                                )}
-                                                aria-hidden="true"
-                                            />
-                                        </button>
-                                    </TableCell>
-                                    <TableCell className={text.body}>{l.name}</TableCell>
-                                    <TableCell className={cn(text.metric, 'text-right')}>
-                                        {fmtHours(l.requiredHours)}
-                                    </TableCell>
-                                    <TableCell className={cn(text.metric, 'text-right')}>
-                                        {fmtHours(l.existingHours)}
-                                    </TableCell>
-                                    <TableCell className={cn(text.metric, 'text-right')}>
-                                        {fmtHours(l.leaveHours)}
-                                    </TableCell>
-                                    <TableCell className={cn(text.metric, 'text-right')}>
-                                        {fmtHours(l.proposedHours)}
-                                    </TableCell>
-                                    <TableCell
-                                        className={cn(
-                                            text.metric, 'text-right',
-                                            status === 'over' && 'text-destructive',
-                                        )}
-                                    >
-                                        {Math.abs(l.varianceHours) <= VARIANCE_EPSILON
-                                            ? '—'
-                                            : fmtHm(l.varianceHours)}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant="outline"
-                                            className={cn(text.label, chip.className)}
-                                        >
-                                            {chip.label}
-                                        </Badge>
-                                    </TableCell>
-                                </TableRow>
-
-                                {isOpen && (
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableCell colSpan={8} className="p-0">
-                                            <EmployeeDetail ledger={l} />
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </React.Fragment>
-                        );
-                    })}
-                </TableBody>
-            </Table>
-        </div>
-        </>
     );
 };

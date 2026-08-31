@@ -62,10 +62,13 @@ function h(hours: number): string {
 /**
  * Validate a pattern against the contract it will be generated for.
  *
- * Returns findings. Any BLOCKING finding means the run must not proceed — the
- * pattern is common to every employee in the sub-department, so a pattern-level
- * failure is the one case that aborts wholesale rather than dropping a single
- * candidate.
+ * Returns findings. A BLOCKING finding now drops ONE EMPLOYEE rather than the
+ * whole run. That changed with the pattern itself: when a single template was
+ * shared across the sub-department, a pattern-level failure meant nothing
+ * lawful could be generated for anybody, so aborting wholesale was correct.
+ * Patterns are per-employee now, so one person's unlawful pattern says nothing
+ * about their colleagues' — and discarding twenty valid rosters because of one
+ * is exactly the behaviour this feature exists to avoid.
  */
 export function validatePattern(
     pattern: BaselinePattern,
@@ -79,9 +82,9 @@ export function validatePattern(
         findings.push({
             severity: 'BLOCKING',
             code: 'BFT_PATTERN_EMPTY',
-            plain: 'This template has no shifts, so there is no working pattern to generate from.',
+            plain: 'This employee has no working days set, so there is no pattern to generate from.',
             overridable: false,
-            calculation: { template_id: pattern.templateId },
+            calculation: { employee_id: pattern.employeeId },
         });
         return findings;
     }
@@ -99,13 +102,12 @@ export function validatePattern(
             severity: 'BLOCKING',
             code: 'BFT_PATTERN_NO_WEEKDAY',
             plain:
-                `${undated.length} of ${pattern.slots.length} shifts in this template have no day ` +
-                `of the week set, so the template describes shift shapes but not a weekly pattern. ` +
-                `Set a day on each shift before using it as a baseline.`,
+                `${undated.length} of ${pattern.slots.length} lines in this pattern have no day ` +
+                `of the week set, so it describes shift shapes but not a weekly pattern.`,
             overridable: false,
             calculation: {
-                template_id: pattern.templateId,
-                shifts_without_weekday: undated.map(s => s.templateShiftId),
+                employee_id: pattern.employeeId,
+                shifts_without_weekday: undated.map(s => s.sourceSlotId),
                 total_shifts: pattern.slots.length,
             },
         });
@@ -137,7 +139,7 @@ export function validatePattern(
                     `${DAY_NAMES[slot.dayOfWeek]} ${slot.startTime}–${slot.endTime}: ${hit.summary}.`,
                 clause: extractClause(hit.details),
                 overridable: !hit.blocking,
-                calculation: { ...hit.calculation, template_shift_id: slot.templateShiftId },
+                calculation: { ...hit.calculation, source_slot_id: slot.sourceSlotId },
             });
         }
     }

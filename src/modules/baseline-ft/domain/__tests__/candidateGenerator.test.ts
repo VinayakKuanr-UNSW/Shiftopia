@@ -18,7 +18,6 @@ const SCOPE: RunScope = {
     subDepartmentId: 'sub-1',
     periodStart: '2024-07-15',
     periodEnd: '2024-08-11',
-    templateId: 'tmpl-1',
 };
 
 const FACTS: EmployeeContractFacts = {
@@ -35,7 +34,7 @@ const FACTS: EmployeeContractFacts = {
 
 function slot(day: IsoWeekday, netMinutes: number, sortOrder = day): PatternSlot {
     return {
-        templateShiftId: `ts-${day}`,
+        sourceSlotId: `ts-${day}`,
         dayOfWeek: day,
         startTime: '08:00',
         endTime: '16:06',
@@ -50,7 +49,8 @@ function slot(day: IsoWeekday, netMinutes: number, sortOrder = day): PatternSlot
 /** Mon–Fri at the given net minutes per day. */
 function weekPattern(netMinutes: number): BaselinePattern {
     return {
-        templateId: 'tmpl-1',
+        employeeId: 'emp-1',
+        userContractId: 'uc-1',
         subDepartmentId: 'sub-1',
         slots: ([1, 2, 3, 4, 5] as IsoWeekday[]).map(d => slot(d, netMinutes)),
     };
@@ -226,8 +226,8 @@ describe('determinism', () => {
         const forward: BaselinePattern = {
             ...weekPattern(456),
             slots: [
-                { ...slot(1, 456), templateShiftId: 'ts-b', sortOrder: 1 },
-                { ...slot(1, 456), templateShiftId: 'ts-a', sortOrder: 1 },
+                { ...slot(1, 456), sourceSlotId: 'ts-b', sortOrder: 1 },
+                { ...slot(1, 456), sourceSlotId: 'ts-a', sortOrder: 1 },
             ],
         };
         const reversed: BaselinePattern = { ...forward, slots: [...forward.slots].reverse() };
@@ -240,8 +240,8 @@ describe('determinism', () => {
         const a = go(forward);
         const b = go(reversed);
 
-        expect(a.candidates.map(c => c.templateShiftId)).toEqual(['ts-a']);
-        expect(b.candidates.map(c => c.templateShiftId)).toEqual(['ts-a']);
+        expect(a.candidates.map(c => c.sourceSlotId)).toEqual(['ts-a']);
+        expect(b.candidates.map(c => c.sourceSlotId)).toEqual(['ts-a']);
         expect(a.findings.some(f => f.code === 'BFT_DAY_ALREADY_ROSTERED')).toBe(true);
     });
 });
@@ -255,7 +255,29 @@ describe('idempotency key', () => {
 
         expect(buildIdempotencyKey(SCOPE, args)).toBe(buildIdempotencyKey(SCOPE, args));
         expect(buildIdempotencyKey(SCOPE, args))
-            .toBe('bft:sub-1:2024-07-15_2024-08-11:tmpl-1:emp-1:2024-07-15:08:00-16:06:role-1');
+            .toBe('bft:sub-1:emp-1:2024-07-15:08:00-16:06:role-1');
+    });
+
+    it('is the SAME key from a Week view and from a Month view', () => {
+        // The review screen navigates by Day / 3-Day / Week / Month, so the
+        // same Tuesday shift is reached through many different windows. While
+        // the period was part of the key, each window produced a different one
+        // and the shift would have been created once per zoom level.
+        //
+        // `baseline_ft_proposed_shifts.idempotency_key` is globally unique, so
+        // this is the assertion standing between a manager clicking between
+        // views and a duplicate roster.
+        const shift = {
+            employeeId: 'emp-1', shiftDate: '2024-07-16',
+            startTime: '08:00', endTime: '16:06', roleId: ROLE,
+        };
+
+        const week  = { subDepartmentId: 'sub-1', periodStart: '2024-07-15', periodEnd: '2024-07-21' };
+        const month = { subDepartmentId: 'sub-1', periodStart: '2024-07-01', periodEnd: '2024-07-31' };
+        const day   = { subDepartmentId: 'sub-1', periodStart: '2024-07-16', periodEnd: '2024-07-16' };
+
+        expect(buildIdempotencyKey(week, shift)).toBe(buildIdempotencyKey(month, shift));
+        expect(buildIdempotencyKey(week, shift)).toBe(buildIdempotencyKey(day, shift));
     });
 
     it('differs when any component of the shift differs', () => {
@@ -269,7 +291,7 @@ describe('idempotency key', () => {
             buildIdempotencyKey(SCOPE, { ...base, shiftDate: '2024-07-16' }),
             buildIdempotencyKey(SCOPE, { ...base, endTime: '17:00' }),
             buildIdempotencyKey(SCOPE, { ...base, roleId: 'role-2' }),
-            buildIdempotencyKey({ ...SCOPE, templateId: 'tmpl-2' }, base),
+            buildIdempotencyKey({ subDepartmentId: 'sub-2' }, base),
         ]);
 
         expect(keys.size).toBe(6);

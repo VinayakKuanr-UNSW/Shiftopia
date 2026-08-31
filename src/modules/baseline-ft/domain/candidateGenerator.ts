@@ -54,7 +54,6 @@ export interface RunScope {
     subDepartmentId: string;
     periodStart: string;
     periodEnd: string;
-    templateId: string;
 }
 
 export interface GenerateResult {
@@ -68,16 +67,27 @@ export interface GenerateResult {
  * A hash cannot be debugged from a database row, and the uniqueness needed here
  * is exact rather than probabilistic — a collision would silently drop a real
  * shift. The components are exactly the facts that make two candidates "the
- * same shift": who, when, what shape, what role, within which scope.
+ * same shift": who, when, what shape, what role, in which team.
+ *
+ * IT CARRIES NEITHER THE RUN NOR THE PERIOD, and both omissions are deliberate.
+ *
+ * The run, because keying on it would let Generate → Apply → Generate → Apply
+ * write the same shift twice: the second run has a different id, so the second
+ * key would be new.
+ *
+ * The period, because the review screen now navigates by Day / 3-Day / Week /
+ * Month. The same Tuesday shift reached from a Week view and from a Month view
+ * would otherwise produce two different keys and be created twice — the window
+ * a manager happened to be looking through is not part of a shift's identity.
+ * That was a latent bug when the period was a typed-in constant; free date
+ * navigation makes it a routine one.
  */
-export function buildIdempotencyKey(scope: RunScope, c: {
+export function buildIdempotencyKey(scope: Pick<RunScope, 'subDepartmentId'>, c: {
     employeeId: string; shiftDate: string; startTime: string; endTime: string; roleId: string;
 }): string {
     return [
         'bft',
         scope.subDepartmentId,
-        `${scope.periodStart}_${scope.periodEnd}`,
-        scope.templateId,
         c.employeeId,
         c.shiftDate,
         `${c.startTime}-${c.endTime}`,
@@ -88,7 +98,7 @@ export function buildIdempotencyKey(scope: RunScope, c: {
 /** Total, stable ordering of pattern slots within a day. */
 function bySlotOrder(a: PatternSlot, b: PatternSlot): number {
     if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-    return a.templateShiftId < b.templateShiftId ? -1 : a.templateShiftId > b.templateShiftId ? 1 : 0;
+    return a.sourceSlotId < b.sourceSlotId ? -1 : a.sourceSlotId > b.sourceSlotId ? 1 : 0;
 }
 
 function formatHm(hours: number): string {
@@ -197,7 +207,7 @@ export function generateCandidates(input: GenerateInput): GenerateResult {
                 const candidate: Candidate = {
                     employeeId: facts.employeeId,
                     userContractId: facts.userContractId,
-                    templateShiftId: slot.templateShiftId,
+                    sourceSlotId: slot.sourceSlotId,
                     shiftDate: date,
                     startTime: slot.startTime,
                     endTime: slot.endTime,
