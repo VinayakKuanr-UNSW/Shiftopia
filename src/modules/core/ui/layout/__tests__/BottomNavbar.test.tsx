@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import BottomNavbar from '../BottomNavbar';
+import { ALLOWED_MOBILE_ROUTES } from '@/modules/core/ui/components/MobileAccessGuard';
 
 const authMocks = vi.hoisted(() => ({
   logout: vi.fn(),
@@ -217,5 +218,49 @@ describe('BottomNavbar — employer persona', () => {
     for (const label of ['Notif', 'Profile', 'Settings']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
+  });
+});
+
+// The bottom bar IS the phone navigation, and MobileAccessGuard renders the
+// "Desktop Only" screen for any path outside its allowlist. Nothing connects
+// the two files, so a destination can be added here and be dead on every phone
+// — which is exactly what happened to Leave: it shipped pointing at /my-leave
+// while the allowlist did not contain it, and every tap hit Desktop Only.
+// 41ff0e1 allowlisted it but pinned nothing, so the next entry can repeat it.
+// This asserts the join instead of the two halves separately.
+describe('every destination the phone nav offers clears the mobile guard', () => {
+  function renderedRoutes(): string[] {
+    return screen
+      .getAllByRole('link')
+      .map((el) => el.getAttribute('href') ?? '')
+      .filter((href) => href.startsWith('/'));
+  }
+
+  function assertAllAllowlisted(routes: string[]): void {
+    expect(routes.length).toBeGreaterThan(0);
+    const blocked = [...new Set(routes)].filter(
+      (route) => !ALLOWED_MOBILE_ROUTES.has(route),
+    );
+    // Name the offenders — "expected true to be false" would send the next
+    // person back to the allowlist to diff it by eye.
+    expect(blocked).toEqual([]);
+  }
+
+  it('in the employee persona, including the more drawer', () => {
+    personaMocks.persona = 'employee';
+    renderNavbar();
+    const bar = renderedRoutes();
+    openMoreNavigation();
+    assertAllAllowlisted([...bar, ...renderedRoutes()]);
+  });
+
+  it('in the employer persona, holding every permission', () => {
+    personaMocks.persona = 'employer';
+    personaMocks.canSwitch = true;
+    authMocks.hasPermission.mockReturnValue(true);
+    renderNavbar();
+    const bar = renderedRoutes();
+    openMoreNavigation();
+    assertAllAllowlisted([...bar, ...renderedRoutes()]);
   });
 });

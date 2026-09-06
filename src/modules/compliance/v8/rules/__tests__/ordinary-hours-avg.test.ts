@@ -33,6 +33,39 @@ describe('ordinaryHoursAvgRule', () => {
     expect(blocking!.calculation?.limit).toBe(152);
   });
 
+  /**
+   * The cap counts ORDINARY hours — cl 35.x(a) says so in as many words — so
+   * the rule skips any shift flagged otherwise. This pins that skip.
+   *
+   * WORTH KNOWING: `is_ordinary_hours` is currently a phantom. It exists on
+   * no table in supabase/ and on no row in the generated types, and all
+   * twelve producers write a literal `true` (or `?? true` over a column that
+   * is never selected because it does not exist). So in production the guard
+   * at ordinary-hours-avg.ts can never take its false branch, every shift
+   * counts as ordinary, and overtime cannot be represented at all — the cap
+   * therefore over-counts anyone working beyond ordinary hours, which is the
+   * same false-violation mechanism the anchored-cycle rewrite set out to kill.
+   *
+   * The rule side is correct and this test keeps it that way. What is missing
+   * is the column and whatever decides its value; until that lands, this test
+   * is the only place the intended behaviour is stated.
+   */
+  it('excludes a shift flagged non-ordinary from the cycle total', () => {
+    resetIdCounter();
+    const shifts = buildConsecutiveShifts(28, '2026-05-18', {
+      start_time: '08:00',
+      end_time: '20:00',
+    });
+    // 28 × 12h = 336h blocks against the 152h four-week ceiling. Mark all but
+    // twelve as non-ordinary and 144h remains — under the ceiling.
+    for (const s of shifts.slice(12)) {
+      (s as { is_ordinary_hours?: boolean }).is_ordinary_hours = false;
+    }
+    const ctx = buildContext({ employee: { contract_type: 'CASUAL' }, shifts });
+
+    expect(ordinaryHoursAvgRule(ctx).find(h => h.blocking)).toBeUndefined();
+  });
+
   it('leaves a CASUAL inside the ceiling alone', () => {
     resetIdCounter();
     const ctx = buildContext({
