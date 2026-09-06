@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeftRight,
   BadgeCheck,
@@ -22,7 +22,6 @@ import {
   Plus,
   Radio,
   RefreshCw,
-  Search,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -41,7 +40,7 @@ import {
   useBroadcastNotifications,
 } from "@/modules/broadcasts/state/useBroadcasts";
 import { useAuth } from "@/platform/auth/useAuth";
-import { usePersona } from "@/platform/auth/PersonaProvider";
+import { usePersona, resolvePersonaRoute } from "@/platform/auth/PersonaProvider";
 import { useTheme } from "@/modules/core/contexts/ThemeContext";
 
 type MoreNavPermission =
@@ -123,7 +122,6 @@ const employerItems: BottomNavItem[] = [
   { label: "Swaps", icon: ArrowLeftRight, path: "/management/swaps", requiredPermission: "management" },
   { label: "Leave Appr", icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
   { label: "Templates", icon: LayoutTemplate, path: "/templates", requiredPermission: "templates" },
-  { label: "New Shift", icon: Plus, path: "/rosters/shift/new", requiredPermission: "rosters" },
   { label: "Demand", icon: TrendingUp, path: "/labor-demand", requiredPermission: "rosters" },
   { label: "Times", icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
   { label: "Broadcast", icon: Megaphone, path: "/broadcast", requiredPermission: "broadcast" },
@@ -137,14 +135,13 @@ const employerItems: BottomNavItem[] = [
 
 /**
  * Reachable from either persona, because none of them is persona work.
- * Notifications is workspace-wide; Profile, Settings and Search belong to the
+ * Notifications is workspace-wide; Profile and Settings belong to the
  * application. Hiding any of them behind the toggle would strand it.
  */
 const sharedMoreItems: MoreNavItem[] = [
   { label: "Notif", Icon: BellRing, path: "/my-notifications" },
   { label: "Profile", Icon: UserRound, path: "/profile" },
   { label: "Settings", Icon: Settings, path: "/settings" },
-  { label: "Search", Icon: Search, path: "/search" },
 ];
 
 const toMoreItem = ({ label, icon: Icon, path, requiredPermission }: BottomNavItem): MoreNavItem => ({
@@ -231,6 +228,7 @@ const BottomNavbar: React.FC = () => {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [isBottomDrawerActive, setIsBottomDrawerActive] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -434,8 +432,13 @@ const BottomNavbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    const nextPersona = persona === "employee" ? "employer" : "employee";
                     togglePersona();
                     setMoreOpen(false);
+                    const targetPath = resolvePersonaRoute(location.pathname, nextPersona, hasPermission);
+                    if (targetPath && targetPath !== location.pathname) {
+                      navigate(targetPath);
+                    }
                   }}
                   aria-label={
                     persona === "employee"

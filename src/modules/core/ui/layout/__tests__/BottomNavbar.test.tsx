@@ -14,17 +14,21 @@ const personaMocks = vi.hoisted(() => ({
   togglePersona: vi.fn(),
 }));
 
-vi.mock('@/platform/auth/PersonaProvider', () => ({
-  usePersona: () => ({
-    persona: personaMocks.persona,
-    canSwitch: personaMocks.canSwitch,
-    togglePersona: personaMocks.togglePersona,
-    setPersona: vi.fn(),
-    employeeCertificate: null,
-    employerCertificate: null,
-    displayLevel: 'alpha',
-  }),
-}));
+vi.mock('@/platform/auth/PersonaProvider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/platform/auth/PersonaProvider')>();
+  return {
+    ...actual,
+    usePersona: () => ({
+      persona: personaMocks.persona,
+      canSwitch: personaMocks.canSwitch,
+      togglePersona: personaMocks.togglePersona,
+      setPersona: vi.fn(),
+      employeeCertificate: null,
+      employerCertificate: null,
+      displayLevel: 'alpha',
+    }),
+  };
+});
 
 vi.mock('@/platform/auth/useAuth', () => ({
   useAuth: () => ({
@@ -95,7 +99,7 @@ describe('BottomNavbar', () => {
   it('keeps the shared surfaces reachable in the employee persona', () => {
     renderNavbar();
     openMoreNavigation();
-    for (const label of ['Notif', 'Profile', 'Settings', 'Search']) {
+    for (const label of ['Notif', 'Profile', 'Settings']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });
@@ -122,7 +126,7 @@ describe('BottomNavbar', () => {
     renderNavbar();
     openMoreNavigation();
 
-    const lastGridLink = screen.getByRole('link', { name: 'Search' });
+    const lastGridLink = screen.getByRole('link', { name: 'Settings' });
     const persona = screen.getByRole('button', { name: 'Switch to employer view' });
     const signOut = screen.getByRole('button', { name: 'Sign out' });
 
@@ -202,7 +206,7 @@ describe('BottomNavbar — employer persona', () => {
     expect(screen.queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
   });
 
-  // Notifications, Profile, Settings and Search belong to the application, not
+  // Notifications, Profile and Settings belong to the application, not
   // to either persona. Reachable even when the user holds no employer
   // permission at all.
   it('keeps the shared surfaces reachable from either persona', () => {
@@ -210,7 +214,7 @@ describe('BottomNavbar — employer persona', () => {
     renderNavbar();
     openMoreNavigation();
 
-    for (const label of ['Notif', 'Profile', 'Settings', 'Search']) {
+    for (const label of ['Notif', 'Profile', 'Settings']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });

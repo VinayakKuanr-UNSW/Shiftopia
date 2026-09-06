@@ -1,15 +1,27 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
 import { Briefcase, LogOut, User, UserRound } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { usePersona } from '@/platform/auth/PersonaProvider';
+import { usePersona, resolvePersonaRoute } from '@/platform/auth/PersonaProvider';
 
 export const SidebarUser: React.FC = () => {
-    const { user, logout, activeCertificate } = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
+    const { user, logout, activeCertificate, hasPermission } = useAuth();
     const { persona, togglePersona, canSwitch, displayLevel } = usePersona();
 
     if (!user) return null;
+
+    const handleTogglePersona = () => {
+        const nextPersona = persona === 'employee' ? 'employer' : 'employee';
+        togglePersona();
+        const targetPath = resolvePersonaRoute(location.pathname, nextPersona, hasPermission);
+        if (targetPath && targetPath !== location.pathname) {
+            navigate(targetPath);
+        }
+    };
 
     // Premium gradient for the avatar fallbak
     const avatarGradient = "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500";
@@ -65,7 +77,7 @@ export const SidebarUser: React.FC = () => {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={togglePersona}
+                            onClick={handleTogglePersona}
                             aria-label={
                                 persona === 'employee'
                                     ? 'Switch to employer view'

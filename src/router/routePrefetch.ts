@@ -49,7 +49,6 @@ const routeImporters: Record<string, () => Promise<unknown>> = {
   '/compliance/rejections': () => import('@/modules/compliance/ui/pages/RejectionsPage.tsx'),
   '/users':              () => import('@/modules/users/pages/UsersPage.tsx'),
   '/settings':           () => import('@/modules/settings/pages/SettingsPage.tsx'),
-  '/search':             () => import('@/modules/search/pages/SearchPage.tsx'),
 };
 
 // Paths already warmed this session — avoids re-triggering import() on every

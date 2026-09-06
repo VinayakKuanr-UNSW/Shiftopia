@@ -31,13 +31,136 @@
  * nav that the same user can still reach by typing the URL — the toggle would
  * be lying about what they can do.
  */
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
 import type { AccessCertificate, AccessLevel } from './types';
 
 export type Persona = 'employee' | 'employer';
 
 const STORAGE_KEY = 'shiftopia.persona';
+
+/**
+ * 1-to-1 route pairings across Employee and Employer personas.
+ */
+export const PAIRED_ROUTES: Array<{
+    employee: string;
+    employer: string;
+    employerPermission?: string;
+}> = [
+    { employee: '/my-roster', employer: '/rosters', employerPermission: 'rosters' },
+    { employee: '/my-availabilities', employer: '/team-availability', employerPermission: 'management' },
+    { employee: '/my-bids', employer: '/management/bids', employerPermission: 'management' },
+    { employee: '/my-swaps', employer: '/management/swaps', employerPermission: 'management' },
+    { employee: '/my-leave', employer: '/management/leave', employerPermission: 'management' },
+    { employee: '/my-broadcasts', employer: '/broadcast', employerPermission: 'broadcast' },
+    { employee: '/performance', employer: '/insights', employerPermission: 'insights' },
+    { employee: '/my-attendance', employer: '/timesheet', employerPermission: 'timesheet-view' },
+];
+
+/**
+ * Shared workspace pages that belong to the user/session, valid in both personas.
+ */
+export const SHARED_ROUTES = [
+    '/profile',
+    '/settings',
+    '/my-notifications',
+];
+
+/**
+ * Prioritized employer route fallback list when user lacks permission for the primary paired route.
+ */
+export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
+    { path: '/rosters', permission: 'rosters' },
+    { path: '/team-availability', permission: 'management' },
+    { path: '/management/bids', permission: 'management' },
+    { path: '/insights', permission: 'insights' },
+    { path: '/management/swaps', permission: 'management' },
+    { path: '/management/leave', permission: 'management' },
+    { path: '/templates', permission: 'templates' },
+    { path: '/timesheet', permission: 'timesheet-view' },
+    { path: '/broadcast', permission: 'broadcast' },
+    { path: '/compliance/rejections', permission: 'management' },
+    { path: '/users', permission: 'users' },
+];
+
+/**
+ * Employer surfaces with no employee counterpart, so they cannot be derived
+ * from PAIRED_ROUTES. `/management` covers the paired /management/* routes and
+ * /management/payroll alike; the three availability aliases all redirect to
+ * /team-availability but are classified anyway so the persona is right on the
+ * first frame rather than after the redirect.
+ */
+const EMPLOYER_ONLY_ROUTES = [
+    '/templates',
+    '/users',
+    '/labor-demand',
+    '/compliance',
+    '/management',
+    '/grid',
+    '/availability-manager',
+    '/availibility-manger',
+];
+
+function matchesRoute(pathname: string, base: string): boolean {
+    return pathname === base || pathname.startsWith(`${base}/`);
+}
+
+/**
+ * Which hat a route implies, or null when it implies neither.
+ *
+ * The persona is a claim about what the user is currently doing, so the route
+ * they are actually on is better evidence than a value stored on their last
+ * visit. Shared workspace pages, auth and error routes deliberately claim
+ * nothing — landing on /profile must not silently flip anyone's hat, and
+ * /my-notifications is shared despite reading like a "My …" page.
+ */
+export function personaForPath(pathname: string): Persona | null {
+    if (SHARED_ROUTES.some((shared) => matchesRoute(pathname, shared))) return null;
+    if (PAIRED_ROUTES.some((pair) => matchesRoute(pathname, pair.employee))) return 'employee';
+    if (PAIRED_ROUTES.some((pair) => matchesRoute(pathname, pair.employer))) return 'employer';
+    if (EMPLOYER_ONLY_ROUTES.some((route) => matchesRoute(pathname, route))) return 'employer';
+    return null;
+}
+
+/**
+ * Resolves the destination route when switching personas.
+ */
+export function resolvePersonaRoute(
+    currentPath: string,
+    targetPersona: Persona,
+    hasPermission?: (permission: string) => boolean,
+): string {
+    // 1. Preserve shared workspace pages
+    if (SHARED_ROUTES.some((shared) => currentPath === shared || currentPath.startsWith(`${shared}/`))) {
+        return currentPath;
+    }
+
+    if (targetPersona === 'employer') {
+        const pair = PAIRED_ROUTES.find((p) => currentPath === p.employee || currentPath.startsWith(`${p.employee}/`));
+        if (pair) {
+            if (!pair.employerPermission || !hasPermission || hasPermission(pair.employerPermission)) {
+                return pair.employer;
+            }
+        }
+        if (hasPermission) {
+            const accessible = EMPLOYER_FALLBACK_ORDER.find((item) => hasPermission(item.permission));
+            if (accessible) return accessible.path;
+        }
+        return '/rosters';
+    } else {
+        const pair = PAIRED_ROUTES.find((p) => currentPath === p.employer || currentPath.startsWith(`${p.employer}/`));
+        if (pair) {
+            return pair.employee;
+        }
+        // Aliases / legacy routes
+        if (currentPath === '/grid' || currentPath.startsWith('/grid/')) {
+            return '/my-availabilities';
+        }
+        // Fallback for employer-only pages (/templates, /labor-demand, /compliance/rejections, /users, etc.)
+        return '/my-roster';
+    }
+}
 
 /**
  * The employer surfaces, as the sidebar gates them. Anyone who can reach ANY of
@@ -109,11 +232,14 @@ export const PersonaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         () => readStored() ?? (employerCertificate ? 'employer' : 'employee'),
     );
 
-    // A user who cannot be an employer must never be left in that persona —
-    // a stored value can outlive the certificate that justified it.
-    useEffect(() => {
-        if (!canSwitch && persona === 'employer') setPersonaState('employee');
-    }, [canSwitch, persona]);
+    // NO downgrade effect here, deliberately. `hasPermission` is derived from the
+    // resolved access level, which arrives from an RPC after the first render, so
+    // `canSwitch` is false for a moment on EVERY reload. An effect that wrote
+    // 'employee' into state during that window destroyed the stored choice, and
+    // nothing put it back once permissions landed — a manager was dropped into the
+    // employee sidebar on every refresh. The exposed `persona` below is derived
+    // through `canSwitch` instead, which serves the same purpose (a stored value
+    // that outlives its certificate is never REPORTED) without discarding it.
 
     const setPersona = useCallback((next: Persona) => {
         setPersonaState(next);
@@ -155,6 +281,37 @@ export const PersonaProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
 
     return <PersonaContext.Provider value={value}>{children}</PersonaContext.Provider>;
+};
+
+/**
+ * Keeps the persona honest about where the user actually is.
+ *
+ * Mounted inside the Router (the provider itself is not, because it only needs
+ * auth). Landing on /rosters from a bookmark, a reload, a notification deep link
+ * or a redirect used to leave the employee sidebar showing over a manager page;
+ * now the route decides, and the choice is written through so it survives the
+ * next reload. One component covers both navs — the sidebar and the mobile
+ * bottom bar both read `persona` from this context.
+ */
+export const PersonaRouteSync: React.FC = () => {
+    const { pathname } = useLocation();
+    const { persona, setPersona, canSwitch } = usePersona();
+    const syncedPath = useRef<string | null>(null);
+
+    useEffect(() => {
+        const implied = personaForPath(pathname);
+        if (!implied) return;
+        // Bail WITHOUT recording the path: permissions land after the first
+        // render, so this must stay armed and re-run when `canSwitch` flips.
+        if (implied === 'employer' && !canSwitch) return;
+        // Once per navigation. Guarding on the path rather than on the persona
+        // keeps a toggle made ON a shared route from being immediately undone.
+        if (syncedPath.current === pathname) return;
+        syncedPath.current = pathname;
+        if (implied !== persona) setPersona(implied);
+    }, [pathname, persona, canSwitch, setPersona]);
+
+    return null;
 };
 
 /**
