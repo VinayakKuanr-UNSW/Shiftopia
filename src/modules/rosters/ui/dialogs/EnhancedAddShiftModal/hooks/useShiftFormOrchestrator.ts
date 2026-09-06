@@ -599,7 +599,6 @@ export function useShiftFormOrchestrator({
                     end_time: (s.end_time || '').slice(0, 5),
                     role_id: s.role_id || watchV8RoleId || '',
                     required_qualifications: [],
-                    is_ordinary_hours: s.is_ordinary_hours ?? true,
                     break_minutes: s.unpaid_break_minutes || 0,
                     unpaid_break_minutes: s.unpaid_break_minutes || 0,
                     paid_break_minutes: s.paid_break_minutes || 0,
@@ -618,7 +617,6 @@ export function useShiftFormOrchestrator({
                     department_id:     resolvedContext.departmentId ?? undefined,
                     sub_department_id: resolvedContext.subDepartmentId ?? undefined,
                     required_qualifications: [],
-                    is_ordinary_hours: true,
                     is_training: watchIsTraining || false,
                     break_minutes:     0,
                     unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
@@ -664,7 +662,6 @@ export function useShiftFormOrchestrator({
                             start_time: watchStart || '09:00',
                             end_time: watchEnd || '17:00',
                             role_id: watchV8RoleId || 'unassigned',
-                            is_ordinary_hours: true,
                             is_training: watchIsTraining || false,
                             break_minutes: 0,
                             unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
@@ -702,7 +699,6 @@ export function useShiftFormOrchestrator({
                                 shift_date: s.shift_date,
                                 start_time: s.start_time,
                                 end_time:   s.end_time,
-                                is_ordinary_hours: true,
                             })),
                     };
                 } catch {

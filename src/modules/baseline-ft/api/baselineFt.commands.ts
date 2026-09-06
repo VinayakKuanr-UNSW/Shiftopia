@@ -98,7 +98,7 @@ export interface BaselineProposal {
     periodEnd: string;
     referenceDate: string;
     generatedAt: string;
-    /** Stated on every run: `is_ordinary_hours` is not a stored fact. */
+    /** Stated on every run: the ordinary/overtime split is not rostering data. */
     axioms: string[];
     ledgers: EmployeeLedger[];
     runFindings: Finding[];
@@ -125,10 +125,14 @@ export class BaselineRunConflictError extends Error {
 /**
  * Stated on every run, so nobody has to infer it from the numbers.
  *
- * `shifts.is_ordinary_hours` is not a column — it is a TypeScript literal at
- * every call site in the codebase — so the ordinary/overtime split cannot be
- * read from the roster. Until it can, every rostered hour counts as ordinary,
- * and saying so is the difference between a stated assumption and a hidden one.
+ * The ordinary/overtime split cannot be read from a roster, and no longer
+ * pretends to be: `is_ordinary_hours` was a required field on the V8 shift
+ * contract that every producer filled with a literal `true`, backed by no
+ * column anywhere. It was removed rather than given a column, because a shift
+ * is not wholly one or the other — under cl 42 the 38th and 39th hour of a
+ * week can fall inside the same shift. That split belongs to payroll, which
+ * already computes it per shift "post weekly-OT reclass" from hours actually
+ * worked. Rostering counts every planned hour as ordinary, and says so.
  */
 export const AXIOMS: string[] = [
     'All existing rostered hours are counted as ordinary hours. The system does not ' +

@@ -42,7 +42,6 @@ export interface V8Shift {
     shift_date?:           string;    // Alias for compatibility
     start_time:            string;    // HH:mm
     end_time:              string;    // HH:mm
-    is_ordinary_hours:     boolean;
     unpaid_break_minutes?: number;
     paid_break_minutes?:   number;
     role_id?:              V8RoleId;

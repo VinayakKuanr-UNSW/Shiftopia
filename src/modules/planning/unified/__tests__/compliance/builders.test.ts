@@ -48,7 +48,6 @@ const shift = (
   date,
   start_time: startTime,
   end_time: endTime,
-  is_ordinary_hours: true,
   required_qualifications: [],
   break_minutes: 30,
 });

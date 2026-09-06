@@ -86,7 +86,6 @@ const DUMMY_SHIFT: RosterShift = {
     shift_date: '1970-01-01',
     start_time: '00:00',
     end_time: '00:00',
-    is_ordinary_hours: false,
     unpaid_break_minutes: 0,
 };
 

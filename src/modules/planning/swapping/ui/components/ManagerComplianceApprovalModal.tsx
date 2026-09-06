@@ -239,7 +239,6 @@ function buildV8OrchestratorShift(s: RosterShiftInput, fallbackId?: string): V8O
         department_id:        s.department_id ?? undefined,
         sub_department_id:    s.sub_department_id ?? undefined,
         required_qualifications: [],
-        is_ordinary_hours:    true,
         break_minutes:        s.unpaid_break_minutes || 0,
         unpaid_break_minutes: s.unpaid_break_minutes || 0,
     } as V8OrchestratorShift;
@@ -374,11 +373,11 @@ export function ManagerComplianceApprovalModal({
         //    Party B = offerer   (loses their own shift, gains the requester's).
         const requesterShiftV8: V8OrchestratorShift = requesterShiftData
             ? buildV8OrchestratorShift(requesterShiftData as any)
-            : ({ id: requesterV8ShiftId, date: '', start_time: '', end_time: '', is_ordinary_hours: true, required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
+            : ({ id: requesterV8ShiftId, date: '', start_time: '', end_time: '', required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
 
         const offererShiftV8: V8OrchestratorShift = offererShiftData
             ? buildV8OrchestratorShift(offererShiftData as any)
-            : ({ id: offererV8ShiftId ?? '', date: '', start_time: '', end_time: '', is_ordinary_hours: true, required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
+            : ({ id: offererV8ShiftId ?? '', date: '', start_time: '', end_time: '', required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
 
         const { inputA, inputB } = buildSwapInputs({
             partyAEmployeeId:     requesterEmployeeId,

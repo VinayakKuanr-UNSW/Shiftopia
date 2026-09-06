@@ -146,7 +146,6 @@ export async function validateBeforeCommit(
         shift_date:           s.shift_date ?? s.date ?? '',
         start_time:           s.start_time,
         end_time:             s.end_time,
-        is_ordinary_hours:    s.is_ordinary_hours ?? true,
         unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
     });
 

@@ -57,7 +57,6 @@ export class V8SwapEngine {
         };
         const shiftsA: V8Shift[] = scenario.partyA.hypothetical_schedule.map(s => ({
             ...s,
-            is_ordinary_hours: s.is_ordinary_hours ?? true,
             // Candidate scoping: the RECEIVED shift is the one this operation
             // adds; everything else is committed history that per-shift rules
             // (leave-conflict, min-engagement, meal-break) must not re-validate.
@@ -87,7 +86,6 @@ export class V8SwapEngine {
             };
             const shiftsB: V8Shift[] = scenario.partyB.hypothetical_schedule.map(s => ({
                 ...s,
-                is_ordinary_hours: s.is_ordinary_hours ?? true,
                 is_candidate: s.is_candidate ?? (s.id === scenario.partyB.received_shift.id),
             }));
             resultB = engine.evaluate(empB, shiftsB);

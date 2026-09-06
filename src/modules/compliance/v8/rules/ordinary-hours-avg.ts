@@ -50,12 +50,30 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
 
     const isFtSecurity = !!employee.is_security_role && employee.contract_type === 'FULL_TIME';
 
-    // 1. Daily net ordinary hours, attributed to the shift's start date.
+    // 1. Daily net rostered hours, attributed to the shift's start date.
+    //
+    // EVERY rostered shift counts, and there is deliberately no per-shift
+    // "is this ordinary?" flag to skip on. There used to be one. It could
+    // never be false: it lived on no table and in no generated row type, so
+    // all twelve producers wrote a literal `true` into a required field and
+    // the guard's false branch was unreachable.
+    //
+    // It is also the wrong shape. Under cl 42 the 38th and 39th hour of a
+    // week can fall inside the SAME shift, so "ordinary" is a property of
+    // hours within a period, not of a shift. The pay engine already models it
+    // that way -- gross-pay.types.ts splits each shift into ordinaryHours and
+    // overtimeHours "post weekly-OT reclass".
+    //
+    // The two layers answer different questions and must not share a flag.
+    // Compliance runs at ROSTERING time over planned hours: does this roster
+    // plan to exceed the ordinary-hours ceiling? Counting everything is the
+    // correct answer to that. Payroll runs POST-HOC over worked hours and
+    // reclassifies the excess at cl 42 rates. Re-introducing a boolean here
+    // would make this the fourth rival definition of overtime in the codebase.
     const dailyHours = new Map<string, number>();
     for (const s of shifts) {
         const dateStr = s.date || s.shift_date || '';
         if (!dateStr || !s.start_time || !s.end_time) continue; // skip malformed
-        if (!s.is_ordinary_hours) continue;
 
         const breakMins = s.unpaid_break_minutes || 0;
         const netHours = Math.max(0, shiftDurationMinutes(s.start_time, s.end_time) - breakMins) / 60;

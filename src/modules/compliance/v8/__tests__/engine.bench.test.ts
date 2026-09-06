@@ -29,7 +29,6 @@ function buildShift(empId: string, dayIdx: number): V8OrchestratorShift {
     date,
     start_time: '09:00',
     end_time: '17:00',
-    is_ordinary_hours: true,
     role_id: 'r1',
     required_qualifications: ['rsa-cert'],
     break_minutes: 0,

@@ -362,7 +362,6 @@ export async function fetchEmployeeShiftsV2(
         // R10/R11/R12 apply only to candidate (incoming) shifts.
         role_id:                 '',
         required_qualifications: [],
-        is_ordinary_hours:       true,
         break_minutes:           s.unpaid_break_minutes ?? 0,
         unpaid_break_minutes:    s.unpaid_break_minutes ?? 0,
     }));

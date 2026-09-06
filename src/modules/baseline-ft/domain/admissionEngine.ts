@@ -84,12 +84,9 @@ function toV8Shift(s: ExistingShift): V8Shift {
         shift_date: s.date,
         start_time: s.startTime,
         end_time: s.endTime,
-        // NOT A STORED FACT. `shifts.is_ordinary_hours` does not exist as a
-        // column; it is a TypeScript-layer literal at every call site in the
-        // codebase. Until overtime is modelled, every rostered hour counts as
-        // ordinary, and the run states that axiom explicitly rather than
-        // letting it be inferred from this line.
-        is_ordinary_hours: true,
+        // Every rostered hour counts as ordinary here; the run states that
+        // axiom explicitly rather than letting it be inferred. The ordinary/
+        // overtime split is payroll's, computed from hours actually worked.
         sub_department_id: s.subDepartmentId,
         target_employment_type: 'FT',
     };
@@ -104,7 +101,6 @@ function candidateToV8Shift(c: Candidate): V8Shift {
         shift_date: c.shiftDate,
         start_time: c.startTime,
         end_time: c.endTime,
-        is_ordinary_hours: true,
         unpaid_break_minutes: c.unpaidBreakMinutes,
         paid_break_minutes: c.paidBreakMinutes,
         role_id: c.roleId,

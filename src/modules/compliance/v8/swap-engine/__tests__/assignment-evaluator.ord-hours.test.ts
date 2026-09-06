@@ -31,7 +31,6 @@ function consecutive(nDays: number, startDate = '2026-05-18'): RosterShift[] {
             date,
             start_time: '08:00',
             end_time: '18:00',
-            is_ordinary_hours: true,
             unpaid_break_minutes: 0,
         });
     }

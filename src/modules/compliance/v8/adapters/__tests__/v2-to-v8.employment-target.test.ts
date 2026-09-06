@@ -28,7 +28,6 @@ function shift(over: Partial<V8OrchestratorShift> = {}): V8OrchestratorShift {
         date: '2026-06-01',
         start_time: '09:00',
         end_time: '12:00',
-        is_ordinary_hours: true,
         required_qualifications: [],
         break_minutes: 0,
         sub_department_id: SUB_DEPT,

@@ -60,7 +60,6 @@ export function runV8ComplexBridge(
             date: dateStr,
             start_time: s.start_time,
             end_time: s.end_time,
-            is_ordinary_hours: s.is_ordinary_hours,
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
             paid_break_minutes: (s as any).paid_break_minutes || 0,
             is_training: s.is_training ?? false,

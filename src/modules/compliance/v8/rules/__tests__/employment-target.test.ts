@@ -25,7 +25,6 @@ function shift(over: Partial<V8Shift> = {}): V8Shift {
         date: '2026-06-01',
         start_time: '09:00',
         end_time: '17:00',
-        is_ordinary_hours: true,
         ...over,
     };
 }

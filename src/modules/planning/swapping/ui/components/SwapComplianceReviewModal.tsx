@@ -120,7 +120,6 @@ function toV8Shift(s: { id: string; shift_date: string; start_time: string; end_
         start_time: s.start_time,
         end_time: s.end_time,
         unpaid_break_minutes: s.unpaid_break_minutes,
-        is_ordinary_hours: true as const,
     };
 }
 

@@ -35,7 +35,6 @@ export function buildShift(overrides: Partial<V8Shift> & { id?: string } = {}): 
         date,
         start_time: '09:00',
         end_time: '17:00',
-        is_ordinary_hours: true,
         unpaid_break_minutes: 0,
         is_training: false,
         is_sunday: false,

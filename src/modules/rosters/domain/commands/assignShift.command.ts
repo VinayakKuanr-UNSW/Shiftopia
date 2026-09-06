@@ -117,7 +117,6 @@ async function runFullCompliancePreCheck(
             ...(shift.required_skills  ?? []),
             ...(shift.required_licenses ?? []),
         ],
-        is_ordinary_hours:    true,
         is_training:          shift.is_training ?? false,
         break_minutes:        shift.unpaid_break_minutes ?? 0,
         unpaid_break_minutes: shift.unpaid_break_minutes ?? 0,
@@ -138,7 +137,6 @@ async function runFullCompliancePreCheck(
                 date:              s.shift_date,
                 start_time:        s.start_time,
                 end_time:          s.end_time,
-                is_ordinary_hours: true,
             })),
     };
 
