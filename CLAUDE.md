@@ -19,5 +19,6 @@ Rules:
     - `python3 scripts/graphify/ask.py docs <frag>`         — the doc SECTIONS (file#line) that explain it
   `graphify path "A" "B"` and `graphify explain "X"` remain fine for single-node questions.
 - The graph spans FOUR layers: TS/Python (AST), the SQL migrations (`sql_layer.py`), documentation sections bound to the entities they describe (`docs_layer.py`), and institutional memory (`memory_layer.py`). `graphify update .` refreshes only the first — run `sql_layer.py && docs_layer.py && memory_layer.py && merge_layers.py` in that order (docs and memory read the DB nodes sql_layer creates). The post-commit hook does this automatically.
+- `python3 scripts/graphify/check.py` asserts the graph is intact (all four layers present, no dangling edges, no dedup drift in provenance). The post-commit hook runs it; run it yourself if a query returns something surprising.
 - NEVER rebuild with graphify's default label dedup. It merges nodes by normalised label + fuzzy match, which collapses every `index.ts`/`Props`/`handler` in a 1,100-file codebase into one node with wrong provenance. `merge_layers.py` uses exact-ID dedup only.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
