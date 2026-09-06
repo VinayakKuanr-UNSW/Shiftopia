@@ -18,16 +18,22 @@ from graphify.export import to_json
 ROOT = Path(__file__).resolve().parents[2]
 code = json.loads((ROOT / "graphify-out/graph.json").read_text())
 sql = json.loads((ROOT / "graphify-out/.sql_layer.json").read_text())
+semf = ROOT / "graphify-out/semantic/graphify-out/graph.json"
+if semf.exists():
+    _s = json.loads(semf.read_text())
+    sem = {"nodes": _s.get("nodes", []), "edges": _s.get("links", _s.get("edges", []))}
+else:
+    sem = {"nodes": [], "edges": []}
 docf = ROOT / "graphify-out/.docs_layer.json"
 docs = json.loads(docf.read_text()) if docf.exists() else {"nodes": [], "edges": []}
 memf = ROOT / "graphify-out/.memory_layer.json"
 mem = json.loads(memf.read_text()) if memf.exists() else {"nodes": [], "edges": []}
 
 nodes, seen = [], set()
-for n in code["nodes"] + sql["nodes"] + mem["nodes"] + docs["nodes"]:
+for n in code["nodes"] + sql["nodes"] + mem["nodes"] + docs["nodes"] + sem["nodes"]:
     if n["id"] not in seen:
         seen.add(n["id"]); nodes.append(n)
-edges = [e for e in code.get("links", code.get("edges", [])) + sql["edges"] + mem["edges"] + docs["edges"]
+edges = [e for e in code.get("links", code.get("edges", [])) + sql["edges"] + mem["edges"] + docs["edges"] + sem["edges"]
          if e["source"] in seen and e["target"] in seen]
 
 ext = {"nodes": nodes, "edges": edges,
