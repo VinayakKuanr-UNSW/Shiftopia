@@ -12,6 +12,7 @@ import WorkRightsSection from '@/modules/users/ui/components/WorkRightsSection';
 import { UserContractsSection, AccessCertificatesSection } from '@/modules/users/ui/components/ContractsSection';
 import { DeleteUserDialog } from '@/modules/users/ui/components/DeleteUserDialog';
 import { useAuth } from '@/platform/auth/useAuth';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
@@ -28,6 +29,7 @@ interface Profile {
 const UsersPage: React.FC = () => {
     const { user: currentUser } = useAuth();
     const { isDark } = useTheme();
+    const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const isAuthorizedAdmin = currentUser?.highestAccessLevel === 'epsilon';
 
     // State
@@ -78,6 +80,9 @@ const UsersPage: React.FC = () => {
                     <PersonalPageHeader
                         title="User Management"
                         Icon={Users}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
                         mode="managerial"
                         className="mb-4 lg:mb-6"
                     />

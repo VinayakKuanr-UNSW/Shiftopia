@@ -21,10 +21,11 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { useAuth } from '@/platform/auth/useAuth';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { text, touch } from '@/modules/core/ui/typography';
@@ -36,6 +37,7 @@ import { KpiBand, KpiTileGrid, CountStrip } from '../ui/components/KpiBand';
 const PerformancePage: React.FC = () => {
     const { user } = useAuth();
     const { isDark } = useTheme();
+    const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
     const quarters = React.useMemo(() => recentQuarters(5), []);
     const [period, setPeriod] = React.useState<QuarterRef>(quarters[0]);
 
@@ -62,12 +64,20 @@ const PerformancePage: React.FC = () => {
 
     return (
         <TooltipProvider delayDuration={200}>
-            <div className="flex h-full flex-col gap-4 overflow-hidden p-4 lg:p-6">
-                <PersonalPageHeader title="My Performance" Icon={TrendingUp} rightActions={periodPicker} />
+            <div className="h-full flex flex-col overflow-hidden bg-background">
+                <GoldStandardHeader
+                    title="My Performance"
+                    Icon={TrendingUp}
+                    scope={scope}
+                    setScope={setScope}
+                    isGammaLocked={isGammaLocked}
+                    mode="personal"
+                    rightActions={periodPicker}
+                />
 
                 <div
                     className={cn(
-                        'custom-scrollbar min-h-0 flex-1 overflow-y-auto rounded-[32px] border p-4 transition-all lg:p-8',
+                        'mx-4 lg:mx-6 mb-4 lg:mb-6 custom-scrollbar min-h-0 flex-1 overflow-y-auto rounded-[32px] border p-4 transition-all lg:p-8',
                         isDark
                             ? 'border-white/5 bg-[#1c2333]/40 shadow-2xl shadow-black/20'
                             : 'border-white bg-white/70 shadow-xl shadow-slate-200/50 backdrop-blur-md',

@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, ShieldX, Cpu, ListFilter, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/platform/supabase/client';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { cn } from '@/modules/core/lib/utils';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
@@ -98,6 +99,7 @@ export default function RejectionsPage() {
   const [window, setWindow] = useState<Window>('7d');
   const [opTypeFilter, setOpTypeFilter] = useState<string>('all');
   const [bypassedOnly, setBypassedOnly] = useState(false);
+  const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['compliance-rejections', window, opTypeFilter, bypassedOnly],
@@ -134,6 +136,9 @@ export default function RejectionsPage() {
           <PersonalPageHeader
             title="Compliance Engine & Rejections"
             Icon={ShieldX}
+            scope={scope}
+            setScope={setScope}
+            isGammaLocked={isGammaLocked}
             mode="managerial"
             className="mb-6"
           />
