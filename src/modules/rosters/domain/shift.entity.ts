@@ -300,3 +300,26 @@ export function doesShiftTrulyCrossMidnight(shift: {
     return endMinutes < startMinutes;
 }
 
+
+/**
+ * A shift plus the denormalised group labels the My Roster surfaces render.
+ *
+ * Lives HERE, next to `Shift`, and not in `model/roster.types.ts`, because there
+ * are two different `Shift` interfaces in this module — this one, and
+ * `model/shift.types.ts#Shift`, which is what `@/modules/core/types` re-exports.
+ * The My Roster views all import `Shift` from the module barrel, i.e. this file.
+ * Declaring the wrapper anywhere else silently binds it to the other `Shift`.
+ *
+ * Six files had their own identical copy (`useMyRoster`, `MyRosterCalendar` and
+ * each of the four calendar views) — which is how a shared component and its
+ * callers drift apart. One definition, imported.
+ *
+ * Instances are built once per fetch by `useMyRoster`'s date index and are
+ * referentially stable; that is what lets the card components be `React.memo`d.
+ */
+export interface ShiftWithDetails {
+    shift: Shift;
+    groupName: string;
+    groupColor: string;
+    subGroupName: string;
+}

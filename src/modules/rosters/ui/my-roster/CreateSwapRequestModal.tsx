@@ -37,7 +37,8 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { createSwap } = useSwaps();
+  // Only the mutation is needed here; the five read queries are pure overhead.
+  const { createSwap } = useSwaps(undefined, { enabled: false });
 
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

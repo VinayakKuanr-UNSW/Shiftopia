@@ -14,7 +14,7 @@ interface ShiftPillProps {
   style?: React.CSSProperties;
 }
 
-const ShiftPill: React.FC<ShiftPillProps> = ({
+const ShiftPillImpl: React.FC<ShiftPillProps> = ({
   shift,
   groupName,
   groupColor,
@@ -72,8 +72,14 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
     }
   }, [groupVariant]);
 
-  const startTime = shift.start_time.slice(0, 5);
-  const endTime = shift.end_time.slice(0, 5);
+  // Optional chaining is defence in depth, not decoration. `start_time` and
+  // `end_time` are NOT NULL in the database, so a normal fetch cannot produce a
+  // null here — but this object is also built from optimistic cache writes and
+  // realtime payloads, and the nearest error boundary is at the ROUTE. An
+  // unguarded `.slice` on one bad chip therefore unmounts the entire roster
+  // rather than degrading that one card.
+  const startTime = shift.start_time?.slice(0, 5) ?? '--:--';
+  const endTime = shift.end_time?.slice(0, 5) ?? '--:--';
 
   // Check if we are in a tall container (Day/Week view) or short (Month view)
   // Day/Week views pass a style object with a numeric or string height.
@@ -147,5 +153,12 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
     </button>
   );
 };
+
+/**
+ * Memoised: this is the leaf the month grid renders up to 126 of, and its parent
+ * `MyRosterShift` now passes a stable `onClick` and `style`.
+ */
+const ShiftPill = React.memo(ShiftPillImpl);
+ShiftPill.displayName = 'ShiftPill';
 
 export default ShiftPill;

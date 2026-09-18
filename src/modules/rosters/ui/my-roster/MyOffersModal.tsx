@@ -282,8 +282,8 @@ const OfferItem: React.FC<{
                 subGroup={(offer.shift as any).sub_group_name}
                 role={roleLabel}
                 shiftDate={formatCalendarDate(offer.shift.shift_date, 'EEE, MMM d, yyyy')}
-                startTime={offer.shift.start_time.slice(0, 5)}
-                endTime={offer.shift.end_time.slice(0, 5)}
+                startTime={offer.shift.start_time?.slice(0, 5) ?? '--:--'}
+                endTime={offer.shift.end_time?.slice(0, 5) ?? '--:--'}
                 netLength={netLength}
                 paidBreak={offer.shift.paid_break_minutes ?? offer.shift.break_minutes ?? 0}
                 unpaidBreak={offer.shift.unpaid_break_minutes ?? 0}

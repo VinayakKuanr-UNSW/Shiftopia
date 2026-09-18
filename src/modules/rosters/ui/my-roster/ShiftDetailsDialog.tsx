@@ -16,7 +16,7 @@ import {
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { text, touch } from '@/modules/core/ui/typography';
-import { Shift } from '@/modules/rosters';
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge';
 
@@ -27,11 +27,12 @@ import DropShiftDrawer from './DropShiftDrawer';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
-import { parseZonedDateTime, formatInTimezone, formatClockTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { useAuth } from '@/platform/auth/useAuth';
+import { useClockValue, isShiftPast, type ClockSnapshot } from '@/modules/core/hooks/useClock';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
@@ -49,13 +50,6 @@ import {
 // copy while two other surfaces carried their own incorrect ones — see
 // `formatClockTime`.
 const formatWallClock = (value: string | null | undefined) => formatClockTime(value);
-
-interface ShiftWithDetails {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
-}
 
 interface ShiftDetailsDialogProps {
   isOpen: boolean;
@@ -106,7 +100,13 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
 }) => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { mySwapRequests, myActiveOfferDetails, isLoadingOfferDetails } = useSwaps();
+  // Every My Roster calendar view mounts this dialog unconditionally so it can
+  // animate open, which meant `useSwaps()` ran its five read queries on page
+  // load for a dialog nobody had opened. Gate them on `isOpen`.
+  const { mySwapRequests, myActiveOfferDetails, isLoadingOfferDetails } = useSwaps(
+    undefined,
+    { enabled: isOpen },
+  );
 
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
@@ -114,14 +114,22 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const dropShiftMutation = useDropShift();
   const isDropping = dropShiftMutation.isPending;
 
-  const isPast = React.useMemo(() => {
-    if (!shiftData?.shift?.shift_date || !shiftData?.shift?.end_time) return false;
-    try {
-      return parseZonedDateTime(shiftData.shift.shift_date, shiftData.shift.end_time, SYDNEY_TZ).getTime() < Date.now();
-    } catch {
-      return false;
-    }
-  }, [shiftData?.shift?.shift_date, shiftData?.shift?.end_time]);
+  // Shared with the roster chip via `isShiftPast`. This used to be
+  // `parseZonedDateTime(date, end) < Date.now()`, which resolves a `00:00` end
+  // to the START of the day — so a midnight-finishing shift was greyed out here
+  // while the chip behind the dialog still showed it live. It was also frozen at
+  // mount; the shared clock re-evaluates it once a minute.
+  const isPastSelector = React.useCallback(
+    (now: ClockSnapshot) =>
+      isShiftPast(
+        shiftData?.shift?.shift_date,
+        shiftData?.shift?.end_time,
+        now,
+        shiftData?.shift?.start_time,
+      ),
+    [shiftData?.shift?.shift_date, shiftData?.shift?.end_time, shiftData?.shift?.start_time],
+  );
+  const isPast = useClockValue(isPastSelector);
 
   const isWithinLockoutPeriod = React.useMemo(() => 
     shiftData ? isShiftLocked(shiftData.shift.shift_date, shiftData.shift.start_time, 'my_roster') : false
@@ -386,8 +394,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               subGroup={subGroupName || (shift as any).sub_group_name}
               role={shift.roles?.name || 'Shift'}
               shiftDate={format(shiftDate, 'EEE, MMM d, yyyy')}
-              startTime={formatWallClock(shift.start_time) ?? shift.start_time.slice(0, 5)}
-              endTime={formatWallClock(shift.end_time) ?? shift.end_time.slice(0, 5)}
+              startTime={formatWallClock(shift.start_time) ?? shift.start_time?.slice(0, 5) ?? '--:--'}
+              endTime={formatWallClock(shift.end_time) ?? shift.end_time?.slice(0, 5) ?? '--:--'}
               // The BILLABLE (post-floor) net, which is what this prop means —
               // it feeds the Payroll section. This passed the SCHEDULED net, so
               // a shift topped up to the EBA minimum read one net here and a

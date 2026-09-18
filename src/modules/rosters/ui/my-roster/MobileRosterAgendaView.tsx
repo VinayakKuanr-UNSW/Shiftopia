@@ -5,17 +5,10 @@ import { listItemSpring } from '@/modules/core/ui/motion/presets';
 import { cn } from '@/modules/core/lib/utils';
 import { text } from '@/modules/core/ui/typography';
 import { isTodayInTimezone } from '@/modules/core/lib/date.utils';
-import { Shift } from '@/modules/rosters';
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 import { MobileShiftCard } from './MobileShiftCard';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import './MobileRosterAgendaView.css';
-
-interface ShiftWithDetails {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
-}
 
 interface MobileRosterAgendaViewProps {
   days: Date[];

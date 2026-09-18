@@ -41,12 +41,11 @@ export interface FilterOption {
     category: FilterCategory;
 }
 
-export interface ShiftWithDetails {
-    shift: Shift;
-    groupName: string;
-    groupColor: string;
-    subGroupName: string;
-}
+// `ShiftWithDetails` used to live here. It had ZERO importers — every one of the
+// six consumers redeclared it locally — because the `Shift` in scope in this file
+// is `model/shift.types.ts#Shift`, re-exported via `@/modules/core/types`, while
+// the My Roster views all use `domain/shift.entity.ts#Shift`. The shared type was
+// unusable by the people it was for. It now lives beside the Shift it wraps.
 
 export interface ShiftAssignment {
     shiftId: string;

@@ -2,19 +2,12 @@ import React, { useState } from 'react';
 import { addDays } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import TimeGrid, { HOUR_HEIGHT } from '@/modules/rosters/ui/components/TimeGrid';
-import { Shift } from '@/modules/rosters';
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { cn } from '@/modules/core/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { calculateShiftLayout } from '../../utils/shift-layout.utils';
 import MyRosterShift from './MyRosterShift';
-
-interface ShiftWithDetails {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
-}
 
 interface WeekViewProps {
   date: Date;
@@ -49,6 +42,12 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
     date: Date;
   } | null>(null);
 
+  // Stable across renders so the memoised chips are not invalidated every time
+  // this view re-renders (e.g. when a dialog opens).
+  const handleSelect = React.useCallback((data: ShiftWithDetails, dateKey: string) => {
+    setSelectedShift({ data, date: parseISO(dateKey) });
+  }, []);
+
   // Start week on Monday (app-wide Mon–Sun convention)
   const start = startOfWeekAU(date);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -73,12 +72,10 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
                     style={{ top, height }}
                   >
                     <MyRosterShift
-                      shift={shift}
-                      groupName={shiftData.groupName}
-                      groupColor={shiftData.groupColor}
-                      subGroupName={shiftData.subGroupName}
-                      onClick={() => setSelectedShift({ data: shiftData, date: day })}
-                      style={{ height }}
+                      data={shiftData}
+                      dateKey={dateStr}
+                      height={height}
+                      onSelect={handleSelect}
                     />
                   </div>
                 );

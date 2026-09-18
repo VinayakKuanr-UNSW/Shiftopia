@@ -1,19 +1,12 @@
 import React, { useState } from 'react';
 import TimeGrid, { HOUR_HEIGHT } from '@/modules/rosters/ui/components/TimeGrid';
-import { Shift } from '@/modules/rosters';
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 import { getDepartmentColor } from '@/modules/core/lib/utils';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { calculateShiftLayout } from '../../utils/shift-layout.utils';
 import MyRosterShift from './MyRosterShift';
-
-interface ShiftWithDetails {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
-}
 
 interface DayViewProps {
   date: Date;
@@ -45,6 +38,12 @@ const getGradientClass = (color: string): string => {
 const DayView: React.FC<DayViewProps> = ({ date, shifts }) => {
   const [selectedShift, setSelectedShift] = useState<ShiftWithDetails | null>(null);
 
+  // Stable identity: the memoised chips must not be invalidated every time this
+  // view re-renders. The day is fixed for this view, so `dateKey` is unused.
+  const handleSelect = React.useCallback((data: ShiftWithDetails) => {
+    setSelectedShift(data);
+  }, []);
+
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -63,12 +62,10 @@ const DayView: React.FC<DayViewProps> = ({ date, shifts }) => {
                 style={{ top, height }}
               >
                 <MyRosterShift
-                  shift={shift}
-                  groupName={shiftData.groupName}
-                  groupColor={shiftData.groupColor}
-                  subGroupName={shiftData.subGroupName}
-                  onClick={() => setSelectedShift(shiftData)}
-                  style={{ height }}
+                  data={shiftData}
+                  dateKey={dateStr}
+                  height={height}
+                  onSelect={handleSelect}
                 />
               </div>
             );

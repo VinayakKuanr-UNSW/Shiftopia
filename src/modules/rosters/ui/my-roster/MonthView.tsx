@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, parseISO } from 'date-fns';
 import { getTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { Calendar } from 'lucide-react';
 import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/modules/core/ui/primitives/dialog';
-import { Shift } from '@/modules/rosters';
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 import { MobileShiftCard } from './MobileShiftCard';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import MyRosterShift from './MyRosterShift';
@@ -37,13 +37,6 @@ import MyRosterShift from './MyRosterShift';
  *     rather than being conveyed by chip colour alone.
  */
 
-interface ShiftWithDetails {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
-}
-
 interface MonthViewProps {
   date: Date;
   getShiftsForDate: (date: Date, options?: { includeContinuations?: boolean }) => ShiftWithDetails[];
@@ -57,13 +50,19 @@ interface MonthViewProps {
 
 const SYDNEY_TZ = 'Australia/Sydney';
 
+/** Local-field `YYYY-MM-DD`. Called once per cell per render, so not `format()`. */
+const toDateKey = (d: Date): string =>
+  `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`;
+
 /** Group colour → shift-density dot. */
-const DENSITY_DOT_COLOURS: Record<string, string> = {
-  convention: '#60a5fa', // blue-400
-  exhibition: '#4ade80', // green-400
-  theatre: '#f87171',    // red-400
-  cutaway: '#fbbf24',    // amber-400
-};
+/** `Map`: an object lookup returns `Object.prototype` members for keys like
+ *  `constructor`, which would put a function into a `backgroundColor`. */
+const DENSITY_DOT_COLOURS = new Map<string, string>([
+  ['convention', '#60a5fa'], // blue-400
+  ['exhibition', '#4ade80'], // green-400
+  ['theatre', '#f87171'],    // red-400
+  ['cutaway', '#fbbf24'],    // amber-400
+]);
 const DENSITY_DOT_FALLBACK = '#94a3b8'; // slate-400
 
 const MonthView: React.FC<MonthViewProps> = ({
@@ -82,6 +81,13 @@ const MonthView: React.FC<MonthViewProps> = ({
   useEffect(() => {
     setSelectedDay(date);
   }, [date]);
+
+  // Stable identity: the desktop grid renders up to 126 chips (42 cells x 3), and
+  // this component re-renders whenever `selectedShift` changes. An inline arrow
+  // here would re-render every chip on every dialog open.
+  const handleSelect = React.useCallback((data: ShiftWithDetails, dateKey: string) => {
+    setSelectedShift({ data, date: parseISO(dateKey) });
+  }, []);
 
   const openDay = React.useCallback(
     (day: Date) => {
@@ -107,14 +113,14 @@ const MonthView: React.FC<MonthViewProps> = ({
           ? 'no shifts'
           : `${dayShifts.length} shift${dayShifts.length === 1 ? '' : 's'}`,
       );
-      if (offerDates.has(format(ctx.date, 'yyyy-MM-dd'))) parts.push('offer pending');
+      if (offerDates.has(toDateKey(ctx.date))) parts.push('offer pending');
       return parts.join(', ');
     },
     [getShiftsForDate, offerDates],
   );
 
   const agendaShifts = getShiftsForDate(selectedDay, { includeContinuations: false });
-  const selectedDateStr = format(selectedDay, 'yyyy-MM-dd');
+  const selectedDateStr = toDateKey(selectedDay);
   const hasOffer = offerDates.has(selectedDateStr);
 
   // ── MOBILE — Outlook-style compact grid ───────────────────────────────────
@@ -149,13 +155,13 @@ const MonthView: React.FC<MonthViewProps> = ({
                 className={cn('h-1.5 w-1.5 rounded-full', isSelected && 'ring-1 ring-white/50')}
                 style={{
                   backgroundColor:
-                    DENSITY_DOT_COLOURS[s.groupColor?.toLowerCase() ?? ''] ?? DENSITY_DOT_FALLBACK,
+                    DENSITY_DOT_COLOURS.get(s.groupColor?.toLowerCase() ?? '') ?? DENSITY_DOT_FALLBACK,
                 }}
               />
             ))}
           </div>
 
-          {offerDates.has(format(ctx.date, 'yyyy-MM-dd')) && (
+          {offerDates.has(toDateKey(ctx.date)) && (
             // Static. A pulsing dot on every offer day meant a month with a
             // few offers had several things blinking at once, and the marker is
             // already carried in the cell's accessible name.
@@ -217,12 +223,10 @@ const MonthView: React.FC<MonthViewProps> = ({
           {dayShifts.slice(0, 3).map((shiftData) => (
             <div key={shiftData.shift.id} className="pointer-events-auto">
               <MyRosterShift
-                shift={shiftData.shift}
-                groupName={shiftData.groupName}
-                groupColor={shiftData.groupColor}
-                subGroupName={shiftData.subGroupName}
+                data={shiftData}
+                dateKey={toDateKey(ctx.date)}
                 compact
-                onClick={() => setSelectedShift({ data: shiftData, date: ctx.date })}
+                onSelect={handleSelect}
               />
             </div>
           ))}
@@ -245,7 +249,7 @@ const MonthView: React.FC<MonthViewProps> = ({
         </div>
       );
     },
-    [getShiftsForDate, openDay],
+    [getShiftsForDate, openDay, handleSelect],
   );
 
   const dayPopover = (

@@ -12,14 +12,7 @@ import ThreeDayView from './ThreeDayView';
 import WeekView from './WeekView';
 import MonthView from './MonthView';
 import MobileRosterAgendaView from './MobileRosterAgendaView';
-import { Shift } from '@/modules/rosters';
-
-interface ShiftWithDetails {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
-}
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 
 interface MyRosterCalendarProps {
   view: CalendarView;

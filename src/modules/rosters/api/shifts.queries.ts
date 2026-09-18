@@ -2,6 +2,28 @@ import { supabase } from '@/platform/supabase/client';
 import { Shift, ShiftStatus, TemplateGroupType, isValidUuid } from '../domain/shift.entity';
 import { callAuthenticatedRpc } from '@/platform/supabase/rpc/client';
 import { OfferActionResponseSchema } from './contracts';
+import { getTodayInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+
+/**
+ * Sydney's `YYYY-MM-DD`, as the floor for "still-actionable offer" queries.
+ *
+ * A PENDING offer is `lifecycle_status = 'Published'` + `assignment_outcome IS
+ * NULL`, and nothing ever rewrites those columns when an offer lapses — so
+ * without a date floor the predicate is unbounded and grows monotonically for
+ * the life of the account. Every My Roster page load ran it, because the page
+ * builds its calendar offer-dots from the same query.
+ *
+ * An offer for a shift that has already happened is not actionable, so the floor
+ * changes no behaviour the user can see: `MyOffersModal` was already discarding
+ * these client-side via `resolveOfferDeadline`, after downloading them.
+ */
+function actionableOfferFloor(): string {
+    const today = getTodayInTimezone(SYDNEY_TZ);
+    const y = today.getFullYear();
+    const m = `${today.getMonth() + 1}`.padStart(2, '0');
+    const d = `${today.getDate()}`.padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
 
 // ── Lookup types ──────────────────────────────────────────────────────────────
 
@@ -984,7 +1006,10 @@ export const shiftsQueries = {
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
                 .is('assignment_outcome', null)
-                .is('deleted_at', null);
+                .is('deleted_at', null)
+                // Must match getMyOffers exactly, or the badge counts offers the
+                // list does not show.
+                .gte('shift_date', actionableOfferFloor());
 
             if (error) {
                 console.error('Error fetching pending offer count:', error);
@@ -1080,7 +1105,8 @@ export const shiftsQueries = {
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
                 .is('assignment_outcome', null)
-                .is('deleted_at', null);
+                .is('deleted_at', null)
+                .gte('shift_date', actionableOfferFloor());
 
             if (filters?.organizationId && isValidUuid(filters.organizationId)) {
                 query = query.eq('organization_id', filters.organizationId);
