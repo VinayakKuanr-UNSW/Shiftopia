@@ -14,7 +14,11 @@ import { runHardValidation, HardValidationResult, ShiftTimeRange } from '@/modul
 import { format, addDays, subDays } from 'date-fns';
 import { getNowInTimezone, SYDNEY_TZ, todayISO } from '@/modules/core/lib/date.utils';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { isEqual } from 'lodash';
+// Deep import: `from 'lodash'` pulls the whole CJS bundle, which Rollup cannot
+// tree-shake and then hoists into the EAGER entry chunk (72 KB) because
+// recharts also depends on it. This module path is ~5 KB and stays in this
+// lazy modal's own chunk.
+import isEqual from 'lodash/isEqual';
 
 const EMPTY_ARRAY: any[] = [];
 

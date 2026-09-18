@@ -15,7 +15,11 @@
 
 import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { isEqual } from 'lodash';
+// Deep import: `from 'lodash'` pulls the whole CJS bundle, which Rollup cannot
+// tree-shake and then hoists into the EAGER entry chunk (72 KB) because
+// recharts also depends on it. This module path is ~5 KB and stays in this
+// lazy modal's own chunk.
+import isEqual from 'lodash/isEqual';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, startOfDay, parse } from 'date-fns';

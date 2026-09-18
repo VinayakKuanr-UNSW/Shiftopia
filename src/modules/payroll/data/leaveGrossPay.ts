@@ -19,7 +19,7 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { ausHolidays } from '@/modules/core/lib/holidays';
+import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 import type { GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 import type { CostCalculatorOptions } from '../../rosters/domain/projections/utils/cost/types';
 import { mapEmploymentType } from './grossPay.read.api';
@@ -412,7 +412,7 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<
   const ctxById = await resolveLeaveContexts(employeeIds, bounds);
   const rosterByEmp = await fetchRosteredMinutes(employeeIds, bounds);
 
-  const isHoliday = (ymd: string) => !!ausHolidays.isHoliday(ymd);
+  const isHoliday = (ymd: string) => isPublicHolidayISO(ymd);
   const out: GrossPayShiftInput[] = [];
   const phSeen = new Set<string>(); // employee:date — overlapping requests must not double-pay a PH
   for (const req of approved) {

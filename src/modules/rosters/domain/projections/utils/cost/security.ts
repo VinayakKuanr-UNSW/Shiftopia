@@ -1,5 +1,5 @@
 import {
-  hd, SATURDAY, SUNDAY, CASUAL_LOADING, TIME_AND_HALF_MULTIPLIER,
+  isPublicHolidayISO, SATURDAY, SUNDAY, CASUAL_LOADING, TIME_AND_HALF_MULTIPLIER,
   TIME_AND_HALF_HOURS_CAP, DOUBLE_TIME_MULTIPLIER, DOUBLE_TIME_AND_HALF_MULTIPLIER,
   ANNUAL_LEAVE_LOADING, ZERO_COST_BREAKDOWN,
 } from './constants';
@@ -163,7 +163,7 @@ export function estimateDetailedShiftCost(
     isHoliday = facts.isPublicHoliday;
     shiftDay = facts.dayOfWeek;
   } else {
-    isHoliday = !!hd.isHoliday(shift_date);
+    isHoliday = isPublicHolidayISO(shift_date);
     shiftDay = new Date(shift_date + 'T00:00:00').getDay();
   }
 
@@ -199,7 +199,7 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (ordinaryEndMins > 1440 || otEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : !!hd.isHoliday(nextStr);
+    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
   }
 
   interface Seg { fromMins: number; toMins: number; day: number; isHoliday: boolean; }

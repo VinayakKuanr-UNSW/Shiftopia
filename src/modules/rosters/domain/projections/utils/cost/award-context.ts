@@ -2,7 +2,7 @@
  * Award Context — Pre-computed per-date facts for the ICC Sydney EA 2025.
  *
  * The core insight: on a typical roster, shifts cluster on the same handful of
- * dates (often just 7 days). Instead of calling `hd.isHoliday()` (~0.24ms) and
+ * dates (often just 7 days). Instead of calling `isPublicHolidayISO()` and
  * `new Date().getDay()` for every single shift, we compute these facts ONCE
  * per unique date and pass the resulting `DateFacts` map through the engine.
  *
@@ -11,14 +11,14 @@
  * This module is worker-safe — no DOM, no React, no Supabase.
  */
 
-import { hd } from './constants';
+import { isPublicHolidayISO } from './constants';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /**
  * Pre-computed facts about a single calendar date.
  * Every field that previously required a per-shift `new Date()` or
- * `hd.isHoliday()` call is pre-baked here.
+ * `isPublicHolidayISO()` call is pre-baked here.
  */
 export interface DateFacts {
   /** The original YYYY-MM-DD string */
@@ -96,7 +96,7 @@ export function buildAwardContext(shiftDates: (string | Date)[]): AwardContext {
     // One-time per unique date
     const dateObj = new Date(dateStr + 'T00:00:00');
     const dayOfWeek = dateObj.getDay();
-    const isPublicHoliday = !!hd.isHoliday(dateStr);
+    const isPublicHoliday = isPublicHolidayISO(dateStr);
     const midnightMs = dateObj.getTime();
 
     dateFacts.set(dateStr, {
@@ -125,7 +125,7 @@ export function getDateFacts(ctx: AwardContext, dateStr: string): DateFacts {
     facts = {
       dateStr: normalized,
       dayOfWeek: dateObj.getDay(),
-      isPublicHoliday: !!hd.isHoliday(normalized),
+      isPublicHoliday: isPublicHolidayISO(normalized),
       midnightMs: dateObj.getTime(),
     };
     ctx.dateFacts.set(normalized, facts);

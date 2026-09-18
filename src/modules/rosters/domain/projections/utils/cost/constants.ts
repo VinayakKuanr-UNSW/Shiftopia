@@ -1,6 +1,10 @@
-// Re-export the app-wide AU/NSW holiday instance so the cost engine and the
-// calendar UI share a single source of truth for public holidays.
-export { ausHolidays as hd } from '@/modules/core/lib/holidays';
+// The cost engine and the calendar UI share one source of truth for public
+// holidays. This used to re-export the raw `date-holidays` instance as `hd`,
+// and every caller asked it `hd.isHoliday(date)` — which is truthy for
+// `observance` and `bank` entries too, so Mother's Day, Father's Day and the
+// NSW August Bank Holiday were each priced at PUBLIC-HOLIDAY penalty rates.
+// `isPublicHolidayISO` is public-only; import it directly.
+export { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 
 export const SUNDAY = 0;
 export const MONDAY = 1;
