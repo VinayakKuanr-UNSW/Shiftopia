@@ -13,6 +13,7 @@ import { Gavel, Flame, Clock, CheckCircle, CircleSlash, Zap, Loader2, Filter, Ch
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 
 
 const BID_TOGGLE_TABS: { id: BidToggle; label: string; icon: typeof Flame; accent: string }[] = [
@@ -200,10 +201,14 @@ export const ManagerBidsPage: React.FC = () => {
                         ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
                         : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
                 )}>
+                    {/* Narrow only when the selection is unambiguous: an
+                        ORG-scoped manager has all 11 departments selected by
+                        default, and `dept_ids[0]` filtered their bids to one
+                        arbitrary department. */}
                     <OpenBidsView
-                        organizationId={scope.org_ids[0] ?? null}
-                        departmentId={scope.dept_ids[0] ?? null}
-                        subDepartmentId={scope.subdept_ids[0] ?? null}
+                        organizationId={soleOrgId(scope)}
+                        departmentId={soleDeptId(scope)}
+                        subDepartmentId={soleSubDeptId(scope)}
                         externalSearchQuery={searchQuery}
                         viewMode={viewMode}
                         groupBy={groupBy}

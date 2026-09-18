@@ -42,6 +42,7 @@ import type { Shift } from "../domain/shift.entity";
 
 // Scope
 import { useScopeFilter } from "@/platform/auth/useScopeFilter";
+import { soleOrgId, soleDeptId, soleSubDeptId, deptIds, subDeptIds } from '@/platform/auth/scope-narrowing';
 
 // Layout
 import { PageLayout } from "@/modules/core/ui/layout/PageLayout";
@@ -820,11 +821,15 @@ const LaborDemandForecastingPage: React.FC = () => {
   } = useScopeFilter("managerial");
 
   // Multi-department derived IDs
-  const organizationId = scope.org_ids[0] || null;
-  const departmentId = scope.dept_ids[0] || null; // For legacy single-ID calls
-  const subDepartmentId = scope.subdept_ids[0] || null; // For legacy single-ID calls
-  const departmentIds = scope.dept_ids;
-  const subDepartmentIds = scope.subdept_ids;
+  const organizationId = soleOrgId(scope);
+  // The single-ID calls this page still has must narrow ONLY when the selection
+  // is unambiguous. `[0]` silently picked one of the org's 11 departments.
+  const departmentId = soleDeptId(scope);
+  const subDepartmentId = soleSubDeptId(scope);
+  // The multi-ID path, filtered: one non-UUID in a PostgREST `.in()` 400s the
+  // whole select, and react-query's `= []` then renders an empty state.
+  const departmentIds = deptIds(scope);
+  const subDepartmentIds = subDeptIds(scope);
 
   // Use the first selected dept name if available (simple fallback)
   const departmentName = departmentId ? "Selected Department" : null; 

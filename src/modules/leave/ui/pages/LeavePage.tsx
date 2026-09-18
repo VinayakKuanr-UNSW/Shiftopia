@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter, type ScopeMode } from '@/platform/auth/useScopeFilter';
+import { soleDeptId } from '@/platform/auth/scope-narrowing';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
@@ -150,7 +151,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
     if (!employeeId) return;
     setLoading(true);
     try {
-      const deptFilter = isManager && activeTab === 'approvals' && scope.dept_ids?.length === 1 ? scope.dept_ids[0] : undefined;
+      const deptFilter = isManager && activeTab === 'approvals' ? (soleDeptId(scope) ?? undefined) : undefined;
       const [bals, reqs, team, ftSecurity] = await Promise.all([
         getLeaveBalances(employeeId),
         getLeaveRequests(employeeId),

@@ -21,6 +21,7 @@ import {
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { TemplateFunctionBar } from '../ui/components/TemplateFunctionBar';
 import { cn } from '@/modules/core/lib/utils';
@@ -78,9 +79,15 @@ const TemplatesPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const { isDark } = useTheme();
 
-  const organizationId = scope.org_ids[0] ?? '';
-  const departmentId = scope.dept_ids[0] || '';
-  const subDepartmentId = scope.subdept_ids[0] || '';
+  // Department and sub-department are OPTIONAL filters here (see the
+  // `|| undefined` at the fetch below), so "several selected" must mean "do not
+  // narrow", not "narrow to the first". This database has 11 departments and 25
+  // sub-departments in one org, and an ORG-scoped manager's default selection
+  // contains all of them — `dept_ids[0]` showed such a manager the templates of
+  // one arbitrary department out of eleven.
+  const organizationId = soleOrgId(scope) ?? '';
+  const departmentId = soleDeptId(scope) ?? '';
+  const subDepartmentId = soleSubDeptId(scope) ?? '';
 
   useEffect(() => {
     if (organizationId) {

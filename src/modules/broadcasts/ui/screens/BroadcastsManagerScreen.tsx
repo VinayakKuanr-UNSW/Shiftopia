@@ -30,6 +30,7 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
+import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 
 import { useBroadcastGroups } from '../../state/useBroadcasts';
 import { BroadcastGroupsView } from '../views/BroadcastGroups.view';
@@ -90,13 +91,14 @@ export function BroadcastsManagerScreen({
   // Sync with global scope filter
   React.useEffect(() => {
     if (scope) {
-      if (scope.org_ids.length > 0) setSelectedOrgId(scope.org_ids[0]);
-      if (scope.dept_ids.length > 0) setSelectedDeptId(scope.dept_ids[0]);
-      if (scope.subdept_ids.length > 0) setSelectedSubDeptId(scope.subdept_ids[0]);
-
-      // Handle "clear" cases if needed, though usually scope has defaults
-      if (scope.dept_ids.length === 0) setSelectedDeptId(null);
-      if (scope.subdept_ids.length === 0) setSelectedSubDeptId(null);
+      // These drive SINGLE-select dropdowns, so something has to be chosen — but
+      // choosing it silently is the bug. An ORG-scoped manager has all 11
+      // departments in scope, and `dept_ids[0]` picked one of them for them,
+      // invisibly, deciding who a broadcast reaches. Auto-select only when the
+      // scope names exactly one; otherwise leave it null so the manager picks.
+      setSelectedOrgId(soleOrgId(scope));
+      setSelectedDeptId(soleDeptId(scope));
+      setSelectedSubDeptId(soleSubDeptId(scope));
     }
   }, [scope]);
 

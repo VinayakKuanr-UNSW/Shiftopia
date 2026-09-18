@@ -62,6 +62,7 @@ import { Drawer, DrawerContent, DrawerTitle, DrawerDescription, DrawerClose } fr
 import { useQuery } from '@tanstack/react-query';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, deptIds, subDeptIds } from '@/platform/auth/scope-narrowing';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
 import { computeShiftUrgency, ShiftUrgency, EMERGENT_WINDOW_MS } from '@/modules/rosters/domain/bidding-urgency';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
@@ -368,9 +369,9 @@ export const EmployeeSwapsPage: React.FC = () => {
         isCancelling,
         userId,
     } = useSwaps({
-        organizationId: scope.org_ids[0],
-        departmentId: scope.dept_ids.length > 0 ? scope.dept_ids : null,
-        subDepartmentId: scope.subdept_ids.length > 0 ? scope.subdept_ids : null
+        organizationId: soleOrgId(scope) ?? undefined,
+        departmentId: deptIds(scope).length > 0 ? deptIds(scope) : null,
+        subDepartmentId: subDeptIds(scope).length > 0 ? subDeptIds(scope) : null
     });
 
     // §2 Combined State helper — derive C1-C7 from swap status

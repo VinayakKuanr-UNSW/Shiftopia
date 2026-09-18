@@ -38,6 +38,7 @@ import { BidSelectionToolbar } from '../components/BidSelectionToolbar';
 import { groupOpportunities, type BidGroupBy } from '../utils/bid-grouping';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, deptIds, subDeptIds } from '@/platform/auth/scope-narrowing';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primitives/popover';
 import {
@@ -113,9 +114,11 @@ export const EmployeeBidsPage: React.FC = () => {
     const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
 
     const hierarchyFilters = {
-        organizationId: scope.org_ids[0] ?? '',
-        departmentId: scope.dept_ids,
-        subDepartmentId: scope.subdept_ids,
+        // Narrow only when unambiguous; the dept/sub-dept levels already passed
+        // the whole selection, and now drop non-UUIDs before they reach `.in()`.
+        organizationId: soleOrgId(scope) ?? '',
+        departmentId: deptIds(scope),
+        subDepartmentId: subDeptIds(scope),
     };
 
     // ========================================================================

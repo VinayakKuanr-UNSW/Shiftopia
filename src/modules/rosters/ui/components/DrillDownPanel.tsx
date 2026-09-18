@@ -86,7 +86,11 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const createShiftMutation = useCreateShift();
 
   // Fetch data with guaranteed organization ID fallback and enabled only when modal is open
-  const activeOrgId = organizationId || useRosterStore.getState().selectedOrganizationId || '00000000-0000-0000-0000-000000000001';
+  // The hardcoded literal here was the id of the only organisation that exists,
+  // so it read as a harmless default — but for any other org it would quietly
+  // drill into the wrong one's data. Absent an org, resolve to null and let the
+  // caller's query stay disabled.
+  const activeOrgId = organizationId || useRosterStore.getState().selectedOrganizationId || null;
 
   // Scope the fetch to the SAME org/department/sub-department the bucket cell
   // was aggregated over. `get_roster_summary` (which produced the count the

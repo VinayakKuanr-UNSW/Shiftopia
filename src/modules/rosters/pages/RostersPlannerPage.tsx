@@ -79,6 +79,7 @@ import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPref
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, soleId } from '@/platform/auth/scope-narrowing';
 import {
   preflightPublish,
   preflightUnpublish,
@@ -214,7 +215,7 @@ const NewRostersPage: React.FC = () => {
   // commit so consumers re-render once per scope change instead of three times.
   React.useEffect(() => {
     useRosterStore.setState({
-      ...(scope.org_ids.length > 0 ? { selectedOrganizationId: scope.org_ids[0] } : {}),
+      ...(soleOrgId(scope) ? { selectedOrganizationId: soleOrgId(scope)! } : {}),
       selectedDepartmentIds: scope.dept_ids,
       selectedSubDepartmentIds: scope.subdept_ids,
     });
@@ -341,7 +342,11 @@ const NewRostersPage: React.FC = () => {
     // per-shift fetch by gating the query off (null orgId → enabled = false).
     // React Query auto-refetches when this flips back to a real org id on
     // switching into DnD / Collapse / Bulk / Day view.
-    isGroupBucketView ? null : (selectedOrganizationId || scope.org_ids[0] || '00000000-0000-0000-0000-000000000001'),
+    // No hardcoded organisation fallback. That literal is the id of the ONLY org
+    // that currently exists, so it looked harmless — but it would silently query
+    // the wrong org's shifts for anyone else. A null orgId gates the query off,
+    // which is exactly what the comment above describes.
+    isGroupBucketView ? null : (selectedOrganizationId || soleOrgId(scope)),
     startDate,
     endDate,
     queryFilters
@@ -1524,9 +1529,9 @@ const NewRostersPage: React.FC = () => {
         date={drillDownState.date}
         groupType={drillDownState.groupType}
         subGroupName={drillDownState.subGroupName}
-        organizationId={selectedOrganizationId || scope.org_ids[0] || undefined}
-        departmentId={selectedDepartmentIds[0] || undefined}
-        subDepartmentId={selectedSubDepartmentIds[0] || undefined}
+        organizationId={selectedOrganizationId || soleOrgId(scope) || undefined}
+        departmentId={soleId(selectedDepartmentIds) ?? undefined}
+        subDepartmentId={soleId(selectedSubDepartmentIds) ?? undefined}
         departmentIds={selectedDepartmentIds}
         subDepartmentIds={selectedSubDepartmentIds}
         groupName={GROUP_DISPLAY_NAMES[drillDownState.groupType as TemplateGroupType | 'unassigned'] || drillDownState.groupType}

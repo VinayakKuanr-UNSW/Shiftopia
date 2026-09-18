@@ -19,6 +19,7 @@ import { SwapPriority, PRIORITY_CONFIG } from './EmployeeSwaps.page';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
@@ -503,9 +504,11 @@ export const ManagerSwapsPage: React.FC = () => {
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
     const { isDark } = useTheme();
 
-    const currentOrgId = scope.org_ids[0] || orgSelection.organizationId;
-    const currentDeptId = scope.dept_ids.length === 1 ? scope.dept_ids[0] : undefined;
-    const currentSubDeptId = scope.subdept_ids.length === 1 ? scope.subdept_ids[0] : undefined;
+    // The dept/sub-dept lines were already the correct pattern, spelled inline;
+    // `soleOrgId` extends it to the organisation, which was still taking `[0]`.
+    const currentOrgId = soleOrgId(scope) ?? orgSelection.organizationId;
+    const currentDeptId = soleDeptId(scope) ?? undefined;
+    const currentSubDeptId = soleSubDeptId(scope) ?? undefined;
 
     // ==================== STATE ====================
     const [statusFilter, setStatusFilter] = useState<SwapStatus | 'all'>('MANAGER_PENDING');
