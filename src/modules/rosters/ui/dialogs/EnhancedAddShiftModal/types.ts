@@ -81,6 +81,24 @@ export interface ShiftContext {
     eventStartTime?: string;
     eventEndTime?: string;
     eventId?: string;
+    /**
+     * What to record in `shifts.creation_source`, when the caller is not a
+     * manager typing a one-off shift.
+     *
+     * Defaults to 'manual' ('template' in template mode), which is what the
+     * Roster Planner wants. A provenance label only: until 2026-10-04 a trigger
+     * (`enforce_ft_shifts_are_baseline_only`) refused any FT shift not labelled
+     * 'baseline_ft', which is why the Office page still passes that value.
+     * Migration 20261004170000 dropped it — FT shifts are created on the
+     * Rosters page with the default.
+     */
+    creationSource?: string;
+    /**
+     * Pre-fills Employment target on a NEW shift (edit reads the row's own,
+     * falling back to this). A surface that locks the field must also fill
+     * it: a lock over an empty value leaves the Role step invalid for good.
+     */
+    targetEmploymentType?: FormValues['target_employment_type'];
 }
 
 export interface EnhancedAddShiftModalProps {
@@ -91,6 +109,19 @@ export interface EnhancedAddShiftModalProps {
     isTemplateMode?: boolean;
     editMode?: boolean;
     existingShift?: any;
+    /**
+     * Fields the caller has already decided, rendered but not editable.
+     *
+     * For a surface where the grid position IS the answer — the Office week grid
+     * fixes employee, date and target type by which cell was clicked, and role,
+     * group and sub-group by contract and convention — a picker would only offer
+     * ways to make the row wrong. Empty by default, so the Roster Planner is
+     * unaffected.
+     *
+     * Distinct from the existing global read-only state, which is about a
+     * PUBLISHED shift and disables everything at once.
+     */
+    lockedFields?: readonly (keyof FormValues)[];
     onShiftCreated?: (shiftData: any) => void;
 }
 
@@ -212,6 +243,8 @@ export interface ShiftFormDrawerContentProps {
     selectedRemLevel?: RemunerationLevel;
     isRoleLocked?: boolean;
     isEmployeeLocked?: boolean;
+    /** Locks the Employment target select. See `lockedFields`. */
+    isTargetTypeLocked?: boolean;
     isScheduleDefined: boolean;
 
     /** Active wizard step (1..5) */
@@ -277,6 +310,8 @@ export interface ShiftFormSheetProps {
     isSubGroupLocked: boolean;
     isRoleLocked?: boolean;
     isEmployeeLocked?: boolean;
+    /** Locks the Employment target select. See `lockedFields`. */
+    isTargetTypeLocked?: boolean;
 
     // Actions
     canUnpublish?: boolean;

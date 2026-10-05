@@ -191,6 +191,10 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
         tags: shift.tags || [],
         notes: shift.notes,
         is_training: shift.is_training,
+        // Mandatory on every shift — without it every Clone failed with
+        // "target_employment_type is required" (fn_shift_inherit_template_row).
+        target_employment_type: (shift as any).target_employment_type,
+        target_requires_flexible: (shift as any).target_requires_flexible,
       };
 
       await createShiftMutation.mutateAsync(cloneData);

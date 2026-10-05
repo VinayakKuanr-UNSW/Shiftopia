@@ -37,8 +37,7 @@
     "leave_approvals": "Leave Approvals",
     "team_availability": "Team Availability",
     "gross_pay": "Gross Pay",
-    "compliance_rejections": "Compliance Rejections",
-    "baseline_ft": "Baseline FT"
+    "compliance_rejections": "Compliance Rejections"
   },
   "settings": {
     "title": "My Settings",

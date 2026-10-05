@@ -83,14 +83,15 @@ export function applyTimesheetFilters(
 
 // Exported so shared Group By logic (core/lib/row-grouping.ts callers) can
 // prettify group-type keys consistently with these filter chips.
-// Four fixed roster groups (see roster_groups table / memory: "Roster has
-// FOUR fixed groups"). 'v' is the canonical enum key (shifts.group_type /
+// Five fixed roster groups (roster_groups table; Office added 2026-10-04 for
+// full-time shifts). 'v' is the canonical enum key (shifts.group_type /
 // roster_groups.external_id).
 export const GROUP_OPTIONS: { v: string; l: string }[] = [
     { v: 'convention_centre', l: 'Convention' },
     { v: 'exhibition_centre', l: 'Exhibition' },
     { v: 'theatre',           l: 'Theatre' },
     { v: 'the_cutaway',       l: 'The Cutaway' },
+    { v: 'office',            l: 'Office' },
 ];
 
 // entry.group holds EITHER the enum key (group_type, when no roster_subgroup
@@ -107,6 +108,7 @@ const GROUP_ALIASES: Record<string, string> = {
     theatre: 'theatre',
     the_cutaway: 'the_cutaway',
     'the cutaway': 'the_cutaway',
+    office: 'office',
 };
 
 export function normalizeGroupKey(raw: string): string {

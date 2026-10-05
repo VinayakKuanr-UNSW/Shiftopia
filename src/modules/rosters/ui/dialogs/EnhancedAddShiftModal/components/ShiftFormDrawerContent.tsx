@@ -77,6 +77,7 @@ import type { ShiftFormDrawerContentProps } from '../types';
 import { formatHours } from '../utils';
 import {
     targetEmploymentTypeOptions,
+    FULL_TIME_GROUP_TYPE,
     TARGET_EMPLOYMENT_TYPES,
     TARGET_EMPLOYMENT_TYPE_LABELS,
     contractMatchesTarget,
@@ -91,6 +92,7 @@ const GROUP_LABEL: Record<string, string> = {
     exhibition_centre: 'Exhibition Centre',
     theatre: 'Theatre',
     the_cutaway: 'The Cutaway',
+    office: 'Office',
 };
 
 export const STEP = {
@@ -196,6 +198,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     isSubGroupLocked,
     isRoleLocked,
     isEmployeeLocked,
+    isTargetTypeLocked,
     onCancel,
     onSubmit,
     canSave = true,
@@ -590,7 +593,9 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 id="target-emp-select"
                                                 label="Target Employment Type"
                                                 required
-                                                options={targetEmploymentTypeOptions(field.value).map((t) => ({
+                                                options={targetEmploymentTypeOptions(field.value, {
+                                                    allowFullTime: watchGroup === FULL_TIME_GROUP_TYPE,
+                                                }).map((t) => ({
                                                     id: t,
                                                     name: TARGET_EMPLOYMENT_TYPE_LABELS[t],
                                                 }))}
@@ -612,7 +617,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     }
                                                 }}
                                                 placeholder="Select target employment…"
-                                                disabled={isReadOnly}
+                                                disabled={isReadOnly || isTargetTypeLocked}
                                             />
                                             <FormMessage className="text-xs font-semibold text-rose-600 dark:text-rose-400" />
                                         </FormItem>
@@ -652,7 +657,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                             if (!stillOk) form.setValue('assigned_employee_id', null);
                                                         }
                                                     }}
-                                                    disabled={isReadOnly}
+                                                    disabled={isReadOnly || isTargetTypeLocked}
                                                 />
                                             </FormControl>
                                         </FormItem>

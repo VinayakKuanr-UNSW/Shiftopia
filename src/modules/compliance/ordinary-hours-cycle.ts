@@ -68,7 +68,7 @@ const MS_PER_DAY = 86_400_000;
  * cycle boundaries are calendar facts, and letting the runtime's local zone into
  * the arithmetic shifts every boundary by a day for half the year in Sydney.
  *
- * EXPORTED so callers that reason about the same calendar — the Baseline FT
+ * EXPORTED so callers that reason about the same calendar — the Office
  * requirement calculator counts a contract's active days inside a cycle — do
  * not write a second date implementation. A second one would be a second place
  * for the local-timezone bug above to reappear, which is exactly the class of

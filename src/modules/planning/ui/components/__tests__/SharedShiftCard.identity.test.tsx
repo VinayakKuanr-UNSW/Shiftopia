@@ -236,3 +236,43 @@ describe('SharedShiftCard — identity grid', () => {
     expect(within(container).getByText('Set-up')).toBeInTheDocument();
   });
 });
+
+describe('SharedShiftCard — columns layout (Office expand dialog)', () => {
+  const columns = () => renderCard({
+    sectionLayout: 'columns', estimatedPay: '$273.07', billablePay: undefined,
+    defaultExpandedSections: { scheduled: false, actual: false, payroll: false, variance: false },
+  });
+
+  it('opens every section and offers no toggle, whatever the defaults say', () => {
+    const { container } = columns();
+    expect(container.querySelectorAll('[aria-expanded]')).toHaveLength(0);
+    for (const name of ['scheduled', 'actual', 'payroll', 'variance']) {
+      expect(container.querySelector(`[role="region"][id$="-${name}"]`)).not.toBeNull();
+    }
+  });
+
+  it('three equal panes in a row, Variance full width beneath', () => {
+    const { container } = columns();
+    const grid = container.querySelector('[role="region"][id$="-scheduled"]')!.parentElement!.parentElement!;
+    expect(grid.className).toContain('sm:grid-cols-3');
+    const panes = Array.from(grid.children) as HTMLElement[];
+    expect(panes).toHaveLength(4);
+    for (const pane of panes.slice(0, 3)) expect(pane.className).toContain('h-full');
+    expect(panes[3].className).toContain('sm:col-span-3');
+    expect(within(panes[3]).getByText('Variance')).toBeInTheDocument();
+  });
+
+  it('Actual carries a pay row like the other two — N/A when nothing prices it', () => {
+    const { container } = columns();
+    const actual = container.querySelector('[role="region"][id$="-actual"]') as HTMLElement;
+    expect(within(actual).getByText(/Actual Pay/i)).toBeInTheDocument();
+    expect(within(actual).getByText('N/A')).toBeInTheDocument();
+  });
+
+  it('the stacked layout is unchanged: toggles, and no Actual Pay row', () => {
+    const { container } = renderCard({ defaultExpandedSections: { actual: true } });
+    expect(container.querySelectorAll('button[aria-expanded]').length).toBeGreaterThanOrEqual(4);
+    const actual = container.querySelector('[role="region"][id$="-actual"]') as HTMLElement;
+    expect(within(actual).queryByText(/Actual Pay/i)).toBeNull();
+  });
+});

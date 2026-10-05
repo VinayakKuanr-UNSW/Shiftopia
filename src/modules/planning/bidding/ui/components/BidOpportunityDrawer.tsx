@@ -164,7 +164,8 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                         opp.groupType === 'convention_centre' ? 'convention' :
                                         opp.groupType === 'exhibition_centre' ? 'exhibition' :
                                         opp.groupType === 'theatre' ? 'theatre' :
-                                        opp.groupType === 'the_cutaway' ? 'cutaway' : 'default'
+                                        opp.groupType === 'the_cutaway' ? 'cutaway' :
+                                        opp.groupType === 'office' ? 'office' : 'default'
                                     }
                                     footerActions={footerActions}
                                     isFlat={false}

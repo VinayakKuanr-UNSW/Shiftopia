@@ -8,7 +8,7 @@ interface GroupSummaryCellProps {
   date: Date;
   groupName: string;
   summary: RosterSummaryCellDTO | undefined;
-  accent: string; // 'blue' | 'emerald' | 'red' | 'gray' | 'amber'
+  accent: string; // 'blue' | 'emerald' | 'red' | 'gray' | 'amber' | 'cyan'
   onClick: () => void;
   isBulkMode?: boolean;
   selectionState?: 'all' | 'some' | 'none';
@@ -37,6 +37,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
     emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', bar: 'bg-emerald-400', border: 'border-emerald-500/20', hover: 'hover:bg-emerald-500/15 hover:border-emerald-500/30' },
     red: { bg: 'bg-red-500/10', text: 'text-red-700 dark:text-red-400', bar: 'bg-red-400', border: 'border-red-500/20', hover: 'hover:bg-red-500/15 hover:border-red-500/30' },
     amber: { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', bar: 'bg-amber-400', border: 'border-amber-500/20', hover: 'hover:bg-amber-500/15 hover:border-amber-500/30' },
+    cyan: { bg: 'bg-cyan-500/10', text: 'text-cyan-700 dark:text-cyan-400', bar: 'bg-cyan-400', border: 'border-cyan-500/20', hover: 'hover:bg-cyan-500/15 hover:border-cyan-500/30' },
     gray: { bg: 'bg-slate-500/10', text: 'text-slate-700 dark:text-slate-400', bar: 'bg-slate-400', border: 'border-slate-500/20', hover: 'hover:bg-slate-500/15 hover:border-slate-500/30' },
   };
 

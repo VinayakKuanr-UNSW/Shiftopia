@@ -46,26 +46,25 @@ export const TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] = [
 ] as const;
 
 /**
- * What a person may CHOOSE when creating a shift by hand.
+ * What a person may CHOOSE when creating a shift by hand, outside the Office
+ * group.
  *
- * 'FT' is absent deliberately. Full-time hours are capped over a declared
- * multi-week cycle (ICC EBA cl 35.1(a)), and whether one more full-time shift
- * is lawful depends on what the employee has already worked and been credited
- * across that whole cycle — a question a single-shift form cannot ask. Adding
- * them one at a time is how a roster ends up over the ceiling without anything
- * ever reporting a breach: production carried 160h against a 152h cap on every
- * full-time employee, and no screen said so.
+ * Full-time shifts live in the roster's Office group (handover 2026-10-04,
+ * D2), so 'FT' is offered there and nowhere else — see
+ * `targetEmploymentTypeOptions`. That keeps them in one place; it is not what
+ * makes them lawful.
  *
- * Full-time shifts therefore come only from Baseline FT, which reconciles the
- * contract, the existing roster, leave and public holidays before proposing
- * anything.
+ * What makes them lawful is the cycle check. Full-time hours are capped over a
+ * declared multi-week cycle (ICC EBA cl 35.1(a)). That check was once missing
+ * from the single-shift form, which is how production carried 160h against a
+ * 152h cap with no screen saying so. The form's V8 ordinary-hours rule now runs
+ * against the employee's declared cycle and the shifts around it, and blocks
+ * the save at the ceiling. The database adds one rule of its own: one
+ * full-time shift per person per day (cl 39.1), `trg_shift_ft_one_per_day`.
  *
- * THIS LIST IS A COURTESY, NOT THE ENFORCEMENT. The database refuses any
- * `shifts` row with `target_employment_type = 'FT'` whose `creation_source` is
- * not `'baseline_ft'`, via `enforce_ft_shifts_are_baseline_only()` — a TRIGGER
- * rather than a check inside `sm_create_shift`, because
- * `apply_template_to_date_range_v2` inserts into `shifts` directly and would
- * otherwise walk straight past it.
+ * (Until 2026-10-04 a trigger refused any FT row not created by the Office
+ * page. It checked a label, not the shift, and was dropped in
+ * 20261004170000.)
  */
 export const CREATABLE_TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] = [
     'PT',
@@ -77,20 +76,45 @@ export const CREATABLE_TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] 
  *
  * `CREATABLE_TARGET_EMPLOYMENT_TYPES`, plus whatever the shift already is.
  *
- * Editing one of the full-time shifts Baseline FT created must still RENDER as
+ * Editing a full-time shift outside the Office group must still RENDER as
  * "Full-Time". Without the current value in the list a Radix Select falls back
  * to its placeholder, so the field silently reads as unset and the next save
  * changes the shift's type — turning "open a shift to check it" into an
- * accidental edit. The DB trigger only blocks BECOMING full-time, so switching
- * away is still possible; it just has to be deliberate.
+ * accidental edit. Switching away is still possible; it just has to be
+ * deliberate.
+ *
+ * `allowFullTime` — the shift is in the Office group, where full-time shifts
+ * are created: every type is offered.
  */
 export function targetEmploymentTypeOptions(
     current: TargetEmploymentType | null | undefined,
+    opts: { allowFullTime?: boolean } = {},
 ): readonly TargetEmploymentType[] {
+    if (opts.allowFullTime) return TARGET_EMPLOYMENT_TYPES;
     if (!current || CREATABLE_TARGET_EMPLOYMENT_TYPES.includes(current)) {
         return CREATABLE_TARGET_EMPLOYMENT_TYPES;
     }
     return [current, ...CREATABLE_TARGET_EMPLOYMENT_TYPES];
+}
+
+/** The roster group where full-time shifts are created (D2). */
+export const FULL_TIME_GROUP_TYPE = 'office';
+
+/**
+ * The target a NEW shift starts with.
+ *
+ * Only a caller that has already decided supplies one — and opening the form
+ * in the Office group is that decision, because it is where full-time shifts
+ * live. Everywhere else it is undefined and the planner must choose: seeding
+ * e.g. 'Casual' would silently decide who may work the shift, and the match is
+ * HARD. A starting value, not a lock — the picker still offers every type.
+ */
+export function initialTargetEmploymentType(
+    explicit: TargetEmploymentType | null | undefined,
+    groupType: string | null | undefined,
+): TargetEmploymentType | undefined {
+    if (explicit) return explicit;
+    return groupType === FULL_TIME_GROUP_TYPE ? 'FT' : undefined;
 }
 
 export const TARGET_EMPLOYMENT_TYPE_LABELS: Record<TargetEmploymentType, string> = {

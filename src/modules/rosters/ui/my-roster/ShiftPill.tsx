@@ -61,6 +61,14 @@ const ShiftPillImpl: React.FC<ShiftPillProps> = ({
           text: 'text-amber-700 dark:text-amber-300',
           time: 'text-amber-600/60 dark:text-amber-400/60'
         };
+      case 'office':
+        return {
+          bg: 'bg-cyan-500/10 hover:bg-cyan-500/20',
+          border: 'border-cyan-500/40',
+          accent: 'bg-cyan-500',
+          text: 'text-cyan-700 dark:text-cyan-300',
+          time: 'text-cyan-700 dark:text-cyan-300'
+        };
       default:
         return {
           bg: 'bg-slate-500/10 hover:bg-slate-500/20',

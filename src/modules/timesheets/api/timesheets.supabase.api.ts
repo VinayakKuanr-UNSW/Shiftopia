@@ -824,11 +824,6 @@ export async function updateTimesheetEntry(
             }
         }
 
-        // Provenance is owned by the DB trigger `trg_timesheet_provenance` (migration
-        // 20260725100000): it fires on every timesheets write and appends the
-        // lifecycle event (MANUALLY_APPROVED / REJECTED / EDITED / REOPENED / NO_SHOW)
-        // to the append-only timesheet_audit_log. No client-side insert here — that
-        // would double-log every event.
         return true;
     } catch (error) {
         if (error instanceof TimesheetConflictError) throw error;  // let the caller prompt a refresh

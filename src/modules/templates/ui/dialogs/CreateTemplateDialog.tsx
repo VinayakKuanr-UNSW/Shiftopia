@@ -456,7 +456,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                         Auto-Seeding
                       </Label>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Created with core shifts for <span className="text-foreground">Convention</span>, <span className="text-foreground">Exhibition</span>, <span className="text-foreground">Theatre</span>, and <span className="text-foreground">The Cutaway</span>.
+                        Created with core shifts for <span className="text-foreground">Convention</span>, <span className="text-foreground">Exhibition</span>, <span className="text-foreground">Theatre</span>, <span className="text-foreground">The Cutaway</span>, and <span className="text-foreground">Office</span>.
                       </p>
                     </div>
                   </div>

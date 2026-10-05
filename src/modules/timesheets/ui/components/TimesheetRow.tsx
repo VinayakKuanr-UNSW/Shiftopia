@@ -21,7 +21,6 @@ import {
     TrendingUp,
 } from "lucide-react";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
-import { TimesheetHistoryPopover } from "./TimesheetHistoryPopover";
 
 
 import { cn } from "@/modules/core/lib/utils";
@@ -725,7 +724,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 <td className={cellClass}>
                     <div className="flex flex-col gap-1 items-start">
                         <div className="flex items-center gap-1">
-                            <TimesheetHistoryPopover shiftId={String(entry.id)} />
                             {!!entry.editCount && entry.editCount > 0 && (
                                 <TooltipProvider>
                                     <Tooltip>

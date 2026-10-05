@@ -7,6 +7,7 @@
 
 import { Shift, TemplateGroupType, shiftsApi } from '@/modules/rosters/api/shifts.api';
 import { format } from 'date-fns';
+import { ALL_GROUP_TYPES, GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
 
 /* ============================================================
    TYPES
@@ -51,6 +52,7 @@ const GROUP_COLORS: Record<TemplateGroupType, string> = {
     exhibition_centre: 'emerald',
     theatre: 'red',
     the_cutaway: 'amber',
+    office: 'cyan',
 };
 
 /* ============================================================
@@ -78,7 +80,7 @@ export function buildGroupsModeGrid(
     const groupMap = new Map<TemplateGroupType, Map<string, Shift[]>>();
 
     // Initialize all group types
-    (['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'] as TemplateGroupType[]).forEach(
+    ALL_GROUP_TYPES.forEach(
         (type) => {
             groupMap.set(type, new Map());
         }
@@ -155,9 +157,7 @@ export function buildGroupsModeGrid(
 
         visualGroups.push({
             id: groupType,
-            name: groupType === 'convention_centre' ? 'Convention Centre' :
-                groupType === 'exhibition_centre' ? 'Exhibition Centre' :
-                    groupType === 'the_cutaway' ? 'The Cutaway' : 'Theatre',
+            name: GROUP_DISPLAY_NAMES[groupType],
             type: groupType,
             color: GROUP_COLORS[groupType],
             subGroups,
@@ -171,12 +171,10 @@ export function buildGroupsModeGrid(
  * Get default empty groups structure
  */
 export function getDefaultGroups(): VisualGroup[] {
-    return (['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'] as TemplateGroupType[]).map(
+    return ALL_GROUP_TYPES.map(
         (type) => ({
             id: type,
-            name: type === 'convention_centre' ? 'Convention Centre' :
-                type === 'exhibition_centre' ? 'Exhibition Centre' :
-                    type === 'the_cutaway' ? 'The Cutaway' : 'Theatre',
+            name: GROUP_DISPLAY_NAMES[type],
             type,
             color: GROUP_COLORS[type],
             subGroups: DEFAULT_SUB_GROUPS.map((name) => ({

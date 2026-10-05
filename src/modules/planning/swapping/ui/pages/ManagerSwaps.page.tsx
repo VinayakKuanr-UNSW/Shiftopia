@@ -46,6 +46,7 @@ const formatTime = (time: string): string => {
 // Authoritative: shift.group_type is the only signal. No name/uuid fallbacks.
 function getDeptGlassClass(data?: { groupType?: string }): string {
     const g = (data?.groupType || '').toLowerCase();
+    if (g === 'office')           return 'dept-card-glass-office';
     if (g.includes('convention')) return 'dept-card-glass-convention';
     if (g.includes('exhibition')) return 'dept-card-glass-exhibition';
     if (g.includes('theatre'))    return 'dept-card-glass-theatre';
@@ -137,6 +138,7 @@ const ShiftPane: React.FC<{
                 lifecycleStatus={data.lifecycleStatus}
                 estimatedPay={data.estimatedPay > 0 ? `$${data.estimatedPay.toFixed(2)}` : undefined}
                 groupVariant={
+                    deptClass.includes('office') ? 'office' :
                     deptClass.includes('convention') ? 'convention' :
                     deptClass.includes('exhibition') ? 'exhibition' :
                     deptClass.includes('theatre') ? 'theatre' :

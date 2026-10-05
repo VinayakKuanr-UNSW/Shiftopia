@@ -7,7 +7,7 @@
  * shift on EVERY date in the range" to
  * `apply_template_to_date_range_v2`. All 26 template shifts in production were
  * null, which is not 26 authors choosing the wildcard; it is 26 authors never
- * being asked. The Baseline FT generator refuses such a template outright,
+ * being asked. The Office generator refuses such a template outright,
  * because a shape with no schedule is not a weekly pattern.
  *
  * "Every day" REMAINS AVAILABLE, deliberately. It is a real and occasionally
@@ -17,9 +17,10 @@
  * decision rather than the residue of an unasked question.
  *
  * Values are 0 = Sunday … 6 = Saturday, matching the column and JavaScript's
- * `getDay()`. Note the Baseline FT domain speaks ISO (1 = Monday … 7 = Sunday)
- * because every work-cycle boundary is anchored to a Monday; the single
- * conversion between the two lives in `baseline-ft/api/baselineFt.loaders.ts`.
+ * `getDay()`. Worth knowing when reading this alongside the compliance layer,
+ * which speaks ISO (1 = Monday … 7 = Sunday) because every work-cycle boundary
+ * is anchored to a Monday — see `compliance/ordinary-hours-cycle.ts`. Anything
+ * converting between the two conventions has to say which one it is holding.
  */
 
 import React from 'react';

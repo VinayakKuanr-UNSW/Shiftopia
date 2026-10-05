@@ -13,7 +13,7 @@ export type ShiftStatus =
 
 export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | 'excused' | 'auto_clock_out';
 
-export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre' | 'the_cutaway';
+export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre' | 'the_cutaway' | 'office';
 
 export type AssignmentStatusText =
     | 'unassigned'

@@ -63,7 +63,7 @@ interface SharedShiftCardProps {
     isUrgent?: boolean;
     /** Full three-zone urgency badge. When provided, supersedes isUrgent. */
     urgency?: ShiftUrgency;
-    groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default';
+    groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';
     complianceLabel?: string;
     isPast?: boolean;
     statusIcons?: React.ReactNode;
@@ -107,6 +107,12 @@ interface SharedShiftCardProps {
     billablePay?: React.ReactNode;
     /** Itemised rate breakdown for `billablePay` — shown in a hover tooltip when non-empty. */
     billablePayBreakdown?: EarningsLine[];
+    /**
+     * What the CLOCKED window prices at. Shown as the Actual section's pay row
+     * in the `columns` layout — "N/A" when omitted, never a guess, so the
+     * three panes read row for row.
+     */
+    actualPay?: React.ReactNode;
     /** When true, passes showPayrollRules to ShiftRuleHeader. */
     showPayrollRules?: boolean;
     /** Custom hex color (e.g. from groupColor) to style the department accent bar and theme */
@@ -120,6 +126,14 @@ interface SharedShiftCardProps {
         payroll?: boolean;
         variance?: boolean;
     };
+    /**
+     * How Scheduled / Actual / Payroll / Variance are laid out. `stack` (the
+     * default) is one under another, for a card in a list or grid cell;
+     * `columns` gives the card the whole width, as in the Office expand
+     * dialog: Scheduled · Actual · Payroll as three equal panes, Variance full
+     * width beneath them, every section open and none collapsible.
+     */
+    sectionLayout?: 'stack' | 'columns';
     /** When true, suppresses (hides) the Actual Clocking section entirely */
     hideActualClocking?: boolean;
     /** When true, suppresses (hides) the Payroll & Billable section entirely */
@@ -397,6 +411,29 @@ const PayAmountWithBreakdown: React.FC<{
     );
 };
 
+/**
+ * A section's header row. A toggle normally; in the `columns` layout every
+ * section is always open, so it is a plain row — a button that does nothing
+ * would still be announced, and focused, as one.
+ */
+const SectionHeader: React.FC<{
+    collapsible: boolean;
+    open: boolean;
+    controls: string;
+    onToggle: () => void;
+    children: React.ReactNode;
+}> = ({ collapsible, open, controls, onToggle, children }) => {
+    const cls = 'w-full flex items-center justify-between py-3 px-4 bg-muted/30';
+    return collapsible ? (
+        <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={controls}
+            className={cn(cls, 'hover:bg-muted/50 transition-colors')}>
+            {children}
+        </button>
+    ) : (
+        <div className={cls}>{children}</div>
+    );
+};
+
 export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(({
     avatarUrl,
     organization,
@@ -440,12 +477,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     estimatedPayBreakdown,
     billablePay,
     billablePayBreakdown,
+    actualPay,
     showPayrollRules,
     customColor,
     timesheetStatus,
     defaultExpandedSections,
     hideActualClocking = false,
     hidePayrollSection = false,
+    sectionLayout = 'stack',
     hideGlow = false,
     hideBreadcrumbs = false,
     hideSegmentedBox = false,
@@ -528,6 +567,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                 color: '#d97706',
                 secondary: '#f59e0b',
                 atmosphere: ['#b45309', '#d97706', '#fbbf24'],
+            };
+            case 'office': return {
+                badge: 'dept-badge-office',
+                cardBg: `${base} dept-card-glass-office`,
+                accent: 'text-cyan-500',
+                color: '#0891b2',
+                secondary: '#06b6d4',
+                atmosphere: ['#0e7490', '#0891b2', '#22d3ee'],
             };
             default:
                 if (effectiveColor) {
@@ -640,12 +687,17 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
 
 
+    const isColumns = sectionLayout === 'columns';
     const [expandedSections, setExpandedSections] = React.useState({
         scheduled: defaultExpandedSections?.scheduled ?? false,
         actual: defaultExpandedSections?.actual ?? false,
         payroll: defaultExpandedSections?.payroll ?? false,
         variance: defaultExpandedSections?.variance ?? false,
     });
+    // Columns: every section open, and no toggle offered.
+    const sectionsOpen = isColumns
+        ? { scheduled: true, actual: true, payroll: true, variance: true }
+        : expandedSections;
 
     // ── Variance (Scheduled vs Billable) — feeds the 4th collapsible section.
     // Gross/Net are re-derived independently for each side (never shared) so a
@@ -905,15 +957,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                 )}
 
                 {/* Collapsible Section Rows */}
-                <div className="space-y-4 mb-6">
+                <div className={isColumns ? 'mb-6 grid gap-4 sm:grid-cols-3' : 'space-y-4 mb-6'}>
                     {/* 1. SCHEDULED SHIFT SECTION */}
-                    <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                        <button
-                            type="button"
-                            onClick={() => setExpandedSections(prev => ({ ...prev, scheduled: !prev.scheduled }))}
-                            aria-expanded={expandedSections.scheduled}
-                            aria-controls={`${sectionIdBase}-scheduled`}
-                            className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                    <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'flex h-full flex-col')}>
+                        <SectionHeader
+                            collapsible={!isColumns}
+                            open={sectionsOpen.scheduled}
+                            controls={`${sectionIdBase}-scheduled`}
+                            onToggle={() => setExpandedSections(prev => ({ ...prev, scheduled: !prev.scheduled }))}
                         >
                             <div className="flex items-center gap-2">
                                 <span className="text-base font-black text-foreground">Scheduled</span>
@@ -924,11 +975,11 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                         {timeRule.label}
                                     </span>
                                 )}
-                                {expandedSections.scheduled ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                {!isColumns && (sectionsOpen.scheduled ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                             </div>
-                        </button>
+                        </SectionHeader>
 
-                        {expandedSections.scheduled && (
+                        {sectionsOpen.scheduled && (
                             <div id={`${sectionIdBase}-scheduled`} role="region" className="p-4 pt-3 space-y-1.5 border-t border-border/40">
                                 <div className="text-sm font-bold text-foreground/90">
                                     Timings: {startTime} – {endTime}
@@ -954,13 +1005,12 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {/* 2. ACTUAL CLOCKING SECTION */}
                     {!hideActualClocking && (
-                        <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedSections(prev => ({ ...prev, actual: !prev.actual }))}
-                            aria-expanded={expandedSections.actual}
-                            aria-controls={`${sectionIdBase}-actual`}
-                                className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                        <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'flex h-full flex-col')}>
+                            <SectionHeader
+                                collapsible={!isColumns}
+                                open={sectionsOpen.actual}
+                                controls={`${sectionIdBase}-actual`}
+                                onToggle={() => setExpandedSections(prev => ({ ...prev, actual: !prev.actual }))}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="text-base font-black text-foreground">Actual</span>
@@ -984,11 +1034,11 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                             Pending
                                         </span>
                                     )}
-                                    {expandedSections.actual ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    {!isColumns && (sectionsOpen.actual ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                                 </div>
-                            </button>
+                            </SectionHeader>
 
-                            {expandedSections.actual && (
+                            {sectionsOpen.actual && (
                                 <div id={`${sectionIdBase}-actual`} role="region" className="p-4 pt-3 space-y-1.5 border-t border-border/40">
                                     <div className="text-sm font-bold text-foreground/90">
                                         Timings: {clockIn || '--:--'} – {clockOut || '--:--'}
@@ -999,6 +1049,11 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                     <div className={cn("text-sm font-mono font-black", (clockIn && clockOut) ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40")}>
                                         Gross: {clockIn && clockOut ? formatMins(calculateGrossMinutes(clockIn, clockOut)) : '--'} · Net: {clockIn && clockOut ? formatMins(Math.max(0, (calculateGrossMinutes(clockIn, clockOut) || 0) - unpaidBreak)) : '--'}
                                     </div>
+                                    {isColumns && (
+                                        <div className="pt-1.5 border-t border-border/20">
+                                            <PayAmountWithBreakdown label="Actual Pay" amount={actualPay != null && actualPay !== '' ? actualPay : 'N/A'} />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -1006,13 +1061,12 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {/* 3. PAYROLL & BILLABLE SECTION */}
                     {!hidePayrollSection && showPayrollSection && (
-                        <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedSections(prev => ({ ...prev, payroll: !prev.payroll }))}
-                            aria-expanded={expandedSections.payroll}
-                            aria-controls={`${sectionIdBase}-payroll`}
-                                className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                        <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'flex h-full flex-col')}>
+                            <SectionHeader
+                                collapsible={!isColumns}
+                                open={sectionsOpen.payroll}
+                                controls={`${sectionIdBase}-payroll`}
+                                onToggle={() => setExpandedSections(prev => ({ ...prev, payroll: !prev.payroll }))}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="text-base font-black text-foreground">Payroll</span>
@@ -1066,11 +1120,11 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                             Pending
                                         </span>
                                     )}
-                                    {expandedSections.payroll ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    {!isColumns && (sectionsOpen.payroll ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                                 </div>
-                            </button>
+                            </SectionHeader>
 
-                            {expandedSections.payroll && (
+                            {sectionsOpen.payroll && (
                                 <div id={`${sectionIdBase}-payroll`} role="region" className="p-4 pt-3 space-y-1.5 border-t border-border/40">
                                     {!isShiftFinished ? (
                                         // Billable/payable is locked until the shift ends — no value is
@@ -1144,23 +1198,22 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {/* 4. VARIANCE SECTION — Scheduled vs Billable, at a glance */}
                     {!hidePayrollSection && showPayrollSection && (
-                        <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedSections(prev => ({ ...prev, variance: !prev.variance }))}
-                            aria-expanded={expandedSections.variance}
-                            aria-controls={`${sectionIdBase}-variance`}
-                                className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                        <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'sm:col-span-3')}>
+                            <SectionHeader
+                                collapsible={!isColumns}
+                                open={sectionsOpen.variance}
+                                controls={`${sectionIdBase}-variance`}
+                                onToggle={() => setExpandedSections(prev => ({ ...prev, variance: !prev.variance }))}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="text-base font-black text-foreground">Variance</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {expandedSections.variance ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    {!isColumns && (sectionsOpen.variance ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                                 </div>
-                            </button>
+                            </SectionHeader>
 
-                            {expandedSections.variance && (
+                            {sectionsOpen.variance && (
                                 <div id={`${sectionIdBase}-variance`} role="region" className="p-4 pt-3 border-t border-border/40">
                                     {!isShiftFinished ? (
                                         <div className="text-sm font-bold text-muted-foreground/40 italic flex items-center gap-2">

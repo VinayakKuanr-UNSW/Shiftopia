@@ -100,9 +100,10 @@ const calcNetMinutes = (s: { start_time: string; end_time: string; unpaid_break_
     return Math.max(1, gross - (s.unpaid_break_minutes ?? 0));
 };
 
-const resolveGroupVariant = (groupType?: string | null, deptName = ''): 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default' => {
+const resolveGroupVariant = (groupType?: string | null, deptName = ''): 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default' => {
     const type = (groupType || '').toLowerCase();
     const name = deptName.toLowerCase();
+    if (type === 'office') return 'office';
     if (type.includes('convention') || name.includes('convention')) return 'convention';
     if (type.includes('exhibition') || name.includes('exhibition')) return 'exhibition';
     if (type.includes('theatre') || type.includes('theater') || name.includes('theatre')) return 'theatre';

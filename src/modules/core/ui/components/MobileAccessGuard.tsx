@@ -43,13 +43,6 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   // two-dimensional scrolling at 320px, which SC 1.4.10 forbids — it swaps to a
   // one-day list composition. See TeamMobileDayList.
   '/team-availability',
-  // Baseline FT. Its review ledger is eight columns wide, which cannot become a
-  // table at 430px without two-dimensional scrolling (SC 1.4.10), so below `md`
-  // it swaps composition to one card per employee carrying the four figures
-  // that answer "what happens to this person" — the same swap
-  // '/team-availability' makes above. Scope, pattern and period all come from
-  // stacked controls, and the designer dialog scrolls within the viewport.
-  '/baseline-ft',
   '/grid',
   '/users',
   '/settings',

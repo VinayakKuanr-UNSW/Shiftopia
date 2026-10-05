@@ -698,7 +698,8 @@ export const EmployeeSwapsPage: React.FC = () => {
         const isTerminalRequest = swap.status === 'APPROVED' || swap.status === 'REJECTED' || swap.status === 'CANCELLED' || swap.status === 'MANAGER_PENDING';
         const timerDisplay = isTerminalRequest ? null : timerText;
 
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default' = 
+        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default' = 
+            shift?.group_type === 'office' ? 'office' :
             (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
             (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
             (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
@@ -806,7 +807,8 @@ export const EmployeeSwapsPage: React.FC = () => {
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
 
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default' = 
+        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default' = 
+            shift?.group_type === 'office' ? 'office' :
             (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
             (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
             (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
@@ -883,7 +885,8 @@ export const EmployeeSwapsPage: React.FC = () => {
 
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
         
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default' = 
+        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default' = 
+            shift?.group_type === 'office' ? 'office' :
             (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
             (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
             (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :

@@ -65,6 +65,12 @@ const colorClasses: Record<
     border: 'border-amber-500/20 dark:border-amber-500/30',
     text: 'text-amber-600 dark:text-amber-400',
   },
+  cyan: {
+    bg: 'bg-cyan-500/5 dark:bg-cyan-500/10',
+    bgHover: 'hover:bg-cyan-500/10 dark:hover:bg-cyan-500/20',
+    border: 'border-cyan-500/20 dark:border-cyan-500/30',
+    text: 'text-cyan-600 dark:text-cyan-400',
+  },
 };
 
 const ShiftCard: React.FC<ShiftCardProps> = React.memo(({

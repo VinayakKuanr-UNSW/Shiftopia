@@ -62,6 +62,7 @@ const DENSITY_DOT_COLOURS = new Map<string, string>([
   ['exhibition', '#4ade80'], // green-400
   ['theatre', '#f87171'],    // red-400
   ['cutaway', '#fbbf24'],    // amber-400
+  ['office', '#22d3ee'],     // cyan-400
 ]);
 const DENSITY_DOT_FALLBACK = '#94a3b8'; // slate-400
 

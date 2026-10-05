@@ -12,6 +12,7 @@ import {
   Edit2,
   Zap,
   Flame,
+  Maximize2,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
@@ -21,6 +22,10 @@ import { AvailabilityBar } from '@/modules/rosters/ui/components/AvailabilityBar
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDateCell';
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
+import { useApprovedLeaveDays } from '@/modules/rosters/hooks/useApprovedLeaveDays';
+import { LeaveDayCard } from '@/modules/rosters/ui/components/LeaveDayCard';
+import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
+import type { RawLeaveDay } from '@/modules/office/domain/types';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
@@ -195,9 +200,11 @@ interface ShiftRowMenuProps {
   onEdit: (shift: PeopleModeShift) => void;
   onClone: (shift: PeopleModeShift) => void;
   onUnpublish?: (shiftId: string) => void;
+  /** Full-time shifts only: the expanded Scheduled · Actual · Payroll view. */
+  onExpand?: (shift: PeopleModeShift) => void;
 }
 
-const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, onUnpublish }) => {
+const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, onUnpublish, onExpand }) => {
   const { isPast } = resolveShiftStatus(shift);
 
   return (
@@ -214,6 +221,16 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, on
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
+        {onExpand && shift.rawShift?.target_employment_type === 'FT' && (
+          <DropdownMenuItem
+            onClick={() => onExpand(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            Expand
+          </DropdownMenuItem>
+        )}
+
         <DropdownMenuItem
           disabled={isPast}
           onClick={() => onEdit(shift)}
@@ -305,6 +322,11 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     [currentSelectedShifts],
   );
 
+  const [expandedShift, setExpandedShift] = React.useState<Shift | null>(null);
+  const handleExpandShift = useCallback((shift: PeopleModeShift) => {
+    if (shift.rawShift) setExpandedShift(shift.rawShift as Shift);
+  }, []);
+
   const handleCloneShift = useCallback(async (shift: PeopleModeShift) => {
     try {
       const { rawShift } = shift;
@@ -336,6 +358,10 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
         tags: rawShift.tags || [],
         notes: rawShift.notes,
         is_training: rawShift.is_training,
+        // Mandatory on every shift — without it every Clone failed with
+        // "target_employment_type is required" (fn_shift_inherit_template_row).
+        target_employment_type: (rawShift as any).target_employment_type,
+        target_requires_flexible: (rawShift as any).target_requires_flexible,
       };
 
       await createShiftMutation.mutateAsync(cloneData);
@@ -382,6 +408,9 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     dates,
     showAvailabilities // Only fetch when availabilities are shown
   );
+
+  // Approved leave — a leave card on the day, and the day closed to rostering.
+  const { getLeave } = useApprovedLeaveDays(profileIds, dates);
 
   const showFatigueHeatmap = useRosterStore(s => s.showFatigueHeatmap);
 
@@ -515,10 +544,12 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                         currentSelectedShifts={currentSelectedShiftsSet}
                         isDnDModeActive={isDnDModeActive}
                         getAvailability={getAvailability}
+                        getLeave={getLeave}
                         onAddShift={onAddShift}
                         onClickShift={handleShiftClick}
                         onEditShift={handleEditShift}
                         onCloneShift={handleCloneShift}
+                        onExpandShift={handleExpandShift}
                         onUnpublishShift={onUnpublishShift}
                         onAssign={stableOnAssign}
                         onMoveShift={onMoveShift}
@@ -538,6 +569,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
           </div>
         </div>
       </div>
+      <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
     </TooltipProvider>
   );
 };
@@ -564,10 +596,12 @@ interface EmployeeRowProps {
   currentSelectedShifts: Set<string>;
   isDnDModeActive: boolean;
   getAvailability: (employeeId: string, dateKey: string) => any;
+  getLeave: (employeeId: string, dateKey: string) => RawLeaveDay | undefined;
   onAddShift: (employee: PeopleModeEmployee, date: Date) => void;
   onClickShift: (shift: PeopleModeShift) => void;
   onEditShift: (shift: PeopleModeShift) => void;
   onCloneShift: (shift: PeopleModeShift) => void;
+  onExpandShift?: (shift: PeopleModeShift) => void;
   onUnpublishShift?: (shiftId: string) => void;
   onAssign: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
@@ -595,10 +629,12 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
   currentSelectedShifts,
   isDnDModeActive,
   getAvailability,
+  getLeave,
   onAddShift,
   onClickShift,
   onEditShift,
   onCloneShift,
+  onExpandShift,
   onUnpublishShift,
   onAssign,
   onMoveShift,
@@ -865,10 +901,12 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
           currentSelectedShifts={currentSelectedShifts}
           isDnDModeActive={isDnDModeActive}
           getAvailability={getAvailability}
+          getLeave={getLeave}
           onAddShift={onAddShift}
           onClickShift={onClickShift}
           onEditShift={onEditShift}
           onCloneShift={onCloneShift}
+          onExpandShift={onExpandShift}
           onUnpublishShift={onUnpublishShift}
           onAssign={onAssign}
           onMoveShift={onMoveShift}
@@ -898,10 +936,12 @@ interface EmployeeDateCellProps {
   currentSelectedShifts: Set<string>;
   isDnDModeActive: boolean;
   getAvailability: (employeeId: string, dateKey: string) => any;
+  getLeave: (employeeId: string, dateKey: string) => RawLeaveDay | undefined;
   onAddShift: (employee: PeopleModeEmployee, date: Date) => void;
   onClickShift: (shift: PeopleModeShift) => void;
   onEditShift: (shift: PeopleModeShift) => void;
   onCloneShift: (shift: PeopleModeShift) => void;
+  onExpandShift?: (shift: PeopleModeShift) => void;
   onUnpublishShift?: (shiftId: string) => void;
   onAssign: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
@@ -920,10 +960,12 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   currentSelectedShifts,
   isDnDModeActive,
   getAvailability,
+  getLeave,
   onAddShift,
   onClickShift,
   onEditShift,
   onCloneShift,
+  onExpandShift,
   onUnpublishShift,
   onAssign,
   onMoveShift,
@@ -932,7 +974,10 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   const dateKey = format(date, 'yyyy-MM-dd');
   const shifts = employee.shifts[dateKey] ?? [];
   const availability = getAvailability(employee.id, dateKey);
+  const leave = getLeave(employee.id, dateKey);
   const datePast = isSydneyPast(date);
+  /** Approved leave closes the day to rostering. */
+  const closed = datePast || Boolean(leave);
 
   const cellClassName = cn(
     'px-3 py-3 align-top relative group/cell',
@@ -941,10 +986,10 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   );
 
   const cellOnClick = useCallback(() => {
-    if (canEdit && !isBulkMode && shifts.length === 0 && !datePast) {
+    if (canEdit && !isBulkMode && shifts.length === 0 && !closed) {
       onAddShift(employee, date);
     }
-  }, [canEdit, isBulkMode, shifts.length, datePast, onAddShift, employee, date]);
+  }, [canEdit, isBulkMode, shifts.length, closed, onAddShift, employee, date]);
 
   const handleAddClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -962,6 +1007,8 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
       onMove={onMoveShift}
     >
       <div className={cn('space-y-2', showAvailabilities ? 'min-h-[110px]' : 'min-h-[80px]')}>
+        {leave && <LeaveDayCard leave={leave} hasConflictingShift={shifts.length > 0} />}
+
         {shifts.length > 0
           ? shifts.map((shift) => {
               const { isPast, isLocked: isManagementLocked } = resolveShiftStatus(shift);
@@ -983,6 +1030,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
                           shift={shift}
                           onEdit={onEditShift}
                           onClone={onCloneShift}
+                          onExpand={onExpandShift}
                           onUnpublish={onUnpublishShift}
                         />
                       ) : undefined
@@ -1006,7 +1054,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
             })
           : null}
 
-        {!isBulkMode && canEdit && !datePast && (
+        {!isBulkMode && canEdit && !closed && (
           <div
             className={cn(
               'absolute inset-0 flex pointer-events-none z-10',

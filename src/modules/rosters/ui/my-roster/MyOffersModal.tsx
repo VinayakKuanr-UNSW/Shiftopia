@@ -297,6 +297,7 @@ const OfferItem: React.FC<{
                     offer.shift.group_type === 'exhibition_centre' ? 'exhibition' :
                     offer.shift.group_type === 'theatre' ? 'theatre' :
                     offer.shift.group_type === 'the_cutaway' ? 'cutaway' :
+                    offer.shift.group_type === 'office' ? 'office' :
                     resolveGroupVariant(offer.shift as any, offer.shift.departments?.name, offer.shift.sub_departments?.name)
                 }
                 footerActions={footerActions}

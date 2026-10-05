@@ -852,7 +852,7 @@ export function getAvailableActions(state: ShiftStateID | string, urgency?: Shif
     }
 }
 
-export type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default';
+export type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';
 
 /**
  * Derives the canonical GroupVariant for ICC Sydney venue branding:
@@ -860,6 +860,7 @@ export type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' |
  *  - exhibition: GREEN      (#10b981 / text-emerald-500) (matches 'exhibition' or 'expo')
  *  - theatre:    RED        (#ef4444 / text-rose-500)    (matches 'theatre', 'theater', 'dht')
  *  - cutaway:    AMBER      (#d97706 / text-amber-500)   (matches 'cutaway', 'barangaroo')
+ *  - office:     CYAN       (#0891b2 / text-cyan-500)    (the GROUP only — see below)
  *  - default:    PURPLE     (#9333ea / text-purple-500)
  */
 export function resolveGroupVariant(
@@ -896,6 +897,12 @@ export function resolveGroupVariant(
     }
 
     const fullText = `${typeStr} ${deptStr} ${subStr}`.toLowerCase();
+
+    // Office (full-time shifts) is decided by the group fields alone, and before
+    // the free-text matches: "office" is too common in role and department names
+    // ("Box Office") to infer from them, and an Office shift in a department whose
+    // name mentions a venue must still read as Office.
+    if (/\boffice\b/i.test(typeStr)) return 'office';
 
     if (/convention/i.test(fullText)) return 'convention';
     if (/exhibition|expo/i.test(fullText)) return 'exhibition';

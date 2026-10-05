@@ -975,17 +975,28 @@ export const shiftsCommands = {
        DELETE SHIFT
        ============================================================ */
 
-    async deleteShift(shiftId: string): Promise<boolean> {
+    /**
+     * Permanently delete one shift. The database refuses a started or worked
+     * shift (code SHIFT_STARTED / SHIFT_WORKED) and, when `expectedVersion` is
+     * given, one someone else changed meanwhile (VERSION_CONFLICT). The code is
+     * attached to the thrown error as `.code`.
+     */
+    async deleteShift(shiftId: string, expectedVersion?: number): Promise<boolean> {
         if (!shiftId || !isValidUuid(shiftId)) return false;
 
         const result = await callAuthenticatedRpc(
             'sm_delete_shift',
-            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: 'Manual deletion' }),
+            (userId) => ({
+                p_shift_id: shiftId,
+                p_user_id: userId,
+                p_reason: 'Manual deletion',
+                p_expected_version: expectedVersion ?? null,
+            }),
             DeleteShiftResponseSchema,
         );
 
         if (!result.success) {
-            throw new Error(result.error ?? 'Failed to delete shift on the server.');
+            throw Object.assign(new Error(result.error ?? 'Failed to delete shift on the server.'), { code: result.code });
         }
 
         return true;
@@ -1022,8 +1033,11 @@ export const shiftsCommands = {
             );
 
             if (result.success !== false) {
-                // If RPC succeeds but we don't have per-item errors in schema, assume all passed
-                return { deletedIds: shiftIds, failed: [] };
+                // Per item: a started or worked shift refuses itself, not the batch.
+                return {
+                    deletedIds: result.deleted_ids ?? [],
+                    failed: result.failed ?? [],
+                };
             } else {
                 return { deletedIds: [], failed: shiftIds.map(id => ({ id, reason: result.error || 'Bulk delete failed' })) };
             }
@@ -1096,28 +1110,6 @@ export const shiftsCommands = {
         }
 
         return { eligible, complianceFailed, skipped };
-    },
-
-    /* ============================================================
-       DELETE SHIFTS BY TEMPLATE
-       ============================================================ */
-
-    async deleteShiftsByTemplateId(templateId: string): Promise<number> {
-        if (!templateId || !isValidUuid(templateId)) return 0;
-
-        const { count } = await supabase
-            .from('shifts')
-            .select('*', { count: 'exact', head: true })
-            .eq('template_id', templateId);
-
-        const { error } = await supabase
-            .from('shifts')
-            .delete()
-            .eq('template_id', templateId);
-
-        if (error) throw new Error(error.message);
-
-        return count ?? 0;
     },
 
     /* ============================================================

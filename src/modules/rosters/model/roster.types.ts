@@ -418,6 +418,7 @@ function getGroupColorName(hex: string): string {
         '#ef4444': 'red',
         '#f59e0b': 'orange',
         '#8b5cf6': 'purple',
+        '#06b6d4': 'cyan',
     };
     return colorMap[hex.toLowerCase()] || 'blue';
 }
@@ -431,6 +432,7 @@ export function getGroupColor(name: string | null | undefined): string {
     if (n.includes('exhibition')) return 'exhibition_centre';
     if (n.includes('theatre')) return 'theatre';
     if (n.includes('cutaway')) return 'the_cutaway';
+    if (n === 'office') return 'office';
     return 'default_yellow';
 }
 

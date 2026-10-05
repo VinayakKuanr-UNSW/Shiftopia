@@ -327,10 +327,12 @@ export async function executeAssignShift(
         // A date change is NOT a plain column write. `rosters` is a per-day
         // container and `roster_groups`/`roster_subgroups` hang off it, so moving a
         // shift to another day has to re-point roster_id and re-resolve the
-        // group/subgroup on the destination day — and create that day's roster if
-        // nobody has scheduled on it yet. sm_move_shift does all of that
-        // atomically; a raw `.update({ shift_date })` here silently left roster_id
-        // on the ORIGINAL day, which is the drift this replaces.
+        // group/subgroup on the destination day. The database does that for every
+        // writer (`trg_shift_placement`, 20261004190000): sm_move_shift changes the
+        // date, and the trigger moves the shift into that day's roster under the
+        // same group and sub-group (creating the sub-group if the day lacks it). A
+        // day with no roster is refused, not invented. Before that trigger this call
+        // nulled the NOT NULL sub-group and failed outright.
         const isDateMove = !!targetDate && targetDate !== (shift as any).shift_date;
         if (isDateMove) {
             const { data: moveResult, error: moveError } = await (supabase as any)

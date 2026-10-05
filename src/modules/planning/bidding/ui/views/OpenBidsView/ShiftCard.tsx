@@ -57,6 +57,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   const g = (shift.groupType || shift.group || '').toLowerCase();
   const d = (shift.department || '').toLowerCase();
   const groupVariant =
+    g === 'office' ? 'office' :
     g.includes('convention') || d.includes('convention') ? 'convention' :
     g.includes('exhibition') || d.includes('exhibition') ? 'exhibition' :
     g.includes('theatre') || g.includes('theater') || d.includes('theatre') || d.includes('theater') ? 'theatre' :

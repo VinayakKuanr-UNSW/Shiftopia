@@ -40,7 +40,7 @@ const NO_SHIFTS: ShiftWithDetails[] = [];
  * fires and a FUNCTION lands in `groupName` — which React then refuses to render
  * as a child. Same for `__proto__`, `toString`, `valueOf`, `hasOwnProperty`.
  *
- * `shifts.group_type` is a 4-value Postgres enum today, so the DB cannot produce
+ * `shifts.group_type` is a 5-value Postgres enum today, so the DB cannot produce
  * those. But the wrapper is also built from optimistic cache writes and offer
  * mappings, and this codebase does use `ALTER TYPE ... ADD VALUE`. A `Map` has no
  * prototype chain to fall through, so the question cannot arise.
@@ -50,12 +50,14 @@ const GROUP_NAMES = new Map<string, string>([
     ['exhibition_centre', 'Exhibition'],
     ['theatre', 'Theatre'],
     ['the_cutaway', 'The Cutaway'],
+    ['office', 'Office'],
 ]);
 const GROUP_COLORS = new Map<string, string>([
     ['convention_centre', 'convention'],
     ['exhibition_centre', 'exhibition'],
     ['theatre', 'theatre'],
     ['the_cutaway', 'cutaway'],
+    ['office', 'office'],
 ]);
 
 interface DayBucket {

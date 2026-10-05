@@ -24,7 +24,6 @@ import {
     Shield,
     Sparkles,
     Gavel,
-    History,
     Briefcase,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -51,8 +50,6 @@ import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
-import ShiftHistoryTimeline from './ShiftHistoryTimeline';
-import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
     resolveBillableSide,
@@ -64,62 +61,6 @@ import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShif
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
-
-// ============================================================================
-// HISTORY OVERLAY COMPONENT
-// ============================================================================
-
-interface ShiftHistoryButtonProps {
-    shiftId: string;
-    triggerClassName?: string;
-    iconClassName?: string;
-    onViewHistory?: (shiftId: string) => void;
-}
-
-const ShiftHistoryButton: React.FC<ShiftHistoryButtonProps> = ({ shiftId, triggerClassName, iconClassName, onViewHistory }) => {
-    if (onViewHistory) {
-        return (
-            <button
-                className={triggerClassName}
-                title="View History"
-                aria-label="View Shift History"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onViewHistory(shiftId);
-                }}
-            >
-                <History className={iconClassName} />
-            </button>
-        );
-    }
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <button
-                    className={triggerClassName}
-                    title="View History"
-                    aria-label="View Shift History"
-                >
-                    <History className={iconClassName} />
-                </button>
-            </PopoverTrigger>
-            <PopoverContent 
-                className="w-[360px] p-0 z-50 overflow-hidden rounded-xl border bg-card text-popover-foreground shadow-2xl" 
-                align="end" 
-                side="bottom"
-                sideOffset={8}
-            >
-                <div className="px-4 py-3 border-b border-border bg-muted/20">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Shift Audit History</h3>
-                </div>
-                <div className="p-4 max-h-[350px] overflow-y-auto scrollbar-thin">
-                    <ShiftHistoryTimeline shiftId={shiftId} />
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
-};
-
 
 // ============================================================================
 // TYPES & HELPERS
@@ -174,7 +115,6 @@ export interface SmartShiftCardProps {
      * the real concurrency guard. Injected by SmartShiftCard via useShiftPresence.
      */
     editors?: ShiftEditor[];
-    onViewHistory?: (shiftId: string) => void;
     isPeopleMode?: boolean;
     dense?: boolean;
 }
@@ -186,10 +126,12 @@ const GROUP_COLORS: Record<string, { header: string; accent: string; text: strin
     orange: { header: 'bg-orange-600 dark:bg-orange-600', accent: 'border-orange-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
     purple: { header: 'bg-purple-600 dark:bg-purple-600', accent: 'border-purple-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
     amber: { header: 'bg-amber-500 dark:bg-amber-500', accent: 'border-amber-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
+    cyan: { header: 'bg-cyan-600 dark:bg-cyan-600', accent: 'border-cyan-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
     convention_centre: { header: 'bg-blue-600', accent: 'border-blue-500/30', text: 'text-white', badge: 'bg-white/20' },
     exhibition_centre: { header: 'bg-emerald-600', accent: 'border-emerald-500/30', text: 'text-white', badge: 'bg-white/20' },
     theatre: { header: 'bg-red-600', accent: 'border-red-500/30', text: 'text-white', badge: 'bg-white/20' },
     the_cutaway: { header: 'bg-amber-500', accent: 'border-amber-500/30', text: 'text-white', badge: 'bg-white/20' },
+    office: { header: 'bg-cyan-600', accent: 'border-cyan-500/30', text: 'text-white', badge: 'bg-white/20' },
     default_yellow: { header: 'bg-amber-400', accent: 'border-amber-400/30', text: 'text-amber-950', badge: 'bg-black/10' },
 };
 
@@ -316,7 +258,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     showStatusIcons,
     detailedCost,
     editors,
-    onViewHistory,
     isPeopleMode = false,
     dense = false,
 }) => {
@@ -462,12 +403,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                         <div className="flex items-center gap-1">
                             <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                                <ShiftHistoryButton
-                                    shiftId={shift.id}
-                                    triggerClassName="h-7 w-7 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-                                    iconClassName="h-3 w-3 opacity-60"
-                                    onViewHistory={onViewHistory}
-                                />
                                 {headerAction || (!isFullyLocked && (
                                     <button className="h-7 w-7 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
                                         <MoreHorizontal className="h-3 w-3 opacity-60" />
@@ -587,12 +522,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         )}
 
                         <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                            <ShiftHistoryButton
-                                shiftId={shift.id}
-                                triggerClassName="h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-                                iconClassName="h-3 w-3 opacity-60"
-                                onViewHistory={onViewHistory}
-                            />
                             {headerAction || (!isFullyLocked && (
                                 <button className="h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
                                     <MoreHorizontal className="h-3 w-3 opacity-60" />
@@ -705,7 +634,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     className,
     showStatusIcons,
     detailedCost,
-    onViewHistory,
     isPeopleMode = false,
 }) => {
     const colors = useMemo(
@@ -809,12 +737,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         <div className="flex items-center gap-1.5">
                             {getLifecycleIcon(statusStr)}
                             <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                                <ShiftHistoryButton
-                                    shiftId={shift.id}
-                                    triggerClassName="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors"
-                                    iconClassName="h-4 w-4 opacity-60"
-                                    onViewHistory={onViewHistory}
-                                />
                                 {headerAction || (!isFullyLocked && (
                                     <button className="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
                                         <MoreHorizontal className="h-4 w-4 opacity-60" />
@@ -966,12 +888,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                         {getLifecycleIcon(statusStr)}
                         <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                            <ShiftHistoryButton
-                                shiftId={shift.id}
-                                triggerClassName="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors"
-                                iconClassName="h-4 w-4 opacity-60"
-                                onViewHistory={onViewHistory}
-                            />
                             {headerAction || (!isFullyLocked && (
                                 <button className="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
                                     <MoreHorizontal className="h-4 w-4 opacity-60" />
@@ -1102,7 +1018,6 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     identityFields,
     selectionSlot,
     className,
-    onViewHistory,
 }) => {
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
     const roleName = shift.roles?.name || 'No Role';
@@ -1248,13 +1163,6 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     const topContent = (
         <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 shrink-0">
             {selectionSlot}
-
-            <ShiftHistoryButton
-                shiftId={shift.id}
-                triggerClassName="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
-                iconClassName="h-4 w-4 text-slate-400"
-                onViewHistory={onViewHistory}
-            />
         </div>
     );
 

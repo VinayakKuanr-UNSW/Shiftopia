@@ -50,6 +50,8 @@ interface UseHardValidationProps {
     isTemplateMode: boolean;
     existingV8ShiftId?: string;
     timezone?: string;
+    /** 'FT' adds the one-shift-per-day rule (cl 39.1). */
+    targetEmploymentType?: string | null;
 }
 
 interface UseHardValidationReturn {
@@ -71,6 +73,7 @@ export function useHardValidation({
     isTemplateMode,
     existingV8ShiftId,
     timezone = SYDNEY_TZ,
+    targetEmploymentType,
 }: UseHardValidationProps): UseHardValidationReturn {
     const [hardValidation, setHardValidation] = useState<HardValidationResult>({ passed: true, errors: [] });
 
@@ -193,6 +196,7 @@ export function useHardValidation({
             current_time: getNowInTimezone(timezone),
             is_template: isTemplateMode,
             shift_id: existingV8ShiftId,
+            target_employment_type: targetEmploymentType,
         });
 
         // Only update if result actually changed to prevent render loops
@@ -200,7 +204,7 @@ export function useHardValidation({
             if (isEqual(prev, result)) return prev;
             return result;
         });
-    }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone]);
+    }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone, targetEmploymentType, existingV8ShiftId]);
 
     return { hardValidation, employeeExistingShifts, studentVisaEnforcement, restGapAgreement8h, contractType, isLoadingShifts };
 }

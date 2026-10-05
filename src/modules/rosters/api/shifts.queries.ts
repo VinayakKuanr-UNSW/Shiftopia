@@ -516,6 +516,61 @@ export const shiftsQueries = {
     },
 
     /* ============================================================
+       GET SHIFTS FOR SEVERAL EMPLOYEES OVER A RANGE — EVERY STATUS
+       ============================================================ */
+
+    /**
+     * Every shift these employees hold in the window, whatever its status.
+     *
+     * DIFFERENT FROM `getEmployeeShifts` IN TWO WAYS THAT BOTH MATTER:
+     *
+     *   • No lifecycle filter. That one reads Published/InProgress/Completed,
+     *     because it answers "what am I working". The Office grid edits shifts
+     *     while they are still DRAFT, so filtering those out would show an empty
+     *     week over a roster full of them.
+     *
+     *   • Every sub-department, not just the caller's. The grid enforces one FT
+     *     shift per person per day (cl 39.1), and that guard is only correct if
+     *     it can see a shift the person holds on another team that day.
+     *
+     * Uses SHIFT_SELECT, deliberately. A hand-rolled select here would drop
+     * `remuneration_level`/`remuneration_rate` and `roles(name)`, and the cost
+     * engine does not fail on their absence — it falls through to a flat default
+     * rate. See `shift-card-pay.ts` for where that shipped.
+     */
+    async getShiftsForEmployeesInRange(
+        employeeIds: readonly string[],
+        startDate: string,
+        endDate: string,
+    ): Promise<Shift[]> {
+        const ids = employeeIds.filter(isValidUuid);
+        // A bare `.in()` on an empty array returns EVERY row, which here would
+        // be every shift in the window for the whole organisation.
+        if (ids.length === 0) return [];
+
+        try {
+            const { data, error } = await supabase
+                .from('shifts')
+                .select(SHIFT_SELECT)
+                .in('assigned_employee_id', ids)
+                .gte('shift_date', startDate)
+                .lte('shift_date', endDate)
+                .is('deleted_at', null)
+                .order('shift_date')
+                .order('start_time');
+
+            if (error) {
+                console.error('Error fetching shifts for employees in range:', error);
+                return [];
+            }
+            return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
+        } catch (error) {
+            console.error('Exception in getShiftsForEmployeesInRange:', error);
+            return [];
+        }
+    },
+
+    /* ============================================================
        GET SHIFTS FOR EMPLOYEE — ATTENDANCE (includes InProgress + Completed)
        Used by AttendancePage so shifts are visible after cron moves them
        out of 'Published' into 'InProgress' or 'Completed'.
@@ -1489,32 +1544,6 @@ export const shiftsQueries = {
         return (data ?? []) as ShiftDeltaRow[];
     },
 
-    /* ============================================================
-       GET SHIFT EVENT TIMELINE  (read-only audit ledger)
-       Returns the full ordered audit trail for a single shift from
-       public.shift_events, via the get_shift_event_timeline RPC.
-       Powers the read-only "History" timeline UI — never writes events.
-
-       NOTE: this RPC is not yet in the generated supabase type registry
-       (migration pending), so it follows the same `(supabase.rpc as any)`
-       + plain-interface pattern as getShiftDelta above.
-       ============================================================ */
-
-    async getShiftEventTimeline(shiftId: string): Promise<ShiftEventTimelineRow[]> {
-        if (!isValidUuid(shiftId)) return [];
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase.rpc as any)('get_shift_event_timeline', {
-            p_shift_id: shiftId,
-        });
-
-        if (error) {
-            console.error('[getShiftEventTimeline] RPC error:', error);
-            throw error;
-        }
-
-        return (data ?? []) as ShiftEventTimelineRow[];
-    },
 };
 
 // ── Delta sync types ──────────────────────────────────────────────────────────
@@ -1535,56 +1564,3 @@ export interface ShiftDeltaRow {
     sub_department_id: string | null;
     role_id: string | null;
 }
-
-// ── Shift event timeline types ──────────────────────────────────────────────
-// Mirrors the get_shift_event_timeline RPC contract (the audit ledger view over
-// public.shift_events). Read-only — the UI never emits events.
-
-/** Domain bucket an audit event belongs to. */
-export type ShiftEventDomain =
-    | 'lifecycle'
-    | 'assignment'
-    | 'schedule'
-    | 'offer'
-    | 'marketplace'
-    | 'trade'
-    | 'drop'
-    | 'attendance'
-    | 'compliance'
-    | 'payroll';
-
-/** Who triggered the event. */
-export type ShiftEventActorRole = 'manager' | 'employee' | 'system' | 'autoscheduler';
-
-/** A single field-level diff entry inside `changes`. */
-export interface ShiftEventFieldChange {
-    old: unknown;
-    new: unknown;
-}
-
-/** One row returned by get_shift_event_timeline — a single audit-ledger event. */
-export interface ShiftEventTimelineRow {
-    event_id: string;
-    event_time: string; // ISO 8601 timestamptz
-    domain: ShiftEventDomain | string | null;
-    event_type: string;
-    op: string | null;
-    actor_id: string | null;
-    actor_role: ShiftEventActorRole | string | null;
-    /** Human-readable actor display name; null for system/cron events. */
-    actor_name: string | null;
-    employee_id: string | null;
-    /** Display name of the worker the event is ABOUT (the folded assignee). */
-    assignee_name: string | null;
-    from_state: string | null;
-    to_state: string | null;
-    from_version: string | null;
-    to_version: string | null;
-    changes: Record<string, ShiftEventFieldChange> | null;
-    reason: string | null;
-    /** Creation mode for a `create` event: manual | template | synthesizer. */
-    creation_source: string | null;
-    /** How the worker was assigned: direct | manual | offer | bid | swap | … */
-    assignment_source: string | null;
-}
-

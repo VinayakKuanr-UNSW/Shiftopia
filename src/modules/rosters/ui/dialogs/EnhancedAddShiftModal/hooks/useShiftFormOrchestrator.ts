@@ -45,6 +45,7 @@ import { buildAssignInput, buildSkeletonInput } from '@/modules/planning/unified
 import type { V8OrchestratorInput, V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
 import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { initialTargetEmploymentType } from '@/modules/core/model/employment.types';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
@@ -65,9 +66,16 @@ export function useShiftFormOrchestrator({
     editMode = false,
     existingShift,
     onShiftCreated,
+    lockedFields,
 }: EnhancedAddShiftModalProps) {
     const safeContext = context ?? {};
     const { toast } = useToast();
+
+    /** See `initialTargetEmploymentType`: the Office group starts as FT. */
+    const defaultTargetFor = (ctx: typeof context) => initialTargetEmploymentType(
+        ctx?.targetEmploymentType,
+        ctx?.group_type || ctx?.groupName?.toLowerCase().replace(/\s+/g, '_'),
+    );
     const { scopeTree } = useScopeFilter('managerial');
     const queryClient = useQueryClient();
 
@@ -107,10 +115,12 @@ export function useShiftFormOrchestrator({
             notes: '',
             group_type: (safeContext.group_type || safeContext.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'],
             sub_group_name: safeContext.sub_group_name || safeContext.subGroupName || '',
-            // Deliberately undefined, not a default token: the planner must make
-            // an explicit choice. Seeding e.g. 'Casual' would silently decide who
-            // may work the shift, and the match is now HARD.
-            target_employment_type: undefined,
+            // Never a default token: seeding e.g. 'Casual' would silently decide
+            // who may work the shift, and the match is HARD. Only a caller that
+            // has ALREADY decided (the Office group: full-time by definition)
+            // supplies one; everywhere else this is undefined and the planner
+            // must choose.
+            target_employment_type: defaultTargetFor(safeContext),
             target_requires_flexible: false,
             // Deliberately undefined rather than null. `null` is the "every day"
             // wildcard and a legitimate choice, but it must be CHOSEN: it was
@@ -248,6 +258,7 @@ export function useShiftFormOrchestrator({
         isTemplateMode,
         existingV8ShiftId: existingShift?.id,
         timezone: watchTimezone,
+        targetEmploymentType: watchTargetEmploymentType,
     });
 
     // ── Computed values ──────────────────────────────────────────────────────
@@ -384,13 +395,39 @@ export function useShiftFormOrchestrator({
 
     const isContextInherited = isGridLaunch || isEditModeSource;
 
+    /*
+     * A caller can name fields it has already decided.
+     *
+     * The locks below are each gated on a particular `mode` — group locks group,
+     * roles locks role, people locks employee — so no mode locks all of them at
+     * once. A surface where the grid POSITION is the answer needs exactly that:
+     * the Office week grid fixes employee and date by which cell was clicked,
+     * target type by being full-time, and role, group and sub-group by contract
+     * and convention. Declaring them beats inventing a mode whose only meaning is
+     * "lock more things".
+     */
+    const explicitlyLocked = useMemo(
+        () => new Set<string>(lockedFields ?? []),
+        [lockedFields],
+    );
+    const isLockedField = (field: keyof FormValues) => explicitlyLocked.has(field);
+
     const isRosterLocked = isContextInherited && !!derivedRosterId;
-    const isGroupLocked = (isContextInherited && (!!resolvedContext.groupId || !!resolvedContext.groupName || !!resolvedContext.group_type) && safeContext.mode === 'group')
+    const isGroupLocked = isLockedField('group_type')
+        || (isContextInherited && (!!resolvedContext.groupId || !!resolvedContext.groupName || !!resolvedContext.group_type) && safeContext.mode === 'group')
         || (safeContext.mode === 'template' && (!!safeContext.groupName || !!safeContext.group_type));
-    const isSubGroupLocked = (isContextInherited && (!!resolvedContext.subGroupId || !!resolvedContext.subGroupName) && safeContext.mode === 'group')
+    const isSubGroupLocked = isLockedField('sub_group_name')
+        || (isContextInherited && (!!resolvedContext.subGroupId || !!resolvedContext.subGroupName) && safeContext.mode === 'group')
         || (safeContext.mode === 'template' && !!safeContext.subGroupName);
-    const isRoleLocked = isContextInherited && safeContext.mode === 'roles' && !!safeContext.roleId;
-    const isEmployeeLocked = isContextInherited && safeContext.mode === 'people' && !!safeContext.employeeId;
+    const isRoleLocked = isLockedField('role_id')
+        || (isContextInherited && safeContext.mode === 'roles' && !!safeContext.roleId);
+    const isEmployeeLocked = isLockedField('assigned_employee_id')
+        || (isContextInherited && safeContext.mode === 'people' && !!safeContext.employeeId);
+    /*
+     * No prior equivalent. `shift_date` needs none — the sheet already renders
+     * the date as a ReadOnlyField, so it is never editable from here.
+     */
+    const isTargetTypeLocked = isLockedField('target_employment_type');
 
     // Assignment is disabled for templates (always unassigned) and in read-only modes.
     // In Group/Role modes, we allow selection even if times aren't set yet (though compliance will be pending).
@@ -471,6 +508,7 @@ export function useShiftFormOrchestrator({
                 target_employment_type:
                     existingShift.target_employment_type
                     ?? existingShift.targetEmploymentType
+                    ?? safeContext.targetEmploymentType
                     ?? undefined,
                 target_requires_flexible:
                     existingShift.target_requires_flexible
@@ -508,7 +546,7 @@ export function useShiftFormOrchestrator({
                 event_ids: [],
                 notes: '',
                 is_training: false,
-                target_employment_type: undefined,
+                target_employment_type: defaultTargetFor(context),
                 target_requires_flexible: false,
                 day_of_week: undefined,
             });
@@ -760,6 +798,16 @@ export function useShiftFormOrchestrator({
             return { ok: false, reason: msg || 'Fix the time validation errors' };
         }
 
+        // A full-time shift is never left without its employee
+        // (trg_full_time_shift_rules: FT_NO_UNASSIGN). Caught here because the
+        // edit save is not atomic — the field edit is written BEFORE the
+        // unassign op, so letting the database refuse it would half-save.
+        const prevAssignee = existingShift?.assigned_employee_id ?? existingShift?.assignedEmployeeId ?? null;
+        const savedTarget = existingShift?.target_employment_type ?? existingShift?.targetEmploymentType;
+        if (editMode && savedTarget === 'FT' && prevAssignee && !watchEmployeeId) {
+            return { ok: false, reason: 'A full-time shift keeps its employee — choose someone else, or delete the shift' };
+        }
+
         // Shift shape. This gate previously existed ONLY in step-1 navigation,
         // so `canSave` re-derived its own list and silently omitted duration —
         // and the unassigned early-return below skipped it altogether, letting
@@ -798,7 +846,7 @@ export function useShiftFormOrchestrator({
         isReadOnly, isPublished, watchV8RoleId, watchShiftDate, watchStart, watchEnd,
         hasDepartment, isTemplateMode, watchDayOfWeek, watchEmployeeId, hardValidation,
         shape.status, shape.blocking, shapeBlockers, compliancePanel.status, compliancePanel.canProceed,
-        compliancePanel.result,
+        compliancePanel.result, editMode, existingShift,
     ]);
 
     const canSave = saveGate.ok;
@@ -938,7 +986,11 @@ export function useShiftFormOrchestrator({
             if (!hardValidation.passed) {
                 toast({
                     title: 'Validation Failed',
-                    description: hardValidation.errors.join('. ') || 'Hard validation failed.',
+                    // The errors are objects; joining them printed "[object Object]".
+                    description: hardValidation.errors
+                        .map((e: any) => (typeof e === 'string' ? e : e?.message))
+                        .filter(Boolean)
+                        .join('. ') || 'Hard validation failed.',
                     variant: 'destructive',
                 });
             } else if (!isTemplateMode && !!watchEmployeeId && !complianceHasRun) {
@@ -1087,7 +1139,11 @@ export function useShiftFormOrchestrator({
                     notes: values.notes || null,
                     display_order: 0,
                     // Source tracking
-                    creation_source: isTemplateMode ? 'template' : 'manual',
+                    // `context.creationSource` wins when a surface sets it: the FT
+                    // trigger matches this value EXACTLY, so 'manual' here is a
+                    // failed save on the Office grid rather than a mislabelled row.
+                    creation_source: context?.creationSource
+                        ?? (isTemplateMode ? 'template' : 'manual'),
                     assignment_source: values.assigned_employee_id
                         ? (editMode ? 'manual' : 'direct')
                         : null,
@@ -1268,10 +1324,19 @@ export function useShiftFormOrchestrator({
                     // Close the modal now instead of blocking on the server round-trip
                     // (compliance check + sm_create_shift + detail refetch); a failure
                     // rolls the card back and surfaces a destructive toast.
-                    createShiftMutation.mutate(
-                        payload,
-                        { onSuccess: () => onSuccess?.(), onError: onMutationError },
-                    );
+                    //
+                    // mutateAsync().then(), NOT mutate(payload, { onSuccess }). The
+                    // modal closes on the next line, and a caller may UNMOUNT it on
+                    // close (the Office grid does). TanStack drops per-call
+                    // `mutate` callbacks once the calling component unmounts, so
+                    // the caller's `onSuccess` — the Office grid's refetch — never
+                    // ran: a created shift stayed invisible until a hard refresh.
+                    // The promise from mutateAsync settles regardless of unmount.
+                    // The mutation's own hooks (optimistic insert, rollback) are
+                    // unaffected either way.
+                    createShiftMutation.mutateAsync(payload)
+                        .then(() => onSuccess?.())
+                        .catch(onMutationError);
                     toast({
                         title: 'Shift Created',
                         description: `Shift created for ${format(values.shift_date!, 'dd MMM yyyy')}`,
@@ -1342,6 +1407,7 @@ export function useShiftFormOrchestrator({
         isSubGroupLocked,
         isRoleLocked,
         isEmployeeLocked,
+        isTargetTypeLocked,
 
         // Read-only
         isPast,

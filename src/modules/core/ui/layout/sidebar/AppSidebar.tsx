@@ -10,7 +10,6 @@ import {
   Workflow,
   CalendarDays,
   FileSpreadsheet,
-  CalendarRange,
   BellRing,
   BadgeCheck,
   RefreshCw,
@@ -61,7 +60,6 @@ type IconColorKey =
   | 'attendance'
   | 'templates'
   | 'rosters'
-  | 'baselineFt'
   | 'timesheet'
   | 'openBids'
   | 'swapRequests'
@@ -93,7 +91,6 @@ const iconColorMap: Record<IconColorKey, string> = {
   attendance: 'text-emerald-400',
   templates: 'text-sky-400',
   rosters: 'text-indigo-400',
-  baselineFt: 'text-emerald-400',
   timesheet: 'text-amber-400',
   openBids: 'text-green-400',
   swapRequests: 'text-rose-400',
@@ -470,17 +467,6 @@ const AppSidebar: React.FC = () => {
                   label={t('nav.rosters')}
                   isActive={isRouteActive('/rosters')}
                   description="Manage schedules"
-                />
-              )}
-
-              {hasPermission('rosters') && (
-                <NavigationItem
-                  to="/baseline-ft"
-                  icon={CalendarRange}
-                  iconColor={iconColorMap.baselineFt}
-                  label={t('nav.baseline_ft')}
-                  isActive={isRouteActive('/baseline-ft')}
-                  description="Full-time contracted hours"
                 />
               )}
 

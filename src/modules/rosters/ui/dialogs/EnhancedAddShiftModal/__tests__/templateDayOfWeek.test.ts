@@ -2,7 +2,7 @@
  * The template weekday, and the encoding boundary either side of it.
  *
  * `template_shifts.day_of_week` is stored SUNDAY-FIRST (0 = Sunday … 6 =
- * Saturday), matching JavaScript's `getDay()`. The Baseline FT domain speaks
+ * Saturday), matching JavaScript's `getDay()`. The Office domain speaks
  * ISO (1 = Monday … 7 = Sunday) because every work-cycle boundary is anchored
  * to a Monday. Two encodings for one fact is exactly the shape of an off-by-one
  * that survives review, so the correspondence is pinned here rather than left
@@ -18,9 +18,12 @@ import { formSchema } from '../types';
 import { TEMPLATE_WEEKDAYS } from '../components/TemplateDaySelect';
 
 /**
- * The conversion `baseline-ft/api/baselineFt.loaders.ts#loadPattern` performs.
- * Reproduced rather than imported because the loader inlines it inside a
- * Supabase read; if that line changes, this test is the thing that notices.
+ * Stored weekday (0 = Sunday) to ISO weekday (7 = Sunday).
+ *
+ * The one reader that performed this conversion lived in the Office
+ * loader, which has been removed. The column still stores 0–6 while the
+ * compliance layer still reasons in ISO 1–7, so the mismatch outlived that
+ * caller and this stays as the pin on which convention the column holds.
  */
 const toIso = (stored: number): number => (stored === 0 ? 7 : stored);
 
@@ -37,7 +40,7 @@ describe('template weekday encoding', () => {
         expect(TEMPLATE_WEEKDAYS[TEMPLATE_WEEKDAYS.length - 1].label).toBe('Sunday');
     });
 
-    it('converts to ISO without collision — the boundary Baseline FT depends on', () => {
+    it('converts to ISO without collision — the boundary Office depends on', () => {
         const iso = TEMPLATE_WEEKDAYS.map(d => toIso(d.value));
         expect(new Set(iso).size).toBe(7);
         expect(iso.every(v => v >= 1 && v <= 7)).toBe(true);

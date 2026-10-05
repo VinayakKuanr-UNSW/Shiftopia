@@ -205,6 +205,8 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       'Convention Centre': 'blue',
       'Exhibition Centre': 'green',
       Theatre: 'red',
+      'The Cutaway': 'amber',
+      Office: 'cyan',
     };
     return colorMap[groupName] || 'blue';
   };

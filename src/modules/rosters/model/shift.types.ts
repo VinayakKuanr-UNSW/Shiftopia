@@ -101,9 +101,9 @@ export interface Shift {
      * with a correct subgroup and a null `group_type` is parented properly and
      * renders nowhere.
      *
-     * Typed as `TemplateGroupType`, which has FOUR members. This field listed
-     * three — 'the_cutaway' was missing, so one of the roster's four fixed
-     * groups could not be named through the typed create path at all.
+     * Typed as `TemplateGroupType` — the roster's five fixed groups. This field
+     * once listed three ('the_cutaway' was missing), so a fixed group could not
+     * be named through the typed create path at all.
      */
     group_type?: TemplateGroupType;
     workflow_status?: ShiftWorkflowStatus;

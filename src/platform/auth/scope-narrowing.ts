@@ -26,10 +26,11 @@ import type { ScopeSelection } from './types';
  *      "do not narrow", not "pick one" — the pattern `ManagerSwaps.page.tsx` and
  *      `LeavePage.tsx` spell inline as `length === 1 ? ids[0] : undefined`.
  *
- *   3. Refuse to guess, and make the user choose. `useBaselineFt` does this: an
- *      unpicked sub-department yields no query rather than a guess, which is the
- *      right call for anything that WRITES. `isAmbiguous` is the predicate for
- *      rendering that prompt.
+ *   3. Refuse to guess, and make the user choose: an unpicked sub-department
+ *      yields no query rather than a guess, which is the right call for
+ *      anything that WRITES. `isAmbiguous` is the predicate for rendering that
+ *      prompt. (The worked example used to be `useBaselineFt`, whose page has
+ *      since been removed; the pattern is the point, not that caller.)
  *
  * Everything here filters through a UUID check first. A non-UUID reaching a
  * PostgREST `.in()` poisons the whole request — one bad value 400s the entire

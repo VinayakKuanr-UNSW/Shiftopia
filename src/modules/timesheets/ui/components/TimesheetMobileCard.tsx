@@ -22,7 +22,6 @@ import {
 } from '@/modules/core/ui/primitives/select';
 import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import { TimesheetStatusBadge } from './TimesheetStatusBadge';
-import { TimesheetHistoryPopover } from './TimesheetHistoryPopover';
 import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
@@ -262,6 +261,17 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         const isExhibition = type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
         const isTheatre = type === 'theatre' || group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
         const isCutaway = type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway') || subDept.includes('cutaway') || org.includes('cutaway');
+        // Office by the group alone, and first: "office" is too common in
+        // department and role names to infer, and an Office shift in a
+        // department named after a venue must still read as Office.
+        const isOffice = type === 'office' || group === 'office';
+
+        if (isOffice) return {
+            color: '#0891b2',
+            secondary: '#06b6d4',
+            atmosphere: ['#0e7490', '#0891b2', '#22d3ee'],
+            tint: 'rgba(6, 182, 212, 0.04)'
+        };
 
         if (isConvention) return { 
             color: '#2563eb', 
@@ -501,7 +511,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                             {isSelected && <CheckSquare className="w-5 h-5 text-white" />}
                         </button>
                     )}
-                    <TimesheetHistoryPopover shiftId={String(entry.id)} />
                 </div>
             }
             footerActions={

@@ -83,6 +83,11 @@ export function TemplateSubgroupCard({
             border: 'border-amber-500/30',
             text: 'text-amber-700 dark:text-amber-300',
         },
+        cyan: {
+            bg: 'bg-cyan-500/15 dark:bg-cyan-900/40',
+            border: 'border-cyan-500/30',
+            text: 'text-cyan-700 dark:text-cyan-300',
+        },
     };
 
     const colors = colorClasses[groupColor] || colorClasses.blue;

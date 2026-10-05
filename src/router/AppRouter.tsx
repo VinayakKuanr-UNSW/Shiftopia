@@ -38,7 +38,6 @@ const GrossPayPage = lazy(() => import('@/modules/payroll/ui/GrossPayPage.tsx'))
 // Rostering
 const TemplatesPage = lazy(() => import('@/modules/templates/pages/TemplatesPage'));
 const RostersPlannerPage = lazy(() => import('@/modules/rosters/pages/RostersPlannerPage'));
-const BaselineFtPage = lazy(() => import('@/modules/baseline-ft/ui/pages/BaselineFtPage'));
 const ShiftFormPage = lazy(() => import('@/modules/rosters/pages/ShiftFormPage'));
 const LaborDemandForecastingPage = lazy(() => import('@/modules/rosters/pages/LaborDemandForecastingPage'));
 const TimesheetPage = lazy(() => import('@/modules/timesheets/ui/TimesheetPage'));
@@ -182,12 +181,10 @@ const AppRouter: React.FC = () => {
 
                     <Route element={<FeatureGate feature="rosters" />}>
                         <Route path="/rosters" element={<RostersPlannerPage />} />
-                        {/* Creates shifts, so it sits behind the same gate as
-                            the roster planner rather than the template editor.
-                            Top-level rather than nested under /rosters because
-                            isRouteActive() matches on startsWith, so a child
-                            path would light up the Rosters nav item too. */}
-                        <Route path="/baseline-ft" element={<BaselineFtPage />} />
+                        {/* The Office page was retired 2026-10-04: full-time
+                            shifts live on the Rosters page, in the Office group.
+                            Old links land there rather than on a 404. */}
+                        <Route path="/office" element={<Navigate to="/rosters" replace />} />
                         <Route path="/rosters/shift/new" element={<ShiftFormPage />} />
                         <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
                     </Route>

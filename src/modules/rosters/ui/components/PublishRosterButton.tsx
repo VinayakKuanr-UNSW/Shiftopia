@@ -18,7 +18,6 @@ import type { PublishRosterPlan } from '@/modules/rosters/domain/bulk-action-eng
 /** Outcome of executing a {@link PublishRosterPlan}. */
 export interface PublishRosterResult {
   published: number;
-  deleted: number;
   failed: number;
   failedReasons?: string[];
 }
@@ -33,7 +32,7 @@ interface PublishRosterButtonProps {
    * summary cells only and no per-shift list is loaded.
    */
   loadPlan: () => Promise<PublishRosterPlan>;
-  /** Executes the plan: deletes dead shifts, then publishes the rest. */
+  /** Executes the plan: publishes the drafts. Started shifts are never deleted. */
   execute: (plan: PublishRosterPlan) => Promise<PublishRosterResult>;
   selectedViewType?: string;
   selectedViewRange?: string;
@@ -52,9 +51,9 @@ type State =
 
 /**
  * One-click roster finalize. Publishes all assigned drafts (→ offers) and all
- * unassigned drafts (→ open bidding), and deletes dead shifts (unassigned
- * drafts whose window is already live). Always confirms first — the action
- * broadcasts to employees and permanently deletes shifts.
+ * unassigned drafts (→ open bidding). Unassigned drafts that have already
+ * started are reported and left alone: a started shift is never deleted.
+ * Always confirms first — the action broadcasts to employees.
  */
 export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   disabled,
@@ -77,18 +76,23 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   const emergentAssignedCount = plan?.emergentAssignedIds.length ?? 0;
   const emergentUnassignedCount = plan?.emergentUnassignedIds.length ?? 0;
   const deadCount = plan?.deadIds.length ?? 0;
+  const fullTimeCount = plan?.fullTimeIds.length ?? 0;
+  const fullTimeUnassignedCount = plan?.fullTimeUnassignedIds.length ?? 0;
+  const onLeaveCount = plan?.onLeaveIds?.length ?? 0;
   const alreadyPublishedCount = plan?.alreadyPublishedCount ?? 0;
 
-  // What the Confirm button will actually change: publishes (X + Y + A) and
-  // deletes (W). Emergent-unassigned (B) and already-published (Z) are skips.
+  // What the Confirm button will actually change: publishes (X + Y + A).
+  // Emergent-unassigned (B), started-unstaffed (W) and already-published (Z)
+  // are skips.
   const actionableCount =
-    assignedCount + unassignedCount + emergentAssignedCount + deadCount;
+    assignedCount + unassignedCount + emergentAssignedCount + fullTimeCount;
   // The plan considered no shifts at all → nothing to show.
   const consideredCount =
-    actionableCount + emergentUnassignedCount + alreadyPublishedCount;
+    actionableCount + emergentUnassignedCount + alreadyPublishedCount + deadCount + fullTimeUnassignedCount
+    + onLeaveCount;
   const nothingToDo = plan !== null && consideredCount === 0;
 
-  // The six calculations shown in the confirm dialog, in order.
+  // The calculations shown in the confirm dialog, in order.
   const steps: Array<{
     count: number;
     title: string;
@@ -106,6 +110,24 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
       title: `${unassignedCount} Unassigned Shift${unassignedCount !== 1 ? 's' : ''}`,
       desc: 'Pushed to open bidding for eligible employees',
       tone: 'success',
+    },
+    {
+      count: fullTimeCount,
+      title: `${fullTimeCount} Full-time Shift${fullTimeCount !== 1 ? 's' : ''}`,
+      desc: 'Confirmed directly — contracted hours, no offer to accept',
+      tone: 'success',
+    },
+    {
+      count: fullTimeUnassignedCount,
+      title: `${fullTimeUnassignedCount} Full-time · nobody on it`,
+      desc: 'A full-time shift never goes to bidding — assign it first (skipped)',
+      tone: 'warning',
+    },
+    {
+      count: onLeaveCount,
+      title: `${onLeaveCount} On approved leave`,
+      desc: 'The assignee is on approved leave that day — reassign or remove the shift (skipped)',
+      tone: 'warning',
     },
     {
       count: emergentAssignedCount,
@@ -127,9 +149,9 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
     },
     {
       count: deadCount,
-      title: `${deadCount} Dead Shift${deadCount !== 1 ? 's' : ''}`,
-      desc: 'Unassigned & already live — permanently deleted',
-      tone: 'danger',
+      title: `${deadCount} Started · nobody on it`,
+      desc: 'Already started, so it can’t be published or deleted — skipped',
+      tone: 'warning',
     },
   ];
 
@@ -172,8 +194,6 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
       const result = await execute(toRun);
       const parts: string[] = [];
       if (result.published) parts.push(`${result.published} published`);
-      if (result.deleted)
-        parts.push(`${result.deleted} dead shift${result.deleted !== 1 ? 's' : ''} removed`);
       if (result.failed) parts.push(`${result.failed} skipped`);
       toast({
         title: result.failed ? 'Roster published — with skips' : 'Roster published',
@@ -197,12 +217,12 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
         size="sm"
         onClick={handleClick}
         disabled={disabled || isLoading}
-        aria-label="Publish roster — send offers, open bidding, remove dead shifts"
+        aria-label="Publish roster — send offers, open bidding"
         className={cn(
           'h-10 min-h-[44px] sm:min-h-[36px] sm:h-9 gap-2 rounded-xl px-4 text-xs font-extrabold uppercase tracking-wider shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950',
           'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95',
         )}
-        title="Publish roster — send offers, open bidding, remove dead shifts"
+        title="Publish roster — send offers, open bidding"
       >
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
@@ -246,7 +266,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
               <div className="space-y-6 text-sm">
                 {nothingToDo ? (
                   <p className="text-muted-foreground text-center py-6 text-base font-medium">
-                    No draft or dead shifts in the current view — nothing to publish.
+                    No draft shifts in the current view — nothing to publish.
                   </p>
                 ) : (
                   <>
@@ -254,7 +274,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                       The following will be applied to every draft shift in the current view:
                     </p>
 
-                    {/* Stepper / Timeline Checklist — all six calculations */}
+                    {/* Stepper / Timeline Checklist — every calculation */}
                     <div className="relative pl-8 space-y-6 text-left before:absolute before:left-[13px] before:top-2.5 before:bottom-2.5 before:w-[2px] before:bg-slate-100 dark:before:bg-white/10">
                       {steps.map((step, i) => {
                         const active = step.count > 0;

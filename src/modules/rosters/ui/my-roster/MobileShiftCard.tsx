@@ -58,6 +58,12 @@ const colorClasses: Record<
     border: 'border-amber-500/20 dark:border-amber-500/30',
     text: 'text-amber-600 dark:text-amber-400',
   },
+  cyan: {
+    bg: 'bg-cyan-500/5 dark:bg-cyan-500/10',
+    bgHover: 'hover:bg-cyan-500/10 dark:hover:bg-cyan-500/20',
+    border: 'border-cyan-500/20 dark:border-cyan-500/30',
+    text: 'text-cyan-600 dark:text-cyan-400',
+  },
   purple: {
     bg: 'bg-purple-500/5 dark:bg-purple-500/10',
     bgHover: 'hover:bg-purple-500/10 dark:hover:bg-purple-500/20',
@@ -68,6 +74,7 @@ const colorClasses: Record<
 
 function resolveColorKey(groupColor?: string, groupName?: string): string {
   const c = (groupColor || groupName || '').toLowerCase();
+  if (c === 'office' || c.includes('cyan')) return 'cyan';
   if (c.includes('exhibition') || c.includes('green') || c.includes('emerald')) return 'green';
   if (c.includes('theatre') || c.includes('red') || c.includes('rose')) return 'red';
   if (c.includes('cutaway') || c.includes('amber') || c.includes('yellow')) return 'amber';

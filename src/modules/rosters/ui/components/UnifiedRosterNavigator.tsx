@@ -131,6 +131,14 @@ export interface UnifiedRosterNavigatorProps {
    * full              — ToggleGroup + date picker (suits desktop manager bar)
    */
   variant?: 'compact' | 'full';
+  /**
+   * Which view types to offer. Defaults to all four.
+   *
+   * A page whose grid only makes sense at one zoom passes that one, and the
+   * switcher disappears rather than rendering a single pill that cannot be
+   * toggled — an affordance that does nothing reads as broken.
+   */
+  views?: readonly ViewType[];
   className?: string;
 }
 
@@ -148,6 +156,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
   onViewTypeChange,
   showToday = false,
   showPicker = false,
+  views,
   minDate,
   maxDate,
   variant = 'compact',
@@ -155,6 +164,16 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
 }) => {
   const range = useMemo(() => computeRange(date, viewType), [date, viewType]);
   const label = useMemo(() => formatRangeLabel(range, viewType), [range, viewType]);
+
+  // Offered views, in VIEW_OPTIONS' order rather than the caller's, so two
+  // pages that pass the same set always render the same switcher.
+  const options = useMemo(
+    () => (views ? VIEW_OPTIONS.filter((o) => views.includes(o.value)) : VIEW_OPTIONS),
+    [views],
+  );
+  // One choice is not a choice. Hide the switcher rather than render a pill
+  // that is permanently on and does nothing when pressed.
+  const showSwitcher = options.length > 1;
 
   // Fire onChange with concurrent transition to avoid blocking heavy renders
   const fire = (newDate: Date) => {
@@ -231,7 +250,9 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
   if (variant === 'full') {
     return (
       <div className={cn('flex items-center gap-4', className)}>
-        {/* View type — ToggleGroup */}
+        {/* View type — ToggleGroup. The whole pill box goes, not just the
+            control inside it, or a single-view page carries an empty one. */}
+        {showSwitcher && (
         <div className="flex-shrink-0 flex items-center bg-slate-100/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm">
           <ToggleGroup
             type="single"
@@ -239,7 +260,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
             onValueChange={(v) => v && onViewTypeChange(v as ViewType)}
             className="flex items-center gap-0.5"
           >
-            {VIEW_OPTIONS.map((v) => (
+            {options.map((v) => (
               <ToggleGroupItem
                 key={v.value}
                 value={v.value}
@@ -250,6 +271,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
             ))}
           </ToggleGroup>
         </div>
+        )}
 
         {/* Date navigation */}
         <div className="flex-shrink-0 flex items-center gap-1 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
@@ -292,8 +314,9 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
   return (
     <div className={cn('flex items-center gap-1.5 flex-wrap', className)}>
       {/* View mode pills */}
+      {showSwitcher && (
       <div className="flex rounded-lg bg-muted/50 p-0.5 gap-0.5 flex-shrink-0">
-        {VIEW_OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <button
             key={opt.value}
             onClick={() => onViewTypeChange(opt.value)}
@@ -309,6 +332,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
           </button>
         ))}
       </div>
+      )}
 
       {/* Date navigation */}
       <div className="flex items-center gap-0.5 flex-shrink-0">

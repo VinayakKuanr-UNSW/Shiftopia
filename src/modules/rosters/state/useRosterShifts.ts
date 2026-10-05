@@ -638,13 +638,20 @@ export function useDeleteShift() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    // Routed through the optimistic-concurrency gateway: a SOFT delete (deleted_at)
-    // guarded by the shift `version` the UI was showing. Two managers can no longer
-    // both delete/clobber the same shift — the stale one gets a VERSION_CONFLICT.
-    // Safe for UX because every roster read filters `deleted_at IS NULL` and
-    // delta-sync evicts tombstoned rows. (Hard archival remains via sm_delete_shift.)
-    mutationFn: ({ shiftId, expectedVersion }: { shiftId: string; expectedVersion: number }) =>
-      runGatewayOp({ shiftId, expectedVersion, op: 'delete' }),
+    // A PERMANENT delete (`sm_delete_shift`), still guarded by the shift `version`
+    // the UI was showing: two managers cannot both act on the same shift — the
+    // stale one gets VERSION_CONFLICT. The database refuses a started shift.
+    mutationFn: async ({ shiftId, expectedVersion }: { shiftId: string; expectedVersion: number }) => {
+      try {
+        await shiftsCommands.deleteShift(shiftId, expectedVersion);
+      } catch (e) {
+        // Same error shape the gateway used, so onError's refresh logic holds.
+        const code = (e as { code?: string }).code;
+        throw Object.assign(e as Error, {
+          shiftOpResult: { code: code === 'SHIFT_NOT_FOUND' ? 'GONE' : code },
+        });
+      }
+    },
 
     onMutate: async ({ shiftId }) => {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });

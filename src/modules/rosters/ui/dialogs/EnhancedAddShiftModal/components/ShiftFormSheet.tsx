@@ -68,6 +68,7 @@ import { formatHours, calculateShiftLength } from '../utils';
 import type { ShiftFormSheetProps } from '../types';
 import {
     targetEmploymentTypeOptions,
+    FULL_TIME_GROUP_TYPE,
     TARGET_EMPLOYMENT_TYPES,
     TARGET_EMPLOYMENT_TYPE_LABELS,
     contractMatchesTarget,
@@ -78,6 +79,7 @@ const GROUP_LABEL: Record<string, string> = {
     exhibition_centre: 'Exhibition Centre',
     theatre: 'Theatre',
     the_cutaway: 'The Cutaway',
+    office: 'Office',
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -174,6 +176,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     isSubGroupLocked,
     isRoleLocked,
     isEmployeeLocked,
+    isTargetTypeLocked,
     canUnpublish,
     onUnpublish,
     canSave,
@@ -1010,7 +1013,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                                 if (!stillOk) form.setValue('assigned_employee_id', null);
                                             }
                                         }}
-                                        disabled={isReadOnly}
+                                        disabled={isReadOnly || isTargetTypeLocked}
                                     >
                                         <FormControl>
                                             <SelectTrigger className={SELECT_CLS}>
@@ -1018,7 +1021,9 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent className="z-[200]">
-                                            {targetEmploymentTypeOptions(field.value).map((t) => (
+                                            {targetEmploymentTypeOptions(field.value, {
+                                                allowFullTime: watchGroup === FULL_TIME_GROUP_TYPE,
+                                            }).map((t) => (
                                                 <SelectItem key={t} value={t}>
                                                     {TARGET_EMPLOYMENT_TYPE_LABELS[t]}
                                                 </SelectItem>

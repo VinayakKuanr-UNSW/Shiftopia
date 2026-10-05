@@ -73,6 +73,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         isSubGroupLocked,
         isRoleLocked,
         isEmployeeLocked,
+        isTargetTypeLocked,
 
         // Read-only
         isPast,
@@ -167,6 +168,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                     isSubGroupLocked={isSubGroupLocked}
                     isRoleLocked={isRoleLocked}
                     isEmployeeLocked={isEmployeeLocked}
+                    isTargetTypeLocked={isTargetTypeLocked}
                     canUnpublish={canUnpublish}
                     onUnpublish={handleUnpublish}
                     canSave={canSave}
@@ -302,6 +304,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                 isSubGroupLocked={isSubGroupLocked}
                                 isRoleLocked={isRoleLocked}
                                 isEmployeeLocked={isEmployeeLocked}
+                                            isTargetTypeLocked={isTargetTypeLocked}
                                 isScheduleDefined={isScheduleDefined}
                                 currentStep={1}
                                 onCancel={handleCancel}

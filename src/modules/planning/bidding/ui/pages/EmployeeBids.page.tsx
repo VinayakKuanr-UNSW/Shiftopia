@@ -268,6 +268,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         'theatre': 'Theatre',
                         'the_cutaway': 'The Cutaway',
                         'cutaway': 'The Cutaway',
+                        'office': 'Office',
                     };
                     if (map[t]) return map[t];
                     if (t.toLowerCase().includes('cutaway')) return 'The Cutaway';
@@ -336,6 +337,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         'theatre': 'Theatre',
                         'the_cutaway': 'The Cutaway',
                         'cutaway': 'The Cutaway',
+                        'office': 'Office',
                     };
                     if (map[t]) return map[t];
                     if (t.toLowerCase().includes('cutaway')) return 'The Cutaway';

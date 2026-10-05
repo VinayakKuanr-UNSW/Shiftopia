@@ -71,7 +71,7 @@ import { BidLedgerImpact, type BidLedgerImpactData } from './BidLedgerImpact';
 // All class strings are written statically so Tailwind can scan them.
 // =============================================================================
 
-type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default';
+type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';
 
 const GROUP_THEME: Record<GroupVariant, {
   bar: string;       // left stripe color
@@ -118,6 +118,15 @@ const GROUP_THEME: Record<GroupVariant, {
     badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
     dot:   'bg-amber-500',
   },
+  office: {
+    bar:   'bg-cyan-500',
+    tint:  'bg-cyan-500/[0.05]',
+    ring:  'ring-cyan-500/30',
+    text:  'text-cyan-600 dark:text-cyan-400',
+    boost: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-cyan-500/25',
+    badge: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20',
+    dot:   'bg-cyan-500',
+  },
   default: {
     bar:   'bg-violet-500',
     tint:  'bg-violet-500/[0.05]',
@@ -132,6 +141,7 @@ const GROUP_THEME: Record<GroupVariant, {
 function getGroupVariant(groupType?: string | null, dept?: string): GroupVariant {
   const d = (dept || '').toLowerCase();
   const g = (groupType || '').toLowerCase();
+  if (g === 'office') return 'office';
   if (g.includes('convention') || d.includes('convention')) return 'convention';
   if (g.includes('exhibition') || d.includes('exhibition')) return 'exhibition';
   if (g.includes('theatre') || g.includes('theater') || d.includes('theatre') || d.includes('theater')) return 'theatre';

@@ -158,6 +158,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const isS3PendingOffer = shiftData?.shift.lifecycle_status === 'Published' && shiftData?.shift.assignment_status === 'assigned' && !shiftData?.shift.assignment_outcome;
 
   const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
+  // Full-time hours are fixed: an FT shift is never swapped or dropped to
+  // Bidding (the database refuses both). Changes go through leave or the manager.
+  const isFullTimeShift = (shiftData?.shift as any)?.target_employment_type === 'FT';
 
   const paidBreak = (shiftData?.shift as any)?.paid_break_minutes ?? 0;
   const unpaidBreak = (shiftData?.shift as any)?.unpaid_break_minutes ?? shiftData?.shift.break_minutes ?? 0;
@@ -424,7 +427,12 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               statusIcons={null}
               footerActions={
                 <div className="flex flex-col gap-2 w-full">
-                  {!isLockedFromActions && (
+                  {!isLockedFromActions && isFullTimeShift && (
+                    <p className={cn(text.caption, 'text-center')}>
+                      Full-time shifts can’t be swapped or dropped. Request leave, or talk to your manager.
+                    </p>
+                  )}
+                  {!isLockedFromActions && !isFullTimeShift && (
                     <div className="flex gap-2">
                       {/* Solid. These were 10%-opacity tints over a coloured
                           card, which left the label near the card's own

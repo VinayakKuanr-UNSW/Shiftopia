@@ -27,6 +27,7 @@ const CARDS = {
   ShiftDetailsDialog: 'src/modules/rosters/ui/my-roster/ShiftDetailsDialog.tsx',
   TimesheetMobileCard: 'src/modules/timesheets/ui/components/TimesheetMobileCard.tsx',
   MyOffersModal: 'src/modules/rosters/ui/my-roster/MyOffersModal.tsx',
+  ShiftExpandDialog: 'src/modules/rosters/ui/dialogs/ShiftExpandDialog.tsx',
 } as const;
 
 describe('shift card contracts', () => {

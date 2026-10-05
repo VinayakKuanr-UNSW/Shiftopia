@@ -153,8 +153,8 @@ export function preflightDelete(shifts: Shift[]): BulkPreflightSummary {
  *   • unassignedIds — DRAFT + unassigned + still in the future. Publishing opens
  *                     these for Open Bidding.
  *   • deadIds       — DRAFT + unassigned + already "Live" (the scheduled window
- *                     has started with nobody on it). These can never be staffed
- *                     and are deleted.
+ *                     has started with nobody on it). These can never be staffed,
+ *                     and — having started — can never be deleted. Reported only.
  *
  * The three buckets are disjoint by construction: a dead shift is past-start,
  * a publishable shift is future-start.
@@ -174,8 +174,21 @@ export interface PublishRosterPlan {
      * bidding (it would immediately expire) — must be assigned manually. Skipped.
      */
     emergentUnassignedIds: string[];
-    /** W — unassigned drafts already "Live" (started, unstaffed): deleted. */
+    /** W — unassigned drafts already "Live" (started, unstaffed): skipped, never deleted. */
     deadIds: string[];
+    /**
+     * F — FULL-TIME assigned drafts, any time-to-start: published straight to
+     * Confirmed (S4). Full-time hours are contracted — never offered.
+     */
+    fullTimeIds: string[];
+    /** F0 — FULL-TIME drafts with nobody on them: skipped (an FT shift never goes to bidding). */
+    fullTimeUnassignedIds: string[];
+    /**
+     * L — assigned drafts on a day the assignee has APPROVED leave: skipped. The
+     * database refuses to publish them (`trg_shift_not_on_approved_leave`), and
+     * `sm_bulk_publish_shifts` skips them; this says so before the manager confirms.
+     */
+    onLeaveIds: string[];
     /** Z — already-published shifts in the view: skipped (informational). */
     alreadyPublishedCount: number;
 }
@@ -194,12 +207,19 @@ const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
  *   emergent unassigned (B) · dead unassigned-live (W). Already-published shifts
  *   are only counted (Z).
  */
-export function planPublishRoster(shifts: Shift[]): PublishRosterPlan {
+export function planPublishRoster(
+    shifts: Shift[],
+    /** Is this employee on approved leave on this `yyyy-MM-dd`? Omitted ⇒ nobody is. */
+    isOnApprovedLeave?: (employeeId: string, dateKey: string) => boolean,
+): PublishRosterPlan {
     const assignedIds: string[] = [];
     const unassignedIds: string[] = [];
     const emergentAssignedIds: string[] = [];
     const emergentUnassignedIds: string[] = [];
     const deadIds: string[] = [];
+    const fullTimeIds: string[] = [];
+    const fullTimeUnassignedIds: string[] = [];
+    const onLeaveIds: string[] = [];
     let alreadyPublishedCount = 0;
 
     // Real epoch for absolute-instant math. getSydneyNow().getTime() would be a
@@ -231,12 +251,27 @@ export function planPublishRoster(shifts: Shift[]): PublishRosterPlan {
         const isUnassigned = !s.assigned_employee_id;
 
         // Dead shift — an unassigned draft currently inside its scheduled window.
-        // It started with nobody on it and can never be staffed → delete.
+        // It started with nobody on it and can never be staffed → reported, left alone.
         if (isUnassigned && nowMs >= startMs && nowMs < endMs) {
             deadIds.push(s.id);
             continue;
         }
         if (!Number.isFinite(startMs) || startMs <= nowMs) continue;
+
+        // Approved leave beats every other bucket: the shift cannot be published
+        // to this person at all, whatever its type or time-to-start.
+        if (!isUnassigned && isOnApprovedLeave?.(s.assigned_employee_id as string, s.shift_date)) {
+            onLeaveIds.push(s.id);
+            continue;
+        }
+
+        // Full-time: its own branch of the state machine (sm_publish_shift /
+        // sm_bulk_publish_shifts) — confirmed directly, or skipped if unassigned.
+        if (s.target_employment_type === 'FT') {
+            if (isUnassigned) fullTimeUnassignedIds.push(s.id);
+            else fullTimeIds.push(s.id);
+            continue;
+        }
 
         const isEmergent = startMs - nowMs <= EMERGENT_WINDOW_MS;
 
@@ -258,6 +293,9 @@ export function planPublishRoster(shifts: Shift[]): PublishRosterPlan {
         emergentAssignedIds,
         emergentUnassignedIds,
         deadIds,
+        fullTimeIds,
+        fullTimeUnassignedIds,
+        onLeaveIds,
         alreadyPublishedCount,
     };
 }

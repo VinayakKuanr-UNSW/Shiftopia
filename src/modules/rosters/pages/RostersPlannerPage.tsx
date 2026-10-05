@@ -87,6 +87,8 @@ import {
   planPublishRoster,
   type PublishRosterPlan,
 } from '@/modules/rosters/domain/bulk-action-engine';
+import { loadLeaveDays } from '@/modules/office/api/office.loaders';
+import { indexApprovedLeaveDays } from '@/modules/rosters/hooks/useApprovedLeaveDays';
 import type { PublishRosterResult } from '@/modules/rosters/ui/components/PublishRosterButton';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
@@ -724,8 +726,8 @@ const NewRostersPage: React.FC = () => {
 
   // ── One-click "Publish" (function bar) ────────────────────────────────────
   // Publishes every draft shift in the current view (assigned → offers,
-  // unassigned → open bidding) and deletes dead shifts (unassigned drafts whose
-  // window is already live). Loads on demand so it works in every view — the
+  // unassigned → open bidding). Unassigned drafts already live are skipped —
+  // started shifts are never deleted. Loads on demand so it works in every view — the
   // default Group Bucket View gates off the per-shift fetch, so we can't rely on
   // the rendered `shifts` array here. `fetchQuery` reuses the cache when it's
   // already warm (non-bucket views).
@@ -736,6 +738,9 @@ const NewRostersPage: React.FC = () => {
       emergentAssignedIds: [],
       emergentUnassignedIds: [],
       deadIds: [],
+      fullTimeIds: [],
+      fullTimeUnassignedIds: [],
+      onLeaveIds: [],
       alreadyPublishedCount: 0,
     };
     if (!selectedOrganizationId || !startDate || !endDate) return empty;
@@ -746,7 +751,23 @@ const NewRostersPage: React.FC = () => {
       staleTime: 30_000,
     });
 
-    return planPublishRoster((planShifts ?? []) as Shift[]);
+    // Approved leave for everyone assigned to a draft in the range, so the dialog
+    // can say which shifts will be skipped for it (the database refuses them).
+    const draftAssignees = [...new Set(((planShifts ?? []) as Shift[])
+      .filter(s => s.lifecycle_status === 'Draft' && s.assigned_employee_id)
+      .map(s => s.assigned_employee_id as string))];
+    let isOnApprovedLeave: ((employeeId: string, dateKey: string) => boolean) | undefined;
+    if (draftAssignees.length > 0) {
+      try {
+        const leave = indexApprovedLeaveDays(await loadLeaveDays(draftAssignees, startDate, endDate));
+        isOnApprovedLeave = (employeeId, dateKey) => Boolean(leave.get(employeeId)?.has(dateKey));
+      } catch {
+        // Unreadable leave just means the dialog cannot pre-announce the skips;
+        // the database still refuses to publish onto approved leave.
+      }
+    }
+
+    return planPublishRoster((planShifts ?? []) as Shift[], isOnApprovedLeave);
   }, [selectedOrganizationId, startDate, endDate, queryFilters, queryClient]);
 
   const executePublishRoster = React.useCallback(
@@ -759,19 +780,14 @@ const NewRostersPage: React.FC = () => {
         ...plan.assignedIds,
         ...plan.unassignedIds,
         ...plan.emergentAssignedIds,
+        ...plan.fullTimeIds,
       ];
       let published = 0;
-      let deleted = 0;
       let failed = 0;
       const failedReasons: string[] = [];
 
-      // Delete dead shifts first so they never round-trip through publish.
-      if (plan.deadIds.length > 0) {
-        const res = await bulkDelete.mutateAsync(plan.deadIds);
-        deleted = res.deletedIds.length;
-        failed += res.failed.length;
-        failedReasons.push(...res.failed.map(f => f.reason));
-      }
+      // Started-unstaffed drafts (plan.deadIds) are left alone: a shift that has
+      // started is never deleted, and it can no longer be published either.
 
       // The publish command already routes each shift by assignment + time-to-start.
       if (publishIds.length > 0) {
@@ -781,9 +797,9 @@ const NewRostersPage: React.FC = () => {
         failedReasons.push(...[...res.complianceFailed, ...res.dbFailed].map(f => f.reason));
       }
 
-      return { published, deleted, failed, failedReasons };
+      return { published, failed, failedReasons };
     },
-    [bulkDelete, bulkPublish],
+    [bulkPublish],
   );
 
   const handleBulkDelete = async (): Promise<BulkActionResult> => {

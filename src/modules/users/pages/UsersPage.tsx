@@ -10,7 +10,6 @@ import SkillsSection from '@/modules/users/ui/components/SkillsSection';
 import LicensesSection from '@/modules/users/ui/components/LicensesSection';
 import WorkRightsSection from '@/modules/users/ui/components/WorkRightsSection';
 import { UserContractsSection, AccessCertificatesSection } from '@/modules/users/ui/components/ContractsSection';
-import { DeleteUserDialog } from '@/modules/users/ui/components/DeleteUserDialog';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
@@ -145,16 +144,6 @@ const UsersPage: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Employee profile actions">
-                                    {isAuthorizedAdmin && selectedUser && (
-                                        <DeleteUserDialog 
-                                            userId={selectedUserId}
-                                            userName={selectedUser.full_name}
-                                            onSuccess={() => {
-                                                setSelectedUserId('');
-                                                refetchProfiles();
-                                            }}
-                                        />
-                                    )}
                                     <Button
                                         variant="outline"
                                         aria-label={`Edit profile for ${selectedUser?.full_name}`}

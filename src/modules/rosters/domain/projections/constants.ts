@@ -51,6 +51,15 @@ export const GROUP_COLORS: Record<TemplateGroupType, GroupColorSet> = {
     glassContainer: 'bg-amber-500/5 backdrop-blur-xl border border-amber-500/20 shadow-[0_8px_32px_rgba(245,158,11,0.15)]',
     glassHeader:    'bg-gradient-to-r from-amber-600/90 to-amber-500/80 backdrop-blur-md border-b border-amber-400/30',
   },
+  office: {                                   // ← Full-time shifts. Cyan: clear of blue, emerald and the purple fallback
+    card:           'bg-cyan-500/10 hover:bg-cyan-500/15',
+    cardBorder:     'border-l-cyan-500',
+    badge:          'bg-cyan-100 text-cyan-700 border-cyan-200',
+    accent:         'cyan',
+    dndHighlight:   'ring-cyan-400',
+    glassContainer: 'bg-cyan-500/5 backdrop-blur-xl border border-cyan-500/20 shadow-[0_8px_32px_rgba(6,182,212,0.15)]',
+    glassHeader:    'bg-gradient-to-r from-cyan-600/90 to-cyan-500/80 backdrop-blur-md border-b border-cyan-400/30',
+  },
 };
 
 /** Colour set for shifts/groups that have no group_type (orphan/unassigned) */
@@ -71,6 +80,7 @@ export const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', strin
   exhibition_centre: 'Exhibition Centre',
   theatre:           'Theatre',
   the_cutaway:       'The Cutaway',
+  office:            'Office',
   unassigned:        'Unassigned',
 };
 
@@ -79,6 +89,7 @@ export const ALL_GROUP_TYPES: TemplateGroupType[] = [
   'exhibition_centre',
   'theatre',
   'the_cutaway',
+  'office',
 ];
 
 // ── Level colour mapping ───────────────────────────────────────────────────────
