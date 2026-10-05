@@ -16,7 +16,6 @@
  *
  * Consumers:
  *   - shifts.queries.ts  → getEmployees()
- *   - autoschedule.api.ts → fetchBaseline()
  */
 
 import { supabase } from '@/platform/supabase/client';
