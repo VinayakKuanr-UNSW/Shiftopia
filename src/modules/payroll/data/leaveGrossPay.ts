@@ -68,7 +68,15 @@ export interface LeaveFlags {
  * personal-leave line: the Fair Work Regulations prohibit identifying FDV
  * leave on a payslip (`computeShiftGrossPay` enforces this).
  */
-export function leaveTypeToFlags(leaveType: string | null | undefined): LeaveFlags | null {
+export function leaveTypeToFlags(
+  leaveType: string | null | undefined,
+  /**
+   * cl 55.1 / cl 58.2 only: what the employee chose. These two clauses offer
+   * accrued PAID ANNUAL leave OR UNPAID leave, so the type alone cannot say
+   * whether the day is paid. Ignored for every other type.
+   */
+  electionMode?: string | null,
+): LeaveFlags | null {
   const t = (leaveType ?? '').toLowerCase();
   if (/annual|recreation|holiday/.test(t)) return { isAnnualLeave: true };
   // cl 52 supporting carer (secondary carer / partner / paternity). Checked
@@ -85,14 +93,16 @@ export function leaveTypeToFlags(leaveType: string | null | undefined): LeaveFla
   if (/parental|maternity|adoption/.test(t)) return { isParentalLeave: true };
   if (/long.?service|lsl/.test(t)) return { isLongServiceLeave: true };
   if (/jury|court/.test(t)) return { isJuryDuty: true };
-  // cl 55 / cl 58 (audit H-10/H-11): both are explicitly framed as drawing
-  // "accrued PAID ANNUAL LEAVE" (not a flat-rate entitlement like personal/
-  // carer's), so they price with the same 17.5%-loading treatment as
-  // ordinary annual leave — the dedicated capped balance in the leave
-  // module is what distinguishes them for tracking/reporting, not the
-  // pricing formula.
-  if (/religious|cultural|ceremonial|naidoc/.test(t)) return { isAnnualLeave: true };
-  if (/gender.?affirmation/.test(t)) return { isAnnualLeave: true };
+  // cl 55.1 / cl 58.2: the employee ELECTS paid annual leave or unpaid leave.
+  // Elected annual → priced as annual leave (17.5% loading, cl 44.7), exactly
+  // as the deduction trigger draws it from the annual balance. Elected unpaid
+  // → not priced. NOT RECORDED → not priced either: these used to be paid as
+  // annual leave unconditionally, which paid every "unpaid" election; paying
+  // nothing on an unknown election is the error a manager can see and fix,
+  // paying for it is not. (The request form now makes the election required.)
+  if (/religious|cultural|ceremonial|naidoc|gender.?affirmation/.test(t)) {
+    return electionMode === 'annual' ? { isAnnualLeave: true } : null;
+  }
   return null;
 }
 
@@ -258,6 +268,8 @@ export interface LeaveRequestRow {
   leave_type: string;
   start_date: string;
   end_date: string;
+  /** cl 55.1 / 58.2 election — 'annual' | 'unpaid' | null. See `leaveTypeToFlags`. */
+  election_mode?: string | null;
 }
 
 /**
@@ -280,7 +292,7 @@ export function buildLeaveInputs(
   days: string[],
   dailyMinutesOverrides?: Map<string, number>,
 ): GrossPayShiftInput[] {
-  const flags = leaveTypeToFlags(req.leave_type);
+  const flags = leaveTypeToFlags(req.leave_type, req.election_mode);
   if (!flags) return [];
   const isCasual = /casual/i.test(ctx.employmentType ?? '');
   // Casuals accrue NO paid leave (cl 12.5(b) — loading in lieu) with ONE
@@ -395,7 +407,7 @@ export interface LeaveFetchBounds {
 export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<GrossPayShiftInput[]> {
   const { data: leaves, error } = await (supabase as any)
     .from('leave_requests')
-    .select('id, employee_id, leave_type, start_date, end_date, status')
+    .select('id, employee_id, leave_type, start_date, end_date, status, election_mode')
     .lte('start_date', `${bounds.periodEnd}T23:59:59`)
     .gte('end_date', bounds.periodStart);
   if (error) {
@@ -405,7 +417,7 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<
 
   const approved: LeaveRequestRow[] = (leaves ?? [])
     .filter((l: any) => APPROVED_LEAVE_STATUSES.has(String(l.status ?? '').toLowerCase()))
-    .filter((l: any) => leaveTypeToFlags(l.leave_type) !== null);
+    .filter((l: any) => leaveTypeToFlags(l.leave_type, l.election_mode) !== null);
   if (approved.length === 0) return [];
 
   const employeeIds = Array.from(new Set(approved.map((l) => l.employee_id).filter(Boolean)));
@@ -418,7 +430,7 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<
   for (const req of approved) {
     const ctx = ctxById.get(req.employee_id);
     if (!ctx) continue; // no resolvable contract/rate — skip rather than guess.
-    const flags = leaveTypeToFlags(req.leave_type)!; // non-null: filtered above
+    const flags = leaveTypeToFlags(req.leave_type, req.election_mode)!; // non-null: filtered above
     const cap = paidDayCapFor(flags);
     const roster = rosterByEmp.get(req.employee_id);
 

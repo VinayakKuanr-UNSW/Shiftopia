@@ -45,7 +45,7 @@ export const LEAVE_TYPE_LABELS: Record<LeaveTypeCode, string> = {
  *
  * This is a SEPARATE question from `paidForCasual` (which asks whether a casual
  * is paid at all) and from `balanceTracked` (which asks whether we hold a
- * running balance). It exists because the Baseline FT generator has to answer
+ * running balance). It exists because the Office generator has to answer
  * "how many hours does this employee still owe" and a leave day either counts
  * toward that or it does not.
  *
@@ -68,7 +68,7 @@ export interface LeavePolicy {
   leaveType: LeaveTypeCode;
   /**
    * Effect on a permanent's contracted ordinary hours. See
-   * {@link OrdinaryHoursCredit}. Consumed by the Baseline FT requirement
+   * {@link OrdinaryHoursCredit}. Consumed by the Office requirement
    * calculator; deliberately NOT derived from `accrualRateHoursPerYear`,
    * because a type can be paid without accruing (compassionate, parental)
    * and tracked without being paid from a balance at all.
@@ -123,7 +123,7 @@ export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelle
  * day is paid — only the election can.
  *
  * `null` means not yet recorded, which is a real state rather than an error:
- * every request predating the election column has one, and the Baseline FT
+ * every request predating the election column has one, and the Office
  * calculator reports both readings instead of guessing.
  */
 export type LeaveElectionMode = 'annual' | 'unpaid';

@@ -75,7 +75,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
     certificateThresholdDays: null,
     paidForCasual: false,
     balanceTracked: false,
-    clause: 'cl 47, NES ss104-105',
+    clause: 'cl 48, NES ss104-105',
     description: 'Compassionate leave — 2 days per occasion (death/serious illness of immediate family/household member).',
   },
   parental: {
@@ -291,6 +291,20 @@ export interface CertificateAdjacency {
   /** The day immediately before the leave start, or immediately after the
    *  leave end, is a public holiday. */
   adjacentToPublicHoliday?: boolean;
+  /** cl 45.5(b)(iii): the neighbouring day is the person's ROSTERED day off —
+   *  not rostered, while they are rostered on days around it. On a 7-day
+   *  roster that is often not a Saturday or Sunday. */
+  adjacentToRosteredDayOff?: boolean;
+  /** cl 45.5(b)(iv): the leave runs straight on from, or into, other leave. */
+  adjacentToOtherLeave?: boolean;
+}
+
+/** What `computeCertificateAdjacency` can use beyond the calendar. */
+export interface CertificateContext {
+  /** yyyy-MM-dd dates the person is rostered, covering at least a week either side. */
+  rosteredDates?: ReadonlySet<string>;
+  /** Their OTHER pending or approved leave (this request excluded). */
+  otherLeave?: ReadonlyArray<{ startDate: string; endDate: string }>;
 }
 
 /**
@@ -316,8 +330,29 @@ export function isCertificateRequired(
   const policy = LEAVE_POLICIES[leaveType];
   if (!policy?.requiresCertificate) return false;
   if (policy.certificateThresholdDays == null) return true; // always required (jury, parental)
-  if (adjacency.adjacentToWeekend || adjacency.adjacentToPublicHoliday) return true;
-  return consecutiveDays > policy.certificateThresholdDays;
+  return certificateReasons(leaveType, consecutiveDays, adjacency).length > 0;
+}
+
+/**
+ * WHY a certificate is required — empty when it is not. cl 45.5(b) lists four
+ * triggers; each that applies is named, so the employee knows what to provide
+ * and the manager knows what to ask for.
+ */
+export function certificateReasons(
+  leaveType: LeaveTypeCode,
+  consecutiveDays: number,
+  adjacency: CertificateAdjacency = {},
+): string[] {
+  const policy = LEAVE_POLICIES[leaveType];
+  if (!policy?.requiresCertificate) return [];
+  if (policy.certificateThresholdDays == null) return ['Evidence is always required for this leave'];
+  const out: string[] = [];
+  if (consecutiveDays > policy.certificateThresholdDays) out.push(`More than ${policy.certificateThresholdDays} working days`);
+  if (adjacency.adjacentToPublicHoliday) out.push('Next to a public holiday');
+  if (adjacency.adjacentToWeekend) out.push('Next to a weekend');
+  if (adjacency.adjacentToRosteredDayOff) out.push('Next to a rostered day off');
+  if (adjacency.adjacentToOtherLeave) out.push('Next to other leave');
+  return out;
 }
 
 /**
@@ -325,7 +360,11 @@ export function isCertificateRequired(
  * day immediately before `startDate` and immediately after `endDate`
  * (YYYY-MM-DD, both LOCAL date parts, never `.toISOString()`).
  */
-export function computeCertificateAdjacency(startDate: string, endDate: string): CertificateAdjacency {
+export function computeCertificateAdjacency(
+  startDate: string,
+  endDate: string,
+  context: CertificateContext = {},
+): CertificateAdjacency {
   const start = new Date(startDate + 'T00:00:00');
   const end = new Date(endDate + 'T00:00:00');
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return {};
@@ -337,9 +376,41 @@ export function computeCertificateAdjacency(startDate: string, endDate: string):
 
   const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const before = ymd(dayBefore);
+  const after = ymd(dayAfter);
+
+  /*
+   * A rostered day off is a day NOT rostered between days that are. Judged
+   * only when the roster around it is known — a week either side — because an
+   * unpublished future roster is "not rostered yet", not a day off. Weekends
+   * are reported as weekends, not again as days off.
+   */
+  const rostered = context.rosteredDates;
+  const isRosteredDayOff = (d: Date): boolean => {
+    if (!rostered || rostered.size === 0 || isWeekend(d)) return false;
+    const key = ymd(d);
+    if (rostered.has(key)) return false;
+    const near = (offset: number) => {
+      const x = new Date(d);
+      x.setDate(x.getDate() + offset);
+      return ymd(x);
+    };
+    const rosteredBefore = [1, 2, 3, 4, 5, 6, 7].some(n => rostered.has(near(-n)));
+    const rosteredAfter = [1, 2, 3, 4, 5, 6, 7].some(n => rostered.has(near(n)));
+    return rosteredBefore && rosteredAfter;
+  };
+
+  const other = context.otherLeave ?? [];
+  const touchesOtherLeave = other.some(l =>
+    (l.startDate <= before && l.endDate >= before) || (l.startDate <= after && l.endDate >= after));
+
   return {
     adjacentToWeekend: isWeekend(dayBefore) || isWeekend(dayAfter),
     adjacentToPublicHoliday: isPublicHoliday(dayBefore) || isPublicHoliday(dayAfter),
+    adjacentToRosteredDayOff: isRosteredDayOff(dayBefore) || isRosteredDayOff(dayAfter),
+    adjacentToOtherLeave: touchesOtherLeave,
   };
 }
 

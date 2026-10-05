@@ -31,7 +31,8 @@ const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/page
 const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage.tsx'));
 const AttendancePage = lazy(() => import('@/modules/rosters/pages/AttendancePage.tsx'));
 const MyNotificationsPage = lazy(() => import('@/modules/core/pages/MyNotificationsPage.tsx'));
-const LeavePage = lazy(() => import('@/modules/leave/ui/pages/LeavePage.tsx'));
+const MyLeavePage = lazy(() => import('@/modules/leave/ui/pages/MyLeavePage.tsx'));
+const LeaveApprovalsPage = lazy(() => import('@/modules/leave/ui/pages/LeaveApprovalsPage.tsx'));
 const GrossPayPage = lazy(() => import('@/modules/payroll/ui/GrossPayPage.tsx'));
 
 // Rostering
@@ -168,7 +169,7 @@ const AppRouter: React.FC = () => {
                     <Route path="/my-swaps" element={<EmployeeSwapsPage />} />
                     <Route path="/my-notifications" element={<MyNotificationsPage />} />
                     <Route path="/performance" element={<PerformancePage />} />
-                    <Route path="/my-leave" element={<LeavePage />} />
+                    <Route path="/my-leave" element={<MyLeavePage />} />
 
                     <Route element={<FeatureGate feature="my-broadcasts" />}>
                         <Route path="/my-broadcasts" element={<MyBroadcastsPage />} />
@@ -211,7 +212,7 @@ const AppRouter: React.FC = () => {
 
                     {/* ── Leave Approvals (Management) ── */}
                     <Route element={<FeatureGate feature="management" />}>
-                        <Route path="/management/leave" element={<LeavePage tab="approvals" />} />
+                        <Route path="/management/leave" element={<LeaveApprovalsPage />} />
                         <Route path="/management/payroll" element={<GrossPayPage />} />
                     </Route>
 
