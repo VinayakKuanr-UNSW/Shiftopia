@@ -52,8 +52,22 @@ const CASES: Array<{ id: string; date: string; st: string; net: number; sched: n
   { id: 'overnight-into-ph',       date: '2026-12-27', st: '20:00', net: 480, sched: 510, lvl: 2, emp: 'Casual', expected: 498.82 },
 ];
 
-const price = (c: typeof CASES[number]) =>
+/**
+ * cl 28.2 first aid, ported in migration 20261005063752. Live values from
+ * `fn_eba_estimate_shift_cost(..., p_first_aid => true)` on 2026-10-05: each
+ * is the base golden figure plus the effective-dated rate on PAID ordinary
+ * hours — floored hours included, overtime hours excluded.
+ */
+const FIRST_AID_CASES: Array<{ base: string; expected: number; why: string }> = [
+  { base: 'weekday-casual-L2',   expected: 246.61, why: '+7h x $0.59' },
+  { base: 'overtime-ft-2h',      expected: 375.31, why: '+8 ordinary x $0.59; the 2 OT hours earn none' },
+  { base: 'minengage-casual-1h', expected: 105.69, why: '+3 floored hours x $0.59' },
+  { base: 'publicholiday-ft',    expected: 611.74, why: '+7.5h x $0.59' },
+];
+
+const price = (c: typeof CASES[number], firstAid = false) =>
   estimateDetailedCostFromShift({
+    is_first_aid_duty: firstAid,
     shift_date: c.date,
     start_time: `${c.st}:00`,
     end_time: '23:59:00',
@@ -85,5 +99,15 @@ describe('EBA engine — golden figures mirrored by the SQL port', () => {
   it('gives a full-time member no minimum-engagement top-up (cl 12)', () => {
     // 1h worked, 1h paid — PT/casual would be floored to 3h.
     expect(price(CASES.find(c => c.id === 'minengage-ft-1h')!)).toBeCloseTo(32.39, 2);
+  });
+
+  it.each(FIRST_AID_CASES)('first aid (cl 28.2): $base $why', ({ base, expected }) => {
+    expect(Number(price(CASES.find(c => c.id === base)!, true).toFixed(2))).toBe(expected);
+  });
+
+  it('first aid uses the FY25/26 rate before 6 Jul 2026 (live SQL: 217.84 -> 222.32)', () => {
+    const c = { id: 'weekday-pt-fy2526', date: '2026-06-29', st: '09:00', net: 480, sched: 480, lvl: 3, emp: 'PT', expected: 217.84 };
+    expect(Number(price(c).toFixed(2))).toBe(217.84);
+    expect(Number(price(c, true).toFixed(2))).toBe(222.32); // +8h x $0.56
   });
 });

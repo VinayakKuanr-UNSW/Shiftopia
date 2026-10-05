@@ -67,7 +67,6 @@ export interface Shift {
     remuneration_rate: number | null;
     actual_hourly_rate: number | null;
     currency: string;
-    cost_center_id: string | null;
     start_time: string;
     end_time: string;
     scheduled_start: string | null;
@@ -124,7 +123,6 @@ export interface Shift {
     published_at: string | null;
     published_by_user_id: string | null;
     is_locked: boolean;
-    lock_reason_text: string | null;
     timesheet_id: string | null;
     actual_start: string | null;
     actual_end: string | null;
@@ -162,9 +160,7 @@ export interface Shift {
     adjusted_end_source?: 'manual' | 'snapped' | 'auto' | null;
     adjusted_start_is_manual?: boolean;
     adjusted_end_is_manual?: boolean;
-    
-    is_recurring: boolean;
-    recurrence_rule: string | null;
+
     confirmed_at: string | null;
     organizations?: { id: string; name: string } | null;
     departments?: { id: string; name: string } | null;
@@ -198,6 +194,14 @@ export interface Shift {
     /** Narrows a 'PT' target to Flexible Part-Time staff only. */
     target_requires_flexible?: boolean;
     demand_group_id?: string | null;
+
+    /**
+     * cl 28.2 — READ-ONLY computed field (`public.is_first_aid_duty(shifts)`):
+     * true when the assignee holds a first-aid appointment covering
+     * shift_date. Present only when explicitly selected; `select('*')` omits
+     * computed fields. Feed the cost engines via `resolveShiftAllowances`.
+     */
+    is_first_aid_duty?: boolean | null;
 
     // Allowances
     allowances?: {

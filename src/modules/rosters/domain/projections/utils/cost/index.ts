@@ -5,6 +5,7 @@ import * as SecurityEngine from './security';
 import { Shift } from '../../../shift.entity';
 import type { AwardContext } from './award-context';
 import { buildAwardContext } from './award-context';
+import { resolveShiftAllowances } from './shift-allowances';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 /**
@@ -156,7 +157,7 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     is_overnight: shift.is_overnight,
     is_cancelled: shift.is_cancelled,
     shift_date: shift.shift_date,
-    allowances: shift.allowances,
+    allowances: resolveShiftAllowances(shift),
     isAnnualLeave: shift.isAnnualLeave,
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,
@@ -204,7 +205,7 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     is_overnight: shift.is_overnight,
     is_cancelled: shift.is_cancelled,
     shift_date: shift.shift_date,
-    allowances: shift.allowances,
+    allowances: resolveShiftAllowances(shift),
     isAnnualLeave: shift.isAnnualLeave,
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,

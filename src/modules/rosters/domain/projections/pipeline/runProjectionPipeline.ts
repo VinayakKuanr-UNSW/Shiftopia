@@ -99,7 +99,10 @@ export function computeCostForShift(
   netMinutes: number,
   ctx?: AwardContext,
 ): ShiftCostBreakdown {
-  const key = makeCacheKey(shift.id, shift.updatedAtMs);
+  // cl 28.2 first aid follows an appointment on the PERSON, so creating or
+  // ending one changes this shift's cost without touching its updated_at. Fold
+  // the flag into the key, or the cache keeps serving the pre-appointment figure.
+  const key = `${makeCacheKey(shift.id, shift.updatedAtMs)}${shift.allowances?.firstAid ? ':fa' : ''}`;
   const cached = getCachedCost(key);
   if (cached) return cached;
 

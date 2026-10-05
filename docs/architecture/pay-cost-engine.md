@@ -75,9 +75,22 @@ Each of these is a conscious omission, not an oversight:
   week, and an *unassigned* shift has no member to accumulate against. The TS
   engine also defaults this off when `priorOrdinaryHoursThisWeek` is absent, so
   the two agree.
-- **Opt-in allowances** (first-aid, protein-spill, split-shift; cl 28.2–28.4) —
-  per-shift flags nothing sets today. The cl 28.1 meal allowance is *not* in this
-  list; it triggers off overtime and is ported.
+- **Opt-in allowances** (protein-spill, split-shift; cl 28.3–28.4) — per-shift
+  flags nothing sets today. The cl 28.1 meal allowance is *not* in this list; it
+  triggers off overtime and is ported.
+
+First aid (cl 28.2) **is** ported (migration 20261005063752). The appointment
+belongs to the *person* — `first_aid_appointments`, dated, managed from the
+Users page — and reaches each shift row as the computed field
+`is_first_aid_duty`. `fn_eba_estimate_shift_cost(..., p_first_aid)` prices the
+effective-dated `eba_allowance.first_aid_per_hour` on PAID ordinary hours
+(floored hours included, overtime excluded), exactly as standard.ts does;
+`get_roster_planner_stats` and the `fn_eba_shift_cost(shifts)` row wrapper pass
+the flag. `sql-port-parity.test.ts` pins five first-aid golden figures read
+from the live function. The TS security engine also pays it to Part-Time and
+Casual Event Security, never to annualised FT security (Sch 3 §4.1(b)).
+Started appointments cannot be deleted or back-dated (trigger,
+20261005064116), because every engine re-reads them live.
 - **The Security engine** (Schedule 3) and the **trainee / apprentice / SWS**
   matrices (Schedules 4–6) — these re-derive the *base rate*, not the loadings.
 - **Leave-flagged shifts** (cl 44.7 / NES) and **higher duties** (cl 29).

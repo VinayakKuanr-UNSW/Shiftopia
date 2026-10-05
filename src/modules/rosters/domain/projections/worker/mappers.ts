@@ -26,6 +26,7 @@ import type {
 import type { EmployeeRecord, RoleRecord, LevelRecord, EventRecord } from '../types';
 import type { RosterStructure } from '../../../model/roster.types';
 import type { AdvancedFilters } from '../../../state/useRosterStore';
+import { resolveShiftAllowances } from '../utils/cost/shift-allowances';
 
 // ── Shift → WorkerShiftDTO ────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
 
     // Cost engine inputs
     targetEmploymentType: shift.target_employment_type ?? null,
-    allowances: shift.allowances ?? null,
+    allowances: resolveShiftAllowances(shift) ?? null,
     isAnnualLeave: shift.isAnnualLeave,
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,

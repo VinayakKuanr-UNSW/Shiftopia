@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import SkillsSection from '@/modules/users/ui/components/SkillsSection';
 import LicensesSection from '@/modules/users/ui/components/LicensesSection';
 import WorkRightsSection from '@/modules/users/ui/components/WorkRightsSection';
+import FirstAidSection from '@/modules/users/ui/components/FirstAidSection';
 import { UserContractsSection, AccessCertificatesSection } from '@/modules/users/ui/components/ContractsSection';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
@@ -155,10 +156,14 @@ const UsersPage: React.FC = () => {
                             </div>
 
                             {/* Sectioned Content */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" aria-label="Employee compliance sections">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-6" aria-label="Employee compliance sections">
                                 <SkillsSection employeeId={selectedUserId} />
                                 <LicensesSection employeeId={selectedUserId} />
                                 <WorkRightsSection employeeId={selectedUserId} />
+                                <FirstAidSection
+                                    employeeId={selectedUserId}
+                                    employeeName={selectedUser?.full_name || undefined}
+                                />
                             </div>
 
                             <div className="space-y-8" aria-label="Employee contracts and certificates">

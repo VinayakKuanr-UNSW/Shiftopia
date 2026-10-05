@@ -148,6 +148,7 @@ const SHIFT_SELECT = `
   required_licenses,
   notes,
   is_training,
+  is_first_aid_duty,
   published_at,
   cancelled_at,
   deleted_at,
