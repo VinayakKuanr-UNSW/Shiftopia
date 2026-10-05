@@ -31,7 +31,8 @@ const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/page
 const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage.tsx'));
 const AttendancePage = lazy(() => import('@/modules/rosters/pages/AttendancePage.tsx'));
 const MyNotificationsPage = lazy(() => import('@/modules/core/pages/MyNotificationsPage.tsx'));
-const LeavePage = lazy(() => import('@/modules/leave/ui/pages/LeavePage.tsx'));
+const MyLeavePage = lazy(() => import('@/modules/leave/ui/pages/MyLeavePage.tsx'));
+const LeaveApprovalsPage = lazy(() => import('@/modules/leave/ui/pages/LeaveApprovalsPage.tsx'));
 const GrossPayPage = lazy(() => import('@/modules/payroll/ui/GrossPayPage.tsx'));
 
 // Rostering
@@ -49,15 +50,15 @@ const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/Br
 
 // Features
 const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage.tsx'));
+// Employee-facing half of the KPI split — every access level sees their own
+// numbers. The managerial roll-up is /insights, gated on `insights`.
+const PerformancePage = lazy(() => import('@/modules/insights/pages/PerformancePage.tsx'));
 const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage.tsx'));
 const ComplianceRejectionsPage = lazy(() => import('@/modules/compliance/ui/pages/RejectionsPage.tsx'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage.tsx'));
 
 
 const SettingsPage = lazy(() => import('@/modules/settings/pages/SettingsPage.tsx'));
-
-// Utility
-const SearchPage = lazy(() => import('@/modules/search/pages/SearchPage.tsx'));
 
 /* =======================
    LOADING FALLBACK
@@ -166,7 +167,8 @@ const AppRouter: React.FC = () => {
                     <Route path="/my-bids" element={<EmployeeBidsPage />} />
                     <Route path="/my-swaps" element={<EmployeeSwapsPage />} />
                     <Route path="/my-notifications" element={<MyNotificationsPage />} />
-                    <Route path="/my-leave" element={<LeavePage />} />
+                    <Route path="/performance" element={<PerformancePage />} />
+                    <Route path="/my-leave" element={<MyLeavePage />} />
 
                     <Route element={<FeatureGate feature="my-broadcasts" />}>
                         <Route path="/my-broadcasts" element={<MyBroadcastsPage />} />
@@ -179,6 +181,10 @@ const AppRouter: React.FC = () => {
 
                     <Route element={<FeatureGate feature="rosters" />}>
                         <Route path="/rosters" element={<RostersPlannerPage />} />
+                        {/* The Office page was retired 2026-10-04: full-time
+                            shifts live on the Rosters page, in the Office group.
+                            Old links land there rather than on a 404. */}
+                        <Route path="/office" element={<Navigate to="/rosters" replace />} />
                         <Route path="/rosters/shift/new" element={<ShiftFormPage />} />
                         <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
                     </Route>
@@ -203,7 +209,7 @@ const AppRouter: React.FC = () => {
 
                     {/* ── Leave Approvals (Management) ── */}
                     <Route element={<FeatureGate feature="management" />}>
-                        <Route path="/management/leave" element={<LeavePage tab="approvals" />} />
+                        <Route path="/management/leave" element={<LeaveApprovalsPage />} />
                         <Route path="/management/payroll" element={<GrossPayPage />} />
                     </Route>
 
@@ -245,9 +251,6 @@ const AppRouter: React.FC = () => {
 
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/settings/:section" element={<SettingsPage />} />
-
-                    {/* ── Utility ── */}
-                    <Route path="/search" element={<SearchPage />} />
 
                 </Route>{/* /MobileAccessGuard */}
 

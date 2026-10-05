@@ -169,9 +169,32 @@ describe('the solver actually uses the constants it declares', () => {
     // gone from the constraint bodies.
     const src = readFileSync(MODEL_BUILDER, 'utf8');
 
+    /**
+     * Comment-stripped, because a source-reading test that matches a COMMENT
+     * proves nothing about the code. One of these once passed against the very
+     * comment describing the bug it existed to catch.
+     */
+    const code = src.replace(/#.*$/gm, '');
+
     it('no longer hardcodes the 9120-minute general cycle', () => {
-        expect(src).not.toMatch(/limit_mins\s*=\s*9120/);
-        expect(src).toMatch(/ORD_AVG_SECURITY_CYCLE_MINUTES if is_ft_security else ORD_AVG_CYCLE_MINUTES/);
+        expect(code).not.toMatch(/limit_mins\s*=\s*9120/);
+        // Both constants are still what the branch is built from — the shape of
+        // the expression changed when the general side became a function of the
+        // DECLARED cycle length, but neither side may go back to a literal.
+        expect(code).toMatch(/ORD_AVG_SECURITY_CYCLE_MINUTES if is_ft_security else/);
+        expect(code).toMatch(/ORD_AVG_CYCLE_MINUTES/);
+    });
+
+    it('derives the general ceiling from the DECLARED cycle, not a fixed four weeks', () => {
+        // cl 35.x(a) is a disjunction over the cycle cl 12.2(b) declares. A
+        // solver that reads its own constant here instead of the employee's
+        // field is back to enforcing one rung of the ladder for everybody.
+        expect(code).toMatch(/emp\.ordinary_hours_cycle_weeks/);
+        expect(code).toMatch(/emp\.ordinary_hours_cycle_anchor/);
+    });
+
+    it('caps every employment type, because cl 35.4(a) covers casuals too', () => {
+        expect(code).toMatch(/employment_type in \('FT', 'PT', 'Casual'\)/);
     });
 
     it('branches the cycle on full-time security, matching isFtSecurity', () => {

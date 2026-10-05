@@ -15,7 +15,7 @@
 import { estimateDetailedShiftCost } from '../../rosters/domain/projections/utils/cost/index';
 import type { CostCalculatorOptions, ShiftCostBreakdown } from '../../rosters/domain/projections/utils/cost/types';
 import type { EarningsLine, ShiftGrossPay, GrossPayHoursSource } from '../model/gross-pay.types';
-import { ausHolidays } from '@/modules/core/lib/holidays';
+import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 
 function round2(x: number): number {
   if (!Number.isFinite(x)) return 0;
@@ -212,7 +212,7 @@ export function buildOrdinaryEarningsLines(
   } else {
     const dateObj = new Date(ctx.shiftDate + 'T00:00:00');
     const dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
-    const isHoliday = !!ausHolidays.isHoliday(ctx.shiftDate);
+    const isHoliday = isPublicHolidayISO(ctx.shiftDate);
 
     let startMins = 0;
     let endMins = (b.ordinaryHours || 0) * 60;
@@ -242,7 +242,7 @@ export function buildOrdinaryEarningsLines(
         segments.push({
           hours: secondDayHours,
           day: (dayOfWeek + 1) % 7,
-          isHoliday: !!ausHolidays.isHoliday(nextDateStr),
+          isHoliday: isPublicHolidayISO(nextDateStr),
         });
       }
     }

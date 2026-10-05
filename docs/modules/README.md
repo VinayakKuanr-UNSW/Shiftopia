@@ -8,5 +8,7 @@ Per-module/feature deep dives, each mirroring a directory under `src/modules/` (
 | **[people-mode/](people-mode/README.md)** | The People view of the Rosters Planner: fatigue (FTG), utilization (UTL), workload projections | `README.md` → `01`–`05` |
 | **[autoscheduler/](autoscheduler/)** | The OR-Tools CP-SAT optimizer service: solver design, schema-drift contract tests, hardening | `01` → `02` |
 | **[shift-synthesizer/](shift-synthesizer/)** | ML-driven labour-demand forecasting → automatic draft-shift generation | `01` → `02` → `03` |
+| **[full-time-rostering.md](full-time-rostering.md)** | Full-time shifts on the Rosters page (Office group): FSM branch, DB rules, Copy-to, leave, the `office` module | single page |
+| **[shift-integrity.md](shift-integrity.md)** | Every rule the database enforces on `shifts` (placement, overlap, leave, FT, shape, state) and the known gaps | single page |
 
 Each folder has (or should have) its own `README.md`/index — check there first for that module's specifics, current-vs-historical caveats, and file-to-code cross-references.

@@ -15,6 +15,7 @@ import { estimateDetailedShiftCost } from '../utils/cost/index';
 import { buildAwardContext } from '../utils/cost/award-context';
 import type { AwardContext } from '../utils/cost/award-context';
 import { detectSplitShiftEligibleIds } from '../utils/cost/split-shift-eligibility';
+import { resolveShiftAllowances } from '../utils/cost/shift-allowances';
 import { detectRestGapBreaches } from '../utils/cost/rest-gap-breach';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
@@ -144,9 +145,10 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
     if (shift.assigned_employee_id) {
       const roleName = shift.roles?.name;
       const empType = shift.target_employment_type;
+      const baseAllowances = resolveShiftAllowances(shift);
       const allowances = splitShiftEligibleIds.has(shift.id)
-        ? { ...shift.allowances, splitShift: true }
-        : shift.allowances;
+        ? { ...baseAllowances, splitShift: true }
+        : baseAllowances;
 
       const detail = estimateDetailedShiftCost({
         netMinutes: mins,

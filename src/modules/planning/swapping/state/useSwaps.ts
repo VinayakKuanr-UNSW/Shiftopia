@@ -8,12 +8,26 @@ import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInva
 
 /**
  * Hook for managing shift swaps with real database data
+ *
+ * `options.enabled` gates the READ queries only; the mutations are always
+ * returned. Five queries hang off this hook, and a caller that wants one
+ * mutation — or a dialog that is currently closed — used to pay for all five.
+ * `ShiftDetailsDialog` is mounted unconditionally by every My Roster calendar
+ * view, so simply opening My Roster fired `mySwapRequests`, `availableSwaps`,
+ * `myActiveOfferDetails`, `myActiveOffers` AND `pendingSwapApprovals` (a
+ * MANAGER query) before the user had touched anything.
+ *
+ * Defaults to true, so existing callers are unaffected.
  */
-export const useSwaps = (scopeOverrides?: { 
-    organizationId?: string; 
-    departmentId?: string | string[] | null; 
-    subDepartmentId?: string | string[] | null 
-}) => {
+export const useSwaps = (
+    scopeOverrides?: {
+        organizationId?: string;
+        departmentId?: string | string[] | null;
+        subDepartmentId?: string | string[] | null
+    },
+    options?: { enabled?: boolean },
+) => {
+    const queriesEnabled = options?.enabled ?? true;
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { user, activeContract } = useAuth();
@@ -31,7 +45,7 @@ export const useSwaps = (scopeOverrides?: {
     const mySwapRequestsQuery = useQuery({
         queryKey: ['mySwapRequests', userId, hierarchy.organizationId],
         queryFn: () => userId ? swapsApi.getMySwaps(userId, { organizationId: hierarchy.organizationId }) : Promise.resolve([]),
-        enabled: !!userId,
+        enabled: queriesEnabled && !!userId,
         staleTime: 60_000, // 1 minute staleTime
     });
 
@@ -44,7 +58,7 @@ export const useSwaps = (scopeOverrides?: {
             departmentId: hierarchy.departmentId || undefined,
             subDepartmentId: hierarchy.subDepartmentId || undefined
         }) : Promise.resolve([]),
-        enabled: !!userId && !!hierarchy.organizationId,
+        enabled: queriesEnabled && !!userId && !!hierarchy.organizationId,
         staleTime: 60_000, // 1 minute staleTime
     });
 
@@ -59,7 +73,7 @@ export const useSwaps = (scopeOverrides?: {
                 subDepartmentId: hierarchy.subDepartmentId || undefined
             })
             : Promise.resolve([]),
-        enabled: !!hierarchy.organizationId,
+        enabled: queriesEnabled && !!hierarchy.organizationId,
         staleTime: 60_000, // 1 minute staleTime
     });
 
@@ -67,7 +81,7 @@ export const useSwaps = (scopeOverrides?: {
     const myActiveOfferDetailsQuery = useQuery({
         queryKey: ['myActiveOfferDetails', userId],
         queryFn: () => userId ? swapsApi.getMyActiveOfferDetails(userId) : Promise.resolve([]),
-        enabled: !!userId,
+        enabled: queriesEnabled && !!userId,
         staleTime: 2 * 60_000, // 2 minutes staleTime (surgically invalidated on mutation)
     });
 
@@ -75,7 +89,7 @@ export const useSwaps = (scopeOverrides?: {
     const myActiveOffersQuery = useQuery({
         queryKey: ['myActiveOffers', userId],
         queryFn: () => userId ? swapsApi.getMyActiveOffers(userId) : Promise.resolve(new Set<string>()),
-        enabled: !!userId,
+        enabled: queriesEnabled && !!userId,
         staleTime: 2 * 60_000, // 2 minutes staleTime (surgically invalidated on mutation)
     });
 

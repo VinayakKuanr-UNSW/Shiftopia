@@ -5,8 +5,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { AuthProvider } from '@/platform/auth/AuthProvider';
+import { PersonaProvider, PersonaRouteSync } from '@/platform/auth/PersonaProvider';
 import { ScopeFilterProvider } from '@/platform/auth/ScopeFilterContext';
-import { SearchProvider } from '@/modules/core/contexts/SearchContext';
 import { ThemeProvider } from '@/modules/core/contexts/ThemeContext';
 import { OrgSelectionProvider } from '@/modules/core/contexts/OrgSelectionContext';
 import { RosterUIProvider } from '@/modules/rosters/contexts/RosterUIContext';
@@ -69,34 +69,39 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
+          {/* Persona reads the user's certificates, so it must sit inside auth. */}
+          <PersonaProvider>
           <ScopeFilterProvider>
             <OrgSelectionProvider>
               <LocaleProvider>
                 <ThemeProvider>
-                  <SearchProvider>
-                    <SidebarProvider defaultOpen={true}>
-                      <div className="h-full w-full overflow-hidden">
-                        <OfflineBanner />
-                        <Toaster />
-                        <Sonner />
-                        <RosterUIProvider>
-                           <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: false }}>
-                            {/* Both are null-rendering and no-op off-device;
-                                they sit inside the Router because they use
-                                useNavigate/useLocation (hardware back, and
-                                deep-linking from a tapped notification). */}
-                            <CapacitorBridge />
-                            <NotificationBridge />
-                            {children}
-                          </BrowserRouter>
-                        </RosterUIProvider>
-                      </div>
-                    </SidebarProvider>
-                  </SearchProvider>
+                  <SidebarProvider defaultOpen={true}>
+                    <div className="h-full w-full overflow-hidden">
+                      <OfflineBanner />
+                      <Toaster />
+                      <Sonner />
+                      <RosterUIProvider>
+                         <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: false }}>
+                          {/* Both are null-rendering and no-op off-device;
+                              they sit inside the Router because they use
+                              useNavigate/useLocation (hardware back, and
+                              deep-linking from a tapped notification). */}
+                          <CapacitorBridge />
+                          <NotificationBridge />
+                          {/* Also null-rendering, and in here for the same reason:
+                              it reads useLocation to keep the employee/employer
+                              persona matched to the page the user is actually on. */}
+                          <PersonaRouteSync />
+                          {children}
+                        </BrowserRouter>
+                      </RosterUIProvider>
+                    </div>
+                  </SidebarProvider>
                 </ThemeProvider>
               </LocaleProvider>
             </OrgSelectionProvider>
           </ScopeFilterProvider>
+          </PersonaProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

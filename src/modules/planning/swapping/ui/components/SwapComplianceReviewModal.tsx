@@ -120,7 +120,6 @@ function toV8Shift(s: { id: string; shift_date: string; start_time: string; end_
         start_time: s.start_time,
         end_time: s.end_time,
         unpaid_break_minutes: s.unpaid_break_minutes,
-        is_ordinary_hours: true as const,
     };
 }
 
@@ -627,6 +626,7 @@ function ShiftCard({ shift, label, color }: { shift: ShiftData; label: string; c
             <SharedShiftCard
                 variant="timecard"
                 isFlat={true}
+                identityGrid
                 organization=""
                 department={shift.department_name || ''}
                 role={shift.role_name || 'Shift'}
@@ -639,6 +639,7 @@ function ShiftCard({ shift, label, color }: { shift: ShiftData; label: string; c
                 groupVariant={(() => {
                     const g = (shift.group_type || '').toLowerCase();
                     const d = (shift.department_name || '').toLowerCase();
+                    if (g === 'office') return 'office' as const;
                     if (g.includes('convention') || d.includes('convention')) return 'convention' as const;
                     if (g.includes('exhibition') || d.includes('exhibition')) return 'exhibition' as const;
                     if (g.includes('theatre') || d.includes('theatre')) return 'theatre' as const;

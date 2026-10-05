@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ArrowLeft, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/modules/core/ui/primitives/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useMetricAnalysis } from '../hooks/useMetricAnalysis';
-import { useDateRange } from '../hooks/useDateRange';
+import { recentQuarters } from '../hooks/useKpiFilters';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageState } from '@/modules/core/ui/components/PageState';
@@ -16,14 +16,25 @@ import { format } from 'date-fns';
 const AnalysisPage: React.FC = () => {
   const { metricId } = useParams<{ metricId: string }>();
   const { scope } = useScopeFilter('managerial');
-  const { startDate, endDate } = useDateRange('THIS_MONTH');
+  const [searchParams] = useSearchParams();
+
+  // The period travels in the URL from the tile that opened this page. Without
+  // it the drill-down defaulted to THIS_MONTH off the DEVICE clock, so a tile
+  // clicked while viewing Q1 2026 opened an analysis of the current month —
+  // and a manager overseas saw a different month again. Quarter boundaries are
+  // Sydney-anchored, matching the rest of the KPI surface.
+  const quarters = useMemo(() => recentQuarters(5), []);
+  const period = useMemo(() => {
+    const label = searchParams.get('period');
+    return quarters.find((q) => q.label === label) ?? quarters[0];
+  }, [searchParams, quarters]);
 
   const filters = useMemo(() => ({
-    startDate,
-    endDate,
+    startDate: period.startDate,
+    endDate: period.endDate,
     orgIds: scope.org_ids.length ? scope.org_ids : undefined,
     deptIds: scope.dept_ids.length ? scope.dept_ids : undefined,
-  }), [startDate, endDate, scope]);
+  }), [period, scope]);
 
   const { data: liveData, isLoading } = useMetricAnalysis(metricId, filters);
 
@@ -138,13 +149,14 @@ const AnalysisPage: React.FC = () => {
   return (
     <div className="h-full flex flex-col overflow-hidden bg-background">
       <GoldStandardHeader
-        title={data.title}
+        title={`${data.title} · ${period.label}`}
         Icon={LineChartIcon}
         rightActions={
           <Button asChild variant="ghost" size="sm" className="text-foreground/80 hover:bg-muted">
-            <Link to="/insights">
+            {/* Carry the period back so returning does not silently reset it. */}
+            <Link to={`/insights?period=${encodeURIComponent(period.label)}`}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+              Back to KPI
             </Link>
           </Button>
         }
@@ -159,7 +171,7 @@ const AnalysisPage: React.FC = () => {
             {Object.entries(data.metrics).map(([key, value]) => (
               <div key={key} className="flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl backdrop-blur-md">
                 <div className="flex flex-col">
-                    <span className="text-white/40 text-[10px] uppercase font-black tracking-widest">{key}</span>
+                    <span className="text-muted-foreground text-[11px] uppercase font-bold tracking-widest">{key}</span>
                     <div className="flex items-center gap-2">
                         <span className="text-white font-bold text-lg leading-none">{value as string}</span>
                         {key === 'trend' && getTrendIcon(value as string)}

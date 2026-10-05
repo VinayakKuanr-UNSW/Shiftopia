@@ -22,7 +22,6 @@ import {
 } from '@/modules/core/ui/primitives/select';
 import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import { TimesheetStatusBadge } from './TimesheetStatusBadge';
-import { TimesheetHistoryPopover } from './TimesheetHistoryPopover';
 import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
@@ -35,6 +34,7 @@ import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MI
 import { validateBillableEdit, billableVarianceVsRoster } from '../../domain/billable-edit';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 
 interface TimesheetMobileCardProps {
     entry: TimesheetRow;
@@ -97,26 +97,15 @@ const DataRow: React.FC<{
     </div>
 );
 
+/**
+ * Sydney-pinned, via the shared formatter.
+ *
+ * This used `new Date(t).getHours()` — the BROWSER's timezone. Correct in
+ * Sydney by coincidence and wrong for every other viewer, which is exactly the
+ * kind of bug no local dev ever sees.
+ */
 function formatTime(t: string | null | undefined): string {
-    if (!t || t === '-') return '—';
-    if (t.includes('AM') || t.includes('PM')) return t;
-    
-    let timeStr = t;
-    if (t.includes('T')) {
-        const d = new Date(t);
-        if (!isNaN(d.getTime())) {
-            const h = d.getHours();
-            const m = d.getMinutes();
-            return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-        }
-    }
-
-    const parts = timeStr.split(':').map(Number);
-    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        const h = parts[0], m = parts[1];
-        return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
-    }
-    return timeStr;
+    return formatClockTime(t, 'h:mm a', '—') ?? '—';
 }
 
 function getDisplayStatus(entry: TimesheetRow): { label: string; variant: string; isPrimary: boolean } {
@@ -183,6 +172,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 start_time: entry.scheduledStart,
                 end_time: entry.scheduledEnd,
                 roles: { name: entry.role },
+                remuneration_level: entry.remunerationLevel,
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
@@ -191,7 +181,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         } catch {
             return null;
         }
-    }, [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.role, entry.employmentType, entry.isTraining, entry.unpaidBreak]);
+    }, [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.role, entry.remunerationLevel, entry.employmentType, entry.isTraining, entry.unpaidBreak]);
     const scheduledPay = scheduledCost ? `$${scheduledCost.totalCost.toFixed(2)}` : null;
     const scheduledPayLines = useMemo(
         () => scheduledCost
@@ -271,6 +261,17 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         const isExhibition = type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
         const isTheatre = type === 'theatre' || group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
         const isCutaway = type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway') || subDept.includes('cutaway') || org.includes('cutaway');
+        // Office by the group alone, and first: "office" is too common in
+        // department and role names to infer, and an Office shift in a
+        // department named after a venue must still read as Office.
+        const isOffice = type === 'office' || group === 'office';
+
+        if (isOffice) return {
+            color: '#0891b2',
+            secondary: '#06b6d4',
+            atmosphere: ['#0e7490', '#0891b2', '#22d3ee'],
+            tint: 'rgba(6, 182, 212, 0.04)'
+        };
 
         if (isConvention) return { 
             color: '#2563eb', 
@@ -435,8 +436,11 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             <SharedShiftCard
             variant="timecard"
             hideGlow={hideGlow}
+            identityGrid
             organization={entry.organization}
             department={entry.department}
+            subDepartment={entry.subDepartment}
+            group={entry.group}
             subGroup={entry.subGroup}
             role={entry.role}
             shiftDate={String(entry.date)}
@@ -507,7 +511,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                             {isSelected && <CheckSquare className="w-5 h-5 text-white" />}
                         </button>
                     )}
-                    <TimesheetHistoryPopover shiftId={String(entry.id)} />
                 </div>
             }
             footerActions={

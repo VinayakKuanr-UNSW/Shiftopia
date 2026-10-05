@@ -85,12 +85,23 @@ function toHours(value: number | string | null | undefined): number {
 export function computeRemainingCapacity(
     existingContracts: readonly ExistingContract[],
     excludeContractId?: string,
+    /**
+     * Further contracts to leave out — the rows an edit is REPLACING.
+     *
+     * Editing a whole sub-department engagement proposes hours that supersede
+     * every row already in that sub-department. Counting those rows as
+     * "existing" as well would double them: a 38h Full-Time engagement edited
+     * in place would read as 76h and refuse to save.
+     */
+    excludeContractIds?: readonly string[],
 ): CapacityResult {
+    const excluded = new Set(excludeContractIds ?? []);
     const existingHours = existingContracts
         .filter(c =>
             c.status === 'Active' &&
             isCeilingCounted(c.employment_status) &&
-            c.id !== excludeContractId,
+            c.id !== excludeContractId &&
+            !excluded.has(c.id),
         )
         .reduce((sum, c) => sum + toHours(c.contracted_weekly_hours), 0);
 
@@ -120,12 +131,15 @@ export function validateContractHours(
     proposedStatus: string,
     existingContracts: readonly ExistingContract[],
     excludeContractId?: string,
+    /** Rows this proposal replaces — see `computeRemainingCapacity`. */
+    excludeContractIds?: readonly string[],
 ): ValidationResult {
     // Casual contracts are always valid (they don't consume the ceiling)
     if (!isCeilingCounted(proposedStatus)) {
         const { existingHours, remainingCapacity } = computeRemainingCapacity(
             existingContracts,
             excludeContractId,
+            excludeContractIds,
         );
         return {
             valid: true,
@@ -139,6 +153,7 @@ export function validateContractHours(
     const { existingHours, remainingCapacity } = computeRemainingCapacity(
         existingContracts,
         excludeContractId,
+        excludeContractIds,
     );
     const proposedTotal = existingHours + proposedHours;
 

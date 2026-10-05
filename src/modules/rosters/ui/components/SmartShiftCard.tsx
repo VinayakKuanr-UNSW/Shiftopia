@@ -24,9 +24,7 @@ import {
     Shield,
     Sparkles,
     Gavel,
-    History,
     Briefcase,
-    Phone,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -52,10 +50,7 @@ import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
-import ShiftHistoryTimeline from './ShiftHistoryTimeline';
-import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
-import { useReserveListPanelStore } from '@/modules/reserve-list';
-import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
+import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
     resolveBillableSide,
     isShiftFinished as isShiftFinishedForBillable,
@@ -64,63 +59,8 @@ import {
 } from '@/modules/timesheets/domain/billable-time';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
-
-// ============================================================================
-// HISTORY OVERLAY COMPONENT
-// ============================================================================
-
-interface ShiftHistoryButtonProps {
-    shiftId: string;
-    triggerClassName?: string;
-    iconClassName?: string;
-    onViewHistory?: (shiftId: string) => void;
-}
-
-const ShiftHistoryButton: React.FC<ShiftHistoryButtonProps> = ({ shiftId, triggerClassName, iconClassName, onViewHistory }) => {
-    if (onViewHistory) {
-        return (
-            <button
-                className={triggerClassName}
-                title="View History"
-                aria-label="View Shift History"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onViewHistory(shiftId);
-                }}
-            >
-                <History className={iconClassName} />
-            </button>
-        );
-    }
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <button
-                    className={triggerClassName}
-                    title="View History"
-                    aria-label="View Shift History"
-                >
-                    <History className={iconClassName} />
-                </button>
-            </PopoverTrigger>
-            <PopoverContent 
-                className="w-[360px] p-0 z-50 overflow-hidden rounded-xl border bg-card text-popover-foreground shadow-2xl" 
-                align="end" 
-                side="bottom"
-                sideOffset={8}
-            >
-                <div className="px-4 py-3 border-b border-border bg-muted/20">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Shift Audit History</h3>
-                </div>
-                <div className="p-4 max-h-[350px] overflow-y-auto scrollbar-thin">
-                    <ShiftHistoryTimeline shiftId={shiftId} />
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
-};
-
 
 // ============================================================================
 // TYPES & HELPERS
@@ -148,6 +88,13 @@ export interface SmartShiftCardProps {
     groupColor?: string;
     /** Human-readable group name for the breadcrumb (e.g. "Convention Centre"). */
     groupName?: string;
+    /**
+     * Which identity cells the card shows. Defaults to all nine.
+     *
+     * The roster drill-down states its org → sub-group scope once in the panel
+     * header, so its cards carry only what actually varies between them.
+     */
+    identityFields?: ShiftIdentityField[];
     /** Selection control (e.g. a checkbox) rendered at the card's top-left for consistent in-card selection. */
     selectionSlot?: React.ReactNode;
     isLocked?: boolean;
@@ -168,7 +115,6 @@ export interface SmartShiftCardProps {
      * the real concurrency guard. Injected by SmartShiftCard via useShiftPresence.
      */
     editors?: ShiftEditor[];
-    onViewHistory?: (shiftId: string) => void;
     isPeopleMode?: boolean;
     dense?: boolean;
 }
@@ -180,20 +126,26 @@ const GROUP_COLORS: Record<string, { header: string; accent: string; text: strin
     orange: { header: 'bg-orange-600 dark:bg-orange-600', accent: 'border-orange-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
     purple: { header: 'bg-purple-600 dark:bg-purple-600', accent: 'border-purple-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
     amber: { header: 'bg-amber-500 dark:bg-amber-500', accent: 'border-amber-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
+    cyan: { header: 'bg-cyan-600 dark:bg-cyan-600', accent: 'border-cyan-500/30', text: 'text-white', badge: 'bg-white/20 dark:bg-white/10' },
     convention_centre: { header: 'bg-blue-600', accent: 'border-blue-500/30', text: 'text-white', badge: 'bg-white/20' },
     exhibition_centre: { header: 'bg-emerald-600', accent: 'border-emerald-500/30', text: 'text-white', badge: 'bg-white/20' },
     theatre: { header: 'bg-red-600', accent: 'border-red-500/30', text: 'text-white', badge: 'bg-white/20' },
     the_cutaway: { header: 'bg-amber-500', accent: 'border-amber-500/30', text: 'text-white', badge: 'bg-white/20' },
+    office: { header: 'bg-cyan-600', accent: 'border-cyan-500/30', text: 'text-white', badge: 'bg-white/20' },
     default_yellow: { header: 'bg-amber-400', accent: 'border-amber-400/30', text: 'text-amber-950', badge: 'bg-black/10' },
 };
 
 
+/**
+ * Sydney-pinned, via the shared formatter.
+ *
+ * This used to slice the time straight out of the ISO string and never convert,
+ * so a clock-in stored as `2026-08-20T00:25:05+00` rendered here as "00:25"
+ * while My Attendance showed the same punch as 10:25 AM — the whole AEST
+ * offset, shown to a manager as the time someone started work.
+ */
 function formatTime(time: string | null): string {
-    if (!time) return '--:--';
-    const timePart = time.includes('T') ? time.split('T')[1].substring(0, 5) : time;
-    const parts = timePart.split(':');
-    if (parts.length >= 2) return `${parts[0]}:${parts[1]}`;
-    return timePart;
+    return formatClockTime(time, 'HH:mm', '--:--') ?? '--:--';
 }
 
 function getInitials(name: string): string {
@@ -306,7 +258,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     showStatusIcons,
     detailedCost,
     editors,
-    onViewHistory,
     isPeopleMode = false,
     dense = false,
 }) => {
@@ -336,12 +287,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         if (ctx.urgency === 'urgent' || ctx.urgency === 'emergent') return 'urgent';
         return 'standard';
     }, [ctx.urgency, isBiddingActive]);
-
-    // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
-    // the marketplace (bidding) indicator — manager-only emergency staffing
-    // workflow (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md).
-    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled && !isPast;
-    const openReserveList = useReserveListPanelStore((s) => s.open);
 
     const stateDisplay = useMemo(
         () => getShiftStateDisplay(ctx.state),
@@ -458,12 +403,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                         <div className="flex items-center gap-1">
                             <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                                <ShiftHistoryButton
-                                    shiftId={shift.id}
-                                    triggerClassName="h-7 w-7 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-                                    iconClassName="h-3 w-3 opacity-60"
-                                    onViewHistory={onViewHistory}
-                                />
                                 {headerAction || (!isFullyLocked && (
                                     <button className="h-7 w-7 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
                                         <MoreHorizontal className="h-3 w-3 opacity-60" />
@@ -583,12 +522,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         )}
 
                         <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                            <ShiftHistoryButton
-                                shiftId={shift.id}
-                                triggerClassName="h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors"
-                                iconClassName="h-3 w-3 opacity-60"
-                                onViewHistory={onViewHistory}
-                            />
                             {headerAction || (!isFullyLocked && (
                                 <button className="h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
                                     <MoreHorizontal className="h-3 w-3 opacity-60" />
@@ -648,46 +581,25 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     )}
 
-                    {/* Reserve List Icon — replaces the marketplace/bidding indicator
-                        for TTS<4h unassigned shifts (manager-only emergency staffing). */}
-                    {isEmergentUnassigned ? (
+                    {/* Bidding Icon — floating in bottom right */}
+                    {isBiddingActive && biddingUrgency && (
                         <div className="absolute bottom-1.5 right-1.5 z-30">
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); openReserveList(shift.id); }}
-                                        className="p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-all duration-300 bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 animate-pulse"
-                                    >
-                                        <Phone className="h-4.5 w-4.5" />
-                                    </button>
+                                    <div className={cn(
+                                        "p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-help hover:scale-105 transition-all duration-300",
+                                        biddingUrgency === 'urgent' && "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400",
+                                        biddingUrgency === 'standard' && "bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400"
+                                    )}>
+                                        <Gavel className="h-4.5 w-4.5" />
+                                    </div>
                                 </TooltipTrigger>
                                 <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                                    Emergency — Open Reserve List
+                                    {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
+                                    {biddingUrgency === 'standard' && 'Bidding Active'}
                                 </TooltipContent>
                             </Tooltip>
                         </div>
-                    ) : (
-                        /* Bidding Icon — floating in bottom right */
-                        isBiddingActive && biddingUrgency && (
-                            <div className="absolute bottom-1.5 right-1.5 z-30">
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div className={cn(
-                                            "p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-help hover:scale-105 transition-all duration-300",
-                                            biddingUrgency === 'urgent' && "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400",
-                                            biddingUrgency === 'standard' && "bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400"
-                                        )}>
-                                            <Gavel className="h-4.5 w-4.5" />
-                                        </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                                        {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
-                                        {biddingUrgency === 'standard' && 'Bidding Active'}
-                                    </TooltipContent>
-                                </Tooltip>
-                            </div>
-                        )
                     )}
                 </div>
             </div>
@@ -722,7 +634,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     className,
     showStatusIcons,
     detailedCost,
-    onViewHistory,
     isPeopleMode = false,
 }) => {
     const colors = useMemo(
@@ -754,12 +665,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         if (ctx.urgency === 'urgent' || ctx.urgency === 'emergent') return 'urgent';
         return 'standard';
     }, [ctx.urgency, isBiddingActive]);
-
-    // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
-    // the marketplace (bidding) indicator — manager-only emergency staffing
-    // workflow (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md).
-    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled && !isPast;
-    const openReserveList = useReserveListPanelStore((s) => s.open);
 
     const fsmLock = getLockState(ctx.state);
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
@@ -832,12 +737,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         <div className="flex items-center gap-1.5">
                             {getLifecycleIcon(statusStr)}
                             <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                                <ShiftHistoryButton
-                                    shiftId={shift.id}
-                                    triggerClassName="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors"
-                                    iconClassName="h-4 w-4 opacity-60"
-                                    onViewHistory={onViewHistory}
-                                />
                                 {headerAction || (!isFullyLocked && (
                                     <button className="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
                                         <MoreHorizontal className="h-4 w-4 opacity-60" />
@@ -921,26 +820,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                 </div>
 
-                {/* Reserve List Icon — replaces the marketplace/bidding indicator
-                    for TTS<4h unassigned shifts (manager-only emergency staffing). */}
-                {isEmergentUnassigned ? (
-                    <div className="absolute bottom-2 right-2 z-30">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); openReserveList(shift.id); }}
-                                    className="p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-all duration-300 bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 animate-pulse"
-                                >
-                                    <Phone className="h-4.5 w-4.5" />
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                                Emergency — Open Reserve List
-                            </TooltipContent>
-                        </Tooltip>
-                    </div>
-                ) : biddingUrgency && (
+                {biddingUrgency && (
                     <div className="absolute bottom-2 right-2 z-30">
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -1008,12 +888,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                         {getLifecycleIcon(statusStr)}
                         <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                            <ShiftHistoryButton
-                                shiftId={shift.id}
-                                triggerClassName="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors"
-                                iconClassName="h-4 w-4 opacity-60"
-                                onViewHistory={onViewHistory}
-                            />
                             {headerAction || (!isFullyLocked && (
                                 <button className="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
                                     <MoreHorizontal className="h-4 w-4 opacity-60" />
@@ -1097,26 +971,8 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
                     ) : null}
 
-                    {/* Reserve List Icon — replaces the marketplace/bidding indicator
-                        for TTS<4h unassigned shifts (manager-only emergency staffing). */}
-                    {isEmergentUnassigned ? (
-                        <div className="absolute bottom-2 right-2 z-30">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); openReserveList(shift.id); }}
-                                        className="p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-all duration-300 bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 animate-pulse"
-                                    >
-                                        <Phone className="h-4.5 w-4.5" />
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                                    Emergency — Open Reserve List
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                    ) : biddingUrgency && (
+                    {/* Bidding Icon */}
+                    {biddingUrgency && (
                         <div className="absolute bottom-2 right-2 z-30">
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1159,9 +1015,9 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     isPast,
     headerAction,
     groupName,
+    identityFields,
     selectionSlot,
     className,
-    onViewHistory,
 }) => {
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
     const roleName = shift.roles?.name || 'No Role';
@@ -1179,14 +1035,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         actual_start:       shift.actual_start      ?? null,
     }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
-    // Reserve List: TTS<4h + unassigned shifts get a Phone action — manager-only
-    // emergency staffing workflow (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md).
-    // This is the card variant actually rendered by DrillDownPanel's per-shift
-    // grid (the manager's default click-through from the Bucket View summary),
-    // so unlike Compact/Detailed there's no existing bidding badge to swap out —
-    // the Phone icon is added to the action row instead.
-    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled && !isPast;
-    const openReserveList = useReserveListPanelStore((s) => s.open);
+
 
     // Billable-window resolution — same three-tier rule (manager edit → snapped
     // actual → missing) the Timesheets/My Attendance cards use, via the
@@ -1208,12 +1057,23 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     // shares the same SharedShiftCard UI) shows real Billable Pay + a
     // Variance→Pay delta instead of leaving them at 'N/A'/'--'.
     const isSecurityRole = isSecurityRoleName(shift.roles?.name);
-    // Assigned shift → price the person who is actually working it. Unassigned →
-    // price the shift's declared target. Falling through to `null` used to make
-    // the estimator assume Casual, so every unassigned shift carried a phantom
-    // 25% loading regardless of what it was actually rostered for.
-    const employmentType = (shift as any).assigned_profiles?.employment_type
-      ?? shift.target_employment_type
+    // Price the BASIS THIS SHIFT IS WORKED ON, not a summary of the person.
+    //
+    // The precedence used to run the other way — assigned profile first, on the
+    // reasoning that an assigned shift should be priced for whoever is actually
+    // working it. That reads well and is wrong: someone can hold several
+    // contracts at once, so they work THIS shift under one of them, and
+    // `shifts.target_employment_type` (NOT NULL since 20260806120100) is the one
+    // that names it. A prod employee holds a Full-Time Security L7 contract
+    // alongside four Casual ones; their profile says "Full-Time", so their
+    // Casual shift was priced at permanent Level 4 ($30.26/h) instead of casual
+    // ($37.82/h) — the 25% loading dropped silently.
+    //
+    // The profile stays as a fallback for rows where the target is somehow
+    // absent (synthetic/preview objects only). Falling through to `null` makes
+    // the estimator price as permanent rather than inventing a loading.
+    const employmentType = shift.target_employment_type
+      ?? (shift as any).assigned_profiles?.employment_type
       ?? null;
 
     const scheduledCost = useMemo(() => {
@@ -1243,7 +1103,16 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         [scheduledCost, isSecurityRole, shift.shift_date, shift.start_time],
     );
 
-    const billableNetMinutes = useMemo(() => {
+    /**
+     * The EBA minimum-engagement floor.
+     *
+     * The whole result is kept, not just `.netMinutes`. Discarding
+     * `wasToppedUp` / `requiredMins` meant the "Topped Up to Min" badge — the
+     * only on-screen sign that a shift is being PAID more hours than it was
+     * worked — never rendered on the roster planner or its drill-down, while
+     * Timesheets and My Roster both showed it for the same shift.
+     */
+    const billableFloor = useMemo(() => {
         const rawNet = calculateNetMinutes(resolvedStart, resolvedEnd, shift.unpaid_break_minutes || 0);
         if (rawNet === null) return null;
         const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date);
@@ -1253,8 +1122,10 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
             isPublicHoliday,
             employmentType,
             isSecurityRole,
-        }).netMinutes;
+        });
     }, [resolvedStart, resolvedEnd, shift.unpaid_break_minutes, shift.shift_date, shift.is_training, employmentType, isSecurityRole]);
+
+    const billableNetMinutes = billableFloor?.netMinutes ?? null;
 
     const billableCost = useMemo(() => {
         if (!resolvedStart.hhmm || !resolvedEnd.hhmm || billableNetMinutes == null) return null;
@@ -1292,42 +1163,24 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     const topContent = (
         <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 shrink-0">
             {selectionSlot}
-            {isEmergentUnassigned && (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            type="button"
-                            onClick={() => openReserveList(shift.id)}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:scale-105 transition-all"
-                        >
-                            <Phone className="h-4 w-4 animate-pulse" />
-                        </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                        Emergency — Open Reserve List
-                    </TooltipContent>
-                </Tooltip>
-            )}
-            <ShiftHistoryButton
-                shiftId={shift.id}
-                triggerClassName="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
-                iconClassName="h-4 w-4 text-slate-400"
-                onViewHistory={onViewHistory}
-            />
         </div>
     );
 
     return (
         <SharedShiftCard
             variant="timecard"
+            identityGrid
+            identityFields={identityFields}
             organization={shift.organizations?.name || ''}
-            department={groupName || ''}
+            department={shift.departments?.name || ''}
+            subDepartment={shift.sub_departments?.name || undefined}
+            group={groupName || undefined}
             subGroup={shift.sub_group_name || undefined}
             role={roleName}
             shiftDate={shift.shift_date}
             startTime={shift.start_time}
             endTime={shift.end_time}
-            netLength={shift.net_length_minutes || 0}
+            netLength={billableNetMinutes ?? shift.net_length_minutes ?? 0}
             paidBreak={shift.paid_break_minutes || 0}
             unpaidBreak={shift.unpaid_break_minutes || 0}
             lifecycleStatus={shift.lifecycle_status}
@@ -1335,8 +1188,10 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
             employeeName={employeeName || undefined}
             clockIn={shift.actual_start ? formatTime(shift.actual_start) : null}
             clockOut={shift.actual_end ? formatTime(shift.actual_end) : null}
-            adjustedStart={resolvedStart.hhmm}
-            adjustedEnd={resolvedEnd.hhmm}
+            adjustedStart={formatTime(resolvedStart.hhmm)}
+            adjustedEnd={formatTime(resolvedEnd.hhmm)}
+            wasToppedUpToMinEngagement={billableFloor?.wasToppedUp}
+            requiredEngagementMinutes={billableFloor?.requiredMins || null}
             adjustedStartSource={resolvedStart.source === 'missing' ? null : resolvedStart.source}
             adjustedEndSource={resolvedEnd.source === 'missing' ? null : resolvedEnd.source}
             estimatedPay={estimatedPay}

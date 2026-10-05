@@ -3,6 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { focusManager } from '@tanstack/react-query';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 const APP_HOME_PATH = '/my-roster';
@@ -107,6 +108,41 @@ export function CapacitorBridge() {
       void listener?.remove();
     };
   }, [navigate]);
+
+  /**
+   * Teach React Query what "focused" means on a phone.
+   *
+   * `refetchOnWindowFocus` — on by default for every query in the app — hangs
+   * off React Query's focusManager, which subscribes to the document's
+   * `visibilitychange`. In a browser tab that fires whenever you switch back to
+   * the window, so data quietly refreshes itself. The Capacitor WebView is not
+   * a tab: it stays visible for the whole life of the process, so the event
+   * never arrives and nothing is ever revalidated on return. Anything cached
+   * before the app was backgrounded is replayed on the way back in, however
+   * long that was — which is how a shift offered minutes earlier could be
+   * missing from the inbox while the same account saw it on desktop.
+   *
+   * Android's `appStateChange` is the signal that actually corresponds to
+   * "the user came back", so it drives the focus state instead.
+   */
+  useEffect(() => {
+    if (!isNativeRuntime()) return;
+
+    let listener: PluginListenerHandle | undefined;
+
+    void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      focusManager.setFocused(isActive);
+    }).then((handle) => {
+      listener = handle;
+    });
+
+    return () => {
+      void listener?.remove();
+      // Hand control back to the default (document-visibility) behaviour
+      // rather than leaving the app pinned to whatever the last state was.
+      focusManager.setFocused(undefined);
+    };
+  }, []);
 
   return null;
 }

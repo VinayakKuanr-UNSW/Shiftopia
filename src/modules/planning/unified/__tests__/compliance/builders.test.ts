@@ -31,6 +31,8 @@ const employeeContext = (
   employee_id: employeeId,
   contract_type: 'PART_TIME',
   contracted_weekly_hours: 24,
+  ordinary_hours_cycle_weeks: 4,
+  ordinary_hours_cycle_anchor: '2024-01-01',
   assigned_role_ids: ['role-1'],
   contracts: [],
   qualifications: [],
@@ -46,7 +48,6 @@ const shift = (
   date,
   start_time: startTime,
   end_time: endTime,
-  is_ordinary_hours: true,
   required_qualifications: [],
   break_minutes: 30,
 });

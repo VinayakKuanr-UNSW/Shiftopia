@@ -1,133 +1,171 @@
-import React, { useMemo, useState } from 'react';
-import {
-    Tabs, TabsContent,
-} from '@/modules/core/ui/primitives/tabs';
+/**
+ * KPI — the manager-facing dashboard (route stays /insights).
+ *
+ * Five tabs. The four behavioural ones are the failure modes of a shift
+ * marketplace, and each maps onto a distinct terminal outcome that already
+ * exists in the data:
+ *
+ *   Attendance     worked / no_show, and the punctuality flags
+ *   Bids           the pre-assignment competition
+ *   Swaps          traded_out, plus the offer funnel
+ *   Cancellations  dropped_std / dropped_late
+ *
+ * Overview carries what belongs to none of them — coverage, cost, compliance
+ * and the composite scores — rather than force-fitting them into a tab whose
+ * question they do not answer.
+ *
+ * Only the active tab mounts. Radix renders every TabsContent child by
+ * default, which previously fired all four tabs' queries on page load.
+ */
+
+import React, { useCallback } from 'react';
+import { BarChart3, Activity, Gavel, ArrowLeftRight, CalendarX, LayoutGrid } from 'lucide-react';
+import { Tabs, TabsContent } from '@/modules/core/ui/primitives/tabs';
+import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useQueryClient } from '@tanstack/react-query';
-import { useDateRange, DATE_PRESET_LABELS } from '../hooks/useDateRange';
-import type { DatePreset, InsightsFilters } from '../model/metric.types';
-import OverviewTab from '../ui/views/OverviewTab';
-import WorkforceTab from '../ui/views/WorkforceTab';
-import ComplianceCostTab from '../ui/views/ComplianceCostTab';
-import PerformanceTab from '../ui/views/PerformanceTab';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
-import { InsightsFunctionBar } from '../ui/components/InsightsFunctionBar';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-import { BarChart3 } from 'lucide-react';
-import { getCurrentQuarter } from '@/modules/users/hooks/usePerformanceMetrics';
 
-const PRESETS: DatePreset[] = ['THIS_WEEK', 'THIS_MONTH', 'LAST_30', 'LAST_90'];
+import { useKpiFilters } from '../hooks/useKpiFilters';
+import { KpiFunctionBar, type KpiTabDef } from '../ui/components/KpiFunctionBar';
+import OverviewKpiTab from '../ui/tabs/OverviewKpiTab';
+import EmployeePerformanceTable from '../ui/tabs/EmployeePerformanceTable';
+import BidsTab from '../ui/tabs/BidsTab';
+import SwapsTab from '../ui/tabs/SwapsTab';
+import AttendanceTab from '../ui/tabs/AttendanceTab';
+import CancellationsTab from '../ui/tabs/CancellationsTab';
+import ManagerScorecardBand from '../ui/tabs/ManagerScorecardBand';
 
-/* ═══════════════════ QUARTER OPTIONS ═══════════════════ */
-const buildQuarterOptions = () => {
-    const opts: { year: number; quarter: number; label: string }[] = [];
-    const { year, quarter } = getCurrentQuarter();
-    for (let i = 0; i < 5; i++) {
-        let q = quarter - i;
-        let y = year;
-        while (q <= 0) { q += 4; y -= 1; }
-        opts.push({ year: y, quarter: q, label: `Q${q} ${y}` });
-    }
-    return opts;
+const TABS: KpiTabDef[] = [
+    { value: 'overview',      label: 'Overview',      Icon: LayoutGrid },
+    { value: 'attendance',    label: 'Attendance',    Icon: Activity },
+    { value: 'bids',          label: 'Bids',          Icon: Gavel },
+    { value: 'swaps',         label: 'Swaps',         Icon: ArrowLeftRight },
+    { value: 'cancellations', label: 'Cancellations', Icon: CalendarX },
+];
+
+/**
+ * Query keys each tab owns, so Refresh invalidates exactly what is on screen.
+ *
+ * Exported because it is load-bearing rather than cosmetic: inside the
+ * Capacitor WebView this is the ONLY invalidation path. `refetchOnWindowFocus`
+ * hangs off `visibilitychange`, which the WebView never fires, so every
+ * staleTime is effectively infinite there. A key missing from this map is a
+ * tab that silently cannot be refreshed on a phone — which is why a test pins
+ * it against the hooks each tab actually calls.
+ */
+export const TAB_QUERY_KEYS: Record<string, string[]> = {
+    overview: [
+        'insights_summary', 'insights_trend', 'insights_dept_breakdown',
+        'manager_scorecard', 'quarterly_performance_report',
+    ],
+    attendance: [
+        'kpi_behaviour_summary', 'kpi_behaviour_trend', 'quarterly_performance_report',
+    ],
+    bids: [
+        'bidding_kpis', 'kpi_marketplace_trend', 'quarterly_performance_report',
+    ],
+    swaps: [
+        'marketplace_kpis', 'kpi_marketplace_trend', 'quarterly_performance_report',
+    ],
+    cancellations: [
+        'kpi_behaviour_summary', 'kpi_behaviour_trend',
+        'cancellation_reason_breakdown', 'quarterly_performance_report',
+    ],
 };
 
 const InsightsPage: React.FC = () => {
-    const [activeTab, setActiveTab] = useState('overview');
-    
-    // Performance Tab Quarter State
-    const quarterOptions = useMemo(buildQuarterOptions, []);
-    const defaultQ = quarterOptions[0];
-    const [selectedYear, setSelectedYear] = useState(defaultQ.year);
-    const [selectedQuarter, setSelectedQuarter] = useState(defaultQ.quarter);
-    const selectedQuarterLabel = `Q${selectedQuarter} ${selectedYear}`;
-
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
-    const { preset, startDate, endDate, setPreset } = useDateRange('THIS_MONTH');
+    const {
+        filters, period, quarters, compare, activeTab,
+        setPeriodByLabel, setCompare, setActiveTab,
+    } = useKpiFilters(scope, 'overview');
     const queryClient = useQueryClient();
-
-    const filters: InsightsFilters = useMemo(() => ({
-        startDate,
-        endDate,
-        orgIds:     scope.org_ids.length     ? scope.org_ids     : undefined,
-        deptIds:    scope.dept_ids.length    ? scope.dept_ids    : undefined,
-        subdeptIds: scope.subdept_ids.length ? scope.subdept_ids : undefined,
-    }), [startDate, endDate, scope]);
-
     const { isDark } = useTheme();
 
-    function handleRefresh() {
-        if (activeTab === 'performance') {
-            queryClient.invalidateQueries({ queryKey: ['quarterly_performance_report'] });
-            queryClient.invalidateQueries({ queryKey: ['performance_metrics'] });
-        } else {
-            queryClient.invalidateQueries({ queryKey: ['insights_summary'] });
-            queryClient.invalidateQueries({ queryKey: ['insights_trend'] });
-            queryClient.invalidateQueries({ queryKey: ['insights_dept_breakdown'] });
+    /**
+     * Refresh must invalidate every key the ACTIVE tab reads. It is also the
+     * only invalidation path inside the Capacitor WebView: the global
+     * refetchOnWindowFocus hangs off `visibilitychange`, which the WebView
+     * never fires, so on a phone every staleTime is effectively infinite.
+     */
+    const handleRefresh = useCallback(() => {
+        for (const key of TAB_QUERY_KEYS[activeTab] ?? []) {
+            queryClient.invalidateQueries({ queryKey: [key] });
         }
-    }
-
-    function handleQuarterChange(val: string) {
-        const opt = quarterOptions.find(o => o.label === val);
-        if (opt) { 
-            setSelectedYear(opt.year); 
-            setSelectedQuarter(opt.quarter); 
-        }
-    }
+    }, [activeTab, queryClient]);
 
     return (
-        <div className="h-full flex flex-col overflow-hidden bg-background">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-                {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
-                <GoldStandardHeader
-                    title="My Insights"
-                    Icon={BarChart3}
-                    mode="managerial"
-                    scope={scope}
-                    setScope={setScope}
-                    isGammaLocked={isGammaLocked}
-                    functionBar={
-                        <InsightsFunctionBar
-                            activeTab={activeTab}
-                            preset={preset}
-                            onPresetChange={v => setPreset(v as DatePreset)}
-                            presetLabels={DATE_PRESET_LABELS}
-                            presets={PRESETS}
-                            startDate={startDate}
-                            endDate={endDate}
-                            onRefresh={handleRefresh}
-                            selectedQuarterLabel={selectedQuarterLabel}
-                            quarterOptions={quarterOptions}
-                            onQuarterChange={handleQuarterChange}
-                        />
-                    }
-                />
+        <TooltipProvider delayDuration={200}>
+            <div className="flex h-full flex-col overflow-hidden bg-background">
+                <Tabs
+                    value={activeTab}
+                    onValueChange={setActiveTab}
+                    className="flex min-h-0 flex-1 flex-col"
+                >
+                    <GoldStandardHeader
+                        title="KPI"
+                        Icon={BarChart3}
+                        mode="managerial"
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
+                        functionBar={
+                            <KpiFunctionBar
+                                tabs={TABS}
+                                period={period}
+                                quarters={quarters}
+                                onPeriodChange={setPeriodByLabel}
+                                compare={compare}
+                                onCompareChange={setCompare}
+                                onRefresh={handleRefresh}
+                            />
+                        }
+                    />
 
-                {/* ── BODY ── */}
-                <div className={cn(
-                    "flex-1 min-h-0 overflow-y-auto mx-4 lg:mx-6 mb-4 lg:mb-6 rounded-[32px] border transition-all p-4 lg:p-8 custom-scrollbar",
-                    isDark
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-                )}>
-                    <TabsContent value="overview" className="mt-0 outline-none">
-                        <OverviewTab filters={filters} />
-                    </TabsContent>
+                    <div
+                        className={cn(
+                            'custom-scrollbar mx-4 mb-4 min-h-0 flex-1 overflow-y-auto rounded-[28px] border p-4 transition-all lg:mx-6 lg:mb-6 lg:p-6',
+                            isDark
+                                ? 'border-border/60 bg-background/50 shadow-2xl shadow-black/20'
+                                : 'border-border/60 bg-card/40 shadow-sm backdrop-blur-sm',
+                        )}
+                    >
+                        <TabsContent value="overview" className="mt-0 outline-none">
+                            {activeTab === 'overview' && (
+                                <div className="flex flex-col gap-10">
+                                    <OverviewKpiTab filters={filters} scope={scope} />
+                                    <ManagerScorecardBand filters={filters} scope={scope} />
+                                    <EmployeePerformanceTable
+                                        scope={scope}
+                                        selectedYear={period.year}
+                                        selectedQuarter={period.quarter}
+                                    />
+                                </div>
+                            )}
+                        </TabsContent>
 
-                    <TabsContent value="workforce" className="mt-0 outline-none">
-                        <WorkforceTab filters={filters} scope={scope} />
-                    </TabsContent>
+                        <TabsContent value="attendance" className="mt-0 outline-none">
+                            {activeTab === 'attendance' && <AttendanceTab filters={filters} scope={scope} />}
+                        </TabsContent>
 
-                    <TabsContent value="compliance" className="mt-0 outline-none">
-                        <ComplianceCostTab filters={filters} />
-                    </TabsContent>
+                        <TabsContent value="bids" className="mt-0 outline-none">
+                            {activeTab === 'bids' && <BidsTab filters={filters} scope={scope} />}
+                        </TabsContent>
 
-                    <TabsContent value="performance" className="mt-0 outline-none">
-                        <PerformanceTab scope={scope} selectedYear={selectedYear} selectedQuarter={selectedQuarter} />
-                    </TabsContent>
-                </div>
-            </Tabs>
-        </div>
+                        <TabsContent value="swaps" className="mt-0 outline-none">
+                            {activeTab === 'swaps' && <SwapsTab filters={filters} scope={scope} />}
+                        </TabsContent>
+
+                        <TabsContent value="cancellations" className="mt-0 outline-none">
+                            {activeTab === 'cancellations' && <CancellationsTab filters={filters} scope={scope} />}
+                        </TabsContent>
+                    </div>
+                </Tabs>
+            </div>
+        </TooltipProvider>
     );
 };
 

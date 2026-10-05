@@ -595,6 +595,15 @@ body {
   @apply bg-amber-500/10 border-amber-400/30 text-amber-200 font-medium;
 }
 
+/* -- Badge: Office (Cyan) -- */
+.light .dept-badge-office {
+  @apply bg-cyan-50 border-cyan-200 text-cyan-700 font-medium;
+}
+
+.dark .dept-badge-office {
+  @apply bg-cyan-500/10 border-cyan-400/30 text-cyan-200 font-medium;
+}
+
 /* -- Badge: Default -- */
 .light .dept-badge-default {
   @apply bg-slate-50 border-slate-200 text-slate-600 font-medium;
@@ -722,10 +731,42 @@ body {
   border-left: 4px solid rgba(245, 158, 11, 0.7) !important;
 }
 
+/* -- Office (Cyan) Row -- */
+.light .dept-row-office {
+  background-color: rgba(6, 182, 212, 0.14) !important;
+}
+.light .dept-row-office:hover {
+  background-color: rgba(6, 182, 212, 0.22) !important;
+}
+.dark .dept-row-office {
+  background-color: rgba(6, 182, 212, 0.20) !important;
+}
+.dark .dept-row-office:hover {
+  background-color: rgba(6, 182, 212, 0.30) !important;
+}
+.light .dept-row-office td:first-child {
+  border-left: 4px solid rgba(6, 182, 212, 0.8) !important;
+}
+.dark .dept-row-office td:first-child {
+  border-left: 4px solid rgba(6, 182, 212, 0.7) !important;
+}
+
 /* -- Metropolis Glass Styling (Premium Glassmorphism) -- */
 .dept-card-glass-base {
   @apply backdrop-blur-2xl border transition-all duration-500 !important;
   box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Flat-embedded cards keep the glass tint but drop the frame.
+   `.dept-card-glass-base` sets `border` (1px) with !important and each
+   `.dept-card-glass-<group>` colours it, so a card embedded inside another
+   container drew a coloured hairline that followed its OWN radius instead of
+   the container's — the red line down the left and along the bottom of the
+   shift-details dialog. A Tailwind `border-0` cannot win this: unlayered rules
+   in this file are emitted after the utilities layer, so at equal specificity
+   the glass rule is simply later. Hence the compound selector. */
+.dept-card-glass-base.dept-card-glass-flat {
+  border-width: 0 !important;
 }
 
 /* -- Glass: Convention (Blue) -- */
@@ -773,6 +814,18 @@ body {
 .dark .dept-card-glass-cutaway {
   @apply bg-amber-950/60 border-amber-500/50 shadow-amber-500/30 text-amber-50 !important;
   background-image: radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.45) 0px, transparent 80%), linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(15, 23, 42, 0.9) 100%) !important;
+}
+
+
+/* -- Glass: Office (Cyan) -- */
+.light .dept-card-glass-office {
+  @apply bg-cyan-500/15 border-cyan-500/40 shadow-cyan-500/20 text-cyan-950 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.3) 0px, transparent 80%), linear-gradient(135deg, rgba(6, 182, 212, 0.15) 0%, rgba(207, 250, 254, 0.95) 100%) !important;
+}
+
+.dark .dept-card-glass-office {
+  @apply bg-cyan-950/60 border-cyan-500/50 shadow-cyan-500/30 text-cyan-50 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.45) 0px, transparent 80%), linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(15, 23, 42, 0.9) 100%) !important;
 }
 
 

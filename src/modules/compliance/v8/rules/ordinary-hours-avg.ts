@@ -1,5 +1,10 @@
 import { V8Hit, V8RuleEvaluator } from '../types';
 import { shiftDurationMinutes } from '../utils/time';
+import {
+    cycleBoundsFor,
+    cycleIndexFor,
+    normaliseCycleAnchor,
+} from '../../ordinary-hours-cycle';
 
 /**
  * V8 Rule: Ordinary Hours Averaging (ICC EBA cl. 35)
@@ -16,7 +21,9 @@ import { shiftDurationMinutes } from '../utils/time';
  *     hours is permitted by written agreement at ordinary rates (cl. 12.3(d)),
  *     so it is a warning — NOT a block on the contracted figure.
  *
- * Casuals have no ordinary-hours contract and are excluded.
+ * Casuals are IN SCOPE: cl 35.4(a) caps their ordinary hours in the same words
+ * as full-timers'. They default to the four-week rung, having no clause that
+ * declares a cycle length of their own.
  *
  * Full-Time SECURITY (EBA Schedule 3 §3) is a discriminated exception: they
  * run a 42h/week average (38 ordinary + 4 "reasonable additional") over an
@@ -27,16 +34,46 @@ import { shiftDurationMinutes } from '../utils/time';
 export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     const { employee, shifts, config } = ctx;
 
-    if (employee.contract_type === 'CASUAL') return [];
+    // NO CASUAL EXEMPTION. cl 35.4(a) states the ordinary-hours ladder for
+    // casuals in the same words 35.1(a) uses for full-timers — "will not exceed
+    // an average of 38 ordinary hours per week within work cycles based on the
+    // following: 38 / 76 / 114 / 152". The 2026-07-05 exemption was a fix for
+    // the WRONG divergence: the wall of false badges it removed came from
+    // applying every rung of the ladder as a rolling window, not from casuals
+    // being in scope. Now that the cap is one declared, anchored cycle, they
+    // belong in it.
+    //
+    // Casuals have no clause declaring a cycle LENGTH (there is no 12.5
+    // counterpart to 12.2(b)), so they default to the four-week rung — the most
+    // permissive the Agreement enumerates, and consistent with "up to four (4)
+    // weeks" everywhere else.
 
     const isFtSecurity = !!employee.is_security_role && employee.contract_type === 'FULL_TIME';
 
-    // 1. Daily net ordinary hours, attributed to the shift's start date.
+    // 1. Daily net rostered hours, attributed to the shift's start date.
+    //
+    // EVERY rostered shift counts, and there is deliberately no per-shift
+    // "is this ordinary?" flag to skip on. There used to be one. It could
+    // never be false: it lived on no table and in no generated row type, so
+    // all twelve producers wrote a literal `true` into a required field and
+    // the guard's false branch was unreachable.
+    //
+    // It is also the wrong shape. Under cl 42 the 38th and 39th hour of a
+    // week can fall inside the SAME shift, so "ordinary" is a property of
+    // hours within a period, not of a shift. The pay engine already models it
+    // that way -- gross-pay.types.ts splits each shift into ordinaryHours and
+    // overtimeHours "post weekly-OT reclass".
+    //
+    // The two layers answer different questions and must not share a flag.
+    // Compliance runs at ROSTERING time over planned hours: does this roster
+    // plan to exceed the ordinary-hours ceiling? Counting everything is the
+    // correct answer to that. Payroll runs POST-HOC over worked hours and
+    // reclassifies the excess at cl 42 rates. Re-introducing a boolean here
+    // would make this the fourth rival definition of overtime in the codebase.
     const dailyHours = new Map<string, number>();
     for (const s of shifts) {
         const dateStr = s.date || s.shift_date || '';
         if (!dateStr || !s.start_time || !s.end_time) continue; // skip malformed
-        if (!s.is_ordinary_hours) continue;
 
         const breakMins = s.unpaid_break_minutes || 0;
         const netHours = Math.max(0, shiftDurationMinutes(s.start_time, s.end_time) - breakMins) / 60;
@@ -79,13 +116,51 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     // Sch 3 §3 — Full-Time Security: 42h/week over an 8-week cycle instead
     // of the general 38h/week over a 4-week cycle.
     const weeklyLimit = isFtSecurity ? config.security_ord_avg_weekly_limit : config.ord_avg_weekly_limit;
-    const cycleWeeks = isFtSecurity ? config.security_ord_avg_cycle_weeks : config.ord_avg_cycle_weeks;
+    // The general population's cycle is DECLARED per engagement — cl 35.x(a) is a
+    // disjunction over "a work cycle of up to four (4) weeks" (cl 12.2(b)), not
+    // four caps at once. Full-time security instead run Schedule 3 §3.1's fixed
+    // eight-week even-time cycle, which §1.1 makes prevail. The config value
+    // survives only as the fallback for a context built without a contract read.
+    const cycleWeeks = isFtSecurity
+        ? config.security_ord_avg_cycle_weeks
+        : (employee.ordinary_hours_cycle_weeks ?? config.ord_avg_cycle_weeks);
+    const cycleAnchor = normaliseCycleAnchor(employee.ordinary_hours_cycle_anchor);
     const cycleDays = cycleWeeks * 7;                  // 28 general / 56 security
     const cycleLimit = cycleWeeks * weeklyLimit;       // 152h general / 336h security
 
-    // 3. HARD CAP — declared work cycle. BLOCKING dominates; return it alone.
-    const cycle = worstWindow(cycleDays);
-    if (cycle.hours > cycleLimit) {
+    // 3. HARD CAP — the declared work cycle, ANCHORED rather than rolling.
+    //
+    // cl 35.x(a) caps the CYCLE. A rolling window instead caps every N
+    // consecutive days, which is strictly stricter: it sums across a cycle
+    // boundary and reports a breach on a roster that satisfies both cycles it
+    // straddles. cl 42.6 ("during the work cycle") and cl 35.1(e) ("during each
+    // work cycle") both presuppose a period with edges, so the hours are bucketed
+    // by which cycle each date falls in and each bucket tested on its own.
+    //
+    // A bucket at the edge of the loaded window is PARTIAL, and therefore only
+    // ever under-counts. That is the safe direction: a partial cycle can miss a
+    // breach that the next evaluation catches, where a rolling window invents one
+    // that never existed.
+    const byCycle = new Map<number, { hours: number; anyDate: string }>();
+    for (const [dateStr, hrs] of dailyHours) {
+        const idx = cycleIndexFor(dateStr, cycleAnchor, cycleWeeks);
+        const bucket = byCycle.get(idx);
+        if (bucket) bucket.hours += hrs;
+        else byCycle.set(idx, { hours: hrs, anyDate: dateStr });
+    }
+
+    let worstCycle: { hours: number; anyDate: string } | null = null;
+    for (const bucket of byCycle.values()) {
+        if (!worstCycle || bucket.hours > worstCycle.hours) worstCycle = bucket;
+    }
+
+    if (worstCycle && worstCycle.hours > cycleLimit) {
+        const bounds = cycleBoundsFor(worstCycle.anyDate, cycleAnchor, cycleWeeks);
+        const cycle = {
+            hours: worstCycle.hours,
+            start: bounds.start,
+            end: bounds.endInclusive,
+        };
         const avg = cycle.hours / cycleWeeks;
         return [{
             rule_id: 'V8_ORD_HOURS_AVG',

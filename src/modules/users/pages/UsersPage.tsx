@@ -9,9 +9,10 @@ import { motion } from 'framer-motion';
 import SkillsSection from '@/modules/users/ui/components/SkillsSection';
 import LicensesSection from '@/modules/users/ui/components/LicensesSection';
 import WorkRightsSection from '@/modules/users/ui/components/WorkRightsSection';
+import FirstAidSection from '@/modules/users/ui/components/FirstAidSection';
 import { UserContractsSection, AccessCertificatesSection } from '@/modules/users/ui/components/ContractsSection';
-import { DeleteUserDialog } from '@/modules/users/ui/components/DeleteUserDialog';
 import { useAuth } from '@/platform/auth/useAuth';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
@@ -28,7 +29,8 @@ interface Profile {
 const UsersPage: React.FC = () => {
     const { user: currentUser } = useAuth();
     const { isDark } = useTheme();
-    const isAuthorizedAdmin = ['epsilon', 'zeta'].includes(currentUser?.highestAccessLevel || '');
+    const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
+    const isAuthorizedAdmin = currentUser?.highestAccessLevel === 'epsilon';
 
     // State
     const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -78,6 +80,9 @@ const UsersPage: React.FC = () => {
                     <PersonalPageHeader
                         title="User Management"
                         Icon={Users}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
                         mode="managerial"
                         className="mb-4 lg:mb-6"
                     />
@@ -87,7 +92,7 @@ const UsersPage: React.FC = () => {
                         profiles={profiles}
                         selectedUserId={selectedUserId}
                         onUserSelect={setSelectedUserId}
-                        isZeta={isAuthorizedAdmin}
+                        isAdmin={isAuthorizedAdmin}
                         transparent
                     />
                 </div>
@@ -140,16 +145,6 @@ const UsersPage: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0" role="group" aria-label="Employee profile actions">
-                                    {isAuthorizedAdmin && selectedUser && (
-                                        <DeleteUserDialog 
-                                            userId={selectedUserId}
-                                            userName={selectedUser.full_name}
-                                            onSuccess={() => {
-                                                setSelectedUserId('');
-                                                refetchProfiles();
-                                            }}
-                                        />
-                                    )}
                                     <Button
                                         variant="outline"
                                         aria-label={`Edit profile for ${selectedUser?.full_name}`}
@@ -161,10 +156,14 @@ const UsersPage: React.FC = () => {
                             </div>
 
                             {/* Sectioned Content */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" aria-label="Employee compliance sections">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-6" aria-label="Employee compliance sections">
                                 <SkillsSection employeeId={selectedUserId} />
                                 <LicensesSection employeeId={selectedUserId} />
                                 <WorkRightsSection employeeId={selectedUserId} />
+                                <FirstAidSection
+                                    employeeId={selectedUserId}
+                                    employeeName={selectedUser?.full_name || undefined}
+                                />
                             </div>
 
                             <div className="space-y-8" aria-label="Employee contracts and certificates">

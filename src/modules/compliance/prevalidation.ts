@@ -39,6 +39,8 @@ export interface HardValidationInput {
     current_time?: Date;          // For testing (defaults to now)
     is_template?: boolean;        // Skip date/time validation for templates
     shift_id?: string;            // For edit mode - exclude self
+    /** The shift's target. 'FT' adds the one-shift-per-day rule. */
+    target_employment_type?: string | null;
 }
 
 // =============================================================================
@@ -158,6 +160,32 @@ function validateNotPastDate(input: HardValidationInput): HardValidationError | 
     return null;
 }
 
+/**
+ * A full-time employee works one shift a day (ICC EBA cl 39.1 — split shifts
+ * are for part-time and flexible part-time).
+ *
+ * Mirrors `trg_shift_ft_one_per_day`, which refuses the save anyway; this says
+ * so while the form is open instead of after Save. Same semantics: an FT shift
+ * is blocked by ANY other shift the person holds that date. `existing_shifts`
+ * comes from `get_employee_shift_window`, which already drops cancelled and
+ * deleted shifts and the shift being edited.
+ */
+function validateFullTimeOnePerDay(input: HardValidationInput): HardValidationError | null {
+    if (input.target_employment_type !== 'FT' || !input.employee_id || input.is_template) {
+        return null;
+    }
+    const other = (input.existing_shifts ?? []).find(s =>
+        s.shift_date === input.shift_date
+        && !(input.shift_id && (s.shift_id === input.shift_id || (s as any).id === input.shift_id)));
+    if (!other) return null;
+    return {
+        field: 'shift_date',
+        rule: 'FT_ONE_SHIFT_PER_DAY',
+        message: `Already rostered that day (${other.start_time.slice(0, 5)}–${other.end_time.slice(0, 5)}). `
+            + 'A full-time employee works one shift a day (ICC EBA cl 39.1) — edit that shift instead.',
+    };
+}
+
 // =============================================================================
 // MAIN VALIDATION FUNCTION
 // =============================================================================
@@ -185,6 +213,10 @@ export function runHardValidation(input: HardValidationInput): HardValidationRes
     // Overlap handled by compliance engine (NoOverlapRule) but also here for immediate Level 1 blocking
     const overlapError = validateNoOverlap(input);
     if (overlapError) errors.push(overlapError);
+
+    // An overlap already says the day is taken; one message is enough.
+    const onePerDayError = overlapError ? null : validateFullTimeOnePerDay(input);
+    if (onePerDayError) errors.push(onePerDayError);
 
     return {
         passed: errors.length === 0,

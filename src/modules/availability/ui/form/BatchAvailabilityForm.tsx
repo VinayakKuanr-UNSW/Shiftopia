@@ -11,7 +11,7 @@ import {
 } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
+import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
 import { Calendar } from '@/modules/core/ui/calendar';
 import { PlusCircle, Trash2, CalendarIcon } from 'lucide-react';
 import { TimeSlot } from '../../model/availability.types';
@@ -119,72 +119,53 @@ export function BatchAvailabilityForm({ onSubmit, onCancel }: BatchAvailabilityF
             
             {timeSlots.map((slot, index) => (
               <div key={index} className="flex flex-col gap-2">
-                <div className="grid grid-cols-5 gap-2">
-                  <div className="col-span-2">
-                    <Select
-                      value={slot.startTime}
-                      onValueChange={(value) => updateTimeSlot(index, 'startTime', value)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Start time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 24 }).map((_, i) => {
-                          const hour = i.toString().padStart(2, '0');
-                          return (
-                            <SelectItem key={`${hour}:00`} value={`${hour}:00`}>
-                              {`${hour}:00`}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center justify-center">
-                    <span className="text-sm text-muted-foreground">to</span>
-                  </div>
-                  <div className="col-span-2">
-                    <Select
-                      value={slot.endTime}
-                      onValueChange={(value) => updateTimeSlot(index, 'endTime', value)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="End time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 24 }).map((_, i) => {
-                          const hour = i.toString().padStart(2, '0');
-                          return (
-                            <SelectItem key={`${hour}:00`} value={`${hour}:00`}>
-                              {`${hour}:00`}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <GlobalStyleSelect
+                    label="Start Time"
+                    value={slot.startTime}
+                    onChange={(value) => updateTimeSlot(index, 'startTime', value)}
+                    options={Array.from({ length: 24 }).map((_, i) => {
+                      const hour = i.toString().padStart(2, '0');
+                      return { id: `${hour}:00`, name: `${hour}:00` };
+                    })}
+                    showSearch={false}
+                    compact
+                  />
+                  <GlobalStyleSelect
+                    label="End Time"
+                    value={slot.endTime}
+                    onChange={(value) => updateTimeSlot(index, 'endTime', value)}
+                    options={Array.from({ length: 24 }).map((_, i) => {
+                      const hour = i.toString().padStart(2, '0');
+                      return { id: `${hour}:00`, name: `${hour}:00` };
+                    })}
+                    showSearch={false}
+                    compact
+                  />
                 </div>
                 
-                <div className="flex gap-2">
-                  <Select
-                    value={slot.status}
-                    onValueChange={(value) => updateTimeSlot(index, 'status', value)}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Available">Available</SelectItem>
-                      <SelectItem value="Unavailable">Unavailable</SelectItem>
-                      <SelectItem value="Partial">Partial</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <GlobalStyleSelect
+                      label="Status"
+                      value={slot.status || 'Available'}
+                      onChange={(value) => updateTimeSlot(index, 'status', value)}
+                      options={[
+                        { id: 'Available', name: 'Available' },
+                        { id: 'Unavailable', name: 'Unavailable' },
+                        { id: 'Partial', name: 'Partial' },
+                      ]}
+                      showSearch={false}
+                      compact
+                    />
+                  </div>
                   
                   {timeSlots.length > 1 && (
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
+                      className="h-11 w-11 rounded-xl shrink-0 text-destructive hover:bg-destructive/10"
                       onClick={() => removeTimeSlot(index)}
                     >
                       <Trash2 className="h-4 w-4" />

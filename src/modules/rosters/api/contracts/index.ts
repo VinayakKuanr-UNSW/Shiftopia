@@ -182,6 +182,9 @@ export const BulkDeleteResponseSchema = z.object({
   total_requested: z.number().int().optional(),
   success_count: z.number().int(),
   failure_count: z.number().int().optional(),
+  /** Per item: which were deleted, and why each other one was refused. */
+  deleted_ids: z.array(z.string().uuid()).optional(),
+  failed: z.array(z.object({ id: z.string().uuid(), reason: z.string() })).optional(),
   error: z.string().optional(),
 });
 export type BulkDeleteResponse = z.infer<typeof BulkDeleteResponseSchema>;

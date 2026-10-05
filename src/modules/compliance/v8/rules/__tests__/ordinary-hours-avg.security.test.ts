@@ -28,11 +28,12 @@ describe('ordinaryHoursAvgRule — Schedule 3 §3 Full-Time Security (audit H-5)
   });
 
   it('a Security roster that genuinely exceeds 336h/8-weeks still blocks', () => {
-    // 56 days at 8h/day = 448h — well over the 336h Security cycle limit.
+    // 2026-06-15 opens an eight-week Security cycle, which is exactly 56 days.
+    // Worked end to end at 8h/day that is 448h against the 336h ceiling.
     resetIdCounter();
     const ctx = buildContext({
       employee: { contract_type: 'FULL_TIME', contracted_weekly_hours: 42, is_security_role: true },
-      shifts: buildConsecutiveShifts(56, '2026-06-01', { start_time: '08:00', end_time: '16:00' }),
+      shifts: buildConsecutiveShifts(56, '2026-06-15', { start_time: '08:00', end_time: '16:00' }),
     });
     const hits = ordinaryHoursAvgRule(ctx);
     const blocking = hits.find(h => h.blocking);
@@ -43,13 +44,14 @@ describe('ordinaryHoursAvgRule — Schedule 3 §3 Full-Time Security (audit H-5)
   });
 
   it('is_security_role has no effect on a PART_TIME employee (Sch 3 §3 is FT-only)', () => {
-    // Same 168h/28-day pattern that blocks general FULL_TIME staff — a
-    // PART_TIME security-flagged employee should still be evaluated
-    // against the general structure (Sch 3 §5), not get the FT exemption.
+    // Same 168h-in-one-cycle pattern that blocks general FULL_TIME staff — a
+    // PART_TIME security-flagged employee should still be evaluated against the
+    // general structure (Sch 3 §5), not get the FT exemption. 2026-05-18 opens
+    // the four-week cycle, so all 28 days sit inside it.
     resetIdCounter();
     const ctx = buildContext({
       employee: { contract_type: 'PART_TIME', contracted_weekly_hours: 20, is_security_role: true },
-      shifts: buildConsecutiveShifts(28, '2026-06-01', { start_time: '08:00', end_time: '14:00' }),
+      shifts: buildConsecutiveShifts(28, '2026-05-18', { start_time: '08:00', end_time: '14:00' }),
     });
     const hits = ordinaryHoursAvgRule(ctx);
     const blocking = hits.find(h => h.blocking);

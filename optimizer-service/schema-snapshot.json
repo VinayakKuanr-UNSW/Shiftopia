@@ -2,7 +2,8 @@
   "AvailabilitySlot": [
     "end_time",
     "slot_date",
-    "start_time"
+    "start_time",
+    "sub_department_id"
   ],
   "Constraints": [
     "allow_partial",
@@ -68,6 +69,7 @@
     "shift_date",
     "shift_type",
     "start_time",
+    "sub_department_id",
     "target_employment_type",
     "target_requires_flexible",
     "unpaid_break_minutes"

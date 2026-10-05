@@ -7,16 +7,42 @@ describe('ordinaryHoursAvgRule', () => {
     expect(ordinaryHoursAvgRule(buildContext())).toEqual([]);
   });
 
-  it('does not apply to CASUAL employees', () => {
+  /**
+   * cl 35.4(a) caps casual ordinary hours in the same words 35.1(a) uses for a
+   * full-timer. The exemption this replaces was added on 2026-07-05 to stop a
+   * wall of false badges — but those came from stacking every rung of the
+   * ladder as a rolling window, not from casuals being in scope, so it was a
+   * fix aimed at the wrong divergence.
+   */
+  it('applies to CASUAL employees — cl 35.4(a) caps them too', () => {
     resetIdCounter();
     const ctx = buildContext({
       employee: { contract_type: 'CASUAL' },
-      shifts: buildConsecutiveShifts(28, '2026-06-01', {
+      // Inside ONE four-week cycle: 2026-05-18 opens it. 28 × 12h = 336h.
+      shifts: buildConsecutiveShifts(28, '2026-05-18', {
         start_time: '08:00',
         end_time: '20:00',
       }),
     });
-    expect(ordinaryHoursAvgRule(ctx)).toEqual([]);
+    const blocking = ordinaryHoursAvgRule(ctx).find(h => h.blocking);
+    expect(blocking).toBeDefined();
+    expect(blocking!.rule_id).toBe('V8_ORD_HOURS_AVG');
+    // No clause declares a cycle length for casuals — there is no 12.5
+    // counterpart to 12.2(b) — so they take the four-week rung, the most
+    // permissive the Agreement enumerates.
+    expect(blocking!.calculation?.limit).toBe(152);
+  });
+
+  it('leaves a CASUAL inside the ceiling alone', () => {
+    resetIdCounter();
+    const ctx = buildContext({
+      employee: { contract_type: 'CASUAL' },
+      shifts: buildConsecutiveShifts(12, '2026-05-18', {
+        start_time: '08:00',
+        end_time: '20:00',
+      }),   // 12 × 12h = 144h < 152h
+    });
+    expect(ordinaryHoursAvgRule(ctx).find(h => h.blocking)).toBeUndefined();
   });
 
   it('passes a modest 5-day fortnight at 38h total', () => {
@@ -32,8 +58,38 @@ describe('ordinaryHoursAvgRule', () => {
     expect(ordinaryHoursAvgRule(ctx)).toEqual([]);
   });
 
-  it('flags an extreme over-average across consecutive weeks (BLOCKING)', () => {
-    // 28 consecutive 10h days = 280h far above the 152h 4-week cycle limit
+  it('flags an extreme over-average WITHIN one cycle (BLOCKING)', () => {
+    // 2026-05-18 opens a four-week cycle (anchor 2024-01-01), so all 28 of
+    // these 10h days land in it: 280h against the 152h ceiling.
+    resetIdCounter();
+    const ctx = buildContext({
+      employee: { contract_type: 'FULL_TIME', contracted_weekly_hours: 38 },
+      shifts: buildConsecutiveShifts(28, '2026-05-18', {
+        start_time: '08:00',
+        end_time: '18:00',
+      }),
+    });
+    const hits = ordinaryHoursAvgRule(ctx);
+    const blocking = hits.find(h => h.blocking);
+    expect(blocking).toBeDefined();
+    expect(blocking!.rule_id).toBe('V8_ORD_HOURS_AVG');
+  });
+
+  /**
+   * The behaviour change in the move from rolling windows to anchored cycles,
+   * pinned deliberately.
+   *
+   * The identical 28-day block shifted two weeks later straddles the boundary
+   * between cycles 31 and 32, putting 140h in each — under the 152h ceiling
+   * both times. cl 35.x(a) caps the CYCLE, not every 28 consecutive days, so
+   * this is not an ordinary-hours breach.
+   *
+   * It is still an unlawful roster, and it is still blocked: 28 consecutive
+   * worked days breaches cl 35.1(e)'s 20-in-28, which `V8_20_IN_28` in
+   * consecutive-days.ts enforces as BLOCKING. The rolling window here was doing
+   * that rule's job and calling it by the wrong clause.
+   */
+  it('does NOT flag the same block straddling two cycles — that shape is V8_20_IN_28', () => {
     resetIdCounter();
     const ctx = buildContext({
       employee: { contract_type: 'FULL_TIME', contracted_weekly_hours: 38 },
@@ -43,9 +99,7 @@ describe('ordinaryHoursAvgRule', () => {
       }),
     });
     const hits = ordinaryHoursAvgRule(ctx);
-    const blocking = hits.find(h => h.blocking);
-    expect(blocking).toBeDefined();
-    expect(blocking!.rule_id).toBe('V8_ORD_HOURS_AVG');
+    expect(hits.find(h => h.blocking)).toBeUndefined();
   });
 
   it('a single 45h week that averages out over the cycle WARNS, does not block', () => {

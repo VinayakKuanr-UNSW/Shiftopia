@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { cn } from '@/modules/core/lib/utils';
@@ -8,7 +8,6 @@ import { useTheme } from '@/modules/core/contexts/ThemeContext';
 interface BroadcastFunctionBarProps {
   onSearchChange: (query: string) => void;
   searchQuery: string;
-  onRefresh: () => void;
   onCreateGroup?: () => void;
   /**
    * Creating a group is a manager capability and only the Broadcasts Manager
@@ -23,7 +22,6 @@ interface BroadcastFunctionBarProps {
 export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
   onSearchChange,
   searchQuery,
-  onRefresh,
   onCreateGroup,
   canCreateGroup = true,
   isLoading,
@@ -49,20 +47,6 @@ export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={onRefresh}
-          aria-label="Refresh broadcast groups"
-          className={cn(
-            "h-[44px] w-[44px] rounded-xl border shadow-sm transition-all",
-            isDark ? "bg-[#111827]/60 border-white/5" : "bg-slate-100 border-slate-200/50"
-          )}
-          disabled={isLoading}
-        >
-          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-        </Button>
-
         {canCreateGroup && (
           <Button
             onClick={onCreateGroup}

@@ -27,8 +27,11 @@
     "android:sync:live": "npx cap sync android",
     "android:open": "npx cap open android",
     "android:run": "npm run android:build:web && npx cap run android",
+    "db:types": "node scripts/gen-types.mjs",
     "seed:generate": "npx tsx scripts/generate-venueops-seed.ts > supabase/seed.sql",
     "gen:eba-rates": "node scripts/gen-eba-rate-schedule.mjs",
+    "gen:holidays": "node scripts/gen-au-nsw-holidays.mjs",
+    "gen:holidays:check": "node scripts/gen-au-nsw-holidays.mjs --check",
     "graph:diff": "node scripts/graph-diff.js"
   },
   "dependencies": {
@@ -80,7 +83,6 @@
     "copy-to-clipboard": "^3.3.3",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
-    "date-holidays": "^3.27.0",
     "dompurify": "^3.3.1",
     "embla-carousel-react": "^8.3.0",
     "file-saver": "^2.0.5",
@@ -136,6 +138,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
+    "date-holidays": "^3.27.0",
     "dependency-cruiser": "^17.3.7",
     "dotenv": "^17.3.1",
     "eslint": "^9.9.0",

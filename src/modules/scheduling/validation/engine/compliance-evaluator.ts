@@ -47,7 +47,6 @@ function candidateToRosterShift(s: CandidateShift): RosterShift {
         start_time: s.start_time,
         end_time: s.end_time,
         unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
-        is_ordinary_hours: true, // Default for V8 rules
         role_id: s.role_id ?? undefined,
         is_training: s.lifecycle_status === 'TRAINING', // If applicable
         // Explicit field mappers like this one are where per-shift rule inputs

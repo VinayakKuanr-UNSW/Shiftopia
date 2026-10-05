@@ -6,7 +6,7 @@ import * as availabilityApi from '../availability.api';
 import { supabase } from '@/platform/supabase/client';
 
 vi.mock('../contract-basis.api', () => ({
-  fetchContractBasis: vi.fn(),
+  fetchScopedContractBasis: vi.fn(),
 }));
 
 vi.mock('../availability.api', () => ({
@@ -29,12 +29,15 @@ describe('Full-Time Availability Guard', () => {
   });
 
   it('rejects createAvailabilityFromForm for Full-Time employees', async () => {
-    vi.mocked(contractBasisApi.fetchContractBasis).mockResolvedValue({
+    vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'FT',
       isFullTime: true,
+      isWhollyFullTime: true,
       contractedWeeklyHours: 38,
       employmentStatus: 'Full-Time',
       envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
+      cycleWeeks: 4,
+      cycleAnchor: '2024-01-01',
       availabilityMode: 'OPT_OUT',
       roleIds: [],
       isError: false,
@@ -56,12 +59,15 @@ describe('Full-Time Availability Guard', () => {
   });
 
   it('permits createAvailabilityFromForm for Casual employees', async () => {
-    vi.mocked(contractBasisApi.fetchContractBasis).mockResolvedValue({
+    vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'CASUAL',
       isFullTime: false,
+      isWhollyFullTime: false,
       contractedWeeklyHours: undefined,
       employmentStatus: 'Casual',
       envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
+      cycleWeeks: 4,
+      cycleAnchor: '2024-01-01',
       availabilityMode: 'OPT_IN',
       roleIds: [],
       isError: false,
@@ -93,12 +99,15 @@ describe('Full-Time Availability Guard', () => {
   });
 
   it('rejects createAvailabilityException for Full-Time employees', async () => {
-    vi.mocked(contractBasisApi.fetchContractBasis).mockResolvedValue({
+    vi.mocked(contractBasisApi.fetchScopedContractBasis).mockResolvedValue({
       contractType: 'FT',
       isFullTime: true,
+      isWhollyFullTime: true,
       contractedWeeklyHours: 38,
       employmentStatus: 'Full-Time',
       envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
+      cycleWeeks: 4,
+      cycleAnchor: '2024-01-01',
       availabilityMode: 'OPT_OUT',
       roleIds: [],
       isError: false,

@@ -24,8 +24,10 @@ const EXPECTED: Record<LeaveTypeCode, LeaveFlags | null> = {
   supporting_carer: { isSupportingCarer: true },
   community_service: null,                    // unpaid (NES ss108-112, except jury)
   unpaid: null,
-  religious_cultural: { isAnnualLeave: true }, // cl 55 — "accrued paid annual leave"
-  gender_affirmation: { isAnnualLeave: true }, // cl 58 — "accrued paid annual leave"
+  // cl 55.1 / 58.2 with NO election recorded: not priced. See the election
+  // cases below — only an ANNUAL election is paid.
+  religious_cultural: null,
+  gender_affirmation: null,
 };
 
 describe('leaveTypeToFlags × canonical LeaveTypeCode taxonomy', () => {
@@ -37,6 +39,21 @@ describe('leaveTypeToFlags × canonical LeaveTypeCode taxonomy', () => {
 
   it.each(codes)('maps %s exactly as expected', (code) => {
     expect(leaveTypeToFlags(code)).toEqual(EXPECTED[code]);
+  });
+
+  describe('cl 55.1 / 58.2 — the election decides whether the day is paid', () => {
+    it.each(['religious_cultural', 'gender_affirmation'])('%s elected ANNUAL is paid as annual leave (with loading)', (code) => {
+      expect(leaveTypeToFlags(code, 'annual')).toEqual({ isAnnualLeave: true });
+    });
+
+    it.each(['religious_cultural', 'gender_affirmation'])('%s elected UNPAID is not priced', (code) => {
+      // It used to be paid as annual leave regardless of the choice.
+      expect(leaveTypeToFlags(code, 'unpaid')).toBeNull();
+    });
+
+    it('ignores an election on any other type', () => {
+      expect(leaveTypeToFlags('annual', 'unpaid')).toEqual({ isAnnualLeave: true });
+    });
   });
 
   it('caps compassionate at 2 paid days per occasion (cl 48)', () => {

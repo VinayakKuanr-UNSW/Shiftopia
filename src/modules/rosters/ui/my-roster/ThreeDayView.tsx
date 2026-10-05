@@ -1,19 +1,12 @@
 import React, { useState } from 'react';
 import { addDays } from 'date-fns';
 import TimeGrid, { HOUR_HEIGHT } from '@/modules/rosters/ui/components/TimeGrid';
-import { Shift } from '@/modules/rosters';
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { cn } from '@/modules/core/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { calculateShiftLayout } from '../../utils/shift-layout.utils';
 import MyRosterShift from './MyRosterShift';
-
-interface ShiftWithDetails {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
-}
 
 interface ThreeDayViewProps {
   startDate: Date;
@@ -51,6 +44,13 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
     date: Date;
   } | null>(null);
 
+  // Stable identity so the memoised chips survive this view's re-renders.
+  // `dateKey` is the CLICKED day, which for an overnight continuation is the day
+  // after `shift.shift_date` — this view asks for continuations.
+  const handleSelect = React.useCallback((data: ShiftWithDetails, dateKey: string) => {
+    setSelectedShift({ data, date: parseISO(dateKey) });
+  }, []);
+
   const days = [startDate, addDays(startDate, 1), addDays(startDate, 2)];
 
 
@@ -73,12 +73,10 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
                 style={{ top, height }}
               >
                 <MyRosterShift
-                  shift={shift}
-                  groupName={shiftData.groupName}
-                  groupColor={shiftData.groupColor}
-                  subGroupName={shiftData.subGroupName}
-                  onClick={() => setSelectedShift({ data: shiftData, date: day })}
-                  style={{ height }}
+                  data={shiftData}
+                  dateKey={dateStr}
+                  height={height}
+                  onSelect={handleSelect}
                 />
               </div>
             );

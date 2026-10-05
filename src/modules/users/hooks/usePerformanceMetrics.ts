@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 import type { ScopeSelection } from '@/platform/auth/types';
 import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { statusFor, type MetricStatus } from '@/modules/insights/model/metric-registry';
 
 import {
     PerformanceMetrics,
@@ -130,26 +131,34 @@ export const METRIC_THRESHOLDS = {
     on_time_out_rate:         { good: 85, warn: 70 },
 } as const;
 
-type MetricThresholdKey = keyof typeof METRIC_THRESHOLDS;
-
 // ---------------------------------------------------------------------------
-// getMetricStatus — deterministic, explainable
+// getMetricStatus / getReportCellStatus
+//
+// Both now DELEGATE to statusFor() in the KPI metric registry, which is the
+// single threshold catalogue. They survive only as adapters so the components
+// still calling them keep their signatures.
+//
+// They used to be two of five rival implementations over four threshold
+// tables, and the two tables disagreed: reliability_score was 85/70 here and
+// 90/75 in REPORT_THRESHOLDS, so a per-employee dialog could paint a score
+// green while the table row that opened it painted the same score amber.
+//
+// METRIC_THRESHOLDS and REPORT_THRESHOLDS are kept as data — the parity test
+// asserts the registry still agrees with them — but nothing reads them to make
+// a decision any more.
 // ---------------------------------------------------------------------------
-export const getMetricStatus = (metricType: string, value: number): 'good' | 'warn' | 'critical' => {
-    const thresholds = METRIC_THRESHOLDS[metricType as MetricThresholdKey];
-    if (!thresholds) return 'good';
 
-    const higherIsBetter: MetricThresholdKey[] = ['acceptance_rate', 'reliability_score', 'on_time_in_rate', 'on_time_out_rate'];
-    if (higherIsBetter.includes(metricType as MetricThresholdKey)) {
-        if (value >= thresholds.good) return 'good';
-        if (value >= thresholds.warn) return 'warn';
-        return 'critical';
-    } else {
-        if (value <= thresholds.good) return 'good';
-        if (value <= thresholds.warn) return 'warn';
-        return 'critical';
-    }
-};
+/**
+ * The registry reports 'neutral' for a metric with no defensible target. These
+ * legacy call sites index into three-key colour maps with no neutral slot, so
+ * it is folded into 'good' here — matching what they did before. New code
+ * should call statusFor() and handle 'neutral' properly.
+ */
+const toLegacyStatus = (s: MetricStatus): 'good' | 'warn' | 'critical' =>
+    s === 'neutral' ? 'good' : s;
+
+export const getMetricStatus = (metricType: string, value: number): 'good' | 'warn' | 'critical' =>
+    toLegacyStatus(statusFor(metricType, value));
 
 // ---------------------------------------------------------------------------
 // Quarter helpers
@@ -369,20 +378,5 @@ export const REPORT_THRESHOLDS = {
     on_time_out_rate: { good: 85, warn: 70 },
 } as const;
 
-type ReportThresholdKey = keyof typeof REPORT_THRESHOLDS;
-
-export const getReportCellStatus = (metricType: string, value: number): 'good' | 'warn' | 'critical' => {
-    const thresholds = REPORT_THRESHOLDS[metricType as ReportThresholdKey];
-    if (!thresholds) return 'good';
-
-    const higherIsBetter = ['acceptance_rate', 'reliability_score', 'performance_score', 'engagement_score', 'attendance_compliance_rate', 'on_time_in_rate', 'on_time_out_rate'];
-    if (higherIsBetter.includes(metricType)) {
-        if (value >= thresholds.good) return 'good';
-        if (value >= thresholds.warn) return 'warn';
-        return 'critical';
-    } else {
-        if (value <= thresholds.good) return 'good';
-        if (value <= thresholds.warn) return 'warn';
-        return 'critical';
-    }
-};
+export const getReportCellStatus = (metricType: string, value: number): 'good' | 'warn' | 'critical' =>
+    toLegacyStatus(statusFor(metricType, value));

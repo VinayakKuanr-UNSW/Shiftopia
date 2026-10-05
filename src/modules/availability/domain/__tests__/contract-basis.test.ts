@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+    contractsInScope,
+    contractsInRoleScope,
+    hasConflictingEmploymentTypes,
     resolveComplianceBasis,
+    resolveScopedBasis,
     sortByComplianceBasis,
     toContractType,
     type ContractBasisInput,
@@ -51,9 +55,18 @@ describe('resolveComplianceBasis', () => {
         expect(resolveComplianceBasis([])).toEqual({
             contractType: null,
             contractedWeeklyHours: undefined,
+            // Defaults, not absences. cl 12.2(b) engages everyone on a cycle, so
+            // "no contract read" still resolves to the Agreement's own outer
+            // bound rather than leaving the ceiling undefined.
+            cycleWeeks: 4,
+            cycleAnchor: '2024-01-01',
             employmentStatus: null,
             envelope: { spanStart: null, spanEnd: null, days: null, isConfigured: false },
             isFullTime: false,
+            // Not "wholly Full-Time" either: someone with no contract in scope
+            // is UNCLASSIFIED, and must stay able to declare. The SQL guard
+            // requires the same EXISTS before it blocks.
+            isWhollyFullTime: false,
             // Nobody we can read a contract for stays on the STRICT reading —
             // the same default the solver applies — so the page never tells
             // someone they are available when the solver will not place them.
@@ -267,5 +280,252 @@ describe('resolveComplianceBasis — ordinary-hours envelope', () => {
         });
         expect(resolveComplianceBasis([casualWithSpan, ftWithSpan]).envelope.spanStart)
             .toBe('06:00:00');
+    });
+});
+
+// ============================================================================
+// SCOPED BASIS — the same precedence, asked of ONE JOB
+// ============================================================================
+//
+// The SQL half of this pair (`sm_holds_active_contract_in` /
+// `sm_holds_active_ft_contract_in`, migrations 20260821090000 / 20260821090100)
+// is pinned independently by supabase/tests/availability_subdepartment_scope.sql.
+// Two independent behavioural suites asserting the same three branches is the
+// parity check here — deliberately not a test that reads the migration's text,
+// which passes as happily against a comment as against the code.
+
+// Production's actual shape: one Full-Time contract in Building Services ·
+// Security, plus four Casual contracts across Event Delivery · Set-up (three
+// roles) and Live Events · Front of House.
+const SECURITY = { subDepartmentId: 'sd-security', departmentId: 'd-building' };
+const SETUP = { subDepartmentId: 'sd-setup', departmentId: 'd-events' };
+const FOH = { subDepartmentId: 'sd-foh', departmentId: 'd-live' };
+
+const MULTI_JOB: ContractBasisInput[] = [
+    contract({ employmentStatus: 'Full-Time', contractedWeeklyHours: 38, ...SECURITY }),
+    contract({ employmentStatus: 'Casual', contractedWeeklyHours: 0, ...SETUP }),
+    contract({ employmentStatus: 'Casual', contractedWeeklyHours: 0, ...SETUP }),
+    contract({ employmentStatus: 'Casual', contractedWeeklyHours: 0, ...SETUP }),
+    contract({ employmentStatus: 'Casual', contractedWeeklyHours: 0, ...FOH }),
+];
+
+describe('resolveScopedBasis — the 1 Full-Time + 4 Casual employee', () => {
+    // The defect, stated as a test. Without it the three below could pass on a
+    // fixture where the person-wide answer happened to be right anyway.
+    it('person-wide, the Full-Time contract wins — which is why the page hid the editor', () => {
+        const basis = resolveComplianceBasis(MULTI_JOB);
+        expect(basis.contractType).toBe('FT');
+        expect(basis.isFullTime).toBe(true);
+        expect(basis.availabilityMode).toBe('OPT_OUT');
+    });
+
+    it('scoped to Security, they are Full-Time — availability stays contract-based', () => {
+        const basis = resolveScopedBasis(MULTI_JOB, SECURITY);
+        expect(basis.contractType).toBe('FT');
+        expect(basis.isFullTime).toBe(true);
+        expect(basis.availabilityMode).toBe('OPT_OUT');
+        expect(basis.contractedWeeklyHours).toBe(38);
+    });
+
+    it('scoped to Set-up, they are Casual — silence means unavailable, so the editor must show', () => {
+        const basis = resolveScopedBasis(MULTI_JOB, SETUP);
+        expect(basis.contractType).toBe('CASUAL');
+        expect(basis.isFullTime).toBe(false);
+        expect(basis.availabilityMode).toBe('OPT_IN');
+        // Casual rows carry 0 weekly hours, which is "unset", never a zero-hour cap.
+        expect(basis.contractedWeeklyHours).toBeUndefined();
+    });
+
+    it('scoped to Front of House, they are Casual there too', () => {
+        expect(resolveScopedBasis(MULTI_JOB, FOH).availabilityMode).toBe('OPT_IN');
+        expect(resolveScopedBasis(MULTI_JOB, FOH).isFullTime).toBe(false);
+    });
+
+    // Three Set-up contracts differing only by role share ONE declaration. If
+    // the grain were the contract this would be three separate calendars for
+    // the same physical shift.
+    it('collapses several contracts in one sub-department to a single basis', () => {
+        expect(resolveScopedBasis(MULTI_JOB, SETUP)).toEqual(resolveScopedBasis(
+            [MULTI_JOB[1], MULTI_JOB[4]], SETUP,
+        ));
+    });
+});
+
+describe('resolveScopedBasis — scope semantics', () => {
+    // The invariant that lets every existing caller keep its meaning: an
+    // unresolved scope is the person-wide question, not an empty one. It is
+    // also the NULL branch of sm_holds_active_ft_contract_in.
+    it('a null sub-department is identical to the person-wide basis', () => {
+        expect(resolveScopedBasis(MULTI_JOB, { subDepartmentId: null }))
+            .toEqual(resolveComplianceBasis(MULTI_JOB));
+        expect(resolveScopedBasis([], { subDepartmentId: null }))
+            .toEqual(resolveComplianceBasis([]));
+    });
+
+    it('applies the SAME precedence inside a scope, not a second ordering', () => {
+        const casualHere = contract({ employmentStatus: 'Casual', contractedWeeklyHours: 0, ...SETUP });
+        const ptHere = contract({ employmentStatus: 'Part-Time', contractedWeeklyHours: 20, ...SETUP });
+        // Non-casual beats casual — the rule from resolveComplianceBasis.
+        expect(resolveScopedBasis([casualHere, ptHere], SETUP).contractType).toBe('PT');
+        expect(resolveScopedBasis([ptHere, casualHere], SETUP).contractType).toBe('PT');
+    });
+
+    // A DEPARTMENT-WIDE contract has no sub-department of its own and covers
+    // every sub-department beneath it. No Active contract is in that shape in
+    // production, but the SQL guards honour it and the two must not diverge.
+    it('admits a department-wide contract for a sub-department beneath it', () => {
+        const deptWide = contract({
+            employmentStatus: 'Full-Time', contractedWeeklyHours: 38,
+            subDepartmentId: null, departmentId: 'd-events',
+        });
+        expect(contractsInScope([deptWide], SETUP)).toHaveLength(1);
+        expect(resolveScopedBasis([deptWide], SETUP).isFullTime).toBe(true);
+    });
+
+    it('does NOT admit a department-wide contract from a different department', () => {
+        const deptWideElsewhere = contract({
+            employmentStatus: 'Full-Time', contractedWeeklyHours: 38,
+            subDepartmentId: null, departmentId: 'd-building',
+        });
+        expect(contractsInScope([deptWideElsewhere], SETUP)).toHaveLength(0);
+    });
+
+    // Conservative by omission: without a departmentId there is no way to know
+    // the contract covers this sub-department, and guessing that it does would
+    // silently make someone Full-Time for a job they may not hold.
+    it('excludes a department-wide contract when the scope names no department', () => {
+        const deptWide = contract({
+            employmentStatus: 'Full-Time', subDepartmentId: null, departmentId: 'd-events',
+        });
+        expect(contractsInScope([deptWide], { subDepartmentId: 'sd-setup' })).toHaveLength(0);
+    });
+
+    // Documented fallback. The page only ever offers scopes built from the
+    // person's own contracts, and the database refuses the write regardless —
+    // this pins that the fallback is the STRICT basis, not a permissive one.
+    it('returns the empty basis for a scope the person holds no contract in', () => {
+        const basis = resolveScopedBasis(MULTI_JOB, { subDepartmentId: 'sd-nowhere' });
+        expect(basis.contractType).toBeNull();
+        expect(basis.isFullTime).toBe(false);
+        expect(basis.availabilityMode).toBe('OPT_IN');
+    });
+
+    it('takes the envelope from the winning contract IN SCOPE, not the person-wide winner', () => {
+        const ftSecurity = contract({
+            employmentStatus: 'Full-Time', contractedWeeklyHours: 38, ...SECURITY,
+            ordinarySpanStart: '06:00:00', ordinarySpanEnd: '18:00:00',
+        });
+        const ptSetup = contract({
+            employmentStatus: 'Part-Time', contractedWeeklyHours: 20, ...SETUP,
+            ordinarySpanStart: '09:00:00', ordinarySpanEnd: '15:00:00',
+        });
+        expect(resolveScopedBasis([ftSecurity, ptSetup], SETUP).envelope.spanStart).toBe('09:00:00');
+        expect(resolveComplianceBasis([ftSecurity, ptSetup]).envelope.spanStart).toBe('06:00:00');
+    });
+});
+
+/**
+ * Role grain — one sub-department, two engagements.
+ *
+ * Sub-department scoping was enough while a sub-department meant one
+ * appointment. EBA cl 13 (Multi-Hiring) and migrations 20260824130000/130100
+ * made "Full-Time Event Setups Manager AND Casual Usher, both in Events" a
+ * shape the database accepts, and the casual-last ordering answers that with
+ * Full-Time — right for "how many hours may this human work", wrong for "what
+ * are they engaged as when they usher".
+ */
+describe('contractsInRoleScope / resolveScopedBasis — role grain', () => {
+    const EVENTS = 'sd-events';
+    const OPS = 'sd-ops';
+    const DEPT = 'd1';
+    const MANAGER = 'role-manager';
+    const USHER = 'role-usher';
+
+    const c = (over: Partial<ContractBasisInput>): ContractBasisInput => ({
+        employmentStatus: 'Casual',
+        contractedWeeklyHours: null,
+        startDate: null,
+        subDepartmentId: EVENTS,
+        departmentId: DEPT,
+        roleId: USHER,
+        ...over,
+    });
+
+    const mixed: ContractBasisInput[] = [
+        c({ employmentStatus: 'Full-Time', contractedWeeklyHours: 38, roleId: MANAGER }),
+        c({ employmentStatus: 'Casual', roleId: USHER }),
+    ];
+
+    it('resolves the usher role to Casual, not to the Full-Time contract beside it', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: USHER });
+        expect(basis.contractType).toBe('CASUAL');
+        expect(basis.employmentStatus).toBe('Casual');
+        expect(basis.isFullTime).toBe(false);
+        expect(basis.availabilityMode).toBe('OPT_IN');
+    });
+
+    it('resolves the manager role to Full-Time', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: MANAGER });
+        expect(basis.contractType).toBe('FT');
+        expect(basis.isFullTime).toBe(true);
+        expect(basis.availabilityMode).toBe('OPT_OUT');
+    });
+
+    // Without a role the question is job-wide, and the strict reading still
+    // wins — this is the behaviour every existing caller relies on.
+    it('keeps the casual-last precedence when no role is named', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT });
+        expect(basis.contractType).toBe('FT');
+    });
+
+    // Falling back rather than narrowing to empty is load-bearing: an empty
+    // basis reads as unclassified, flips to the strict OPT_IN, and hard-filters
+    // the person off every shift.
+    it('falls back to the sub-department when no contract names the role', () => {
+        const basis = resolveScopedBasis(mixed, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: 'role-not-held' });
+        expect(basis.contractType).toBe('FT');
+        expect(basis.employmentStatus).toBeTruthy();
+    });
+
+    it('narrows within the sub-department only', () => {
+        const spanning: ContractBasisInput[] = [
+            c({ employmentStatus: 'Full-Time', contractedWeeklyHours: 38, subDepartmentId: OPS, roleId: USHER }),
+            c({ employmentStatus: 'Casual', subDepartmentId: EVENTS, roleId: USHER }),
+        ];
+        expect(resolveScopedBasis(spanning, { subDepartmentId: EVENTS, departmentId: DEPT, roleId: USHER }).contractType).toBe('CASUAL');
+        expect(resolveScopedBasis(spanning, { subDepartmentId: OPS, departmentId: DEPT, roleId: USHER }).contractType).toBe('FT');
+    });
+});
+
+/** The TS mirror of `sm_all_active_contracts_ft_in` (migration 20260824130200). */
+describe('isWhollyFullTime — what the availability editor is gated on', () => {
+    const base: ContractBasisInput = {
+        employmentStatus: 'Full-Time',
+        contractedWeeklyHours: 38,
+        startDate: null,
+        subDepartmentId: 'sd1',
+        departmentId: 'd1',
+    };
+
+    it('is true when every contract in scope is Full-Time', () => {
+        expect(resolveComplianceBasis([base]).isWhollyFullTime).toBe(true);
+        expect(resolveComplianceBasis([base, { ...base, roleId: 'r2' }]).isWhollyFullTime).toBe(true);
+    });
+
+    it('is FALSE for a mixed scope, even though isFullTime is true', () => {
+        const mixed = [base, { ...base, employmentStatus: 'Casual', contractedWeeklyHours: null }];
+        const basis = resolveComplianceBasis(mixed);
+        expect(basis.isFullTime).toBe(true);         // governing contract
+        expect(basis.isWhollyFullTime).toBe(false);  // ...but still declarable
+    });
+
+    it('is false for an empty scope — unclassified is not Full-Time', () => {
+        expect(resolveComplianceBasis([]).isWhollyFullTime).toBe(false);
+    });
+
+    it('is false when the scope is wholly Part-Time', () => {
+        expect(resolveComplianceBasis([
+            { ...base, employmentStatus: 'Part-Time', contractedWeeklyHours: 20 },
+        ]).isWhollyFullTime).toBe(false);
     });
 });

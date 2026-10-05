@@ -205,6 +205,8 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       'Convention Centre': 'blue',
       'Exhibition Centre': 'green',
       Theatre: 'red',
+      'The Cutaway': 'amber',
+      Office: 'cyan',
     };
     return colorMap[groupName] || 'blue';
   };
@@ -266,7 +268,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       // (a zod enum), so dropping it here was what made every new template shift
       // fail to save with a 400 once the column became mandatory.
       targetEmploymentType:
-        shiftData.target_employment_type || shiftData.targetEmploymentType || editShift?.targetEmploymentType || 'FT',
+        // NOT 'FT'. Templates can no longer hold full-time rows — the database
+        // refuses them (`enforce_no_ft_template_shifts`) because a template
+        // stamps one shape on everyone and cannot reconcile a full-time
+        // employee's cycle ceiling. A stale 'FT' fallback here would make a
+        // template shift with a dropped type fail to save with a 400.
+        shiftData.target_employment_type || shiftData.targetEmploymentType || editShift?.targetEmploymentType || 'Casual',
       targetRequiresFlexible:
         shiftData.target_requires_flexible ?? shiftData.targetRequiresFlexible ?? false,
       // 0 = Sunday .. 6 = Saturday; null is the "any day" wildcard, and the two

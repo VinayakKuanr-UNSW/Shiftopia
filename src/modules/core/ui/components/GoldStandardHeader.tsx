@@ -2,6 +2,7 @@ import React from 'react';
 import { LucideIcon } from 'lucide-react';
 import { ScopeSelection } from '@/platform/auth/types';
 import { PersonalPageHeader } from './PersonalPageHeader';
+import type { ScopeLevel } from './GlobalScopeFilter';
 import { UnifiedModuleFunctionBar } from './UnifiedModuleFunctionBar';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
@@ -43,6 +44,8 @@ interface ScopeRowProps {
     isGammaLocked?: boolean;
     mode?: 'personal' | 'managerial';
     multiSelect?: boolean;
+    /** Levels forced to a single choice — see `GlobalScopeFilterProps`. */
+    singleSelectLevels?: ScopeLevel[];
 }
 
 // ─── Row 3 props (structured fallback to UnifiedModuleFunctionBar) ──────────
@@ -94,6 +97,7 @@ export const GoldStandardHeader: React.FC<GoldStandardHeaderProps> = ({
     isGammaLocked,
     mode = 'personal',
     multiSelect,
+    singleSelectLevels,
     // Row 3 (custom slot)
     functionBar,
     subFunctionBar,
@@ -140,6 +144,7 @@ export const GoldStandardHeader: React.FC<GoldStandardHeaderProps> = ({
                     isGammaLocked={isGammaLocked}
                     mode={mode}
                     multiSelect={multiSelect}
+                    singleSelectLevels={singleSelectLevels}
                     rightActions={rightActions}
                 />
 

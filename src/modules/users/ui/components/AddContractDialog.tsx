@@ -1,17 +1,21 @@
 import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Label } from '@/modules/core/ui/primitives/label';
-import { Plus, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil, Clock, GraduationCap, Award, School, BookOpen, Trophy, Info, Accessibility, Scale, CalendarClock, AlertTriangle } from 'lucide-react';
+import { 
+    Plus, Check, Building2, Users, ChevronRight, Briefcase, 
+    Loader2, Sparkles, Pencil, Clock, GraduationCap, 
+    BookOpen, Accessibility, ChevronDown, ShieldCheck, Zap, AlertTriangle
+} from 'lucide-react';
 import { useReferenceData } from '../hooks/useReferenceData';
 import { useContractForm, FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../hooks/useContractForm';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { CommandSelector } from './CommandSelector';
+import { EmploymentTypeDropdown, STANDARD_EMPLOYMENT_TYPES } from './EmploymentTypeDropdown';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/supabase/client';
 import { Input } from '@/modules/core/ui/primitives/input';
-import { validateContractHours, computeRemainingCapacity, isCeilingCounted, MAX_CONTRACTED_WEEKLY_HOURS, type ExistingContract } from '../../domain/contractHoursCeiling';
+import { validateContractHours, MAX_CONTRACTED_WEEKLY_HOURS, type ExistingContract } from '../../domain/contractHoursCeiling';
 
 interface AddContractDialogProps {
     employeeId: string;
@@ -25,41 +29,102 @@ interface AddContractDialogProps {
         remuneration_level?: number | null;
         employment_status?: string | null;
     };
+    /** Every contract row the employee holds in ONE sub-department. */
+    existingScope?: any[];
     /** All contracts for this employee — used for the 38h ceiling check. */
     existingContracts?: any[];
+    trigger?: React.ReactNode;
     onSuccess?: () => void;
 }
 
-export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId, employeeName, existingContract, existingContracts = [], onSuccess }) => {
+const SWS_MIN_WEEKLY_PAY = 90;
+
+const fmtHours = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+export const AddContractDialog: React.FC<AddContractDialogProps> = ({ 
+    employeeId, 
+    employeeName, 
+    existingContract, 
+    existingScope,
+    existingContracts = [], 
+    trigger,
+    onSuccess 
+}) => {
     const [open, setOpen] = useState(false);
     const { toast } = useToast();
 
     // Hooks
     const {
-        organizations, departments, subDepartments, roles, remLevels,
+        organizations, departments, subDepartments, roles,
         isLoading: isLoadingRefs, loadReferenceData
     } = useReferenceData(open);
 
     const {
-        formData, isSubmitting, updateField, updateRole, submit, setFormData
+        formData, isSubmitting, updateField, toggleRole, setRoleTerm, submit, submitScopeUpdate, setFormData,
+        positions, totalWeeklyHours,
     } = useContractForm(employeeId, () => {
         setOpen(false);
         if (onSuccess) onSuccess();
     });
 
-    // Determines if we are in Edit Mode
-    const isEditMode = !!existingContract;
+    const isScopeEdit = !!existingScope?.length;
+    const isEditMode = !!existingContract || isScopeEdit;
 
     // Pre-fill form when editing
     React.useEffect(() => {
-        if (open && existingContract) {
+        if (open && isScopeEdit && existingScope) {
+            const head = existingScope[0];
+            setFormData({
+                organization_id: head.organization_id || '',
+                department_id: head.department_id || '',
+                sub_department_id: head.sub_department_id || '',
+                role_ids: existingScope.map((c: any) => c.role_id).filter(Boolean),
+                role_terms: Object.fromEntries(existingScope
+                    .filter((c: any) => c.role_id)
+                    .map((c: any) => [c.role_id, {
+                        employment_status: c.employment_status || '',
+                        contracted_weekly_hours: Number(c.contracted_weekly_hours) || 0,
+                        annual_guaranteed_hours: Number(c.annual_guaranteed_hours) || 0,
+                    }])),
+                remuneration_level: '',
+                employment_status: '',
+                contracted_weekly_hours: 0,
+                annual_guaranteed_hours: 0,
+                is_apprentice: head.is_apprentice || false,
+                apprentice_type: head.apprentice_type || 'standard',
+                apprentice_year: head.apprentice_year || 1,
+                has_completed_year_12: head.has_completed_year_12 || false,
+                is_trainee: head.is_trainee || false,
+                trainee_category: head.trainee_category || 'junior',
+                trainee_level: head.trainee_level || 'A',
+                trainee_exit_year: head.trainee_exit_year || 12,
+                trainee_years_out: head.trainee_years_out || 0,
+                trainee_aqf_level: head.trainee_aqf_level || 3,
+                trainee_year: head.trainee_year || 1,
+                is_training_on_job: head.is_training_on_job || false,
+                prefers_sba_loading: head.prefers_sba_loading || false,
+                is_sws: head.is_sws || false,
+                sws_capacity_percentage: head.sws_capacity_percentage || 50,
+                is_sws_trial: head.is_sws_trial || false,
+                sws_trial_start_date: head.sws_trial_start_date || '',
+            });
+        } else if (open && existingContract) {
             setFormData({
                 organization_id: existingContract.organization_id || '',
                 department_id: existingContract.department_id || '',
                 sub_department_id: existingContract.sub_department_id || '',
-                role_id: existingContract.role_id,
-                remuneration_level: existingContract.remuneration_level || '',
-                employment_status: (existingContract.employment_status as any) || 'Casual',
+                role_ids: existingContract.role_id ? [existingContract.role_id] : [],
+                role_terms: existingContract.role_id
+                    ? {
+                        [existingContract.role_id]: {
+                            employment_status: existingContract.employment_status || '',
+                            contracted_weekly_hours: (existingContract as any).contracted_weekly_hours || 0,
+                            annual_guaranteed_hours: (existingContract as any).annual_guaranteed_hours || 0,
+                        },
+                    }
+                    : {},
+                remuneration_level: existingContract.remuneration_level != null ? existingContract.remuneration_level : '',
+                employment_status: existingContract.employment_status || '',
                 contracted_weekly_hours: (existingContract as any).contracted_weekly_hours || 0,
                 is_apprentice: (existingContract as any).is_apprentice || false,
                 apprentice_type: (existingContract as any).apprentice_type || 'standard',
@@ -85,7 +150,8 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 organization_id: '',
                 department_id: '',
                 sub_department_id: '',
-                role_id: '',
+                role_ids: [],
+                role_terms: {},
                 remuneration_level: '',
                 employment_status: '',
                 contracted_weekly_hours: 0,
@@ -109,27 +175,37 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 sws_trial_start_date: ''
             });
         }
-    }, [open, existingContract, setFormData]);
+    }, [open, existingContract, existingScope, isScopeEdit, setFormData]);
 
-    // Filtered options based on form selection
+    // Filtered hierarchy options
     const filteredDepartments = departments.filter(d => d.organization_id === formData.organization_id);
     const filteredSubDepartments = subDepartments.filter(sd => sd.department_id === formData.department_id);
     
-    // Clean role names (remove L0, L1 redundancy)
+    // Clean role names (remove trailing L0, L1 redundancy)
     const cleanRoleName = (name: string) => name.replace(/\s*\(L\d+\)$/i, '').trim();
     
-    const filteredRoles = roles
-        .filter(r => r.sub_department_id === formData.sub_department_id)
-        .map(r => ({ ...r, name: cleanRoleName(r.name) }));
+    // Arrange roles from highest level to lowest: L7 down to L0 (not alphabetically)
+    const filteredRoles = useMemo(() => {
+        return roles
+            .filter(r => r.sub_department_id === formData.sub_department_id)
+            .map(r => ({ ...r, name: cleanRoleName(r.name) }))
+            .sort((a, b) => {
+                const levelA = a.remuneration_level != null ? Number(a.remuneration_level) : -1;
+                const levelB = b.remuneration_level != null ? Number(b.remuneration_level) : -1;
+                if (levelB !== levelA) {
+                    return levelB - levelA; // L7 -> L6 -> L5 -> L4 -> L3 -> L2 -> L1 -> L0 -> unlevelled (-1)
+                }
+                return a.name.localeCompare(b.name);
+            });
+    }, [roles, formData.sub_department_id]);
 
-    // AUDIT FIX M-2: cl 12.4 bounds Flexible Part-Time annual guaranteed hours
-    // to 624-1,976h/year.
-    const isFptHoursInvalid =
-        formData.employment_status === 'Flexible Part-Time' &&
-        ((formData.annual_guaranteed_hours ?? 0) < FLEXIBLE_PT_ANNUAL_HOURS_MIN ||
-            (formData.annual_guaranteed_hours ?? 0) > FLEXIBLE_PT_ANNUAL_HOURS_MAX);
+    // Bounds Flexible Part-Time annual guaranteed hours to 624-1,976h/year
+    const isFptHoursInvalid = positions.some(p =>
+        p.employment_status === 'Flexible Part-Time' &&
+        (p.annual_guaranteed_hours < FLEXIBLE_PT_ANNUAL_HOURS_MIN ||
+            p.annual_guaranteed_hours > FLEXIBLE_PT_ANNUAL_HOURS_MAX));
 
-    // ── 38h contracted weekly hours ceiling validation ──────────────────
+    // 38h contracted weekly hours ceiling validation
     const ceilingContracts: ExistingContract[] = useMemo(() =>
         (existingContracts ?? []).map((c: any) => ({
             id: c.id,
@@ -141,31 +217,26 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
     );
 
     const ceilingValidation = useMemo(() => {
-        const proposedHours = formData.contracted_weekly_hours || 0;
-        const proposedStatus = formData.employment_status || '';
         return validateContractHours(
-            proposedHours,
-            proposedStatus,
+            totalWeeklyHours,
+            totalWeeklyHours > 0 ? 'Part-Time' : 'Casual',
             ceilingContracts,
             isEditMode ? existingContract?.id : undefined,
+            isScopeEdit ? existingScope?.map((c: any) => c.id) : undefined,
         );
-    }, [
-        formData.contracted_weekly_hours,
-        formData.employment_status,
-        ceilingContracts,
-        isEditMode,
-        existingContract?.id,
-    ]);
-
-    const capacityInfo = useMemo(() =>
-        computeRemainingCapacity(
-            ceilingContracts,
-            isEditMode ? existingContract?.id : undefined,
-        ),
-        [ceilingContracts, isEditMode, existingContract?.id],
-    );
+    }, [totalWeeklyHours, ceilingContracts, isEditMode, existingContract?.id, isScopeEdit, existingScope]);
 
     const isCeilingExceeded = !ceilingValidation.valid;
+
+    const mixedPermanentConflict = useMemo(() => {
+        const perm = positions.filter(p => p.employment_status
+            && p.employment_status !== 'Casual');
+        const hasFT = perm.some(p => p.employment_status === 'Full-Time');
+        if (hasFT && perm.length > 1) {
+            return 'A Full-Time engagement is 38 hours and cannot be combined with another permanent (PT/FPT) engagement. Make additional roles Casual.';
+        }
+        return null;
+    }, [positions]);
 
     const handleSubmit = async () => {
         if (isFptHoursInvalid) {
@@ -176,7 +247,6 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
             });
             return;
         }
-        // Block if the 38h ceiling would be exceeded
         if (isCeilingExceeded) {
             toast({
                 title: 'Contract Hours Ceiling',
@@ -185,18 +255,29 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
             });
             return;
         }
+        if (mixedPermanentConflict) {
+            toast({
+                title: 'Conflicting Engagements',
+                description: mixedPermanentConflict,
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (isScopeEdit && existingScope) {
+            await submitScopeUpdate(existingScope, roleLevels);
+            return;
+        }
         if (isEditMode) {
-            // Implement update logic here or in useContractForm
             const { error } = await supabase
                 .from('user_contracts')
                 .update({
                     organization_id: formData.organization_id,
                     department_id: formData.department_id,
                     sub_department_id: formData.sub_department_id,
-                    role_id: formData.role_id,
+                    role_id: formData.role_ids[0],
                     remuneration_level: formData.remuneration_level === '' ? undefined : formData.remuneration_level,
-                    employment_status: formData.employment_status as any,
-                    contracted_weekly_hours: formData.contracted_weekly_hours,
+                    employment_status: formData.role_terms[formData.role_ids[0]]?.employment_status || formData.employment_status as any,
+                    contracted_weekly_hours: formData.role_terms[formData.role_ids[0]]?.contracted_weekly_hours ?? formData.contracted_weekly_hours,
                     is_apprentice: formData.is_apprentice,
                     apprentice_type: formData.apprentice_type,
                     apprentice_year: formData.apprentice_year,
@@ -214,13 +295,12 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     sws_capacity_percentage: formData.sws_capacity_percentage,
                     is_sws_trial: formData.is_sws_trial,
                     sws_trial_start_date: formData.sws_trial_start_date || null,
-                    annual_guaranteed_hours: formData.annual_guaranteed_hours
+                    annual_guaranteed_hours: formData.role_terms[formData.role_ids[0]]?.annual_guaranteed_hours ?? formData.annual_guaranteed_hours
                 })
                 .eq('id', existingContract!.id);
             
             if (error) {
                 console.error('Update error:', error);
-                // Surface DB trigger rejection message to the user
                 toast({
                     title: 'Contract Update Failed',
                     description: error.message || 'Failed to update contract.',
@@ -231,7 +311,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
             setOpen(false);
             if (onSuccess) onSuccess();
         } else {
-            await submit();
+            await submit(roleLevels);
         }
     };
 
@@ -239,73 +319,129 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
     const isOrgSelected = !!formData.organization_id;
     const isDeptSelected = !!formData.department_id;
     const isSubDeptSelected = !!formData.sub_department_id;
-    const isRoleSelected = !!formData.role_id;
+    const isRoleSelected = formData.role_ids.length > 0;
 
-    const selectedRole = roles.find(r => r.id === formData.role_id);
-    const selectedRemLevel = remLevels.find(rl => rl.level_number === formData.remuneration_level);
-    const isRemLocked = !!formData.role_id && !!selectedRole?.remuneration_level;
+    /** Check that every selected role has chosen its employment type */
+    const allRolesTyped = formData.role_ids.every(
+        id => !!formData.role_terms[id]?.employment_status,
+    );
 
-    // Auto-populate remuneration level when role changes
-    React.useEffect(() => {
-        if (formData.role_id && formData.remuneration_level === '') {
-            const role = roles.find(r => r.id === formData.role_id);
-            if (role?.remuneration_level) {
-                updateField('remuneration_level', role.remuneration_level);
-            }
+    /** role id → its remuneration level */
+    const roleLevels = React.useMemo(
+        () => Object.fromEntries(
+            roles.map(r => [r.id, r.remuneration_level as number | null | undefined]),
+        ),
+        [roles],
+    );
+
+    const allRolesSelected = filteredRoles.length > 0 && formData.role_ids.length === filteredRoles.length;
+
+    const handleSelectAllRoles = () => {
+        if (allRolesSelected) {
+            updateField('role_ids', []);
+        } else {
+            const allIds = filteredRoles.map(r => r.id);
+            updateField('role_ids', allIds);
+            // Default untyped roles to Casual or Full-Time
+            allIds.forEach(id => {
+                if (!formData.role_terms[id]?.employment_status) {
+                    setRoleTerm(id, { employment_status: 'Casual', contracted_weekly_hours: 0, annual_guaranteed_hours: 0 });
+                }
+            });
         }
-    }, [formData.role_id, roles, formData.remuneration_level, updateField]);
+    };
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className={cn(
-                        "transition-all duration-300",
-                        isEditMode 
-                            ? "opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary" 
-                            : "ml-auto bg-primary/5 hover:bg-primary/10 border-primary/20 text-primary"
-                    )}
-                    onClick={() => loadReferenceData()}
-                >
-                    {isEditMode ? (
-                        <Pencil className="w-4 h-4" />
-                    ) : (
-                        <>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Contract
-                        </>
-                    )}
-                </Button>
+                {trigger || (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className={cn(
+                            "transition-all duration-300 rounded-xl",
+                            isEditMode 
+                                ? "bg-white/5 hover:bg-primary/20 text-muted-foreground hover:text-primary border-white/10" 
+                                : "ml-auto bg-primary/10 hover:bg-primary/20 border-primary/30 text-primary font-bold shadow-md shadow-primary/10"
+                        )}
+                        onClick={() => loadReferenceData()}
+                    >
+                        {isEditMode ? (
+                            <span className="flex items-center gap-1.5"><Pencil className="w-3.5 h-3.5" /> Edit</span>
+                        ) : (
+                            <>
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add Contract
+                            </>
+                        )}
+                    </Button>
+                )}
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-5xl h-auto flex flex-col bg-background/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2rem] overflow-hidden p-0">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
+
+            <DialogContent className="w-[96vw] max-w-6xl h-[92vh] max-h-[92vh] flex flex-col gap-0 bg-background dark:bg-[#0b0e14]/98 border border-border text-foreground shadow-2xl backdrop-blur-3xl rounded-[2.5rem] overflow-hidden p-0">
+                <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-primary/5 pointer-events-none" />
                 
-                <div className="p-8 pb-4 flex-shrink-0">
-                    <DialogHeader className="mb-6">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="p-2 rounded-xl bg-primary/10 text-primary shadow-inner">
-                                <Sparkles className="w-5 h-5" />
+                {/* ── Top Header ────────────────────────────────────────────── */}
+                <div className="p-6 sm:p-8 pb-5 flex-shrink-0 border-b border-border bg-muted/20 dark:bg-white/[0.02]">
+                    <DialogHeader className="mb-0">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3.5">
+                                <div className="p-2.5 rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/30 shadow-inner">
+                                    <Sparkles className="w-5 h-5" />
+                                </div>
+                                <div className="text-left">
+                                    <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+                                        {isEditMode ? 'Edit Contract' : 'Add Position Contract'}
+                                        <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+                                            {employeeName}
+                                        </span>
+                                    </DialogTitle>
+                                    <DialogDescription className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+                                        Configure hierarchy, select roles across all 8 remuneration levels individually, and set employment terms.
+                                    </DialogDescription>
+                                </div>
                             </div>
-                            <div>
-                                <DialogTitle className="text-2xl font-bold tracking-tight">
-                                    {isEditMode ? 'Edit Contract' : 'Add Contract'}
-                                </DialogTitle>
-                                <DialogDescription className="text-muted-foreground/60">
-                                    {isEditMode ? 'Update existing' : 'Create a new'} organizational role for {employeeName}
-                                </DialogDescription>
+                            
+                            {/* Live Weekly Hours Meter */}
+                            <div className={cn(
+                                "hidden lg:flex items-center gap-3 px-4 py-2 rounded-2xl border backdrop-blur-md transition-all",
+                                isCeilingExceeded
+                                    ? "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-300"
+                                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300"
+                            )}>
+                                <div className="flex flex-col text-right">
+                                    <span className="text-[9px] font-black uppercase tracking-wider opacity-70">
+                                        Total Contracted Hours
+                                    </span>
+                                    <span className="text-xs font-bold font-mono">
+                                        {fmtHours(ceilingValidation.proposedTotal)}h / {MAX_CONTRACTED_WEEKLY_HOURS}h Cap
+                                    </span>
+                                </div>
+                                <div className={cn(
+                                    "w-2.5 h-2.5 rounded-full",
+                                    isCeilingExceeded ? "bg-rose-500 animate-pulse" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+                                )} />
                             </div>
                         </div>
                     </DialogHeader>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 overflow-visible relative">
-                        {/* Vertical Divider for Desktop */}
-                        <div className="hidden md:block absolute left-1/2 top-4 bottom-4 w-[1px] bg-border/40 -translate-x-1/2" />
+                {/* ── Scrollable Body (Internal Scrolling Container) ──────────── */}
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6 sm:p-8 space-y-8 scrollbar-thin scrollbar-thumb-muted-foreground/30 overscroll-contain">
+                    
+                    {/* ─────────────────────────────────────────────────────────────
+                        CENTERED VERTICAL HIERARCHY PIPELINE
+                        Select Org -> | -> Select Dept -> | -> Select SubDept -> |
+                       ───────────────────────────────────────────────────────────── */}
+                    <div className="max-w-md mx-auto flex flex-col items-center justify-center text-center w-full">
+                        <div className="mb-3">
+                            <span className="text-[10px] font-black tracking-[0.25em] uppercase text-primary bg-primary/10 px-3.5 py-1 rounded-full border border-primary/20">
+                                Hierarchy Selection
+                            </span>
+                        </div>
 
-                        {/* Left Column: Primary Selection */}
-                        <div className="flex flex-col gap-6">
-                            {/* 1. Organization */}
+                        {/* 1. SELECT ORGANISATION */}
+                        <div className="w-full relative z-30 shadow-md">
                             <CommandSelector
                                 label="Organization"
                                 placeholder="Select organization"
@@ -315,681 +451,644 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                     updateField('organization_id', val);
                                     updateField('department_id', '');
                                     updateField('sub_department_id', '');
-                                    updateField('role_id', '');
+                                    updateField('role_ids', []);
                                 }}
-                                icon={<Building2 className="w-5 h-5" />}
+                                icon={<Building2 className="w-5 h-5 text-primary" />}
                             />
-
-                            {/* 2. Department */}
-                            <AnimatePresence mode="wait">
-                                {isOrgSelected && (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        transition={{ duration: 0.3 }}
-                                    >
-                                        <CommandSelector
-                                            label="Department"
-                                            placeholder="Select department"
-                                            value={formData.department_id}
-                                            options={filteredDepartments.map(d => ({ id: d.id, name: d.name }))}
-                                            onValueChange={(val) => {
-                                                updateField('department_id', val);
-                                                updateField('sub_department_id', '');
-                                                updateField('role_id', '');
-                                            }}
-                                            icon={<Users className="w-5 h-5" />}
-                                        />
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-
-                            {/* 3. Sub-Department */}
-                            <AnimatePresence mode="wait">
-                                {isDeptSelected && (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        transition={{ duration: 0.3 }}
-                                    >
-                                        <CommandSelector
-                                            label="Sub-Department"
-                                            placeholder="Select sub-department"
-                                            value={formData.sub_department_id}
-                                            options={filteredSubDepartments.map(sd => ({ id: sd.id, name: sd.name }))}
-                                            onValueChange={(val) => {
-                                                updateField('sub_department_id', val);
-                                                updateField('role_id', '');
-                                            }}
-                                            icon={<ChevronRight className="w-5 h-5" />}
-                                        />
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-
-                            {/* 4. Role */}
-                            <AnimatePresence mode="wait">
-                                {isSubDeptSelected && (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        transition={{ duration: 0.3 }}
-                                    >
-                                        <CommandSelector
-                                            label="Position / Role"
-                                            placeholder="Select role"
-                                            value={formData.role_id}
-                                            options={filteredRoles.map(r => ({ id: r.id, name: r.name }))}
-                                            onValueChange={(val) => {
-                                            const role = roles.find(r => r.id === val);
-                                            updateRole(val, role?.remuneration_level);
-                                        }}
-                                            icon={<Briefcase className="w-5 h-5" />}
-                                        />
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-
-                        {/* 5. Remuneration & Employment */}
-                        <AnimatePresence>
-                            {isRoleSelected && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0, y: 10 }}
-                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                                    transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
-                                    className="flex flex-col gap-6"
-                                >
-                                    <div className="grid grid-cols-2 gap-4 mt-2 p-4 rounded-2xl bg-primary/5 border border-primary/10 shadow-inner">
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
-                                                <DollarSign className="w-3 h-3" /> Remuneration
-                                            </Label>
-                                            <div className="text-sm font-semibold text-primary/90 flex items-center gap-2">
-                                                {selectedRemLevel ? (
-                                                    <>
-                                                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-xs">L{selectedRemLevel.level_number}</span>
-                                                        <span>{selectedRemLevel.level_name}</span>
-                                                    </>
-                                                ) : '—'}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1 border-l border-border/40 pl-4">
-                                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
-                                                <Briefcase className="w-3 h-3" /> Selection Type
-                                            </Label>
-                                            <div className="text-sm font-semibold text-primary/90 flex items-center gap-2">
-                                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                                                {formData.employment_status || '—'}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <CommandSelector
-                                        label="Change Employment Type"
-                                        placeholder="Select type"
-                                        value={formData.employment_status}
-                                        options={[
-                                            { id: 'Full-Time', name: 'Full-Time' },
-                                            { id: 'Part-Time', name: 'Part-Time' },
-                                            { id: 'Casual', name: 'Casual' },
-                                            { id: 'Flexible Part-Time', name: 'Flexible Part-Time' }
-                                        ]}
-                                        onValueChange={(val) => updateField('employment_status', val)}
-                                        icon={<Briefcase className="w-5 h-5" />}
-                                    />
-
-                                    {(formData.employment_status === 'Full-Time' || formData.employment_status === 'Part-Time' || formData.employment_status === 'Flexible Part-Time') && (
-                                        <motion.div
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            className="p-4 rounded-2xl bg-primary/5 border border-primary/10 shadow-inner space-y-3"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
-                                                    <Clock className="w-3 h-3" /> 
-                                                    {formData.employment_status === 'Flexible Part-Time' ? 'Annual Guaranteed Hours' : 'Contracted Weekly Hours'}
-                                                </Label>
-                                                <span className="text-[10px] font-mono text-primary/40 italic">
-                                                    {formData.employment_status === 'Full-Time' ? 'EA Standard: 38h' : 
-                                                     formData.employment_status === 'Flexible Part-Time' ? 'EA Standard: 624h' : 'EA Standard: 20h+'}
-                                                </span>
-                                            </div>
-                                            <div className="relative group">
-                                                <Input
-                                                    type="number"
-                                                    value={formData.employment_status === 'Flexible Part-Time' ? formData.annual_guaranteed_hours : formData.contracted_weekly_hours}
-                                                    onChange={(e) => {
-                                                        const val = parseFloat(e.target.value) || 0;
-                                                        if (formData.employment_status === 'Flexible Part-Time') {
-                                                            updateField('annual_guaranteed_hours', val);
-                                                        } else {
-                                                            updateField('contracted_weekly_hours', val);
-                                                        }
-                                                    }}
-                                                    className="bg-muted/40 border-primary/20 focus:border-primary/50 text-lg font-bold text-primary pl-4 h-12 rounded-xl transition-all"
-                                                />
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/40 font-medium">
-                                                    {formData.employment_status === 'Flexible Part-Time' ? 'hours / year' : 'hours / week'}
-                                                </div>
-                                            </div>
-                                            {isFptHoursInvalid && (
-                                                <p className="text-[11px] text-destructive font-medium">
-                                                    Must be between {FLEXIBLE_PT_ANNUAL_HOURS_MIN}-{FLEXIBLE_PT_ANNUAL_HOURS_MAX}h/year (cl 12.4).
-                                                </p>
-                                            )}
-
-                                            {/* ── 38h Contracted Hours Capacity Banner ── */}
-                                            {formData.employment_status !== 'Flexible Part-Time' && isCeilingCounted(formData.employment_status) && (
-                                                <div className={cn(
-                                                    "mt-2 p-3 rounded-xl border space-y-2 transition-all",
-                                                    isCeilingExceeded
-                                                        ? "bg-destructive/10 border-destructive/30"
-                                                        : "bg-emerald-500/5 border-emerald-500/20"
-                                                )}>
-                                                    <div className="flex items-center gap-2">
-                                                        {isCeilingExceeded
-                                                            ? <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                                                            : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
-                                                        <span className={cn(
-                                                            "text-[10px] font-bold uppercase tracking-wider",
-                                                            isCeilingExceeded ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
-                                                        )}>
-                                                            Weekly Hours Capacity
-                                                        </span>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                                                        <span className="text-muted-foreground">Existing contracted:</span>
-                                                        <span className="font-bold text-foreground">{ceilingValidation.existingHours}h/week</span>
-                                                        <span className="text-muted-foreground">New contract:</span>
-                                                        <span className="font-bold text-foreground">{formData.contracted_weekly_hours || 0}h/week</span>
-                                                        <span className="text-muted-foreground">Combined:</span>
-                                                        <span className={cn(
-                                                            "font-bold",
-                                                            isCeilingExceeded ? "text-destructive" : "text-foreground"
-                                                        )}>
-                                                            {ceilingValidation.proposedTotal}h/week
-                                                        </span>
-                                                        <span className="text-muted-foreground">Remaining capacity:</span>
-                                                        <span className={cn(
-                                                            "font-bold",
-                                                            isCeilingExceeded ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
-                                                        )}>
-                                                            {isCeilingExceeded ? '0' : ceilingValidation.remainingCapacity}h/week
-                                                        </span>
-                                                    </div>
-                                                    {isCeilingExceeded && ceilingValidation.message && (
-                                                        <p className="text-[11px] text-destructive font-medium mt-1">
-                                                            {ceilingValidation.message}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </motion.div>
-                                    )}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-
-                    {/* Right Column: Special Configurations */}
-                    <div className="flex flex-col gap-6">
-                        <div className={cn(
-                            "p-4 rounded-2xl border transition-all h-fit",
-                            formData.is_apprentice ? "bg-indigo-500/10 border-indigo-500/30" : "bg-muted/5 border-border/40"
-                        )}>
-                            <div className="flex items-center justify-between group cursor-pointer" onClick={() => updateField('is_apprentice', !formData.is_apprentice)}>
-                                <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                        "p-2 rounded-xl transition-all",
-                                        formData.is_apprentice ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-muted text-muted-foreground"
-                                    )}>
-                                        <GraduationCap className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <p className={cn("text-sm font-bold", formData.is_apprentice ? "text-indigo-600 dark:text-indigo-100" : "text-foreground")}>Apprentice Mode</p>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Schedule 4 Wage Alignment</p>
-                                    </div>
-                                </div>
-                                <div className={cn(
-                                    "w-10 h-5 rounded-full relative transition-all duration-300",
-                                    formData.is_apprentice ? "bg-indigo-500" : "bg-muted"
-                                )}>
-                                    <motion.div 
-                                        animate={{ x: formData.is_apprentice ? 20 : 2 }}
-                                        className="absolute top-1 left-0 w-3 h-3 bg-background rounded-full shadow-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <AnimatePresence>
-                                {formData.is_apprentice && (
-                                    <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-indigo-500/20"
-                                    >
-                                        {/* Apprentice Type */}
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {[
-                                                { id: 'standard', name: 'Standard', icon: <Award className="w-4 h-4" /> },
-                                                { id: 'adult', name: 'Adult (21+)', icon: <CheckCircle2 className="w-4 h-4" /> },
-                                                { id: 'school_based', name: 'School-Based', icon: <School className="w-4 h-4" /> }
-                                            ].map((t) => (
-                                                <button
-                                                    key={t.id}
-                                                    onClick={() => updateField('apprentice_type', t.id)}
-                                                    className={cn(
-                                                        "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-center",
-                                                        formData.apprentice_type === t.id 
-                                                            ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-700 dark:text-indigo-200 shadow-lg shadow-indigo-500/10"
-                                                            : "bg-muted/20 border-transparent text-muted-foreground hover:bg-muted/30"
-                                                    )}
-                                                >
-                                                    {t.icon}
-                                                    <span className="text-[10px] font-bold">{t.name}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {/* Year and Yr 12 */}
-                                        <div className="flex gap-4">
-                                            <div className="flex-1 space-y-2">
-                                                <Label className="text-[10px] uppercase tracking-widest text-indigo-500/50 font-bold ml-1">Apprenticeship Year</Label>
-                                                <div className="flex bg-muted/20 rounded-xl p-1 border border-indigo-500/10">
-                                                    {[1, 2, 3, 4].map((y) => (
-                                                        <button
-                                                            key={y}
-                                                            onClick={() => updateField('apprentice_year', y)}
-                                                            className={cn(
-                                                                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                                                                formData.apprentice_year === y 
-                                                                    ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
-                                                                    : "text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-200"
-                                                            )}
-                                                        >
-                                                            Yr {y}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {formData.apprentice_type === 'standard' && (
-                                                <div className="space-y-2">
-                                                    <Label className="text-[10px] uppercase tracking-widest text-indigo-500/50 font-bold ml-1">Year 12 Completion</Label>
-                                                    <button
-                                                        onClick={() => updateField('has_completed_year_12', !formData.has_completed_year_12)}
-                                                        className={cn(
-                                                            "w-full px-4 py-3 rounded-xl border flex items-center justify-between gap-4 transition-all h-[42px]",
-                                                            formData.has_completed_year_12
-                                                                ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-700 dark:text-emerald-200"
-                                                                : "bg-muted/20 border-transparent text-muted-foreground"
-                                                        )}
-                                                    >
-                                                        <span className="text-xs font-bold">Graduated?</span>
-                                                        {formData.has_completed_year_12 ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border border-current opacity-20" />}
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-                                            <p className="text-[10px] text-indigo-600/70 dark:text-indigo-200/70 font-medium italic">
-                                                {formData.apprentice_type === 'adult' 
-                                                    ? "Adult rate: 80% of L4 in Yr 1, Min Adult rate thereafter."
-                                                    : formData.apprentice_type === 'school_based'
-                                                    ? "SBA: Standard % + 25% loading for training time."
-                                                    : "Standard: Base % applied to ICC Sydney Level 4."}
-                                            </p>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
                         </div>
 
-                        {/* Trainee Configuration */}
-                        <div className={cn(
-                            "p-4 rounded-2xl border transition-all h-fit",
-                            formData.is_trainee ? "bg-amber-500/10 border-amber-500/30" : "bg-muted/5 border-border/40"
-                        )}>
-                            <div className="flex items-center justify-between group cursor-pointer" onClick={() => updateField('is_trainee', !formData.is_trainee)}>
-                                <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                        "p-2 rounded-xl transition-all",
-                                        formData.is_trainee ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" : "bg-muted text-muted-foreground"
-                                    )}>
-                                        <BookOpen className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <p className={cn("text-sm font-bold", formData.is_trainee ? "text-amber-600 dark:text-amber-100" : "text-foreground")}>Trainee Mode</p>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Schedule 5 Wage Matrix</p>
-                                    </div>
-                                </div>
-                                <div className={cn(
-                                    "w-10 h-5 rounded-full relative transition-all duration-300",
-                                    formData.is_trainee ? "bg-amber-500" : "bg-muted"
-                                )}>
-                                    <motion.div 
-                                        animate={{ x: formData.is_trainee ? 20 : 2 }}
-                                        className="absolute top-1 left-0 w-3 h-3 bg-background rounded-full shadow-sm"
-                                    />
-                                </div>
+                        {/* Flow Pipe Connector 1 */}
+                        <div className="flex flex-col items-center my-1 select-none">
+                            <div className={cn(
+                                "w-0.5 h-4 transition-all duration-500",
+                                isOrgSelected ? "bg-gradient-to-b from-primary to-primary/60 shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border"
+                            )} />
+                            <div className={cn(
+                                "w-2 h-2 rounded-full border-2 transition-all duration-500",
+                                isOrgSelected ? "bg-primary border-primary ring-2 ring-primary/20 scale-110" : "bg-muted border-border"
+                            )} />
+                            <div className={cn(
+                                "w-0.5 h-4 transition-all duration-500",
+                                isOrgSelected ? "bg-gradient-to-b from-primary/60 to-primary shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border"
+                            )} />
+                        </div>
+
+                        {/* 2. SELECT DEPARTMENT */}
+                        <div className={cn("w-full transition-all duration-300 relative z-20 shadow-md", !isOrgSelected && "opacity-40 pointer-events-none")}>
+                            <CommandSelector
+                                label="Department"
+                                placeholder={isOrgSelected ? "Select department" : "Select organization first"}
+                                value={formData.department_id}
+                                disabled={!isOrgSelected}
+                                options={filteredDepartments.map(d => ({ id: d.id, name: d.name }))}
+                                onValueChange={(val) => {
+                                    updateField('department_id', val);
+                                    updateField('sub_department_id', '');
+                                    updateField('role_ids', []);
+                                }}
+                                icon={<Users className="w-5 h-5 text-primary" />}
+                            />
+                        </div>
+
+                        {/* Flow Pipe Connector 2 */}
+                        <div className="flex flex-col items-center my-1 select-none">
+                            <div className={cn(
+                                "w-0.5 h-4 transition-all duration-500",
+                                isDeptSelected ? "bg-gradient-to-b from-primary to-primary/60 shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border"
+                            )} />
+                            <div className={cn(
+                                "w-2 h-2 rounded-full border-2 transition-all duration-500",
+                                isDeptSelected ? "bg-primary border-primary ring-2 ring-primary/20 scale-110" : "bg-muted border-border"
+                            )} />
+                            <div className={cn(
+                                "w-0.5 h-4 transition-all duration-500",
+                                isDeptSelected ? "bg-gradient-to-b from-primary/60 to-primary shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border"
+                            )} />
+                        </div>
+
+                        {/* 3. SELECT SUB-DEPARTMENT */}
+                        <div className={cn("w-full transition-all duration-300 relative z-10 shadow-md", !isDeptSelected && "opacity-40 pointer-events-none")}>
+                            <CommandSelector
+                                label="Sub-Department"
+                                placeholder={isDeptSelected ? "Select sub-department" : "Select department first"}
+                                value={formData.sub_department_id}
+                                disabled={!isDeptSelected}
+                                options={filteredSubDepartments.map(sd => ({ id: sd.id, name: sd.name }))}
+                                onValueChange={(val) => {
+                                    updateField('sub_department_id', val);
+                                    updateField('role_ids', []);
+                                }}
+                                icon={<ChevronRight className="w-5 h-5 text-primary" />}
+                            />
+                        </div>
+
+                        {/* Flow Pipe Connector 3 down to 8 Levels Matrix */}
+                        <div className="flex flex-col items-center my-1 select-none">
+                            <div className={cn(
+                                "w-0.5 h-6 transition-all duration-500",
+                                isSubDeptSelected ? "bg-gradient-to-b from-primary to-primary/60 shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border"
+                            )} />
+                            <div className={cn(
+                                "p-1 rounded-full border transition-all duration-500",
+                                isSubDeptSelected ? "bg-primary/20 border-primary text-primary shadow-[0_0_15px_rgba(99,102,241,0.6)]" : "border-border text-muted-foreground/40"
+                            )}>
+                                <ChevronDown className="w-3.5 h-3.5" />
                             </div>
+                        </div>
+                    </div>
 
-                            <AnimatePresence>
-                                {formData.is_trainee && (
-                                    <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-amber-500/20"
-                                    >
-                                        {/* Wage Level A vs B */}
-                                        <div className="flex bg-muted/20 rounded-xl p-1 border border-amber-500/10">
-                                            <button
-                                                onClick={() => updateField('trainee_level', 'A')}
-                                                className={cn(
-                                                    "flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2",
-                                                    formData.trainee_level === 'A' ? "bg-amber-500 text-white shadow-md" : "text-muted-foreground hover:text-amber-600 dark:hover:text-amber-200"
-                                                )}
+                    {/* ─────────────────────────────────────────────────────────────
+                        INDIVIDUAL 8-LEVEL ROLES CONFIGURATION MATRIX (L7 -> L0)
+                        [ Select Button | Role | Employment Type | Contracted Hours ]
+                       ───────────────────────────────────────────────────────────── */}
+                    <AnimatePresence>
+                        {isSubDeptSelected && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: 25 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.45 }}
+                                className="w-full max-w-5xl mx-auto space-y-4"
+                            >
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 rounded-2xl bg-card border border-border shadow-sm">
+                                    <div>
+                                        <span className="text-[11px] font-black tracking-[0.2em] uppercase text-primary flex items-center gap-2">
+                                            <Briefcase className="w-4 h-4" /> Position Roles & Level Configuration (L7 - L0)
+                                        </span>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Set the Employment Type and Contracted Hours for each of the 8 levels individually.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2.5">
+                                        {!isEditMode && filteredRoles.length > 1 && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleSelectAllRoles}
+                                                className="text-xs h-9 rounded-xl border-border bg-background hover:bg-primary/10 hover:text-primary transition-all font-semibold"
                                             >
-                                                Wage Level A
-                                                {formData.trainee_level === 'A' && <Trophy className="w-3 h-3" />}
-                                            </button>
-                                            <button
-                                                onClick={() => updateField('trainee_level', 'B')}
-                                                className={cn(
-                                                    "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                                                    formData.trainee_level === 'B' ? "bg-amber-500 text-white shadow-md" : "text-muted-foreground hover:text-amber-600 dark:hover:text-amber-200"
-                                                )}
-                                            >
-                                                Wage Level B
-                                            </button>
+                                                {allRolesSelected ? 'Deselect All' : 'Select All Roles'}
+                                            </Button>
+                                        )}
+                                        {formData.role_ids.length > 0 && (
+                                            <span className="px-3.5 py-1.5 rounded-xl bg-primary/15 text-primary border border-primary/25 text-xs font-black">
+                                                {formData.role_ids.length} Role{formData.role_ids.length === 1 ? '' : 's'} Selected
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* 8 Levels Matrix Table */}
+                                <div className="rounded-2xl border border-border bg-card shadow-lg overflow-hidden divide-y divide-border">
+                                    {/* Table Column Headers */}
+                                    <div className="grid grid-cols-12 gap-4 px-6 py-3.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground bg-muted/40 items-center">
+                                        <div className="col-span-2 text-left">Select Button</div>
+                                        <div className="col-span-4 text-left">Role (L7 - L0)</div>
+                                        <div className="col-span-3 text-left">Employment Type</div>
+                                        <div className="col-span-3 text-right">Contracted Hours</div>
+                                    </div>
+
+                                    {filteredRoles.length === 0 ? (
+                                        <div className="p-10 text-center text-sm text-muted-foreground font-medium">
+                                            No roles catalogued under this sub-department.
                                         </div>
-
-                                        {/* Category Selector */}
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {[
-                                                { id: 'junior', name: 'Junior', icon: <GraduationCap className="w-4 h-4" /> },
-                                                { id: 'adult', name: 'Adult', icon: <CheckCircle2 className="w-4 h-4" /> },
-                                                { id: 'school_based', name: 'SBA', icon: <School className="w-4 h-4" /> }
-                                            ].map((c) => (
-                                                <button
-                                                    key={c.id}
-                                                    onClick={() => updateField('trainee_category', c.id)}
+                                    ) : (
+                                        filteredRoles.map((role) => {
+                                            const isSelected = formData.role_ids.includes(role.id);
+                                            const terms = formData.role_terms[role.id];
+                                            const roleStatus = terms?.employment_status ?? '';
+                                            const isCasual = roleStatus === 'Casual';
+                                            const isFlexible = roleStatus === 'Flexible Part-Time';
+                                            const levelNumber = role.remuneration_level != null ? role.remuneration_level : -1;
+                                            const levelLabel = levelNumber >= 0 ? `L${levelNumber}` : '—';
+                                            
+                                            return (
+                                                <motion.div
+                                                    key={role.id}
+                                                    whileHover={{ backgroundColor: 'rgba(0, 0, 0, 0.02)' }}
                                                     className={cn(
-                                                        "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all",
-                                                        formData.trainee_category === c.id 
-                                                            ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200"
-                                                            : "bg-muted/20 border-transparent text-muted-foreground hover:bg-muted/30"
+                                                        "grid grid-cols-12 gap-4 px-6 py-3.5 items-center transition-all duration-200",
+                                                        isSelected
+                                                            ? "bg-primary/5 dark:bg-primary/10 border-l-4 border-l-primary"
+                                                            : "border-l-4 border-l-transparent opacity-80 hover:opacity-100"
                                                     )}
                                                 >
-                                                    {c.icon}
-                                                    <span className="text-[10px] font-bold">{c.name}</span>
-                                                </button>
-                                            ))}
+                                                    {/* 1. SELECT BUTTON (Circle & Tick only) */}
+                                                    <div className="col-span-2 flex items-center text-left pl-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleRole(role.id)}
+                                                            aria-label={isSelected ? `Deselect ${role.name}` : `Select ${role.name}`}
+                                                            className={cn(
+                                                                "w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0",
+                                                                isSelected
+                                                                    ? "bg-primary text-primary-foreground border-2 border-primary shadow-sm shadow-primary/30"
+                                                                    : "border-2 border-muted-foreground/40 hover:border-primary bg-transparent"
+                                                            )}
+                                                        >
+                                                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                                        </button>
+                                                    </div>
+
+                                                    {/* 2. ROLE & LEVEL */}
+                                                    <div className="col-span-4 flex items-center gap-3 min-w-0 text-left">
+                                                        <span className={cn(
+                                                            "px-2.5 py-1 rounded-lg text-xs font-black font-mono border shrink-0",
+                                                            levelNumber === 7 ? "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30" :
+                                                            levelNumber === 6 ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
+                                                            levelNumber === 5 ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30" :
+                                                            levelNumber === 4 ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30" :
+                                                            levelNumber === 3 ? "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30" :
+                                                            levelNumber === 2 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" :
+                                                            levelNumber === 1 ? "bg-teal-500/15 text-teal-600 dark:text-teal-300 border-teal-500/30" :
+                                                            "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30"
+                                                        )}>
+                                                            {levelLabel}
+                                                        </span>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className={cn(
+                                                                "text-sm font-bold truncate",
+                                                                isSelected ? "text-foreground font-black" : "text-foreground/80"
+                                                            )}>
+                                                                {role.name}
+                                                            </span>
+                                                            <span className="text-[10px] text-muted-foreground truncate">
+                                                                {role.employment_type ? `Catalogued as ${role.employment_type}` : 'General Role'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 3. EMPLOYMENT TYPE SELECTOR */}
+                                                    <div className="col-span-3 flex items-center text-left">
+                                                        {isSelected ? (
+                                                            <EmploymentTypeDropdown
+                                                                value={roleStatus}
+                                                                onChange={(val) => setRoleTerm(role.id, { employment_status: val })}
+                                                                ariaLabel={`Employment type for ${role.name}`}
+                                                                widthClassName="w-48"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-muted-foreground/40 text-xs font-mono pl-3">—</span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 4. CONTRACTED HOURS INPUT (Square Box, WCAG/ARIA compliant) */}
+                                                    <div className="col-span-3 flex items-center justify-end gap-2 text-right">
+                                                        {!isSelected || !roleStatus ? (
+                                                            <span className="text-muted-foreground/40 text-xs font-mono pr-4">—</span>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1.5 justify-end">
+                                                                <label htmlFor={`role-hours-${role.id}`} className="sr-only">
+                                                                    {role.name} {isFlexible ? 'annual guaranteed hours' : 'contracted weekly hours'}
+                                                                </label>
+                                                                <Input
+                                                                    id={`role-hours-${role.id}`}
+                                                                    name={`contracted_hours_${role.id}`}
+                                                                    type="number"
+                                                                    inputMode="decimal"
+                                                                    role="spinbutton"
+                                                                    aria-label={`Contracted ${isFlexible ? 'annual' : 'weekly'} hours for ${role.name}`}
+                                                                    aria-valuemin={0}
+                                                                    aria-valuemax={isFlexible ? FLEXIBLE_PT_ANNUAL_HOURS_MAX : MAX_CONTRACTED_WEEKLY_HOURS}
+                                                                    aria-valuenow={isCasual ? 0 : isFlexible ? (terms?.annual_guaranteed_hours ?? FLEXIBLE_PT_ANNUAL_HOURS_MIN) : (terms?.contracted_weekly_hours ?? 0)}
+                                                                    aria-valuetext={isCasual ? '0 hours (Casual contract)' : `${isFlexible ? terms?.annual_guaranteed_hours ?? FLEXIBLE_PT_ANNUAL_HOURS_MIN : terms?.contracted_weekly_hours ?? 0} hours per ${isFlexible ? 'year' : 'week'}`}
+                                                                    aria-required={isSelected && !isCasual}
+                                                                    aria-invalid={isCeilingExceeded || isFptHoursInvalid}
+                                                                    disabled={isCasual}
+                                                                    min={isFlexible ? FLEXIBLE_PT_ANNUAL_HOURS_MIN : 0}
+                                                                    max={isFlexible ? FLEXIBLE_PT_ANNUAL_HOURS_MAX : MAX_CONTRACTED_WEEKLY_HOURS}
+                                                                    value={isCasual ? 0 : isFlexible
+                                                                        ? (terms?.annual_guaranteed_hours ?? FLEXIBLE_PT_ANNUAL_HOURS_MIN)
+                                                                        : (terms?.contracted_weekly_hours ?? 0)}
+                                                                    onChange={(e) => setRoleTerm(role.id, isFlexible
+                                                                        ? { annual_guaranteed_hours: parseFloat(e.target.value) || 0 }
+                                                                        : { contracted_weekly_hours: parseFloat(e.target.value) || 0 })}
+                                                                    className={cn(
+                                                                        "h-10 w-20 text-right tabular-nums text-xs font-bold rounded-md border",
+                                                                        "bg-background text-foreground border-input",
+                                                                        "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                                                                        "focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:border-primary",
+                                                                        isCasual && "opacity-40 cursor-not-allowed bg-muted/40 border-border"
+                                                                    )}
+                                                                />
+                                                                <span className="text-xs font-semibold text-foreground/80 font-mono w-8 text-left select-none" aria-hidden="true">
+                                                                    {isFlexible ? 'h/yr' : 'h/wk'}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+
+                                {/* Problems & Warnings Callout */}
+                                {(isCeilingExceeded || mixedPermanentConflict || isFptHoursInvalid) && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, scale: 0.98 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="p-4 rounded-2xl border border-destructive/40 bg-destructive/10 flex items-center gap-3 text-destructive text-xs font-medium"
+                                    >
+                                        <AlertTriangle className="w-5 h-5 shrink-0" />
+                                        <div className="space-y-0.5 text-left">
+                                            {isCeilingExceeded && (
+                                                <p>Contracted hours total {fmtHours(ceilingValidation.proposedTotal)}h/week, exceeding the {MAX_CONTRACTED_WEEKLY_HOURS}h maximum weekly ceiling.</p>
+                                            )}
+                                            {mixedPermanentConflict && (
+                                                <p>{mixedPermanentConflict}</p>
+                                            )}
+                                            {isFptHoursInvalid && (
+                                                <p>Flexible Part-Time annual guaranteed hours must be between {FLEXIBLE_PT_ANNUAL_HOURS_MIN} and {FLEXIBLE_PT_ANNUAL_HOURS_MAX}h/year (cl 12.4).</p>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* ─────────────────────────────────────────────────────────────
+                        FOOTER SECTION: APPRENTICE / TRAINEE / SWS SPECIAL CONFIGS
+                       ───────────────────────────────────────────────────────────── */}
+                    <div className="max-w-5xl mx-auto pt-6 space-y-4">
+                        <div className="text-center border-b border-border pb-3">
+                            <span className="text-[10px] font-black tracking-[0.25em] uppercase text-muted-foreground inline-flex items-center gap-1.5 bg-muted/40 px-4 py-1.5 rounded-full border border-border">
+                                <ShieldCheck className="w-4 h-4 text-emerald-500" /> Award Schedules & Special Conditions (Optional)
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            {/* 1. Apprentice Mode Card */}
+                            <div className={cn(
+                                "p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between shadow-sm",
+                                formData.is_apprentice 
+                                    ? "bg-indigo-500/10 border-indigo-500/40 shadow-indigo-500/10" 
+                                    : "bg-card border-border hover:border-border/80"
+                            )}>
+                                <div>
+                                    <div 
+                                        className="flex items-center justify-between cursor-pointer select-none"
+                                        onClick={() => updateField('is_apprentice', !formData.is_apprentice)}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "p-2.5 rounded-xl transition-all",
+                                                formData.is_apprentice ? "bg-indigo-500/20 text-indigo-600 dark:text-indigo-300" : "bg-muted text-muted-foreground"
+                                            )}>
+                                                <GraduationCap className="w-5 h-5" />
+                                            </div>
+                                            <div className="text-left">
+                                                <h4 className="text-sm font-bold text-foreground">Apprentice Mode</h4>
+                                                <p className="text-[10px] text-muted-foreground">Schedule 4 Wage Alignment</p>
+                                            </div>
                                         </div>
 
-                                        {/* School Exit Year (Junior) */}
-                                        {formData.trainee_category === 'junior' && (
-                                            <div className="space-y-4">
-                                                <div className="space-y-2">
-                                                    <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold ml-1">Left School At</Label>
-                                                    <div className="grid grid-cols-3 gap-2">
-                                                        {[10, 11, 12].map(y => (
+                                        <div className={cn(
+                                            "w-11 h-6 rounded-full relative transition-all duration-300",
+                                            formData.is_apprentice ? "bg-indigo-500" : "bg-muted border border-border"
+                                        )}>
+                                            <motion.div 
+                                                animate={{ x: formData.is_apprentice ? 22 : 2 }}
+                                                className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-md"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Expandable Apprentice Settings */}
+                                    <AnimatePresence>
+                                        {formData.is_apprentice && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="mt-4 pt-4 border-t border-indigo-500/20 space-y-4 overflow-hidden text-left"
+                                            >
+                                                <div className="space-y-1.5">
+                                                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Apprentice Type</span>
+                                                    <div className="grid grid-cols-3 gap-1.5">
+                                                        {[
+                                                            { id: 'standard', name: 'Standard' },
+                                                            { id: 'adult', name: 'Adult (21+)' },
+                                                            { id: 'school_based', name: 'School' }
+                                                        ].map((t) => (
                                                             <button
-                                                                key={y}
-                                                                onClick={() => updateField('trainee_exit_year', y)}
+                                                                key={t.id}
+                                                                type="button"
+                                                                onClick={() => updateField('apprentice_type', t.id)}
                                                                 className={cn(
-                                                                    "py-2 rounded-lg border text-xs font-bold transition-all",
-                                                                    formData.trainee_exit_year === y ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
+                                                                    "px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all truncate",
+                                                                    formData.apprentice_type === t.id
+                                                                        ? "bg-indigo-500/25 border-indigo-500/60 text-indigo-700 dark:text-indigo-200"
+                                                                        : "bg-muted/40 border-border text-muted-foreground hover:bg-muted"
                                                                 )}
                                                             >
-                                                                Year {y}
+                                                                {t.name}
                                                             </button>
                                                         ))}
                                                     </div>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between items-center px-1">
-                                                        <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold">Years Since Graduation</Label>
-                                                        <span className="text-[10px] font-bold text-amber-500">{formData.trainee_years_out} years</span>
+
+                                                <div className="space-y-1.5">
+                                                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Training Year</span>
+                                                    <div className="grid grid-cols-4 gap-1">
+                                                        {[1, 2, 3, 4].map(year => (
+                                                            <button
+                                                                key={year}
+                                                                type="button"
+                                                                onClick={() => updateField('apprentice_year', year)}
+                                                                className={cn(
+                                                                    "h-7 rounded-lg text-[11px] font-bold border transition-all",
+                                                                    formData.apprentice_year === year
+                                                                        ? "bg-indigo-500 text-white border-indigo-400"
+                                                                        : "bg-muted/40 border-border text-muted-foreground hover:bg-muted"
+                                                                )}
+                                                            >
+                                                                Yr {year}
+                                                            </button>
+                                                        ))}
                                                     </div>
-                                                    <input 
-                                                        type="range" min="0" max="5" step="1" 
-                                                        value={formData.trainee_years_out}
-                                                        onChange={(e) => updateField('trainee_years_out', parseInt(e.target.value))}
-                                                        className="w-full h-1.5 bg-muted/40 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                </div>
+
+                                                <div className="flex items-center gap-2 pt-1">
+                                                    <input
+                                                        id="apprentice-year12"
+                                                        type="checkbox"
+                                                        checked={!!formData.has_completed_year_12}
+                                                        onChange={() => updateField('has_completed_year_12', !formData.has_completed_year_12)}
+                                                        className="h-4 w-4 rounded border-border accent-indigo-500"
                                                     />
+                                                    <label htmlFor="apprentice-year12" className="text-xs text-foreground cursor-pointer select-none">
+                                                        Completed Year 12
+                                                    </label>
                                                 </div>
-                                            </div>
+                                            </motion.div>
                                         )}
-
-                                        {/* Adult Years */}
-                                        {formData.trainee_category === 'adult' && (
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold ml-1">Traineeship Year</Label>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    {[1, 2].map(y => (
-                                                        <button
-                                                            key={y}
-                                                            onClick={() => updateField('trainee_year', y)}
-                                                            className={cn(
-                                                                "py-2 rounded-lg border text-xs font-bold transition-all",
-                                                                formData.trainee_year === y ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
-                                                            )}
-                                                        >
-                                                            {y === 1 ? '1st Year' : '2nd+ Year'}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* AQF Level Selector */}
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold ml-1">AQF Certificate Level</Label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button
-                                                    onClick={() => updateField('trainee_aqf_level', 3)}
-                                                    className={cn(
-                                                        "py-2 rounded-lg border text-xs font-bold transition-all",
-                                                        formData.trainee_aqf_level === 3 ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
-                                                    )}
-                                                >
-                                                    Level I / II / III
-                                                </button>
-                                                <button
-                                                    onClick={() => updateField('trainee_aqf_level', 4)}
-                                                    className={cn(
-                                                        "py-2 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2",
-                                                        formData.trainee_aqf_level === 4 ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
-                                                    )}
-                                                >
-                                                    Level IV (+3.8%)
-                                                    <Sparkles className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-center gap-3">
-                                            <Info className="w-4 h-4 text-amber-400/60" />
-                                            <p className="text-[10px] text-amber-600/70 dark:text-amber-200/70 font-medium italic">
-                                                {formData.trainee_category === 'junior' 
-                                                    ? `Junior Level ${formData.trainee_level}: Rates scaled based on years out of school.`
-                                                    : formData.trainee_category === 'school_based'
-                                                    ? "SBA: Fixed hourly rate based on current school year (11/12)."
-                                                    : "Adult Trainee: First year floor rate applied based on Wage Level."}
-                                            </p>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-
-                        {/* SWS Configuration */}
-                        <div className={cn(
-                            "p-4 rounded-2xl border transition-all h-fit",
-                            formData.is_sws ? "bg-emerald-500/10 border-emerald-500/30" : "bg-muted/5 border-border/40"
-                        )}>
-                            <div className="flex items-center justify-between group cursor-pointer" onClick={() => updateField('is_sws', !formData.is_sws)}>
-                                <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                        "p-2 rounded-xl transition-all",
-                                        formData.is_sws ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-muted text-muted-foreground"
-                                    )}>
-                                        <Accessibility className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <p className={cn("text-sm font-bold", formData.is_sws ? "text-emerald-600 dark:text-emerald-100" : "text-foreground")}>Supported Wage (SWS)</p>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Schedule 6 Compliance</p>
-                                    </div>
-                                </div>
-                                <div className={cn(
-                                    "w-10 h-5 rounded-full relative transition-all duration-300",
-                                    formData.is_sws ? "bg-emerald-500" : "bg-muted"
-                                )}>
-                                    <motion.div 
-                                        animate={{ x: formData.is_sws ? 20 : 2 }}
-                                        className="absolute top-1 left-0 w-3 h-3 bg-background rounded-full shadow-sm"
-                                    />
+                                    </AnimatePresence>
                                 </div>
                             </div>
 
-                            <AnimatePresence>
-                                {formData.is_sws && (
-                                    <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-emerald-500/20"
+                            {/* 2. Trainee Mode Card */}
+                            <div className={cn(
+                                "p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between shadow-sm",
+                                formData.is_trainee 
+                                    ? "bg-purple-500/10 border-purple-500/40 shadow-purple-500/10" 
+                                    : "bg-card border-border hover:border-border/80"
+                            )}>
+                                <div>
+                                    <div 
+                                        className="flex items-center justify-between cursor-pointer select-none"
+                                        onClick={() => updateField('is_trainee', !formData.is_trainee)}
                                     >
-                                        {/* Capacity Slider */}
-                                        <div className="space-y-3">
-                                            <div className="flex justify-between items-center px-1">
-                                                <div className="flex items-center gap-2">
-                                                    <Scale className="w-4 h-4 text-emerald-400/60" />
-                                                    <Label className="text-[10px] uppercase tracking-widest text-emerald-500/50 font-bold">Assessed Capacity</Label>
-                                                </div>
-                                                <span className="text-lg font-black text-emerald-400">{formData.sws_capacity_percentage}%</span>
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "p-2.5 rounded-xl transition-all",
+                                                formData.is_trainee ? "bg-purple-500/20 text-purple-600 dark:text-purple-300" : "bg-muted text-muted-foreground"
+                                            )}>
+                                                <BookOpen className="w-5 h-5" />
                                             </div>
-                                            <div className="relative pt-2">
-                                                <input 
-                                                    type="range" min="10" max="90" step="10" 
-                                                    value={formData.sws_capacity_percentage}
-                                                    onChange={(e) => updateField('sws_capacity_percentage', parseInt(e.target.value))}
-                                                    className="w-full h-2 bg-muted/40 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                                                />
-                                                <div className="flex justify-between mt-2 px-1 text-[8px] font-bold text-emerald-500/30">
-                                                    <span>10%</span>
-                                                    <span>30%</span>
-                                                    <span>50%</span>
-                                                    <span>70%</span>
-                                                    <span>90%</span>
-                                                </div>
+                                            <div className="text-left">
+                                                <h4 className="text-sm font-bold text-foreground">Trainee Mode</h4>
+                                                <p className="text-[10px] text-muted-foreground">Schedule 5 Wage Matrix</p>
                                             </div>
                                         </div>
 
-                                        {/* Trial Period */}
-                                        <div className="flex gap-4">
-                                            <div className="flex-1 space-y-2">
-                                                <Label className="text-[10px] uppercase tracking-widest text-emerald-500/50 font-bold ml-1">Trial Period</Label>
-                                                <button
-                                                    onClick={() => {
-                                                        const next = !formData.is_sws_trial;
-                                                        updateField('is_sws_trial', next);
-                                                        // AUDIT FIX M-3: default the trial start date to today the
-                                                        // moment the trial is switched on — previously this field
-                                                        // had no input anywhere, so the 12-week cap could never be
-                                                        // computed.
-                                                        if (next && !formData.sws_trial_start_date) {
-                                                            updateField('sws_trial_start_date', new Date().toISOString().slice(0, 10));
-                                                        }
-                                                    }}
-                                                    className={cn(
-                                                        "w-full px-4 py-3 rounded-xl border flex items-center justify-between gap-4 transition-all h-[48px]",
-                                                        formData.is_sws_trial
-                                                            ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200"
-                                                            : "bg-muted/20 border-transparent text-muted-foreground"
-                                                    )}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <CalendarClock className="w-4 h-4" />
-                                                        <span className="text-xs font-bold">Trial Active</span>
+                                        <div className={cn(
+                                            "w-11 h-6 rounded-full relative transition-all duration-300",
+                                            formData.is_trainee ? "bg-purple-500" : "bg-muted border border-border"
+                                        )}>
+                                            <motion.div 
+                                                animate={{ x: formData.is_trainee ? 22 : 2 }}
+                                                className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-md"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Expandable Trainee Settings */}
+                                    <AnimatePresence>
+                                        {formData.is_trainee && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="mt-4 pt-4 border-t border-purple-500/20 space-y-4 overflow-hidden text-left"
+                                            >
+                                                <div className="space-y-1.5">
+                                                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Category</span>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {['junior', 'adult'].map((cat) => (
+                                                            <button
+                                                                key={cat}
+                                                                type="button"
+                                                                onClick={() => updateField('trainee_category', cat)}
+                                                                className={cn(
+                                                                    "py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all",
+                                                                    formData.trainee_category === cat
+                                                                        ? "bg-purple-500/25 border-purple-500/60 text-purple-700 dark:text-purple-200"
+                                                                        : "bg-muted/40 border-border text-muted-foreground hover:bg-muted"
+                                                                )}
+                                                            >
+                                                                {cat}
+                                                            </button>
+                                                        ))}
                                                     </div>
-                                                    <div className={cn(
-                                                        "w-2 h-2 rounded-full transition-all",
-                                                        formData.is_sws_trial ? "bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-muted-foreground/20"
-                                                    )} />
-                                                </button>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Wage Level</span>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {['A', 'B'].map((lvl) => (
+                                                            <button
+                                                                key={lvl}
+                                                                type="button"
+                                                                onClick={() => updateField('trainee_level', lvl)}
+                                                                className={cn(
+                                                                    "py-1 rounded-lg text-[11px] font-bold border transition-all",
+                                                                    formData.trainee_level === lvl
+                                                                        ? "bg-purple-500 text-white border-purple-400"
+                                                                        : "bg-muted/40 border-border text-muted-foreground hover:bg-muted"
+                                                                )}
+                                                            >
+                                                                Level {lvl}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            </div>
+
+                            {/* 3. Supported Wage System (SWS) Card */}
+                            <div className={cn(
+                                "p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between shadow-sm",
+                                formData.is_sws 
+                                    ? "bg-emerald-500/10 border-emerald-500/40 shadow-emerald-500/10" 
+                                    : "bg-card border-border hover:border-border/80"
+                            )}>
+                                <div>
+                                    <div 
+                                        className="flex items-center justify-between cursor-pointer select-none"
+                                        onClick={() => updateField('is_sws', !formData.is_sws)}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "p-2.5 rounded-xl transition-all",
+                                                formData.is_sws ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300" : "bg-muted text-muted-foreground"
+                                            )}>
+                                                <Accessibility className="w-5 h-5" />
                                             </div>
-                                            {formData.is_sws_trial && (
-                                                <div className="flex-1 space-y-2">
-                                                    <Label className="text-[10px] uppercase tracking-widest text-emerald-500/50 font-bold ml-1">Trial Start Date</Label>
-                                                    <Input
-                                                        type="date"
-                                                        value={formData.sws_trial_start_date || ''}
-                                                        onChange={(e) => updateField('sws_trial_start_date', e.target.value)}
-                                                        className="bg-muted/40 border-primary/20 focus:border-primary/50 h-[48px] rounded-xl"
+                                            <div className="text-left">
+                                                <h4 className="text-sm font-bold text-foreground">Supported Wage (SWS)</h4>
+                                                <p className="text-[10px] text-muted-foreground">Schedule 6 Compliance</p>
+                                            </div>
+                                        </div>
+
+                                        <div className={cn(
+                                            "w-11 h-6 rounded-full relative transition-all duration-300",
+                                            formData.is_sws ? "bg-emerald-500" : "bg-muted border border-border"
+                                        )}>
+                                            <motion.div 
+                                                animate={{ x: formData.is_sws ? 22 : 2 }}
+                                                className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-md"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Expandable SWS Settings */}
+                                    <AnimatePresence>
+                                        {formData.is_sws && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className="mt-4 pt-4 border-t border-emerald-500/20 space-y-4 overflow-hidden text-left"
+                                            >
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Assessed Capacity</span>
+                                                        <span className="text-xs font-black text-emerald-500 font-mono">{formData.sws_capacity_percentage}%</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min={10}
+                                                        max={90}
+                                                        step={10}
+                                                        value={formData.sws_capacity_percentage}
+                                                        onChange={(e) => updateField('sws_capacity_percentage', parseInt(e.target.value))}
+                                                        className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-muted rounded-lg"
                                                     />
                                                 </div>
-                                            )}
-                                        </div>
 
-                                        <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <Info className="w-3 h-3 text-emerald-400" />
-                                                <p className="text-[10px] text-emerald-700 dark:text-emerald-100 font-bold uppercase tracking-tight">SWS Wage Guarantee</p>
-                                            </div>
-                                            <p className="text-[10px] text-emerald-600/60 dark:text-emerald-200/60 font-medium italic leading-relaxed">
-                                                Point 24: Absolute minimum payable must not be less than **$90 per week**. 
-                                                {formData.is_sws_trial && " Trial period is capped at 12 weeks."}
-                                            </p>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                                                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-700 dark:text-emerald-200/80 leading-relaxed">
+                                                    Schedule 6: Absolute minimum payable rate is ${SWS_MIN_WEEKLY_PAY}/week baseline regardless of capacity.
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            </div>
                         </div>
-                    </div>
                     </div>
                 </div>
 
-                <div className="p-8 pt-4 bg-muted/20 border-t border-border/20 flex-shrink-0">
-                    <DialogFooter className="gap-3 sm:gap-0">
-                        <Button 
-                            variant="ghost" 
-                            onClick={() => setOpen(false)}
-                            className="rounded-xl hover:bg-muted/50 transition-all duration-300"
-                        >
-                            Cancel
-                        </Button>
-                        <Button 
-                            onClick={handleSubmit} 
-                            disabled={isSubmitting || isLoadingRefs || !isRoleSelected || isFptHoursInvalid || isCeilingExceeded}
-                            className={cn(
-                                "rounded-xl px-8 transition-all duration-500 font-bold shadow-lg shadow-primary/20",
-                                isRoleSelected && !isCeilingExceeded ? "bg-primary hover:bg-primary/90 scale-100" : "bg-muted-foreground/20 scale-95 opacity-50"
-                            )}
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Synchronizing...
-                                </>
+                {/* ── Fixed Sticky Footer Action Bar ────────────────────────── */}
+                <div className="p-6 px-8 bg-muted/20 dark:bg-white/[0.02] border-t border-border flex-shrink-0">
+                    <DialogFooter className="flex-col sm:flex-row items-center justify-between gap-4 w-full">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            {!isRoleSelected ? (
+                                <span>Select at least one role above.</span>
+                            ) : !allRolesTyped ? (
+                                <span className="text-amber-500 font-medium">Every selected role needs an Employment Type.</span>
                             ) : (
-                                <span className="flex items-center gap-2">
-                                    {isEditMode ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                                    {isEditMode ? 'Update Contract' : 'Add Contract'}
+                                <span className="font-semibold text-foreground flex items-center gap-2">
+                                    <span className="text-primary font-bold">{formData.role_ids.length} role(s)</span>
+                                    <span>•</span>
+                                    <span>{positions.length} position appointment(s)</span>
+                                    <span>•</span>
+                                    <span className="text-emerald-500 font-mono font-bold">{fmtHours(totalWeeklyHours)}h/wk</span>
                                 </span>
                             )}
-                        </Button>
+                        </div>
+
+                        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                            <Button 
+                                variant="ghost" 
+                                onClick={() => setOpen(false)}
+                                className="rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                onClick={handleSubmit} 
+                                disabled={isSubmitting || isLoadingRefs || !isRoleSelected || !allRolesTyped || isFptHoursInvalid || isCeilingExceeded || !!mixedPermanentConflict}
+                                className={cn(
+                                    "rounded-xl px-8 h-11 transition-all duration-300 font-bold shadow-md",
+                                    isRoleSelected && allRolesTyped && !isCeilingExceeded && !mixedPermanentConflict
+                                        ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/30 active:scale-95 cursor-pointer" 
+                                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                                )}
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Saving…
+                                    </>
+                                ) : (
+                                    <span className="flex items-center gap-2">
+                                        {isEditMode ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                        {isEditMode ? 'Save Changes' : 'Add Position Contract'}
+                                    </span>
+                                )}
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </div>
             </DialogContent>
         </Dialog>
     );
 };
+
+export default AddContractDialog;

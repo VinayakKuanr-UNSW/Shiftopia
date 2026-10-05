@@ -31,7 +31,6 @@ import { BulkActionsToolbar, type BulkActionResult, type BulkPublishValidationRe
 import { RosterModals, type RosterModalsHandle } from '@/modules/rosters/ui/components/RosterModals';
 import { ShiftWizardModal } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal/ShiftWizardModal';
 import { useShiftFormModalStore } from '@/modules/rosters/state/useShiftFormModalStore';
-import { ReserveListPanel } from '@/modules/reserve-list';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
@@ -80,6 +79,7 @@ import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPref
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, soleId } from '@/platform/auth/scope-narrowing';
 import {
   preflightPublish,
   preflightUnpublish,
@@ -87,6 +87,8 @@ import {
   planPublishRoster,
   type PublishRosterPlan,
 } from '@/modules/rosters/domain/bulk-action-engine';
+import { loadLeaveDays } from '@/modules/office/api/office.loaders';
+import { indexApprovedLeaveDays } from '@/modules/rosters/hooks/useApprovedLeaveDays';
 import type { PublishRosterResult } from '@/modules/rosters/ui/components/PublishRosterButton';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
@@ -215,7 +217,7 @@ const NewRostersPage: React.FC = () => {
   // commit so consumers re-render once per scope change instead of three times.
   React.useEffect(() => {
     useRosterStore.setState({
-      ...(scope.org_ids.length > 0 ? { selectedOrganizationId: scope.org_ids[0] } : {}),
+      ...(soleOrgId(scope) ? { selectedOrganizationId: soleOrgId(scope)! } : {}),
       selectedDepartmentIds: scope.dept_ids,
       selectedSubDepartmentIds: scope.subdept_ids,
     });
@@ -342,7 +344,11 @@ const NewRostersPage: React.FC = () => {
     // per-shift fetch by gating the query off (null orgId → enabled = false).
     // React Query auto-refetches when this flips back to a real org id on
     // switching into DnD / Collapse / Bulk / Day view.
-    isGroupBucketView ? null : (selectedOrganizationId || scope.org_ids[0] || '00000000-0000-0000-0000-000000000001'),
+    // No hardcoded organisation fallback. That literal is the id of the ONLY org
+    // that currently exists, so it looked harmless — but it would silently query
+    // the wrong org's shifts for anyone else. A null orgId gates the query off,
+    // which is exactly what the comment above describes.
+    isGroupBucketView ? null : (selectedOrganizationId || soleOrgId(scope)),
     startDate,
     endDate,
     queryFilters
@@ -720,8 +726,8 @@ const NewRostersPage: React.FC = () => {
 
   // ── One-click "Publish" (function bar) ────────────────────────────────────
   // Publishes every draft shift in the current view (assigned → offers,
-  // unassigned → open bidding) and deletes dead shifts (unassigned drafts whose
-  // window is already live). Loads on demand so it works in every view — the
+  // unassigned → open bidding). Unassigned drafts already live are skipped —
+  // started shifts are never deleted. Loads on demand so it works in every view — the
   // default Group Bucket View gates off the per-shift fetch, so we can't rely on
   // the rendered `shifts` array here. `fetchQuery` reuses the cache when it's
   // already warm (non-bucket views).
@@ -732,6 +738,9 @@ const NewRostersPage: React.FC = () => {
       emergentAssignedIds: [],
       emergentUnassignedIds: [],
       deadIds: [],
+      fullTimeIds: [],
+      fullTimeUnassignedIds: [],
+      onLeaveIds: [],
       alreadyPublishedCount: 0,
     };
     if (!selectedOrganizationId || !startDate || !endDate) return empty;
@@ -742,7 +751,23 @@ const NewRostersPage: React.FC = () => {
       staleTime: 30_000,
     });
 
-    return planPublishRoster((planShifts ?? []) as Shift[]);
+    // Approved leave for everyone assigned to a draft in the range, so the dialog
+    // can say which shifts will be skipped for it (the database refuses them).
+    const draftAssignees = [...new Set(((planShifts ?? []) as Shift[])
+      .filter(s => s.lifecycle_status === 'Draft' && s.assigned_employee_id)
+      .map(s => s.assigned_employee_id as string))];
+    let isOnApprovedLeave: ((employeeId: string, dateKey: string) => boolean) | undefined;
+    if (draftAssignees.length > 0) {
+      try {
+        const leave = indexApprovedLeaveDays(await loadLeaveDays(draftAssignees, startDate, endDate));
+        isOnApprovedLeave = (employeeId, dateKey) => Boolean(leave.get(employeeId)?.has(dateKey));
+      } catch {
+        // Unreadable leave just means the dialog cannot pre-announce the skips;
+        // the database still refuses to publish onto approved leave.
+      }
+    }
+
+    return planPublishRoster((planShifts ?? []) as Shift[], isOnApprovedLeave);
   }, [selectedOrganizationId, startDate, endDate, queryFilters, queryClient]);
 
   const executePublishRoster = React.useCallback(
@@ -755,19 +780,14 @@ const NewRostersPage: React.FC = () => {
         ...plan.assignedIds,
         ...plan.unassignedIds,
         ...plan.emergentAssignedIds,
+        ...plan.fullTimeIds,
       ];
       let published = 0;
-      let deleted = 0;
       let failed = 0;
       const failedReasons: string[] = [];
 
-      // Delete dead shifts first so they never round-trip through publish.
-      if (plan.deadIds.length > 0) {
-        const res = await bulkDelete.mutateAsync(plan.deadIds);
-        deleted = res.deletedIds.length;
-        failed += res.failed.length;
-        failedReasons.push(...res.failed.map(f => f.reason));
-      }
+      // Started-unstaffed drafts (plan.deadIds) are left alone: a shift that has
+      // started is never deleted, and it can no longer be published either.
 
       // The publish command already routes each shift by assignment + time-to-start.
       if (publishIds.length > 0) {
@@ -777,9 +797,9 @@ const NewRostersPage: React.FC = () => {
         failedReasons.push(...[...res.complianceFailed, ...res.dbFailed].map(f => f.reason));
       }
 
-      return { published, deleted, failed, failedReasons };
+      return { published, failed, failedReasons };
     },
-    [bulkDelete, bulkPublish],
+    [bulkPublish],
   );
 
   const handleBulkDelete = async (): Promise<BulkActionResult> => {
@@ -1496,9 +1516,6 @@ const NewRostersPage: React.FC = () => {
       {/* Add/Edit Shift wizard — centered modal overlay (opened via useShiftFormNav store) */}
       <ShiftWizardModal />
 
-      {/* Reserve List — manager-only emergency staffing (opened via useReserveListPanelStore) */}
-      <ReserveListPanel />
-
       {/* DnD Assignment Modal */}
       {pendingDndAssign && (
         <DndAssignModal
@@ -1528,9 +1545,9 @@ const NewRostersPage: React.FC = () => {
         date={drillDownState.date}
         groupType={drillDownState.groupType}
         subGroupName={drillDownState.subGroupName}
-        organizationId={selectedOrganizationId || scope.org_ids[0] || undefined}
-        departmentId={selectedDepartmentIds[0] || undefined}
-        subDepartmentId={selectedSubDepartmentIds[0] || undefined}
+        organizationId={selectedOrganizationId || soleOrgId(scope) || undefined}
+        departmentId={soleId(selectedDepartmentIds) ?? undefined}
+        subDepartmentId={soleId(selectedSubDepartmentIds) ?? undefined}
         departmentIds={selectedDepartmentIds}
         subDepartmentIds={selectedSubDepartmentIds}
         groupName={GROUP_DISPLAY_NAMES[drillDownState.groupType as TemplateGroupType | 'unassigned'] || drillDownState.groupType}

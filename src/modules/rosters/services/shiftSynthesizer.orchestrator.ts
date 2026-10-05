@@ -191,7 +191,6 @@ function runSkeletonCompliance(
     end_time: endTime,
     role_id: shift.roleId,
     required_qualifications: [],
-    is_ordinary_hours: true,
     break_minutes: 0,
   };
 

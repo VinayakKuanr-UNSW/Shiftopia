@@ -181,7 +181,6 @@ export function BidComplianceModal({
             start_time:           s.start_time,
             end_time:             s.end_time,
             unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
-            is_ordinary_hours:    true,
         });
 
         const solverResult = assignmentEvaluator.evaluate({
@@ -195,7 +194,6 @@ export function BidComplianceModal({
                 start_time:           input.candidate_shift.start_time,
                 end_time:             input.candidate_shift.end_time,
                 unpaid_break_minutes: input.candidate_shift.unpaid_break_minutes ?? 0,
-                is_ordinary_hours:    true,
             },
             action_type:     'bid',
         });

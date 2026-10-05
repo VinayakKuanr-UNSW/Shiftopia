@@ -65,6 +65,12 @@ const colorClasses: Record<
     border: 'border-amber-500/20 dark:border-amber-500/30',
     text: 'text-amber-600 dark:text-amber-400',
   },
+  cyan: {
+    bg: 'bg-cyan-500/5 dark:bg-cyan-500/10',
+    bgHover: 'hover:bg-cyan-500/10 dark:hover:bg-cyan-500/20',
+    border: 'border-cyan-500/20 dark:border-cyan-500/30',
+    text: 'text-cyan-600 dark:text-cyan-400',
+  },
 };
 
 const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
@@ -123,22 +129,26 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
       )}
     >
       {/* Actions. The trigger was icon-only with no aria-label, so it announced
-          as an unnamed "button" — the tooltip is not an accessible name. */}
+          as an unnamed "button" — the tooltip is not an accessible name.
+          Both wrappers are load-bearing: TooltipTrigger names it, DropdownMenuTrigger
+          is what actually opens the menu. Dropping the latter leaves a dead button. */}
       {!isReadOnly && (
         <div className="absolute top-1 right-1">
           <TooltipProvider>
             <Tooltip>
               <DropdownMenu>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Actions for ${roleLabel}`}
-                    className="h-11 w-11 min-h-[44px] min-w-[44px] text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                  </Button>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Actions for ${roleLabel}`}
+                      className="h-11 w-11 min-h-[44px] min-w-[44px] text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <DropdownMenuContent align="end" className="w-40">
                   <DropdownMenuItem

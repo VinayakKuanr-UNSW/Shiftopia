@@ -14,12 +14,8 @@ const EMPTY_SUMMARY: InsightsSummary = {
     scheduled_hours: 0,
     estimated_cost: 0,
     shift_fill_rate: 0,
-    last_minute_changes: 0,
-    compliance_failures: 0,
     compliance_overrides: 0,
     no_show_rate: 0,
-    avg_reliability_score: 100,
-    avg_swap_rate: 0,
 };
 
 export function useInsightsSummary(filters: InsightsFilters) {
@@ -33,6 +29,8 @@ export function useInsightsSummary(filters: InsightsFilters) {
         enabled: !!filters.startDate && !!filters.endDate,
         staleTime: 5 * 60 * 1000,   // 5 min — analytics don't need real-time
         gcTime:    15 * 60 * 1000,
-        placeholderData: EMPTY_SUMMARY,
+        // No placeholderData. An all-zero placeholder renders a confident "0%"
+        // on first paint, which is indistinguishable from a real zero and from
+        // a failed query. Callers show a skeleton while isLoading instead.
     });
 }

@@ -39,8 +39,14 @@ import {
 } from '@/modules/rosters/domain/shift-ui';
 import { ShiftRuleHeader } from '@/modules/rosters/ui/components/ShiftRuleHeader';
 import type { EarningsLine } from '@/modules/payroll/model/gross-pay.types';
+import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
 
-export interface SharedShiftCardProps {
+export type ShiftIdentityField =
+    | 'org' | 'dept' | 'subDept'
+    | 'group' | 'subGroup' | 'role'
+    | 'employee' | 'schedPay' | 'billablePay';
+
+interface SharedShiftCardProps {
     organization: string;
     department: string;
     subGroup?: string;
@@ -57,7 +63,7 @@ export interface SharedShiftCardProps {
     isUrgent?: boolean;
     /** Full three-zone urgency badge. When provided, supersedes isUrgent. */
     urgency?: ShiftUrgency;
-    groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default';
+    groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';
     complianceLabel?: string;
     isPast?: boolean;
     statusIcons?: React.ReactNode;
@@ -101,6 +107,12 @@ export interface SharedShiftCardProps {
     billablePay?: React.ReactNode;
     /** Itemised rate breakdown for `billablePay` — shown in a hover tooltip when non-empty. */
     billablePayBreakdown?: EarningsLine[];
+    /**
+     * What the CLOCKED window prices at. Shown as the Actual section's pay row
+     * in the `columns` layout — "N/A" when omitted, never a guess, so the
+     * three panes read row for row.
+     */
+    actualPay?: React.ReactNode;
     /** When true, passes showPayrollRules to ShiftRuleHeader. */
     showPayrollRules?: boolean;
     /** Custom hex color (e.g. from groupColor) to style the department accent bar and theme */
@@ -114,6 +126,14 @@ export interface SharedShiftCardProps {
         payroll?: boolean;
         variance?: boolean;
     };
+    /**
+     * How Scheduled / Actual / Payroll / Variance are laid out. `stack` (the
+     * default) is one under another, for a card in a list or grid cell;
+     * `columns` gives the card the whole width, as in the Office expand
+     * dialog: Scheduled · Actual · Payroll as three equal panes, Variance full
+     * width beneath them, every section open and none collapsible.
+     */
+    sectionLayout?: 'stack' | 'columns';
     /** When true, suppresses (hides) the Actual Clocking section entirely */
     hideActualClocking?: boolean;
     /** When true, suppresses (hides) the Payroll & Billable section entirely */
@@ -124,6 +144,46 @@ export interface SharedShiftCardProps {
     hideBreadcrumbs?: boolean;
     /** When true, hides the top DATES | ROLE | TIMESHEET STATUS segmented grid */
     hideSegmentedBox?: boolean;
+    /**
+     * Lead the card with a labelled identity grid instead of a heading.
+     *
+     * The role/assignee heading and the breadcrumb trail are dropped and six
+     * labelled cells render three-up in their place — Org · Dept · Sub-Dept /
+     * Group · Sub-Group · Role — replacing the DATES | ROLE | TIMESHEET STATUS
+     * box. It is one decision, not three: identity is either a headline or a
+     * table, and mixing them repeated the same org → dept → role facts in three
+     * different type sizes.
+     *
+     * The card derives every cell itself from the props below (falling back to
+     * `shiftData` where a caller has not spelled a fact out), so adopting this
+     * on a new surface is one boolean.
+     *
+     * `employeeName`, when given, is appended as a seventh "Employee" cell —
+     * manager-facing surfaces lead on *who*, and dropping the assignee to hit a
+     * tidy 3×2 would be losing information, not tightening a layout. Employee
+     * surfaces showing a person their own shift simply omit it.
+     */
+    identityGrid?: boolean;
+    /**
+     * Which identity cells to render, and in what order. Defaults to all nine.
+     *
+     * For a surface that has already stated some of these facts, repeating them
+     * on every card is noise: the roster drill-down is scoped to one group,
+     * sub-group and date, so five of the nine cells were identical across every
+     * card in the panel and the two that actually distinguished the shifts —
+     * role and assignee — were the smallest things on screen. Naming a subset
+     * lets that panel show `['role','employee','schedPay','billablePay']` as a
+     * 2×2 while every other surface keeps the full 3×3.
+     */
+    identityFields?: ShiftIdentityField[];
+    /**
+     * Org-chart sub-department. Distinct from `subGroup`, which is the roster's
+     * own grouping — two different facts that callers had been feeding through
+     * the same prop, so the card could never show both.
+     */
+    subDepartment?: string;
+    /** Roster group ("Theatre"). Derived from `shiftData.group_type` when omitted. */
+    group?: string;
     /** When true, moves topContent (selection slot, history button, etc.) to the bottom row alongside footerActions */
     moveTopContentToBottom?: boolean;
 }
@@ -248,6 +308,60 @@ function parseCurrency(value: React.ReactNode): number | null {
  * this card renders inside modals elsewhere (swap/bid dialogs), and a modal
  * popover there kills pointer events on the parent dialog.
  */
+/**
+ * A pay amount inside an identity-grid cell.
+ *
+ * `PayAmountWithBreakdown` below prints its own label inline, which the grid
+ * cell already supplies as the `<dt>`; this renders the amount alone and keeps
+ * the itemised-rate popover.
+ */
+const PayAmountValue: React.FC<{
+    label: string;
+    amount: React.ReactNode;
+    lines?: EarningsLine[];
+}> = ({ label, amount, lines }) => {
+    const hasBreakdown = !!lines && lines.length > 0;
+    return (
+        <span className="inline-flex items-center gap-1.5">
+            <span>{amount}</span>
+            {hasBreakdown && (
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button
+                            type="button"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`${label} rate breakdown`}
+                            className="h-6 w-6 flex items-center justify-center rounded-md text-emerald-600/70 hover:text-emerald-600 hover:bg-emerald-500/10 active:scale-95 transition-colors shrink-0 dark:text-emerald-400/70 dark:hover:text-emerald-400"
+                        >
+                            <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                        align="start"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-auto min-w-[220px] p-3 bg-popover border-border rounded-xl shadow-2xl z-[999]"
+                    >
+                        <div className="space-y-1">
+                            {lines!.map((line, i) => (
+                                <div key={i} className="flex items-center justify-between gap-4 text-xs">
+                                    <span className="text-muted-foreground">
+                                        {line.description}{line.hours ? ` · ${line.hours.toFixed(2)}h` : ''}
+                                    </span>
+                                    <span className="font-mono font-bold tabular-nums shrink-0">${line.amount.toFixed(2)}</span>
+                                </div>
+                            ))}
+                            <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-border/40 text-xs font-black">
+                                <span>Total</span>
+                                <span className="font-mono tabular-nums">${lines!.reduce((sum, l) => sum + l.amount, 0).toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
+            )}
+        </span>
+    );
+};
+
 const PayAmountWithBreakdown: React.FC<{
     label: string;
     amount: React.ReactNode;
@@ -297,6 +411,29 @@ const PayAmountWithBreakdown: React.FC<{
     );
 };
 
+/**
+ * A section's header row. A toggle normally; in the `columns` layout every
+ * section is always open, so it is a plain row — a button that does nothing
+ * would still be announced, and focused, as one.
+ */
+const SectionHeader: React.FC<{
+    collapsible: boolean;
+    open: boolean;
+    controls: string;
+    onToggle: () => void;
+    children: React.ReactNode;
+}> = ({ collapsible, open, controls, onToggle, children }) => {
+    const cls = 'w-full flex items-center justify-between py-3 px-4 bg-muted/30';
+    return collapsible ? (
+        <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={controls}
+            className={cn(cls, 'hover:bg-muted/50 transition-colors')}>
+            {children}
+        </button>
+    ) : (
+        <div className={cls}>{children}</div>
+    );
+};
+
 export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(({
     avatarUrl,
     organization,
@@ -340,15 +477,21 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     estimatedPayBreakdown,
     billablePay,
     billablePayBreakdown,
+    actualPay,
     showPayrollRules,
     customColor,
     timesheetStatus,
     defaultExpandedSections,
     hideActualClocking = false,
     hidePayrollSection = false,
+    sectionLayout = 'stack',
     hideGlow = false,
     hideBreadcrumbs = false,
     hideSegmentedBox = false,
+    identityGrid = false,
+    identityFields,
+    subDepartment,
+    group,
     moveTopContentToBottom = false,
 }, ref) => {
     const protection = React.useMemo(() => getProtectionContext(
@@ -425,6 +568,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                 secondary: '#f59e0b',
                 atmosphere: ['#b45309', '#d97706', '#fbbf24'],
             };
+            case 'office': return {
+                badge: 'dept-badge-office',
+                cardBg: `${base} dept-card-glass-office`,
+                accent: 'text-cyan-500',
+                color: '#0891b2',
+                secondary: '#06b6d4',
+                atmosphere: ['#0e7490', '#0891b2', '#22d3ee'],
+            };
             default:
                 if (effectiveColor) {
                     return {
@@ -449,6 +600,72 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
     const isNested = variant === 'nested';
     const isTimecard = variant === 'timecard';
+
+    /**
+     * The identity grid's cells.
+     *
+     * Derived here rather than at each call site so every surface — bids,
+     * swaps, timesheets, the roster planner, the offers inbox — shows the same
+     * six facts under the same six labels, in the same order. A caller that has
+     * not spelled a fact out gets it off `shiftData`, which every one of them
+     * already passes.
+     */
+    const identityGridCells = React.useMemo(() => {
+        if (!identityGrid) return null;
+        const groupType = shiftData?.group_type ?? shiftData?.groupType;
+        const str = (v?: string | null) => (v?.trim() ? v : null);
+        const money = (v: React.ReactNode) => (v == null || v === '' ? null : v);
+
+        const byField: Record<ShiftIdentityField, { label: string; value: React.ReactNode; breakdown?: EarningsLine[] }> = {
+            org: { label: 'Org', value: str(organization) ?? str(shiftData?.organizations?.name) },
+            dept: { label: 'Dept', value: str(department) ?? str(shiftData?.departments?.name) },
+            subDept: { label: 'Sub-Dept', value: str(subDepartment) ?? str(shiftData?.sub_departments?.name) },
+            group: {
+                label: 'Group',
+                value:
+                    str(group) ??
+                    (groupType
+                        ? GROUP_DISPLAY_NAMES[groupType as keyof typeof GROUP_DISPLAY_NAMES] ?? groupType
+                        : null),
+            },
+            subGroup: { label: 'Sub-Group', value: str(subGroup) ?? str(shiftData?.sub_group_name) },
+            role: { label: 'Role', value: str(role) ?? str(shiftData?.roles?.name) },
+            // An unfilled shift is a real state, not a missing value, so it reads
+            // "Unassigned" rather than the em-dash used for absent facts — but
+            // only where the card can actually tell the two apart. `shiftData`
+            // carrying an empty `assigned_employee_id` is positive evidence that
+            // nobody holds the shift; a caller that simply never passed an
+            // assignee (the swap pickers select no profile at all) has told us
+            // nothing, and printing "Unassigned" there would be the same lie the
+            // offers inbox used to tell its own recipient.
+            employee: {
+                label: 'Employee',
+                value:
+                    str(employeeName) ??
+                    (shiftData && 'assigned_employee_id' in shiftData ? 'Unassigned' : null),
+            },
+            // Pay lives here rather than inside the Scheduled and Payroll
+            // sections. It was the one number people opened those sections to
+            // read, and two collapsed panels is a poor place to keep it.
+            schedPay: { label: 'Sched. Pay', value: money(estimatedPay), breakdown: estimatedPayBreakdown },
+            billablePay: { label: 'Billable Pay', value: money(billablePay), breakdown: billablePayBreakdown },
+        };
+
+        const order: ShiftIdentityField[] = identityFields ?? [
+            'org', 'dept', 'subDept',
+            'group', 'subGroup', 'role',
+            'employee', 'schedPay', 'billablePay',
+        ];
+        return order.map((field) => byField[field]).filter(Boolean);
+    }, [
+        identityGrid, identityFields, organization, department, subDepartment, group, subGroup, role,
+        employeeName, estimatedPay, estimatedPayBreakdown, billablePay, billablePayBreakdown,
+        shiftData,
+    ]);
+    // Several of these cards can share a page (an offers inbox, a swap list),
+    // so the collapsible regions need ids that are unique per instance for
+    // aria-controls to resolve to the right panel.
+    const sectionIdBase = React.useId();
     const theme = getTheme();
 
     const breadcrumbs = (
@@ -470,12 +687,17 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
 
 
+    const isColumns = sectionLayout === 'columns';
     const [expandedSections, setExpandedSections] = React.useState({
         scheduled: defaultExpandedSections?.scheduled ?? false,
         actual: defaultExpandedSections?.actual ?? false,
         payroll: defaultExpandedSections?.payroll ?? false,
         variance: defaultExpandedSections?.variance ?? false,
     });
+    // Columns: every section open, and no toggle offered.
+    const sectionsOpen = isColumns
+        ? { scheduled: true, actual: true, payroll: true, variance: true }
+        : expandedSections;
 
     // ── Variance (Scheduled vs Billable) — feeds the 4th collapsible section.
     // Gross/Net are re-derived independently for each side (never shared) so a
@@ -565,6 +787,12 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
     const isCardPast = isPast || isExpired;
 
+    // A pay figure only leaves its collapsible section if the grid is the one
+    // showing it — a caller that selects a subset without the pay cells keeps
+    // the Scheduled / Payroll lines it always had.
+    const gridShowsSchedPay = !!identityGridCells?.some((c) => c.label === 'Sched. Pay');
+    const gridShowsBillablePay = !!identityGridCells?.some((c) => c.label === 'Billable Pay');
+
     if (isTimecard) {
         const displayRole = role || 'Shift';
 
@@ -575,7 +803,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     'relative overflow-hidden transition-all duration-300',
                     isCardPast ? 'bg-slate-900/60 border-slate-700/30 grayscale-[0.85] opacity-60 saturate-50' : theme.cardBg,
                     !isFlat && 'rounded-[28px] border text-card-foreground shadow-xl p-6',
-                    isFlat && 'rounded-xl p-4 border border-border/40',
+                    // No border. `isFlat` has always promised to remove it, but
+                    // it added `border border-border/40` — and the width was
+                    // all the `.dept-card-glass-*` rules needed, since they set
+                    // `border-<colour>` with `!important`. The result was a
+                    // coloured hairline down the left and along the bottom of
+                    // every embedded card, tracking the container's radius
+                    // rather than the card's. Background and tint are untouched.
+                    isFlat && 'rounded-xl p-4 border-0 dept-card-glass-flat',
                     className
                 )}
                 style={!isFlat ? {
@@ -583,7 +818,10 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     boxShadow: (hideGlow || isCardPast) ? 'none' : `0 8px 30px -10px ${theme.color}25`,
                 } : undefined}
             >
-                {/* Header: Role & Assignee Subtitle */}
+                {/* Header: Role & Assignee Subtitle. Omitted entirely when the
+                    caller leads with `identityCells` — those carry the same
+                    facts, labelled, and the heading would only restate them. */}
+                {!identityGridCells && (
                 <div className="flex items-start justify-between gap-4 mb-4 pt-1">
                     <div className="min-w-0 flex-1">
                         <h2 className="text-2xl font-black tracking-tight text-foreground truncate">
@@ -601,10 +839,13 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                 <span className="truncate">{organization}</span>
                                 <span className="text-primary/40 shrink-0">→</span>
                                 <span className="truncate">{department || 'General'}</span>
-                                {subGroup && subGroup !== 'General' && (
+                                {/* `subDepartment` first: callers that used to cram it into
+                                    `subGroup` now pass it properly, and the trail should read
+                                    the same as it always did for them. */}
+                                {(subDepartment || subGroup) && (subDepartment || subGroup) !== 'General' && (
                                     <>
                                         <span className="text-primary/40 shrink-0">→</span>
-                                        <span className="truncate">{subGroup}</span>
+                                        <span className="truncate">{subDepartment || subGroup}</span>
                                     </>
                                 )}
                             </div>
@@ -613,6 +854,11 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {!moveTopContentToBottom && topContent}
                 </div>
+                )}
+
+                {identityGridCells && !moveTopContentToBottom && topContent && (
+                    <div className="flex justify-end mb-3">{topContent}</div>
+                )}
 
                 {/* COUNTDOWN */}
                 {timerText && (
@@ -627,8 +873,61 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     </div>
                 )}
 
+                {/* Identity grid — three-up, so nine cells read as 3×3. */}
+                {identityGridCells && identityGridCells.length > 0 && (
+                    <dl className={cn(
+                        'grid gap-2 mb-5',
+                        // Nine cells read as 3×3, four as 2×2 — the column count
+                        // follows the selection rather than being asserted, so a
+                        // subset never leaves a ragged trailing row.
+                        identityGridCells.length % 3 === 0 ? 'grid-cols-3'
+                            : identityGridCells.length % 2 === 0 ? 'grid-cols-2'
+                            : 'grid-cols-3',
+                    )}>
+                        {/* Discrete cells rather than a divided box: Tailwind's
+                            `divide-*` is a `> * + *` rule, so in a grid it puts
+                            a left border on the first cell of every row and a
+                            top border across the first row. */}
+                        {identityGridCells.map(({ label, value, breakdown }) => {
+                            const isPay = breakdown !== undefined;
+                            return (
+                                <div
+                                    key={label}
+                                    className="min-w-0 rounded-lg border border-border/60 bg-muted/20 p-2.5 dark:bg-zinc-900/50"
+                                >
+                                    <dt className={cn(
+                                        'block text-[11px] font-bold uppercase tracking-[0.12em]',
+                                        isPay && value != null
+                                            ? 'text-emerald-700 dark:text-emerald-400/80'
+                                            : 'text-muted-foreground',
+                                    )}>
+                                        {label}
+                                    </dt>
+                                    <dd className={cn(
+                                        'mt-1 text-sm font-semibold break-words',
+                                        isPay && value != null
+                                            ? 'text-emerald-700 dark:text-emerald-400 tabular-nums'
+                                            : 'text-foreground',
+                                    )}>
+                                        {value == null ? (
+                                            <>
+                                                <span aria-hidden="true">—</span>
+                                                <span className="sr-only">Not set</span>
+                                            </>
+                                        ) : isPay ? (
+                                            <PayAmountValue label={label} amount={value} lines={breakdown} />
+                                        ) : (
+                                            value
+                                        )}
+                                    </dd>
+                                </div>
+                            );
+                        })}
+                    </dl>
+                )}
+
                 {/* Segmented Top Selector Box: DATES | ROLE | STATUS */}
-                {!hideSegmentedBox && (
+                {!hideSegmentedBox && !identityGridCells && (
                     <div className="grid grid-cols-3 rounded-xl border border-border/80 bg-muted/20 dark:bg-zinc-900/60 overflow-hidden mb-5 divide-x divide-border/80">
                         <div className="p-3.5 min-w-0">
                             <span className="block text-xs font-black uppercase tracking-widest text-muted-foreground truncate">
@@ -658,13 +957,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                 )}
 
                 {/* Collapsible Section Rows */}
-                <div className="space-y-4 mb-6">
+                <div className={isColumns ? 'mb-6 grid gap-4 sm:grid-cols-3' : 'space-y-4 mb-6'}>
                     {/* 1. SCHEDULED SHIFT SECTION */}
-                    <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                        <button
-                            type="button"
-                            onClick={() => setExpandedSections(prev => ({ ...prev, scheduled: !prev.scheduled }))}
-                            className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                    <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'flex h-full flex-col')}>
+                        <SectionHeader
+                            collapsible={!isColumns}
+                            open={sectionsOpen.scheduled}
+                            controls={`${sectionIdBase}-scheduled`}
+                            onToggle={() => setExpandedSections(prev => ({ ...prev, scheduled: !prev.scheduled }))}
                         >
                             <div className="flex items-center gap-2">
                                 <span className="text-base font-black text-foreground">Scheduled</span>
@@ -675,12 +975,12 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                         {timeRule.label}
                                     </span>
                                 )}
-                                {expandedSections.scheduled ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                {!isColumns && (sectionsOpen.scheduled ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                             </div>
-                        </button>
+                        </SectionHeader>
 
-                        {expandedSections.scheduled && (
-                            <div className="p-4 pt-3 space-y-1.5 border-t border-border/40">
+                        {sectionsOpen.scheduled && (
+                            <div id={`${sectionIdBase}-scheduled`} role="region" className="p-4 pt-3 space-y-1.5 border-t border-border/40">
                                 <div className="text-sm font-bold text-foreground/90">
                                     Timings: {startTime} – {endTime}
                                 </div>
@@ -694,7 +994,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                         section's own Net below, masking any variance between them. */}
                                     Gross: {formatMins(calculateGrossMinutes(startTime, endTime))} · Net: {formatMins(Math.max(0, (calculateGrossMinutes(startTime, endTime) || 0) - unpaidBreak))}
                                 </div>
-                                {estimatedPay != null && estimatedPay !== '' && (
+                                {!gridShowsSchedPay && estimatedPay != null && estimatedPay !== '' && (
                                     <div className="pt-1.5 border-t border-border/20">
                                         <PayAmountWithBreakdown label="Est. Pay" amount={estimatedPay} lines={estimatedPayBreakdown} />
                                     </div>
@@ -705,11 +1005,12 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {/* 2. ACTUAL CLOCKING SECTION */}
                     {!hideActualClocking && (
-                        <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedSections(prev => ({ ...prev, actual: !prev.actual }))}
-                                className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                        <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'flex h-full flex-col')}>
+                            <SectionHeader
+                                collapsible={!isColumns}
+                                open={sectionsOpen.actual}
+                                controls={`${sectionIdBase}-actual`}
+                                onToggle={() => setExpandedSections(prev => ({ ...prev, actual: !prev.actual }))}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="text-base font-black text-foreground">Actual</span>
@@ -729,16 +1030,16 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                             )}
                                         </div>
                                     ) : (
-                                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/50">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                             Pending
                                         </span>
                                     )}
-                                    {expandedSections.actual ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    {!isColumns && (sectionsOpen.actual ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                                 </div>
-                            </button>
+                            </SectionHeader>
 
-                            {expandedSections.actual && (
-                                <div className="p-4 pt-3 space-y-1.5 border-t border-border/40">
+                            {sectionsOpen.actual && (
+                                <div id={`${sectionIdBase}-actual`} role="region" className="p-4 pt-3 space-y-1.5 border-t border-border/40">
                                     <div className="text-sm font-bold text-foreground/90">
                                         Timings: {clockIn || '--:--'} – {clockOut || '--:--'}
                                     </div>
@@ -748,6 +1049,11 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                     <div className={cn("text-sm font-mono font-black", (clockIn && clockOut) ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40")}>
                                         Gross: {clockIn && clockOut ? formatMins(calculateGrossMinutes(clockIn, clockOut)) : '--'} · Net: {clockIn && clockOut ? formatMins(Math.max(0, (calculateGrossMinutes(clockIn, clockOut) || 0) - unpaidBreak)) : '--'}
                                     </div>
+                                    {isColumns && (
+                                        <div className="pt-1.5 border-t border-border/20">
+                                            <PayAmountWithBreakdown label="Actual Pay" amount={actualPay != null && actualPay !== '' ? actualPay : 'N/A'} />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -755,11 +1061,12 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {/* 3. PAYROLL & BILLABLE SECTION */}
                     {!hidePayrollSection && showPayrollSection && (
-                        <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedSections(prev => ({ ...prev, payroll: !prev.payroll }))}
-                                className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                        <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'flex h-full flex-col')}>
+                            <SectionHeader
+                                collapsible={!isColumns}
+                                open={sectionsOpen.payroll}
+                                controls={`${sectionIdBase}-payroll`}
+                                onToggle={() => setExpandedSections(prev => ({ ...prev, payroll: !prev.payroll }))}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="text-base font-black text-foreground">Payroll</span>
@@ -809,16 +1116,16 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                             )}
                                         </div>
                                     ) : (
-                                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/50">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                             Pending
                                         </span>
                                     )}
-                                    {expandedSections.payroll ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    {!isColumns && (sectionsOpen.payroll ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                                 </div>
-                            </button>
+                            </SectionHeader>
 
-                            {expandedSections.payroll && (
-                                <div className="p-4 pt-3 space-y-1.5 border-t border-border/40">
+                            {sectionsOpen.payroll && (
+                                <div id={`${sectionIdBase}-payroll`} role="region" className="p-4 pt-3 space-y-1.5 border-t border-border/40">
                                     {!isShiftFinished ? (
                                         // Billable/payable is locked until the shift ends — no value is
                                         // shown or editable while the shift is still live.
@@ -854,10 +1161,13 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                     {/* Shift is finished (we're past the isShiftFinished branch above),
                                         so always show this line — a null billablePay means the billable
                                         window hasn't resolved yet (e.g. a missing punch), which must read
-                                        as "N/A", not silently disappear. */}
+                                        as "N/A", not silently disappear. The identity grid carries its own
+                                        Billable Pay cell, so this would be the same number twice. */}
+                                    {!gridShowsBillablePay && (
                                     <div className="pt-1.5 border-t border-border/20">
                                         <PayAmountWithBreakdown label="Billable Pay" amount={billablePay != null && billablePay !== '' ? billablePay : 'N/A'} lines={billablePayBreakdown} />
                                     </div>
+                                    )}
                                     {wasToppedUpToMinEngagement && (
                                         <div
                                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black font-mono tracking-tight uppercase border w-fit"
@@ -888,22 +1198,23 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                     {/* 4. VARIANCE SECTION — Scheduled vs Billable, at a glance */}
                     {!hidePayrollSection && showPayrollSection && (
-                        <div className="rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all">
-                            <button
-                                type="button"
-                                onClick={() => setExpandedSections(prev => ({ ...prev, variance: !prev.variance }))}
-                                className="w-full flex items-center justify-between py-3 px-4 bg-muted/30 hover:bg-muted/50 transition-colors"
+                        <div className={cn('rounded-xl border border-border/60 bg-muted/10 overflow-hidden transition-all', isColumns && 'sm:col-span-3')}>
+                            <SectionHeader
+                                collapsible={!isColumns}
+                                open={sectionsOpen.variance}
+                                controls={`${sectionIdBase}-variance`}
+                                onToggle={() => setExpandedSections(prev => ({ ...prev, variance: !prev.variance }))}
                             >
                                 <div className="flex items-center gap-2">
                                     <span className="text-base font-black text-foreground">Variance</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {expandedSections.variance ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                                    {!isColumns && (sectionsOpen.variance ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />)}
                                 </div>
-                            </button>
+                            </SectionHeader>
 
-                            {expandedSections.variance && (
-                                <div className="p-4 pt-3 border-t border-border/40">
+                            {sectionsOpen.variance && (
+                                <div id={`${sectionIdBase}-variance`} role="region" className="p-4 pt-3 border-t border-border/40">
                                     {!isShiftFinished ? (
                                         <div className="text-sm font-bold text-muted-foreground/40 italic flex items-center gap-2">
                                             <Lock className="h-3.5 w-3.5 shrink-0" />

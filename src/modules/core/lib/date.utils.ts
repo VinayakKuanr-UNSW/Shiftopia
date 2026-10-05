@@ -144,6 +144,56 @@ export const formatShiftTime = (
 };
 
 /**
+ * Format any clock value a shift card shows — scheduled, clocked or adjusted —
+ * in Australia/Sydney, whatever the viewer's timezone.
+ *
+ * The one formatter for the one job. There were three, and they disagreed:
+ *
+ *  - `ShiftDetailsDialog.formatWallClock` converted correctly.
+ *  - `SmartShiftCard.formatTime` sliced the time out of the ISO string
+ *    (`value.split('T')[1]`) and never converted, so a clock-in stored as
+ *    `2026-08-20T00:25:05+00` rendered as "00:25" on the Rosters drill-down
+ *    while My Attendance showed the same punch as 10:25 AM — the AEST offset,
+ *    shown to a manager as the time someone started work.
+ *  - `TimesheetMobileCard.formatTime` used `new Date(t).getHours()`, i.e. the
+ *    BROWSER's zone. Right in Sydney by luck, wrong everywhere else — the same
+ *    trap as reading a naive string as UTC.
+ *
+ * Handles both shapes a card is handed: a full timestamp (`actual_start`, a
+ * timestamptz) and a naive wall-clock string (`start_time`, "HH:mm[:ss]",
+ * already Sydney by definition and so never converted).
+ */
+export const formatClockTime = (
+    value: string | null | undefined,
+    fmt: string = 'h:mm a',
+    fallback: string | null = null,
+): string | null => {
+    if (!value) return fallback;
+    const raw = value.trim();
+    if (!raw || raw === '-') return fallback;
+    // Already formatted upstream — pass it through rather than re-parsing.
+    if (/[AP]M$/i.test(raw)) return raw;
+
+    // A full timestamp: an absolute instant, so convert it into Sydney.
+    if (raw.includes('T') || (raw.length > 8 && raw.includes('-'))) {
+        // Postgres renders a timestamptz as "2026-08-20 00:25:05+00" — a space
+        // instead of T, and an hours-only offset that `new Date` rejects in
+        // several engines. Normalise both before parsing.
+        const iso = raw
+            .replace(' ', 'T')
+            .replace(/([+-]\d{2})$/, '$1:00');
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return fallback;
+        return formatInTimezone(d, SYDNEY_TZ, fmt);
+    }
+
+    // A naive wall-clock string is ALREADY Sydney; converting it would move it.
+    const [h, m] = raw.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return fallback;
+    return formatZoned(new Date(2000, 0, 1, h, m), fmt);
+};
+
+/**
  * Format a shift's calendar date in Australia/Sydney (AEST/AEDT).
  * Prefers the authored shift_date; falls back to start_at.
  * @param fmt date-fns format string (e.g. 'EEE, MMM d', 'yyyy-MM-dd')

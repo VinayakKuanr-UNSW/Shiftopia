@@ -272,6 +272,14 @@ export function useAutoScheduler({
                 // already — this projection was the only thing dropping them.
                 target_employment_type: s.target_employment_type ?? null,
                 target_requires_flexible: s.target_requires_flexible ?? false,
+                // WHICH JOB this shift is for. HC-5d matches declared
+                // availability against it, and availability is per-job now: a
+                // Set-up declaration must not make someone eligible for a
+                // Security shift. Already in SHIFT_SELECT; this projection was
+                // the gap — the same silent-drop the paragraph above describes,
+                // and one that fails OPEN (everyone stays eligible for
+                // everything) rather than loudly.
+                sub_department_id: (s as any).sub_department_id ?? null,
                 // Lowers the min-engagement floor 3h → 2h for training shifts.
                 is_training: s.is_training ?? false,
                 // Feeds the solver's skill/level matching.

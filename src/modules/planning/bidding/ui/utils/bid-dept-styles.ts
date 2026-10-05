@@ -3,6 +3,8 @@
 export function getDeptColor(groupType: string | null | undefined, dept: string): string {
     const gt = (groupType || '').toLowerCase();
     const d = (dept || '').toLowerCase();
+    if (gt === 'office')
+        return 'dept-badge-office';
     if (gt === 'convention_centre' || d.includes('convention'))
         return 'dept-badge-convention';
     if (gt === 'exhibition_centre' || d.includes('exhibition'))
@@ -18,6 +20,8 @@ export function getCardBg(groupType: string | null | undefined, dept: string): s
     const base = 'dept-card-base';
     const gt = (groupType || '').toLowerCase();
     const d = (dept || '').toLowerCase();
+    if (gt === 'office')
+        return `${base} dept-card-glass-office`;
     if (gt === 'convention_centre' || d.includes('convention'))
         return `${base} dept-card-convention`;
     if (gt === 'exhibition_centre' || d.includes('exhibition'))
@@ -32,6 +36,8 @@ export function getCardBg(groupType: string | null | undefined, dept: string): s
 export function getRowClass(groupType: string | null | undefined, dept: string): string {
     const gt = (groupType || '').toLowerCase();
     const d = (dept || '').toLowerCase();
+    if (gt === 'office')
+        return 'dept-row-office';
     if (gt === 'convention_centre' || d.includes('convention'))
         return 'dept-row-convention';
     if (gt === 'exhibition_centre' || d.includes('exhibition'))
@@ -54,6 +60,13 @@ export type DeptAccent = {
 export function getDeptAccent(groupType: string | null | undefined, dept: string): DeptAccent {
     const d = (dept || '').toLowerCase();
     const gt = (groupType || '').toLowerCase();
+    if (gt === 'office') {
+        return {
+            bg: 'bg-cyan-500/[0.06] dark:bg-cyan-500/[0.10]',
+            stripe: 'border-l-cyan-500/70 dark:border-l-cyan-400/70',
+            dot: 'bg-cyan-500',
+        };
+    }
     if (gt === 'convention_centre' || d.includes('convention')) {
         return {
             bg: 'bg-blue-500/[0.06] dark:bg-blue-500/[0.10]',

@@ -46,7 +46,16 @@ export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
 /** Day-cell metrics per size. Kept together so the two never drift. */
 const SIZE_CLASSNAMES: Record<
   CalendarSize,
-  { months: string; month: string; table: string; row: string; head_cell: string; cell: string; day: string }
+  {
+    months: string;
+    month: string;
+    table: string;
+    tbody?: string;
+    row: string;
+    head_cell: string;
+    cell: string;
+    day: string;
+  }
 > = {
   popover: {
     months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
@@ -61,13 +70,14 @@ const SIZE_CLASSNAMES: Record<
     // Stretch to the host container so a month view can own the full page
     // height. `<table>`/`<tr>`/`<td>` accept flex just fine, which is how the
     // day columns stay aligned without a second grid definition.
-    months: 'flex flex-col flex-1 min-h-0 w-full',
-    month: 'flex flex-col flex-1 min-h-0 w-full',
-    table: 'flex flex-col flex-1 min-h-0 w-full border-collapse',
+    months: 'flex flex-col flex-1 min-h-0 w-full h-full',
+    month: 'flex flex-col flex-1 min-h-0 w-full h-full',
+    table: 'flex flex-col flex-1 min-h-0 w-full h-full border-collapse',
+    tbody: 'flex flex-col flex-1 min-h-0 w-full',
     row: 'flex w-full flex-1 min-h-0',
     head_cell:
       'flex-1 basis-0 min-w-0 text-muted-foreground font-medium text-[0.7rem] uppercase tracking-wider flex items-center justify-center py-2',
-    cell: 'flex-1 basis-0 min-w-0 min-h-0',
+    cell: 'flex-1 basis-0 min-w-0 min-h-0 h-full',
     day: 'w-full h-full p-0 font-normal items-start justify-start rounded-none',
   },
 };
@@ -108,7 +118,7 @@ function Calendar({
       weekStartsOn={weekStartsOn}
       className={cn(
         'pointer-events-auto',
-        size === 'popover' ? 'p-4' : 'flex flex-col flex-1 min-h-0 w-full',
+        size === 'popover' ? 'p-4' : 'flex flex-col flex-1 min-h-0 w-full h-full',
         className,
       )}
       {...props}
@@ -127,6 +137,7 @@ function Calendar({
         nav_button_previous: 'absolute left-1',
         nav_button_next: 'absolute right-1',
         table: s.table,
+        tbody: s.tbody,
         head_row: 'flex w-full mb-1',
         head_cell: s.head_cell,
         row: s.row,

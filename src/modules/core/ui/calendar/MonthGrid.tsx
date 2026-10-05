@@ -261,7 +261,7 @@ export function MonthGrid({
         disabled={disabled}
         modifiers={modifiers}
         modifiersClassNames={modifiersClassNames}
-        className={cn('w-full', className)}
+        className={cn('w-full h-full flex-1 min-h-0', className)}
         classNames={{
           // Day cells own their padding, borders and state colours here; the
           // ghost-button preset from the picker size would wash them out.

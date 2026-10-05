@@ -13,6 +13,10 @@ import { format, addDays, subDays, parseISO } from 'date-fns';
 import type { ContractRecordV2, QualificationV2, ContractType } from './v8/types';
 import type { V8EmployeeContext, V8OrchestratorShift } from './v8/orchestrator/types';
 import { isSecurityRoleName } from './security-role';
+import {
+    normaliseCycleAnchor,
+    resolveGoverningCycleWeeks,
+} from './ordinary-hours-cycle';
 
 // =============================================================================
 // SESSION-SCOPED CACHE  (TTL: 5 minutes per entry)
@@ -28,6 +32,17 @@ const CACHE_TTL_MS = 5 * 60 * 1000;   // 5 minutes
 const _contextCache = new Map<string, CacheEntry>();
 
 /** Invalidate the in-memory cache for a specific employee (call on profile update). */
+/**
+ * Contract columns for the V8 context.
+ *
+ * Split so the work-cycle columns (migration 20260826090000) can be retried
+ * away in a database that has not taken that migration — see the retry below.
+ */
+const CONTRACT_COLUMNS_BASE =
+    'organization_id, department_id, sub_department_id, role_id, contracted_weekly_hours, employment_status';
+const CONTRACT_COLUMNS_WITH_CYCLE =
+    `${CONTRACT_COLUMNS_BASE}, ordinary_hours_cycle_weeks, ordinary_hours_cycle_anchor`;
+
 export function invalidateEmployeeContextCache(employeeId: string): void {
     _contextCache.delete(employeeId);
 }
@@ -84,7 +99,7 @@ export async function fetchV8EmployeeContext(
             .single(),
         supabase
             .from('user_contracts')
-            .select('organization_id, department_id, sub_department_id, role_id, contracted_weekly_hours, employment_status')
+            .select(CONTRACT_COLUMNS_WITH_CYCLE)
             .eq('user_id', employeeId)
             .eq('status', 'Active'),
         supabase
@@ -105,7 +120,30 @@ export async function fetchV8EmployeeContext(
     ]);
 
     const profile  = profileRes.data;
-    const rawContracts = contractsRes.data ?? [];
+
+    // The cycle columns arrived in migration 20260826090000. PostgREST rejects
+    // the ENTIRE select when one name is unknown, and the `?? []` below turns
+    // that 400 into "this person has no contracts" — which reads as a casual on
+    // zero contracted hours. So an un-migrated database gets one retry on the
+    // base columns rather than a silently contractless employee.
+    let contractRows = contractsRes.data;
+    if (contractsRes.error) {
+        const retry = await supabase
+            .from('user_contracts')
+            .select(CONTRACT_COLUMNS_BASE)
+            .eq('user_id', employeeId)
+            .eq('status', 'Active');
+        if (!retry.error) {
+            contractRows = retry.data as typeof contractRows;
+            console.info(
+                '[EmployeeContext] work-cycle columns unavailable — defaulting to the '
+                + 'four-week cycle (migration 20260826090000 not applied here)',
+            );
+        } else {
+            console.warn('[EmployeeContext] contract fetch failed', retry.error);
+        }
+    }
+    const rawContracts = contractRows ?? [];
     const skills   = skillsRes.data ?? [];
     const licenses = licensesRes.data ?? [];
 
@@ -164,6 +202,13 @@ export async function fetchV8EmployeeContext(
             department_id:     c.department_id as string,
             sub_department_id: (c.sub_department_id as string | null) ?? null,
             role_id:           c.role_id as string,
+            // Kept WITH its scope, not just in the flat list below. The two were
+            // built from the same rows and split apart — `contracts` held the
+            // scope without the status, `employment_statuses` the status without
+            // the scope — so V8_EMPLOYMENT_TARGET could not tell which contract
+            // a status belonged to. That is the whole reason it had to match
+            // person-wide.
+            employment_status: (c.employment_status as string | null) ?? null,
         }));
 
     // Derive assigned_role_ids from contracts for backward compat.
@@ -205,6 +250,17 @@ export async function fetchV8EmployeeContext(
         ? Math.max(...rawContracts.map((c: any) => Number(c.contracted_weekly_hours) || 0))
         : 0;
 
+    // MAX for hours, MIN for the cycle — deliberately opposite directions. The
+    // highest contracted hours is the most generous basis the person actually
+    // holds, while the shortest cycle is the least smoothing any of their
+    // engagements permits. Both pick the reading that cannot under-enforce.
+    const ordinary_hours_cycle_weeks = resolveGoverningCycleWeeks(
+        rawContracts.map((c: any) => c?.ordinary_hours_cycle_weeks),
+    );
+    const ordinary_hours_cycle_anchor = normaliseCycleAnchor(
+        rawContracts.find((c: any) => c?.ordinary_hours_cycle_anchor)?.ordinary_hours_cycle_anchor,
+    );
+
     // Expand approved-leave ranges to per-day YYYY-MM-DD dates (clamped to the
     // lookahead window). Fail-open: a query error just leaves leave_days
     // undefined and V8_LEAVE_CONFLICT stays silent.
@@ -238,6 +294,8 @@ export async function fetchV8EmployeeContext(
         employee_id:             employeeId,
         contract_type,
         contracted_weekly_hours,
+        ordinary_hours_cycle_weeks,
+        ordinary_hours_cycle_anchor,
         assigned_role_ids,
         contracts,
         qualifications,
@@ -304,7 +362,6 @@ export async function fetchEmployeeShiftsV2(
         // R10/R11/R12 apply only to candidate (incoming) shifts.
         role_id:                 '',
         required_qualifications: [],
-        is_ordinary_hours:       true,
         break_minutes:           s.unpaid_break_minutes ?? 0,
         unpaid_break_minutes:    s.unpaid_break_minutes ?? 0,
     }));

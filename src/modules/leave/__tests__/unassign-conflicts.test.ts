@@ -1,80 +1,47 @@
 /**
- * Approval-sweep completion (audit E): once leave is approved, the manager can
- * unassign the still-rostered shifts in one click. `unassignConflictingShifts`
- * is a thin, audited wrapper over the shift-mutation gateway; these tests pin
- * its contract — empty-input short-circuit, success/partial-success counting,
- * and error surfacing — without a live Supabase.
+ * Leave approval unassigns the part-time / casual shifts in the leave dates
+ * through `sm_unassign_shift` — the roster's own command, so a Published
+ * shift goes to Bidding exactly as when a manager removes someone on the
+ * roster. These pin the contract: empty input short-circuits, the right RPC is
+ * called once per shift, partial success is counted, errors are returned.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const mockSelect = vi.fn();
 const mockRpc = vi.fn();
 
 vi.mock('@/platform/supabase/client', () => ({
-  supabase: {
-    from: () => ({
-      select: () => ({
-        in: () => ({
-          is: mockSelect,
-        }),
-      }),
-    }),
-    rpc: (...args: any[]) => mockRpc(...args),
-  },
+  supabase: { rpc: (...args: any[]) => mockRpc(...args) },
 }));
 
 import { unassignConflictingShifts } from '../api/leave.api';
 
 describe('unassignConflictingShifts', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  beforeEach(() => vi.clearAllMocks());
 
-  it('short-circuits on empty input WITHOUT calling the gateway', async () => {
+  it('short-circuits on empty input without calling the database', async () => {
     const res = await unassignConflictingShifts([]);
     expect(res.data).toEqual({ attempted: 0, succeeded: 0 });
-    expect(mockSelect).not.toHaveBeenCalled();
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
-  it('reports full success when every shift unassigns', async () => {
-    mockSelect.mockResolvedValueOnce({
-      data: [
-        { id: 'a', version: 1, assigned_employee_id: 'emp-1' },
-        { id: 'b', version: 2, assigned_employee_id: 'emp-1' },
-      ],
-      error: null,
-    });
-    mockRpc.mockResolvedValue({ data: { code: 'APPLIED' }, error: null });
-
+  it('unassigns each shift through sm_unassign_shift (Published → Bidding)', async () => {
+    mockRpc.mockResolvedValue({ data: { success: true }, error: null });
     const res = await unassignConflictingShifts(['a', 'b']);
     expect(mockRpc).toHaveBeenCalledTimes(2);
+    expect(mockRpc).toHaveBeenCalledWith('sm_unassign_shift', { p_shift_id: 'a' });
     expect(res.data).toEqual({ attempted: 2, succeeded: 2 });
   });
 
-  it('reports partial success when the gateway skips some shifts', async () => {
-    mockSelect.mockResolvedValueOnce({
-      data: [
-        { id: 'a', version: 1, assigned_employee_id: 'emp-1' },
-        { id: 'b', version: 2, assigned_employee_id: 'emp-1' },
-        { id: 'c', version: 1, assigned_employee_id: 'emp-1' },
-      ],
-      error: null,
-    });
-    mockRpc.mockImplementation(async (_rpcName: string, args: { p_shift_id: string }) => {
-      if (args.p_shift_id === 'a') return { data: { code: 'APPLIED' }, error: null };
-      return { data: { code: 'VERSION_CONFLICT' }, error: null };
-    });
-
+  it('counts a refused shift as not unassigned, not as a failure of the batch', async () => {
+    mockRpc.mockImplementation(async (_n: string, args: { p_shift_id: string }) =>
+      ({ data: { success: args.p_shift_id === 'a' }, error: null }));
     const res = await unassignConflictingShifts(['a', 'b', 'c']);
     expect(res.data).toEqual({ attempted: 3, succeeded: 1 });
   });
 
-  it('surfaces a gateway throw as an error result, not a throw', async () => {
-    mockSelect.mockRejectedValueOnce(new Error('network down'));
-
+  it('returns a database error as an error result, not a throw', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: new Error('network down') });
     const res = await unassignConflictingShifts(['a']);
     expect(res.error).toBe('network down');
-    expect(res.data).toBeUndefined();
   });
 });

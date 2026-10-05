@@ -6,15 +6,17 @@ import { useMyRoster } from '@/modules/rosters';
 import { usePendingOfferCount, useMyOffers } from '@/modules/rosters/state/useRosterShifts';
 import { CalendarDays, Info, Loader2, Mail } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { text, touch } from '@/modules/core/ui/typography';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { EmployeeFunctionBar } from '@/modules/core/ui/components/EmployeeFunctionBar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { format, startOfMonth } from 'date-fns';
+import { format, startOfMonth, startOfDay, isWithinInterval } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { ChevronLeft, ChevronRight, Calendar, RefreshCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { DatePicker } from '@/modules/core/ui/calendar';
 import { 
   computeRange, 
@@ -22,104 +24,6 @@ import {
   formatRangeLabel, 
   ViewType 
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
-
-/**
- * Disconnected Navigation Component for MyRoster
- */
-const MyRosterNavigator: React.FC<{
-    view: ViewType;
-    onViewChange: (v: ViewType) => void;
-    selectedDate: Date;
-    onDateChange: (d: Date) => void;
-}> = ({ view, onViewChange, selectedDate, onDateChange }) => {
-    const { isDark } = useTheme();
-
-    const range = computeRange(selectedDate, view);
-    const label = formatRangeLabel(range, view);
-
-    const handlePrev = () => onDateChange(navigateDate(selectedDate, view, -1));
-    const handleNext = () => onDateChange(navigateDate(selectedDate, view, 1));
-    const handleToday = () => onDateChange(new Date());
-
-    // The picker closes itself; this only snaps the pick to the view's period.
-    const handleDateSelect = (date: Date) => {
-        let snapped = date;
-        if (view === 'week') snapped = startOfWeekAU(date);
-        if (view === 'month') snapped = startOfMonth(date);
-        onDateChange(snapped);
-    };
-
-    const buttonBaseCls = cn(
-        "flex items-center gap-2 h-10 lg:h-11 px-2.5 lg:px-4 rounded-xl transition-all font-black tabular-nums text-[10px]",
-        isDark 
-            ? "bg-[#111827]/60 text-white hover:bg-[#252d40]" 
-            : "bg-white text-slate-900 border border-slate-200/50 shadow-sm hover:bg-slate-50"
-    );
-
-    const toggleBaseCls = cn(
-        "px-2 lg:px-3 h-8 lg:h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
-        isDark ? "text-white/40 hover:text-white" : "text-slate-900/40 hover:text-slate-900"
-    );
-
-    const VIEW_OPTIONS: { value: ViewType; label: string; short: string }[] = [
-        { value: 'day', label: 'Day', short: 'D' },
-        { value: '3day', label: '3D', short: '3D' },
-        { value: 'week', label: 'Week', short: 'W' },
-        { value: 'month', label: 'Month', short: 'M' },
-    ];
-
-    return (
-        <div className="flex items-center gap-1.5 lg:gap-2">
-            {/* View Toggle */}
-            <div className={cn(
-                "flex items-center gap-1 p-1 rounded-xl",
-                isDark ? "bg-[#111827]/60" : "bg-slate-100"
-            )}>
-                {VIEW_OPTIONS.map((opt) => (
-                    <button
-                        key={opt.value}
-                        onClick={() => onViewChange(opt.value)}
-                        className={cn(
-                            toggleBaseCls,
-                            view === opt.value && (isDark ? "bg-[#1c2333] text-white shadow-sm" : "bg-white text-slate-900 shadow-sm")
-                        )}
-                    >
-                        <span className="sm:hidden">{opt.short}</span>
-                        <span className="hidden sm:inline">{opt.label}</span>
-                    </button>
-                ))}
-            </div>
-
-            <div className="h-6 w-px bg-border/10 mx-1" />
-
-            {/* Navigation Controls */}
-            <div className="flex items-center gap-1.5">
-                <button onClick={handlePrev} className={cn(buttonBaseCls, "px-2 lg:px-2")}>
-                    <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                <DatePicker value={selectedDate} onChange={handleDateSelect} label="Date shown" align="center">
-                    <button className={buttonBaseCls}>
-                        <Calendar className="w-3.5 h-3.5 opacity-50" aria-hidden="true" />
-                        <span className="tracking-tight">{label}</span>
-                    </button>
-                </DatePicker>
-
-                <button onClick={handleNext} className={cn(buttonBaseCls, "px-2 lg:px-2")}>
-                    <ChevronRight className="w-4 h-4" />
-                </button>
-            </div>
-
-            <div className="h-6 w-px bg-border/10 mx-1" />
-
-            {/* Today Button */}
-            <button onClick={handleToday} className={cn(buttonBaseCls, "uppercase tracking-wider")}>
-                <RefreshCcw className="w-3.5 h-3.5 opacity-50" />
-                <span>Today</span>
-            </button>
-        </div>
-    );
-};
 
 const MyRosterPage: React.FC = () => {
   const { user } = useAuth();
@@ -142,6 +46,18 @@ const MyRosterPage: React.FC = () => {
   const { data: pendingOfferCount = 0 } = usePendingOfferCount(user?.id || null);
 
   const handleOfferResponded = () => {};
+
+  const rangeLabel = React.useMemo(
+    () => formatRangeLabel(computeRange(selectedDate, view), view),
+    [selectedDate, view],
+  );
+
+  // The picker closes itself; this only snaps the pick to the view's period.
+  const handleDateSelect = React.useCallback((date: Date) => {
+    if (view === 'week') return setSelectedDate(startOfWeekAU(date));
+    if (view === 'month') return setSelectedDate(startOfMonth(date));
+    setSelectedDate(date);
+  }, [view]);
 
   const { isDark } = useTheme();
 
@@ -173,37 +89,42 @@ const MyRosterPage: React.FC = () => {
         setScope={setScope}
         isGammaLocked={isGammaLocked}
         functionBar={
-          <div className="flex flex-row items-center gap-2 w-full">
-            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none">
-              <MyRosterNavigator
-                view={view}
-                onViewChange={setView}
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-              />
-
-              <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-
+          <EmployeeFunctionBar
+            view={view}
+            onViewChange={(v) => setView(v as ViewType)}
+            selectedDate={selectedDate}
+            onDateChange={handleDateSelect}
+            rangeLabel={rangeLabel}
+            onPrevious={() => setSelectedDate(navigateDate(selectedDate, view, -1))}
+            onNext={() => setSelectedDate(navigateDate(selectedDate, view, 1))}
+            trailing={
               <button
                 onClick={() => setShowOffersModal(true)}
+                aria-label={
+                  pendingOfferCount > 0
+                    ? `Shift offers — ${pendingOfferCount} pending`
+                    : 'Shift offers'
+                }
                 className={cn(
-                  'hidden md:flex items-center gap-2 h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black transition-all flex-shrink-0 uppercase tracking-wider shadow-sm',
-                  isDark
-                    ? 'bg-[#111827]/60 text-white/70 hover:text-white'
-                    : 'bg-slate-100 text-slate-700 border border-slate-200/50 hover:bg-slate-200',
-                  pendingOfferCount > 0 && (isDark ? 'text-amber-400 border border-amber-500/30' : 'text-amber-600 border border-amber-500/30'),
+                  text.label,
+                  touch.targetY,
+                  'hidden md:inline-flex items-center gap-2 rounded-xl border px-3 uppercase transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  pendingOfferCount > 0
+                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    : 'border-border bg-background/70 text-foreground hover:bg-muted/60',
                 )}
               >
-                <Mail className="h-3.5 w-3.5" />
+                <Mail className="h-4 w-4" aria-hidden="true" />
                 <span>Offers</span>
                 {pendingOfferCount > 0 && (
-                  <span className="min-w-[18px] h-4.5 bg-amber-500 text-black font-black text-[10px] flex items-center justify-center rounded-full px-1 leading-none">
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-bold leading-none text-black tabular-nums">
                     {pendingOfferCount}
                   </span>
                 )}
               </button>
-            </div>
-          </div>
+            }
+          />
         }
       />
 
@@ -250,30 +171,38 @@ const MyRosterPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile sticky FAB — offers access below the calendar */}
+      {/* Mobile sticky FAB — offers access floating above the bottom navigation bar */}
       <AnimatePresence>
         <motion.div
           key="offers-fab"
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0, opacity: 0 }}
-          className="md:hidden fixed bottom-24 right-5 z-40"
+          className="md:hidden fixed bottom-[var(--mobile-floating-action-bottom,calc(var(--mobile-bottom-nav-clearance,96px)+1.5rem))] right-[calc(env(safe-area-inset-right,0px)+1.25rem)] z-50"
         >
           <button
             onClick={(e) => {
               e.currentTarget.blur();
               setShowOffersModal(true);
             }}
+            aria-label={
+              pendingOfferCount > 0
+                ? `Shift offers — ${pendingOfferCount} pending`
+                : 'Shift offers'
+            }
             className={cn(
               "relative h-14 w-14 rounded-full flex items-center justify-center",
-              "bg-amber-500 hover:bg-amber-400 active:scale-95 transition-all",
-              "shadow-2xl shadow-amber-500/40",
-              pendingOfferCount > 0 && "animate-[pulse_2s_ease-in-out_infinite]"
+              "bg-amber-500 hover:bg-amber-400 active:scale-95 transition-colors",
+              // A plain elevation shadow. This was `shadow-2xl shadow-amber-500/40`
+              // plus a 2s infinite pulse whenever anything was pending — a
+              // permanently throbbing halo in the corner of the roster, and a
+              // WCAG 2.2.2 problem since nothing stopped it.
+              "shadow-lg shadow-black/25",
             )}
           >
-            <Mail size={22} className="text-black" />
+            <Mail size={24} className="text-black" aria-hidden="true" />
             {pendingOfferCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 bg-black text-amber-400 font-black text-[10px] flex items-center justify-center rounded-full border-2 border-amber-500 px-1">
+              <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 bg-black text-amber-400 text-[11px] font-bold tabular-nums flex items-center justify-center rounded-full border-2 border-amber-500 px-1.5">
                 {pendingOfferCount}
               </span>
             )}

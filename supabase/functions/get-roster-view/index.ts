@@ -5,6 +5,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 function corsHeaders() {
   return {
@@ -19,8 +20,75 @@ function isValidUuid(id: string | null | undefined): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
+function jsonError(status: number, message: string): Response {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { status, headers: { ...corsHeaders(), "Content-Type": "application/json" } }
+  );
+}
+
+// ── Authorisation ─────────────────────────────────────────────────────────────
+// Every read in this function uses the SERVICE ROLE, so row-level security does
+// not protect it. `verify_jwt` alone was never enough: the publishable anon key
+// is itself a valid JWT, so until 2026-10-05 an unauthenticated caller could
+// read any organisation's roster and staff list just by naming its
+// organization_id (verified: 20 shifts + 101 employees with only the anon key).
+//
+// Require a real signed-in user, and `shift.view` over exactly the scope being
+// requested — the rule `shifts_select_rbac` applies row by row. A caller whose
+// scope is narrower gets a 403; the planner's prefetch then fails soft and the
+// page's own RLS-scoped queries load the data instead.
+async function authoriseRosterRead(
+  req: Request,
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  orgId: string,
+  deptIds: string[],
+  subDeptIds: string[],
+): Promise<Response | null> {
+  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+    auth: { persistSession: false },
+  });
+  const { data: userData, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !userData?.user) return jsonError(401, "Sign in required");
+
+  // Each check must name the department too: DEPT-scoped grants match on it.
+  let checks: Array<{ dept: string | null; sub: string | null }>;
+  if (subDeptIds.length > 0) {
+    const { data, error } = await admin.from("sub_departments").select("id, department_id").in("id", subDeptIds);
+    if (error) return jsonError(500, "Could not resolve the requested scope");
+    const deptOf = new Map<string, string>(
+      ((data ?? []) as { id: string; department_id: string }[]).map((r) => [r.id, r.department_id]),
+    );
+    if (deptOf.size !== new Set(subDeptIds).size) return jsonError(403, "Not authorised for this roster scope");
+    checks = subDeptIds.map((sub) => ({ dept: deptOf.get(sub)!, sub }));
+  } else if (deptIds.length > 0) {
+    checks = deptIds.map((dept) => ({ dept, sub: null }));
+  } else {
+    checks = [{ dept: null, sub: null }];
+  }
+
+  const results = await Promise.all(checks.map((c) =>
+    userClient.rpc("user_has_action_in_scope", {
+      p_action_code: "shift.view",
+      p_org_id: orgId,
+      p_dept_id: c.dept,
+      p_sub_dept_id: c.sub,
+    })
+  ));
+  if (results.some((r: { data: unknown; error: unknown }) => r.error || r.data !== true)) {
+    return jsonError(403, "Not authorised for this roster scope");
+  }
+  return null;
+}
+
+// `is_first_aid_duty` is a COMPUTED field (cl 28.2, migration 20261005060327):
+// `*` never includes computed fields, so it is named explicitly. Without it the
+// rows this function seeds into the planner cache price first aid at zero.
 const SHIFT_SELECT = `
   *,
+  is_first_aid_duty,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
@@ -98,6 +166,11 @@ Deno.serve(async (req: Request) => {
     const primaryDeptId   = validDeptIds[0] ?? null;
     const primarySubDeptId = validSubDeptIds[0] ?? null;
 
+    // Authorise BEFORE the shared cache can answer.
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const denied = await authoriseRosterRead(req, supabase, organization_id, validDeptIds, validSubDeptIds);
+    if (denied) return denied;
+
     // Cache keys
     const shiftKey  = `${organization_id}:${validDeptIds.sort().join(",")}:${validSubDeptIds.sort().join(",")}:${start_date}:${end_date}`;
     const lookupKey = `${organization_id}:${primaryDeptId ?? ""}:${primarySubDeptId ?? ""}`;
@@ -112,8 +185,6 @@ Deno.serve(async (req: Request) => {
         { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
       );
     }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // ── 1. Shifts query ────────────────────────────────────────────────────────
     const shiftsPromise = cachedShifts
@@ -195,7 +266,9 @@ Deno.serve(async (req: Request) => {
       ? Promise.resolve(null)
       : supabase
           .from("remuneration_levels")
-          .select("id, level_number, level_name, hourly_rate_min, hourly_rate_max, description")
+          // public.remuneration_levels has no `id` column — naming one 400s the
+          // query and the planner silently gets no pay levels (matches prod v11).
+          .select("level_number, level_name, hourly_rate_min, hourly_rate_max, description")
           .order("level_number");
 
     // ── 5. Events ───────────────────────────────────────────────────────────────

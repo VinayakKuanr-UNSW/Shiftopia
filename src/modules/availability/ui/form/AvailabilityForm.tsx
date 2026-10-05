@@ -27,13 +27,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/modules/core/ui/primitives/select';
+import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { AlertCircle } from 'lucide-react';
 import {
@@ -231,22 +225,20 @@ export function AvailabilityForm({
 
 
           {/* Repeat Type */}
-          <div className="space-y-2">
-            <Label htmlFor="repeat-type">Repeat</Label>
-            <Select
+          <div className="space-y-1">
+            <GlobalStyleSelect
+              label="Repeat"
               value={repeatType}
-              onValueChange={(value) => setRepeatType(value as RepeatType)}
-            >
-              <SelectTrigger id="repeat-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Does not repeat</SelectItem>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="fortnightly">Fortnightly</SelectItem>
-              </SelectContent>
-            </Select>
+              onChange={(value) => setRepeatType(value as RepeatType)}
+              options={[
+                { id: 'none', name: 'Does not repeat', description: 'One-off availability for this date' },
+                { id: 'daily', name: 'Daily', description: 'Repeats every day' },
+                { id: 'weekly', name: 'Weekly', description: 'Repeats weekly on chosen days' },
+                { id: 'fortnightly', name: 'Fortnightly', description: 'Repeats every 2 weeks' },
+              ]}
+              showSearch={false}
+              compact
+            />
           </div>
 
           {/* Weekly Repeat Days */}

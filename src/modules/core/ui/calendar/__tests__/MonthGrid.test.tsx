@@ -192,4 +192,13 @@ describe('Calendar primitive', () => {
     render(<Calendar mode="single" defaultMonth={APRIL_2026} />);
     expect(screen.getByRole('gridcell', { name: /Good Friday, public holiday/ })).toBeInTheDocument();
   });
+
+  it('renders surface mode with flex-1 tbody and table for full-height container fill', () => {
+    const { container } = render(<Calendar size="surface" defaultMonth={APRIL_2026} />);
+    const table = container.querySelector('table');
+    const tbody = container.querySelector('tbody');
+    expect(table?.className).toContain('flex-1');
+    expect(tbody?.className).toContain('flex-1');
+    expect(tbody?.className).toContain('flex-col');
+  });
 });

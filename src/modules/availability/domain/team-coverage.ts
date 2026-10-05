@@ -143,13 +143,46 @@ export function containmentShortfallMinutes(
 /**
  * Is this member rostered from their contract rather than from a declaration?
  *
- * Reads `contractType` — the COMPLIANCE BASIS resolved by
- * `resolveComplianceBasis`, not the display `employmentStatus` — because 30 of
- * 103 people hold several active contracts and the one the UI labels them with
- * is not necessarily the one that decides their availability model.
+ * Reads `isWhollyFullTime` — "is EVERY contract in scope Full-Time" — which is
+ * the TypeScript mirror of `sm_all_active_contracts_ft_in` (migration
+ * 20260824130200) and the same predicate the availability EDITOR is gated on
+ * (`AvailabilityPage`, `assertCanDeclareFor`). The manager's view of who owes a
+ * declaration and the employee's ability to give one have to be the same
+ * question, or the page puts someone on the chase-list it will not let declare.
+ *
+ * IT USED TO READ `contractType === 'FT'`, and that is the bug. `contractType`
+ * is the GOVERNING contract, and casual-last ordering makes the governing
+ * contract of a mixed scope the Full-Time one. So a Full-Time Supervisor who is
+ * also a Casual Team Leader in the same sub-department rendered "Contract
+ * based" — no declaration expected, counted in AVAILABLE — while their casual
+ * engagement is OPT_IN, had declared nothing, and was therefore hard-filtered
+ * off every casual shift in that sub-department with no reason emitted. The
+ * page reported supply that the solver would not place.
+ *
+ * Nothing changes for the wholly Full-Time population, which is every
+ * Full-Time employee in the system apart from the multi-hired handful.
+ *
+ * Undefined is FALSE, not "unknown, assume Full-Time" — see the field comment.
  */
 function isContractRostered(member: TeamMember): boolean {
-    return member.contractType === 'FT';
+    return member.isWhollyFullTime === true;
+}
+
+/**
+ * The multi-hired case, said out loud.
+ *
+ * Without this the grid shows "Not declared" against a FULL-TIME chip and the
+ * manager has no way to tell it from a data-quality problem. Presentational: it
+ * explains the state, it never chooses it.
+ */
+function mixedEngagementNote(member: TeamMember, state: TeamDayState): string | undefined {
+    if (state !== 'unset') return undefined;
+    if (member.contractType !== 'FT') return undefined;
+    if (member.isWhollyFullTime !== false) return undefined;
+    return (
+        'Full-Time here, but also holds a non-permanent engagement in this scope. '
+        + 'That work is opt-in, so with nothing declared they cannot be rostered onto it.'
+    );
 }
 
 function resolveState(
@@ -163,10 +196,16 @@ function resolveState(
     // `getResolvedAvailabilities` omits profiles with no rules entirely, so a
     // missing entry is genuinely "never declared", not "declared nothing today".
     if (!availability || member.hasDeclared === false) {
-        // …but for a full-timer "never declared" is the CORRECT and only
-        // possible state: their rows were removed by 20260817120000 and the
-        // write guard prevents new ones. Reporting them as 'unset' would put the
-        // whole permanent workforce on a chase-list that has nothing to chase.
+        // …but for a WHOLLY Full-Time scope "never declared" is the CORRECT and
+        // only possible state: those rows were removed by 20260817120000 and
+        // the write guard still prevents new ones there. Reporting them as
+        // 'unset' would put the whole permanent workforce on a chase-list that
+        // has nothing to chase.
+        //
+        // A MIXED scope falls through to 'unset', and that is the point: the
+        // database accepts a declaration for it (20260824130200), the editor
+        // now offers one, and until it arrives the casual half of that person's
+        // employment is invisible to the solver.
         return isContractRostered(member) ? 'contract' : 'unset';
     }
     if (availability.isFullyUnavailable || availability.availableWindows.length === 0) {
@@ -214,6 +253,7 @@ export function buildTeamDayCells(
                 profileId: member.profileId,
                 date,
                 state,
+                note: mixedEngagementNote(member, state),
                 windows: dayAvail?.availableWindows ?? [],
                 shifts: dayShifts.map((s) => ({
                     id: s.id,
@@ -373,14 +413,31 @@ export function summarise(
     /** Reference point for "expiring soon"; yyyy-MM-dd. */
     today: string,
 ): TeamAvailabilitySummary {
-    const { members, dates, requiredSource } = inputs;
+    const { members, dates, requiredSource, availability } = inputs;
 
     // The chase-list. Contract-rostered staff are excluded because there is
     // nothing to chase: they cannot declare availability, so counting them would
     // make the "Not declared" tile permanently report the full-time headcount as
     // an outstanding action.
+    //
+    // "Never declared" is read the SAME way `resolveState` reads it — an absent
+    // entry in the availability map. `getResolvedAvailabilities` omits any
+    // profile with no rules, and its rule probe is scoped, so absence here means
+    // "never declared FOR THIS JOB" rather than "never declared at all". That is
+    // what makes the tile answer the question the page is filtered to.
+    //
+    // It used to test `m.hasDeclared === false` alone. Nothing populates
+    // `hasDeclared` — `getTeamMembers` does not return it and no other producer
+    // sets it — so the predicate was false for every member and the tile read a
+    // permanent ZERO. A count that is always zero looks like good news, which is
+    // why it survived: an empty chase-list is indistinguishable from a finished
+    // one. `hasDeclared` is still honoured when a caller does set it (the domain
+    // tests do), it is simply no longer the only signal.
+    const neverDeclared = (m: TeamMember): boolean =>
+        m.hasDeclared === false || !availability.get(m.profileId);
+
     const unsetCount = members.filter(
-        (m) => m.hasDeclared === false && !isContractRostered(m),
+        (m) => neverDeclared(m) && !isContractRostered(m),
     ).length;
 
     // 'contract' counts here. The tile reads "N/M declared" against

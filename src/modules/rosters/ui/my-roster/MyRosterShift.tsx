@@ -1,55 +1,70 @@
 import React from 'react';
-import { Shift } from '@/modules/rosters';
+import { Shift, ShiftWithDetails } from '@/modules/rosters';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
-import { format } from 'date-fns';
-import { getNowInTimezone, SYDNEY_TZ, formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { useClockValue, isShiftPast, type ClockSnapshot } from '@/modules/core/hooks/useClock';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { useAuth } from '@/platform/auth/useAuth';
 import ShiftPill from './ShiftPill';
 
+/**
+ * Props are deliberately all primitives plus one referentially-stable object, so
+ * the `React.memo` at the bottom of this file actually holds.
+ *
+ * The desktop month grid renders up to 126 of these (42 cells x 3 chips). Before
+ * memo, opening a shift dialog re-rendered every one of them, because the parent
+ * re-renders on `selectedShift` and the old contract passed an inline
+ * `onClick={() => ...}` arrow and an inline `style={{ height }}` object — two
+ * fresh identities per card per render, which defeat memo on their own.
+ *
+ * Hence `onSelect` + `dateKey` instead of a closure, and `height` as a number
+ * instead of a style object.
+ */
 interface MyRosterShiftProps {
-  shift: Shift;
-  groupName: string;
-  groupColor: string;
-  subGroupName: string;
+  data: ShiftWithDetails;
+  /**
+   * The calendar day this instance is rendered under, `YYYY-MM-DD`.
+   *
+   * NOT always `data.shift.shift_date`: the 3-day view asks for continuations,
+   * so an overnight shift also appears under the following day and the dialog
+   * must open on the day the user actually clicked.
+   */
+  dateKey: string;
   compact?: boolean;
-  onClick?: (e?: React.MouseEvent) => void;
-  style?: React.CSSProperties;
+  /** Pixel height when laid out in a time grid; its presence selects the pill. */
+  height?: number;
+  onSelect?: (data: ShiftWithDetails, dateKey: string) => void;
 }
 
-const MyRosterShift: React.FC<MyRosterShiftProps> = ({
-  shift,
-  groupName,
-  groupColor,
-  subGroupName,
+const MyRosterShiftImpl: React.FC<MyRosterShiftProps> = ({
+  data,
+  dateKey,
   compact = false,
-  onClick,
-  style,
+  height,
+  onSelect,
 }) => {
+  const { shift, groupName, groupColor, subGroupName } = data;
+  const handleClick = React.useCallback(() => onSelect?.(data, dateKey), [onSelect, data, dateKey]);
+  const style = React.useMemo<React.CSSProperties | undefined>(
+    () => (height == null ? undefined : { height }),
+    [height],
+  );
   const isMobile = useIsMobile();
   const { user } = useAuth();
 
-  // Calculate if shift is in the past
-  const isPast = React.useMemo(() => {
-    if (!shift.shift_date || !shift.end_time) return false;
-    try {
-      // "Now" in Sydney (AEST/AEDT) so comparisons against the shift's Sydney
-      // wall-clock fields are correct regardless of the viewer's browser tz.
-      const nowSyd = getNowInTimezone(SYDNEY_TZ);
-      const todayStr = format(nowSyd, 'yyyy-MM-dd');
-      if (shift.shift_date > todayStr) return false;
-      if (shift.shift_date < todayStr) return true;
-      const [nowH, nowM] = format(nowSyd, 'HH:mm').split(':').map(Number);
-      const [endH, endM] = shift.end_time.split(':').map(Number);
-      const resolvedEndH = endH === 0 ? 24 : endH;
-      const currentMinutes = nowH * 60 + nowM;
-      const endMinutes = resolvedEndH * 60 + endM;
-      return currentMinutes > endMinutes;
-    } catch {
-      return false;
-    }
-  }, [shift.shift_date, shift.end_time]);
+  // "Now" in Sydney (AEST/AEDT), so comparisons against the shift's Sydney
+  // wall-clock fields are correct regardless of the viewer's browser tz.
+  //
+  // This was a `useMemo` keyed on the shift, which froze the answer at mount: a
+  // shift that ended while the roster sat open never went grey. The shared clock
+  // ticks once a minute for the whole app and re-renders only the cards whose
+  // boolean actually flipped — see `useClock`.
+  const isPastSelector = React.useCallback(
+    (now: ClockSnapshot) => isShiftPast(shift.shift_date, shift.end_time, now, shift.start_time),
+    [shift.shift_date, shift.end_time, shift.start_time],
+  );
+  const isPast = useClockValue(isPastSelector);
 
   const netLength = React.useMemo(() => {
     if (!shift.start_time || !shift.end_time) return 0;
@@ -77,7 +92,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
   // Determine if we should show the compact "Pill" design.
   // 1. In any Grid View (D/3D/W) where 'style.height' is passed (both Desktop & Mobile)
   // 2. In the Desktop Month View (where 'compact' is true and it's not mobile)
-  const isGridView = !!style?.height;
+  const isGridView = height != null;
   const showPill = isGridView || (!isMobile && compact);
 
   if (showPill) {
@@ -87,7 +102,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         groupName={groupName}
         groupColor={groupColor}
         subGroupName={subGroupName}
-        onClick={onClick}
+        onClick={handleClick}
         style={style}
       />
     );
@@ -105,15 +120,15 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         role={shift.roles?.name || 'Shift'}
         employeeName={assignedEmployeeName}
         shiftDate={formatCalendarDate(shift.shift_date, 'EEE, MMM d')}
-        startTime={shift.start_time.slice(0, 5)}
-        endTime={shift.end_time.slice(0, 5)}
+        startTime={shift.start_time?.slice(0, 5) ?? '--:--'}
+        endTime={shift.end_time?.slice(0, 5) ?? '--:--'}
         netLength={netLength}
         paidBreak={shift.paid_break_minutes ?? shift.break_minutes ?? 0}
         unpaidBreak={shift.unpaid_break_minutes ?? 0}
         isPast={isPast}
         lifecycleStatus={shift.lifecycle_status}
         groupVariant={resolveGroupVariant(shift, groupColor || groupName, subGroupName)}
-        onClick={onClick}
+        onClick={handleClick}
         shiftData={shift}
         className="h-full"
       />
@@ -121,6 +136,14 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
   );
 };
 
+
+/**
+ * Memoised on a shallow prop compare. `data` comes from `useMyRoster`'s date
+ * index, which builds each `ShiftWithDetails` once per fetch, so identity is
+ * stable across re-renders of the parent — the precondition this relies on.
+ */
+const MyRosterShift = React.memo(MyRosterShiftImpl);
+MyRosterShift.displayName = 'MyRosterShift';
 
 export default MyRosterShift;
 

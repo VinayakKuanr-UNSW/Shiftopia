@@ -1,0 +1,24 @@
+# --- graphify corpus scope ---
+# Goal: ONE authoritative node per real concept. Every entry below is either a
+# build artifact, a vendored copy, or a near-duplicate of src/ — indexing them
+# splits retrieval across identical twins and inflates token cost per query.
+
+# Capacitor/Gradle bundle copies of the app (7,193 dup nodes, mostly bundled .js)
+android/
+
+# The almond repo is a FORK of this repo (merge base 8af1d4e), not a separate
+# project — indexing it duplicates ~2,755 nodes of src/.
+capstone-project-26t2-9900-t17b-almond/
+
+# Vendored / generated
+node_modules/
+dist/
+public/
+assets/
+**/.venv/
+**/__pycache__/
+graphify-out/
+
+# Scratch dirs, not knowledge
+1/
+scratch/

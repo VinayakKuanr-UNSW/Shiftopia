@@ -1,11 +1,13 @@
 import React from 'react';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { GlobalScopeFilter } from './GlobalScopeFilter';
+import { GlobalScopeFilter, type ScopeLevel } from './GlobalScopeFilter';
 import type { ScopeSelection } from '@/platform/auth/types';
 
 interface PersonalScopeFilterProps {
     onScopeChange: (scope: ScopeSelection) => void;
     multiSelect?: boolean;
+    /** Levels forced to a single choice — see `GlobalScopeFilterProps`. */
+    singleSelectLevels?: ScopeLevel[];
 }
 
 /**
@@ -17,6 +19,7 @@ interface PersonalScopeFilterProps {
 export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
     onScopeChange,
     multiSelect = true,
+    singleSelectLevels,
 }) => {
     const { scope, scopeTree, isLoading } = useScopeFilter('personal');
 
@@ -36,6 +39,7 @@ export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
             defaultSelection={scope}
             onScopeChange={onScopeChange}
             multiSelect={multiSelect}
+            singleSelectLevels={singleSelectLevels}
         />
     );
 };

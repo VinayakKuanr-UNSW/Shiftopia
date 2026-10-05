@@ -9,6 +9,7 @@
  * them only when consistent local + CI numbers warrant it.
  */
 
+import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
 import { describe, it, expect } from 'vitest';
 import { runV8Orchestrator } from '../orchestrator';
 import type {
@@ -28,7 +29,6 @@ function buildShift(empId: string, dayIdx: number): V8OrchestratorShift {
     date,
     start_time: '09:00',
     end_time: '17:00',
-    is_ordinary_hours: true,
     role_id: 'r1',
     required_qualifications: ['rsa-cert'],
     break_minutes: 0,
@@ -41,6 +41,8 @@ function buildEmployeeContext(empId: string): V8EmployeeContext {
     employee_id: empId,
     contract_type: 'FULL_TIME',
     contracted_weekly_hours: 38,
+    ordinary_hours_cycle_weeks:  ORD_CYCLE_WEEKS_DEFAULT,
+    ordinary_hours_cycle_anchor: ORD_CYCLE_ANCHOR_DEFAULT,
     skill_ids: ['rsa-cert'],
     license_ids: [],
     assigned_role_ids: ['r1'],

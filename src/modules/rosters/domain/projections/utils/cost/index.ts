@@ -5,6 +5,7 @@ import * as SecurityEngine from './security';
 import { Shift } from '../../../shift.entity';
 import type { AwardContext } from './award-context';
 import { buildAwardContext } from './award-context';
+import { resolveShiftAllowances } from './shift-allowances';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 /**
@@ -36,8 +37,8 @@ const warnedUnclassifiedRoles = new Set<string>();
 export function extractLevel(roleName?: string | null): string | undefined {
   if (!roleName) return undefined;
 
-  // 1. Check for explicit level shorthand L1, L2, etc.
-  const match = roleName.match(/(?:L|Level\s*)(\d)/i);
+  // 1. Check for explicit level shorthand L1, L2, TM1..7, etc.
+  const match = roleName.match(/(?:L|Level\s*|TM\s*)(\d)/i);
   if (match) return `LEVEL_${match[1]}`;
 
   // 2. Trainee detection (Maps to WAGE_RATES.TRAINEE)
@@ -156,7 +157,7 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     is_overnight: shift.is_overnight,
     is_cancelled: shift.is_cancelled,
     shift_date: shift.shift_date,
-    allowances: shift.allowances,
+    allowances: resolveShiftAllowances(shift),
     isAnnualLeave: shift.isAnnualLeave,
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,
@@ -204,7 +205,7 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     is_overnight: shift.is_overnight,
     is_cancelled: shift.is_cancelled,
     shift_date: shift.shift_date,
-    allowances: shift.allowances,
+    allowances: resolveShiftAllowances(shift),
     isAnnualLeave: shift.isAnnualLeave,
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,

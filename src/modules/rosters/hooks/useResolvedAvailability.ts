@@ -26,10 +26,18 @@ interface UseResolvedAvailabilityResult {
 /**
  * Hook to fetch and manage resolved availability for multiple profiles
  */
+/**
+ * @param subDepartmentId Which JOB the availability is for. Omit it and the
+ *   answer is person-wide (today's behaviour). Pass a specific sub-department
+ *   id and the read narrows to declarations for THAT job plus unscoped ones.
+ *   Added in the sub-department scoping work; existing callers that omit it
+ *   get the same behaviour as before.
+ */
 export function useResolvedAvailability(
     profileIds: string[],
     dates: Date[],
-    enabled: boolean = true
+    enabled: boolean = true,
+    subDepartmentId?: string | null,
 ): UseResolvedAvailabilityResult {
     // Memoize the date range
     const dateRange = useMemo(() => {
@@ -51,18 +59,22 @@ export function useResolvedAvailability(
         queryKey: [
             'availability',
             'resolved',
-            // Source discriminator: bumped when the read path moved off the empty
-            // `availabilities` table onto `availability_slots`. Prevents reusing a
-            // stale (empty) cache entry from the old code path after a hot reload.
-            'slots-v2',
+            // Source discriminator: bumped from v2→v3 when the scope parameter was
+            // added. Without the bump, navigating from a page that fetched the
+            // person-wide list to one asking about a specific job would serve the
+            // cached person-wide result for the scoped key — and react-query would
+            // not refetch because the data was still fresh.
+            'slots-v3',
             profileIdKey,
             dateRange?.start.getTime(),
             dateRange?.end.getTime(),
+            subDepartmentId ?? null,
         ] as const,
         queryFn: () => getResolvedAvailabilities(
             profileIds,
             dateRange!.start,
-            dateRange!.end
+            dateRange!.end,
+            subDepartmentId,
         ),
         enabled: enabled && !!dateRange && profileIds.length > 0,
         staleTime: 30_000,

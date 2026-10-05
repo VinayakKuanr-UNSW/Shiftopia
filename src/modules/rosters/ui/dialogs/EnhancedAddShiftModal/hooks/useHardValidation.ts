@@ -14,7 +14,11 @@ import { runHardValidation, HardValidationResult, ShiftTimeRange } from '@/modul
 import { format, addDays, subDays } from 'date-fns';
 import { getNowInTimezone, SYDNEY_TZ, todayISO } from '@/modules/core/lib/date.utils';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { isEqual } from 'lodash';
+// Deep import: `from 'lodash'` pulls the whole CJS bundle, which Rollup cannot
+// tree-shake and then hoists into the EAGER entry chunk (72 KB) because
+// recharts also depends on it. This module path is ~5 KB and stays in this
+// lazy modal's own chunk.
+import isEqual from 'lodash/isEqual';
 
 const EMPTY_ARRAY: any[] = [];
 
@@ -46,6 +50,8 @@ interface UseHardValidationProps {
     isTemplateMode: boolean;
     existingV8ShiftId?: string;
     timezone?: string;
+    /** 'FT' adds the one-shift-per-day rule (cl 39.1). */
+    targetEmploymentType?: string | null;
 }
 
 interface UseHardValidationReturn {
@@ -67,6 +73,7 @@ export function useHardValidation({
     isTemplateMode,
     existingV8ShiftId,
     timezone = SYDNEY_TZ,
+    targetEmploymentType,
 }: UseHardValidationProps): UseHardValidationReturn {
     const [hardValidation, setHardValidation] = useState<HardValidationResult>({ passed: true, errors: [] });
 
@@ -189,6 +196,7 @@ export function useHardValidation({
             current_time: getNowInTimezone(timezone),
             is_template: isTemplateMode,
             shift_id: existingV8ShiftId,
+            target_employment_type: targetEmploymentType,
         });
 
         // Only update if result actually changed to prevent render loops
@@ -196,7 +204,7 @@ export function useHardValidation({
             if (isEqual(prev, result)) return prev;
             return result;
         });
-    }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone]);
+    }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone, targetEmploymentType, existingV8ShiftId]);
 
     return { hardValidation, employeeExistingShifts, studentVisaEnforcement, restGapAgreement8h, contractType, isLoadingShifts };
 }

@@ -42,6 +42,7 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { ThemeSelector } from '@/modules/core/ui/components/ThemeSelector';
 import { useNotifications } from '@/modules/core/hooks/useNotifications';
 import { ACCESS_LEVEL_CONFIG } from '@/platform/auth/constants';
+import { usePersona } from '@/platform/auth/PersonaProvider';
 import { SidebarUser } from './SidebarUser';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/modules/core/ui/primitives/collapsible';
 import { useTranslation } from 'react-i18next';
@@ -240,6 +241,12 @@ const AppSidebar: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { user, hasPermission, logout } = useAuth();
+  // The persona splits this list in two. `hasPermission` still gates every
+  // employer entry underneath — the persona decides which HALF is on screen,
+  // never whether the user is allowed there.
+  const { persona } = usePersona();
+  const isEmployee = persona === 'employee';
+  const isEmployer = persona === 'employer';
   const { unreadCount } = useNotifications();
   const queryClient = useQueryClient();
 
@@ -303,7 +310,8 @@ const AppSidebar: React.FC = () => {
       {/* ==================== NAVIGATION ==================== */}
       <div className="flex-1 overflow-y-auto space-y-4 py-4 px-[15px]">
 
-        {/* ---------- Work Section ---------- */}
+        {/* ---------- Employee persona: Work, Requests and Personal ---------- */}
+        {isEmployee && (<>
         <CollapsibleSection
           icon={UserCircle2}
           title={t('nav.work', 'Work')}
@@ -392,6 +400,33 @@ const AppSidebar: React.FC = () => {
             description="View announcements"
           />
 
+          {/* Employee-facing half of the KPI split. No permission gate — every
+              access level sees their own numbers, and the RPC behind it already
+              enforces `p_employee_id = auth.uid() OR is_manager_or_above()`. */}
+          <NavigationItem
+            to="/performance"
+            icon={TrendingUp}
+            iconColor={iconColorMap.insights}
+            label={t('nav.performance', 'Performance')}
+            isActive={isRouteActive('/performance')}
+            description="Your attendance, bids, swaps & cancellations"
+          />
+        </CollapsibleSection>
+        </>)}
+
+        {/* ---------- Shared: belongs to neither persona ----------
+            Notifications is workspace-wide, not employer or employee work. It
+            was inside the employee block, which meant switching to the employer
+            persona hid the unread badge — the one entry a manager most needs to
+            keep seeing. Settings lives in the footer below and is already
+            persona-independent; Profile and Search are reached from the header,
+            so neither needs a nav entry here. */}
+        <CollapsibleSection
+          icon={BellRing}
+          title={t('nav.shared', 'Workspace')}
+          color={iconColorMap.notifications}
+          defaultOpen={true}
+        >
           <NavigationItem
             to="/my-notifications"
             icon={BellRing}
@@ -403,8 +438,8 @@ const AppSidebar: React.FC = () => {
           />
         </CollapsibleSection>
 
-        {/* ---------- Rostering Section ---------- */}
-        {(hasPermission('templates') ||
+        {/* ---------- Rostering Section (employer persona) ---------- */}
+        {isEmployer && (hasPermission('templates') ||
           hasPermission('rosters') ||
           hasPermission('timesheet-view')) && (
             <CollapsibleSection
@@ -460,7 +495,7 @@ const AppSidebar: React.FC = () => {
           )}
 
         {/* ---------- Management Section ---------- */}
-        {hasPermission('management') && (
+        {isEmployer && hasPermission('management') && (
           <CollapsibleSection
             icon={Shield}
             title={t('nav.management')}
@@ -526,7 +561,7 @@ const AppSidebar: React.FC = () => {
         )}
 
         {/* ---------- Features Section ---------- */}
-        {(hasPermission('broadcast') ||
+        {isEmployer && (hasPermission('broadcast') ||
           hasPermission('insights') ||
           hasPermission('management')) && (
             <CollapsibleSection
@@ -553,7 +588,7 @@ const AppSidebar: React.FC = () => {
                   iconColor={iconColorMap.insights}
                   label={t('nav.insights')}
                   isActive={isRouteActive('/insights')}
-                  description="Analytics & reports"
+                  description="Attendance, bids, swaps & cancellations"
                 />
               )}
 
@@ -562,7 +597,7 @@ const AppSidebar: React.FC = () => {
           )}
 
         {/* ---------- Admin Section ---------- */}
-        {(hasPermission('insights') || hasPermission('management')) && (
+        {isEmployer && (hasPermission('insights') || hasPermission('management')) && (
           <CollapsibleSection
             icon={Shield}
             title={t('common.admin')}

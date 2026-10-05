@@ -31,7 +31,8 @@ import type {
     TeamMember,
 } from '../model/team-availability.types';
 import { addDaysISO } from '../domain/team-coverage';
-import { resolveComplianceBasis, sortByComplianceBasis } from '../domain/contract-basis';
+import { resolveComplianceBasis, resolveScopedBasis, sortByComplianceBasis } from '../domain/contract-basis';
+import type { AvailabilityScopeRef } from '../domain/contract-basis';
 import { resolveNetMinutes } from '../domain/hours-compliance';
 import type { FairnessStanding } from '../domain/team-metrics';
 
@@ -55,13 +56,22 @@ interface ContractRow {
     /** `numeric` — PostgREST may serialise it as a string. See ContractBasisInput. */
     contracted_weekly_hours: number | string | null;
     start_date: string | null;
+    /** Migration 20260826090000. Absent on a database without it — see the retry. */
+    ordinary_hours_cycle_weeks?: number | string | null;
+    ordinary_hours_cycle_anchor?: string | null;
 }
+
+const CONTRACT_COLUMNS_BASE =
+    'user_id,department_id,sub_department_id,role_id,employment_status,status,contracted_weekly_hours,start_date';
+const CONTRACT_COLUMNS_CYCLE = 'ordinary_hours_cycle_weeks,ordinary_hours_cycle_anchor';
 
 /** `ContractRow` in the shape `contract-basis` compares. */
 const toBasisInput = (row: ContractRow) => ({
     employmentStatus: row.employment_status,
     contractedWeeklyHours: row.contracted_weekly_hours,
     startDate: row.start_date,
+    ordinaryHoursCycleWeeks: row.ordinary_hours_cycle_weeks ?? null,
+    ordinaryHoursCycleAnchor: row.ordinary_hours_cycle_anchor ?? null,
 });
 
 /**
@@ -78,23 +88,41 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
 
     if (orgIds.length === 0) return [];
 
-    let contractQuery = supabase
-        .from('user_contracts')
-        .select(
-            'user_id,department_id,sub_department_id,role_id,employment_status,status,contracted_weekly_hours,start_date',
-        )
-        .in('organization_id', orgIds)
-        .eq('status', 'Active'); // capital A — 'active' matches nothing
+    // The work-cycle columns arrived in migration 20260826090000. PostgREST
+    // rejects the whole select on one unknown name, and this read THROWS — so on
+    // a database without the migration the page would hard-error rather than
+    // degrade. One retry on the base columns keeps it working; the cycle then
+    // reads as the four-week default, which is what every layer assumed anyway.
+    const runContractQuery = async (columns: string) => {
+        let q = supabase
+            .from('user_contracts')
+            .select(columns)
+            .in('organization_id', orgIds)
+            .eq('status', 'Active'); // capital A — 'active' matches nothing
+        if (deptIds.length > 0) q = q.in('department_id', deptIds);
+        if (subDeptIds.length > 0) q = q.in('sub_department_id', subDeptIds);
+        return await q;
+    };
 
-    if (deptIds.length > 0) contractQuery = contractQuery.in('department_id', deptIds);
-    if (subDeptIds.length > 0) contractQuery = contractQuery.in('sub_department_id', subDeptIds);
-
-    const { data: contracts, error: contractErr } = await contractQuery;
+    let { data: contracts, error: contractErr } = await runContractQuery(
+        `${CONTRACT_COLUMNS_BASE},${CONTRACT_COLUMNS_CYCLE}`,
+    );
+    if (contractErr) {
+        ({ data: contracts, error: contractErr } = await runContractQuery(CONTRACT_COLUMNS_BASE));
+        if (!contractErr) {
+            console.info(
+                '[team-availability.api] work-cycle columns unavailable — defaulting to '
+                + 'the four-week cycle (migration 20260826090000 not applied here)',
+            );
+        }
+    }
     if (contractErr) {
         throw new Error(`Team members: contract fetch failed — ${contractErr.message}`);
     }
 
-    const rows = (contracts ?? []) as ContractRow[];
+    // Through `unknown`: the column list is now a runtime string (see the retry
+    // above), so PostgREST can no longer infer the row shape from a literal.
+    const rows = (contracts ?? []) as unknown as ContractRow[];
     const userContractsMap = new Map<string, ContractRow[]>();
     for (const row of rows) {
         if (!row.user_id) continue;
@@ -170,6 +198,59 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
                 .filter((name): name is string => Boolean(name));
             const userEmploymentStatuses = [...new Set(userContracts.map((c) => c.employment_status).filter(Boolean))];
 
+            // `userContracts[0]?.department_id` is the [0]-of-unordered-rows bug
+            // class this scoping work exists to kill. 30 of 103 people hold
+            // several contracts, and the one that sorted first was the one that
+            // decided which department/sub-department the page attributes them to.
+            //
+            // Resolution: prefer a contract matching the selected sub-department
+            // scope (same rule as EligibilityService lines ~195-210), or one with
+            // a NULL sub-department under the same department (dept-wide contract),
+            // else fall back to the sorted head.
+            const selectedSubDeptIds = subDeptIds;
+            const selectedDeptIds = deptIds;
+            const scopeContract = (() => {
+                // Direct sub-department match
+                if (selectedSubDeptIds.length > 0) {
+                    const match = userContracts.find((c) =>
+                        selectedSubDeptIds.includes(c.sub_department_id ?? ''),
+                    );
+                    if (match) return match;
+                    // Department-wide contract (null sub-dept, matching dept)
+                    if (selectedDeptIds.length > 0) {
+                        const deptWide = userContracts.find((c) =>
+                            !c.sub_department_id &&
+                            selectedDeptIds.includes(c.department_id ?? ''),
+                        );
+                        if (deptWide) return deptWide;
+                    }
+                }
+                return userContracts[0] ?? null;
+            })();
+
+            // When a SINGLE sub-department is selected, the basis must be the
+            // SCOPED one, not the person-wide winner. This is the sharpest
+            // end-to-end test of the whole feature: `isContractRostered` in
+            // `team-coverage.ts` reads `isWhollyFullTime` to decide whether a
+            // cell renders as 'contract' (a permanent, no declaration expected)
+            // or 'unset' (someone who owes a declaration). For the multi-job
+            // employee the SAME PERSON on the SAME DAY must read 'contract' under
+            // Security and 'unset' under Set-up.
+            const scopeRef: AvailabilityScopeRef | null =
+                selectedSubDeptIds.length === 1
+                    ? { subDepartmentId: selectedSubDeptIds[0] }
+                    : null;
+            const scopedBasis = scopeRef
+                ? resolveScopedBasis(
+                    userContracts.map((c) => ({
+                        ...toBasisInput(c),
+                        subDepartmentId: c.sub_department_id ?? null,
+                        departmentId: c.department_id ?? null,
+                    })),
+                    scopeRef,
+                  )
+                : basis;
+
             return {
                 profileId: p.id,
                 fullName:
@@ -181,15 +262,27 @@ export async function getTeamMembers(scope: ScopeSelection): Promise<TeamMember[
                 roleName: primaryContract.roleName,
                 roleNames: distinctRoleNames,
                 contracts: contractsInfoList,
-                departmentId: userContracts[0]?.department_id ?? null,
-                subDepartmentId: userContracts[0]?.sub_department_id ?? null,
+                departmentId: scopeContract?.department_id ?? null,
+                subDepartmentId: scopeContract?.sub_department_id ?? null,
                 employmentStatus: primaryContract.employmentStatus ?? (userEmploymentStatuses.length > 0 ? userEmploymentStatuses.join(', ') : null),
                 // Deliberately NOT `employmentStatus` above: that field is a
                 // display label and may join several statuses with a comma.
-                // These two are the compliance basis and have exactly one
-                // answer each. See domain/contract-basis.ts.
-                contractType: basis.contractType,
-                contractedWeeklyHours: basis.contractedWeeklyHours,
+                // These two are the SCOPED compliance basis when a single
+                // sub-department is selected, and the person-wide one otherwise.
+                contractType: scopedBasis.contractType,
+                contractedWeeklyHours: scopedBasis.contractedWeeklyHours,
+                // The declared ordinary-hours cycle, resolved the same scoped
+                // way — cl 35.x(a) prices the cycle the engagement declares.
+                cycleWeeks: scopedBasis.cycleWeeks,
+                cycleAnchor: scopedBasis.cycleAnchor,
+                // NOT derivable from `contractType` — that is the governing
+                // contract, and the governing contract of a Full-Time +
+                // Casual sub-department is the Full-Time one. This is the
+                // "every contract in scope is Full-Time" question, and it is
+                // what decides whether an absent declaration is a fact or a
+                // gap. Producing a TeamMember without it is a silent vote for
+                // "gap" (see the field comment).
+                isWhollyFullTime: scopedBasis.isWhollyFullTime,
             } satisfies TeamMember;
         })
         .sort((a, b) => a.fullName.localeCompare(b.fullName));

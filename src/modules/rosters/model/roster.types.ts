@@ -41,12 +41,11 @@ export interface FilterOption {
     category: FilterCategory;
 }
 
-export interface ShiftWithDetails {
-    shift: Shift;
-    groupName: string;
-    groupColor: string;
-    subGroupName: string;
-}
+// `ShiftWithDetails` used to live here. It had ZERO importers — every one of the
+// six consumers redeclared it locally — because the `Shift` in scope in this file
+// is `model/shift.types.ts#Shift`, re-exported via `@/modules/core/types`, while
+// the My Roster views all use `domain/shift.entity.ts#Shift`. The shared type was
+// unusable by the people it was for. It now lives beside the Shift it wraps.
 
 export interface ShiftAssignment {
     shiftId: string;
@@ -419,6 +418,7 @@ function getGroupColorName(hex: string): string {
         '#ef4444': 'red',
         '#f59e0b': 'orange',
         '#8b5cf6': 'purple',
+        '#06b6d4': 'cyan',
     };
     return colorMap[hex.toLowerCase()] || 'blue';
 }
@@ -432,6 +432,7 @@ export function getGroupColor(name: string | null | undefined): string {
     if (n.includes('exhibition')) return 'exhibition_centre';
     if (n.includes('theatre')) return 'theatre';
     if (n.includes('cutaway')) return 'the_cutaway';
+    if (n === 'office') return 'office';
     return 'default_yellow';
 }
 

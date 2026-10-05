@@ -39,8 +39,41 @@ export const LEAVE_TYPE_LABELS: Record<LeaveTypeCode, string> = {
   gender_affirmation: 'Gender Affirmation Leave',
 };
 
+/**
+ * Does a day of this leave type discharge a permanent's contracted ordinary
+ * hours, for the purposes of reconciling a roster against a contract?
+ *
+ * This is a SEPARATE question from `paidForCasual` (which asks whether a casual
+ * is paid at all) and from `balanceTracked` (which asks whether we hold a
+ * running balance). It exists because the Office generator has to answer
+ * "how many hours does this employee still owe" and a leave day either counts
+ * toward that or it does not.
+ *
+ *   'CREDITS'  — a paid absence. The employee is treated as having worked
+ *                their ordinary hours for that day (cl 44.7, 45.2, 46.6, …),
+ *                so the day is NOT rostered and NOT counted as a shortfall.
+ *   'BLOCKS'   — an unpaid absence. Nothing may be rostered on the day, but
+ *                the day discharges nothing either: cl 57.5 says authorised
+ *                unpaid leave does not count toward continuous service, so it
+ *                SUSPENDS the exchange rather than completing it. The result
+ *                is a visible variance, which is the honest answer.
+ *   'ELECTION' — the Agreement gives the Team Member a CHOICE between the two
+ *                above, and we do not record which they made. Never guessed;
+ *                the generator computes the requirement both ways and reports
+ *                a WARNING so a human resolves it.
+ */
+export type OrdinaryHoursCredit = 'CREDITS' | 'BLOCKS' | 'ELECTION';
+
 export interface LeavePolicy {
   leaveType: LeaveTypeCode;
+  /**
+   * Effect on a permanent's contracted ordinary hours. See
+   * {@link OrdinaryHoursCredit}. Consumed by the Office requirement
+   * calculator; deliberately NOT derived from `accrualRateHoursPerYear`,
+   * because a type can be paid without accruing (compassionate, parental)
+   * and tracked without being paid from a balance at all.
+   */
+  ordinaryHoursCredit: OrdinaryHoursCredit;
   /** Hours accrued per year of continuous service; null = no accrual (unpaid, community). */
   accrualRateHoursPerYear: number | null;
   /** Maximum balance cap in hours; null = no cap (accumulates indefinitely). */
@@ -55,6 +88,10 @@ export interface LeavePolicy {
    * NES Div 11 semantics: the full entitlement is AVAILABLE UP FRONT and
    * resets on the service anniversary — it does not accrue progressively.
    * projectBalance must not add daily accrual for these types.
+   *
+   * FDV is the only type this describes. Religious/cultural and
+   * gender-affirmation leave used to carry it, on the strength of dedicated
+   * balances cl 55.1 and cl 58.2 do not grant — see `ordinaryHoursCredit`.
    */
   grantedUpFront?: boolean;
   /** Whether balance is tracked (false for per-occasion types like compassionate). */
@@ -76,10 +113,34 @@ export interface LeaveBalance {
 
 export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
+/**
+ * Which of the two things cl 55.1 / cl 58.2 offer the Team Member did they
+ * choose for this absence?
+ *
+ * Both clauses read the same way: apply to use up to N days of accrued paid
+ * ANNUAL leave, OR be absent for up to N days UNPAID. Neither creates a
+ * separate paid entitlement, so the leave type alone cannot say whether the
+ * day is paid — only the election can.
+ *
+ * `null` means not yet recorded, which is a real state rather than an error:
+ * every request predating the election column has one, and the Office
+ * calculator reports both readings instead of guessing.
+ */
+export type LeaveElectionMode = 'annual' | 'unpaid';
+
+/** Leave types that require an election before their pay effect is known. */
+export const ELECTION_LEAVE_TYPES: readonly LeaveTypeCode[] =
+    Object.freeze(['religious_cultural', 'gender_affirmation']);
+
 export interface LeaveRequest {
   id: string;
   employeeId: string;
   leaveType: LeaveTypeCode;
+  /**
+   * cl 55.1 / cl 58.2 only. Null for every other type, and null on an
+   * election-type request whose choice has not been recorded.
+   */
+  electionMode: LeaveElectionMode | null;
   startDate: string;  // YYYY-MM-DD
   endDate: string;    // YYYY-MM-DD
   requestedHours: number;
@@ -96,6 +157,12 @@ export interface LeaveRequest {
 /** Input shape for creating a leave request. */
 export interface CreateLeaveRequestInput {
   leaveType: LeaveTypeCode;
+  /**
+   * Required for cl 55.1 / cl 58.2 leave, ignored for everything else. The
+   * request form must ask, because the leave type alone cannot say whether the
+   * absence is paid.
+   */
+  electionMode?: LeaveElectionMode;
   startDate: string;
   endDate: string;
   requestedHours: number;

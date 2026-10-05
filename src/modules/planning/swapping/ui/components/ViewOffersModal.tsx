@@ -89,6 +89,7 @@ const getGroupColor = (groupType: string | null = null, deptName: string = '') =
     const type = groupType || '';
     const name = deptName.toLowerCase();
 
+    if (type === 'office') return 'bg-cyan-600/10 border-cyan-500/20 text-cyan-400';
     if (type === 'convention_centre' || name.includes('convention')) return 'bg-blue-600/10 border-blue-500/20 text-blue-400';
     if (type === 'exhibition_centre' || name.includes('exhibition')) return 'bg-emerald-600/10 border-emerald-500/20 text-emerald-400';
     if (type === 'theatre' || name.includes('theatre')) return 'bg-rose-600/10 border-rose-500/20 text-rose-400';

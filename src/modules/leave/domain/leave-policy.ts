@@ -8,7 +8,10 @@
  * Hours are based on a 38-hour week / 7.6-hour day (cl 36).
  */
 
-import type { LeavePolicy, LeaveTypeCode, LeaveBalance, LeaveRequest } from '../model/leave.types';
+import type {
+  LeavePolicy, LeaveTypeCode, LeaveBalance, LeaveRequest,
+  LeaveElectionMode, OrdinaryHoursCredit,
+} from '../model/leave.types';
 import { isPublicHoliday } from '@/modules/core/lib/holidays';
 
 const HOURS_PER_DAY = 7.6;   // 38h / 5 days
@@ -29,6 +32,7 @@ const SECURITY_PERSONAL_HOURS_PER_YEAR = 84;
 export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   annual: {
     leaveType: 'annual',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: 152,  // 4 weeks × 38h (cl 44 / NES s87)
     maxBalanceHours: null,         // accumulates indefinitely
     requiresCertificate: false,
@@ -40,6 +44,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   personal: {
     leaveType: 'personal',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: 76,   // 10 days × 7.6h (cl 45 / NES s96)
     maxBalanceHours: null,         // accumulates indefinitely
     requiresCertificate: true,
@@ -51,6 +56,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   carer: {
     leaveType: 'carer',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // draws from personal leave balance
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -62,17 +68,19 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   compassionate: {
     leaveType: 'compassionate',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // per-occasion entitlement
     maxBalanceHours: null,
     requiresCertificate: false,
     certificateThresholdDays: null,
     paidForCasual: false,
     balanceTracked: false,
-    clause: 'cl 47, NES ss104-105',
+    clause: 'cl 48, NES ss104-105',
     description: 'Compassionate leave — 2 days per occasion (death/serious illness of immediate family/household member).',
   },
   parental: {
     leaveType: 'parental',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // one-off entitlement
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -84,6 +92,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   long_service: {
     leaveType: 'long_service',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // state-specific; NSW: 2 months after 10 years
     maxBalanceHours: null,
     requiresCertificate: false,
@@ -95,6 +104,9 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   jury_duty: {
     leaveType: 'jury_duty',
+    // cl 53.2 pays make-up pay for the ordinary hours of the period, so the
+    // day is discharged even though the employer funds only the difference.
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null,
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -106,6 +118,10 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   fdv: {
     leaveType: 'fdv',
+    // cl 46.6 anti-detriment: a Team Member taking FDV leave 'will not be
+    // prejudiced or disadvantaged in the allocation of shifts or rostered
+    // hours'. Crediting is therefore mandatory, not a policy choice.
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: 76,   // 10 days × 7.6h (NES Div 11) — granted up front
     maxBalanceHours: 76,
     requiresCertificate: false,    // privacy: cert MUST NOT appear on payslip
@@ -118,6 +134,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   supporting_carer: {
     leaveType: 'supporting_carer',
+    ordinaryHoursCredit: 'CREDITS',
     accrualRateHoursPerYear: null, // per-occasion entitlement, no accruing balance
     maxBalanceHours: null,
     requiresCertificate: false,
@@ -129,6 +146,8 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   community_service: {
     leaveType: 'community_service',
+    // NES ss108-112 — unpaid. Jury duty is the carve-out and has its own type.
+    ordinaryHoursCredit: 'BLOCKS',
     accrualRateHoursPerYear: null,
     maxBalanceHours: null,
     requiresCertificate: true,
@@ -140,6 +159,7 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   unpaid: {
     leaveType: 'unpaid',
+    ordinaryHoursCredit: 'BLOCKS',
     accrualRateHoursPerYear: null,
     maxBalanceHours: null,
     requiresCertificate: false,
@@ -151,27 +171,33 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
   },
   religious_cultural: {
     leaveType: 'religious_cultural',
-    accrualRateHoursPerYear: null, // capped, granted up front — not progressively accrued
-    maxBalanceHours: 38,           // 5 days × 7.6h
+    // cl 55.1 grants an ELECTION, not an entitlement: apply to use up to five
+    // days of accrued paid ANNUAL leave, or be absent up to five days UNPAID.
+    // Which one applies is recorded per request on leave_requests.election_mode
+    // and resolved by resolveOrdinaryHoursCredit(); until it is recorded the
+    // credit is genuinely unknown and must not be guessed.
+    ordinaryHoursCredit: 'ELECTION',
+    accrualRateHoursPerYear: null, // no accrual: there is no dedicated entitlement
+    maxBalanceHours: null,
     requiresCertificate: false,
     certificateThresholdDays: null,
     paidForCasual: false,
-    balanceTracked: true,
-    grantedUpFront: true,          // resets to the full 38h every 1 January, not on accrual
-    clause: 'cl 55',
-    description: 'Religious, cultural & ceremonial leave (incl. NAIDOC) — up to 5 days paid per calendar year, drawn from this dedicated balance. An unpaid alternative is also available via a general Unpaid Leave request.',
+    balanceTracked: false,         // draws on ANNUAL leave, or is unpaid
+    clause: 'cl 55.1',
+    description: 'Religious, cultural & ceremonial leave (incl. NAIDOC) — up to 5 days per calendar year, taken EITHER as accrued paid annual leave OR as unpaid leave, at the Team Member\u2019s election.',
   },
   gender_affirmation: {
     leaveType: 'gender_affirmation',
-    accrualRateHoursPerYear: null,
-    maxBalanceHours: 76,           // 10 days × 7.6h
+    // cl 58.2 is the same construction as cl 55.1, at ten days.
+    ordinaryHoursCredit: 'ELECTION',
+    accrualRateHoursPerYear: null, // no accrual: there is no dedicated entitlement
+    maxBalanceHours: null,
     requiresCertificate: false,
     certificateThresholdDays: null,
     paidForCasual: false,
-    balanceTracked: true,
-    grantedUpFront: true,          // resets to the full 76h every 1 January
-    clause: 'cl 58',
-    description: 'Gender affirmation leave — up to 10 days paid per calendar year, drawn from this dedicated balance. An unpaid alternative is also available via a general Unpaid Leave request.',
+    balanceTracked: false,         // draws on ANNUAL leave, or is unpaid
+    clause: 'cl 58.2',
+    description: 'Gender affirmation leave — up to 10 days per calendar year, taken EITHER as accrued paid annual leave OR as unpaid leave, at the Team Member\u2019s election.',
   },
 };
 
@@ -265,6 +291,20 @@ export interface CertificateAdjacency {
   /** The day immediately before the leave start, or immediately after the
    *  leave end, is a public holiday. */
   adjacentToPublicHoliday?: boolean;
+  /** cl 45.5(b)(iii): the neighbouring day is the person's ROSTERED day off —
+   *  not rostered, while they are rostered on days around it. On a 7-day
+   *  roster that is often not a Saturday or Sunday. */
+  adjacentToRosteredDayOff?: boolean;
+  /** cl 45.5(b)(iv): the leave runs straight on from, or into, other leave. */
+  adjacentToOtherLeave?: boolean;
+}
+
+/** What `computeCertificateAdjacency` can use beyond the calendar. */
+export interface CertificateContext {
+  /** yyyy-MM-dd dates the person is rostered, covering at least a week either side. */
+  rosteredDates?: ReadonlySet<string>;
+  /** Their OTHER pending or approved leave (this request excluded). */
+  otherLeave?: ReadonlyArray<{ startDate: string; endDate: string }>;
 }
 
 /**
@@ -290,8 +330,29 @@ export function isCertificateRequired(
   const policy = LEAVE_POLICIES[leaveType];
   if (!policy?.requiresCertificate) return false;
   if (policy.certificateThresholdDays == null) return true; // always required (jury, parental)
-  if (adjacency.adjacentToWeekend || adjacency.adjacentToPublicHoliday) return true;
-  return consecutiveDays > policy.certificateThresholdDays;
+  return certificateReasons(leaveType, consecutiveDays, adjacency).length > 0;
+}
+
+/**
+ * WHY a certificate is required — empty when it is not. cl 45.5(b) lists four
+ * triggers; each that applies is named, so the employee knows what to provide
+ * and the manager knows what to ask for.
+ */
+export function certificateReasons(
+  leaveType: LeaveTypeCode,
+  consecutiveDays: number,
+  adjacency: CertificateAdjacency = {},
+): string[] {
+  const policy = LEAVE_POLICIES[leaveType];
+  if (!policy?.requiresCertificate) return [];
+  if (policy.certificateThresholdDays == null) return ['Evidence is always required for this leave'];
+  const out: string[] = [];
+  if (consecutiveDays > policy.certificateThresholdDays) out.push(`More than ${policy.certificateThresholdDays} working days`);
+  if (adjacency.adjacentToPublicHoliday) out.push('Next to a public holiday');
+  if (adjacency.adjacentToWeekend) out.push('Next to a weekend');
+  if (adjacency.adjacentToRosteredDayOff) out.push('Next to a rostered day off');
+  if (adjacency.adjacentToOtherLeave) out.push('Next to other leave');
+  return out;
 }
 
 /**
@@ -299,7 +360,11 @@ export function isCertificateRequired(
  * day immediately before `startDate` and immediately after `endDate`
  * (YYYY-MM-DD, both LOCAL date parts, never `.toISOString()`).
  */
-export function computeCertificateAdjacency(startDate: string, endDate: string): CertificateAdjacency {
+export function computeCertificateAdjacency(
+  startDate: string,
+  endDate: string,
+  context: CertificateContext = {},
+): CertificateAdjacency {
   const start = new Date(startDate + 'T00:00:00');
   const end = new Date(endDate + 'T00:00:00');
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return {};
@@ -311,9 +376,41 @@ export function computeCertificateAdjacency(startDate: string, endDate: string):
 
   const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const before = ymd(dayBefore);
+  const after = ymd(dayAfter);
+
+  /*
+   * A rostered day off is a day NOT rostered between days that are. Judged
+   * only when the roster around it is known — a week either side — because an
+   * unpublished future roster is "not rostered yet", not a day off. Weekends
+   * are reported as weekends, not again as days off.
+   */
+  const rostered = context.rosteredDates;
+  const isRosteredDayOff = (d: Date): boolean => {
+    if (!rostered || rostered.size === 0 || isWeekend(d)) return false;
+    const key = ymd(d);
+    if (rostered.has(key)) return false;
+    const near = (offset: number) => {
+      const x = new Date(d);
+      x.setDate(x.getDate() + offset);
+      return ymd(x);
+    };
+    const rosteredBefore = [1, 2, 3, 4, 5, 6, 7].some(n => rostered.has(near(-n)));
+    const rosteredAfter = [1, 2, 3, 4, 5, 6, 7].some(n => rostered.has(near(n)));
+    return rosteredBefore && rosteredAfter;
+  };
+
+  const other = context.otherLeave ?? [];
+  const touchesOtherLeave = other.some(l =>
+    (l.startDate <= before && l.endDate >= before) || (l.startDate <= after && l.endDate >= after));
+
   return {
     adjacentToWeekend: isWeekend(dayBefore) || isWeekend(dayAfter),
     adjacentToPublicHoliday: isPublicHoliday(dayBefore) || isPublicHoliday(dayAfter),
+    adjacentToRosteredDayOff: isRosteredDayOff(dayBefore) || isRosteredDayOff(dayAfter),
+    adjacentToOtherLeave: touchesOtherLeave,
   };
 }
 
@@ -325,3 +422,23 @@ export const BALANCE_TRACKED_TYPES: LeaveTypeCode[] = (
 )
   .filter((p) => p.balanceTracked)
   .map((p) => p.leaveType);
+
+
+/**
+ * Resolve what a day of leave actually does to contracted ordinary hours.
+ *
+ * Most types answer from the policy alone. The two election types (cl 55.1,
+ * cl 58.2) cannot: the Agreement offers the Team Member a choice between
+ * accrued paid annual leave and unpaid leave, and only the request knows which
+ * was taken. An unrecorded election stays 'ELECTION' rather than defaulting,
+ * because defaulting either way would invent a fact about someone's pay.
+ */
+export function resolveOrdinaryHoursCredit(
+    policy: Pick<LeavePolicy, 'ordinaryHoursCredit'>,
+    electionMode: LeaveElectionMode | null | undefined,
+): OrdinaryHoursCredit {
+    if (policy.ordinaryHoursCredit !== 'ELECTION') return policy.ordinaryHoursCredit;
+    if (electionMode === 'annual') return 'CREDITS';
+    if (electionMode === 'unpaid') return 'BLOCKS';
+    return 'ELECTION';
+}

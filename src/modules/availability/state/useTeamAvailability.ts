@@ -77,8 +77,16 @@ export function useTeamAvailability(
             const members = await getTeamMembers(scope!);
             const profileIds = members.map((m) => m.profileId);
 
+            // When EXACTLY ONE sub-department is selected, scope the
+            // availability read to that job. When several or none are selected,
+            // pass null (person-wide, today's behaviour) — because attributing
+            // one declaration to several sub-departments at once is exactly the
+            // bug this scoping work exists to fix.
+            const subDeptIds = (scope!.subdept_ids ?? []).filter(Boolean);
+            const scopedSubDeptId = subDeptIds.length === 1 ? subDeptIds[0] : null;
+
             const [availability, shiftsResult, leaveDays, required] = await Promise.all([
-                getResolvedAvailabilities(profileIds, startDate, endDate),
+                getResolvedAvailabilities(profileIds, startDate, endDate, scopedSubDeptId),
                 getTeamShifts(scope!, startDate, endDate),
                 getTeamLeaveDays(profileIds, startDate, endDate),
                 resolveRequired(scope!, startDate, endDate),

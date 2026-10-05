@@ -23,7 +23,6 @@ graph TB
         AutoCommit["Autoscheduler commit validation<br/>(bulk-assignment/compliance-evaluator.ts, via V8SwapEngine)"]
     end
     subgraph FixedSubset["Fixed 4-check subset: overlap + 48h weekly + 11h rest + qualification (Edge Function evaluate-compliance)"]
-        Reserve["Reserve-list emergency assign<br/>(reserveList.api.ts)"]
         AutoApproveSwaps["auto-approve-swaps worker"]
         AutoAssignBids["auto-assign-bids worker"]
     end
@@ -34,8 +33,7 @@ graph TB
     BidAccept --> Result1
     SwapAccept --> Result1
     AutoCommit --> Result2["V8SwapEngine wrapper → same 15 rules, NOT logged to compliance_rejections"]
-    Reserve --> Result3["HTTP call, narrow subset, NOT logged to compliance_rejections"]
-    AutoApproveSwaps --> Result3
+    AutoApproveSwaps --> Result3["HTTP call, narrow subset, NOT logged to compliance_rejections"]
     AutoAssignBids --> Result3
 ```
 
@@ -46,13 +44,10 @@ graph TB
 | Swap accept/approve | Full 15-rule `ACTIVE_RULES` (×2, one per party) | Yes, automatic |
 | Autoscheduler — commit-time re-validation | Full 15-rule `ACTIVE_RULES` (via `V8SwapEngine`, not the orchestrator) | **No** |
 | Autoscheduler — proposal generation | Separate Python CP-SAT hard/soft/coverage/cost model | No (different system entirely) |
-| Reserve-list emergency assign | **Fixed 4-check subset** (overlap, 48h weekly cap, 11h rest, qualification) via Edge Function `evaluate-compliance` | No |
-| `auto-approve-swaps` worker (Swap AutoPilot) | Same fixed 4-check subset | No |
+| `auto-approve-swaps` worker (Swap AutoPilot) | Fixed 4-check subset (overlap, 48h weekly cap, 11h rest, qualification) via Edge Function `evaluate-compliance` | No |
 | `auto-assign-bids` worker (Bid AutoPilot) | Same fixed 4-check subset | No |
 
-**⚠ Finding (OPEN, documented drift risk, flagged by the code's own authors):** the Edge Function subset covers roughly 4 of the 15 rules — daily-hours cap, 20-in-28, streak limit, spread-of-hours, split-shift, meal-break, min-engagement, multi-hire eligibility, student-visa, and leave-conflict are **not** enforced on the AutoPilot/reserve-list paths. Both AutoPilot workers' own READMEs explicitly call this out as an accepted v1 gap and warn that if a new BLOCKING rule is ever added to `ACTIVE_RULES`, nothing mechanically propagates it to the deployed Edge Function — no test or CI gate keeps them in sync.
-
-**⚠ Finding (OPEN, doc/reality mismatch):** `reserveList.api.ts`'s own header comment asserts it calls "the real, live V8 compliance engine... the same call real shift assignment already makes" — this is **incorrect**. It calls the same narrow `evaluate-compliance` Edge Function as the AutoPilot workers, not `runV8Orchestrator`. Manual assignment (`assignShift.command.ts`) is the one that actually runs the full rule set; Reserve List does not. Worth correcting the comment or the behavior.
+**⚠ Finding (OPEN, documented drift risk, flagged by the code's own authors):** the Edge Function subset covers roughly 4 of the 15 rules — daily-hours cap, 20-in-28, streak limit, spread-of-hours, split-shift, meal-break, min-engagement, multi-hire eligibility, student-visa, and leave-conflict are **not** enforced on the AutoPilot paths. Both AutoPilot workers' own READMEs explicitly call this out as an accepted v1 gap and warn that if a new BLOCKING rule is ever added to `ACTIVE_RULES`, nothing mechanically propagates it to the deployed Edge Function — no test or CI gate keeps them in sync.
 
 **⚠ Finding (OPEN, dormant infrastructure):** `src/modules/compliance/v8/orchestrator/{batch,bidding,swapping,conflict-resolver}/` implement a genuinely sophisticated global-optimization layer — dependency-graph batch execution, greedy fairness-aware bid selection across all shifts simultaneously, structural swap-conflict resolution, and a resource-contention graph solver with GREEDY/SOLVER/HYBRID strategy selection. **None of it has any caller outside its own package** (confirmed by repo-wide grep) and none of it is re-exported from the module's public `index.ts`. The live bid-accept and swap-accept paths bypass this entirely, calling `runV8Orchestrator` per-employee directly instead. This is real, working, seemingly-tested-in-isolation code with zero production callers — worth confirming with the team whether it's future infrastructure being staged or safe to remove.
 

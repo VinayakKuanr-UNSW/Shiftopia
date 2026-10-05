@@ -39,6 +39,8 @@ export interface ShiftMeta {
     target_requires_flexible?: boolean;
     level?: number;
     is_training?: boolean;
+    /** Which job this shift is for — the scope HC-5d matches slots against. */
+    sub_department_id?: string | null;
 }
 
 export interface EmployeeMeta {

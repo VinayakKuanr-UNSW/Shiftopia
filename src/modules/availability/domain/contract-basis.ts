@@ -27,6 +27,13 @@
  */
 
 import type { TeamContractType } from '../model/team-availability.types';
+import {
+    ORD_CYCLE_ANCHOR_DEFAULT,
+    ORD_CYCLE_WEEKS_DEFAULT,
+    normaliseCycleAnchor,
+    resolveGoverningCycleWeeks,
+    type OrdinaryCycleWeeks,
+} from '@/modules/compliance/ordinary-hours-cycle';
 
 export interface ContractBasisInput {
     employmentStatus: string | null;
@@ -48,7 +55,37 @@ export interface ContractBasisInput {
      */
     ordinarySpanStart?: string | null;
     ordinarySpanEnd?: string | null;
+    /**
+     * Declared ordinary-hours work cycle (migration 20260826090000). Optional
+     * for the same reason as the envelope above — a database without the
+     * migration reads as null, which `resolveComplianceBasis` turns into the
+     * four-week default that every layer already assumed.
+     */
+    ordinaryHoursCycleWeeks?: number | string | null;
+    ordinaryHoursCycleAnchor?: string | null;
     ordinaryDays?: number[] | null;
+    /**
+     * WHICH JOB this contract is — `user_contracts.sub_department_id` and
+     * `.department_id`.
+     *
+     * Optional because most readers of this module ask the person-wide question
+     * and have never selected them. A contract with no `subDepartmentId` is
+     * DEPARTMENT-WIDE: in scope for every sub-department beneath its
+     * department. That is the same rule `sm_holds_active_contract_in`
+     * (migration 20260821090000) applies in SQL, and the two must not diverge —
+     * `contractsInScope` below is the TypeScript half of that pair.
+     */
+    subDepartmentId?: string | null;
+    departmentId?: string | null;
+    /**
+     * WHICH ROLE this contract names — `user_contracts.role_id`.
+     *
+     * Optional because most readers ask the person-wide or the job-wide
+     * question and have never selected it. Present, it lets
+     * `contractsInRoleScope` pick the one contract that actually governs when
+     * someone holds several in one sub-department on different terms.
+     */
+    roleId?: string | null;
 }
 
 /**
@@ -76,6 +113,16 @@ export interface ContractBasis {
     contractType: TeamContractType;
     /** Undefined when the chosen contract records no usable weekly basis. */
     contractedWeeklyHours: number | undefined;
+    /**
+     * The governing ordinary-hours cycle (ICC EBA cl 35.x(a) / 12.2(b)).
+     *
+     * Always defined — unlike `contractedWeeklyHours` there is no such thing as
+     * "no cycle", because cl 12.2(b) engages everyone on one and the four-week
+     * rung is the Agreement's own outer bound.
+     */
+    cycleWeeks: OrdinaryCycleWeeks;
+    /** The Monday those cycles are counted from. */
+    cycleAnchor: string;
     employmentStatus: string | null;
     envelope: OrdinaryHoursEnvelope;
     /**
@@ -83,6 +130,29 @@ export interface ContractBasis {
      * For FT employees, availability is contract-based and managed via Leave.
      */
     isFullTime: boolean;
+    /**
+     * Is EVERY contract in scope Full-Time?
+     *
+     * The TypeScript mirror of `sm_all_active_contracts_ft_in` (migration
+     * 20260824130200), and the predicate that actually decides whether the
+     * availability editor may be shown.
+     *
+     * `isFullTime` cannot answer this. It reports the GOVERNING contract, and
+     * the governing contract of a mixed sub-department is the Full-Time one —
+     * correctly, because Full-Time is the stricter basis for "how many hours
+     * may this person work". But a person who is a Full-Time Event Setups
+     * Manager and a Casual Usher in the same sub-department still has to
+     * declare availability for the usher work: Casual is OPT_IN, and silence
+     * there means UNAVAILABLE, which hard-filters them off every casual shift.
+     *
+     * Blocking is therefore reserved for a scope that is wholly Full-Time —
+     * which is every Full-Time employee in the system today, so nothing about
+     * their experience changes.
+     *
+     * False for an empty scope: someone with no contract here is unclassified,
+     * not Full-Time. The SQL requires the same `EXISTS` before it blocks.
+     */
+    isWhollyFullTime: boolean;
     /**
      * What an ABSENT availability declaration means for this person — the
      * frontend mirror of the solver's `availability_mode`, resolved from the
@@ -196,9 +266,12 @@ export function resolveComplianceBasis(contracts: readonly ContractBasisInput[])
         return {
             contractType: null,
             contractedWeeklyHours: undefined,
+            cycleWeeks: ORD_CYCLE_WEEKS_DEFAULT,
+            cycleAnchor: ORD_CYCLE_ANCHOR_DEFAULT,
             employmentStatus: null,
             envelope: UNRESTRICTED_ENVELOPE,
             isFullTime: false,
+            isWhollyFullTime: false,
             // No contract we could read. OPT_IN is the strict reading and the
             // one the solver defaults to, so the page never promises someone
             // they are available when the solver will not place them.
@@ -209,16 +282,193 @@ export function resolveComplianceBasis(contracts: readonly ContractBasisInput[])
     const hours = weeklyHoursOf(winner);
     const contractType = toContractType(winner.employmentStatus);
     const isFullTime = contractType === 'FT';
+    // Every contract handed to this resolver, not just the winner — the list is
+    // already narrowed to the scope by the time it arrives.
+    const isWhollyFullTime = contracts.every(c => toContractType(c.employmentStatus) === 'FT');
     return {
         contractType,
         contractedWeeklyHours: hours > 0 ? hours : undefined,
+        // The SHORTEST cycle across every contract in scope, not the winner's.
+        // Cycle length is a smoothing allowance rather than a rate — all four
+        // rungs average 38h/week — so the shortest is the strictest, and the
+        // strictest is the safe answer when one person's engagements disagree.
+        cycleWeeks: resolveGoverningCycleWeeks(contracts.map(c => c.ordinaryHoursCycleWeeks)),
+        cycleAnchor: normaliseCycleAnchor(winner.ordinaryHoursCycleAnchor),
         employmentStatus: winner.employmentStatus,
         envelope: toEnvelope(winner),
         isFullTime,
+        isWhollyFullTime,
         // Mirrors the controller: driven by whether a contract obligation
         // exists, not by the employment token. An unrecognised status ranks
         // with the capped population everywhere else in this file, but it
         // carries no known obligation, so it stays OPT_IN here.
         availabilityMode: contractType === 'FT' || contractType === 'PT' ? 'OPT_OUT' : 'OPT_IN',
     };
+}
+
+// ============================================================================
+// SCOPED BASIS — the same precedence, asked of ONE JOB
+// ============================================================================
+
+/**
+ * WHY THERE ARE TWO OF THESE, AND WHY THE ONE ABOVE MUST NOT CHANGE.
+ *
+ * `resolveComplianceBasis` answers "how many hours may this HUMAN work" — the
+ * rolling ordinary-hours caps in `compliance/v8/rules/ordinary-hours-avg.ts`
+ * apply across every contract a person holds, so collapsing them to one basis
+ * is not a simplification there, it is the rule. Its casual-last ordering also
+ * exists so a dual-status person can never be exempted from those caps by an
+ * accident of array order. Leave it, its callers, and its tests alone.
+ *
+ * Availability is the opposite kind of question. It is asked of a JOB: when
+ * will you turn up for Set-up. Production holds one employee with a Full-Time
+ * contract in Building Services · Security and four Casual contracts across
+ * Event Delivery · Set-up and Live Events · Front of House. Ask the person-wide
+ * question and the Full-Time contract wins, the page hides the editor, and
+ * their four casual jobs can never declare anything — which under
+ * `availability_mode = 'OPT_IN'` leaves them hard-filtered out of every casual
+ * shift with no reason emitted.
+ *
+ * So: same precedence, applied to a filtered list. Not a second ordering.
+ */
+
+/**
+ * A job to resolve against. `subDepartmentId: null` means UNSCOPED — every
+ * contract the person holds — which is what makes
+ * `resolveScopedBasis(cs, { subDepartmentId: null })` identical to
+ * `resolveComplianceBasis(cs)`, and mirrors the NULL branch of
+ * `sm_holds_active_ft_contract_in` in SQL.
+ */
+export interface AvailabilityScopeRef {
+    subDepartmentId: string | null;
+    /**
+     * Narrows to the contract for ONE role within the sub-department. Omit for
+     * the job-wide question (availability, which is filed per sub-department
+     * and has no role dimension); supply it for the per-engagement question
+     * (what is this person employed as when they work THIS shift).
+     */
+    roleId?: string | null;
+    /**
+     * Needed only to admit DEPARTMENT-WIDE contracts (those with no
+     * sub-department of their own). Omit it and such a contract is treated as
+     * out of scope — the conservative reading, and correct for production,
+     * where no Active contract is in that shape today.
+     */
+    departmentId?: string | null;
+}
+
+/**
+ * The contracts that bear on one job.
+ *
+ * The TypeScript half of `sm_holds_active_contract_in` /
+ * `sm_holds_active_ft_contract_in` (migrations 20260821090000 / 20260821090100).
+ * Both halves must admit exactly the same rows or the page will offer someone a
+ * declaration the database then refuses — so the three branches below are the
+ * three branches of that SQL, in the same order.
+ */
+export function contractsInScope<T extends ContractBasisInput>(
+    contracts: readonly T[],
+    scope: AvailabilityScopeRef,
+): T[] {
+    // Unscoped covers every job.
+    if (!scope.subDepartmentId) return [...contracts];
+
+    return contracts.filter((c) => {
+        if (c.subDepartmentId === scope.subDepartmentId) return true;
+        // Department-wide contract, in scope for every sub-department beneath it.
+        return (
+            (c.subDepartmentId === null || c.subDepartmentId === undefined)
+            && !!c.departmentId
+            && !!scope.departmentId
+            && c.departmentId === scope.departmentId
+        );
+    });
+}
+
+/**
+ * The compliance basis for ONE job.
+ *
+ * Returns the same `ContractBasis` shape as `resolveComplianceBasis`, so every
+ * consumer reads the same fields and a caller can swap one for the other
+ * without learning a second vocabulary.
+ *
+ * A scope the person holds NO contract in resolves to the empty basis, whose
+ * `isFullTime` is false and whose mode is the strict 'OPT_IN'. That is safe
+ * rather than correct-looking: the page only ever offers scopes derived from
+ * the person's own contracts (`fetchAvailabilityScopes`), and
+ * `trg_availability_scope_is_contracted` refuses the write regardless. It is
+ * not a licence to pass arbitrary scopes in.
+ */
+export function resolveScopedBasis(
+    contracts: readonly ContractBasisInput[],
+    scope: AvailabilityScopeRef,
+): ContractBasis {
+    return resolveComplianceBasis(contractsInRoleScope(contracts, scope));
+}
+
+// ============================================================================
+// ROLE GRAIN — the same precedence, asked of ONE JOB IN ONE ROLE
+// ============================================================================
+
+/**
+ * WHY A THIRD NARROWING, AND WHY IT IS NOT A THIRD ORDERING.
+ *
+ * `contractsInScope` answers "which contracts bear on this sub-department".
+ * That was enough while a sub-department meant one engagement. It stopped
+ * being enough the moment the contract form could write a Full-Time Event
+ * Setups Manager and a Casual Usher into the SAME sub-department — a shape EBA
+ * cl 13 (Multi-Hiring) expressly contemplates, and which the database now
+ * accepts (migrations 20260824130000 / 130100).
+ *
+ * Ask the sub-department question of that person and the casual-last ordering
+ * hands back Full-Time, because Full-Time genuinely is the stricter of the two.
+ * For "how many hours may this human work" that is the right answer. For "what
+ * are they engaged as when they usher" it is simply the wrong contract.
+ *
+ * So: narrow to the contract naming the role FIRST, and fall back to the
+ * sub-department set when the role is unknown or the person holds no contract
+ * for it. That is exactly the two-path shape of
+ * `fn_enforce_shift_employment_target` (migration 20260824130100), and the two
+ * must not diverge — the SQL is what actually accepts or rejects the write.
+ *
+ * FALLING BACK RATHER THAN NARROWING TO EMPTY is the load-bearing part. A shift
+ * with no `role_id`, or a role the person is not contracted to, must not
+ * resolve to "no contract at all" — that reads as unclassified, flips
+ * availability to the strict OPT_IN, and hard-filters them out of every shift.
+ * The previous behaviour is preserved exactly in both of those cases.
+ */
+export function contractsInRoleScope<T extends ContractBasisInput>(
+    contracts: readonly T[],
+    scope: AvailabilityScopeRef,
+): T[] {
+    const inScope = contractsInScope(contracts, scope);
+    if (!scope.roleId) return inScope;
+
+    const forRole = inScope.filter((c) => c.roleId === scope.roleId);
+    return forRole.length > 0 ? forRole : inScope;
+}
+
+/**
+ * Does this person hold more than one employment type in scope?
+ *
+ * Not a rule — a REPORTING question, and the reason it exists is the solver.
+ * `EmployeeInput.employment_type` is a single scalar for a whole solve, and a
+ * solve spans sub-departments; HC-5c then hard-filters on
+ * `emp.employment_type != shift.target_employment_type`. So a person who is
+ * Full-Time in Security and Casual in Set-up is silently ineligible for one of
+ * those jobs however the scalar is chosen — not mis-assigned, which the DB
+ * trigger would catch, but quietly never considered.
+ *
+ * Callers use this to SAY SO rather than to change the answer.
+ */
+export function hasConflictingEmploymentTypes(
+    contracts: readonly ContractBasisInput[],
+    scope: AvailabilityScopeRef,
+): boolean {
+    const statuses = new Set(
+        contractsInScope(contracts, scope)
+            .map((c) => toContractType(c.employmentStatus))
+            .filter((t): t is TeamContractType => t !== null),
+    );
+    return statuses.size > 1;
 }

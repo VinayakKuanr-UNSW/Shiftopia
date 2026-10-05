@@ -4,11 +4,9 @@ import { RefreshCcw, LayoutGrid, List, Search, Calendar, Settings, Layers, Filte
 import { DateRangePicker } from '@/modules/core/ui/calendar';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { addDays, differenceInCalendarDays, endOfMonth, format, startOfMonth } from 'date-fns';
+import { addDays, endOfMonth, format, startOfMonth } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { Calendar as RangeCalendar } from '@/modules/core/ui/calendar';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger, DrawerDescription } from '@/modules/core/ui/primitives/drawer';
 import {
     Tooltip,
     TooltipContent,
@@ -81,6 +79,21 @@ export const MobileIconButton = React.forwardRef<
 ));
 MobileIconButton.displayName = 'MobileIconButton';
 
+/**
+ * Range shortcuts, defined once.
+ *
+ * The mobile and desktop pickers each carried their own list, and they had
+ * already diverged — mobile offered Today / This Week / This Month, desktop
+ * added Next week. `getRange` is resolved on click, so "this week" is always
+ * the current one rather than whenever the module was loaded.
+ */
+const DATE_RANGE_PRESETS = [
+    { label: 'Today', getRange: () => { const t = new Date(); return { from: t, to: t }; } },
+    { label: 'This week', getRange: () => ({ from: startOfWeekAU(new Date()), to: endOfWeekAU(new Date()) }) },
+    { label: 'Next week', getRange: () => ({ from: addDays(startOfWeekAU(new Date()), 7), to: addDays(endOfWeekAU(new Date()), 7) }) },
+    { label: 'This month', getRange: () => { const n = new Date(); return { from: startOfMonth(n), to: endOfMonth(n) }; } },
+];
+
 export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> = ({
     startDate,
     endDate,
@@ -101,7 +114,6 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
     const { isDark } = useTheme();
     const breakpoint = useBreakpoint();
     const isMobile = breakpoint === 'mobile';
-    const [isDateDrawerOpen, setIsDateDrawerOpen] = React.useState(false);
     const [showSearch, setShowSearch] = React.useState(!!searchQuery);
 
     if (isMobile) {
@@ -121,112 +133,27 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                         </div>
                     )}
 
-                    {/* Date Picker Drawer */}
                     {datePickerActive && (
-                        <Drawer open={isDateDrawerOpen} onOpenChange={setIsDateDrawerOpen}>
-                            <DrawerTrigger asChild>
-                                <MobileIconButton
-                                    icon={<Calendar className="h-4 w-4" />}
-                                    label="Filter by date"
-                                    isDark={isDark}
-                                    className="w-10 h-10 shrink-0"
-                                />
-                            </DrawerTrigger>
-                            <DrawerContent className="rounded-t-[2.5rem] border-t-0 bg-background/95 backdrop-blur-2xl px-3 pt-6 pb-6 flex flex-col items-center h-[82vh] max-h-[85vh]">
-                                <DrawerTitle className="sr-only">Select Date Range</DrawerTitle>
-                                {startDate && endDate && (
-                                    <div className="text-center mb-4 flex-shrink-0 flex flex-col gap-1 select-none">
-                                        <DrawerDescription className="sr-only">Select start and end dates</DrawerDescription>
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/45 leading-none">Select Date Range</span>
-                                        <h3 className="text-2xl font-black text-foreground tracking-tight mt-1.5 leading-none">
-                                            {(() => {
-                                                const days = differenceInCalendarDays(endDate, startDate) + 1;
-                                                return days === 1 ? '1-Day Selected' : `${days}-Days Selected`;
-                                            })()}
-                                        </h3>
-                                        <p className="text-[11px] font-mono font-black text-primary uppercase tracking-widest mt-1">
-                                            {format(startDate, 'EEE, d MMM')} – {format(endDate, 'EEE, d MMM')}
-                                        </p>
-                                    </div>
-                                )}
-                                
-                                <div className="w-full overflow-y-auto flex-1 flex flex-col items-center py-2 px-1 scrollbar-none">
-                                    <RangeCalendar
-                                        mode="range"
-                                        numberOfMonths={2}
-                                        selected={{
-                                            from: startDate,
-                                            to: endDate
-                                        }}
-                                        onSelect={(range) => {
-                                            if (range?.from) {
-                                                const toDate = range.to || range.from;
-                                                onDateChange!(range.from, toDate);
-                                                if (range.to && range.from.getTime() !== range.to.getTime()) {
-                                                    setTimeout(() => setIsDateDrawerOpen(false), 250);
-                                                }
-                                            }
-                                        }}
-                                        defaultMonth={startDate}
-                                        className={cn(
-                                            "w-full border-none pointer-events-auto p-2",
-                                            isDark ? "bg-transparent text-white" : "bg-transparent text-slate-900"
-                                        )}
-                                        classNames={{
-                                            months: "w-full flex flex-col space-y-8",
-                                            month: "w-full space-y-4",
-                                            table: "w-full",
-                                            head_row: "flex w-full justify-between mb-2",
-                                            head_cell: "text-muted-foreground/60 w-12 h-12 text-xs font-black uppercase flex items-center justify-center flex-1",
-                                            row: "flex w-full justify-between mt-2",
-                                            cell: "relative p-0 text-center text-base focus-within:relative focus-within:z-20 h-12 flex-1 flex items-center justify-center",
-                                            day: "h-12 w-12 p-0 font-bold rounded-xl flex items-center justify-center text-sm transition-all duration-200 active:scale-95"
-                                        }}
-                                    />
-                                </div>
-                                
-                                <div className={cn(
-                                    "w-full border-t pt-4 mt-2 flex gap-1.5 justify-center bg-background/95 backdrop-blur-md sticky bottom-0 left-0 right-0 z-10 flex-shrink-0",
-                                    isDark ? "border-white/5" : "border-slate-100"
-                                )}>
-                                    <Button
-                                        variant="outline"
-                                        className="flex-1 rounded-xl font-black uppercase text-[9px] tracking-widest h-10 border-none bg-accent/20 hover:bg-accent/40 transition-all active:scale-95"
-                                        onClick={() => {
-                                            const today = new Date();
-                                            onDateChange!(today, today);
-                                            setTimeout(() => setIsDateDrawerOpen(false), 200);
-                                        }}
-                                    >
-                                        Today
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        className="flex-1 rounded-xl font-black uppercase text-[9px] tracking-widest h-10 border-none bg-accent/20 hover:bg-accent/40 transition-all active:scale-95"
-                                        onClick={() => {
-                                            const start = startOfWeekAU(new Date());
-                                            const end = endOfWeekAU(new Date());
-                                            onDateChange!(start, end);
-                                            setTimeout(() => setIsDateDrawerOpen(false), 200);
-                                        }}
-                                    >
-                                        This Week
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        className="flex-1 rounded-xl font-black uppercase text-[9px] tracking-widest h-10 border-none bg-accent/20 hover:bg-accent/40 transition-all active:scale-95"
-                                        onClick={() => {
-                                            const start = addDays(startOfWeekAU(new Date()), 7);
-                                            const end = addDays(endOfWeekAU(new Date()), 7);
-                                            onDateChange!(start, end);
-                                            setTimeout(() => setIsDateDrawerOpen(false), 200);
-                                        }}
-                                    >
-                                        Next Week
-                                    </Button>
-                                </div>
-                            </DrawerContent>
-                        </Drawer>
+                        // The same `DateRangePicker` the desktop branch below
+                        // uses, with the same presets. This used to be a second
+                        // picker: a hand-rolled Drawer wrapping the raw
+                        // `Calendar` with its own cell sizing and its own
+                        // Today / This Week buttons — so the two paths could
+                        // (and did) drift on what a range even meant. The
+                        // shared picker already collapses to one month on a
+                        // narrow viewport, which is what the drawer was for.
+                        <DateRangePicker
+                            label="Date range"
+                            value={{ from: startDate, to: endDate }}
+                            onChange={(range) => {
+                                if (!range?.from) return;
+                                onDateChange!(range.from, range.to ?? range.from);
+                            }}
+                            clearable={false}
+                            displayFormat="d MMM"
+                            presets={DATE_RANGE_PRESETS}
+                            triggerClassName="h-11 rounded-xl font-semibold tabular-nums text-xs"
+                        />
                     )}
 
                     {/* Search Icon Trigger */}
@@ -328,12 +255,7 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                             }}
                             clearable={false}
                             displayFormat="d MMM yy"
-                            presets={[
-                                { label: 'Today',     getRange: () => { const t = new Date(); return { from: t, to: t }; } },
-                                { label: 'This week', getRange: () => ({ from: startOfWeekAU(new Date()), to: endOfWeekAU(new Date()) }) },
-                                { label: 'Next week', getRange: () => ({ from: addDays(startOfWeekAU(new Date()), 7), to: addDays(endOfWeekAU(new Date()), 7) }) },
-                                { label: 'This month', getRange: () => { const n = new Date(); return { from: startOfMonth(n), to: endOfMonth(n) }; } },
-                            ]}
+                            presets={DATE_RANGE_PRESETS}
                             triggerClassName="h-10 lg:h-11 rounded-xl font-black tabular-nums text-[10px] lg:text-xs"
                         />
                     </div>

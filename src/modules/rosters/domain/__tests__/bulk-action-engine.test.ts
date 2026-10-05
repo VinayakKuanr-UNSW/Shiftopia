@@ -27,6 +27,9 @@ describe('planPublishRoster', () => {
         emergentAssignedIds: [],
         emergentUnassignedIds: [],
         deadIds: [],
+        fullTimeIds: [],
+        fullTimeUnassignedIds: [],
+        onLeaveIds: [],
         alreadyPublishedCount: 0,
     };
 
@@ -35,12 +38,49 @@ describe('planPublishRoster', () => {
         expect(plan).toEqual({ ...empty, assignedIds: ['a'] });
     });
 
+    it('routes a FULL-TIME assigned draft to fullTimeIds (→ confirmed, never offered) — even inside 4h', () => {
+        const plan = planPublishRoster([
+            mk('ft', { assigned_employee_id: 'emp-1', target_employment_type: 'FT' } as Partial<Shift>),
+            mk('ft-soon', { assigned_employee_id: 'emp-1', target_employment_type: 'FT', start_at: iso(+2 * HOUR), end_at: iso(+10 * HOUR) } as Partial<Shift>),
+        ]);
+        expect(plan).toEqual({ ...empty, fullTimeIds: ['ft', 'ft-soon'] });
+    });
+
+    it('skips a FULL-TIME draft with nobody on it (an FT shift never goes to bidding)', () => {
+        const plan = planPublishRoster([mk('ft-u', { assigned_employee_id: null, target_employment_type: 'FT' } as Partial<Shift>)]);
+        expect(plan).toEqual({ ...empty, fullTimeUnassignedIds: ['ft-u'] });
+    });
+
+    it('skips an assigned draft on a day the assignee has approved leave — any type, any time-to-start', () => {
+        // The database refuses these (trg_shift_not_on_approved_leave); the dialog says so first.
+        const onLeave = (emp: string, date: string) => emp === 'emp-1' && date === '2099-03-10';
+        const plan = planPublishRoster([
+            mk('casual', { assigned_employee_id: 'emp-1', shift_date: '2099-03-10' } as Partial<Shift>),
+            mk('ft', { assigned_employee_id: 'emp-1', shift_date: '2099-03-10', target_employment_type: 'FT' } as Partial<Shift>),
+            mk('soon', { assigned_employee_id: 'emp-1', shift_date: '2099-03-10', start_at: iso(+2 * HOUR), end_at: iso(+10 * HOUR) } as Partial<Shift>),
+            mk('other-day', { assigned_employee_id: 'emp-1', shift_date: '2099-03-11' } as Partial<Shift>),
+            mk('other-person', { assigned_employee_id: 'emp-2', shift_date: '2099-03-10' } as Partial<Shift>),
+            mk('nobody', { assigned_employee_id: null, shift_date: '2099-03-10' } as Partial<Shift>),
+        ], onLeave);
+        expect(plan).toEqual({
+            ...empty,
+            onLeaveIds: ['casual', 'ft', 'soon'],
+            assignedIds: ['other-day', 'other-person'],
+            unassignedIds: ['nobody'],
+        });
+    });
+
+    it('treats nobody as on leave when no leave lookup is given', () => {
+        const plan = planPublishRoster([mk('a', { assigned_employee_id: 'emp-1', shift_date: '2099-03-10' } as Partial<Shift>)]);
+        expect(plan.onLeaveIds).toEqual([]);
+    });
+
     it('routes a future unassigned draft to unassignedIds (→ bidding)', () => {
         const plan = planPublishRoster([mk('u', { assigned_employee_id: null })]);
         expect(plan).toEqual({ ...empty, unassignedIds: ['u'] });
     });
 
-    it('flags an unassigned draft whose window is already LIVE as dead (→ delete)', () => {
+    it('flags an unassigned draft whose window is already LIVE as dead (→ skipped, never deleted)', () => {
         const plan = planPublishRoster([
             mk('d', { assigned_employee_id: null, start_at: iso(-1 * HOUR), end_at: iso(+2 * HOUR) }),
         ]);

@@ -19,6 +19,7 @@ import { SwapPriority, PRIORITY_CONFIG } from './EmployeeSwaps.page';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
@@ -45,6 +46,7 @@ const formatTime = (time: string): string => {
 // Authoritative: shift.group_type is the only signal. No name/uuid fallbacks.
 function getDeptGlassClass(data?: { groupType?: string }): string {
     const g = (data?.groupType || '').toLowerCase();
+    if (g === 'office')           return 'dept-card-glass-office';
     if (g.includes('convention')) return 'dept-card-glass-convention';
     if (g.includes('exhibition')) return 'dept-card-glass-exhibition';
     if (g.includes('theatre'))    return 'dept-card-glass-theatre';
@@ -122,6 +124,7 @@ const ShiftPane: React.FC<{
             <SharedShiftCard
                 variant="timecard"
                 isFlat={false}
+                identityGrid
                 organization={data.orgName || 'ICC Sydney'}
                 department={data.deptName || 'Department'}
                 subGroup={data.subGroupName}
@@ -135,6 +138,7 @@ const ShiftPane: React.FC<{
                 lifecycleStatus={data.lifecycleStatus}
                 estimatedPay={data.estimatedPay > 0 ? `$${data.estimatedPay.toFixed(2)}` : undefined}
                 groupVariant={
+                    deptClass.includes('office') ? 'office' :
                     deptClass.includes('convention') ? 'convention' :
                     deptClass.includes('exhibition') ? 'exhibition' :
                     deptClass.includes('theatre') ? 'theatre' :
@@ -502,9 +506,11 @@ export const ManagerSwapsPage: React.FC = () => {
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
     const { isDark } = useTheme();
 
-    const currentOrgId = scope.org_ids[0] || orgSelection.organizationId;
-    const currentDeptId = scope.dept_ids.length === 1 ? scope.dept_ids[0] : undefined;
-    const currentSubDeptId = scope.subdept_ids.length === 1 ? scope.subdept_ids[0] : undefined;
+    // The dept/sub-dept lines were already the correct pattern, spelled inline;
+    // `soleOrgId` extends it to the organisation, which was still taking `[0]`.
+    const currentOrgId = soleOrgId(scope) ?? orgSelection.organizationId;
+    const currentDeptId = soleDeptId(scope) ?? undefined;
+    const currentSubDeptId = soleSubDeptId(scope) ?? undefined;
 
     // ==================== STATE ====================
     const [statusFilter, setStatusFilter] = useState<SwapStatus | 'all'>('MANAGER_PENDING');

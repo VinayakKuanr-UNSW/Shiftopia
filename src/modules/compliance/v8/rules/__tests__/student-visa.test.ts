@@ -98,7 +98,6 @@ describe('the visa condition no longer masks the employment type', () => {
       shift_date: day,
       start_time: start,
       end_time: end,
-      is_ordinary_hours: true,
       is_candidate: true,
     });
     const ctx = buildContext({

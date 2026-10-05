@@ -13,7 +13,7 @@ export type ShiftStatus =
 
 export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | 'excused' | 'auto_clock_out';
 
-export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre' | 'the_cutaway';
+export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre' | 'the_cutaway' | 'office';
 
 export type AssignmentStatusText =
     | 'unassigned'
@@ -67,7 +67,6 @@ export interface Shift {
     remuneration_rate: number | null;
     actual_hourly_rate: number | null;
     currency: string;
-    cost_center_id: string | null;
     start_time: string;
     end_time: string;
     scheduled_start: string | null;
@@ -124,7 +123,6 @@ export interface Shift {
     published_at: string | null;
     published_by_user_id: string | null;
     is_locked: boolean;
-    lock_reason_text: string | null;
     timesheet_id: string | null;
     actual_start: string | null;
     actual_end: string | null;
@@ -162,9 +160,7 @@ export interface Shift {
     adjusted_end_source?: 'manual' | 'snapped' | 'auto' | null;
     adjusted_start_is_manual?: boolean;
     adjusted_end_is_manual?: boolean;
-    
-    is_recurring: boolean;
-    recurrence_rule: string | null;
+
     confirmed_at: string | null;
     organizations?: { id: string; name: string } | null;
     departments?: { id: string; name: string } | null;
@@ -198,6 +194,14 @@ export interface Shift {
     /** Narrows a 'PT' target to Flexible Part-Time staff only. */
     target_requires_flexible?: boolean;
     demand_group_id?: string | null;
+
+    /**
+     * cl 28.2 — READ-ONLY computed field (`public.is_first_aid_duty(shifts)`):
+     * true when the assignee holds a first-aid appointment covering
+     * shift_date. Present only when explicitly selected; `select('*')` omits
+     * computed fields. Feed the cost engines via `resolveShiftAllowances`.
+     */
+    is_first_aid_duty?: boolean | null;
 
     // Allowances
     allowances?: {
@@ -300,3 +304,26 @@ export function doesShiftTrulyCrossMidnight(shift: {
     return endMinutes < startMinutes;
 }
 
+
+/**
+ * A shift plus the denormalised group labels the My Roster surfaces render.
+ *
+ * Lives HERE, next to `Shift`, and not in `model/roster.types.ts`, because there
+ * are two different `Shift` interfaces in this module — this one, and
+ * `model/shift.types.ts#Shift`, which is what `@/modules/core/types` re-exports.
+ * The My Roster views all import `Shift` from the module barrel, i.e. this file.
+ * Declaring the wrapper anywhere else silently binds it to the other `Shift`.
+ *
+ * Six files had their own identical copy (`useMyRoster`, `MyRosterCalendar` and
+ * each of the four calendar views) — which is how a shared component and its
+ * callers drift apart. One definition, imported.
+ *
+ * Instances are built once per fetch by `useMyRoster`'s date index and are
+ * referentially stable; that is what lets the card components be `React.memo`d.
+ */
+export interface ShiftWithDetails {
+    shift: Shift;
+    groupName: string;
+    groupColor: string;
+    subGroupName: string;
+}

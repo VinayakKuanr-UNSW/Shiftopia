@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
-import { isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { getSydneyNow, isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
   Plus,
   Check,
@@ -21,6 +21,8 @@ import {
   Wand2,
   Users,
   Sparkles,
+  CopyPlus,
+  Maximize2,
 } from 'lucide-react';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -87,7 +89,7 @@ import {
 } from '@/modules/rosters/state/useRosterMutations';
 import { computeShiftUrgency, computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
-import { startOfMonth, endOfMonth } from 'date-fns';
+import { startOfMonth, endOfMonth, endOfWeek } from 'date-fns';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,6 +121,9 @@ import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { canDragShift, canDropOnTarget } from '@/modules/rosters/utils/dnd.utils';
 import { ToastAction } from '@/modules/core/ui/primitives/toast';
 import type { GroupProjection } from '@/modules/rosters/domain/projections/types';
+import { ALL_GROUP_TYPES } from '@/modules/rosters/domain/projections/constants';
+import { CopyShiftFlow, type CopyShiftSource } from '@/modules/office/ui/components/CopyShiftFlow';
+import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 
@@ -520,6 +525,12 @@ const GROUP_COLORS: Record<TemplateGroupType, {
     badge: 'bg-amber-100 text-amber-700 border-amber-200',
     accent: 'amber',
   },
+  office: {
+    card: 'bg-cyan-500/10 hover:bg-cyan-500/15',
+    cardBorder: 'border-l-cyan-500',
+    badge: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+    accent: 'cyan',
+  },
 };
 
 /* ============================================================
@@ -555,6 +566,12 @@ const GLASS_STYLES: Record<TemplateGroupType, {
     headerText: 'text-white drop-shadow-lg',
     accent: 'amber',
   },
+  office: {
+    container: 'bg-cyan-500/5 dark:bg-cyan-500/5 backdrop-blur-xl border border-cyan-500/20 dark:border-cyan-500/20 shadow-[0_8px_32px_rgba(6,182,212,0.15)]',
+    header: 'bg-gradient-to-r from-cyan-600/90 to-cyan-500/80 dark:from-cyan-600/90 dark:to-cyan-500/80 backdrop-blur-md border-b border-cyan-400/30',
+    headerText: 'text-white drop-shadow-lg',
+    accent: 'cyan',
+  },
 };
 
 // Unassigned group style (separate to avoid type conflicts)
@@ -571,6 +588,7 @@ const DEFAULT_SUB_GROUPS_MAP: Record<TemplateGroupType, string[]> = {
   exhibition_centre: [],
   theatre: [],
   the_cutaway: [],
+  office: [],
 };
 
 // Human-readable group names
@@ -579,6 +597,7 @@ const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
   exhibition_centre: 'Exhibition Centre',
   theatre: 'Theatre',
   the_cutaway: 'The Cutaway',
+  office: 'Office',
   unassigned: 'Unassigned',
 };
 
@@ -659,7 +678,7 @@ const CostPanel: React.FC<CostPanelProps> = ({
 
 interface CoverageSignalBarProps {
   pct: number;      // 0-100
-  accent: string;   // 'blue' | 'emerald' | 'red' | 'gray'
+  accent: string;   // 'blue' | 'emerald' | 'red' | 'amber' | 'cyan' | 'gray'
   segments?: number;
 }
 
@@ -670,6 +689,7 @@ const CoverageSignalBar: React.FC<CoverageSignalBarProps> = ({ pct, accent, segm
     emerald: 'bg-emerald-400',
     red: 'bg-red-400',
     amber: 'bg-amber-400',
+    cyan: 'bg-cyan-400',
     gray: 'bg-slate-400',
   };
   const barColor = colorMap[accent] ?? 'bg-white/40';
@@ -1269,7 +1289,8 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                                     : (group.color === 'blue' ? 'blue' :
                                       group.color === 'emerald' ? 'emerald' :
                                         group.color === 'red' ? 'red' :
-                                          group.color === 'amber' ? 'amber' : 'gray')}
+                                          group.color === 'amber' ? 'amber' :
+                                            group.color === 'cyan' ? 'cyan' : 'gray')}
                                   onClick={() => onDrillDown?.(dateKey, group.type, subGroup.name)}
                                   isBulkMode={isBulkMode}
                                   selectionState={cellSelectionState}
@@ -1755,6 +1776,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // ==================== DELETE CONFIRMATION ====================
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [shiftToDelete, setShiftToDelete] = useState<ShiftDisplay | null>(null);
+  /** A full-time shift being copied onto a range (the Office page's Copy, shared). */
+  const [copySource, setCopySource] = useState<CopyShiftSource | null>(null);
+  /** A full-time shift shown expanded: Scheduled · Actual · Payroll · Variance. */
+  const [expandedShift, setExpandedShift] = useState<Shift | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // ==================== PUBLISH/UNPUBLISH CONFIRMATION ====================
@@ -1933,7 +1958,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }>();
 
     const toCanonicalKey = (name: string, externalId: string | null): string => {
-      if (externalId && ['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'].includes(externalId)) {
+      if (externalId && (ALL_GROUP_TYPES as string[]).includes(externalId)) {
         return externalId;
       }
       return name.trim().toLowerCase().replace(/\s+/g, '_');
@@ -1943,7 +1968,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       const key = toCanonicalKey(name, externalId);
       if (!groupsMap.has(key)) {
         let type: TemplateGroupType = 'convention_centre';
-        if (['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'].includes(key)) {
+        if ((ALL_GROUP_TYPES as string[]).includes(key)) {
           type = key as TemplateGroupType;
         }
         groupsMap.set(key, {
@@ -1963,7 +1988,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     };
 
     // Initialize with standard ICC Sydney groups
-    (['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'] as TemplateGroupType[]).forEach((type, idx) => {
+    ALL_GROUP_TYPES.forEach((type, idx) => {
       ensureGroup(null as any, GROUP_DISPLAY_NAMES[type], type, idx);
     });
 
@@ -2080,7 +2105,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   };
 
   const getDefaultGroups = (): VisualGroup[] => {
-    return (['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'] as TemplateGroupType[]).map((type) => ({
+    return ALL_GROUP_TYPES.map((type) => ({
       id: type,
       name: GROUP_DISPLAY_NAMES[type],
       type,
@@ -2123,7 +2148,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         const type = (group.externalId || 'unassigned') as TemplateGroupType | 'unassigned';
         let groupEntry = byType.get(type);
         if (!groupEntry) {
-          const isTemplate = ['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'].includes(type);
+          const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
           groupEntry = {
             id: group.id || type,
             name: GROUP_DISPLAY_NAMES[type] ?? group.name ?? type,
@@ -2160,7 +2185,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       if (!group) {
         // A group present in the summary but not in the default templates
         // (e.g. an ad-hoc / unassigned bucket). Create it so its rows render.
-        const isTemplate = ['convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway'].includes(type);
+        const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
         group = {
           id: type,
           name: GROUP_DISPLAY_NAMES[type] ?? type,
@@ -2191,6 +2216,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       exhibition_centre: 1,
       theatre: 2,
       the_cutaway: 3,
+      office: 4,
     };
     const groups = Array.from(byType.values()).sort(
       (a, b) => (order[a.type] ?? 99) - (order[b.type] ?? 99),
@@ -2450,6 +2476,28 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }
   };
 
+  /**
+   * Copy a full-time shift onto a range of dates — offered only on an assigned
+   * FT shift. The flow checks leave, existing shifts, writable rosters and the
+   * employee's cycle ceiling (cl 35.1(a)) for the range, and writes into
+   * Office / Administration.
+   */
+  const openCopyShift = (shift: ShiftDisplay) => {
+    const raw = shift.rawShift;
+    if (raw.target_employment_type !== 'FT' || !raw.assigned_employee_id
+      || !raw.role_id || !raw.organization_id || !raw.department_id || !raw.sub_department_id) return;
+    setCopySource({
+      employeeId: raw.assigned_employee_id,
+      employeeName: shift.employeeName ?? '',
+      dateKey: raw.shift_date,
+      shift: raw,
+      roleId: raw.role_id,
+      organizationId: raw.organization_id,
+      departmentId: raw.department_id,
+      subDepartmentId: raw.sub_department_id,
+    });
+  };
+
   const handleCloneShift = async (shift: ShiftDisplay) => {
     try {
       const { rawShift } = shift;
@@ -2476,6 +2524,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         tags: rawShift.tags || [],
         notes: rawShift.notes,
         is_training: rawShift.is_training,
+        // Mandatory on every shift (fn_shift_inherit_template_row raises 23502
+        // without it), and the clone is for the same people as its source.
+        // Omitted, every Clone failed with "target_employment_type is required".
+        target_employment_type: (rawShift as any).target_employment_type,
+        target_requires_flexible: (rawShift as any).target_requires_flexible,
         // assigned_employee_id is NOT copied as per refined requirements
       };
 
@@ -2650,6 +2703,28 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   Clone Shift {hasStarted && '(Locked)'}
                 </DropdownMenuItem>
 
+                {shift.rawShift.target_employment_type === 'FT' && (
+                  <DropdownMenuItem
+                    onClick={() => setExpandedShift(shift.rawShift)}
+                    className="text-popover-foreground hover:bg-accent cursor-pointer"
+                  >
+                    <Maximize2 className="h-4 w-4 mr-2" />
+                    Expand
+                  </DropdownMenuItem>
+                )}
+
+                {/* Copy a full-time shift onto a range — available on a started
+                    shift too, since it writes only from today onward. */}
+                {shift.rawShift.target_employment_type === 'FT' && shift.rawShift.assigned_employee_id && (
+                  <DropdownMenuItem
+                    onClick={() => openCopyShift(shift)}
+                    className="text-popover-foreground hover:bg-accent cursor-pointer"
+                  >
+                    <CopyPlus className="h-4 w-4 mr-2" />
+                    Copy to…
+                  </DropdownMenuItem>
+                )}
+
                 {hasStarted ? (
                   <>
                     <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
@@ -2664,12 +2739,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
                     <DropdownMenuSeparator className="bg-border" />
 
-                    <DropdownMenuItem
-                      onClick={() => handleDeleteShift(shift)}
-                      className="text-destructive hover:bg-destructive/10 cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Shift
+                    {/* A started shift is never deleted (D4) — the database
+                        refuses it (SHIFT_STARTED), so it is not offered. */}
+                    <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
+                      <Lock className="h-4 w-4 mr-2" />
+                      Delete (Started)
                     </DropdownMenuItem>
                   </>
                 ) : (
@@ -2932,13 +3006,47 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             </div>
           </ScrollArea>
 
+        <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
+
+        {/* Copy a full-time shift onto a range */}
+        <CopyShiftFlow
+          source={copySource}
+          defaultEndDate={copySource
+            ? format(endOfWeek(parseISO(copySource.dateKey), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+            : ''}
+          referenceDate={format(getSydneyNow(), 'yyyy-MM-dd')}
+          onClose={() => setCopySource(null)}
+          onCopied={() => { void queryClient.invalidateQueries({ queryKey: shiftKeys.all }); }}
+        />
+
         {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent className="bg-background border-border">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-foreground">Delete Shift?</AlertDialogTitle>
-              <AlertDialogDescription className="text-muted-foreground">
-                This action cannot be undone. The shift "{shiftToDelete?.role}" will be permanently removed.
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    This action cannot be undone. The shift "{shiftToDelete?.role}" will be permanently removed.
+                  </p>
+                  {(() => {
+                    // A full-time employee is owed their contracted hours over the
+                    // declared cycle, so deleting one of their shifts leaves the
+                    // cycle short — said here, as the Office page did.
+                    const raw = shiftToDelete?.rawShift as (Shift & { net_length_minutes?: number | null }) | undefined;
+                    if (!raw || raw.target_employment_type !== 'FT' || !raw.assigned_employee_id) return null;
+                    const hours = Number(raw.net_length_minutes ?? 0) / 60;
+                    const label = `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
+                    return (
+                      <p>
+                        This removes <strong className="text-foreground">{label}</strong> from{' '}
+                        {shiftToDelete?.employeeName ? `${shiftToDelete.employeeName}'s` : 'their'} contracted
+                        cycle. A full-time employee is owed their contracted hours over the declared cycle
+                        (ICC EBA cl 35.1(a)), so it will be short until another shift replaces this one.
+                      </p>
+                    );
+                  })()}
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

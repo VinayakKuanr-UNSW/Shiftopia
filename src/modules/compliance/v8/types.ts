@@ -5,6 +5,7 @@
  * Replaces all V1/V2/Solver types.
  */
 
+import type { OrdinaryCycleWeeks } from '../ordinary-hours-cycle';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 export type ComplianceCheckInput = any; // Legacy alias
@@ -41,10 +42,17 @@ export interface V8Shift {
     shift_date?:           string;    // Alias for compatibility
     start_time:            string;    // HH:mm
     end_time:              string;    // HH:mm
-    is_ordinary_hours:     boolean;
     unpaid_break_minutes?: number;
     paid_break_minutes?:   number;
     role_id?:              V8RoleId;
+    /**
+     * Which job this shift is for. Needed by V8_EMPLOYMENT_TARGET to pick the
+     * contract that governs: a person can hold different employment types in
+     * different sub-departments, and (since EBA cl 13 multi-hiring became
+     * expressible) in different roles within one. Undefined falls back to the
+     * person-wide match, which is what this rule did for every caller before.
+     */
+    sub_department_id?:    string | null;
     is_training?:          boolean;
     is_sunday?:            boolean;
     is_public_holiday?:    boolean;
@@ -74,6 +82,16 @@ export interface V8Employee {
     name:                    string;
     contract_type:           V8ContractType;
     contracted_weekly_hours: number;
+    /**
+     * Declared ordinary-hours work cycle (ICC EBA cl 35.x(a) / 12.2(b)).
+     *
+     * Optional on the RULE input, unlike on the context: plenty of callers build
+     * a V8Employee by hand for a single-shift check that no cycle rule reads,
+     * and `ordinaryHoursAvgRule` falls back to the config default. A required
+     * field here would force every one of them to invent a value.
+     */
+    ordinary_hours_cycle_weeks?:  OrdinaryCycleWeeks;
+    ordinary_hours_cycle_anchor?: string;
     skill_ids?:              string[];
     license_ids?:            string[];
     /** Rich qualification records with expiry dates. When present, the
@@ -100,6 +118,18 @@ export interface V8Employee {
      * tolerates callers that don't hydrate it.
      */
     employment_statuses?:    string[];
+    /**
+     * The Active contracts themselves — scope AND status together.
+     *
+     * `employment_statuses` above is a de-duplicated flat list, which can say
+     * "this person is Full-Time somewhere" but never "they are Casual HERE".
+     * V8_EMPLOYMENT_TARGET needs the second question to match the way
+     * `fn_enforce_shift_employment_target` does, so it reads these.
+     *
+     * Absent ⇒ the rule falls back to the person-wide `employment_statuses`
+     * match, which is exactly what it did before this field existed.
+     */
+    contracts?:              ContractRecordV2[];
     /**
      * True when the employee's role is Security (EBA Schedule 3). Combined
      * with `contract_type === 'FULL_TIME'`, this switches
@@ -136,6 +166,20 @@ export interface ContractRecordV2 {
     department_id:     string;
     sub_department_id: string | null;
     role_id:           string;
+    /**
+     * The raw `user_contracts.employment_status` for THIS contract.
+     *
+     * It used to live only in the flat, de-duplicated
+     * `V8Employee.employment_statuses`, which threw away which contract each
+     * status came from — so V8_EMPLOYMENT_TARGET could tell that a person was
+     * "Full-Time somewhere" but never that they were Casual HERE. Carrying it
+     * on the record keeps the status and the scope together, which is the only
+     * way to answer the question the DB trigger actually asks.
+     *
+     * Optional so a caller that has not hydrated it degrades to the previous
+     * person-wide behaviour rather than blocking.
+     */
+    employment_status?: string | null;
 }
 
 export type ContractType = V8ContractType;

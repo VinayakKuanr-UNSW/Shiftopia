@@ -1,6 +1,6 @@
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
 import {
-  hd, ORDINARY_HOURS_CAP, SATURDAY, SUNDAY, ANNUAL_LEAVE_LOADING,
+  isPublicHolidayISO, ORDINARY_HOURS_CAP, SATURDAY, SUNDAY, ANNUAL_LEAVE_LOADING,
   MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS,
 } from './constants';
 import { resolveRateSet, type WageRateTable } from './rate-schedule';
@@ -140,7 +140,7 @@ export function estimateDetailedShiftCost(
     isHoliday = facts.isPublicHoliday;
     dayOfWeek = facts.dayOfWeek;
   } else {
-    isHoliday = !!hd.isHoliday(shift_date);
+    isHoliday = isPublicHolidayISO(shift_date);
     const dateObj = new Date(shift_date + 'T00:00:00');
     dayOfWeek = isNaN(dateObj.getTime()) ? 1 : dateObj.getDay();
   }
@@ -373,7 +373,7 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (ordinaryEndMins > 1440 || otEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : !!hd.isHoliday(nextStr);
+    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
   }
 
   const segments = splitOrdinaryAtMidnight(

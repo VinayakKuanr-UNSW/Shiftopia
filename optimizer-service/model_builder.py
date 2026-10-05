@@ -341,6 +341,9 @@ class ShiftInput:
     is_saturday: bool = False
     is_public_holiday: bool = False
     shift_type: str = 'NORMAL'  # 'NORMAL' or 'MULTI_HIRE'
+    # WHICH JOB this shift belongs to — see `_slot_in_scope`. None is unscoped
+    # and matches every slot, which is what every caller sent before scoping.
+    sub_department_id: Optional[str] = None
     level: int = 0
     target_employment_type: Optional[str] = None
     # Narrows a 'PT' target to FLEXIBLE part-timers. This cannot be expressed by
@@ -501,6 +504,8 @@ class AvailabilitySlotInput:
     slot_date: str
     start_time: str
     end_time: str
+    # WHICH JOB this was declared for. None means every job the employee holds.
+    sub_department_id: Optional[str] = None
 
 
 @dataclass
@@ -528,6 +533,13 @@ class EmployeeInput:
     is_flexible: bool = False
     is_student: bool = False
     visa_limit: int = 2880 # Standard 48h/fortnight
+    # ICC EBA cl 35.x(a) / 12.2(b) — the DECLARED ordinary-hours work cycle and
+    # the Monday it is counted from. The clause offers 38h/1wk, 76h/2wk,
+    # 114h/3wk OR 152h/4wk; the engagement declares which. Defaults mirror
+    # hr.user_contracts so an omitted field reproduces the old hardcoded
+    # 4-week behaviour exactly rather than silently tightening anyone.
+    ordinary_hours_cycle_weeks: int = 4
+    ordinary_hours_cycle_anchor: str = '2024-01-01'
     # EBA Schedule 3 — Security. Sch 3 §1.1 makes the schedule PREVAIL over the
     # Agreement wherever they conflict, and §3.1 conflicts with cl 35 directly:
     # full-time Security work an "even time" 8-week cycle averaging 42h/week
@@ -924,6 +936,36 @@ def _slot_covers_shift(slot: AvailabilitySlotInput, s0: int, s1: int) -> bool:
     return a0 <= s0 and a1 >= s1
 
 
+def _slot_in_scope(slot: AvailabilitySlotInput, shift: ShiftInput) -> bool:
+    """Does this declared slot apply to the job this shift belongs to?
+
+    Employment is a property of the CONTRACT, not the person, and one employee
+    can hold several — Full-Time in Security, Casual in Set-up and Front of
+    House. Availability is declared per job for exactly that reason, so a
+    declaration made for Set-up says nothing about whether they can work
+    Security, and reading it as if it did is what let one job's declaration
+    satisfy another job's shift.
+
+    A solve is NOT scoped to one sub-department — it spans them — so this cannot
+    be a filter applied when the slots are fetched. It has to be a per-(slot,
+    shift) match at the point of use, which is here.
+
+    Both NULLs are deliberately permissive, and for different reasons:
+
+      * a slot with no sub-department applies to EVERY job the employee holds.
+        That is what every row carried before scoping and what a
+        department-wide contract still produces;
+      * a shift with no sub-department is unscoped, and there is no job to
+        match against. Matching everything keeps the pre-scoping behaviour for
+        any caller that has not started sending it, which matters because the
+        alternative — matching nothing — would silently make every employee
+        ineligible for every shift and read as an infeasible model.
+    """
+    if slot.sub_department_id is None or shift.sub_department_id is None:
+        return True
+    return slot.sub_department_id == shift.sub_department_id
+
+
 def envelope_excludes_shift(emp: EmployeeInput, shift: ShiftInput) -> bool:
     """HC-5e: does the contract ordinary-hours envelope put this shift out of
     bounds for this employee?
@@ -1074,9 +1116,14 @@ def employee_eligible(
         # Approved leave already is — `unavailable_dates`, checked at the top of
         # this function and unaffected by any of this — and non-leave blocks go
         # through `availability_overrides` at HARD severity just above.
+        # Scoped as well as dated. A part-timer who narrowed their Set-up
+        # availability on a date has said nothing about Security that day, and
+        # under OPT_OUT silence means available — so letting the Set-up
+        # declaration into this list would turn their narrowing into a block on
+        # a job they never spoke about.
         declared_today = [
             slot for slot in emp.availability_slots
-            if slot.slot_date == shift.shift_date
+            if slot.slot_date == shift.shift_date and _slot_in_scope(slot, shift)
         ]
         if declared_today:
             s0, s1 = shift_window(shift)
@@ -1100,6 +1147,11 @@ def employee_eligible(
         covered = False
         for slot in emp.availability_slots:
             if slot.slot_date != shift.shift_date:
+                continue
+            # The casual half of the defect: under OPT_IN a slot is what makes
+            # an employee eligible at all, so an out-of-scope slot counted here
+            # rosters someone onto a job they never declared for.
+            if not _slot_in_scope(slot, shift):
                 continue
             if _slot_covers_shift(slot, s0, s1):
                 covered = True
@@ -1956,7 +2008,7 @@ class ScheduleModelBuilder:
     def _add_workload_limits(self):
         """
         Implements:
-        1. EBA 28-day rolling window: S[i+27] - S[i-1] <= 152h
+        1. EBA ordinary hours: each ANCHORED work cycle <= its ceiling (cl 35.x(a))
         2. Workday 28-day window: sum(work_day[d]) <= 20
         """
         all_dates = set()
@@ -2046,20 +2098,56 @@ class ScheduleModelBuilder:
             #    below tests full-time as well as the role. This matches
             #    `ordinaryHoursAvgRule`'s `isFtSecurity` exactly; the two must
             #    agree or the solver proposes rosters the labour layer rejects.
-            if emp.employment_type in ('FT', 'PT'):
+            # EVERY employment type, casuals included. cl 35.4(a) states the
+            # ordinary-hours ladder for casuals in the same words as 35.1(a)
+            # does for full-timers; the old `in ('FT','PT')` gate had no basis
+            # in the Agreement and left the cap unenforced on the population
+            # that actually carries most of the hours.
+            if emp.employment_type in ('FT', 'PT', 'Casual'):
                 is_ft_security = emp.is_security_role and emp.employment_type == 'FT'
-                cycle_days = ORD_AVG_SECURITY_CYCLE_DAYS if is_ft_security else ORD_AVG_CYCLE_DAYS
-                limit_mins = ORD_AVG_SECURITY_CYCLE_MINUTES if is_ft_security else ORD_AVG_CYCLE_MINUTES
+                cycle_weeks = (
+                    ORD_AVG_SECURITY_CYCLE_DAYS // 7 if is_ft_security
+                    else max(1, min(4, int(emp.ordinary_hours_cycle_weeks or 4)))
+                )
+                limit_mins = ORD_AVG_SECURITY_CYCLE_MINUTES if is_ft_security else (
+                    cycle_weeks * ORD_AVG_CYCLE_MINUTES // (ORD_AVG_CYCLE_DAYS // 7)
+                )
 
+                # ANCHORED, not rolling. cl 35.x(a) caps the work CYCLE; a
+                # rolling window caps every N consecutive days, which is
+                # strictly stricter and rejects rosters that satisfy both
+                # cycles they straddle. cl 42.6 ("during the work cycle") and
+                # cl 35.1(e) ("during each work cycle") both presuppose edges.
+                #
+                # This must agree with `ordinaryHoursAvgRule` and the
+                # Availability Manager exactly, or the solver proposes rosters
+                # the labour layer then rejects. All three anchor on the same
+                # Monday epoch.
+                try:
+                    anchor_d = datetime.date.fromisoformat(
+                        str(emp.ordinary_hours_cycle_anchor or '2024-01-01')[:10]
+                    )
+                except ValueError:
+                    anchor_d = datetime.date(2024, 1, 1)
+                first_d = datetime.date.fromisoformat(str(first_date)[:10])
+                span_days = cycle_weeks * 7
+
+                cycle_days_map: dict[int, list[int]] = {}
                 for i in range(num_calendar_days):
-                    if i >= cycle_days - 1:
-                        start_idx = i - (cycle_days - 1)
-                        start_val = S[start_idx-1] if start_idx > 0 else 0
+                    d = first_d + datetime.timedelta(days=i)
+                    idx = (d - anchor_d).days // span_days
+                    cycle_days_map.setdefault(idx, []).append(i)
 
-                        slack = self.model.NewIntVar(0, 100_000, f'slack_h_{emp.id[:4]}_{i}')
-                        self.model.Add(S[i] - start_val - slack <= limit_mins)
-                        # Tier 0: Hard Legal Compliance (100,000,000 penalty)
-                        self._hard_legal_slack_terms.append(100_000_000 * slack)
+                # A cycle only partly inside the horizon is PARTIAL and can only
+                # under-count — the safe direction, and the same choice the two
+                # TypeScript layers make.
+                for idx, day_idxs in cycle_days_map.items():
+                    slack = self.model.NewIntVar(0, 100_000, f'slack_h_{emp.id[:4]}_c{idx}')
+                    self.model.Add(
+                        sum(day_vars[i] for i in day_idxs) - slack <= limit_mins
+                    )
+                    # Tier 0: Hard Legal Compliance (100,000,000 penalty)
+                    self._hard_legal_slack_terms.append(100_000_000 * slack)
             
             # 4. Consecutive-days streak — FLEXIBLE PART-TIME ONLY (cl. 35.3(g),
             #    max 10). FT/PT/casual consecutive-day density is governed solely

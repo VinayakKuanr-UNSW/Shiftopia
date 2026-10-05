@@ -16,12 +16,17 @@
  *
  * Consumers:
  *   - shifts.queries.ts  → getEmployees()
- *   - autoschedule.api.ts → fetchBaseline()
  */
 
 import { supabase } from '@/platform/supabase/client';
 import { isValidUuid } from '../domain/shift.entity';
 import { isFlexibleEmploymentStatus } from '@/modules/core/model/employment.types';
+import {
+    contractsInRoleScope,
+    sortByComplianceBasis,
+    hasConflictingEmploymentTypes,
+    type ContractBasisInput,
+} from '@/modules/availability/domain/contract-basis';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,6 +57,19 @@ export interface EligibleEmployee {
      * the assignment picker's badges) cannot recover it afterwards.
      */
     employment_status?: string | null;
+    /**
+     * True when this person holds Active contracts on MORE THAN ONE employment
+     * type (EBA cl 13 Multi-Hiring — a permanent also engaged casually).
+     *
+     * Reporting only; nothing branches on it. It exists because
+     * `EmployeeInput.employment_type` on the solver wire is a single scalar for
+     * a solve that spans sub-departments, so HC-5c
+     * (`emp.employment_type != shift.target_employment_type`) silently excludes
+     * such a person from every shift targeting their OTHER type. Surfacing the
+     * fact is the honest thing to do until the wire carries per-engagement
+     * types; guessing a scalar would just move the error somewhere quieter.
+     */
+    has_multiple_engagement_types?: boolean;
     /** Convenience mirror of `isFlexibleEmploymentStatus(employment_status)`. */
     is_flexible?: boolean;
     contracted_role_ids?: string[];
@@ -73,20 +91,21 @@ export interface ContractedStaffMember {
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
-export const EligibilityService = {
-    /**
-     * Returns deduplicated list of employees who have an Active contract
-     * matching the given context (org/dept/sub-dept/role).
-     */
-    async getEligibleEmployees(context: EligibilityContext): Promise<EligibleEmployee[]> {
-        try {
-            // We start from profiles to ensure we can find all users, 
-            // but we use an inner join on user_contracts to maintain organizational scoping.
-            // By removing the .eq('status', 'Active') filter, we include all members 
-            // regardless of their current contract state (Expired, Pending, etc).
-            let query = supabase
-                .from('profiles')
-                .select(`
+/**
+ * Annotated `string` rather than left as a template LITERAL, deliberately.
+ *
+ * supabase-js parses the select string at the TYPE level against the entire
+ * schema to infer the row shape. This three-level nested select against a
+ * 125-table schema exceeds TypeScript's instantiation depth limit and fails
+ * the build with TS2589 — which only surfaced once the generated types were
+ * regenerated from the live database and stopped being six tables short.
+ *
+ * Widening to `string` skips that type-level parse. Nothing is lost: the rows
+ * are consumed as `(data as any[])` with `(c: any)` accessors immediately
+ * below, so the inferred shape was never actually being checked against
+ * anything.
+ */
+const PROFILE_ELIGIBILITY_SELECT: string = `
                     id,
                     first_name,
                     last_name,
@@ -110,7 +129,22 @@ export const EligibilityService = {
                         status,
                         verification_status
                     )
-                `);
+                `;
+
+export const EligibilityService = {
+    /**
+     * Returns deduplicated list of employees who have an Active contract
+     * matching the given context (org/dept/sub-dept/role).
+     */
+    async getEligibleEmployees(context: EligibilityContext): Promise<EligibleEmployee[]> {
+        try {
+            // We start from profiles to ensure we can find all users, 
+            // but we use an inner join on user_contracts to maintain organizational scoping.
+            // By removing the .eq('status', 'Active') filter, we include all members 
+            // regardless of their current contract state (Expired, Pending, etc).
+            let query = supabase
+                .from('profiles')
+                .select(PROFILE_ELIGIBILITY_SELECT);
 
             // Org filter
             if (context.organizationId && isValidUuid(context.organizationId)) {
@@ -201,10 +235,35 @@ export const EligibilityService = {
                 // therefore in scope for every sub-department under it — the same
                 // rule the SubDept verification above already applies. Excluding
                 // those would hide staff who are legitimately assignable.
-                const scopedContracts = (context.subDepartmentId && isValidUuid(context.subDepartmentId))
-                    ? activeContracts.filter((c: any) =>
-                        c.sub_department_id === context.subDepartmentId || c.sub_department_id === null)
-                    : activeContracts;
+                // Narrowed to the sub-department AND, where the caller named one,
+                // to the ROLE — because a person can now be Full-Time in one role
+                // and Casual in another WITHIN one sub-department (EBA cl 13
+                // Multi-Hiring; migrations 20260824130000/130100 accept it).
+                // `contractsInRoleScope` is the same narrowing
+                // `fn_enforce_shift_employment_target` performs in SQL, and it
+                // falls back to the sub-department set rather than to nothing
+                // when the role is unknown, so an unroled lookup behaves exactly
+                // as it did before.
+                const basisInputs: Array<ContractBasisInput & { __row: any }> =
+                    activeContracts.map((c: any) => ({
+                        employmentStatus: c.employment_status ?? null,
+                        contractedWeeklyHours: c.contracted_weekly_hours ?? null,
+                        startDate: c.start_date ?? null,
+                        subDepartmentId: c.sub_department_id ?? null,
+                        departmentId: c.department_id ?? null,
+                        roleId: c.role_id ?? null,
+                        __row: c,
+                    }));
+
+                const scopeRef = {
+                    subDepartmentId: (context.subDepartmentId && isValidUuid(context.subDepartmentId))
+                        ? context.subDepartmentId : null,
+                    departmentId: context.departmentId ?? null,
+                    roleId: (context.roleId && isValidUuid(context.roleId)) ? context.roleId : null,
+                };
+
+                const scopedContracts = contractsInRoleScope(basisInputs, scopeRef)
+                    .map(b => b.__row);
 
                 // Skills match verification
                 if (context.skills && context.skills.length > 0) {
@@ -230,10 +289,45 @@ export const EligibilityService = {
                     if (!hasAllLicenses) return;
                 }
 
-                // Prefer a contract that is actually in scope for this lookup — with
-                // multiple active contracts, activeContracts[0] could describe a
-                // different sub-department than the one being planned.
-                const displayContract = scopedContracts[0] || activeContracts[0] || contracts[0];
+                // The contract that GOVERNS this lookup.
+                //
+                // Was `scopedContracts[0]`, straight off unordered PostgREST
+                // output. Sub-department filtering alone left that arbitrary the
+                // moment someone held two contracts in one sub-department, which
+                // the contract form now writes routinely — the same defect
+                // `resolveComplianceBasis` was written to fix, and the same one
+                // the assignment trigger carried until migration 20260824130100.
+                //
+                // `sortByComplianceBasis` gives a TOTAL, deterministic order
+                // (non-casual first, then the larger weekly basis, then the later
+                // start date, then original order), so this returns the same
+                // contract on every load. After the role narrowing above it is
+                // normally a set of one.
+                const orderedScoped = sortByComplianceBasis(
+                    scopedContracts.map((c: any) => ({
+                        employmentStatus: c.employment_status ?? null,
+                        contractedWeeklyHours: c.contracted_weekly_hours ?? null,
+                        startDate: c.start_date ?? null,
+                        subDepartmentId: c.sub_department_id ?? null,
+                        departmentId: c.department_id ?? null,
+                        roleId: c.role_id ?? null,
+                        __row: c,
+                    })),
+                ) as Array<ContractBasisInput & { __row: any }>;
+
+                const displayContract = orderedScoped[0]?.__row ?? activeContracts[0] ?? contracts[0];
+
+                // The solver carries ONE `employment_type` per employee for a
+                // whole solve, and a solve spans sub-departments (see
+                // `auto-scheduler.controller`), so a person engaged on different
+                // terms in different jobs is silently ineligible for one of them
+                // under HC-5c. Flagged rather than papered over: no single scalar
+                // can be right, and a quiet under-assignment is the failure mode
+                // hardest to notice.
+                const multiEngagement = hasConflictingEmploymentTypes(basisInputs, {
+                    subDepartmentId: null,
+                    departmentId: null,
+                });
 
                 profilesMap.set(row.id, {
                     id: row.id,
@@ -246,6 +340,7 @@ export const EligibilityService = {
                                   displayContract?.employment_status === 'Casual' ? 'CASUAL' :
                                   displayContract?.employment_status === 'Flexible Part-Time' ? 'PT' : null,
                     employment_status: displayContract?.employment_status ?? null,
+                    has_multiple_engagement_types: multiEngagement,
                     is_flexible: isFlexibleEmploymentStatus(displayContract?.employment_status),
                     contracted_role_ids: Array.from(new Set(activeContracts.map((c: any) => c.role_id).filter(Boolean))),
                     contracted_weekly_hours: displayContract?.contracted_weekly_hours ?? 38

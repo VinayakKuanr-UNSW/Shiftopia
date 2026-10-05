@@ -1,5 +1,5 @@
 import {
-  hd, SATURDAY, SUNDAY, CASUAL_LOADING, TIME_AND_HALF_MULTIPLIER,
+  isPublicHolidayISO, SATURDAY, SUNDAY, CASUAL_LOADING, TIME_AND_HALF_MULTIPLIER,
   TIME_AND_HALF_HOURS_CAP, DOUBLE_TIME_MULTIPLIER, DOUBLE_TIME_AND_HALF_MULTIPLIER,
   ANNUAL_LEAVE_LOADING, ZERO_COST_BREAKDOWN,
 } from './constants';
@@ -163,7 +163,7 @@ export function estimateDetailedShiftCost(
     isHoliday = facts.isPublicHoliday;
     shiftDay = facts.dayOfWeek;
   } else {
-    isHoliday = !!hd.isHoliday(shift_date);
+    isHoliday = isPublicHolidayISO(shift_date);
     shiftDay = new Date(shift_date + 'T00:00:00').getDay();
   }
 
@@ -199,7 +199,7 @@ export function estimateDetailedShiftCost(
   let nextIsHoliday = false;
   if (ordinaryEndMins > 1440 || otEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
-    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : !!hd.isHoliday(nextStr);
+    nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
   }
 
   interface Seg { fromMins: number; toMins: number; day: number; isHoliday: boolean; }
@@ -357,7 +357,19 @@ export function estimateDetailedShiftCost(
     }
   }
 
-  const allowanceCost = nightAllowanceCost;
+  // cl 28.2 — first-aid allowance on every PAID ordinary hour (post-floor, OT
+  // excluded), parity with the Standard engine. Sch 3 §1.1 makes the main
+  // Agreement apply to Part-Time and Casual Event Security except where the
+  // Schedule is inconsistent, and nothing in Sch 3 displaces cl 28.2 for them.
+  // Annualised FT security is excluded: §4.1(b) pays the salary "in lieu of
+  // any additional payments such as ... allowances". This branch previously
+  // priced no allowance but the night one, so a security officer — the people
+  // most often appointed first aider — never received it.
+  const firstAidCost = !isAnnualised && options.allowances?.firstAid
+    ? rateSet.allowances.firstAidPerHour * paidOrdinaryHours
+    : 0;
+
+  const allowanceCost = nightAllowanceCost + firstAidCost;
   const total = ordinaryCost + penaltyCost + overtimeCost + allowanceCost;
 
   const penaltyRate = isAnnualised

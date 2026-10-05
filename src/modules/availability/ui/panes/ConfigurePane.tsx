@@ -24,13 +24,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Switch } from '@/modules/core/ui/primitives/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/modules/core/ui/primitives/select';
+import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { cn } from '@/modules/core/lib/utils';
@@ -340,22 +334,21 @@ export function ConfigurePane({
                 {formState.repeatEnabled && (
                   <div className="space-y-4 pl-6 border-l-2 border-muted">
                     {/* Repeat Type */}
-                    <div className="space-y-2">
-                      <Label htmlFor="repeat-type">Frequency</Label>
-                      <Select
+                    <div className="space-y-1">
+                      <GlobalStyleSelect
+                        label="Frequency"
                         value={formState.repeatType}
-                        onValueChange={handleRepeatTypeChange}
+                        onChange={handleRepeatTypeChange}
+                        options={[
+                          { id: 'daily', name: 'Daily', description: 'Repeats every day' },
+                          { id: 'weekly', name: 'Weekly', description: 'Repeats on selected days of the week' },
+                          { id: 'fortnightly', name: 'Fortnightly', description: 'Repeats every two weeks' },
+                        ]}
                         disabled={isDisabled}
-                      >
-                        <SelectTrigger id="repeat-type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="fortnightly">Fortnightly</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        icon={<Repeat className="h-4 w-4" />}
+                        showSearch={false}
+                        compact
+                      />
                     </div>
 
                     {/* Day Picker (for weekly/fortnightly) */}

@@ -10,7 +10,7 @@ import {
     EmployeeSkill,
 } from '@/modules/users/hooks/useEmployeeSkills';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/modules/core/ui/primitives/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
+import { CommandSelector } from './CommandSelector';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Zap, Plus, Trash2, Pencil, Search } from 'lucide-react';
@@ -158,19 +158,18 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                             </DialogHeader>
                             <div className="space-y-4 mt-3">
                                 <div>
-                                    <Label className="text-xs font-bold">Select Skill *</Label>
-                                    <Select value={newSkill.skill_id} onValueChange={(val) => setNewSkill({ ...newSkill, skill_id: val })}>
-                                        <SelectTrigger className="rounded-xl border-border/40">
-                                            <SelectValue placeholder="Select skill..." />
-                                        </SelectTrigger>
-                                        <SelectContent className="rounded-xl">
-                                            {allSkills?.map(skill => (
-                                                <SelectItem key={skill.id} value={skill.id}>
-                                                    {skill.name} — {skill.category}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <CommandSelector
+                                        label="Select Skill"
+                                        placeholder="Select skill..."
+                                        value={newSkill.skill_id}
+                                        onValueChange={(val) => setNewSkill({ ...newSkill, skill_id: val })}
+                                        options={(allSkills || []).map(skill => ({
+                                            id: skill.id,
+                                            name: skill.name,
+                                            subtitle: skill.category,
+                                        }))}
+                                        icon={<Zap className="w-4 h-4 text-primary" />}
+                                    />
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>

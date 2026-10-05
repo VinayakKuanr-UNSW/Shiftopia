@@ -119,7 +119,6 @@ function mapShiftToV2(row: Record<string, unknown>): V8OrchestratorShift {
     end_time: row.end_time as string,
     role_id: (row.role_id as string | null) ?? '',
     required_qualifications: (row.required_qualifications as string[] | null) ?? [],
-    is_ordinary_hours: (row.is_ordinary_hours as boolean | null) ?? true,
     break_minutes: (row.break_minutes as number | null) ?? 0,
     unpaid_break_minutes: (row.unpaid_break_minutes as number | null) ?? 0,
   };

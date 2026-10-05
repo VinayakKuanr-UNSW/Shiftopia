@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Plus, Building2, Users, ChevronRight, Shield, Loader2, AlertTriangle, User, UserCheck, Crown, Globe, Pencil, Lock, Zap, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -264,12 +263,13 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-xl bg-[#0b0e14]/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2rem] overflow-hidden p-0">
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-xl max-h-[90vh] min-h-[540px] flex flex-col bg-[#0b0e14]/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2.5rem] overflow-hidden p-0">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent pointer-events-none" />
                 
-                <div className="p-8 pb-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
-                    <DialogHeader className="mb-6">
-                        <div className="flex items-center gap-3 mb-2">
+                {/* Fixed Header */}
+                <div className="p-8 pb-4 flex-shrink-0 border-b border-border/10">
+                    <DialogHeader className="mb-0">
+                        <div className="flex items-center gap-3">
                             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 shadow-inner">
                                 <Sparkles className="w-5 h-5" />
                             </div>
@@ -277,12 +277,16 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                                 <DialogTitle className="text-2xl font-bold tracking-tight">
                                     {isEditMode ? 'Edit Access Certificate' : 'Add Access Certificate'}
                                 </DialogTitle>
-                                <DialogDescription className="text-muted-foreground/60">
+                                <DialogDescription className="text-muted-foreground/60 text-xs sm:text-sm">
                                     {isEditMode ? 'Update' : 'Grant'} system permissions for {employeeName}
                                 </DialogDescription>
                             </div>
                         </div>
                     </DialogHeader>
+                </div>
+
+                {/* Scrollable Form Body with bottom padding for dropdown space */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-8 py-6 pb-28 scrollbar-thin space-y-6">
 
                     <div className="flex flex-col gap-6 py-2 relative">
                         {/* Progress Line */}
@@ -362,41 +366,19 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.1 }}
                         >
-                            <div className="space-y-2">
-                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold ml-1">
-                                    Access Level
-                                </Label>
-                                <Select value={accessLevel} onValueChange={(val) => setAccessLevel(val as AccessLevel)}>
-                                    <SelectTrigger className="h-14 bg-muted/10 border-border/40 rounded-2xl hover:bg-muted/20 hover:border-emerald-500/30 transition-all duration-300">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
-                                                {ACCESS_LEVEL_CONFIG[accessLevel]?.icon}
-                                            </div>
-                                            <div className="flex flex-col text-left">
-                                                <span className="font-bold text-sm">{ACCESS_LEVEL_CONFIG[accessLevel]?.label}</span>
-                                                <span className="text-[10px] text-muted-foreground/60">{ACCESS_LEVEL_CONFIG[accessLevel]?.description}</span>
-                                            </div>
-                                        </div>
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-[#0b0e14] border-border/40 rounded-2xl p-1 backdrop-blur-xl">
-                                        {availableLevels.map(({ level, label, description, icon }) => (
-                                            <SelectItem 
-                                                key={level} 
-                                                value={level} 
-                                                className="rounded-xl py-3 focus:bg-emerald-500/10 focus:text-emerald-400 transition-all cursor-pointer"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-1.5 rounded-lg bg-muted/50">{icon}</div>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-sm">{label}</span>
-                                                        <span className="text-[10px] opacity-60">{description}</span>
-                                                    </div>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            <CommandSelector
+                                label="Access Level"
+                                placeholder="Select access level"
+                                value={accessLevel}
+                                options={availableLevels.map(({ level, label, description, icon }) => ({
+                                    id: level,
+                                    name: label,
+                                    description,
+                                    icon,
+                                }))}
+                                onValueChange={(val) => setAccessLevel(val as AccessLevel)}
+                                icon={ACCESS_LEVEL_CONFIG[accessLevel]?.icon}
+                            />
                         </motion.div>
 
                         {/* 3. Organization */}

@@ -36,6 +36,16 @@ export interface AvailabilityRule {
   repeat_end_date?: string | null; // yyyy-MM-dd
   reason?: string | null;
 
+  /**
+   * WHICH JOB this declaration is for (migration 20260821090000).
+   *
+   * NULL means UNSCOPED — it covers every sub-department the profile holds an
+   * Active contract in. That is what the 5 un-backfilled production rules carry
+   * and what any writer that has not resolved a scope produces, so readers must
+   * always admit NULL alongside the scope they asked for.
+   */
+  sub_department_id?: string | null;
+
   // Metadata
   created_at: string;
   updated_at: string;
@@ -58,6 +68,9 @@ export interface AvailabilitySlot {
   start_time: string;   // HH:mm:ss
   end_time: string;     // HH:mm:ss
 
+  /** Copied from the source rule by the DB trigger. NULL = unscoped. */
+  sub_department_id?: string | null;
+
   created_at: string;
 }
 
@@ -79,6 +92,8 @@ export interface AvailabilityFormPayload {
   repeat_days?: number[]; // Days of week for weekly repeat (0=Sun, 6=Sat)
   repeat_end_date?: Date; // yyyy-MM-dd
   reason?: string;
+  /** The job this declaration is for. Undefined/null writes an unscoped rule. */
+  sub_department_id?: string | null;
 }
 
 // ============================================================================

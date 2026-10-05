@@ -1,13 +1,27 @@
 import React from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
-import { LogOut, User } from 'lucide-react';
+import { Briefcase, LogOut, User, UserRound } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { usePersona, resolvePersonaRoute } from '@/platform/auth/PersonaProvider';
 
 export const SidebarUser: React.FC = () => {
-    const { user, logout, activeCertificate } = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
+    const { user, logout, activeCertificate, hasPermission } = useAuth();
+    const { persona, togglePersona, canSwitch, displayLevel } = usePersona();
 
     if (!user) return null;
+
+    const handleTogglePersona = () => {
+        const nextPersona = persona === 'employee' ? 'employer' : 'employee';
+        togglePersona();
+        const targetPath = resolvePersonaRoute(location.pathname, nextPersona, hasPermission);
+        if (targetPath && targetPath !== location.pathname) {
+            navigate(targetPath);
+        }
+    };
 
     // Premium gradient for the avatar fallbak
     const avatarGradient = "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500";
@@ -20,8 +34,16 @@ export const SidebarUser: React.FC = () => {
                 <h3 className="font-bold text-sm text-foreground truncate tracking-tight">
                     {user.fullName}
                 </h3>
+                {/* The badge follows the PERSONA, not the highest certificate:
+                    employee shows the Type X level (alpha/beta), employer the
+                    Type Y one (gamma..zeta). `activeCertificate` is the old
+                    behaviour and remains the fallback for a user with neither. */}
                 <p className="text-[10px] font-medium text-slate-600 dark:text-slate-300 uppercase tracking-widest mt-0.5">
-                    {activeCertificate ? `<${activeCertificate.accessLevel}>` : (user.systemRole || 'Team Member')}
+                    {displayLevel
+                        ? `<${displayLevel}>`
+                        : activeCertificate
+                          ? `<${activeCertificate.accessLevel}>`
+                          : (user.systemRole || 'Team Member')}
                 </p>
             </div>
 
@@ -47,6 +69,40 @@ export const SidebarUser: React.FC = () => {
                         {/* Online/Active Indicator */}
                         <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 border-2 border-background shadow-sm" />
                     </div>
+
+                    {/* Persona toggle. Hidden entirely for a pure employee —
+                        there is no second hat, and an inert control that never
+                        does anything is worse than no control. */}
+                    {canSwitch && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleTogglePersona}
+                            aria-label={
+                                persona === 'employee'
+                                    ? 'Switch to employer view'
+                                    : 'Switch to employee view'
+                            }
+                            aria-pressed={persona === 'employer'}
+                            title={
+                                persona === 'employee'
+                                    ? 'Employee view — switch to employer'
+                                    : 'Employer view — switch to employee'
+                            }
+                            className={cn(
+                                'h-8 w-8 rounded-full transition-colors',
+                                persona === 'employer'
+                                    ? 'text-indigo-500 dark:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20'
+                                    : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20',
+                            )}
+                        >
+                            {persona === 'employer' ? (
+                                <Briefcase className="h-4 w-4" />
+                            ) : (
+                                <UserRound className="h-4 w-4" />
+                            )}
+                        </Button>
+                    )}
                 </div>
 
                 {/* Logout Button - Subtle until hover */}

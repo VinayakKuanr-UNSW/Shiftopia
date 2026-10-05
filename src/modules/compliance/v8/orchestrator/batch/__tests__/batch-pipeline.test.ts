@@ -1,3 +1,4 @@
+import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
 import { describe, expect, it } from 'vitest';
 
 import type { V8Hit } from '../../../types';
@@ -26,6 +27,8 @@ const employee = (employeeId: string): V8EmployeeContext => ({
   employee_id: employeeId,
   contract_type: 'CASUAL',
   contracted_weekly_hours: 20,
+  ordinary_hours_cycle_weeks:  ORD_CYCLE_WEEKS_DEFAULT,
+  ordinary_hours_cycle_anchor: ORD_CYCLE_ANCHOR_DEFAULT,
   assigned_role_ids: ['role-1'],
   contracts: [],
   qualifications: [],
@@ -41,7 +44,6 @@ const shift = (
   date,
   start_time: startTime,
   end_time: endTime,
-  is_ordinary_hours: true,
   required_qualifications: [],
   break_minutes: 0,
 });

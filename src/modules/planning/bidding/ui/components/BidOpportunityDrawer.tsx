@@ -6,9 +6,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
-import { CostBreakdownTooltip } from '@/modules/rosters/ui/my-roster/ShiftDetailsDialog';
+import { buildShiftCardPay } from '../../../ui/components/shift-card-pay';
 import type { ShiftOpportunity } from '../types';
 
 interface Props {
@@ -127,7 +125,10 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                             </div>
                         );
 
-                        const costBreakdown = rawShift ? estimateDetailedCostFromShift(rawShift as any) : ZERO_COST_BREAKDOWN;
+                        // Was computed and then dropped on the floor — the drawer
+                        // never passed `estimatedPay`, so it showed "—" exactly
+                        // like the card behind it.
+                        const cardPay = buildShiftCardPay(rawShift);
                         const isPast = shiftStart.getTime() < Date.now();
 
                         return (
@@ -141,9 +142,10 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     hideActualClocking={true}
                                     hidePayrollSection={true}
                                     defaultExpandedSections={{ scheduled: true }}
+                                    identityGrid
                                     organization={opp.organization}
                                     department={opp.department}
-                                    subGroup={opp.subGroup}
+                                    subDepartment={opp.subGroup}
                                     role={opp.role}
                                     shiftDate={opp.date}
                                     startTime={opp.startTime}
@@ -156,11 +158,14 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     isUrgent={opp.isUrgent}
                                     isPast={isPast}
                                     lifecycleStatus={opp.lifecycleStatus || 'Published'}
+                                    estimatedPay={cardPay.estimatedPay}
+                                    estimatedPayBreakdown={cardPay.estimatedPayBreakdown}
                                     groupVariant={
                                         opp.groupType === 'convention_centre' ? 'convention' :
                                         opp.groupType === 'exhibition_centre' ? 'exhibition' :
                                         opp.groupType === 'theatre' ? 'theatre' :
-                                        opp.groupType === 'the_cutaway' ? 'cutaway' : 'default'
+                                        opp.groupType === 'the_cutaway' ? 'cutaway' :
+                                        opp.groupType === 'office' ? 'office' : 'default'
                                     }
                                     footerActions={footerActions}
                                     isFlat={false}

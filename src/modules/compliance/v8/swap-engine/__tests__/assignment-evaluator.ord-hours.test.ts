@@ -14,7 +14,12 @@ import type { RosterShift } from '../types';
  */
 
 // N consecutive 10h days (net) starting at startDate. 28 × 10h = 280h ≫ 152h cap.
-function consecutive(nDays: number, startDate = '2026-06-01'): RosterShift[] {
+//
+// 2026-05-18 is deliberate: it OPENS a four-week cycle (anchor 2024-01-01), so
+// all 28 days fall inside one cycle. cl 35.x(a) caps the cycle rather than every
+// 28 consecutive days, and a block that straddles the boundary would split
+// 140h/140h and lawfully pass.
+function consecutive(nDays: number, startDate = '2026-05-18'): RosterShift[] {
     const out: RosterShift[] = [];
     const base = new Date(`${startDate}T00:00:00Z`);
     for (let i = 0; i < nDays; i++) {
@@ -26,7 +31,6 @@ function consecutive(nDays: number, startDate = '2026-06-01'): RosterShift[] {
             date,
             start_time: '08:00',
             end_time: '18:00',
-            is_ordinary_hours: true,
             unpaid_break_minutes: 0,
         });
     }
@@ -60,11 +64,18 @@ describe('assignmentEvaluator — V8_ORD_HOURS_AVG reachability', () => {
         expect(hasOrdHours({ contract_type: 'PT' })).toBe(true);
     });
 
-    it('stays EXEMPT for a CASUAL employee (same schedule)', () => {
-        expect(hasOrdHours({ contract_type: 'CASUAL' })).toBe(false);
+    it('FIRES for a CASUAL employee too — cl 35.4(a) caps them in the same words', () => {
+        expect(hasOrdHours({ contract_type: 'CASUAL' })).toBe(true);
     });
 
-    it('defaults to CASUAL (exempt) when no employee_context is supplied — unchanged legacy behaviour', () => {
-        expect(hasOrdHours(undefined)).toBe(false);
+    /**
+     * A missing context used to default to CASUAL and therefore to no check at
+     * all. With cl 35.4(a) in scope that default now means "evaluated against
+     * the general four-week ceiling", which is the fail-CLOSED direction: an
+     * employee whose contract could not be read is checked rather than waved
+     * through.
+     */
+    it('checks an employee with no context rather than waving them through', () => {
+        expect(hasOrdHours(undefined)).toBe(true);
     });
 });

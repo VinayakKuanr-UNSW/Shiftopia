@@ -1,3 +1,4 @@
+import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -35,6 +36,7 @@ import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
+import { fetchScopedContractBasis } from '@/modules/availability/api/contract-basis.api';
 
 // =============================================================================
 // TYPES
@@ -237,7 +239,6 @@ function buildV8OrchestratorShift(s: RosterShiftInput, fallbackId?: string): V8O
         department_id:        s.department_id ?? undefined,
         sub_department_id:    s.sub_department_id ?? undefined,
         required_qualifications: [],
-        is_ordinary_hours:    true,
         break_minutes:        s.unpaid_break_minutes || 0,
         unpaid_break_minutes: s.unpaid_break_minutes || 0,
     } as V8OrchestratorShift;
@@ -281,19 +282,29 @@ export function ManagerComplianceApprovalModal({
                 if (ids.length === 0) return;
                 const { data: rows } = await supabase
                     .from('shifts')
-                    .select('id, shift_date, start_time, end_time')
+                    .select('id, shift_date, start_time, end_time, sub_department_id')
                     .in('id', ids);
                 const reqShift = (rows as any[] || []).find((s) => s.id === requesterV8ShiftId);
                 const offShift = offererV8ShiftId ? (rows as any[] || []).find((s) => s.id === offererV8ShiftId) : null;
                 const warns: string[] = [];
                 if (offShift) {
-                    const slots = await getAvailabilitySlots(requesterEmployeeId, offShift.shift_date, offShift.shift_date);
-                    const a = evaluateShiftAvailabilityFromSlots(slots, offShift.shift_date, offShift.start_time, offShift.end_time);
+                    const [slots, basis] = await Promise.all([
+                        getAvailabilitySlots(requesterEmployeeId, offShift.shift_date, offShift.shift_date, offShift.sub_department_id),
+                        fetchScopedContractBasis(requesterEmployeeId, { subDepartmentId: offShift.sub_department_id ?? null }),
+                    ]);
+                    const a = evaluateShiftAvailabilityFromSlots(
+                        slots, offShift.shift_date, offShift.start_time, offShift.end_time, basis.availabilityMode,
+                    );
                     if (a.isWarning) warns.push(`${requesterName}: ${a.message}`);
                 }
                 if (offererEmployeeId && reqShift) {
-                    const slots = await getAvailabilitySlots(offererEmployeeId, reqShift.shift_date, reqShift.shift_date);
-                    const a = evaluateShiftAvailabilityFromSlots(slots, reqShift.shift_date, reqShift.start_time, reqShift.end_time);
+                    const [slots, basis] = await Promise.all([
+                        getAvailabilitySlots(offererEmployeeId, reqShift.shift_date, reqShift.shift_date, reqShift.sub_department_id),
+                        fetchScopedContractBasis(offererEmployeeId, { subDepartmentId: reqShift.sub_department_id ?? null }),
+                    ]);
+                    const a = evaluateShiftAvailabilityFromSlots(
+                        slots, reqShift.shift_date, reqShift.start_time, reqShift.end_time, basis.availabilityMode,
+                    );
                     if (a.isWarning) warns.push(`${offererName}: ${a.message}`);
                 }
                 if (!cancelled) setAvailWarnings(warns);
@@ -362,11 +373,11 @@ export function ManagerComplianceApprovalModal({
         //    Party B = offerer   (loses their own shift, gains the requester's).
         const requesterShiftV8: V8OrchestratorShift = requesterShiftData
             ? buildV8OrchestratorShift(requesterShiftData as any)
-            : ({ id: requesterV8ShiftId, date: '', start_time: '', end_time: '', is_ordinary_hours: true, required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
+            : ({ id: requesterV8ShiftId, date: '', start_time: '', end_time: '', required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
 
         const offererShiftV8: V8OrchestratorShift = offererShiftData
             ? buildV8OrchestratorShift(offererShiftData as any)
-            : ({ id: offererV8ShiftId ?? '', date: '', start_time: '', end_time: '', is_ordinary_hours: true, required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
+            : ({ id: offererV8ShiftId ?? '', date: '', start_time: '', end_time: '', required_qualifications: [], break_minutes: 0 } as V8OrchestratorShift);
 
         const { inputA, inputB } = buildSwapInputs({
             partyAEmployeeId:     requesterEmployeeId,
@@ -378,6 +389,8 @@ export function ManagerComplianceApprovalModal({
                 employee_id:             '',
                 contract_type:           'CASUAL',
                 contracted_weekly_hours: 0,
+                ordinary_hours_cycle_weeks:  ORD_CYCLE_WEEKS_DEFAULT,
+                ordinary_hours_cycle_anchor: ORD_CYCLE_ANCHOR_DEFAULT,
                 assigned_role_ids:       [],
                 contracts:               [],
                 qualifications:          [],

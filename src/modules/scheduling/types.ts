@@ -41,6 +41,16 @@ export interface OptimizerShift {
     is_public_holiday?: boolean;
     /** Lower min-engagement floor (training shifts can be 2h vs 3h). */
     is_training?: boolean;
+    /**
+     * WHICH JOB this shift belongs to — the scope HC-5d matches declared
+     * availability against.
+     *
+     * A solve spans sub-departments, so the slot list cannot be narrowed when
+     * it is fetched; the shift has to carry its own job so the solver can match
+     * each slot at the point of use. Null is unscoped and matches every slot,
+     * which is the behaviour every caller had before scoping.
+     */
+    sub_department_id?: string | null;
     /** Required by `_calculate_effective_minutes` for fatigue scoring. */
     unpaid_break_minutes?: number;
     /** cl 39.2 measures the split-shift spread net of meal AND rest breaks. */
@@ -68,6 +78,16 @@ export interface AvailabilitySlotRef {
     slot_date: string;     // YYYY-MM-DD
     start_time: string;    // HH:MM
     end_time: string;      // HH:MM
+    /**
+     * WHICH JOB the employee declared this for. Null means every job they hold
+     * — the value every row carried before scoping, and the one a
+     * department-wide contract still produces.
+     *
+     * Employment is a property of the contract, not the person: the same
+     * employee can be Full-Time in Security and Casual in Set-up. Without this
+     * the solver read one job's declaration as an answer about all of them.
+     */
+    sub_department_id?: string | null;
 }
 
 /**

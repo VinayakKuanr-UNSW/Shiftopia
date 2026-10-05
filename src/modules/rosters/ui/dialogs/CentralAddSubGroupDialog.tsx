@@ -51,6 +51,7 @@ const GROUP_OPTIONS = [
     { value: 'exhibition_centre', label: 'Exhibition Centre' },
     { value: 'theatre', label: 'Theatre' },
     { value: 'the_cutaway', label: 'The Cutaway' },
+    { value: 'office', label: 'Office' },
 ];
 
 export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> = ({

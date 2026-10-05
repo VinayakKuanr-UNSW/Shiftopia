@@ -55,7 +55,6 @@ graph LR
     core["core (app shell)"]
     auth --> core
     availability --> core
-    availability --> reserve_list["reserve-list"]
     broadcasts --> core
     compliance --> core
     compliance --> rosters
@@ -73,10 +72,7 @@ graph LR
     planning --> availability
     planning --> payroll
     planning --> core
-    reserve_list --> rosters
-    reserve_list --> core
     rosters --> planning
-    rosters --> reserve_list
     rosters --> templates
     rosters --> timesheets
     rosters --> users
@@ -281,7 +277,6 @@ graph TB
         Swapping[planning/swapping]
         Manual[rosters manual assign/publish]
         AutoSched[scheduling auto-scheduler]
-        ReserveList[reserve-list emergency assign]
     end
 
     subgraph V8["compliance/v8"]
@@ -297,19 +292,17 @@ graph TB
     Swapping --> Orchestrator
     Manual --> Orchestrator
     AutoSched -.->|"commit validation only, via V8SwapEngine wrapper, bypasses Orchestrator"| Rules
-    ReserveList --> FixedCheck
     Orchestrator --> Rules
     Rules --> Result["Full 15-rule result"]
     Result --> Bidding
     Result --> Swapping
     Result --> Manual
     Result -.->|"BLOCKING, automatic"| RejectionLog[compliance_rejections table]
-    FixedCheck --> ReserveList
 ```
 
-**Corrected from an earlier pass of this diagram — see Ch. 12 for full detail.** Reserve List and the two AutoPilot Edge Function workers (`auto-approve-swaps`, `auto-assign-bids`) do **not** run the full 15-rule engine — they call a separately-deployed Edge Function with a fixed 4-check subset (overlap, 48h weekly cap, 11h rest, qualification), a documented v1 gap per those workers' own READMEs. The autoscheduler's commit-time validation *does* run the full rule set, but via a different wrapper (`V8SwapEngine`) that bypasses `runV8Orchestrator` — so its BLOCKING results are never written to `compliance_rejections`, unlike manual assign and bid/swap accept. `adapters/` is organized by protocol version (v1/v2), not by caller — the real per-caller input builders live in `planning/unified/compliance/input-builder.ts`. The `orchestrator/{batch,bidding,swapping,conflict-resolver}` subfolders implement a sophisticated global-optimization layer with zero production callers today.
+**Corrected from an earlier pass of this diagram — see Ch. 12 for full detail.** The two AutoPilot Edge Function workers (`auto-approve-swaps`, `auto-assign-bids`) do **not** run the full 15-rule engine — they call a separately-deployed Edge Function with a fixed 4-check subset (overlap, 48h weekly cap, 11h rest, qualification), a documented v1 gap per those workers' own READMEs. The autoscheduler's commit-time validation *does* run the full rule set, but via a different wrapper (`V8SwapEngine`) that bypasses `runV8Orchestrator` — so its BLOCKING results are never written to `compliance_rejections`, unlike manual assign and bid/swap accept. `adapters/` is organized by protocol version (v1/v2), not by caller — the real per-caller input builders live in `planning/unified/compliance/input-builder.ts`. The `orchestrator/{batch,bidding,swapping,conflict-resolver}` subfolders implement a sophisticated global-optimization layer with zero production callers today.
 
-**Structural rule confirmed (Verified, via Ch. 1 §2.4/2.9/2.11/2.12/2.10):** every caller module goes through the same `v8/orchestrator` + `v8/rules` — there is no second, independently-implemented compliance path. This is the platform's single most important architectural invariant; Ch. 12 (Compliance Engine deep dive) will document each rule in `rules/` individually.
+**Structural rule confirmed (Verified, via Ch. 1 §2.4/2.9/2.10/2.11):** every caller module goes through the same `v8/orchestrator` + `v8/rules` — there is no second, independently-implemented compliance path. This is the platform's single most important architectural invariant; Ch. 12 (Compliance Engine deep dive) will document each rule in `rules/` individually.
 
 ## 10. Notification flow
 
