@@ -236,13 +236,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "assignment_decisions_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       assignment_events: {
@@ -286,13 +279,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "assignment_events_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -463,13 +449,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "assignment_snapshots_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       attendance_records: {
@@ -527,13 +506,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "attendance_records_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       autoschedule_assignments: {
@@ -584,13 +556,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "autoschedule_assignments_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -1234,13 +1199,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "baseline_ft_proposed_shifts_created_shift_id_fkey"
-            columns: ["created_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "baseline_ft_proposed_shifts_employee_id_fkey"
             columns: ["employee_id"]
             isOneToOne: false
@@ -1769,13 +1727,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "cancellation_history_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       cancellation_reasons: {
@@ -2040,44 +1991,63 @@ export type Database = {
           correction_factor: number | null
           created_at: string | null
           event_id: string | null
+          feature_payload: Json | null
           id: string
           is_locked: boolean | null
           model_version: string | null
           predicted_count: number
           role: string | null
           role_id: string | null
+          scenario_id: string | null
           source: string | null
+          synthesis_run_id: string | null
           time_slot: number | null
+          version: number
         }
         Insert: {
           corrected_count?: number | null
           correction_factor?: number | null
           created_at?: string | null
           event_id?: string | null
+          feature_payload?: Json | null
           id?: string
           is_locked?: boolean | null
           model_version?: string | null
           predicted_count?: number
           role?: string | null
           role_id?: string | null
+          scenario_id?: string | null
           source?: string | null
+          synthesis_run_id?: string | null
           time_slot?: number | null
+          version?: number
         }
         Update: {
           corrected_count?: number | null
           correction_factor?: number | null
           created_at?: string | null
           event_id?: string | null
+          feature_payload?: Json | null
           id?: string
           is_locked?: boolean | null
           model_version?: string | null
           predicted_count?: number
           role?: string | null
           role_id?: string | null
+          scenario_id?: string | null
           source?: string | null
+          synthesis_run_id?: string | null
           time_slot?: number | null
+          version?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "demand_forecasts_synthesis_run_id_fkey"
+            columns: ["synthesis_run_id"]
+            isOneToOne: false
+            referencedRelation: "synthesis_runs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "demand_forecasts_event_id_fkey"
             columns: ["event_id"]
@@ -3089,6 +3059,64 @@ export type Database = {
         }
         Relationships: []
       }
+      first_aid_appointments: {
+        Row: {
+          appointed_by: string | null
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          employee_id: string
+          id: string
+          notes: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          appointed_by?: string | null
+          created_at?: string
+          effective_from: string
+          effective_to?: string | null
+          employee_id: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          appointed_by?: string | null
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "first_aid_appointments_appointed_by_fkey"
+            columns: ["appointed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "first_aid_appointments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "first_aid_appointments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       function_map: {
         Row: {
           created_at: string
@@ -3812,13 +3840,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "planning_offers_offered_shift_id_fkey"
-            columns: ["offered_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "planning_offers_request_id_fkey"
             columns: ["request_id"]
             isOneToOne: false
@@ -3973,13 +3994,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "planning_requests_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
           {
@@ -4249,24 +4263,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "rest_period_violations_first_shift_id_fkey"
-            columns: ["first_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "rest_period_violations_second_shift_id_fkey"
             columns: ["second_shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rest_period_violations_second_shift_id_fkey"
-            columns: ["second_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -4813,13 +4813,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "shift_bid_windows_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: true
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       shift_bids: {
@@ -4906,13 +4899,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "shift_bids_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       shift_compliance_snapshots: {
@@ -4980,13 +4966,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "shift_compliance_snapshots_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: true
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       shift_event_tags: {
@@ -5021,13 +5000,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_event_tags_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -5106,13 +5078,6 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "shift_events_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
         ]
       }
       shift_flags: {
@@ -5149,13 +5114,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_flags_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -5195,13 +5153,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_licenses_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -5256,13 +5207,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_offers_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -5323,13 +5267,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "shift_payroll_records_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: true
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "shift_payroll_records_timesheet_id_fkey"
             columns: ["timesheet_id"]
             isOneToOne: false
@@ -5363,13 +5300,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_skills_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
           {
@@ -5492,13 +5422,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "shift_swaps_requester_shift_id_fkey"
-            columns: ["requester_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "shift_swaps_target_id_fkey"
             columns: ["target_id"]
             isOneToOne: false
@@ -5510,13 +5433,6 @@ export type Database = {
             columns: ["target_shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_swaps_target_shift_id_fkey"
-            columns: ["target_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -5598,7 +5514,6 @@ export type Database = {
           compliance_override_reason: string | null
           compliance_snapshot: Json | null
           confirmed_at: string | null
-          cost_center_id: string | null
           created_at: string | null
           created_by_user_id: string | null
           creation_source: string | null
@@ -5628,14 +5543,12 @@ export type Database = {
           is_on_bidding: boolean | null
           is_overnight: boolean
           is_published: boolean | null
-          is_recurring: boolean | null
           is_training: boolean | null
           last_dropped_by: string | null
           last_modified_by: string | null
           last_modified_reason: string | null
           last_rejected_by: string | null
           lifecycle_status: Database["public"]["Enums"]["shift_lifecycle"]
-          lock_reason_text: string | null
           locked_at: string | null
           net_length_minutes: number | null
           notes: string | null
@@ -5646,10 +5559,8 @@ export type Database = {
           payroll_exported: boolean | null
           published_at: string | null
           published_by_user_id: string | null
-          recurrence_rule: string | null
           remuneration_level: number | null
           remuneration_rate: number | null
-          required_certifications: Json | null
           required_licenses: Json | null
           required_skills: Json | null
           role_id: string | null
@@ -5718,7 +5629,6 @@ export type Database = {
           compliance_override_reason?: string | null
           compliance_snapshot?: Json | null
           confirmed_at?: string | null
-          cost_center_id?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           creation_source?: string | null
@@ -5742,20 +5652,17 @@ export type Database = {
           id?: string
           is_cancelled?: boolean
           is_draft?: boolean | null
-          is_first_aid_duty?: boolean
           is_from_template?: boolean
           is_locked?: boolean | null
           is_on_bidding?: boolean | null
           is_overnight?: boolean
           is_published?: boolean | null
-          is_recurring?: boolean | null
           is_training?: boolean | null
           last_dropped_by?: string | null
           last_modified_by?: string | null
           last_modified_reason?: string | null
           last_rejected_by?: string | null
           lifecycle_status?: Database["public"]["Enums"]["shift_lifecycle"]
-          lock_reason_text?: string | null
           locked_at?: string | null
           net_length_minutes?: number | null
           notes?: string | null
@@ -5766,10 +5673,8 @@ export type Database = {
           payroll_exported?: boolean | null
           published_at?: string | null
           published_by_user_id?: string | null
-          recurrence_rule?: string | null
           remuneration_level?: number | null
           remuneration_rate?: number | null
-          required_certifications?: Json | null
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
@@ -5838,7 +5743,6 @@ export type Database = {
           compliance_override_reason?: string | null
           compliance_snapshot?: Json | null
           confirmed_at?: string | null
-          cost_center_id?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           creation_source?: string | null
@@ -5862,20 +5766,17 @@ export type Database = {
           id?: string
           is_cancelled?: boolean
           is_draft?: boolean | null
-          is_first_aid_duty?: boolean
           is_from_template?: boolean
           is_locked?: boolean | null
           is_on_bidding?: boolean | null
           is_overnight?: boolean
           is_published?: boolean | null
-          is_recurring?: boolean | null
           is_training?: boolean | null
           last_dropped_by?: string | null
           last_modified_by?: string | null
           last_modified_reason?: string | null
           last_rejected_by?: string | null
           lifecycle_status?: Database["public"]["Enums"]["shift_lifecycle"]
-          lock_reason_text?: string | null
           locked_at?: string | null
           net_length_minutes?: number | null
           notes?: string | null
@@ -5886,10 +5787,8 @@ export type Database = {
           payroll_exported?: boolean | null
           published_at?: string | null
           published_by_user_id?: string | null
-          recurrence_rule?: string | null
           remuneration_level?: number | null
           remuneration_rate?: number | null
-          required_certifications?: Json | null
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
@@ -6322,13 +6221,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "swap_offers_offered_shift_id_fkey"
-            columns: ["offered_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "swap_offers_offerer_id_fkey"
             columns: ["offerer_id"]
             isOneToOne: false
@@ -6418,13 +6310,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "swap_requests_offered_shift_id_fkey"
-            columns: ["offered_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "swap_requests_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -6436,13 +6321,6 @@ export type Database = {
             columns: ["original_shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "swap_requests_original_shift_id_fkey"
-            columns: ["original_shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -6927,13 +6805,6 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: true
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "timesheets_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: true
-            referencedRelation: "v_shifts_grouped"
             referencedColumns: ["id"]
           },
         ]
@@ -7932,13 +7803,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "shift_events_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "v_shifts_grouped"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "shifts_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
@@ -7950,425 +7814,6 @@ export type Database = {
             columns: ["sub_department_id"]
             isOneToOne: false
             referencedRelation: "sub_departments"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_shifts_grouped: {
-        Row: {
-          actual_end: string | null
-          actual_hourly_rate: number | null
-          actual_net_minutes: number | null
-          actual_start: string | null
-          assigned_at: string | null
-          assigned_employee_id: string | null
-          assignment_outcome:
-            | Database["public"]["Enums"]["shift_assignment_outcome"]
-            | null
-          assignment_status:
-            | Database["public"]["Enums"]["shift_assignment_status"]
-            | null
-          attendance_status:
-            | Database["public"]["Enums"]["shift_attendance_status"]
-            | null
-          bidding_close_at: string | null
-          bidding_enabled: boolean | null
-          bidding_open_at: string | null
-          bidding_status:
-            | Database["public"]["Enums"]["shift_bidding_status"]
-            | null
-          break_minutes: number | null
-          cancellation_reason: string | null
-          cancelled_at: string | null
-          cancelled_by_user_id: string | null
-          compliance_checked_at: string | null
-          compliance_override: boolean | null
-          compliance_override_reason: string | null
-          compliance_snapshot: Json | null
-          confirmed_at: string | null
-          cost_center_id: string | null
-          created_at: string | null
-          created_by_user_id: string | null
-          currency: string | null
-          deleted_at: string | null
-          deleted_by: string | null
-          department_id: string | null
-          display_order: number | null
-          eligibility_snapshot: Json | null
-          end_time: string | null
-          event_ids: Json | null
-          event_tags: Json | null
-          fulfillment_status:
-            | Database["public"]["Enums"]["shift_fulfillment_status"]
-            | null
-          group_type: Database["public"]["Enums"]["template_group_type"] | null
-          id: string | null
-          is_cancelled: boolean | null
-          is_draft: boolean | null
-          is_from_template: boolean | null
-          is_locked: boolean | null
-          is_on_bidding: boolean | null
-          is_overnight: boolean | null
-          is_published: boolean | null
-          is_recurring: boolean | null
-          last_modified_by: string | null
-          last_modified_reason: string | null
-          lifecycle_status:
-            | Database["public"]["Enums"]["shift_lifecycle"]
-            | null
-          lock_reason_text: string | null
-          net_length_minutes: number | null
-          notes: string | null
-          offer_expires_at: string | null
-          organization_id: string | null
-          paid_break_minutes: number | null
-          payroll_exported: boolean | null
-          published_at: string | null
-          published_by_user_id: string | null
-          recurrence_rule: string | null
-          remuneration_level: number | null
-          remuneration_rate: number | null
-          required_certifications: Json | null
-          required_licenses: Json | null
-          required_skills: Json | null
-          role_id: string | null
-          roster_date: string | null
-          roster_id: string | null
-          roster_shift_id: string | null
-          roster_subgroup_id: string | null
-          roster_template_id: string | null
-          scheduled_end: string | null
-          scheduled_length_minutes: number | null
-          scheduled_start: string | null
-          shift_date: string | null
-          shift_group_id: string | null
-          start_time: string | null
-          sub_department_id: string | null
-          sub_group_name: string | null
-          tags: Json | null
-          template_group:
-            | Database["public"]["Enums"]["template_group_type"]
-            | null
-          template_id: string | null
-          template_instance_id: string | null
-          template_sub_group: string | null
-          template_subgroup_text: string | null
-          timesheet_id: string | null
-          timezone: string | null
-          total_hours: number | null
-          trade_requested_at: string | null
-          trading_status: Database["public"]["Enums"]["shift_trading"] | null
-          unpaid_break_minutes: number | null
-          updated_at: string | null
-          user_contract_id: string | null
-          version: number | null
-        }
-        Insert: {
-          actual_end?: string | null
-          actual_hourly_rate?: number | null
-          actual_net_minutes?: number | null
-          actual_start?: string | null
-          assigned_at?: string | null
-          assigned_employee_id?: string | null
-          assignment_outcome?:
-            | Database["public"]["Enums"]["shift_assignment_outcome"]
-            | null
-          assignment_status?:
-            | Database["public"]["Enums"]["shift_assignment_status"]
-            | null
-          attendance_status?:
-            | Database["public"]["Enums"]["shift_attendance_status"]
-            | null
-          bidding_close_at?: string | null
-          bidding_enabled?: boolean | null
-          bidding_open_at?: string | null
-          bidding_status?:
-            | Database["public"]["Enums"]["shift_bidding_status"]
-            | null
-          break_minutes?: number | null
-          cancellation_reason?: string | null
-          cancelled_at?: string | null
-          cancelled_by_user_id?: string | null
-          compliance_checked_at?: string | null
-          compliance_override?: boolean | null
-          compliance_override_reason?: string | null
-          compliance_snapshot?: Json | null
-          confirmed_at?: string | null
-          cost_center_id?: string | null
-          created_at?: string | null
-          created_by_user_id?: string | null
-          currency?: string | null
-          deleted_at?: string | null
-          deleted_by?: string | null
-          department_id?: string | null
-          display_order?: number | null
-          eligibility_snapshot?: Json | null
-          end_time?: string | null
-          event_ids?: Json | null
-          event_tags?: Json | null
-          fulfillment_status?:
-            | Database["public"]["Enums"]["shift_fulfillment_status"]
-            | null
-          group_type?: Database["public"]["Enums"]["template_group_type"] | null
-          id?: string | null
-          is_cancelled?: boolean | null
-          is_draft?: boolean | null
-          is_from_template?: boolean | null
-          is_locked?: boolean | null
-          is_on_bidding?: boolean | null
-          is_overnight?: boolean | null
-          is_published?: boolean | null
-          is_recurring?: boolean | null
-          last_modified_by?: string | null
-          last_modified_reason?: string | null
-          lifecycle_status?:
-            | Database["public"]["Enums"]["shift_lifecycle"]
-            | null
-          lock_reason_text?: string | null
-          net_length_minutes?: number | null
-          notes?: string | null
-          offer_expires_at?: string | null
-          organization_id?: string | null
-          paid_break_minutes?: number | null
-          payroll_exported?: boolean | null
-          published_at?: string | null
-          published_by_user_id?: string | null
-          recurrence_rule?: string | null
-          remuneration_level?: number | null
-          remuneration_rate?: number | null
-          required_certifications?: Json | null
-          required_licenses?: Json | null
-          required_skills?: Json | null
-          role_id?: string | null
-          roster_date?: string | null
-          roster_id?: string | null
-          roster_shift_id?: string | null
-          roster_subgroup_id?: string | null
-          roster_template_id?: string | null
-          scheduled_end?: string | null
-          scheduled_length_minutes?: number | null
-          scheduled_start?: string | null
-          shift_date?: string | null
-          shift_group_id?: string | null
-          start_time?: string | null
-          sub_department_id?: string | null
-          sub_group_name?: string | null
-          tags?: Json | null
-          template_group?:
-            | Database["public"]["Enums"]["template_group_type"]
-            | null
-          template_id?: string | null
-          template_instance_id?: string | null
-          template_sub_group?: string | null
-          template_subgroup_text?: string | null
-          timesheet_id?: string | null
-          timezone?: string | null
-          total_hours?: number | null
-          trade_requested_at?: string | null
-          trading_status?: Database["public"]["Enums"]["shift_trading"] | null
-          unpaid_break_minutes?: number | null
-          updated_at?: string | null
-          user_contract_id?: string | null
-          version?: number | null
-        }
-        Update: {
-          actual_end?: string | null
-          actual_hourly_rate?: number | null
-          actual_net_minutes?: number | null
-          actual_start?: string | null
-          assigned_at?: string | null
-          assigned_employee_id?: string | null
-          assignment_outcome?:
-            | Database["public"]["Enums"]["shift_assignment_outcome"]
-            | null
-          assignment_status?:
-            | Database["public"]["Enums"]["shift_assignment_status"]
-            | null
-          attendance_status?:
-            | Database["public"]["Enums"]["shift_attendance_status"]
-            | null
-          bidding_close_at?: string | null
-          bidding_enabled?: boolean | null
-          bidding_open_at?: string | null
-          bidding_status?:
-            | Database["public"]["Enums"]["shift_bidding_status"]
-            | null
-          break_minutes?: number | null
-          cancellation_reason?: string | null
-          cancelled_at?: string | null
-          cancelled_by_user_id?: string | null
-          compliance_checked_at?: string | null
-          compliance_override?: boolean | null
-          compliance_override_reason?: string | null
-          compliance_snapshot?: Json | null
-          confirmed_at?: string | null
-          cost_center_id?: string | null
-          created_at?: string | null
-          created_by_user_id?: string | null
-          currency?: string | null
-          deleted_at?: string | null
-          deleted_by?: string | null
-          department_id?: string | null
-          display_order?: number | null
-          eligibility_snapshot?: Json | null
-          end_time?: string | null
-          event_ids?: Json | null
-          event_tags?: Json | null
-          fulfillment_status?:
-            | Database["public"]["Enums"]["shift_fulfillment_status"]
-            | null
-          group_type?: Database["public"]["Enums"]["template_group_type"] | null
-          id?: string | null
-          is_cancelled?: boolean | null
-          is_draft?: boolean | null
-          is_from_template?: boolean | null
-          is_locked?: boolean | null
-          is_on_bidding?: boolean | null
-          is_overnight?: boolean | null
-          is_published?: boolean | null
-          is_recurring?: boolean | null
-          last_modified_by?: string | null
-          last_modified_reason?: string | null
-          lifecycle_status?:
-            | Database["public"]["Enums"]["shift_lifecycle"]
-            | null
-          lock_reason_text?: string | null
-          net_length_minutes?: number | null
-          notes?: string | null
-          offer_expires_at?: string | null
-          organization_id?: string | null
-          paid_break_minutes?: number | null
-          payroll_exported?: boolean | null
-          published_at?: string | null
-          published_by_user_id?: string | null
-          recurrence_rule?: string | null
-          remuneration_level?: number | null
-          remuneration_rate?: number | null
-          required_certifications?: Json | null
-          required_licenses?: Json | null
-          required_skills?: Json | null
-          role_id?: string | null
-          roster_date?: string | null
-          roster_id?: string | null
-          roster_shift_id?: string | null
-          roster_subgroup_id?: string | null
-          roster_template_id?: string | null
-          scheduled_end?: string | null
-          scheduled_length_minutes?: number | null
-          scheduled_start?: string | null
-          shift_date?: string | null
-          shift_group_id?: string | null
-          start_time?: string | null
-          sub_department_id?: string | null
-          sub_group_name?: string | null
-          tags?: Json | null
-          template_group?:
-            | Database["public"]["Enums"]["template_group_type"]
-            | null
-          template_id?: string | null
-          template_instance_id?: string | null
-          template_sub_group?: string | null
-          template_subgroup_text?: string | null
-          timesheet_id?: string | null
-          timezone?: string | null
-          total_hours?: number | null
-          trade_requested_at?: string | null
-          trading_status?: Database["public"]["Enums"]["shift_trading"] | null
-          unpaid_break_minutes?: number | null
-          updated_at?: string | null
-          user_contract_id?: string | null
-          version?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_shifts_assigned_profile"
-            columns: ["assigned_employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_shifts_organization"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_remuneration_level_fkey"
-            columns: ["remuneration_level"]
-            isOneToOne: false
-            referencedRelation: "remuneration_levels"
-            referencedColumns: ["level_number"]
-          },
-          {
-            foreignKeyName: "shifts_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_id_fkey"
-            columns: ["roster_id"]
-            isOneToOne: false
-            referencedRelation: "rosters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_subgroup_id_fkey"
-            columns: ["roster_subgroup_id"]
-            isOneToOne: false
-            referencedRelation: "roster_subgroups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_template_id_fkey"
-            columns: ["roster_template_id"]
-            isOneToOne: false
-            referencedRelation: "roster_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_template_id_fkey"
-            columns: ["roster_template_id"]
-            isOneToOne: false
-            referencedRelation: "v_template_full"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_sub_department_id_fkey"
-            columns: ["sub_department_id"]
-            isOneToOne: false
-            referencedRelation: "sub_departments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "roster_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "v_template_full"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_user_contract_id_fkey"
-            columns: ["user_contract_id"]
-            isOneToOne: false
-            referencedRelation: "user_contracts"
             referencedColumns: ["id"]
           },
         ]
@@ -8712,6 +8157,10 @@ export type Database = {
         Args: { p_roster_shift_id: string }
         Returns: boolean
       }
+      can_manage_first_aid_appointment: {
+        Args: { p_employee_id: string; p_org_id: string }
+        Returns: boolean
+      }
       cancel_shift: {
         Args: { p_cancelled_by?: string; p_reason?: string; p_shift_id: string }
         Returns: Json
@@ -8980,6 +8429,7 @@ export type Database = {
         Args: {
           p_base_rate: number
           p_employment_type: string
+          p_first_aid?: boolean
           p_is_training?: boolean
           p_net_minutes: number
           p_requires_flexible?: boolean
@@ -9779,6 +9229,10 @@ export type Database = {
       has_shift_started: { Args: { p_shift_id: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_broadcast_system_manager: { Args: never; Returns: boolean }
+      is_first_aid_duty: {
+        Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
+        Returns: boolean
+      }
       is_manager_or_above: { Args: never; Returns: boolean }
       is_shift_timesheet_reviewable: {
         Args: { p_shift_id: string }
@@ -10749,6 +10203,7 @@ export type Database = {
         | "exhibition_centre"
         | "theatre"
         | "the_cutaway"
+        | "office"
       template_status: "draft" | "published" | "archived"
       timesheet_status:
         | "draft"
@@ -11072,6 +10527,7 @@ export const Constants = {
         "exhibition_centre",
         "theatre",
         "the_cutaway",
+        "office",
       ],
       template_status: ["draft", "published", "archived"],
       timesheet_status: [
