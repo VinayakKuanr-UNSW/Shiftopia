@@ -39,9 +39,10 @@ check(db >= 1400, f"db/sql nodes {db}")
 check(mem >= 100, f"memory nodes {mem}")
 
 # 3. provenance regression: label dedup must not invent callers.
-#    Ground truth verified by grep on 2026-09-06.
+#    Ground truth verified by grep on 2026-09-06; re-verified 2026-10-05 after
+#    the leave rewrite, which moved leave.api.ts onto sm_unassign_shift /
+#    sm_delete_shift (it no longer calls sm_apply_shift_op).
 truth = {"src_modules_rosters_api_shifts_api_ts",
-         "src_modules_leave_api_leave_api_ts",
          "supabase_functions_auto_assign_bids_index_ts"}
 got = {e["source"] for e in E
        if e.get("target") == "db_fn_sm_apply_shift_op" and e.get("relation") == "calls_rpc"}
