@@ -73,6 +73,7 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     remunerationLevel: shift.remuneration_level,
     remunerationRate: shift.remuneration_rate,
     actualHourlyRate: shift.actual_hourly_rate,
+    payTerms: shift.shift_pay_terms ?? null,
 
     // Level info
     levelName: shift.remuneration_levels?.level_name ?? null,

@@ -291,6 +291,19 @@ export function estimateDetailedShiftCost(
     };
   }
 
+  // Top-up hours (minimum engagement, cl 29.1(a)) carry the engagement-day
+  // loading — book it in the per-day split as well, so payslip lines built
+  // from it add up to penaltyCost. Annualised pay absorbs the loading
+  // (Sch 2 §2 / Sch 3 §4.1(b)), so it gets none.
+  const addTopUpLoading = (hours: number) => {
+    if (isAnnualised) return;
+    const cost = hours * ordinaryRate * startPenaltyLoad;
+    penaltyCost += cost;
+    if (isHoliday) { pbPhH += hours; pbPhC += cost; }
+    else if (shiftDay === SATURDAY) { pbSatH += hours; pbSatC += cost; }
+    else if (shiftDay === SUNDAY) { pbSunH += hours; pbSunC += cost; }
+  };
+
   // ── Minimum engagement (Sch 3 §5.2(e) / §5.3(e)) — PT & casual only ───────
   // Top-up hours are paid but not worked: priced at the engagement-day rate,
   // no night allowance. Threshold logic lives in
@@ -312,7 +325,7 @@ export function estimateDetailedShiftCost(
       if (paidOrdinaryHours < floorHours) {
         const topUp = floorHours - paidOrdinaryHours;
         ordinaryCost += topUp * finalEffectiveRate;
-        penaltyCost += topUp * ordinaryRate * startPenaltyLoad;
+        addTopUpLoading(topUp);
         paidOrdinaryHours = floorHours;
       }
     }
@@ -323,7 +336,7 @@ export function estimateDetailedShiftCost(
   if (higherDutiesApplied && netHours > 0 && paidOrdinaryHours < 4) {
     const topUp = 4 - paidOrdinaryHours;
     ordinaryCost += topUp * finalEffectiveRate;
-    penaltyCost += topUp * ordinaryRate * startPenaltyLoad;
+    addTopUpLoading(topUp);
     paidOrdinaryHours = 4;
   }
 

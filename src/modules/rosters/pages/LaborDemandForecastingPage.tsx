@@ -39,6 +39,7 @@ import { rostersApi } from "../api/rosters.api";
 import { shiftKeys } from "../api/queryKeys";
 import { useShiftsByDate } from "../state/useRosterShifts";
 import type { Shift } from "../domain/shift.entity";
+import { resolveRateSet } from "../domain/projections/utils/cost/rate-schedule";
 
 // Scope
 import { useScopeFilter } from "@/platform/auth/useScopeFilter";
@@ -1264,16 +1265,14 @@ const LaborDemandForecastingPage: React.FC = () => {
   // ── Computation: Budget ──────────────────────────────────────
   const budgetData = useMemo(() => {
     const getAvgRate = (shift: Shift): number => {
-      const lvl = shift.remuneration_levels as {
-        hourly_rate_min: number;
-        hourly_rate_max: number;
-      } | null;
-      if (lvl) return (lvl.hourly_rate_min + lvl.hourly_rate_max) / 2;
-      // Fall back to level lookup
-      const level = remunerationLevels.find(
-        (l) => l.level_number === shift.remuneration_level,
-      );
-      if (level) return (level.hourly_rate_min + level.hourly_rate_max) / 2;
+      if (shift.remuneration_rate) return Number(shift.remuneration_rate);
+      const lvlNum = shift.remuneration_level ?? (shift.remuneration_levels as any)?.level_number;
+      if (lvlNum != null) {
+        const rateSet = resolveRateSet(shift.shift_date || '2026-07-01');
+        const key = lvlNum === 0 ? 'TRAINEE' : (`LEVEL_${lvlNum}` as keyof typeof rateSet.wageRates);
+        const rates = rateSet.wageRates[key];
+        if (rates) return (rates.permanent + rates.casual) / 2;
+      }
       return 28; // enterprise default
     };
 

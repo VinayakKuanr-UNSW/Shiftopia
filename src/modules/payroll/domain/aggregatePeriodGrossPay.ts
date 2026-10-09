@@ -63,7 +63,9 @@ function isCasual(employmentType?: string): boolean {
  * the roster grid can never disagree about which shift earns the allowance.
  */
 function detectSplitShiftMarks(inputs: GrossPayShiftInput[]): Set<string> {
-  return detectSplitShiftEligibleIds(inputs.map((i) => ({
+  // A salaried shift is outside the EA — it earns no cl 28.4 allowance and
+  // must not make an EA shift on the same day look like half of a split.
+  return detectSplitShiftEligibleIds(inputs.filter((i) => i.payBasis !== 'salary').map((i) => ({
     id: i.shiftId,
     employeeId: i.employeeId,
     shiftDate: i.shiftDate,
@@ -83,6 +85,21 @@ function isLeaveInput(input: GrossPayShiftInput): boolean {
   );
 }
 
+/** Number of weeks in a period based on inclusive date bounds. */
+function getPeriodWeeks(periodStart: string, periodEnd: string): number {
+  const [y1, m1, d1] = periodStart.split('-').map(Number);
+  const [y2, m2, d2] = periodEnd.split('-').map(Number);
+  const t1 = Date.UTC(y1, m1 - 1, d1);
+  const t2 = Date.UTC(y2, m2 - 1, d2);
+  const diffDays = Math.round((t2 - t1) / (86400 * 1000)) + 1;
+  return Math.max(0, diffDays) / 7;
+}
+
+export interface SalariedContractConfig {
+  annualSalary: number;
+  contractedWeeklyHours?: number;
+}
+
 /**
  * Aggregate already-computed per-shift gross pay for one employee into a single
  * period record. Shifts outside [periodStart, periodEnd] or for another employee
@@ -92,6 +109,7 @@ export function aggregatePeriodGrossPay(
   employeeId: string,
   shifts: ShiftGrossPay[],
   bounds: PeriodBounds,
+  salariedContract?: SalariedContractConfig,
 ): PeriodGrossPay {
   const inPeriod = shifts.filter(
     (s) => s.employeeId === employeeId
@@ -118,11 +136,59 @@ export function aggregatePeriodGrossPay(
     }
   }
 
+  const contractSalary = salariedContract
+    ?? (() => {
+      const salShift = inPeriod.find((s) => s.payBasis === 'salary' && s.annualSalary != null && s.annualSalary > 0);
+      return salShift ? { annualSalary: salShift.annualSalary!, contractedWeeklyHours: salShift.contractedWeeklyHours } : undefined;
+    })();
+
+  let totalSalariedWorkedHours = 0;
+  let timeInLieuHours: number | undefined;
+  let balanceHours = 0;
+
+  if (contractSalary) {
+    const annualSalary = contractSalary.annualSalary;
+    const contractedWeeklyHours = contractSalary.contractedWeeklyHours ?? 38;
+    const weeks = getPeriodWeeks(bounds.periodStart, bounds.periodEnd);
+    const periodSalary = round2((annualSalary / 52) * weeks);
+    const periodContractedHours = round2(contractedWeeklyHours * weeks);
+
+    totalSalariedWorkedHours = round2(
+      inPeriod.reduce((sum, s) => sum + (s.salariedHours ?? 0), 0)
+    );
+
+    const salariedLeaveShifts = inPeriod.filter((s) => s.payBasis === 'salary' && s.isLeave);
+    const salariedLeaveHours = round2(
+      salariedLeaveShifts.reduce((sum, s) => sum + s.paidHours, 0)
+    );
+    const salariedLeaveAmount = round2(
+      salariedLeaveShifts.reduce((sum, s) => sum + s.grossPay, 0)
+    );
+
+    balanceHours = round2(Math.max(0, periodContractedHours - salariedLeaveHours));
+    const balanceSalaryAmount = round2(Math.max(0, periodSalary - salariedLeaveAmount));
+    timeInLieuHours = round2(Math.max(0, totalSalariedWorkedHours - balanceHours));
+
+    if (balanceSalaryAmount > 0 || balanceHours > 0) {
+      const key = 'ordinary::Salary';
+      byKey.set(key, {
+        code: 'ordinary',
+        description: 'Salary',
+        hours: balanceHours,
+        amount: balanceSalaryAmount,
+      });
+    }
+  }
+
   const lines = Array.from(byKey.values()).sort((a, b) => {
     return CODE_ORDER.indexOf(a.code) - CODE_ORDER.indexOf(b.code);
   });
   const grossPay = round2(lines.reduce((sum, l) => sum + l.amount, 0));
-  const paidHours = round2(inPeriod.reduce((sum, s) => sum + s.paidHours, 0));
+  const paidHours = round2(
+    contractSalary
+      ? (balanceHours + inPeriod.reduce((sum, s) => sum + s.paidHours, 0))
+      : inPeriod.reduce((sum, s) => sum + s.paidHours, 0),
+  );
 
   return {
     employeeId,
@@ -134,6 +200,8 @@ export function aggregatePeriodGrossPay(
     grossPay,
     paidHours,
     shiftCount: inPeriod.length,
+    salariedHours: contractSalary ? totalSalariedWorkedHours : undefined,
+    timeInLieuHours: contractSalary ? timeInLieuHours : undefined,
   };
 }
 
@@ -154,6 +222,8 @@ export interface PeriodConfig {
    * `bounds.periodStart` (no lead-in) when omitted or not earlier than it.
    */
   leadInStart?: string;
+  /** Salaried contract terms for period salary and time-in-lieu calculation. */
+  salariedContract?: SalariedContractConfig;
 }
 
 /**
@@ -241,13 +311,24 @@ export function computeEmployeePeriodGrossPay(
   const minGap = config?.minRestGapMinutes ?? DEFAULT_MIN_REST_GAP_MINUTES;
   applyRestGapPenalty(priced, ordered, minGap);
 
-  return aggregatePeriodGrossPay(employeeId, priced, bounds);
+  const salInput = ordered.find(
+    (i) => i.employeeId === employeeId && i.payBasis === 'salary' && i.annualSalary != null && i.annualSalary > 0,
+  );
+  const salariedContract = config?.salariedContract
+    ?? (salInput ? { annualSalary: salInput.annualSalary!, contractedWeeklyHours: salInput.contractedWeeklyHours } : undefined);
+
+  return aggregatePeriodGrossPay(employeeId, priced, bounds, salariedContract);
 }
 
-/** A priced shift is a real WORKED attendance only if it has clock times and paid hours. */
+/**
+ * A priced shift is a real WORKED attendance only if it has clock times and
+ * hours. A salaried shift has no paid hours but is still work, so a later EA
+ * shift that starts without the rest gap after it is a cl 40.1 breach (the
+ * salaried shift itself has no ordinaryRate, so it never gets the top-up).
+ */
 function isWorkedWithTimes(input: GrossPayShiftInput, result: ShiftGrossPay): boolean {
   return !result.isLeave
-    && result.paidHours > 0
+    && (result.paidHours > 0 || (result.salariedHours ?? 0) > 0)
     && !!input.startTime
     && !!input.endTime;
 }

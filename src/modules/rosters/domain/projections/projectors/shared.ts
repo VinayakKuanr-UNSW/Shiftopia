@@ -11,13 +11,16 @@
 import type { Shift } from '../../shift.entity';
 import type { ProjectionStats } from '../types';
 import { netMinutesFromShift } from '../utils/duration';
-import { estimateDetailedShiftCost } from '../utils/cost/index';
+import {
+  estimateDetailedShiftCost,
+  resolveShiftPayInputs,
+  salariedShiftBreakdown,
+} from '../utils/cost/index';
 import { buildAwardContext } from '../utils/cost/award-context';
 import type { AwardContext } from '../utils/cost/award-context';
 import { detectSplitShiftEligibleIds } from '../utils/cost/split-shift-eligibility';
 import { resolveShiftAllowances } from '../utils/cost/shift-allowances';
 import { detectRestGapBreaches } from '../utils/cost/rest-gap-breach';
-import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 /**
  * Compute the top-level ProjectionStats bag from a flat Shift array.
@@ -143,35 +146,43 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
 
     // Cost is employee-dependent — only compute for assigned shifts
     if (shift.assigned_employee_id) {
-      const roleName = shift.roles?.name;
-      const empType = shift.target_employment_type;
       const baseAllowances = resolveShiftAllowances(shift);
       const allowances = splitShiftEligibleIds.has(shift.id)
         ? { ...baseAllowances, splitShift: true }
         : baseAllowances;
 
-      const detail = estimateDetailedShiftCost({
-        netMinutes: mins,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        rate: (shift as any).actual_hourly_rate || shift.remuneration_rate,
-        scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
-        is_overnight: !!shift.is_overnight,
-        is_cancelled: !!shift.is_cancelled,
-        shift_date: shift.shift_date,
-        allowances,
-        isAnnualLeave: (shift as any).isAnnualLeave,
-        isPersonalLeave: (shift as any).isPersonalLeave,
-        isCarerLeave: (shift as any).isCarerLeave,
-        previousWage: (shift as any).previousWage,
-        employmentType: empType === 'FT' ? 'Full-Time' : empType === 'PT' ? 'Part-Time' : (empType as any || 'Casual'),
-        isSecurityRole: isSecurityRoleName(roleName),
-        classificationLevel: roleName?.match(/(?:L|Level\s*)(\d)/i)
-          ? `LEVEL_${roleName.match(/(?:L|Level\s*)(\d)/i)![1]}`
-          : undefined,
-        // cl 42 weekly OT — undefined ⇒ no-op (only set for non-casual shifts).
-        priorOrdinaryHoursThisWeek: priorOrdinaryMap.get(shift.id),
-      } as any, ctx);
+      // Same pay-terms rule as the cards, the budget and payroll — this used
+      // to read the level out of the role NAME (/L\d/), ignoring the stored
+      // level, so every catalogue role priced at the Level 1 casual default.
+      const pay = resolveShiftPayInputs({
+        payTerms: shift.shift_pay_terms,
+        remunerationLevel: shift.remuneration_level,
+        targetEmploymentType: shift.target_employment_type,
+        roleName: shift.roles?.name,
+      });
+      const detail = pay.salaryHourlyRate !== undefined
+        ? salariedShiftBreakdown(mins, pay.salaryHourlyRate)
+        : estimateDetailedShiftCost({
+            netMinutes: mins,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+            rate: null,
+            scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
+            is_overnight: !!shift.is_overnight,
+            is_cancelled: !!shift.is_cancelled,
+            shift_date: shift.shift_date,
+            allowances,
+            isAnnualLeave: (shift as any).isAnnualLeave,
+            isPersonalLeave: (shift as any).isPersonalLeave,
+            isCarerLeave: (shift as any).isCarerLeave,
+            previousWage: (shift as any).previousWage,
+            employmentType: pay.employmentType,
+            isSecurityRole: pay.isSecurityRole,
+            classificationLevel: pay.classificationLevel,
+            higherDutiesLevel: pay.higherDutiesLevel,
+            // cl 42 weekly OT — undefined ⇒ no-op (only set for non-casual shifts).
+            priorOrdinaryHoursThisWeek: priorOrdinaryMap.get(shift.id),
+          } as any, ctx);
 
       // cl 40.1 double-time floor — a pure additive top-up on the running
       // totals; never mutates `detail`.

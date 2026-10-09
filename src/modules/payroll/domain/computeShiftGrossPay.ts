@@ -15,6 +15,7 @@
 import { estimateDetailedShiftCost } from '../../rosters/domain/projections/utils/cost/index';
 import type { CostCalculatorOptions, ShiftCostBreakdown } from '../../rosters/domain/projections/utils/cost/types';
 import type { EarningsLine, ShiftGrossPay, GrossPayHoursSource } from '../model/gross-pay.types';
+import type { PayBasis } from '@/modules/users/domain/contractPayTerms';
 import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 
 function round2(x: number): number {
@@ -76,6 +77,15 @@ export interface GrossPayShiftInput {
   isPublicHolidayNotWorked?: boolean;
 
   // Rate context.
+  /**
+   * The linked contract's pay basis on the shift date. 'salary' ⇒ no per-shift
+   * pay (cl 2.2 — outside the EA). Undefined ⇒ unlinked, priced as eba_level.
+   */
+  payBasis?: PayBasis;
+  /** Annual salary on the contract for salaried employees. */
+  annualSalary?: number;
+  /** Contracted weekly hours on the contract for salaried employees. */
+  contractedWeeklyHours?: number;
   rate: number | null;
   employmentType?: CostCalculatorOptions['employmentType'];
   classificationLevel?: string;
@@ -341,6 +351,74 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
   const isLeave = isFlatAbsence
     || !!(input.isAnnualLeave || input.isPersonalLeave || input.isCarerLeave || input.isFdvLeave);
 
+  // A salaried contract is outside the EA (cl 2.2):
+  // 1. Worked shifts earn no per-shift pay (the salary is paid per period);
+  //    worked hours are retained for time in lieu.
+  // 2. Paid leave days are paid at the salary hourly equivalent (NES standard,
+  //    no 17.5% EA loading unless contracted).
+  if (input.payBasis === 'salary') {
+    if (!isLeave) {
+      return {
+        ...NOT_WORKED(input),
+        hoursSource: input.hoursSource ?? 'actual',
+        payBasis: 'salary',
+        salariedHours: round2(Math.max(0, input.netMinutes) / 60),
+        annualSalary: input.annualSalary,
+        contractedWeeklyHours: input.contractedWeeklyHours,
+      };
+    }
+
+    const hours = round2(Math.max(0, input.netMinutes) / 60);
+    const weeklyHours = input.contractedWeeklyHours || 38;
+    const rate = input.rate ?? (input.annualSalary != null ? input.annualSalary / 52 / weeklyHours : 0);
+    const amount = round2(hours * rate);
+    const lines: EarningsLine[] = [];
+    if (isPhAbsence) {
+      lines.push({ code: 'public_holiday', description: 'Public holiday (not worked)', hours, amount });
+    } else if (input.isAnnualLeave) {
+      lines.push({ code: 'annual_leave', description: 'Annual leave', hours, amount });
+    } else if (input.isParentalLeave) {
+      lines.push({ code: 'parental_leave', description: 'Paid parental leave (cl 51)', hours, amount });
+    } else if (input.isLongServiceLeave) {
+      lines.push({ code: 'long_service_leave', description: 'Long service leave', hours, amount });
+    } else if (input.isJuryDuty) {
+      const juryAmount = Math.max(0, round2(amount - round2(input.courtFeeAmount ?? 0)));
+      lines.push({ code: 'jury_duty', description: 'Jury/court attendance (cl 53)', hours, amount: juryAmount });
+    } else if (input.isSupportingCarer) {
+      lines.push({ code: 'supporting_carer', description: 'Supporting carer leave (cl 52)', hours, amount });
+    } else {
+      lines.push({ code: 'personal_leave', description: "Personal / carer's leave", hours, amount });
+    }
+    return {
+      shiftId: input.shiftId,
+      employeeId: input.employeeId,
+      shiftDate: input.shiftDate,
+      lines,
+      grossPay: round2(lines.reduce((s, l) => s + l.amount, 0)),
+      ordinaryHours: hours,
+      overtimeHours: 0,
+      paidHours: hours,
+      hoursSource: input.hoursSource ?? 'actual',
+      isLeave: true,
+      ordinaryRate: rate,
+      payBasis: 'salary',
+      salariedHours: 0,
+      annualSalary: input.annualSalary,
+      contractedWeeklyHours: input.contractedWeeklyHours,
+      employeeName: input.employeeName,
+      roleName: input.roleName,
+      groupName: input.groupName,
+      subGroupName: input.subGroupName,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      employmentType: input.employmentType,
+      isSecurityRole: !!input.isSecurityRole,
+      timesheetStatus: input.timesheetStatus,
+      lifecycleStatus: input.lifecycleStatus,
+      rawShift: input.rawShift,
+    };
+  }
+
   const opts: CostCalculatorOptions & { isSecurityRole?: boolean } = {
     netMinutes: input.netMinutes,
     start_time: input.startTime ?? '',
@@ -417,6 +495,7 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
       lines, grossPay, ordinaryHours: b.ordinaryHours || 0, overtimeHours: 0,
       paidHours: round2(b.ordinaryHours || 0), hoursSource: input.hoursSource ?? 'actual', isLeave: true,
       ordinaryRate: b.breakdown.ordinaryRate || 0,
+      payBasis: input.payBasis,
       employeeName: input.employeeName,
       roleName: input.roleName,
       groupName: input.groupName,
@@ -450,6 +529,7 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
     hoursSource: input.hoursSource ?? 'actual',
     isLeave: false,
     ordinaryRate: b.breakdown.ordinaryRate || 0,
+    payBasis: input.payBasis,
     employeeName: input.employeeName,
     roleName: input.roleName,
     groupName: input.groupName,

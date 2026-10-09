@@ -1,5 +1,5 @@
 
-import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
+import { CostCalculatorOptions, ShiftCostBreakdown, ShiftPayTermsField } from './types';
 import * as StandardEngine from './standard';
 import * as SecurityEngine from './security';
 import { Shift } from '../../../shift.entity';
@@ -85,9 +85,22 @@ function resolveClassificationLevel(
   remunerationLevel: unknown,
   roleName?: string | null,
 ): string | undefined {
-  const lvl = Number(remunerationLevel);
-  if (Number.isInteger(lvl) && lvl >= 1 && lvl <= 7) return `LEVEL_${lvl}`;
-  return extractLevel(roleName);
+  return levelClassification(remunerationLevel) ?? extractLevel(roleName);
+}
+
+/**
+ * The engine's classification key for a stored level. Level 0 is the
+ * Introductory level, stored as 'TRAINEE' in the rate schedule (eba_rate) —
+ * it used to fall through to the role-name guess here. NULL/blank ⇒ undefined
+ * (Number(null) is 0, so it must be ruled out before converting).
+ */
+export function levelClassification(level: unknown): string | undefined {
+  if (level === null || level === undefined || level === '') return undefined;
+  const lvl = Number(level);
+  if (!Number.isInteger(lvl)) return undefined;
+  if (lvl === 0) return 'TRAINEE';
+  if (lvl >= 1 && lvl <= 7) return `LEVEL_${lvl}`;
+  return undefined;
 }
 
 /** Roles already warned about a missing employment target (once per process). */
@@ -121,6 +134,122 @@ function resolveEmploymentType(empType?: string | null): string | undefined {
   return undefined;
 }
 
+/** The engine inputs that depend on WHO works a shift, and on what terms. */
+export interface ShiftPayInputs {
+  employmentType?: CostCalculatorOptions['employmentType'];
+  classificationLevel?: string;
+  higherDutiesLevel?: string;
+  isSecurityRole: boolean;
+  /** Set for a salaried contract: price as hours × this rate, no EA terms. */
+  salaryHourlyRate?: number | null;
+}
+
+/**
+ * Resolve those inputs for one shift — the same rule the budget
+ * (internal.shift_cost) and payroll (shiftPayTerms.ts) apply.
+ *
+ * With `payTerms` (the `shift_pay_terms` computed field — the linked contract's
+ * terms on the shift date): the contract level is the classification and a
+ * higher shift level is cl 29 higher duties, which the engine prices on the
+ * whole shift with a 4-hour minimum; annualised Security is Full-Time Security
+ * whatever the role is called; a salary is priced on its hourly equivalent.
+ *
+ * Without them (unassigned, or a viewer who may not see the contract): the
+ * shift's own level and employment target, else the role-name guess. No
+ * per-shift rate override in either case — someone on a level is paid that
+ * level (decision 2026-10-08; the SQL ignores them too).
+ */
+export function resolveShiftPayInputs(src: {
+  payTerms?: ShiftPayTermsField | null;
+  remunerationLevel?: unknown;
+  targetEmploymentType?: string | null;
+  roleName?: string | null;
+  /** Explicit higher-duties level from a caller that already knows it. */
+  higherDutiesLevel?: string;
+}): ShiftPayInputs {
+  const terms = src.payTerms;
+  if (terms) {
+    if (terms.pay_basis === 'salary') {
+      return {
+        employmentType: resolveEmploymentType(terms.employment_type ?? src.targetEmploymentType) as ShiftPayInputs['employmentType'],
+        isSecurityRole: false,
+        salaryHourlyRate: terms.base_rate,
+      };
+    }
+    const higherDutiesLevel = terms.higher_duties ? levelClassification(terms.paid_level) : undefined;
+    if (terms.pay_basis === 'eba_security_annualised') {
+      return {
+        employmentType: 'Full-Time',
+        isSecurityRole: true,
+        classificationLevel: levelClassification(terms.substantive_level),
+        higherDutiesLevel,
+      };
+    }
+    return {
+      employmentType: resolveEmploymentType(terms.employment_type ?? src.targetEmploymentType) as ShiftPayInputs['employmentType'],
+      isSecurityRole: isSecurityRoleName(src.roleName),
+      classificationLevel: levelClassification(terms.substantive_level),
+      higherDutiesLevel,
+    };
+  }
+  return {
+    employmentType: resolveEmploymentType(src.targetEmploymentType) as ShiftPayInputs['employmentType'],
+    isSecurityRole: isSecurityRoleName(src.roleName),
+    classificationLevel: resolveClassificationLevel(src.remunerationLevel, src.roleName),
+    higherDutiesLevel: src.higherDutiesLevel,
+  };
+}
+
+/** Minutes worked from start/end when no net length is stored. */
+function minutesFromTimes(shift: {
+  start_time?: string | null; end_time?: string | null;
+  unpaid_break_minutes?: number | null; is_overnight?: boolean | null;
+}): number {
+  const toMin = (t?: string | null) => {
+    const [h, m] = String(t ?? '').split(':').map(Number);
+    return Number.isFinite(h) ? h * 60 + (Number.isFinite(m) ? m : 0) : NaN;
+  };
+  const start = toMin(shift.start_time);
+  let end = toMin(shift.end_time);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  if (shift.is_overnight || end <= start) end += 1440;
+  return Math.max(0, end - start - (shift.unpaid_break_minutes ?? 0));
+}
+
+/**
+ * A shift worked on a salaried contract: hours × the salary's hourly
+ * equivalent, no EA loadings, penalties or overtime (internal.shift_cost's
+ * salary branch). Budget cost, flagged `payBasis: 'salary'` for pay views.
+ */
+export function salariedShiftBreakdown(
+  netMinutes: number | null | undefined,
+  hourlyRate: number | null | undefined,
+  shift: Parameters<typeof minutesFromTimes>[0] = {},
+): ShiftCostBreakdown {
+  const minutes = netMinutes ?? minutesFromTimes(shift);
+  const hours = Math.max(0, minutes) / 60;
+  const rate = Number(hourlyRate) || 0;
+  const cost = Math.round(hours * rate * 100) / 100;
+  return {
+    totalCost: cost,
+    ordinaryCost: cost,
+    overtimeCost: 0,
+    penaltyCost: 0,
+    allowanceCost: 0,
+    ordinaryHours: hours,
+    overtimeHours: 0,
+    breakdown: {
+      baseRate: rate,
+      ordinaryRate: rate,
+      penaltyRate: rate,
+      isCasual: false,
+      nightHours: 0,
+      nightAllowanceCost: 0,
+    },
+    payBasis: 'salary',
+  };
+}
+
 export function estimateDetailedShiftCost(
   options: CostCalculatorOptions & { isSecurityRole?: boolean },
   ctx?: AwardContext,
@@ -148,11 +277,21 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
   // start/end-time fallback runs — coercing to a synthetic 0 here would read
   // as "genuinely zero minutes worked" and zero out the estimate.
   const mins = netMinutesOverride ?? shift.net_length_minutes;
+  const pay = resolveShiftPayInputs({
+    payTerms: shift.shift_pay_terms,
+    remunerationLevel: shift.remuneration_level,
+    targetEmploymentType: shift.target_employment_type,
+    roleName: shift.roles?.name,
+    higherDutiesLevel: shift.higherDutiesLevel,
+  });
+  if (pay.salaryHourlyRate !== undefined) {
+    return salariedShiftBreakdown(mins, pay.salaryHourlyRate, shift).totalCost;
+  }
   return estimateShiftCost({
     netMinutes: mins,
     start_time: shift.start_time,
     end_time: shift.end_time,
-    rate: shift.remuneration_rate,
+    rate: null,
     scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
     is_overnight: shift.is_overnight,
     is_cancelled: shift.is_cancelled,
@@ -166,14 +305,14 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     // break if it is told about it. Omitting this key silently PAID the break on
     // every caller that relies on that fallback.
     unpaid_break_minutes: shift.unpaid_break_minutes,
-    employmentType: shift.target_employment_type,
-    isSecurityRole: isSecurityRoleName(shift.roles?.name),
-    classificationLevel: resolveClassificationLevel(shift.remuneration_level, shift.roles?.name),
+    employmentType: pay.employmentType,
+    isSecurityRole: pay.isSecurityRole,
+    classificationLevel: pay.classificationLevel,
     // cl 42 weekly OT is cross-shift context this single-shift wrapper can't
     // derive; pass it through only if a caller has already computed it. Undefined
     // ⇒ no weekly OT (unchanged legacy behaviour).
     priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,
-    higherDutiesLevel: shift.higherDutiesLevel,
+    higherDutiesLevel: pay.higherDutiesLevel,
   } as any);
 }
 
@@ -195,12 +334,25 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
   const mins = netMinutesOverride ?? shift.net_length_minutes ?? shift.netLengthMinutes;
   const roleName = shift.roles?.name || shift.roleName;
   const empType = shift.target_employment_type || shift.employmentType;
-  
+  const pay = resolveShiftPayInputs({
+    payTerms: shift.shift_pay_terms,
+    remunerationLevel: shift.remuneration_level,
+    targetEmploymentType: empType,
+    roleName,
+    higherDutiesLevel: shift.higherDutiesLevel,
+  });
+
+  if (pay.salaryHourlyRate !== undefined) {
+    const salaried = salariedShiftBreakdown(mins, pay.salaryHourlyRate, shift);
+    if (!netMinutesOverride) costCache.set(shift, salaried);
+    return salaried;
+  }
+
   const result = estimateDetailedShiftCost({
     netMinutes: mins,
     start_time: shift.start_time,
     end_time: shift.end_time,
-    rate: shift.actual_hourly_rate || shift.remuneration_rate,
+    rate: null,
     scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
     is_overnight: shift.is_overnight,
     is_cancelled: shift.is_cancelled,
@@ -212,13 +364,13 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     previousWage: shift.previousWage,
     // See estimateCostFromShift — without this the unpaid meal break is paid.
     unpaid_break_minutes: shift.unpaid_break_minutes,
-    employmentType: resolveEmploymentType(empType),
-    isSecurityRole: isSecurityRoleName(roleName),
-    classificationLevel: resolveClassificationLevel(shift.remuneration_level, roleName),
+    employmentType: pay.employmentType,
+    isSecurityRole: pay.isSecurityRole,
+    classificationLevel: pay.classificationLevel,
     // See estimateCostFromShift — cross-shift weekly-OT context is only forwarded
     // when a caller has already computed it; undefined leaves weekly OT off.
     priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,
-    higherDutiesLevel: shift.higherDutiesLevel,
+    higherDutiesLevel: pay.higherDutiesLevel,
     is_training_shift: shift.is_training,
   } as any);
 

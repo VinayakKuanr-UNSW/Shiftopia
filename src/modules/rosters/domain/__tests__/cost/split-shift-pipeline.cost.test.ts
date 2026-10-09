@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { runProjectionPipeline } from '../../projections/pipeline/runProjectionPipeline';
 import type { WorkerShiftDTO, ProjectionRequest } from '../../projections/worker/protocol';
+import { resolveRateSet } from '../../projections/utils/cost/rate-schedule';
+
+/** Level 4 permanent on 2026-06-29 (EA 2025 rates). */
+const R = resolveRateSet('2026-06-29').wageRates.LEVEL_4.permanent;
 
 /**
  * Split-shift allowance (cl 28.4/39) — production wiring test. Compliance
@@ -43,9 +47,11 @@ function dto(o: Partial<WorkerShiftDTO>): WorkerShiftDTO {
     subDepartmentId: null,
     roleId: null,
     roleName: 'Attendant',
-    remunerationLevel: null,
-    remunerationRate: 30,
-    actualHourlyRate: 30,
+    // Priced on the stored level — per-shift rate overrides are ignored
+    // (decision 2026-10-08, same as the budget SQL and payroll).
+    remunerationLevel: 4,
+    remunerationRate: null,
+    actualHourlyRate: null,
     levelName: null,
     levelNumber: null,
     groupType: null,
@@ -97,10 +103,10 @@ describe('split-shift allowance — pipeline auto-derivation (production wiring)
     ];
     const res = runProjectionPipeline(request(shifts));
     expect(res).not.toBeNull();
-    // 3h + 4h = 7h @ 30 = 210 base, plus one $11.13 allowance.
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(210, 5);
+    // 3h + 4h = 7h at Level 4 permanent, plus one $11.13 allowance.
+    expect(res!.stats.costBreakdown.base).toBeCloseTo(7 * R, 5);
     expect(res!.stats.costBreakdown.allowance).toBeCloseTo(11.13, 5);
-    expect(res!.stats.estimatedCost).toBeCloseTo(210 + 11.13, 5);
+    expect(res!.stats.estimatedCost).toBeCloseTo(7 * R + 11.13, 5);
   });
 
   it('does not add the allowance when the gap exceeds 3h', () => {
@@ -116,8 +122,8 @@ describe('split-shift allowance — pipeline auto-derivation (production wiring)
   it('does not add the allowance for Casual or Full-Time employees', () => {
     idc = 0;
     const casualShifts = [
-      dto({ startTime: '08:00', endTime: '11:00', targetEmploymentType: 'Casual', actualHourlyRate: 37.5, remunerationRate: 37.5 }),
-      dto({ startTime: '13:00', endTime: '17:00', targetEmploymentType: 'Casual', actualHourlyRate: 37.5, remunerationRate: 37.5 }),
+      dto({ startTime: '08:00', endTime: '11:00', targetEmploymentType: 'Casual' }),
+      dto({ startTime: '13:00', endTime: '17:00', targetEmploymentType: 'Casual' }),
     ];
     const casualRes = runProjectionPipeline(request(casualShifts));
     expect(casualRes!.stats.costBreakdown.allowance).toBe(0);

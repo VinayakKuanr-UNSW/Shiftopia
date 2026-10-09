@@ -400,6 +400,16 @@ export function estimateDetailedShiftCost(
   // can read engine data instead of re-deriving from scratch.
   let pbSatH = 0, pbSunH = 0, pbPhH = 0;
   let pbSatC = 0, pbSunC = 0, pbPhC = 0;
+  // Paid-but-not-worked top-up hours (minimum payment, cl 29.1(a)) are priced
+  // at the engagement-day rate, so their weekend/PH loading belongs in the
+  // per-day split too — the payslip lines are built from it, and without this
+  // they fall short of ordinaryCost by the top-up's loading.
+  const bookTopUpLoading = (hours: number) => {
+    const cost = hours * ordinaryRate * penaltyLoading(dayOfWeek, isHoliday);
+    if (isHoliday) { pbPhH += hours; pbPhC += cost; }
+    else if (dayOfWeek === SATURDAY) { pbSatH += hours; pbSatC += cost; }
+    else if (dayOfWeek === SUNDAY) { pbSunH += hours; pbSunC += cost; }
+  };
   for (const seg of segments) {
     const segHours = Math.max(0, (seg.toMins - seg.fromMins) / 60);
     const segPenaltyLoad = penaltyLoading(seg.day, seg.isHoliday);
@@ -502,6 +512,7 @@ export function estimateDetailedShiftCost(
       const floorHours = floorMinutes / 60;
       if (paidOrdinaryHours < floorHours) {
         ordinaryCost += (floorHours - paidOrdinaryHours) * startPenaltyRate;
+        bookTopUpLoading(floorHours - paidOrdinaryHours);
         paidOrdinaryHours = floorHours;
       }
     }
@@ -515,6 +526,7 @@ export function estimateDetailedShiftCost(
   // rate. Applies to every employment type — cl 29 is not limited to PT/casual.
   if (higherDutiesApplied && netHours > 0 && paidOrdinaryHours < 4) {
     ordinaryCost += (4 - paidOrdinaryHours) * startPenaltyRate;
+    bookTopUpLoading(4 - paidOrdinaryHours);
     paidOrdinaryHours = 4;
   }
 

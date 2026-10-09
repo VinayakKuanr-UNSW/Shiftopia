@@ -14,6 +14,8 @@
  * provider. `PeriodGrossPay` is the hand-off record for that provider.
  */
 
+import type { PayBasis } from '@/modules/users/domain/contractPayTerms';
+
 /** Payslip earnings-line categories (payslip-group granularity). */
 export type EarningsCode =
   | 'ordinary'          // ordinary-time hours at the ordinary rate
@@ -68,6 +70,19 @@ export interface ShiftGrossPay {
   ordinaryRate?: number;
   /** cl 40.1 — uplift applied when rest gap was insufficient (0 if no breach). */
   restGapPenaltyAmount?: number;
+  /**
+   * How the contract the shift was worked under is paid. 'salary' ⇒ the shift
+   * earns no per-shift pay (the salary is paid per period, and hours beyond the
+   * contract accrue time in lieu) — `salariedHours` carries the worked hours.
+   * Undefined ⇒ not linked to a contract (priced on the shift's own terms).
+   */
+  payBasis?: PayBasis;
+  /** Hours worked on a salaried shift (billable, no minimum engagement). 0 otherwise. */
+  salariedHours?: number;
+  /** Annual salary on the contract for salaried shifts. */
+  annualSalary?: number;
+  /** Contracted weekly hours on the contract for salaried shifts. */
+  contractedWeeklyHours?: number;
 
   employeeName?: string;
   roleName?: string;
@@ -97,4 +112,8 @@ export interface PeriodGrossPay {
   grossPay: number;
   paidHours: number;
   shiftCount: number;
+  /** Total hours worked on salaried shifts in the period. */
+  salariedHours?: number;
+  /** Hours worked beyond contracted weekly hours for salaried staff (given as TIL, not cash overtime). */
+  timeInLieuHours?: number;
 }

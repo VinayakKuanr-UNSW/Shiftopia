@@ -5574,6 +5574,8 @@ export type Database = {
           scheduled_start: string | null
           shift_date: string
           shift_group_id: string | null
+          shift_pay_terms: Json | null
+          my_shift_pay_terms: Json | null
           start_at: string | null
           start_time: string
           sub_department_id: string | null
@@ -7420,30 +7422,18 @@ export type Database = {
       remuneration_levels: {
         Row: {
           description: string | null
-          hourly_rate_max: number | null
-          hourly_rate_min: number | null
           level_name: string | null
           level_number: number | null
-          salary_max: number | null
-          salary_min: number | null
         }
         Insert: {
           description?: string | null
-          hourly_rate_max?: number | null
-          hourly_rate_min?: number | null
           level_name?: string | null
           level_number?: number | null
-          salary_max?: number | null
-          salary_min?: number | null
         }
         Update: {
           description?: string | null
-          hourly_rate_max?: number | null
-          hourly_rate_min?: number | null
           level_name?: string | null
           level_number?: number | null
-          salary_max?: number | null
-          salary_min?: number | null
         }
         Relationships: []
       }
@@ -7452,6 +7442,8 @@ export type Database = {
           code: string | null
           created_at: string | null
           description: string | null
+          eba_level_max: number | null
+          eba_level_min: number | null
           employment_type: string | null
           forecasting_bucket: string | null
           id: string | null
@@ -7463,12 +7455,15 @@ export type Database = {
           subdepartment_id: string | null
           supervision_ratio_max: number | null
           supervision_ratio_min: number | null
+          typically_salaried: boolean | null
           updated_at: string | null
         }
         Insert: {
           code?: string | null
           created_at?: string | null
           description?: string | null
+          eba_level_max?: number | null
+          eba_level_min?: number | null
           employment_type?: string | null
           forecasting_bucket?: string | null
           id?: string | null
@@ -7480,12 +7475,15 @@ export type Database = {
           subdepartment_id?: string | null
           supervision_ratio_max?: number | null
           supervision_ratio_min?: number | null
+          typically_salaried?: boolean | null
           updated_at?: string | null
         }
         Update: {
           code?: string | null
           created_at?: string | null
           description?: string | null
+          eba_level_max?: number | null
+          eba_level_min?: number | null
           employment_type?: string | null
           forecasting_bucket?: string | null
           id?: string | null
@@ -7497,6 +7495,7 @@ export type Database = {
           subdepartment_id?: string | null
           supervision_ratio_max?: number | null
           supervision_ratio_min?: number | null
+          typically_salaried?: boolean | null
           updated_at?: string | null
         }
         Relationships: []
@@ -7505,6 +7504,7 @@ export type Database = {
         Row: {
           access_level: Database["public"]["Enums"]["access_level"] | null
           annual_guaranteed_hours: number | null
+          annual_salary: number | null
           apprentice_type: string | null
           apprentice_year: number | null
           contracted_weekly_hours: number | null
@@ -7512,10 +7512,12 @@ export type Database = {
           created_by: string | null
           custom_hourly_rate: number | null
           department_id: string | null
+          eba_exclusion_reason: string | null
           employment_status:
             | Database["public"]["Enums"]["employment_status"]
             | null
           end_date: string | null
+          engagement_kind: string | null
           has_completed_year_12: boolean | null
           id: string | null
           is_apprentice: boolean | null
@@ -7523,6 +7525,7 @@ export type Database = {
           is_sws_trial: boolean | null
           is_trainee: boolean | null
           is_training_on_job: boolean | null
+          multi_hire_request_ref: string | null
           notes: string | null
           ordinary_days: number[] | null
           ordinary_hours_cycle_anchor: string | null
@@ -7530,6 +7533,7 @@ export type Database = {
           ordinary_span_end: string | null
           ordinary_span_start: string | null
           organization_id: string | null
+          pay_basis: string | null
           position_id: string | null
           prefers_sba_loading: boolean | null
           remuneration_level: number | null
@@ -7551,6 +7555,7 @@ export type Database = {
         Insert: {
           access_level?: Database["public"]["Enums"]["access_level"] | null
           annual_guaranteed_hours?: number | null
+          annual_salary?: number | null
           apprentice_type?: string | null
           apprentice_year?: number | null
           contracted_weekly_hours?: number | null
@@ -7558,10 +7563,12 @@ export type Database = {
           created_by?: string | null
           custom_hourly_rate?: number | null
           department_id?: string | null
+          eba_exclusion_reason?: string | null
           employment_status?:
             | Database["public"]["Enums"]["employment_status"]
             | null
           end_date?: string | null
+          engagement_kind?: string | null
           has_completed_year_12?: boolean | null
           id?: string | null
           is_apprentice?: boolean | null
@@ -7569,6 +7576,7 @@ export type Database = {
           is_sws_trial?: boolean | null
           is_trainee?: boolean | null
           is_training_on_job?: boolean | null
+          multi_hire_request_ref?: string | null
           notes?: string | null
           ordinary_days?: number[] | null
           ordinary_hours_cycle_anchor?: string | null
@@ -7576,6 +7584,7 @@ export type Database = {
           ordinary_span_end?: string | null
           ordinary_span_start?: string | null
           organization_id?: string | null
+          pay_basis?: string | null
           position_id?: string | null
           prefers_sba_loading?: boolean | null
           remuneration_level?: number | null
@@ -7597,6 +7606,7 @@ export type Database = {
         Update: {
           access_level?: Database["public"]["Enums"]["access_level"] | null
           annual_guaranteed_hours?: number | null
+          annual_salary?: number | null
           apprentice_type?: string | null
           apprentice_year?: number | null
           contracted_weekly_hours?: number | null
@@ -7604,10 +7614,12 @@ export type Database = {
           created_by?: string | null
           custom_hourly_rate?: number | null
           department_id?: string | null
+          eba_exclusion_reason?: string | null
           employment_status?:
             | Database["public"]["Enums"]["employment_status"]
             | null
           end_date?: string | null
+          engagement_kind?: string | null
           has_completed_year_12?: boolean | null
           id?: string | null
           is_apprentice?: boolean | null
@@ -7615,6 +7627,7 @@ export type Database = {
           is_sws_trial?: boolean | null
           is_trainee?: boolean | null
           is_training_on_job?: boolean | null
+          multi_hire_request_ref?: string | null
           notes?: string | null
           ordinary_days?: number[] | null
           ordinary_hours_cycle_anchor?: string | null
@@ -7622,6 +7635,7 @@ export type Database = {
           ordinary_span_end?: string | null
           ordinary_span_start?: string | null
           organization_id?: string | null
+          pay_basis?: string | null
           position_id?: string | null
           prefers_sba_loading?: boolean | null
           remuneration_level?: number | null
@@ -8672,6 +8686,7 @@ export type Database = {
           shift_date: string
           start_time: string
           unpaid_break_minutes: number
+          user_contract_id: string
         }[]
       }
       get_employees_shift_window_bulk: {
@@ -8687,6 +8702,7 @@ export type Database = {
           shift_date: string
           start_time: string
           unpaid_break_minutes: number
+          user_contract_id: string
         }[]
       }
       get_fairness_debts_latest: {
@@ -9158,6 +9174,21 @@ export type Database = {
         }[]
       }
       get_shift_flags: { Args: { p_shift_id: string }; Returns: string[] }
+      get_prospective_pay_terms: {
+        Args: { p_employee_ids: string[]; p_shift_ids: string[] }
+        Returns: {
+          employee_id: string
+          pay_terms: Json
+          shift_id: string
+        }[]
+      }
+      get_shift_pay_terms: {
+        Args: { p_shift_ids: string[] }
+        Returns: {
+          pay_terms: Json
+          shift_id: string
+        }[]
+      }
       get_shift_fsm_state: {
         Args: {
           p_assignment_outcome: Database["public"]["Enums"]["shift_assignment_outcome"]
@@ -9259,6 +9290,10 @@ export type Database = {
         Returns: undefined
       }
       mark_shift_no_show: { Args: { p_shift_id: string }; Returns: Json }
+      my_shift_pay_terms: {
+        Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
+        Returns: Json
+      }
       notify_admins_pending_department_assignments: {
         Args: never
         Returns: undefined
@@ -9520,6 +9555,14 @@ export type Database = {
         Returns: string
       }
       shift_is_security_role: { Args: { p_role_id: string }; Returns: boolean }
+      shift_pay_terms: {
+        Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
+        Returns: Json
+      }
+      shift_pay_terms_for: {
+        Args: { p_employee: string; s: Database["public"]["Tables"]["shifts"]["Row"] }
+        Returns: Json
+      }
       shift_net_minutes: {
         Args: {
           p_end_time: string

@@ -25,7 +25,7 @@
  */
 
 import type { TemplateGroupType } from '../../shift.entity';
-import type { ShiftCostBreakdown } from '../utils/cost/types';
+import type { ShiftCostBreakdown, ShiftPayTermsField } from '../utils/cost/types';
 
 // ── Projection Modes ──────────────────────────────────────────────────────────
 
@@ -79,6 +79,8 @@ export interface WorkerShiftDTO {
   remunerationLevel: number | null;
   remunerationRate: number | null;
   actualHourlyRate: number | null;
+  /** The linked contract's pay terms (shifts.shift_pay_terms) when visible. */
+  payTerms?: ShiftPayTermsField | null;
 
   // ── Level info (denormalised from join) ──
   levelName: string | null;

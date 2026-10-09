@@ -12,8 +12,8 @@
  * $0, since casuals accrue no paid leave).
  *
  * Rate + hours are resolved off the employee's active `user_contracts` row
- * (custom_hourly_rate ?? the classification's hourly_rate_min; contracted daily
- * hours = contracted_weekly_hours / 5). Weekends and public holidays are excluded
+ * (the contract's classification, priced from the effective-dated EBA rate;
+ * contracted daily hours = contracted_weekly_hours / 5). Weekends and public holidays are excluded
  * from synthesis (a public holiday during leave is a separate entitlement, not a
  * leave day — including it would misprice via the annual-leave greater-of rule).
  */
@@ -22,6 +22,7 @@ import { supabase } from '@/platform/supabase/client';
 import { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 import type { GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 import type { CostCalculatorOptions } from '../../rosters/domain/projections/utils/cost/types';
+import type { PayBasis } from '@/modules/users/domain/contractPayTerms';
 import { mapEmploymentType } from './grossPay.read.api';
 
 const DEFAULT_WEEKLY_HOURS = 38;
@@ -241,6 +242,9 @@ export function publicHolidayDaysInRange(
 export interface LeaveEmployeeContext {
   employeeId: string;
   employmentType?: CostCalculatorOptions['employmentType'];
+  payBasis?: PayBasis;
+  annualSalary?: number;
+  contractedWeeklyHours?: number;
   rate: number | null;
   /** e.g. 'LEVEL_3' — lets the engine resolve the effective-dated EBA rate. */
   classificationLevel?: string;
@@ -334,6 +338,9 @@ export function buildLeaveInputs(
       scheduledLengthMinutes: minutes,
       isOvernight: false,
       hoursSource: 'actual' as const,
+      payBasis: ctx.payBasis,
+      annualSalary: ctx.annualSalary,
+      contractedWeeklyHours: ctx.contractedWeeklyHours,
       rate: ctx.rate,
       classificationLevel: ctx.classificationLevel,
       employmentType: ctx.employmentType,
@@ -542,7 +549,8 @@ async function resolveLeaveContexts(
   let cQuery = (supabase as any)
     .from('user_contracts')
     .select(
-      'user_id, remuneration_level, contracted_weekly_hours, custom_hourly_rate, status, start_date, end_date, ' +
+      'user_id, remuneration_level, contracted_weekly_hours, status, start_date, end_date, ' +
+      'pay_basis, annual_salary, ' +
       'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
       'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
       'is_sws, sws_capacity_percentage'
@@ -599,20 +607,34 @@ async function resolveLeaveContexts(
       }
       continue; // permanents: no contract → cannot resolve a leave-day rate; skip.
     }
-    // Rate precedence: an explicit contract override wins; otherwise pass the
-    // CLASSIFICATION (rate = null) so the award engine resolves the
+    // Pass the CLASSIFICATION (rate = null) so the award engine resolves the
     // effective-dated EBA rate (permanent column — leave is non-casual only) —
     // rather than freezing today's remuneration_levels.hourly_rate_min into pay.
-    const levelNum = c.remuneration_level != null ? Number(c.remuneration_level) : null;
-    const classificationLevel =
-      levelNum != null ? (levelNum === 0 ? 'TRAINEE' : `LEVEL_${levelNum}`) : undefined;
-    const rate: number | null =
-      c.custom_hourly_rate != null ? Number(c.custom_hourly_rate) : null;
+    // There is no per-contract rate override: someone on a level is paid that
+    // level (custom_hourly_rate dropped in 20261009014655).
+    const payBasis = (c.pay_basis ?? 'eba_level') as PayBasis;
+    const annualSalary = c.annual_salary != null ? Number(c.annual_salary) : undefined;
     const weekly = c.contracted_weekly_hours != null ? Number(c.contracted_weekly_hours) : DEFAULT_WEEKLY_HOURS;
     const dailyOrdinaryMinutes = Math.round((weekly / WORKING_DAYS_PER_WEEK) * 60);
+
+    let classificationLevel: string | undefined;
+    let rate: number | null = null;
+    if (payBasis === 'salary') {
+      // Salaried: leave day rate is annualSalary / 52 / weeklyHours
+      // No EBA classification level lookup
+      rate = (annualSalary != null && weekly > 0) ? (annualSalary / 52 / weekly) : null;
+    } else {
+      const levelNum = c.remuneration_level != null ? Number(c.remuneration_level) : null;
+      classificationLevel =
+        levelNum != null ? (levelNum === 0 ? 'TRAINEE' : `LEVEL_${levelNum}`) : undefined;
+    }
+
     out.set(uid, {
       employeeId: uid,
       employmentType: mapEmploymentType(empTypeById.get(uid)),
+      payBasis,
+      annualSalary,
+      contractedWeeklyHours: weekly,
       rate,
       classificationLevel,
       dailyOrdinaryMinutes,

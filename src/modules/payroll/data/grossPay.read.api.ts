@@ -17,10 +17,12 @@
  *     absence, not a shift), so leave IS now priced end-to-end.
  *   • allowances: not represented on approved timesheet data → left undefined
  *     (the engine still auto-derives the cl 28.1 meal allowance from overtime).
- *   • higherDutiesLevel: not carried on the shift row here → left undefined.
- *   • classificationLevel: derived from remuneration_levels.level_number
- *     ('LEVEL_N' / 'TRAINEE') so the engine resolves the effective-dated
- *     Schedule 2 rate, casual/permanent-aware — see the rate block below.
+ *
+ * PAY TERMS: a shift linked to the assignee's own contract (user_contract_id)
+ * is paid on that contract's terms on the shift date — level, basis, salary —
+ * via `resolveShiftPayTerms`, the TS copy of the SQL resolver the roster budget
+ * uses. A shift level above the contract level is higher duties (cl 29). An
+ * unlinked shift is paid on its own level and employment target.
  */
 
 import { supabase } from '@/platform/supabase/client';
@@ -49,6 +51,15 @@ import type {
 } from './types';
 import { getLeaveGrossPayInputs } from './leaveGrossPay';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import {
+  classificationForLevel,
+  contractPayTermsOn,
+  resolveShiftPayTerms,
+  type ContractPayTermsRow,
+  type ShiftPayContract,
+} from '../domain/shiftPayTerms';
+
+type EngineEmploymentType = NonNullable<CostCalculatorOptions['employmentType']>;
 
 /** A mapped input plus its provenance (returned by the *WithProvenance fetch). */
 export interface GrossPayInputWithProvenance {
@@ -137,6 +148,26 @@ export function mapEmploymentType(
   }
 }
 
+/** Same employment basis, Flexible Part-Time counting as Part-Time. */
+function sameBasis(a: EngineEmploymentType | undefined, b: EngineEmploymentType | undefined): boolean {
+  const collapse = (t?: EngineEmploymentType) => (t === 'Flexible Part-Time' ? 'Part-Time' : t);
+  return a !== undefined && collapse(a) === collapse(b);
+}
+
+/**
+ * The award engine's employment type for a row. The shift's target (FT / PT /
+ * Casual) decides it: a person with several contracts has ONE profile value
+ * and differently-paid shifts (memory: casual-loading-priced-off-profile). The
+ * person's own value — the linked contract, else the profile — only refines
+ * Part-Time to Flexible Part-Time, or stands in when the shift has no target.
+ */
+export function resolveRowEmploymentType(row: GrossPayShiftRow): EngineEmploymentType | undefined {
+  const target = mapEmploymentType(row.target_employment_type);
+  const personal = mapEmploymentType(row._payContract?.employmentStatus ?? row._employmentType);
+  if (!target) return personal;
+  return sameBasis(target, personal) ? personal : target;
+}
+
 /**
  * PURE mapper: one `shifts` row (+ attached `_timesheet` / `_employmentType`) →
  * one `GrossPayShiftInput`, or null when the shift has no assigned employee.
@@ -149,10 +180,10 @@ export function mapEmploymentType(
  *                     − unpaidBreak (timesheet.unpaid_break_minutes ?? shift.unpaid_break_minutes)
  *   • startTime / endTime returned as 'HH:MM'.
  *
- * rate = shift.remuneration_rate (explicit override) ELSE null + the derived
- * classificationLevel (engine resolves the effective-dated EBA rate) ELSE
- * remuneration_levels.hourly_rate_min as a last resort.
- * isSecurityRole = roles.name (lowercased) includes 'security'.
+ * rate = null + the classificationLevel (the engine resolves the effective-dated
+ * EBA rate) ELSE remuneration_levels.hourly_rate_min as a last resort. There is
+ * no per-shift rate override: someone on a level is paid that level.
+ * isSecurityRole = an annualised-Security contract, or the role name says so.
  * isNoShow  ⇐ attendance_status === 'no_show' OR timesheet.status === 'no_show'.
  * isCancelled ⇐ lifecycle_status === 'Cancelled' OR assignment_status ∈
  *               {declined, unassigned}.
@@ -176,10 +207,31 @@ export function mapShiftRowToGrossPayInput(
   const subGroupName = rosterSubgroup?.name || undefined;
   const groupName = rosterSubgroup?.roster_group?.name || undefined;
   const roleName = role?.name || undefined;
-  // Hoisted above the min-engagement floor block below (which needs both) —
-  // also reused for the final returned GrossPayShiftInput further down.
-  const isSecurityRole = isSecurityRoleName(role?.name);
-  const employmentType = mapEmploymentType(row._employmentType);
+
+  // ── pay terms ─────────────────────────────────────────────────────────────
+  // Linked to the assignee's own contract ⇒ that contract's terms on the shift
+  // date (resolveShiftPayTerms — the TS copy of internal.resolve_pay_terms).
+  // Resolved above the min-engagement floor block below, which needs the
+  // employment type and the security flag.
+  const shiftLevel = remLevel?.level_number != null
+    ? Number(remLevel.level_number)
+    : (row.remuneration_level != null ? Number(row.remuneration_level) : null);
+  const terms = row._payContract
+    ? resolveShiftPayTerms({
+        shiftDate: row.shift_date,
+        shiftLevel,
+        shiftEmploymentType: row.target_employment_type ?? null,
+        contract: row._payContract,
+      })
+    : null;
+  const isSalaried = terms?.payBasis === 'salary';
+  // Sch 2 §2: annualised Security is Full-Time by definition (DB CHECK
+  // user_contracts_security_annualised_terms), whatever the role is named.
+  const isAnnualisedSecurity = terms?.payBasis === 'eba_security_annualised';
+  const isSecurityRole = isAnnualisedSecurity || isSecurityRoleName(role?.name);
+  const employmentType: EngineEmploymentType | undefined = isAnnualisedSecurity
+    ? 'Full-Time'
+    : resolveRowEmploymentType(row);
 
   // ── not-worked flags ─────────────────────────────────────────────────────
   const tsStatus = (ts?.status ?? '').toLowerCase();
@@ -243,17 +295,20 @@ export function mapShiftRowToGrossPayInput(
   // resolved window must still get the floor. The isNoShow/isCancelled flags
   // below still do their existing job — computeShiftGrossPay's own
   // NOT_WORKED short-circuit zeroes pay when there's genuinely no resolved
-  // window, independent of this floor.
+  // window, independent of this floor. A salaried shift is outside the EA, so
+  // it gets no floor — its hours are the hours worked (time in lieu).
   const { isSunday, isPublicHoliday } = getShiftDayType(row.shift_date);
-  const netMinutes = rawNetMinutes !== null
-    ? applyMinEngagementFloor(rawNetMinutes, {
+  const netMinutes = rawNetMinutes === null
+    ? 0
+    : isSalaried
+      ? rawNetMinutes
+      : applyMinEngagementFloor(rawNetMinutes, {
         isTraining: row.is_training === true,
         isSunday,
         isPublicHoliday,
         employmentType,
         isSecurityRole,
-      }).netMinutes
-    : 0;
+      }).netMinutes;
   const startTime = startForCalc.hhmm ?? undefined;
   const endTime = endForCalc.hhmm ?? undefined;
 
@@ -264,28 +319,28 @@ export function mapShiftRowToGrossPayInput(
   // casual was de-loaded off an already-unloaded rate (~20% underpay) — and the
   // effective-dated eba_rate schedule (cl 25 CPI machinery) never applied.
   //
-  // Now: an explicit per-shift rate (remuneration_rate — an override, NULL in
-  // prod today) wins; otherwise pass the CLASSIFICATION string (rate = null) so
-  // the engine resolves the effective-dated Schedule 2 rate, choosing the
-  // casual vs permanent column from employment type. hourly_rate_min is only a
-  // last resort when the row has a rem-level embed without a level_number.
-  const levelNum = remLevel?.level_number != null
-    ? Number(remLevel.level_number)
-    : (row._contractRemunerationLevel != null ? Number(row._contractRemunerationLevel) : null);
-  const classificationLevel: string | undefined =
-    levelNum != null && Number.isFinite(levelNum)
-      ? (levelNum === 0 ? 'TRAINEE' : `LEVEL_${levelNum}`)
-      : undefined;
+  // Now: pass the CLASSIFICATION string (rate = null) so the engine resolves
+  // the effective-dated Schedule 2 rate, choosing the casual vs permanent
+  // column from employment type. There is no per-shift rate override (user
+  // decision 2026-10-08: someone on a level is paid that level; the SQL budget
+  // ignores shifts.remuneration_rate too). hourly_rate_min is only a last
+  // resort when the row has a rem-level embed without a level_number.
+  //
+  // Linked: the contract's level is the classification; a higher shift level
+  // is cl 29 higher duties, which the engine prices on the whole shift with a
+  // 4-hour minimum. (This used to take the ROLE's level as higher duties.)
+  // Unlinked: the shift's level, else the employee's active contract level.
+  let classificationLevel: string | undefined;
+  let higherDutiesLevel: string | undefined;
+  if (terms) {
+    classificationLevel = classificationForLevel(terms.substantiveLevel);
+    higherDutiesLevel = terms.higherDuties ? classificationForLevel(terms.paidLevel) : undefined;
+  } else {
+    const contractLevel = row._contractRemunerationLevel != null ? Number(row._contractRemunerationLevel) : null;
+    classificationLevel = classificationForLevel(shiftLevel ?? contractLevel);
+  }
 
-  const roleLevelNum = role?.remuneration_level != null ? Number(role.remuneration_level) : null;
-  const higherDutiesLevel: string | undefined =
-    roleLevelNum != null && Number.isFinite(roleLevelNum)
-      ? (roleLevelNum === 0 ? 'TRAINEE' : `LEVEL_${roleLevelNum}`)
-      : undefined;
-
-  const rate: number | null =
-    row.remuneration_rate
-      ?? (classificationLevel ? null : (remLevel?.hourly_rate_min ?? null));
+  const rate: number | null = classificationLevel ? null : (row.remuneration_rate != null ? Number(row.remuneration_rate) : null);
 
   // ── hours provenance ──────────────────────────────────────────────────────
   // 'actual' requires BOTH sides to have genuinely snapped from a real clock
@@ -319,6 +374,9 @@ export function mapShiftRowToGrossPayInput(
     isPersonalLeave: false,
     isCarerLeave: false,
 
+    payBasis: terms?.payBasis,
+    annualSalary: row._payContract?.annualSalary ?? undefined,
+    contractedWeeklyHours: row._payContract?.contractedWeeklyHours ?? undefined,
     rate,
     employmentType,
     classificationLevel,
@@ -391,7 +449,36 @@ function provenanceFor(row: GrossPayShiftRow): GrossPayInputProvenance {
   return {
     timesheetStatus: row._timesheet?.status ?? null,
     managerEdited: !!(row._timesheet?.start_time || row._timesheet?.end_time),
-    employmentTypeMissing: mapEmploymentType(row._employmentType) === undefined,
+    employmentTypeMissing: resolveRowEmploymentType(row) === undefined,
+  };
+}
+
+/** user_contracts columns the pay path reads (pay terms + Schedules 4–6). */
+const CONTRACT_PAY_COLUMNS =
+  'id, user_id, employment_status, remuneration_level, pay_basis, annual_salary, contracted_weekly_hours, ' +
+  'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
+  'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
+  'is_sws, sws_capacity_percentage';
+
+/**
+ * A linked contract's pay terms on `date`: the history row in force then
+ * (hr.contract_pay_terms_on), else the contract's current columns — the same
+ * fallback internal.shift_pay_terms uses.
+ */
+export function payContractOn(
+  contract: any,
+  history: readonly ContractPayTermsRow[],
+  date: string,
+): ShiftPayContract {
+  const h = contractPayTermsOn(history, date);
+  const num = (v: unknown) => (v == null ? null : Number(v));
+  return {
+    payBasis: h?.pay_basis ?? contract.pay_basis ?? 'eba_level',
+    level: num(h ? h.remuneration_level : contract.remuneration_level),
+    annualSalary: num(h ? h.annual_salary : contract.annual_salary),
+    employmentStatus: contract.employment_status ?? null,
+    contractedWeeklyHours: num(contract.contracted_weekly_hours),
+    usesWageScheme: !!(contract.is_apprentice || contract.is_trainee || contract.is_sws),
   };
 }
 
@@ -424,8 +511,10 @@ async function fetchHydratedShiftRows(
       unpaid_break_minutes,
       net_length_minutes,
       scheduled_length_minutes,
-      remuneration_rate,
       remuneration_level,
+      remuneration_rate,
+      target_employment_type,
+      user_contract_id,
       assigned_employee_id,
       assignment_outcome,
       trading_status,
@@ -433,8 +522,8 @@ async function fetchHydratedShiftRows(
       role_id,
       is_first_aid_duty,
       is_training,
-      roles(id, name, remuneration_level),
-      remuneration_levels(level_number, level_name, hourly_rate_min),
+      roles(id, name),
+      remuneration_levels(level_number, level_name),
       assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
       roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
     `)
@@ -478,21 +567,37 @@ async function fetchHydratedShiftRows(
   const employeeIds = Array.from(
     new Set(rows.map((r) => r.assigned_employee_id).filter((id): id is string => !!id)),
   );
+  const linkedContractIds = Array.from(
+    new Set(rows.map((r) => r.user_contract_id).filter((id): id is string => !!id)),
+  );
   const empTypeById = new Map<string, string | null>();
   // H1 audit fix: store the full contract row per employee so apprentice/trainee/SWS
-  // fields travel to the mapper alongside the remuneration level.
+  // fields travel to the mapper alongside the remuneration level. Used only for
+  // a shift with no usable contract link.
   const contractByEmployee = new Map<string, any>();
+  // The contract each shift is linked to (any status — a shift worked under a
+  // since-ended contract is still paid on it), and its pay-terms history.
+  const contractById = new Map<string, any>();
+  const payHistoryByContract = new Map<string, ContractPayTermsRow[]>();
 
   if (employeeIds.length > 0) {
-    const [pRes, cRes] = await Promise.all([
+    const none = Promise.resolve({ data: [] as any[], error: null });
+    const [pRes, cRes, linkedRes, historyRes] = await Promise.all([
       supabase.from('profiles').select('id, employment_type').in('id', employeeIds),
       // H1 audit fix: fetch apprentice/trainee/SWS columns that AddContractDialog writes.
-      supabase.from('user_contracts').select(
-        'user_id, remuneration_level, ' +
-        'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
-        'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
-        'is_sws, sws_capacity_percentage'
-      ).in('user_id', employeeIds).eq('status', 'Active')
+      supabase.from('user_contracts').select(CONTRACT_PAY_COLUMNS)
+        .in('user_id', employeeIds).eq('status', 'Active'),
+      linkedContractIds.length > 0
+        ? supabase.from('user_contracts').select(CONTRACT_PAY_COLUMNS).in('id', linkedContractIds)
+        : none,
+      // RLS: payroll managers (delta access) read every row; others their own.
+      // Unreadable history falls back to the contract's current terms, as the
+      // SQL resolver does when a contract has no history row.
+      linkedContractIds.length > 0
+        ? (supabase as any).schema('hr').from('contract_pay_terms')
+            .select('contract_id, effective_from, pay_basis, remuneration_level, annual_salary')
+            .in('contract_id', linkedContractIds)
+        : none,
     ]);
 
     if (pRes.error) console.error('[grossPay.read] profiles query error:', pRes.error);
@@ -504,6 +609,16 @@ async function fetchHydratedShiftRows(
     for (const c of cRes.data ?? []) {
       contractByEmployee.set((c as any).user_id, c);
     }
+
+    if (linkedRes.error) console.error('[grossPay.read] linked contracts query error:', linkedRes.error);
+    for (const c of linkedRes.data ?? []) contractById.set((c as any).id, c);
+
+    if (historyRes.error) console.error('[grossPay.read] contract_pay_terms query error:', historyRes.error);
+    for (const h of (historyRes.data ?? []) as ContractPayTermsRow[]) {
+      const list = payHistoryByContract.get(h.contract_id);
+      if (list) list.push(h);
+      else payHistoryByContract.set(h.contract_id, [h]);
+    }
   }
 
   for (const r of rows) {
@@ -511,7 +626,14 @@ async function fetchHydratedShiftRows(
     r._employmentType = r.assigned_employee_id
       ? (empTypeById.get(r.assigned_employee_id) ?? null)
       : null;
-    const contract = r.assigned_employee_id ? contractByEmployee.get(r.assigned_employee_id) : null;
+    // Only the assignee's OWN contract is used — a stale link to someone
+    // else's is ignored, exactly as internal.shift_pay_terms does.
+    const linked = r.user_contract_id ? contractById.get(r.user_contract_id) : undefined;
+    const own = linked && linked.user_id === r.assigned_employee_id ? linked : undefined;
+    r._payContract = own
+      ? payContractOn(own, payHistoryByContract.get(own.id) ?? [], r.shift_date)
+      : null;
+    const contract = own ?? (r.assigned_employee_id ? contractByEmployee.get(r.assigned_employee_id) : null);
     r._contractRemunerationLevel = contract?.remuneration_level ?? null;
     // H1 audit fix: apprentice/trainee/SWS fields from the active contract.
     if (contract) {

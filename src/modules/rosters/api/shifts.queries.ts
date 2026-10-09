@@ -30,8 +30,20 @@ function actionableOfferFloor(): string {
 export interface OrgSummary { id: string; name: string }
 export interface DeptSummary { id: string; name: string; organization_id: string }
 export interface SubDeptSummary { id: string; name: string; department_id: string }
-export interface RoleSummary { id: string; name: string; sub_department_id: string; remuneration_level: number; }
-export interface RemunerationLevel { level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
+/**
+ * `remuneration_level` is the role's optional DEFAULT level for new shifts —
+ * not the pay level, which belongs to the contract. `eba_level_min/max` is the
+ * role's EA band (both null = no EA guidance).
+ */
+export interface RoleSummary {
+    id: string;
+    name: string;
+    sub_department_id: string;
+    remuneration_level: number | null;
+    eba_level_min: number | null;
+    eba_level_max: number | null;
+}
+export interface RemunerationLevel { level_number: number; level_name: string; description: string | null }
 export interface SkillSummary { id: string; name: string; description: string | null; category: string | null }
 export interface LicenseSummary { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
 export interface ProfileSummary {
@@ -57,11 +69,12 @@ const SHIFT_DETAIL_SELECT = `
   assignment_outcome,
   attendance_status,
   offer_expires_at,
+  shift_pay_terms,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
   roles(id, name),
-  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
+  remuneration_levels(level_number, level_name),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
@@ -155,11 +168,13 @@ const SHIFT_SELECT = `
   last_modified_by,
   target_employment_type,
   target_requires_flexible,
+  user_contract_id,
+  shift_pay_terms,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
   roles(id, name),
-  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
+  remuneration_levels(level_number, level_name),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
@@ -491,7 +506,7 @@ export const shiftsQueries = {
                   departments(id, name),
                   sub_departments(id, name),
                   roles(id, name),
-                  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
+                  remuneration_levels(level_number, level_name),
                   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
                   timesheets(status, start_time, end_time)
@@ -594,7 +609,7 @@ export const shiftsQueries = {
                   departments(id, name),
                   sub_departments(id, name),
                   roles(id, name),
-                  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
+                  remuneration_levels(level_number, level_name),
                   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
                   timesheets(status, notes, rejected_reason, start_time, end_time)
@@ -701,7 +716,7 @@ export const shiftsQueries = {
             let query = (supabase as any)
                 .schema('hr')
                 .from('roles')
-                .select('id, name, subdepartment_id, remuneration_level')
+                .select('id, name, subdepartment_id, remuneration_level, eba_level_min, eba_level_max')
                 .eq('is_active', true)
                 .order('name');
 
@@ -744,7 +759,9 @@ export const shiftsQueries = {
                 id: r.id,
                 name: r.name,
                 sub_department_id: r.subdepartment_id,
-                remuneration_level: r.remuneration_level,
+                remuneration_level: r.remuneration_level ?? null,
+                eba_level_min: r.eba_level_min ?? null,
+                eba_level_max: r.eba_level_max ?? null,
             })) as RoleSummary[];
         } catch (error) {
             console.error('Exception in getRoles:', error);
@@ -794,7 +811,7 @@ export const shiftsQueries = {
             const { data, error } = await (supabase as any)
                 .schema('hr')
                 .from('remuneration_levels')
-                .select('id:level_number, level_number, level_name, hourly_rate_min, hourly_rate_max, description')
+                .select('id:level_number, level_number, level_name, description')
                 .order('level_number');
 
             if (error) {
@@ -1156,7 +1173,7 @@ export const shiftsQueries = {
                 departments(id, name),
                 sub_departments(name),
                 organizations(id, name),
-                remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max)
+                remuneration_levels(level_number, level_name)
             `)
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
@@ -1253,7 +1270,7 @@ export const shiftsQueries = {
                     departments(id, name),
                     sub_departments(name),
                     organizations(id, name),
-                    remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max)
+                    remuneration_levels(level_number, level_name)
                 `)
                 .is('deleted_at', null);
 
@@ -1377,7 +1394,7 @@ export const shiftsQueries = {
                 departments(name),
                 sub_departments(name),
                 roles(name),
-                remuneration_levels(level_name, hourly_rate_min)
+                remuneration_levels(level_name)
             `)
                 .eq('organization_id', organizationId)
                 .in('bidding_status', ['on_bidding', 'on_bidding_normal', 'on_bidding_urgent'])
@@ -1473,7 +1490,7 @@ export const shiftsQueries = {
                     departments(name),
                     sub_departments(name),
                     roles(name),
-                    remuneration_levels(level_name, hourly_rate_min),
+                    remuneration_levels(level_name),
                     assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                     shift_bids(id)
                 `)
