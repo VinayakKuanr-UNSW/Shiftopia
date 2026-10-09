@@ -112,6 +112,7 @@ export function useHardValidation({
                 start_time: string;
                 end_time: string;
                 unpaid_break_minutes: number;
+                user_contract_id?: string | null;
             }>;
         },
         enabled: queryEnabled,
@@ -168,6 +169,7 @@ export function useHardValidation({
             end_time: s.end_time,
             shift_date: s.shift_date,
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
+            user_contract_id: s.user_contract_id ?? null,
         }));
     }, [rawShifts, watchEmployeeId]);
 

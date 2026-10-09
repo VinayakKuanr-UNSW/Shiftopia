@@ -46,6 +46,8 @@ export function runV8ComplexBridge(
         contracts: input.employee_context.contracts,
         // V8_STUDENT_VISA_LIMIT — its own axis, never read off contract_type.
         is_student_visa: input.employee_context.is_student_visa ?? false,
+        is_salaried: input.employee_context.is_salaried,
+        pay_basis: input.employee_context.pay_basis,
     };
 
     // Shifts being added/changed by this operation — the only ones that pure
@@ -77,6 +79,9 @@ export function runV8ComplexBridge(
             // asking the narrower question.
             role_id: s.role_id ?? undefined,
             sub_department_id: (s as any).sub_department_id ?? null,
+            // The contract a committed shift was worked under — places it for
+            // the per-shift salaried rules (governing-contract.ts).
+            user_contract_id: s.user_contract_id ?? null,
             // V8_EMPLOYMENT_TARGET. Absent on callers that don't carry it, in
             // which case the rule stays silent and the DB trigger guards it.
             target_employment_type: (s as any).target_employment_type ?? null,

@@ -92,6 +92,9 @@ export class ScenarioBuilder {
                 contracted_weekly_hours: partyA.contracted_weekly_hours,
                 leave_days: partyA.leave_days,
                 is_security_role: partyA.is_security_role,
+                is_salaried: partyA.is_salaried,
+                pay_basis: partyA.pay_basis,
+                contracts: partyA.contracts,
             },
             partyB: {
                 employee_id: partyB.employee_id,
@@ -104,6 +107,9 @@ export class ScenarioBuilder {
                 contracted_weekly_hours: partyB.contracted_weekly_hours,
                 leave_days: partyB.leave_days,
                 is_security_role: partyB.is_security_role,
+                is_salaried: partyB.is_salaried,
+                pay_basis: partyB.pay_basis,
+                contracts: partyB.contracts,
             },
         };
     }
@@ -155,6 +161,9 @@ export class ScenarioBuilder {
             contracted_weekly_hours: party.contracted_weekly_hours,
             leave_days: party.leave_days,
             is_security_role: party.is_security_role,
+            is_salaried: party.is_salaried,
+            pay_basis: party.pay_basis,
+            contracts: party.contracts,
         }));
 
         // Build adjacent pairs for incremental evaluation

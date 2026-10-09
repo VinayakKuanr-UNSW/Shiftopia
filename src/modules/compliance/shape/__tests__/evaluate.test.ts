@@ -374,3 +374,29 @@ describe('result contract', () => {
         }
     });
 });
+
+describe('salaried staff advisory gating', () => {
+    it('demotes SHAPE_FT_MIN_DAY to advisory WARNING for salaried staff', () => {
+        const r = evaluateShiftShape(shift({
+            target_employment_type: 'FT',
+            end_time: '12:00',
+            is_salaried: true,
+        }));
+        expect(has(r, 'SHAPE_FT_MIN_DAY')).toBe(true);
+        const hit = r.hits.find(h => h.rule_id === 'SHAPE_FT_MIN_DAY')!;
+        expect(hit.status).toBe('WARNING');
+        expect(hit.blocking).toBe(false);
+    });
+
+    it('demotes SHAPE_MIN_ENGAGEMENT to advisory WARNING for salaried staff', () => {
+        const r = evaluateShiftShape(shift({
+            target_employment_type: 'Casual',
+            end_time: '10:00',
+            pay_basis: 'salary',
+        }));
+        expect(has(r, 'SHAPE_MIN_ENGAGEMENT')).toBe(true);
+        const hit = r.hits.find(h => h.rule_id === 'SHAPE_MIN_ENGAGEMENT')!;
+        expect(hit.status).toBe('WARNING');
+        expect(hit.blocking).toBe(false);
+    });
+});

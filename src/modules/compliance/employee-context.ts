@@ -39,7 +39,7 @@ const _contextCache = new Map<string, CacheEntry>();
  * away in a database that has not taken that migration — see the retry below.
  */
 const CONTRACT_COLUMNS_BASE =
-    'organization_id, department_id, sub_department_id, role_id, contracted_weekly_hours, employment_status';
+    'id, organization_id, department_id, sub_department_id, role_id, contracted_weekly_hours, employment_status, pay_basis, engagement_kind';
 const CONTRACT_COLUMNS_WITH_CYCLE =
     `${CONTRACT_COLUMNS_BASE}, ordinary_hours_cycle_weeks, ordinary_hours_cycle_anchor`;
 
@@ -147,10 +147,29 @@ export async function fetchV8EmployeeContext(
     const skills   = skillsRes.data ?? [];
     const licenses = licensesRes.data ?? [];
 
-    // Determine contract type — map DB employment_type enum to ContractType,
+    // Determine contract type — the active contracts' employment_status takes
+    // precedence over profiles.employment_type (the two disagree for 17 of 122 staff),
     // defaulting to CASUAL. The student-visa flag is derived separately below;
     // it is not a contract type and must not overwrite one.
-    const rawType = (profile?.employment_type || '').toLowerCase().replace(/[-_]/g, ' ');
+    //
+    // For someone holding several contracts this is the HEADLINE engagement:
+    // a cl 13 multi-hire contract is a second, casual engagement and never the
+    // headline, and among primary contracts the most permanent wins (FT > PT >
+    // Casual) — what profiles.employment_type has always carried. Row order is
+    // not meaningful, so "the first contract" was arbitrary. Rules that must
+    // know the engagement a SHIFT is worked under use governing-contract.ts.
+    const permanence = (s: string): number =>
+        /full/i.test(s) ? 3 : /part/i.test(s) ? 2 : /casual/i.test(s) ? 1 : 0;
+    const withStatus = rawContracts.filter((c: any) => !!c.employment_status);
+    const primary = withStatus.filter((c: any) => c.engagement_kind !== 'multi_hire');
+    const headline = (primary.length > 0 ? primary : withStatus).reduce(
+        (best: any, c: any) =>
+            !best || permanence(c.employment_status) > permanence(best.employment_status) ? c : best,
+        null,
+    );
+    const activeContractStatus: string | undefined = headline?.employment_status;
+    const rawStatus = activeContractStatus || profile?.employment_type || '';
+    const rawType = rawStatus.toLowerCase().replace(/[-_]/g, ' ');
     const employmentTypeMap: Record<string, ContractType> = {
         'full time':   'FULL_TIME',
         'full_time':   'FULL_TIME', // fallback
@@ -198,6 +217,7 @@ export async function fetchV8EmployeeContext(
     const contracts: ContractRecordV2[] = rawContracts
         .filter((c: any) => c.organization_id && c.department_id && c.role_id)
         .map((c: any) => ({
+            id:                (c.id as string | undefined) ?? undefined,
             organization_id:   c.organization_id as string,
             department_id:     c.department_id as string,
             sub_department_id: (c.sub_department_id as string | null) ?? null,
@@ -209,6 +229,8 @@ export async function fetchV8EmployeeContext(
             // a status belonged to. That is the whole reason it had to match
             // person-wide.
             employment_status: (c.employment_status as string | null) ?? null,
+            pay_basis:         (c.pay_basis as string | null) ?? null,
+            engagement_kind:   (c.engagement_kind as string | null) ?? null,
         }));
 
     // Derive assigned_role_ids from contracts for backward compat.
@@ -290,6 +312,15 @@ export async function fetchV8EmployeeContext(
         console.warn('[EmployeeContext] Approved-leave fetch failed — V8_LEAVE_CONFLICT silent', (leaveRes as any).error);
     }
 
+    // Person-wide pay facts are only the FALLBACK for a shift that cannot be
+    // placed on one contract (governing-contract.ts). Salaried only when EVERY
+    // active contract is — a salaried manager who also holds a casual
+    // engagement keeps the EBA protections; the basis only when they all agree.
+    const payBases = new Set(rawContracts.map((c: any) => (c.pay_basis as string | null) ?? 'eba_level'));
+    const is_salaried = rawContracts.length > 0
+        && rawContracts.every((c: any) => c.pay_basis === 'salary');
+    const pay_basis = payBases.size === 1 ? [...payBases][0] : null;
+
     const ctx: V8EmployeeContext = {
         employee_id:             employeeId,
         contract_type,
@@ -303,6 +334,8 @@ export async function fetchV8EmployeeContext(
         is_security_role,
         employment_statuses,
         is_student_visa,
+        is_salaried,
+        pay_basis,
     };
 
     // Cache the result
@@ -353,11 +386,14 @@ export async function fetchEmployeeShiftsV2(
         start_time:           string;
         end_time:             string;
         unpaid_break_minutes: number | null;
+        user_contract_id?:    string | null;
     }>).map(s => ({
         id:                      s.id,
         date:                    s.shift_date,
         start_time:              s.start_time,
         end_time:                s.end_time,
+        // The contract it was worked under — places it for per-shift rules.
+        user_contract_id:        s.user_contract_id ?? null,
         // Existing shifts don't need role/quals — time-based rules only.
         // R10/R11/R12 apply only to candidate (incoming) shifts.
         role_id:                 '',

@@ -24,6 +24,7 @@ export interface ShiftTimeRange {
     unpaid_break_minutes?: number;  // Optional break time to subtract for net hours
     paid_break_minutes?: number;    // Optional paid break time (e.g. rest pauses)
     shift_id?: string;   // Unique identifier for database lookups
+    user_contract_id?: string | null;  // The contract a committed shift is linked to
 }
 
 export interface ComplianceCheckInput {
