@@ -16,6 +16,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/supabase/client';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { validateContractHours, MAX_CONTRACTED_WEEKLY_HOURS, type ExistingContract } from '../../domain/contractHoursCeiling';
+import { RemunerationLevelBadge } from './RemunerationLevelBadge';
 
 interface AddContractDialogProps {
     employeeId: string;
@@ -633,19 +634,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({
 
                                                     {/* 2. ROLE & LEVEL */}
                                                     <div className="col-span-4 flex items-center gap-3 min-w-0 text-left">
-                                                        <span className={cn(
-                                                            "px-2.5 py-1 rounded-lg text-xs font-black font-mono border shrink-0",
-                                                            levelNumber === 7 ? "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30" :
-                                                            levelNumber === 6 ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
-                                                            levelNumber === 5 ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30" :
-                                                            levelNumber === 4 ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30" :
-                                                            levelNumber === 3 ? "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30" :
-                                                            levelNumber === 2 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" :
-                                                            levelNumber === 1 ? "bg-teal-500/15 text-teal-600 dark:text-teal-300 border-teal-500/30" :
-                                                            "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30"
-                                                        )}>
-                                                            {levelLabel}
-                                                        </span>
+                                                        <RemunerationLevelBadge level={levelNumber} />
                                                         <div className="flex flex-col min-w-0">
                                                             <span className={cn(
                                                                 "text-sm font-bold truncate",

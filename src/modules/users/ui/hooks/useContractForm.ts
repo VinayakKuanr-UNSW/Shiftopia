@@ -600,6 +600,9 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
                 sws_trial_start_date: formData.sws_trial_start_date || null,
             };
 
+            // No remuneration_level here: an existing contract keeps its own
+            // level (it is a term of the contract, and a salaried contract has
+            // none). Only roles being ADDED take one, below.
             const rowFor = (roleId: string) => {
                 const t = termsForRole(formData, roleId);
                 const key = `${t.employment_status}|${t.contracted_weekly_hours}|${t.annual_guaranteed_hours}`;
@@ -608,7 +611,6 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
                     user_id: employeeId,
                     role_id: roleId,
                     position_id: positionIds.get(key)!,
-                    remuneration_level: roleLevels?.[roleId] ?? formData.remuneration_level,
                     employment_status: t.employment_status,
                     contracted_weekly_hours: t.contracted_weekly_hours,
                     annual_guaranteed_hours: t.annual_guaranteed_hours,
@@ -619,7 +621,10 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
 
             const added = formData.role_ids.filter(id => !byRole.has(id));
             if (added.length > 0) {
-                const { error } = await db.insert(added.map(rowFor));
+                const { error } = await db.insert(added.map(roleId => ({
+                    ...rowFor(roleId),
+                    remuneration_level: roleLevels?.[roleId] ?? formData.remuneration_level,
+                })));
                 if (error) throw error;
             }
 

@@ -131,13 +131,17 @@ export interface EnhancedAddShiftModalProps {
 export interface Role {
     id: string;
     name: string;
-    remuneration_level?: number;
+    /** Optional default level for new shifts — not the pay level (that is the contract's). */
+    remuneration_level?: number | null;
+    /** The role's EA band; both null = no EA guidance. */
+    eba_level_min?: number | null;
+    eba_level_max?: number | null;
 }
 
 export interface RemunerationLevel {
     level_number: number;
     level_name: string;
-    hourly_rate_min: number;
+    hourly_rate_min?: number;
     hourly_rate_max?: number;
 }
 

@@ -1,5 +1,14 @@
 import { isBefore, startOfDay, parseISO, format } from 'date-fns';
 import { isPastInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import type { Role } from './types';
+
+/**
+ * The level a new shift of this role starts at: the role's default level, else
+ * the bottom of its EA band, else none. Level 0 is a real level, so this tests
+ * for null rather than truthiness.
+ */
+export const defaultShiftLevel = (role: Role | undefined): number | null =>
+    role?.remuneration_level ?? role?.eba_level_min ?? null;
 
 export const calculateShiftLength = (start: string, end: string): number => {
     if (!start || !end) return 0;

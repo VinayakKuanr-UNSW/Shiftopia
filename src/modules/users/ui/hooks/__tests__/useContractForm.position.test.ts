@@ -488,4 +488,18 @@ describe('useContractForm — editing a sub-department engagement', () => {
         expect(h.ops).toEqual([]);
         expect(h.toasts.some(t => t.variant === 'destructive')).toBe(true);
     });
+
+    // A contract's level is a term of the CONTRACT. Saving the engagement used
+    // to rewrite every existing row's level with its role's default level —
+    // silently undoing a promotion, and failing outright on a salaried
+    // contract, which has no level at all (user_contracts_salary_terms).
+    it("keeps each existing contract's own level, and only levels the roles it adds", async () => {
+        const result = openOnScope();
+        pick(result, LEAD, 'Casual');
+        await act(async () => { await result.current.submitScopeUpdate(rowsInScope, LEVELS); });
+
+        expect(h.updated).toHaveLength(2);
+        expect(h.updated.every(u => !('remuneration_level' in u.row))).toBe(true);
+        expect(h.inserted[0].map((r: any) => r.remuneration_level)).toEqual([LEVELS[LEAD]]);
+    });
 });
