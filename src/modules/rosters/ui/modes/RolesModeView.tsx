@@ -281,11 +281,16 @@ const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleI
     }),
   }, [date, roleId, roleName, onMove, isDnDModeActive]);
 
+  const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
+  const holidayName = getPublicHolidayName(parsedDate);
+  const isTodayDate = format(parsedDate, 'yyyy-MM-dd') === todayISO();
+
   return (
     <td
       ref={drop}
       className={cn(
         ROLE_CELL_BASE_CLASS,
+        holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-l-amber-500/20' : isTodayDate && 'bg-primary/5',
         isOver && canDrop && 'bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset shadow-[inset_0_0_20px_rgba(16,185,129,0.2)] scale-[1.01] z-10',
         isOver && !canDrop && 'bg-red-500/10 ring-2 ring-red-500/50 ring-inset cursor-no-drop opacity-60'
       )}
@@ -299,7 +304,17 @@ const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleI
 // an inert <td> — avoids a useDrop per (role, date) cell in week/month tables.
 const DroppableRoleCell: React.FC<DroppableRoleCellProps> = (props) => {
   if (!props.isDnDModeActive) {
-    return <td className={ROLE_CELL_BASE_CLASS}>{props.children}</td>;
+    const parsedDate = parse(props.date, 'yyyy-MM-dd', new Date());
+    const holidayName = getPublicHolidayName(parsedDate);
+    const isTodayDate = format(parsedDate, 'yyyy-MM-dd') === todayISO();
+    return (
+      <td className={cn(
+        ROLE_CELL_BASE_CLASS,
+        holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-l-amber-500/20' : isTodayDate && 'bg-primary/5'
+      )}>
+        {props.children}
+      </td>
+    );
   }
   return <DroppableRoleCellActive {...props} />;
 };
@@ -640,7 +655,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                 const holidayName = getPublicHolidayName(date);
                 const isToday = format(date, 'yyyy-MM-dd') === todayISO();
                 return (
-                  <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-border bg-muted/30 transition-colors", holidayName ? "bg-amber-500/10 border-amber-500/30" : isToday && "bg-primary/5")}>
+                  <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-border bg-muted/30 transition-colors", holidayName ? "bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30" : isToday && "bg-primary/5")}>
                     <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", holidayName ? "text-amber-400 font-extrabold" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
                     <div className={cn("text-sm font-mono tabular-nums mt-0.5", holidayName ? "text-amber-300 font-bold" : "text-muted-foreground/50")}>{format(date, 'MMM d')}</div>
                     {holidayName && (
@@ -681,6 +696,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                   </td>
                   {dates.map(date => {
                     const dStr = format(date, 'yyyy-MM-dd');
+                    const holidayName = getPublicHolidayName(date);
                     const cellShifts = role.shiftsByDate[dStr] || [];
                     const cellKey = `${role.id}::${dStr}`;
                     const isExpandedCell = expandedCells.has(cellKey);
@@ -729,11 +745,16 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                               <button
                                 onClick={() => handleCellClick(role.id, date)}
                                 className={cn(
-                                  "flex items-center justify-center rounded-full transition-[transform,background-color,opacity,box-shadow] duration-200 pointer-events-auto bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 w-9 h-9 opacity-40 group-hover/cell:opacity-100",
+                                  "flex items-center justify-center rounded-full transition-[transform,background-color,opacity,box-shadow] duration-200 pointer-events-auto",
+                                  holidayName
+                                    ? "bg-amber-500/30 text-amber-400 dark:text-amber-300 border border-amber-500/40 backdrop-blur-md hover:bg-amber-500/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+                                    : "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
+                                  "w-9 h-9 opacity-40 group-hover/cell:opacity-100",
                                   (!isDnDModeActive && summaryData) ? "hidden" : ""
                                 )}
+                                title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
                               >
-                                <Plus className="h-5 w-5" />
+                                <Plus className={cn("h-5 w-5", holidayName ? "text-amber-400 dark:text-amber-300" : "text-primary")} />
                               </button>
                             </div>
                           )}

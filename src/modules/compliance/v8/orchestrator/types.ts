@@ -64,6 +64,10 @@ export interface V8EmployeeContext {
     /** Student visa with a restricted work limit — see V8Employee.is_student_visa.
      *  Its own axis, never a `contract_type` value. */
     is_student_visa?:         boolean;
+    /** Every active contract is salaried — see V8Employee.is_salaried. */
+    is_salaried?:             boolean;
+    /** The pay basis all active contracts share; null when they differ. */
+    pay_basis?:               string | null;
 }
 
 export interface V8OrchestratorInput {

@@ -81,11 +81,12 @@ export const biddingApi = {
                 *,
                 dropped_by_id,
                 last_dropped_by,
+                my_shift_pay_terms,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
                 roles(id, name),
-                remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max)
+                remuneration_levels(level_number, level_name)
             `)
             .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
             .is('assigned_employee_id', null)
@@ -125,6 +126,7 @@ export const biddingApi = {
                 *,
                 shift:shifts(
                     *,
+                    my_shift_pay_terms,
                     organizations(name),
                     departments(name),
                     sub_departments(name),

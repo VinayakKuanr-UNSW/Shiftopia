@@ -125,6 +125,7 @@ export class ScenarioLoader {
             start_time:           string;
             end_time:             string;
             unpaid_break_minutes: number | null;
+            user_contract_id?:    string | null;
         }>).map(s => ({
             id:                   s.id,
             shift_date:           s.shift_date,
@@ -133,6 +134,7 @@ export class ScenarioLoader {
             assigned_employee_id: employeeId,
             lifecycle_status:     null,
             role_id:              null,
+            user_contract_id:     s.user_contract_id ?? null,
             unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
         }));
     }
@@ -242,6 +244,8 @@ export class ScenarioLoader {
             is_security_role:    ctx.is_security_role,
             // Migration Act condition 8105 — see the contract_type note above.
             is_student_visa:     ctx.is_student_visa,
+            is_salaried:         ctx.is_salaried,
+            pay_basis:           ctx.pay_basis,
             qualifications:      (ctx.qualifications ?? []).map(q => ({
                 qualification_id: q.qualification_id,
                 expires_at:       q.expires_at,

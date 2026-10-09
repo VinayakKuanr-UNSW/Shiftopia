@@ -25,7 +25,10 @@ export async function runV8Compliance(
             name: 'Employee',
             contract_type: ctx.contract_type,
             contracted_weekly_hours: ctx.contracted_weekly_hours,
-            skill_ids: (ctx.qualifications ?? []).map(q => q.qualification_id)
+            skill_ids: (ctx.qualifications ?? []).map(q => q.qualification_id),
+            is_salaried: ctx.is_salaried,
+            pay_basis: ctx.pay_basis,
+            contracts: ctx.contracts,
         };
     }
 
@@ -47,6 +50,7 @@ export async function runV8Compliance(
             end_time: s.end_time,
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
             paid_break_minutes: s.paid_break_minutes || 0,
+            user_contract_id: s.user_contract_id ?? null,
             is_sunday: isSunday(s.shift_date),
             is_public_holiday: isHoliday(s.shift_date)
         }))

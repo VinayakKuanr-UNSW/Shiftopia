@@ -25,6 +25,30 @@ export interface ShiftCostBreakdown {
     satHours: number; sunHours: number; phHours: number;
     satCost: number; sunCost: number; phCost: number;
   };
+  /**
+   * Set when the shift was priced on a SALARIED contract (outside the EA,
+   * cl 2.2): totalCost is the budget cost (hours × the salary's hourly
+   * equivalent), not pay — the salary is paid per period. Pay-facing views
+   * show "Salaried" instead of an amount.
+   */
+  payBasis?: 'salary';
+}
+
+/**
+ * `shifts.shift_pay_terms` — computed field (migration 20261008232922): the
+ * linked contract's pay terms on the shift date, the same terms the budget
+ * (internal.shift_cost) and payroll price on. NULL/absent unless the viewer is
+ * the assignee or a delta-access manager.
+ */
+export interface ShiftPayTermsField {
+  pay_basis: 'eba_level' | 'eba_security_annualised' | 'salary';
+  /** 'FT' | 'PT' | 'Casual' */
+  employment_type: string | null;
+  substantive_level: number | null;
+  paid_level: number | null;
+  higher_duties: boolean;
+  /** EA hourly rate (casual-loaded for casuals), annualised rate, or salary ÷ hours. */
+  base_rate: number | null;
 }
 
 export interface CostCalculatorOptions {

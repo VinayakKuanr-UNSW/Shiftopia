@@ -53,6 +53,12 @@ export interface V8Shift {
      * person-wide match, which is what this rule did for every caller before.
      */
     sub_department_id?:    string | null;
+    /**
+     * The contract this shift is linked to (shifts.user_contract_id) — set for
+     * committed shifts. When present it IS the governing contract
+     * (governing-contract.ts), no matching needed.
+     */
+    user_contract_id?:     string | null;
     is_training?:          boolean;
     is_sunday?:            boolean;
     is_public_holiday?:    boolean;
@@ -153,6 +159,15 @@ export interface V8Employee {
      * ('WorkRights'). Absent/false ⇒ V8_STUDENT_VISA_LIMIT is silent.
      */
     is_student_visa?:       boolean;
+    /**
+     * EVERY active contract is salaried (outside the EBA, cl 2.2). Only the
+     * fallback for a shift that cannot be placed on one contract — rules ask
+     * `isSalariedShift(employee, shift)`, which reads the shift's governing
+     * contract from `contracts` first.
+     */
+    is_salaried?:           boolean;
+    /** The pay basis all active contracts share; null when they differ. */
+    pay_basis?:             string | null;
 }
 
 export interface QualificationV2 {
@@ -162,6 +177,8 @@ export interface QualificationV2 {
 }
 
 export interface ContractRecordV2 {
+    /** hr.user_contracts.id — optional for hand-built callers. */
+    id?:               string;
     organization_id:   string;
     department_id:     string;
     sub_department_id: string | null;
@@ -180,6 +197,10 @@ export interface ContractRecordV2 {
      * person-wide behaviour rather than blocking.
      */
     employment_status?: string | null;
+    /** 'eba_level' | 'eba_security_annualised' | 'salary' — this contract's own. */
+    pay_basis?:         string | null;
+    /** 'primary' | 'multi_hire' (a second, casual engagement under cl 13). */
+    engagement_kind?:   string | null;
 }
 
 export type ContractType = V8ContractType;

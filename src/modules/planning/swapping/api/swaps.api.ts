@@ -319,7 +319,7 @@ export const swapsApi = {
                     scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
                     target_employment_type, remuneration_rate, remuneration_level,
                     roles(name),
-                    remuneration_levels(hourly_rate_min),
+                    remuneration_levels(level_number, level_name),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
@@ -592,7 +592,7 @@ export const swapsApi = {
                     scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
                     target_employment_type, remuneration_rate, remuneration_level,
                     roles(name),
-                    remuneration_levels(hourly_rate_min),
+                    remuneration_levels(level_number, level_name),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
@@ -637,16 +637,18 @@ export const swapsApi = {
                 *,
                 requester_shift:shifts!requester_shift_id${shiftJoinType}(
                     *,
+                    shift_pay_terms,
                     roles(name),
-                    remuneration_levels(hourly_rate_min),
+                    remuneration_levels(level_number, level_name),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
                 ),
                 target_shift:shifts!target_shift_id(
                     *,
+                    shift_pay_terms,
                     roles(name),
-                    remuneration_levels(hourly_rate_min),
+                    remuneration_levels(level_number, level_name),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
@@ -664,6 +666,7 @@ export const swapsApi = {
                         net_length_minutes, scheduled_length_minutes, is_overnight, is_training, sub_group_name,
                         lifecycle_status, group_type,
                         target_employment_type, remuneration_rate, remuneration_level,
+                        user_contract_id, assigned_employee_id, shift_pay_terms,
                         roles(name),
                         departments(name),
                         sub_departments(name),
@@ -702,7 +705,9 @@ export const swapsApi = {
         }
 
         console.log('[API LOG] Fetched manager swaps count:', data?.length || 0);
-        return (data || []).map(mapDbToSwapRequest);
+        const rows = data || [];
+        await attachRequesterPayTerms(rows);
+        return rows.map(mapDbToSwapRequest);
     },
 
     // ----------------------------------------------------------------
@@ -943,6 +948,44 @@ export const swapsApi = {
 };
 
 // Helper to map DB columns to Frontend Model
+/**
+ * The requester's pay on each shift they would RECEIVE, priced on THEIR
+ * contract (get_prospective_pay_terms, migration 20261009022054) rather than
+ * the current holder's. Feeds the swap's pay delta, which sits beside the
+ * requester's change in hours. Attached as `requester_pay_terms` on the raw
+ * shift, which mapDbShift spreads through. Best effort: without it the delta
+ * prices on the shift's linked terms, as before.
+ */
+async function attachRequesterPayTerms(rows: any[]): Promise<void> {
+    const pairs: { shift: any; employeeId: string }[] = [];
+    for (const r of rows) {
+        if (!r.requester_id) continue;
+        if (r.target_shift?.id) pairs.push({ shift: r.target_shift, employeeId: r.requester_id });
+        for (const o of r.swap_offers ?? []) {
+            if (o.offered_shift?.id) pairs.push({ shift: o.offered_shift, employeeId: r.requester_id });
+        }
+    }
+    if (pairs.length === 0) return;
+
+    const { data, error } = await db.rpc('get_prospective_pay_terms', {
+        p_shift_ids: pairs.map(p => p.shift.id),
+        p_employee_ids: pairs.map(p => p.employeeId),
+    });
+    if (error) {
+        console.warn('[API] get_prospective_pay_terms failed — swap pay delta uses linked terms', error);
+        return;
+    }
+    const byPair = new Map<string, unknown>(
+        ((data ?? []) as { shift_id: string; employee_id: string; pay_terms: unknown }[])
+            .filter(d => d.pay_terms !== null)
+            .map(d => [`${d.shift_id}:${d.employee_id}`, d.pay_terms]),
+    );
+    for (const p of pairs) {
+        const terms = byPair.get(`${p.shift.id}:${p.employeeId}`);
+        if (terms) p.shift.requester_pay_terms = terms;
+    }
+}
+
 function mapDbToSwapRequest(row: any): SwapRequestWithDetails {
     const originalShift = mapDbShift(row.requester_shift);
     const requestedShift = mapDbShift(row.target_shift);

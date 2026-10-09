@@ -30,6 +30,7 @@ import type {
     SolverResult,
 } from './types';
 import type { ComplianceResult, ComplianceCalculation } from '../../types';
+import type { ContractRecordV2 } from '../types';
 
 // =============================================================================
 // TYPES
@@ -73,6 +74,11 @@ export interface AssignmentEvaluationInput {
         /** Holds a student visa with a restricted work limit. Its own axis, so
          *  the employee keeps their real contract_type. Absent ⇒ silent. */
         is_student_visa?: boolean;
+        /** Salaried employee (outside EBA per cl 2.2). */
+        is_salaried?: boolean;
+        pay_basis?: string | null;
+        /** Active contracts — see SwapParty.contracts. */
+        contracts?: ContractRecordV2[];
     };
 }
 
@@ -172,6 +178,9 @@ export class AssignmentEvaluator {
             leave_days: input.employee_context?.leave_days,
             employment_statuses: input.employee_context?.employment_statuses,
             is_security_role: input.employee_context?.is_security_role,
+            is_salaried: input.employee_context?.is_salaried,
+            pay_basis: input.employee_context?.pay_basis,
+            contracts: input.employee_context?.contracts,
             // The context is authoritative. `config.student_visa_enforcement`
             // is the same DB fact (`employee_licenses.has_restricted_work_limit`)
             // derived independently by the shift form and the bids view; it was

@@ -102,12 +102,24 @@ describe('splitShiftRule (clause 39)', () => {
   it('does flag when a candidate is added against existing history', () => {
     resetIdCounter();
     const ctx = buildContext({
-      employee: { contract_type: 'PART_TIME' },
+      employee: { contract_type: 'PART_TIME', is_candidate: true } as any,
       shifts: [
         buildShift({ date: '2026-06-01', start_time: '07:00', end_time: '10:00', is_candidate: false }),
         buildShift({ date: '2026-06-01', start_time: '15:00', end_time: '18:00', is_candidate: true }),
       ],
     });
     expect(splitShiftRule(ctx)).toHaveLength(1);
+  });
+
+  it('does not apply to salaried staff (outside EBA cl 2.2)', () => {
+    resetIdCounter();
+    const ctx = buildContext({
+      employee: { contract_type: 'PART_TIME', is_salaried: true },
+      shifts: [
+        buildShift({ date: '2026-06-01', start_time: '07:00', end_time: '10:00', is_candidate: false }),
+        buildShift({ date: '2026-06-01', start_time: '15:00', end_time: '18:00', is_candidate: true }),
+      ],
+    });
+    expect(splitShiftRule(ctx)).toEqual([]);
   });
 });

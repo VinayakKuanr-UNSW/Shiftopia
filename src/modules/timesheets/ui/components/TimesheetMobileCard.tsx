@@ -172,7 +172,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 start_time: entry.scheduledStart,
                 end_time: entry.scheduledEnd,
                 roles: { name: entry.role },
-                remuneration_level: entry.remunerationLevel,
+                remuneration_level: entry.remunerationLevelNumber,
+                shift_pay_terms: entry.payTerms,
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
@@ -181,10 +182,13 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         } catch {
             return null;
         }
-    }, [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.role, entry.remunerationLevel, entry.employmentType, entry.isTraining, entry.unpaidBreak]);
-    const scheduledPay = scheduledCost ? `$${scheduledCost.totalCost.toFixed(2)}` : null;
+    }, [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.role, entry.remunerationLevelNumber, entry.payTerms, entry.employmentType, entry.isTraining, entry.unpaidBreak]);
+    // A salaried shift has no per-shift pay — the salary is paid per period.
+    const scheduledPay = scheduledCost
+        ? (scheduledCost.payBasis === 'salary' ? 'Salaried' : `$${scheduledCost.totalCost.toFixed(2)}`)
+        : null;
     const scheduledPayLines = useMemo(
-        () => scheduledCost
+        () => scheduledCost && scheduledCost.payBasis !== 'salary'
             ? buildOrdinaryEarningsLines(scheduledCost, { isSecurityRole: !!entry.isSecurityRole, shiftDate: String(entry.date), startTime: entry.scheduledStart })
             : [],
         [scheduledCost, entry.isSecurityRole, entry.date, entry.scheduledStart],
@@ -205,6 +209,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 start_time: entry.adjustedStart,
                 end_time: entry.adjustedEnd,
                 roles: { name: entry.role },
+                remuneration_level: entry.remunerationLevelNumber,
+                shift_pay_terms: entry.payTerms,
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
@@ -213,10 +219,12 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         } catch {
             return null;
         }
-    }, [entry.date, entry.adjustedStart, entry.adjustedEnd, entry.netLengthMinutes, entry.role, entry.employmentType, entry.isTraining, entry.unpaidBreak, entry.scheduledStart, entry.scheduledEnd]);
-    const billablePay = billableCost ? `$${billableCost.totalCost.toFixed(2)}` : null;
+    }, [entry.date, entry.adjustedStart, entry.adjustedEnd, entry.netLengthMinutes, entry.role, entry.remunerationLevelNumber, entry.payTerms, entry.employmentType, entry.isTraining, entry.unpaidBreak, entry.scheduledStart, entry.scheduledEnd]);
+    const billablePay = billableCost
+        ? (billableCost.payBasis === 'salary' ? 'Salaried' : `$${billableCost.totalCost.toFixed(2)}`)
+        : null;
     const billablePayLines = useMemo(
-        () => billableCost
+        () => billableCost && billableCost.payBasis !== 'salary'
             ? buildOrdinaryEarningsLines(billableCost, { isSecurityRole: !!entry.isSecurityRole, shiftDate: String(entry.date), startTime: entry.adjustedStart ?? undefined })
             : [],
         [billableCost, entry.isSecurityRole, entry.date, entry.adjustedStart],

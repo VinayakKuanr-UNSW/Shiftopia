@@ -498,8 +498,8 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                         key={idx}
                         className={cn(
                           'sticky top-0 z-20 bg-zinc-900 border-b border-border px-3 py-2.5 text-center transition-colors',
-                          idx < dates.length - 1 && 'border-r',
-                          holidayName ? 'bg-amber-500/10 border-amber-500/30' : dateIsToday && 'bg-primary/5'
+                          idx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r'),
+                          holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30' : dateIsToday && 'bg-primary/5'
                         )}
                       >
                         <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", holidayName ? "text-amber-400 font-extrabold" : dateIsToday ? "text-primary" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
@@ -979,9 +979,13 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   /** Approved leave closes the day to rostering. */
   const closed = datePast || Boolean(leave);
 
+  const holidayName = getPublicHolidayName(date);
+  const isTodayDate = format(date, 'yyyy-MM-dd') === todayISO();
+
   const cellClassName = cn(
-    'px-3 py-3 align-top relative group/cell',
-    !isLastCol && 'border-r border-border',
+    'px-3 py-3 align-top relative group/cell transition-colors',
+    !isLastCol && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-border'),
+    holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15' : isTodayDate && 'bg-primary/5',
     canEdit && !isBulkMode && 'cursor-pointer',
   );
 
@@ -1064,19 +1068,21 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
             <button
               className={cn(
                 'flex items-center justify-center rounded-full transition-[transform,background-color,opacity,box-shadow] duration-200 pointer-events-auto',
-                'bg-primary/30 text-primary border border-primary/40 backdrop-blur-md',
-                'hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]',
+                holidayName
+                  ? 'bg-amber-500/30 text-amber-400 dark:text-amber-300 border border-amber-500/40 backdrop-blur-md hover:bg-amber-500/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.3)]'
+                  : 'bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]',
                 shifts.length > 0
                   ? 'w-7 h-7 opacity-0 scale-75 group-hover/cell:opacity-100 group-hover/cell:scale-100'
                   : 'w-9 h-9 opacity-40 scale-90 hover:opacity-100',
                 'group/add'
               )}
               onClick={handleAddClick}
-              title="Add Shift"
+              title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
             >
               <Plus className={cn(
                 shifts.length > 0 ? 'h-4 w-4' : 'h-5 w-5',
-                'transition-transform group-hover/add:rotate-90'
+                'transition-transform group-hover/add:rotate-90',
+                holidayName ? 'text-amber-400 dark:text-amber-300' : 'text-primary'
               )} />
             </button>
           </div>

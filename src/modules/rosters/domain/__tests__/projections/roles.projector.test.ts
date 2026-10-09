@@ -99,7 +99,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
       id: 'level-1',
       level_name: 'Level 3 – Tech',
       level_number: 3,
-      hourly_rate_min: 25,
     },
     ...overrides,
   } as unknown as Shift));
@@ -143,7 +142,7 @@ describe('projectRoles — level structure', () => {
       makeShift({ role_id: 'role-1', remuneration_level: 3 }),
       makeShift({ role_id: 'role-3', remuneration_level: 1,
         roles: { id: 'role-3', name: 'Usher' },
-        remuneration_levels: { level_name: 'Level 1 – Casual', level_number: 1, hourly_rate_min: 15 },
+        remuneration_levels: { level_name: 'Level 1 – Casual', level_number: 1 },
       }),
     ];
     const result = projectRoles(shifts as unknown as WorkerShiftDTO[], { roles: rolesToDTO(ROLES), levels: levelsToDTO(LEVELS) });
@@ -205,7 +204,7 @@ describe('projectRoles — levelColorClass', () => {
   it('applies a purple colour class for level ≥ 7', () => {
     const lvShift = makeShift({
       remuneration_level: 9,
-      remuneration_levels: { level_name: 'Level 9', level_number: 9, hourly_rate_min: 50 },
+      remuneration_levels: { level_name: 'Level 9', level_number: 9 },
     });
     const result = projectRoles([lvShift], {
       levels: levelsToDTO([{ level_name: 'Level 9', level_number: 9 }] as any),

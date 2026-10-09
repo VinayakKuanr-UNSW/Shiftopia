@@ -35,7 +35,7 @@ import { formatInTimezone, isPastInTimezone, parseZonedDateTime, todayISO } from
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
-import { calculateShiftLength, isDateInPast, isShiftStarted } from '../utils';
+import { calculateShiftLength, defaultShiftLevel, isDateInPast, isShiftStarted } from '../utils';
 import { formSchema, FormValues, EnhancedAddShiftModalProps, ShiftContext } from '../types';
 import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
@@ -456,9 +456,9 @@ export function useShiftFormOrchestrator({
     // Auto-select remuneration level when the chosen role has a default
     useEffect(() => {
         if (watchV8RoleId && roles.length > 0) {
-            const role = roles.find(r => r.id === watchV8RoleId);
-            if (role?.remuneration_level) {
-                form.setValue('remuneration_level', role.remuneration_level);
+            const level = defaultShiftLevel(roles.find(r => r.id === watchV8RoleId));
+            if (level != null) {
+                form.setValue('remuneration_level', level);
             }
         }
     }, [watchV8RoleId, roles, form]);
@@ -469,8 +469,9 @@ export function useShiftFormOrchestrator({
             const match = roles.find(r => r.id === safeContext.roleId);
             if (match) {
                 form.setValue('role_id', match.id);
-                if (match.remuneration_level) {
-                    form.setValue('remuneration_level', match.remuneration_level);
+                const level = defaultShiftLevel(match);
+                if (level != null) {
+                    form.setValue('remuneration_level', level);
                 }
             }
         }
@@ -640,6 +641,9 @@ export function useShiftFormOrchestrator({
                     start_time: (s.start_time || '').slice(0, 5),
                     end_time: (s.end_time || '').slice(0, 5),
                     role_id: s.role_id || watchV8RoleId || '',
+                    // The link governs a committed shift — the role fallback
+                    // above is the CANDIDATE's role, not this shift's.
+                    user_contract_id: s.user_contract_id ?? null,
                     required_qualifications: [],
                     break_minutes: s.unpaid_break_minutes || 0,
                     unpaid_break_minutes: s.unpaid_break_minutes || 0,

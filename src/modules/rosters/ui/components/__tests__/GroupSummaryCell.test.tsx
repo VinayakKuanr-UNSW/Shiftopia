@@ -117,4 +117,43 @@ describe('GroupSummaryCell', () => {
       expect(screen.getByRole('button')).toBe(before);
     });
   });
+
+  describe('public holiday styling', () => {
+    it('applies golden border and background on public holidays for empty cells', () => {
+      // Labour Day 2026: 5 October 2026
+      const labourDay = new Date(2026, 9, 5);
+      render(
+        <GroupSummaryCell
+          date={labourDay}
+          groupName="General"
+          summary={undefined}
+          accent="gray"
+          onClick={vi.fn()}
+        />,
+      );
+
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('border-amber-500/40');
+      expect(button.className).toContain('bg-amber-500/10');
+    });
+
+    it('applies standard muted styling on regular non-holiday days', () => {
+      // 31 July 2026 is a standard Friday (non-holiday)
+      render(
+        <GroupSummaryCell
+          date={date}
+          groupName="General"
+          summary={undefined}
+          accent="gray"
+          onClick={vi.fn()}
+        />,
+      );
+
+      const button = screen.getByRole('button');
+      expect(button.className).toContain('border-border/50');
+      expect(button.className).toContain('bg-muted/20');
+      expect(button.className).not.toContain('border-amber-500/40');
+    });
+  });
 });
+

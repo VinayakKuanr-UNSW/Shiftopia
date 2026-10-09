@@ -8,6 +8,8 @@
  * (see supabase baseline: shift_attendance_status, timesheet_status enums).
  */
 
+import type { ShiftPayContract } from '../domain/shiftPayTerms';
+
 /** Timesheet row joined onto a shift (by shift_id). Only pay-relevant columns. */
 export interface GrossPayTimesheetRow {
   id: string;
@@ -61,8 +63,12 @@ export interface GrossPayShiftRow {
   unpaid_break_minutes?: number | null;
   net_length_minutes?: number | null;
   scheduled_length_minutes?: number | null;
-  remuneration_rate?: number | null;
   remuneration_level?: number | null;
+  remuneration_rate?: number | null;
+  /** 'FT' | 'PT' | 'Casual' — the shift's own employment basis. */
+  target_employment_type?: string | null;
+  /** The assignee's contract this shift is worked under (set by trg_shift_z_link_contract). */
+  user_contract_id?: string | null;
   assigned_employee_id: string | null;
   role_id?: string | null;
   /** cl 28.2 — true when the employer appointed this employee to First Aid duty on this shift. */
@@ -79,6 +85,13 @@ export interface GrossPayShiftRow {
   _employmentType?: string | null;
   /** The employee's substantive contract remuneration level. */
   _contractRemunerationLevel?: number | null;
+  /**
+   * The LINKED contract's pay terms on the shift date (hr.contract_pay_terms),
+   * when `user_contract_id` is the assignee's own contract. Present ⇒ the shift
+   * is paid on the contract's terms (see shiftPayTerms.ts); absent ⇒ on the
+   * shift's own level and target.
+   */
+  _payContract?: ShiftPayContract | null;
   // ── Apprentice / Trainee / SWS contract fields (H1 audit fix) ──────────
   /** Schedule 4 apprentice. */
   _isApprentice?: boolean;

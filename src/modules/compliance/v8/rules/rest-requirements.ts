@@ -5,6 +5,7 @@ import {
     shiftStartDate,
     MULTI_HIRE_MIN_REST_MINUTES,
 } from '../utils/rest-gap';
+import { isSalariedShift } from '../utils/governing-contract';
 
 /**
  * V8 Rule: Minimum Rest Gap (ICC EBA clause 40 — Breaks Between Shifts)
@@ -23,7 +24,7 @@ import {
  *     configured minimum (clause 40.3 / 13.1(f)).
  */
 export const minRestGapRule: V8RuleEvaluator = (ctx) => {
-    const { shifts, config } = ctx;
+    const { shifts, config, employee } = ctx;
 
     const pairs = consecutivePairs(shifts);
     if (pairs.length === 0) return [];
@@ -46,7 +47,12 @@ export const minRestGapRule: V8RuleEvaluator = (ctx) => {
 
         if (gapMinutes < requiredMinutes) {
             const gapHours = Math.round((gapMinutes / 60) * 10) / 10;
-            violations.push({
+            // Advisory only when BOTH sides are worked outside the EBA: a
+            // salaried manager resuming work on their casual engagement is
+            // still owed the cl 40 break.
+            const isSalaried = !!employee
+                && isSalariedShift(employee, a) && isSalariedShift(employee, b);
+            const hit: V8Hit = {
                 rule_id: 'V8_MIN_REST_GAP',
                 rule_name: 'Minimum Rest Gap',
                 status: 'BLOCKING',
@@ -70,7 +76,14 @@ export const minRestGapRule: V8RuleEvaluator = (ctx) => {
                     shift_a: a.id,
                     shift_b: b.id,
                 },
-            });
+            };
+            if (isSalaried) {
+                hit.status = 'WARNING';
+                hit.blocking = false;
+                hit.summary = `Advisory: ${hit.summary}`;
+                hit.details += ' Salaried staff are outside EBA cl 40; rest gap is advisory.';
+            }
+            violations.push(hit);
         }
     }
 

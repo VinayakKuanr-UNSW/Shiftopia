@@ -2,7 +2,7 @@
  * V8 Compliance Engine — Swap Engine Types
  */
 
-import { V8Status, V8Shift } from '../types';
+import { V8Status, V8Shift, ContractRecordV2 } from '../types';
 
 export type RosterShift = V8Shift;
 
@@ -29,6 +29,12 @@ export interface SwapParty {
      *  NOT derivable from `contract_type` (global source; collapses the
      *  Flexible Part-Time variant onto 'PT'). */
     employment_statuses?:      string[];
+    /** Salaried employee (outside EBA per cl 2.2). */
+    is_salaried?:              boolean;
+    pay_basis?:                string | null;
+    /** The party's active contracts — lets rules find the contract each shift
+     *  is worked under (governing-contract.ts). Absent ⇒ person-wide facts. */
+    contracts?:                ContractRecordV2[];
 }
 
 export interface SwapScenario {
@@ -54,6 +60,12 @@ export interface SwapPartyInput {
     leave_days?:               string[];
     /** EBA Schedule 3 §3 — see V8Employee.is_security_role (audit H-5). */
     is_security_role?:         boolean;
+    /** Salaried employee (outside EBA per cl 2.2). */
+    is_salaried?:              boolean;
+    pay_basis?:                string | null;
+    /** The party's active contracts — lets rules find the contract each shift
+     *  is worked under (governing-contract.ts). Absent ⇒ person-wide facts. */
+    contracts?:                ContractRecordV2[];
 }
 
 export interface SwapEvaluationInput {

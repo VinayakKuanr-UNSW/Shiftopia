@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { AddContractDialog } from './AddContractDialog';
+import { ContractWizardDialog } from './contract-wizard/ContractWizardDialog';
+import { RemunerationLevelBadge } from './RemunerationLevelBadge';
 import { AccessCertificateDialog } from './AddAccessCertificateDialog';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -30,6 +32,9 @@ import { text } from '@/modules/core/ui/typography';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCasualConversionStatus } from '../../domain/casualConversion';
 import { getSwsTrialStatus } from '../../domain/swsTrial';
+import { EXCLUSION_REASON_LABELS, quotePay, type EbaExclusionReason, type PayBasis } from '../../domain/contractPayTerms';
+import { useEbaRates } from '@/modules/payroll/state/useEbaRates';
+import { todayISO } from '@/modules/core/lib/date.utils';
 
 interface SectionProps {
     employeeId: string;
@@ -44,6 +49,19 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuth();
     const isAuthorizedAdmin = currentUser?.highestAccessLevel === 'epsilon';
+
+    // What each contract pays today, from the effective-dated EA schedule.
+    const { schedule: ebaSchedule } = useEbaRates(true);
+    const today = todayISO();
+    const payFor = (c: any) => quotePay({
+        payBasis: (c.pay_basis ?? 'eba_level') as PayBasis,
+        employmentStatus: c.employment_status ?? '',
+        level: c.remuneration_level != null ? Number(c.remuneration_level) : '',
+        annualSalary: Number(c.annual_salary) || 0,
+        contractedWeeklyHours: Number(c.contracted_weekly_hours) || 0,
+        schedule: ebaSchedule,
+        onDate: today,
+    });
 
     const { data: contracts, isLoading } = useQuery({
         queryKey: ['user_contracts', employeeId],
@@ -153,7 +171,12 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                     </span>
                 </CardTitle>
                 {isAuthorizedAdmin && (
-                    <AddContractDialog employeeId={employeeId} employeeName={employeeName} existingContracts={contracts ?? []} />
+                    <ContractWizardDialog
+                        employeeId={employeeId}
+                        employeeName={employeeName}
+                        existingContracts={contracts ?? []}
+                        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] })}
+                    />
                 )}
             </CardHeader>
 
@@ -264,6 +287,7 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                     <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Role</th>
                                                     <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Type</th>
                                                     <th scope="col" className="px-3.5 py-2.5 text-right text-[10px] font-black uppercase tracking-wider text-muted-foreground">Hours</th>
+                                                    <th scope="col" className="px-3.5 py-2.5 text-right text-[10px] font-black uppercase tracking-wider text-muted-foreground">Pay</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-border">
@@ -272,23 +296,20 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                     const annual = Number(c.annual_guaranteed_hours) || 0;
                                                     const levelNumber = c.remuneration_level != null ? Number(c.remuneration_level) : -1;
                                                     const status = c.employment_status || '';
+                                                    const isSalaried = c.pay_basis === 'salary';
+                                                    const pay = payFor(c);
+                                                    const reason = c.eba_exclusion_reason as EbaExclusionReason | null;
 
                                                     return (
                                                         <tr key={c.id} className="hover:bg-muted/30 transition-colors">
                                                             <td className="px-3.5 py-2.5">
-                                                                <span className={cn(
-                                                                    "px-2 py-0.5 rounded-md text-[11px] font-black font-mono border inline-block",
-                                                                    levelNumber === 7 ? "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30" :
-                                                                    levelNumber === 6 ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
-                                                                    levelNumber === 5 ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30" :
-                                                                    levelNumber === 4 ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30" :
-                                                                    levelNumber === 3 ? "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30" :
-                                                                    levelNumber === 2 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30" :
-                                                                    levelNumber === 1 ? "bg-teal-500/15 text-teal-600 dark:text-teal-300 border-teal-500/30" :
-                                                                    "bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30"
-                                                                )}>
-                                                                    {levelNumber >= 0 ? `L${levelNumber}` : '—'}
-                                                                </span>
+                                                                {isSalaried ? (
+                                                                    <span className="px-2.5 py-1 rounded-lg text-xs font-black border inline-block bg-muted text-foreground border-border">
+                                                                        Salary
+                                                                    </span>
+                                                                ) : (
+                                                                    <RemunerationLevelBadge level={levelNumber} />
+                                                                )}
                                                             </td>
                                                             <th scope="row" className="px-3.5 py-2.5 text-left font-bold text-sm text-foreground">
                                                                 {c.roles?.name || 'Unknown role'}
@@ -303,11 +324,31 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                                 )}>
                                                                     {status || '—'}
                                                                 </span>
+                                                                {c.engagement_kind === 'multi_hire' && (
+                                                                    <span
+                                                                        className="ml-1.5 px-2 py-0.5 rounded-lg text-[11px] font-bold border inline-block bg-muted text-muted-foreground border-border"
+                                                                        title={c.multi_hire_request_ref ? `Request to Multi-Hire: ${c.multi_hire_request_ref}` : undefined}
+                                                                    >
+                                                                        Multi-hire · cl 13
+                                                                    </span>
+                                                                )}
                                                             </td>
                                                             <td className="px-3.5 py-2.5 text-right font-mono font-bold text-xs text-foreground">
                                                                 {weekly > 0 ? `${weekly} h/wk`
                                                                     : annual > 0 ? `${annual} h/yr`
                                                                         : <span className="text-muted-foreground/40 font-normal">—</span>}
+                                                            </td>
+                                                            <td className="px-3.5 py-2.5 text-right">
+                                                                {pay ? (
+                                                                    <>
+                                                                        <span className="block font-mono font-bold text-xs text-foreground">{pay.headline}</span>
+                                                                        {isSalaried && reason && (
+                                                                            <span className="block text-[11px] text-muted-foreground">{EXCLUSION_REASON_LABELS[reason]}</span>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground/40 text-xs">—</span>
+                                                                )}
                                                             </td>
                                                         </tr>
                                                     );

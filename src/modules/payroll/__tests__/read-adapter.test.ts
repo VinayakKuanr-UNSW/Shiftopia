@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   mapShiftRowToGrossPayInput,
   mapEmploymentType,
+  payContractOn,
 } from '../data/grossPay.read.api';
 import type { GrossPayShiftRow } from '../data/types';
+import type { ShiftPayContract } from '../domain/shiftPayTerms';
+import { computeShiftGrossPay } from '../domain/computeShiftGrossPay';
 
 /**
  * PURE unit tests for the gross-pay read adapter's mapper. NO live Supabase —
@@ -31,12 +34,11 @@ const baseRow = (o: Partial<GrossPayShiftRow> = {}): GrossPayShiftRow => ({
   unpaid_break_minutes: 0,
   net_length_minutes: 480,
   scheduled_length_minutes: 480,
-  remuneration_rate: 30,
   remuneration_level: 3,
   assigned_employee_id: 'e1',
   role_id: 'r1',
   roles: { id: 'r1', name: 'Attendant' },
-  remuneration_levels: { level_number: 3, level_name: 'Level 3', hourly_rate_min: 32.5 },
+  remuneration_levels: { level_number: 3, level_name: 'Level 3' },
   _employmentType: 'full_time',
   _timesheet: null,
   ...o,
@@ -276,49 +278,46 @@ describe('mapShiftRowToGrossPayInput — rate & classification resolution', () =
   // bypassed the effective-dated EBA schedule. The adapter now derives the
   // classification and lets the award engine resolve the Schedule 2 rate.
   it('derives classificationLevel from level_number and leaves rate null (engine resolves the EBA rate)', () => {
-    const row = baseRow({ remuneration_rate: null });
-    const input = mapShiftRowToGrossPayInput(row)!;
+    const input = mapShiftRowToGrossPayInput(baseRow())!;
     expect(input.rate).toBeNull();
     expect(input.classificationLevel).toBe('LEVEL_3');
   });
 
   it('maps level 0 to TRAINEE', () => {
     const row = baseRow({
-      remuneration_rate: null,
-      remuneration_levels: { level_number: 0, level_name: 'Trainee', hourly_rate_min: 24.96 },
+      remuneration_levels: { level_number: 0, level_name: 'Introductory' },
     });
     expect(mapShiftRowToGrossPayInput(row)!.classificationLevel).toBe('TRAINEE');
   });
 
-  it('an explicit shift remuneration_rate is an OVERRIDE and wins over the classification', () => {
-    const row = baseRow({ remuneration_rate: 30 });
+  it('has no per-shift rate override — a stray remuneration_rate on the row is ignored when level is present', () => {
+    // User decision 2026-10-08: someone on a level is paid that level. The SQL
+    // budget (fn_eba_resolve_shift_rate called with NULL overrides) agrees.
+    const row = { ...baseRow(), remuneration_rate: 99 } as GrossPayShiftRow;
     const input = mapShiftRowToGrossPayInput(row)!;
-    expect(input.rate).toBe(30);
-    expect(input.classificationLevel).toBe('LEVEL_3'); // still carried; engine prefers the rate
+    expect(input.rate).toBeNull();
+    expect(input.classificationLevel).toBe('LEVEL_3');
   });
 
-  it('uses hourly_rate_min only as a last resort (embed without a level_number)', () => {
-    const row = baseRow({ remuneration_rate: null, remuneration_levels: { hourly_rate_min: 41.2 } });
+  it('uses remuneration_rate only as a last resort (unlinked row without a level)', () => {
+    const row = baseRow({ remuneration_level: null, remuneration_levels: null, remuneration_rate: 41.2 });
     const input = mapShiftRowToGrossPayInput(row)!;
     expect(input.rate).toBe(41.2);
     expect(input.classificationLevel).toBeUndefined();
   });
 
-  it('falls back to shift.remuneration_rate when the level rate is missing', () => {
-    const row = baseRow({ remuneration_rate: 28.75, remuneration_levels: { hourly_rate_min: null } });
-    expect(mapShiftRowToGrossPayInput(row)!.rate).toBe(28.75);
-  });
-
-  it('is null when neither a level rate nor a shift rate exists', () => {
-    const row = baseRow({ remuneration_rate: null, remuneration_levels: null });
-    expect(mapShiftRowToGrossPayInput(row)!.rate).toBeNull();
+  it('is null when there is no level and no level rate', () => {
+    const row = baseRow({ remuneration_level: null, remuneration_levels: null });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.rate).toBeNull();
+    expect(input.classificationLevel).toBeUndefined();
   });
 
   it('unwraps PostgREST array-style embeds', () => {
     const row = baseRow({
-      remuneration_rate: null,
+      remuneration_level: null,
       roles: [{ id: 'r1', name: 'Security Officer' }] as any,
-      remuneration_levels: [{ level_number: 5, hourly_rate_min: 30.82 }] as any,
+      remuneration_levels: [{ level_number: 5 }] as any,
     });
     const input = mapShiftRowToGrossPayInput(row)!;
     expect(input.rate).toBeNull();
@@ -389,5 +388,183 @@ describe('mapShiftRowToGrossPayInput — documented data gaps', () => {
     expect(input.shiftDate).toBe('2026-07-08');
     expect(input.employeeId).toBe('e1');
     expect(input.scheduledLengthMinutes).toBe(480);
+  });
+});
+
+// ── Pay on the CONTRACT's terms (Phase 4, 2026-10-08) ──────────────────────
+// Expected dollars are internal.shift_cost on prod for the same shifts (the
+// roster budget), so these double as payroll ↔ budget parity checks.
+describe('mapShiftRowToGrossPayInput — paid on the linked contract', () => {
+  const casualContract = (level: number, extra: Partial<ShiftPayContract> = {}): ShiftPayContract => ({
+    payBasis: 'eba_level',
+    level,
+    annualSalary: null,
+    employmentStatus: 'Casual',
+    contractedWeeklyHours: null,
+    usesWageScheme: false,
+    ...extra,
+  });
+
+  // Thursday 09:00–12:00, manager-approved times (deterministic billable window).
+  const thursday3h = (o: Partial<GrossPayShiftRow>): GrossPayShiftRow => baseRow({
+    shift_date: '2026-10-08',
+    start_time: '09:00',
+    end_time: '12:00',
+    net_length_minutes: 180,
+    scheduled_length_minutes: 180,
+    target_employment_type: 'Casual',
+    user_contract_id: 'c1',
+    _employmentType: 'full_time', // the profile — must NOT decide the basis
+    _timesheet: { id: 't1', shift_id: 's1', start_time: '09:00', end_time: '12:00', unpaid_break_minutes: 0, status: 'approved' },
+    ...o,
+  });
+  const pay = (row: GrossPayShiftRow) => computeShiftGrossPay(mapShiftRowToGrossPayInput(row)!);
+
+  it('an L7 casual on an L4 shift is paid at L7 (budget: 134.76)', () => {
+    const row = thursday3h({ remuneration_level: 4, remuneration_levels: { level_number: 4 }, _payContract: casualContract(7) });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.classificationLevel).toBe('LEVEL_7');
+    expect(input.higherDutiesLevel).toBeUndefined();
+    expect(input.employmentType).toBe('Casual');
+    expect(pay(row).grossPay).toBe(134.76);
+  });
+
+  it('an L4 casual doing 3h of L6 work gets 4h at L6 — cl 29.1(a) (budget: 172.48)', () => {
+    const row = thursday3h({ remuneration_level: 6, remuneration_levels: { level_number: 6 }, _payContract: casualContract(4) });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.classificationLevel).toBe('LEVEL_4');
+    expect(input.higherDutiesLevel).toBe('LEVEL_6');
+    const result = pay(row);
+    expect(result.paidHours).toBe(4);
+    expect(result.grossPay).toBe(172.48);
+  });
+
+  it('the same higher duties on a Saturday for 2h (budget: 206.98)', () => {
+    const row = thursday3h({
+      shift_date: '2026-10-10', end_time: '11:00', net_length_minutes: 120, scheduled_length_minutes: 120,
+      _timesheet: { id: 't1', shift_id: 's1', start_time: '09:00', end_time: '11:00', unpaid_break_minutes: 0, status: 'approved' },
+      remuneration_level: 6, remuneration_levels: { level_number: 6 }, _payContract: casualContract(4),
+    });
+    expect(pay(row).grossPay).toBe(206.98);
+  });
+
+  it('no higher duties for a wage-scheme contract (Schedules 4–6 set the rate)', () => {
+    const row = thursday3h({
+      remuneration_level: 6, remuneration_levels: { level_number: 6 },
+      _payContract: casualContract(3, { usesWageScheme: true }),
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.classificationLevel).toBe('LEVEL_3');
+    expect(input.higherDutiesLevel).toBeUndefined();
+  });
+
+  it('the ROLE level is never higher duties any more', () => {
+    const row = thursday3h({
+      roles: { id: 'r1', name: 'Supervisor', remuneration_level: 7 },
+      remuneration_level: 4, remuneration_levels: { level_number: 4 }, _payContract: casualContract(4),
+    });
+    expect(mapShiftRowToGrossPayInput(row)!.higherDutiesLevel).toBeUndefined();
+  });
+
+  it('a salaried shift adds no per-shift pay but keeps the worked hours', () => {
+    const row = thursday3h({
+      target_employment_type: 'FT',
+      end_time: '17:00', net_length_minutes: 480, scheduled_length_minutes: 480,
+      _timesheet: { id: 't1', shift_id: 's1', start_time: '09:00', end_time: '17:00', unpaid_break_minutes: 0, status: 'approved' },
+      _payContract: { payBasis: 'salary', level: null, annualSalary: 95000, employmentStatus: 'Full-Time', contractedWeeklyHours: 38, usesWageScheme: false },
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.payBasis).toBe('salary');
+    const result = pay(row);
+    expect(result.grossPay).toBe(0);
+    expect(result.lines).toEqual([]);
+    expect(result.paidHours).toBe(0);
+    expect(result.salariedHours).toBe(8);
+    expect(result.payBasis).toBe('salary');
+  });
+
+  it('a salaried Part-Timer gets no minimum-engagement floor', () => {
+    const row = thursday3h({
+      target_employment_type: 'PT',
+      end_time: '10:00', net_length_minutes: 60, scheduled_length_minutes: 60,
+      _timesheet: { id: 't1', shift_id: 's1', start_time: '09:00', end_time: '10:00', unpaid_break_minutes: 0, status: 'approved' },
+      _payContract: { payBasis: 'salary', level: null, annualSalary: 78000, employmentStatus: 'Part-Time', contractedWeeklyHours: 30, usesWageScheme: false },
+    });
+    expect(mapShiftRowToGrossPayInput(row)!.netMinutes).toBe(60);
+  });
+
+  it('annualised Security is priced as Full-Time Security whatever the role is called', () => {
+    const row = thursday3h({
+      target_employment_type: 'FT',
+      roles: { id: 'r1', name: 'Venue Supervisor' },
+      remuneration_level: 5, remuneration_levels: { level_number: 5 },
+      _payContract: { payBasis: 'eba_security_annualised', level: 4, annualSalary: null, employmentStatus: 'Full-Time', contractedWeeklyHours: 42, usesWageScheme: false },
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.isSecurityRole).toBe(true);
+    expect(input.employmentType).toBe('Full-Time');
+    expect(input.classificationLevel).toBe('LEVEL_4');
+    expect(input.higherDutiesLevel).toBe('LEVEL_5');
+  });
+
+  it('annualised Security higher duties on a Saturday: 4h at the L5 annualised rate, no weekend loading', () => {
+    // internal.shift_cost: span 3h x $38.95 + 1h cl 29.1(a) top-up x $38.95 = 155.80.
+    // The annualised rate absorbs weekend penalties (Sch 2 §2 / Sch 3 §4.1(b)).
+    const row = thursday3h({
+      shift_date: '2026-10-10',
+      target_employment_type: 'FT',
+      roles: { id: 'r1', name: 'Security Officer' },
+      remuneration_level: 5, remuneration_levels: { level_number: 5 },
+      _payContract: { payBasis: 'eba_security_annualised', level: 4, annualSalary: null, employmentStatus: 'Full-Time', contractedWeeklyHours: 42, usesWageScheme: false },
+    });
+    expect(pay(row).grossPay).toBe(155.8);
+  });
+
+  it('a Flexible Part-Time contract keeps its flexible basis on a PT shift', () => {
+    const row = thursday3h({
+      target_employment_type: 'PT',
+      _payContract: casualContract(3, { employmentStatus: 'Flexible Part-Time' }),
+    });
+    expect(mapShiftRowToGrossPayInput(row)!.employmentType).toBe('Flexible Part-Time');
+  });
+});
+
+describe('mapShiftRowToGrossPayInput — unlinked shift', () => {
+  it('takes the employment basis from the shift target, not the profile', () => {
+    const row = baseRow({ target_employment_type: 'Casual', _employmentType: 'full_time' });
+    expect(mapShiftRowToGrossPayInput(row)!.employmentType).toBe('Casual');
+  });
+
+  it('pays the shift level, with no higher duties', () => {
+    const row = baseRow({ roles: { id: 'r1', name: 'Supervisor', remuneration_level: 7 } });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.classificationLevel).toBe('LEVEL_3');
+    expect(input.higherDutiesLevel).toBeUndefined();
+    expect(input.payBasis).toBeUndefined();
+  });
+});
+
+describe('payContractOn — the linked contract on the shift date', () => {
+  const contract = {
+    id: 'c1', user_id: 'e1', employment_status: 'Casual', remuneration_level: 6,
+    pay_basis: 'eba_level', annual_salary: null, contracted_weekly_hours: null,
+    is_apprentice: false, is_trainee: false, is_sws: false,
+  };
+  const history = [
+    { contract_id: 'c1', effective_from: '2026-01-01', pay_basis: 'eba_level' as const, remuneration_level: 4, annual_salary: null },
+    { contract_id: 'c1', effective_from: '2026-09-01', pay_basis: 'eba_level' as const, remuneration_level: 6, annual_salary: null },
+  ];
+
+  it('uses the level in force on the shift date, not today’s', () => {
+    expect(payContractOn(contract, history, '2026-08-15').level).toBe(4);
+    expect(payContractOn(contract, history, '2026-10-08').level).toBe(6);
+  });
+
+  it('falls back to the contract’s current terms with no readable history', () => {
+    expect(payContractOn(contract, [], '2026-08-15').level).toBe(6);
+  });
+
+  it('flags apprentice / trainee / SWS as a wage scheme', () => {
+    expect(payContractOn({ ...contract, is_trainee: true }, [], '2026-10-08').usesWageScheme).toBe(true);
   });
 });

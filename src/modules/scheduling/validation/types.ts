@@ -31,6 +31,8 @@ export interface CandidateShift {
     organization_id?: string | null;
     department_id?: string | null;
     sub_department_id?: string | null;
+    /** The contract a committed shift is linked to (shifts.user_contract_id). */
+    user_contract_id?: string | null;
     unpaid_break_minutes?: number;
     /** Qualification IDs required to work this shift (skill IDs). */
     required_skills?: string[] | null;
@@ -245,6 +247,9 @@ export interface EmployeeInfo {
      * V8_STUDENT_VISA_LIMIT stays silent.
      */
     is_student_visa?: boolean;
+    /** Salaried employee (outside the EBA per cl 2.2). */
+    is_salaried?: boolean;
+    pay_basis?: string | null;
 }
 
 // =============================================================================

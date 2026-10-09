@@ -93,4 +93,20 @@ describe('minRestGapRule (clause 40 — cross-day only)', () => {
     // Even under the default 10h minimum, a multi-hire pair passes at 8h.
     expect(minRestGapRule(buildContext({ shifts }))).toEqual([]);
   });
+
+  it('emits an advisory WARNING (non-blocking) when employee is salaried', () => {
+    resetIdCounter();
+    const ctx = buildContext({
+      employee: { is_salaried: true },
+      shifts: [
+        buildShift({ date: '2026-06-01', start_time: '08:00', end_time: '20:00' }),
+        buildShift({ date: '2026-06-02', start_time: '05:00', end_time: '10:00' }), // 9h gap
+      ],
+    });
+    const hits = minRestGapRule(ctx);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].rule_id).toBe('V8_MIN_REST_GAP');
+    expect(hits[0].status).toBe('WARNING');
+    expect(hits[0].blocking).toBe(false);
+  });
 });

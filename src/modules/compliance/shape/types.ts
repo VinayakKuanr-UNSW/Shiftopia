@@ -202,6 +202,9 @@ export interface ShapeInput {
      */
     is_sunday?:            boolean;
     is_public_holiday?:    boolean;
+    /** Salaried employee (outside the EBA per cl 2.2). */
+    is_salaried?:          boolean;
+    pay_basis?:            string | null;
 }
 
 export interface ShapeResult {

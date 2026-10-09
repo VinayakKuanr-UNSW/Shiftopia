@@ -30,14 +30,17 @@ import type { ShiftCostBreakdown } from '../utils/cost/types';
 import type { CostCalculatorOptions } from '../utils/cost/types';
 import { detectSplitShiftEligibleIds } from '../utils/cost/split-shift-eligibility';
 import { detectRestGapBreaches } from '../utils/cost/rest-gap-breach';
-import { estimateDetailedShiftCost, extractLevel } from '../utils/cost/index';
+import {
+  estimateDetailedShiftCost,
+  resolveShiftPayInputs,
+  salariedShiftBreakdown,
+} from '../utils/cost/index';
 import type { AwardContext } from '../utils/cost/award-context';
 import { buildAwardContext } from '../utils/cost/award-context';
 import { projectPeople } from '../projectors/people.projector';
 import { projectGroup } from '../projectors/group.projector';
 import { projectEvents } from '../projectors/events.projector';
 import { projectRoles } from '../projectors/roles.projector';
-import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ── Filter Logic (mirrors utils/filters.ts but operates on DTOs) ─────────────
 
@@ -94,6 +97,50 @@ function applyFilters(shifts: WorkerShiftDTO[], filters: WorkerFilterDTO): Worke
 // ── Cost calculation with cache ──────────────────────────────────────────────
 
 
+/**
+ * Price one DTO. Who-works-it inputs come from `resolveShiftPayInputs` — the
+ * rule the cards, the budget and payroll share: the linked contract's terms
+ * when visible, else the shift's stored level (this used to guess the level
+ * from the role NAME, ignoring `remunerationLevel`, and to honour per-shift
+ * rate overrides the budget and payroll ignore).
+ */
+function priceDto(
+  shift: WorkerShiftDTO,
+  netMinutes: number,
+  extra: { allowances?: CostCalculatorOptions['allowances']; priorOrdinaryHoursThisWeek?: number },
+  ctx?: AwardContext,
+): ShiftCostBreakdown {
+  const pay = resolveShiftPayInputs({
+    payTerms: shift.payTerms,
+    remunerationLevel: shift.remunerationLevel,
+    targetEmploymentType: shift.targetEmploymentType,
+    roleName: shift.roleName,
+  });
+  if (pay.salaryHourlyRate !== undefined) {
+    return salariedShiftBreakdown(netMinutes, pay.salaryHourlyRate);
+  }
+  return estimateDetailedShiftCost({
+    netMinutes,
+    start_time: shift.startTime,
+    end_time: shift.endTime,
+    rate: null,
+    scheduled_length_minutes: shift.scheduledLengthMinutes,
+    is_overnight: shift.isOvernight,
+    is_cancelled: shift.isCancelled,
+    shift_date: shift.shiftDate,
+    allowances: extra.allowances,
+    isAnnualLeave: shift.isAnnualLeave,
+    isPersonalLeave: shift.isPersonalLeave,
+    isCarerLeave: shift.isCarerLeave,
+    previousWage: shift.previousWage,
+    employmentType: pay.employmentType,
+    isSecurityRole: pay.isSecurityRole,
+    classificationLevel: pay.classificationLevel,
+    higherDutiesLevel: pay.higherDutiesLevel,
+    priorOrdinaryHoursThisWeek: extra.priorOrdinaryHoursThisWeek,
+  } as CostCalculatorOptions, ctx);
+}
+
 export function computeCostForShift(
   shift: WorkerShiftDTO,
   netMinutes: number,
@@ -102,29 +149,15 @@ export function computeCostForShift(
   // cl 28.2 first aid follows an appointment on the PERSON, so creating or
   // ending one changes this shift's cost without touching its updated_at. Fold
   // the flag into the key, or the cache keeps serving the pre-appointment figure.
-  const key = `${makeCacheKey(shift.id, shift.updatedAtMs)}${shift.allowances?.firstAid ? ':fa' : ''}`;
+  // Contract pay terms change the same way (a progression, a new link), so
+  // they are folded in too.
+  const t = shift.payTerms;
+  const termsKey = t ? `:${t.pay_basis}:${t.substantive_level}:${t.paid_level}:${t.base_rate}` : '';
+  const key = `${makeCacheKey(shift.id, shift.updatedAtMs)}${shift.allowances?.firstAid ? ':fa' : ''}${termsKey}`;
   const cached = getCachedCost(key);
   if (cached) return cached;
 
-  const empType = shift.targetEmploymentType;
-  const result = estimateDetailedShiftCost({
-    netMinutes,
-    start_time: shift.startTime,
-    end_time: shift.endTime,
-    rate: shift.actualHourlyRate || shift.remunerationRate,
-    scheduled_length_minutes: shift.scheduledLengthMinutes,
-    is_overnight: shift.isOvernight,
-    is_cancelled: shift.isCancelled,
-    shift_date: shift.shiftDate,
-    allowances: shift.allowances ?? undefined,
-    isAnnualLeave: shift.isAnnualLeave,
-    isPersonalLeave: shift.isPersonalLeave,
-    isCarerLeave: shift.isCarerLeave,
-    previousWage: shift.previousWage,
-    employmentType: (empType === 'FT' || /full/i.test(empType as string)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType as string)) ? 'Part-Time' : (empType as any || 'Casual'),
-    isSecurityRole: isSecurityRoleName(shift.roleName),
-    classificationLevel: extractLevel(shift.roleName),
-  } as CostCalculatorOptions, ctx);
+  const result = priceDto(shift, netMinutes, { allowances: shift.allowances ?? undefined }, ctx);
 
   setCachedCost(key, result);
   return result;
@@ -147,29 +180,13 @@ export function computeCostForShiftAdjusted(
   overrides: { priorOrdinaryHoursThisWeek?: number; isSplitShiftEligible?: boolean },
   ctx?: AwardContext,
 ): ShiftCostBreakdown {
-  const empType = shift.targetEmploymentType;
   const allowances = overrides.isSplitShiftEligible
     ? { ...shift.allowances, splitShift: true }
     : (shift.allowances ?? undefined);
-  return estimateDetailedShiftCost({
-    netMinutes,
-    start_time: shift.startTime,
-    end_time: shift.endTime,
-    rate: shift.actualHourlyRate || shift.remunerationRate,
-    scheduled_length_minutes: shift.scheduledLengthMinutes,
-    is_overnight: shift.isOvernight,
-    is_cancelled: shift.isCancelled,
-    shift_date: shift.shiftDate,
+  return priceDto(shift, netMinutes, {
     allowances,
-    isAnnualLeave: shift.isAnnualLeave,
-    isPersonalLeave: shift.isPersonalLeave,
-    isCarerLeave: shift.isCarerLeave,
-    previousWage: shift.previousWage,
-    employmentType: (empType === 'FT' || /full/i.test(empType as string)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType as string)) ? 'Part-Time' : (empType as any || 'Casual'),
-    isSecurityRole: isSecurityRoleName(shift.roleName),
-    classificationLevel: extractLevel(shift.roleName),
     priorOrdinaryHoursThisWeek: overrides.priorOrdinaryHoursThisWeek,
-  } as CostCalculatorOptions, ctx);
+  }, ctx);
 }
 
 // ── Net minutes from DTO ─────────────────────────────────────────────────────

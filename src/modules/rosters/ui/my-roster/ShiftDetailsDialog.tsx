@@ -289,6 +289,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
         start_time: resolvedBillableStart.hhmm,
         end_time: resolvedBillableEnd.hhmm,
         roles: shiftData.shift.roles,
+        remuneration_level: shiftData.shift.remuneration_level,
+        shift_pay_terms: shiftData.shift.shift_pay_terms,
         employmentType: payEmploymentType,
         is_training: (shiftData.shift as any).is_training,
         unpaid_break_minutes: unpaidBreak,
@@ -297,7 +299,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     } catch {
       return null;
     }
-  }, [shiftData?.shift, resolvedBillableStart, resolvedBillableEnd, billableFloor, unpaidBreak, user?.employmentType, netLengthMinutes]);
+  }, [shiftData?.shift, resolvedBillableStart, resolvedBillableEnd, billableFloor, unpaidBreak, payEmploymentType, netLengthMinutes]);
 
   // Itemised rate-breakdown lines for both figures, via the SAME builder the
   // Timesheets card uses, so `estimatedPay`/`billablePay` below are plain
@@ -305,14 +307,17 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   // — that's what SharedShiftCard's own Variance section needs to compute a
   // Pay delta; a ReactNode there can't be parsed and silently shows "--".
   const isSecurityRoleForCost = isSecurityRoleName(shiftData?.shift?.roles?.name);
+  // A salaried shift has no per-shift pay — the salary is paid per period.
+  const formatPay = (b: { totalCost?: number; payBasis?: string } | null) =>
+    b ? (b.payBasis === 'salary' ? 'Salaried' : `$${(b.totalCost || 0).toFixed(2)}`) : null;
   const estimatedPayLines = React.useMemo(
-    () => shiftData?.shift
+    () => shiftData?.shift && costBreakdown.payBasis !== 'salary'
       ? buildOrdinaryEarningsLines(costBreakdown, { isSecurityRole: isSecurityRoleForCost, shiftDate: shiftData.shift.shift_date, startTime: shiftData.shift.start_time })
       : [],
     [costBreakdown, isSecurityRoleForCost, shiftData?.shift],
   );
   const billablePayLines = React.useMemo(
-    () => billableCostBreakdown
+    () => billableCostBreakdown && billableCostBreakdown.payBasis !== 'salary'
       ? buildOrdinaryEarningsLines(billableCostBreakdown, { isSecurityRole: isSecurityRoleForCost, shiftDate: shiftData!.shift.shift_date, startTime: resolvedBillableStart.hhmm ?? undefined })
       : [],
     [billableCostBreakdown, isSecurityRoleForCost, shiftData, resolvedBillableStart],
@@ -420,9 +425,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               adjustedEndSource={resolvedBillableEnd.source === 'missing' ? null : resolvedBillableEnd.source}
               wasToppedUpToMinEngagement={billableFloor?.wasToppedUp}
               requiredEngagementMinutes={billableFloor?.requiredMins || null}
-              estimatedPay={`$${(costBreakdown.totalCost || 0).toFixed(2)}`}
+              estimatedPay={formatPay(costBreakdown) ?? '$0.00'}
               estimatedPayBreakdown={estimatedPayLines}
-              billablePay={billableCostBreakdown ? `$${(billableCostBreakdown.totalCost || 0).toFixed(2)}` : null}
+              billablePay={formatPay(billableCostBreakdown)}
               billablePayBreakdown={billablePayLines}
               statusIcons={null}
               footerActions={

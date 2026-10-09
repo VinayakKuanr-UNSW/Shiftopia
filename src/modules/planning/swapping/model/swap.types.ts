@@ -39,7 +39,7 @@ export interface SwapRequestWithDetails extends SwapRequest {
     originalShift?: Shift & {
         roles?: {
             name: string;
-            remuneration_levels?: { hourly_rate_min: number } | null;
+            remuneration_levels?: { level_number?: number; level_name?: string; hourly_rate_min?: number } | null;
         } | null;
         departments?: { name: string } | null;
         sub_departments?: { name: string } | null;
@@ -49,7 +49,7 @@ export interface SwapRequestWithDetails extends SwapRequest {
     requestedShift?: Shift & {
         roles?: {
             name: string;
-            remuneration_levels?: { hourly_rate_min: number } | null;
+            remuneration_levels?: { level_number?: number; level_name?: string; hourly_rate_min?: number } | null;
         } | null;
         departments?: { name: string } | null;
         sub_departments?: { name: string } | null;

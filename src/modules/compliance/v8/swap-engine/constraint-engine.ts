@@ -54,6 +54,9 @@ export class V8SwapEngine {
             // and cannot say WHICH party holds the visa, so the single-party
             // assignment path resolves that fallback before it gets here.
             is_student_visa: scenario.partyA.is_student_visa,
+            is_salaried: scenario.partyA.is_salaried,
+            pay_basis: scenario.partyA.pay_basis,
+            contracts: scenario.partyA.contracts,
         };
         const shiftsA: V8Shift[] = scenario.partyA.hypothetical_schedule.map(s => ({
             ...s,
@@ -83,6 +86,9 @@ export class V8SwapEngine {
                 is_security_role: scenario.partyB.is_security_role,
                 employment_statuses: scenario.partyB.employment_statuses,
                 is_student_visa: scenario.partyB.is_student_visa,
+                is_salaried: scenario.partyB.is_salaried,
+                pay_basis: scenario.partyB.pay_basis,
+                contracts: scenario.partyB.contracts,
             };
             const shiftsB: V8Shift[] = scenario.partyB.hypothetical_schedule.map(s => ({
                 ...s,

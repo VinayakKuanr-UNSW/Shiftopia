@@ -3,6 +3,7 @@ import { estimateDetailedShiftCost } from '../../projections/utils/cost/standard
 import type { CostCalculatorOptions } from '../../projections/utils/cost/types';
 import { runProjectionPipeline } from '../../projections/pipeline/runProjectionPipeline';
 import type { WorkerShiftDTO, ProjectionRequest } from '../../projections/worker/protocol';
+import { resolveRateSet } from '../../projections/utils/cost/rate-schedule';
 
 /**
  * Weekly overtime (cl. 42) — the ordinary hours that push a member's running
@@ -102,6 +103,9 @@ describe('weekly OT — engine (cl. 42)', () => {
 
 // ── Pipeline integration ──────────────────────────────────────────────────────
 
+/** Level 4 on 2026-07-06 (FY26/27 rates): permanent and casual-loaded. */
+const L4 = resolveRateSet('2026-07-06').wageRates.LEVEL_4;
+
 let idc = 0;
 function dto(o: Partial<WorkerShiftDTO>): WorkerShiftDTO {
   return {
@@ -131,9 +135,11 @@ function dto(o: Partial<WorkerShiftDTO>): WorkerShiftDTO {
     subDepartmentId: null,
     roleId: null,
     roleName: 'Attendant',
-    remunerationLevel: null,
-    remunerationRate: 30,
-    actualHourlyRate: 30,
+    // Priced on the stored level — per-shift rate overrides are ignored
+    // (decision 2026-10-08, same as the budget SQL and payroll).
+    remunerationLevel: 4,
+    remunerationRate: null,
+    actualHourlyRate: null,
     levelName: null,
     levelNumber: null,
     groupType: null,
@@ -186,13 +192,13 @@ describe('weekly OT — pipeline accumulation (production wiring)', () => {
     const res = runProjectionPipeline(request(shifts));
     expect(res).not.toBeNull();
 
-    // Shifts 1–4 (prior 0/8/16/24) stay ordinary: 4 × 8h @ 30 = 960 (32h).
-    // Shift 5 (prior 32, room 6): 6h ordinary @30 = 180; 2h OT @1.5 = 90.
-    //   base ordinary total = 960 + 180 = 1140; overtime = 90.
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(1140, 4);
-    expect(res!.stats.costBreakdown.overtime).toBeCloseTo(90, 4);
-    // total = 1140 base + 90 OT = 1230.
-    expect(res!.stats.estimatedCost).toBeCloseTo(1230, 4);
+    // Shifts 1–4 (prior 0/8/16/24) stay ordinary: 4 × 8h = 32h.
+    // Shift 5 (prior 32, room 6): 6h ordinary; 2h OT @1.5.
+    //   base ordinary = 38h × L4; overtime = 2h × 1.5 × L4.
+    const r = L4.permanent;
+    expect(res!.stats.costBreakdown.base).toBeCloseTo(38 * r, 4);
+    expect(res!.stats.costBreakdown.overtime).toBeCloseTo(2 * 1.5 * r, 4);
+    expect(res!.stats.estimatedCost).toBeCloseTo(38 * r + 3 * r, 4);
   });
 
   it('does NOT accumulate across DIFFERENT ISO weeks (each week resets to 0)', () => {
@@ -203,21 +209,21 @@ describe('weekly OT — pipeline accumulation (production wiring)', () => {
     const shifts = [...wk1, ...wk2].map(d => dto({ shiftDate: d }));
 
     const res = runProjectionPipeline(request(shifts));
-    // 8 shifts × 8h @ 30 = 1920 ordinary, no OT (each week peaks at 32h).
+    // 8 shifts × 8h = 64h ordinary, no OT (each week peaks at 32h).
     expect(res!.stats.costBreakdown.overtime).toBeCloseTo(0, 4);
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(1920, 4);
+    expect(res!.stats.costBreakdown.base).toBeCloseTo(64 * L4.permanent, 4);
   });
 
   it('leaves casual members untouched — no weekly OT even past 38h in a week', () => {
     idc = 0;
     const dates = ['2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10'];
     const shifts = dates.map(d => dto({
-      shiftDate: d, targetEmploymentType: 'Casual', actualHourlyRate: 37.5, remunerationRate: 37.5,
+      shiftDate: d, targetEmploymentType: 'Casual',
     }));
 
     const res = runProjectionPipeline(request(shifts));
-    // 5 × 8h @ loaded casual 37.5 = 1500 ordinary, no OT.
+    // 5 × 8h at the loaded casual rate, no OT.
     expect(res!.stats.costBreakdown.overtime).toBeCloseTo(0, 4);
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(1500, 4);
+    expect(res!.stats.costBreakdown.base).toBeCloseTo(40 * L4.casual, 4);
   });
 });

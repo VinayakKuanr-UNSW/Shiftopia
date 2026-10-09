@@ -85,6 +85,41 @@ describe('buildShiftCardPay', () => {
     expect(Number(casual!.replace('$', ''))).toBeGreaterThan(Number(permanent!.replace('$', '')));
   });
 
+  // An open shift has no contract: the card shows what the VIEWER would be
+  // paid (my_shift_pay_terms, migration 20261009022054). Thursday 2026-10-08,
+  // 3h at a Level 6 shift for a viewer on a Level 4 casual contract: cl 29
+  // higher duties, 4h at L6 — the budget SQL gives 172.48 for the same shift.
+  const OPEN_L6 = {
+    id: 'open-1', shift_date: '2026-10-08', start_time: '09:00', end_time: '12:00',
+    net_length_minutes: 180, scheduled_length_minutes: 180, unpaid_break_minutes: 0,
+    remuneration_level: 6, target_employment_type: 'Casual', roles: { name: 'F&B Team Member' },
+  };
+
+  it('prices an open shift on the viewer\'s own contract', () => {
+    const mine = buildShiftCardPay({
+      ...OPEN_L6,
+      my_shift_pay_terms: {
+        pay_basis: 'eba_level', employment_type: 'Casual', substantive_level: 4,
+        paid_level: 6, higher_duties: true, base_rate: 43.12,
+      },
+    });
+    expect(mine.estimatedPay).toBe('$172.48');
+    // Without the viewer's terms it is the shift's own level: 3h at L6, no 4h minimum.
+    expect(buildShiftCardPay(OPEN_L6).estimatedPay).toBe('$129.36');
+  });
+
+  it('says "Salaried" rather than an amount for a salaried viewer', () => {
+    const salaried = buildShiftCardPay({
+      ...OPEN_L6,
+      target_employment_type: 'FT',
+      my_shift_pay_terms: {
+        pay_basis: 'salary', employment_type: 'FT', substantive_level: null,
+        paid_level: null, higher_duties: false, base_rate: 48.0769,
+      },
+    });
+    expect(salaried).toEqual({ estimatedPay: 'Salaried' });
+  });
+
   it('returns empty props rather than a wrong number when there is no shift', () => {
     expect(buildShiftCardPay(null)).toEqual({});
     expect(buildShiftCardPay(undefined)).toEqual({});

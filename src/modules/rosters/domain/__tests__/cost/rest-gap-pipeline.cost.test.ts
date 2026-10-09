@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { runProjectionPipeline } from '../../projections/pipeline/runProjectionPipeline';
 import type { WorkerShiftDTO, ProjectionRequest } from '../../projections/worker/protocol';
+import { resolveRateSet } from '../../projections/utils/cost/rate-schedule';
+
+/** Level 4 permanent on 2026-07-06 (FY26/27 rates). */
+const R = resolveRateSet('2026-07-06').wageRates.LEVEL_4.permanent;
 
 /**
  * cl 40.1 rest-gap double-time — production wiring test. Compliance audit
@@ -44,9 +48,11 @@ function dto(o: Partial<WorkerShiftDTO>): WorkerShiftDTO {
     subDepartmentId: null,
     roleId: null,
     roleName: 'Attendant',
-    remunerationLevel: null,
-    remunerationRate: 30,
-    actualHourlyRate: 30,
+    // Priced on the stored level — per-shift rate overrides are ignored
+    // (decision 2026-10-08, same as the budget SQL and payroll).
+    remunerationLevel: 4,
+    remunerationRate: null,
+    actualHourlyRate: null,
     levelName: null,
     levelNumber: null,
     groupType: null,
@@ -98,11 +104,11 @@ describe('cl 40.1 rest-gap double-time — pipeline auto-derivation (production 
     ];
     const res = runProjectionPipeline(request(shifts));
     expect(res).not.toBeNull();
-    // Shift A: 9h @ 30 = 270 (no OT, no penalty, weekday). Shift B priced normally: 8h @ 30 = 240.
-    // Rest-gap floor on B: effective 30/hr < double-time 60/hr -> top-up (60-30)*8 = 240.
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(270 + 240, 5); // 510
-    expect(res!.stats.costBreakdown.penalty).toBeCloseTo(240, 5); // the double-time top-up
-    expect(res!.stats.estimatedCost).toBeCloseTo(270 + 240 + 240, 5); // 750
+    // Shift A: 9h (no OT, no penalty, weekday). Shift B priced normally: 8h.
+    // Rest-gap floor on B: effective R/hr < double-time 2R/hr -> top-up (2R-R)*8.
+    expect(res!.stats.costBreakdown.base).toBeCloseTo(9 * R + 8 * R, 5);
+    expect(res!.stats.costBreakdown.penalty).toBeCloseTo(8 * R, 5); // the double-time top-up
+    expect(res!.stats.estimatedCost).toBeCloseTo(9 * R + 8 * R + 8 * R, 5);
   });
 
   it('does not apply the floor when the gap is a full 10h or more', () => {
@@ -142,11 +148,11 @@ describe('cl 40.1 rest-gap double-time — pipeline auto-derivation (production 
     const shifts = [
       dto({
         shiftDate: '2026-07-06', startTime: '12:00', endTime: '21:00',
-        targetEmploymentType: 'Casual', actualHourlyRate: 37.5, remunerationRate: 37.5,
+        targetEmploymentType: 'Casual',
       }),
       dto({
         shiftDate: '2026-07-07', startTime: '06:00', endTime: '14:00',
-        targetEmploymentType: 'Casual', actualHourlyRate: 37.5, remunerationRate: 37.5,
+        targetEmploymentType: 'Casual',
       }),
     ];
     const res = runProjectionPipeline(request(shifts));

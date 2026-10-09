@@ -254,13 +254,16 @@ export function buildTeamDayCells(
                 date,
                 state,
                 note: mixedEngagementNote(member, state),
-                windows: dayAvail?.availableWindows ?? [],
-                shifts: dayShifts.map((s) => ({
-                    id: s.id,
-                    start: s.startTime,
-                    end: s.endTime,
-                    roleName: s.roleName,
-                })),
+                windows: state === 'available' ? (dayAvail?.availableWindows ?? []) : [],
+                shifts:
+                    state === 'assigned'
+                        ? dayShifts.map((s) => ({
+                              id: s.id,
+                              start: s.startTime,
+                              end: s.endTime,
+                              roleName: s.roleName,
+                          }))
+                        : [],
             });
         }
         out.set(member.profileId, byDate);

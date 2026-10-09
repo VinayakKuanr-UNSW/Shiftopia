@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { getSydneyNow, isSydneyToday } from '@/modules/core/lib/date.utils';
 import { WeekStrip } from '@/modules/core/ui/calendar';
 import { cn } from '@/modules/core/lib/utils';
+import { getPublicHolidayName, isPublicHoliday } from '@/modules/core/lib/holidays';
 
 export const HOUR_HEIGHT = 48;
 export const TIME_LABEL_WIDTH = 56;
@@ -77,12 +78,15 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
             {/* Day columns with grid cells */}
             {days.map((day) => {
               const isTodayCol = isSydneyToday(day);
+              const holidayName = isPublicHoliday(day) ? getPublicHolidayName(day) : null;
               return (
                 <div
                   key={day.toISOString()}
                   className={cn(
                     'flex-1 border-r border-border last:border-r-0',
-                    isTodayCol && 'bg-primary/[0.02]'
+                    holidayName
+                      ? 'bg-amber-500/10 dark:bg-amber-500/15 border-r-amber-500/20'
+                      : isTodayCol && 'bg-primary/[0.02]'
                   )}
                 >
                   {hours.map((hour) => (

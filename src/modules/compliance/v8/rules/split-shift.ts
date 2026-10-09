@@ -1,5 +1,6 @@
 import { V8Hit, V8RuleEvaluator } from '../types';
 import { consecutivePairs, shiftStartDate } from '../utils/rest-gap';
+import { isSalariedShift } from '../utils/governing-contract';
 
 /**
  * V8 Rule: Split Shift (ICC EBA clause 39)
@@ -48,6 +49,9 @@ export const splitShiftRule: V8RuleEvaluator = (ctx) => {
         // Never re-flag pure committed history — only when the current
         // operation touches at least one side of the pair.
         if (a.is_candidate === false && b.is_candidate === false) continue;
+        // Salaried engagements are outside the EBA (cl 2.2) — but only a pair
+        // worked entirely under salary is; one EBA side keeps the rule.
+        if (isSalariedShift(employee, a) && isSalariedShift(employee, b)) continue;
         if (gapMinutes <= SPLIT_SHIFT_MAX_GAP_MINUTES) continue;        // compliant split shift → allowance (payroll)
 
         const gapHours = Math.round((gapMinutes / 60) * 10) / 10;

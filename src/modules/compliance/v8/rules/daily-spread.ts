@@ -1,5 +1,6 @@
 import { V8Hit, V8RuleEvaluator, V8Shift } from '../types';
 import { parseTimeToMinutes, normalizedEndMinutes } from '../utils/time';
+import { isSalariedShift } from '../utils/governing-contract';
 
 /**
  * V8 Rule: Daily Spread — two clauses, two populations, two measures.
@@ -115,7 +116,9 @@ export const dailySpreadRule: V8RuleEvaluator = (ctx) => {
             // cl 39.2 — NET of meal and rest breaks.
             const net = Math.max(0, day.gross - day.breaks);
             if (net > DAILY_SPREAD_LIMIT_MINUTES) {
-                hits.push({
+                // Advisory only when every engagement that day is outside the EBA.
+                const isSalaried = day.shifts.every(s => isSalariedShift(employee, s));
+                const hit: V8Hit = {
                     rule_id: 'V8_SPLIT_SHIFT_SPREAD',
                     rule_name: 'Split-Shift Spread',
                     status: 'BLOCKING',
@@ -136,7 +139,14 @@ export const dailySpreadRule: V8RuleEvaluator = (ctx) => {
                         measure: 'net',
                         date: day.date,
                     },
-                });
+                };
+                if (isSalaried) {
+                    hit.status = 'WARNING';
+                    hit.blocking = false;
+                    hit.summary = `Advisory: ${hit.summary}`;
+                    hit.details += ' Salaried staff are outside EBA cl 39; spread limit is advisory.';
+                }
+                hits.push(hit);
             }
             continue;
         }

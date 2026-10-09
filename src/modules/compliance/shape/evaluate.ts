@@ -287,6 +287,8 @@ export function evaluateShiftShape(
         });
     }
 
+    const isSalaried = !!(input.is_salaried || input.pay_basis === 'salary');
+
     // ── SHAPE_MIN_ENGAGEMENT_PH (cl 56.2) ────────────────────────────────────
     // "A Team Member working on a public holiday will be rostered to work for a
     // minimum period of four (4) consecutive hours or receive a minimum payment
@@ -302,7 +304,7 @@ export function evaluateShiftShape(
         && netMinutes < config.public_holiday_min_engagement_minutes) {
         const req = config.public_holiday_min_engagement_minutes;
         const end = minutesToTime(startMinutes + req + (isSecurity ? 0 : unpaidBreak));
-        hits.push({
+        const hit: ShapeHit = {
             rule_id:   'SHAPE_MIN_ENGAGEMENT_PH',
             rule_name: 'Public Holiday Minimum Engagement',
             status:    'BLOCKING',
@@ -316,8 +318,16 @@ export function evaluateShiftShape(
                 required_minutes: req,
                 is_public_holiday: true,
                 eba_clause: 'cl 56.2',
+                is_salaried: isSalaried,
             },
-        });
+        };
+        if (isSalaried) {
+            hit.status = 'WARNING';
+            hit.blocking = false;
+            hit.summary = `Advisory: ${hit.summary}`;
+            hit.details += ' Salaried staff are outside EBA cl 56.2; floor is advisory.';
+        }
+        hits.push(hit);
     }
 
     // ── Minimum length — which rule applies depends on the employment target ──
@@ -337,7 +347,7 @@ export function evaluateShiftShape(
         // FT day and the two readings coincide.
         if (netMinutes < config.ft_min_ordinary_day_minutes) {
             const shortfall = config.ft_min_ordinary_day_minutes - netMinutes;
-            hits.push({
+            const hit: ShapeHit = {
                 rule_id:   'SHAPE_FT_MIN_DAY',
                 rule_name: 'Full-Time Minimum Ordinary Day',
                 status:    'BLOCKING',
@@ -355,8 +365,16 @@ export function evaluateShiftShape(
                     required_minutes: config.ft_min_ordinary_day_minutes,
                     shortfall_minutes: shortfall,
                     eba_clause: 'cl 35.1(c)',
+                    is_salaried: isSalaried,
                 },
-            });
+            };
+            if (isSalaried) {
+                hit.status = 'WARNING';
+                hit.blocking = false;
+                hit.summary = `Advisory: ${hit.summary}`;
+                hit.details += ' Salaried staff are outside EBA cl 35.1(c); floor is advisory.';
+            }
+            hits.push(hit);
         }
     } else {
         // ── SHAPE_MIN_ENGAGEMENT (cl 12.3(e) / 12.4(c) / 12.5(c)) ────────────
@@ -369,7 +387,7 @@ export function evaluateShiftShape(
         });
 
         if (netMinutes < requiredMins) {
-            hits.push({
+            const hit: ShapeHit = {
                 rule_id:   'SHAPE_MIN_ENGAGEMENT',
                 rule_name: 'Minimum Engagement',
                 status:    'BLOCKING',
@@ -389,8 +407,16 @@ export function evaluateShiftShape(
                     is_training: isTraining,
                     is_sunday: isSunday,
                     is_public_holiday: isPH,
+                    is_salaried: isSalaried,
                 },
-            });
+            };
+            if (isSalaried) {
+                hit.status = 'WARNING';
+                hit.blocking = false;
+                hit.summary = `Advisory: ${hit.summary}`;
+                hit.details += ' Salaried staff are outside EBA min engagement; floor is advisory.';
+            }
+            hits.push(hit);
         }
     }
 

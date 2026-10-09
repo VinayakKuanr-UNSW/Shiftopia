@@ -48,6 +48,8 @@ function candidateToRosterShift(s: CandidateShift): RosterShift {
         end_time: s.end_time,
         unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
         role_id: s.role_id ?? undefined,
+        sub_department_id: s.sub_department_id ?? null,
+        user_contract_id: s.user_contract_id ?? null,
         is_training: s.lifecycle_status === 'TRAINING', // If applicable
         // Explicit field mappers like this one are where per-shift rule inputs
         // go missing: V8_EMPLOYMENT_TARGET is guarded on the target being
@@ -107,6 +109,9 @@ export class ComplianceEvaluator {
                 // the AutoScheduler no matter what the loader hydrated.
                 is_security_role: employee.is_security_role,
                 is_student_visa:  employee.is_student_visa,
+                is_salaried:      employee.is_salaried,
+                pay_basis:        employee.pay_basis,
+                contracts:        employee.contracts,
             },
         });
 

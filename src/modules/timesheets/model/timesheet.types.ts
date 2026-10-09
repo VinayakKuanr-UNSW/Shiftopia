@@ -7,6 +7,8 @@
  * REJECTED -> DRAFT
  * APPROVED -> LOCKED
  */
+import type { ShiftPayTermsField } from '@/modules/rosters/domain/projections/utils/cost/types';
+
 export type TimesheetStatus =
     | "DRAFT"
     | "SUBMITTED"
@@ -55,6 +57,10 @@ export interface TimesheetRow {
     subGroup: string;
     role: string;
     remunerationLevel: string;
+    /** The shift's stored level as a number (0 = Introductory) — what the cost engine prices on. */
+    remunerationLevelNumber?: number | null;
+    /** The linked contract's pay terms, when the viewer may see them (shifts.shift_pay_terms). */
+    payTerms?: ShiftPayTermsField | null;
     // Scheduled
     scheduledStart: string;
     scheduledEnd: string;

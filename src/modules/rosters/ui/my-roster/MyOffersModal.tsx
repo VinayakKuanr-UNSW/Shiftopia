@@ -86,7 +86,7 @@ interface OfferData {
         offer_expires_at?: string | null;
         remuneration_levels?: {
             level_name: string;
-            hourly_rate_min: number;
+            hourly_rate_min?: number;
             hourly_rate_max?: number;
             level_number?: number;
         } | null;

@@ -33,6 +33,8 @@ export interface ExistingContract {
     employment_status: string | null;
     contracted_weekly_hours: number | string | null;
     status: string | null;
+    /** Not used by the ceiling — carried for the cl 13 multi-hire check. */
+    role_id?: string | null;
 }
 
 export interface CapacityResult {

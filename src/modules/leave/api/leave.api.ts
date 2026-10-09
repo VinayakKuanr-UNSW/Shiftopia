@@ -50,30 +50,21 @@ export async function getLeaveBalances(employeeId: string): Promise<LeaveBalance
  * falling back to the general 152h/76h rates (audit H-9).
  */
 export async function isFullTimeSecurityEmployee(employeeId: string): Promise<boolean> {
-  // BUG THIS FIXES: the contract lookup used `.maybeSingle()`, which ERRORS
-  // (PGRST116) as soon as a second Active row exists — and 30 of 103 people in
-  // production hold more than one Active contract. Every one of them resolved
-  // to `false` and was shown the general 152h/76h accrual instead of Schedule
-  // 3's 210h/84h, with no error surfaced anywhere.
-  //
-  // Resolution now goes through the shared basis reader, so "which of this
-  // person's contracts counts" is answered the same way here as it is for the
-  // hours rules and the availability page.
-  const basis = await fetchContractBasis(employeeId);
-  if (basis.isError || basis.contractType !== 'FT' || basis.roleIds.length === 0) return false;
+  const { data: contracts, error } = await supabase
+    .from('user_contracts')
+    .select('employment_status, pay_basis, roles(name)')
+    .eq('user_id', employeeId)
+    .eq('status', 'Active');
+  if (error || !contracts?.length) return false;
 
-  const { data: roles, error: roleErr } = await (supabase as any)
-    .from('roles')
-    .select('name')
-    .in('id', basis.roleIds);
-  if (roleErr || !roles?.length) return false;
-
-  // Any Security role across their Active contracts qualifies — the DB's
-  // `accrue_leave_balances()` joins contract to role without deduplicating, so
-  // a person holding one Security and one non-Security contract accrues at the
-  // Schedule 3 rate there too.
-  return roles.some((r: { name?: string | null }) =>
-    isSecurityRoleName(r?.name));
+  return contracts.some((c: any) => {
+    const isFt = /full/i.test(c.employment_status ?? '');
+    if (!isFt) return false;
+    if (c.pay_basis === 'eba_security_annualised') return true;
+    if (c.pay_basis === 'salary') return false;
+    const roleName = c.roles?.name ?? '';
+    return isSecurityRoleName(roleName);
+  });
 }
 
 function mapBalanceRow(row: any): LeaveBalance {
