@@ -172,7 +172,6 @@ export const TimesheetPage: React.FC = () => {
         role: shift.roleName,
         remunerationLevel: shift.remunerationLevel || '',
         remunerationLevelNumber: shift.remunerationLevelNumber,
-        payTerms: shift.payTerms,
         scheduledStart: shift.scheduledStart,
         scheduledEnd: shift.scheduledEnd,
         clockIn: formatClockDisplay(shift.clockIn),
@@ -194,9 +193,6 @@ export const TimesheetPage: React.FC = () => {
         netLengthMinutes: shift.netLengthMinutes,
         paidBreak: String(shift.paidBreakMinutes),
         unpaidBreak: String(shift.unpaidBreakMinutes),
-        approximatePay: shift.payBasis === 'salary'
-            ? 'Salaried'
-            : shift.estimatedPay ? `$${shift.estimatedPay.toFixed(2)}` : '-',
         differential: shift.varianceMinutes ? String(shift.varianceMinutes) : '0',
         varianceMinutes: shift.varianceMinutes,
         clockInVarianceMinutes: shift.clockInVarianceMinutes,

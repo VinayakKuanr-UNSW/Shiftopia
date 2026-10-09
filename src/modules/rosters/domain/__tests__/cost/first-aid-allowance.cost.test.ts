@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { estimateDetailedShiftCost as securityCost } from '../../projections/utils/cost/security';
 import { estimateDetailedCostFromShift } from '../../projections/utils/cost/index';
 import { resolveShiftAllowances } from '../../projections/utils/cost/shift-allowances';
-import { shiftToDTO } from '../../projections/worker/mappers';
 import type { CostCalculatorOptions } from '../../projections/utils/cost/types';
-import type { Shift } from '../../shift.entity';
 
 /**
  * cl 28.2 — "A Team Member holding a first aid qualification ... and who is
@@ -100,25 +98,5 @@ describe('legacy cost wrappers read the computed field off a raw shift row', () 
     const without = estimateDetailedCostFromShift(row(false));
     expect(withAid.totalCost - without.totalCost).toBeGreaterThan(0);
     expect(withAid.totalCost - without.totalCost).toBeCloseTo(without.ordinaryHours * 0.56, 2);
-  });
-});
-
-describe('projection worker DTO carries the flag into the pipeline', () => {
-  const minimalShift = (isFirstAid: boolean | undefined) => ({
-    id: 'shift-1',
-    updated_at: '2026-06-29T00:00:00Z',
-    shift_date: '2026-06-29',
-    start_time: '09:00',
-    end_time: '17:00',
-    lifecycle_status: 'Published',
-    is_first_aid_duty: isFirstAid,
-  }) as unknown as Shift;
-
-  it('maps is_first_aid_duty onto allowances.firstAid', () => {
-    expect(shiftToDTO(minimalShift(true)).allowances).toEqual({ firstAid: true });
-  });
-
-  it('a row that never selected the field is not treated as appointed', () => {
-    expect(shiftToDTO(minimalShift(undefined)).allowances).toBeNull();
   });
 });

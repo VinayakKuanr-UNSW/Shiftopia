@@ -34,12 +34,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 // Domain
-import { shiftsQueries } from "../api/shifts.queries";
 import { rostersApi } from "../api/rosters.api";
 import { shiftKeys } from "../api/queryKeys";
 import { useShiftsByDate } from "../state/useRosterShifts";
 import type { Shift } from "../domain/shift.entity";
-import { resolveRateSet } from "../domain/projections/utils/cost/rate-schedule";
 
 // Scope
 import { useScopeFilter } from "@/platform/auth/useScopeFilter";
@@ -93,7 +91,6 @@ import {
   ChevronDown,
   ChevronRight,
   Database,
-  DollarSign,
   Eye,
   GitBranch,
   Info,
@@ -182,10 +179,6 @@ function shiftNetMinutes(shift: Shift): number {
 
 const isRequired = (s: Shift) => s.lifecycle_status !== "Cancelled";
 const isAssigned = (s: Shift) => !!s.assigned_employee_id;
-
-function formatCurrency(n: number): string {
-  return `$${n.toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
 
 /* =============================================================
    TYPES
@@ -923,13 +916,6 @@ const LaborDemandForecastingPage: React.FC = () => {
     gcTime: Infinity,
   });
 
-  // ── Data: Remuneration Levels ────────────────────────────────
-  const { data: remunerationLevels = [] } = useQuery({
-    queryKey: shiftKeys.lookups.remunerationLevels(),
-    queryFn: () => shiftsQueries.getRemunerationLevels(),
-    staleTime: 5 * 60_000,
-  });
-
   // ── Preview & Cache State ────────────────────────────────────
   // Phase 5: preview is gated — ML call only fires after user clicks "Generate Shift Preview".
   // We track the specific scope/date the preview was requested for to avoid auto-generation on switch.
@@ -1261,41 +1247,6 @@ const LaborDemandForecastingPage: React.FC = () => {
     previewResponse?.suggestedDeletions,
     rolesInScope,
   ]);
-
-  // ── Computation: Budget ──────────────────────────────────────
-  const budgetData = useMemo(() => {
-    const getAvgRate = (shift: Shift): number => {
-      if (shift.remuneration_rate) return Number(shift.remuneration_rate);
-      const lvlNum = shift.remuneration_level ?? (shift.remuneration_levels as any)?.level_number;
-      if (lvlNum != null) {
-        const rateSet = resolveRateSet(shift.shift_date || '2026-07-01');
-        const key = lvlNum === 0 ? 'TRAINEE' : (`LEVEL_${lvlNum}` as keyof typeof rateSet.wageRates);
-        const rates = rateSet.wageRates[key];
-        if (rates) return (rates.permanent + rates.casual) / 2;
-      }
-      return 28; // enterprise default
-    };
-
-    const currentSpend = shifts.filter(isAssigned).reduce((sum, s) => {
-      return sum + (shiftNetMinutes(s) / 60) * getAvgRate(s);
-    }, 0);
-
-    const projectedAdd = shifts
-      .filter((s) => isRequired(s) && !isAssigned(s))
-      .reduce((sum, s) => {
-        return sum + (shiftNetMinutes(s) / 60) * getAvgRate(s);
-      }, 0);
-
-    const budgetCap = 30_000;
-    return {
-      currentSpend: Math.round(currentSpend),
-      projectedTotal: Math.round(currentSpend + projectedAdd),
-      variance: Math.round(projectedAdd),
-      budgetCap,
-      withinBudget: currentSpend + projectedAdd <= budgetCap,
-      pct: Math.min(100, ((currentSpend + projectedAdd) / budgetCap) * 100),
-    };
-  }, [shifts, remunerationLevels]);
 
   // ── Mutations (Phase 5) ──────────────────────────────────────
   const generateMutation = useGenerateShifts();
@@ -2269,14 +2220,6 @@ const LaborDemandForecastingPage: React.FC = () => {
                             Hrs
                           </span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Projected Cost Add.
-                          </span>
-                          <span className="font-bold text-emerald-400">
-                            +{formatCurrency(budgetData.variance)}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   )}
@@ -2416,8 +2359,10 @@ const LaborDemandForecastingPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* ===================== COMPLIANCE + BUDGET ===================== */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* ===================== COMPLIANCE ===================== */}
+              {/* No budget panel: labour cost and budget are shown in Gross Pay
+                  alone (decision 2026-10-09). */}
+              <div className="grid grid-cols-1 gap-4">
                 {/* Compliance Preview */}
                 <div className="bg-card border border-border/60 rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-4">
@@ -2466,82 +2411,6 @@ const LaborDemandForecastingPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                </div>
-
-                {/* Budget Impact */}
-                <div className="bg-card border border-border/60 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">
-                        Budget Impact
-                      </span>
-                    </div>
-                    <span
-                      className={cn(
-                        "text-xs font-semibold px-2.5 py-1 rounded-full border",
-                        budgetData.withinBudget
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          : "bg-red-500/15 text-red-400 border-red-500/30",
-                      )}
-                    >
-                      {budgetData.withinBudget
-                        ? "Within Budget"
-                        : "Over Budget"}
-                    </span>
-                  </div>
-                  {isLoading ? (
-                    <div className="animate-pulse space-y-3">
-                      <div className="h-8 bg-muted rounded" />
-                      <div className="h-3 bg-muted rounded w-full" />
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-3 gap-4 mb-3">
-                        {[
-                          {
-                            label: "Current Spend",
-                            value: formatCurrency(budgetData.currentSpend),
-                            color: "text-foreground",
-                          },
-                          {
-                            label: "Projected Total",
-                            value: formatCurrency(budgetData.projectedTotal),
-                            color: "text-foreground",
-                          },
-                          {
-                            label: "Variance",
-                            value: `+${formatCurrency(budgetData.variance)}`,
-                            color: "text-emerald-400",
-                          },
-                        ].map(({ label, value, color }) => (
-                          <div key={label}>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
-                              {label}
-                            </p>
-                            <p className={cn("text-xl font-bold", color)}>
-                              {value}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
-                        <div
-                          className={cn(
-                            "h-full rounded-full transition-all duration-500",
-                            budgetData.withinBudget
-                              ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
-                              : "bg-gradient-to-r from-red-500 to-red-400",
-                          )}
-                          style={{ width: `${budgetData.pct}%` }}
-                        />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1.5">
-                        {budgetData.pct.toFixed(1)}% of{" "}
-                        {formatCurrency(budgetData.budgetCap)} budget cap
-                      </p>
-                    </>
-                  )}
                 </div>
               </div>
 

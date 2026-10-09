@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ArrowLeft, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
@@ -15,7 +15,11 @@ import { format } from 'date-fns';
 
 const AnalysisPage: React.FC = () => {
   const { metricId } = useParams<{ metricId: string }>();
+  const navigate = useNavigate();
   const { scope } = useScopeFilter('managerial');
+  // Labour cost lives in Gross Pay alone (decision 2026-10-09): an old
+  // bookmark to its analysis fetches nothing and points there instead.
+  const isLabourCost = metricId === 'estimated-cost';
   const [searchParams] = useSearchParams();
 
   // The period travels in the URL from the tile that opened this page. Without
@@ -36,7 +40,19 @@ const AnalysisPage: React.FC = () => {
     deptIds: scope.dept_ids.length ? scope.dept_ids : undefined,
   }), [period, scope]);
 
-  const { data: liveData, isLoading } = useMetricAnalysis(metricId, filters);
+  const { data: liveData, isLoading } = useMetricAnalysis(isLabourCost ? undefined : metricId, filters);
+
+  if (isLabourCost) {
+    return (
+      <PageState
+        state="empty"
+        scope="page"
+        title="Labour cost is in Gross Pay"
+        description="Labour cost by department, sub-department, role and employee — against budget — is under Gross Pay → Labour cost."
+        action={{ label: 'Open labour cost', onClick: () => navigate('/management/payroll?tab=labour') }}
+      />
+    );
+  }
 
   if (!metricId) {
     return (

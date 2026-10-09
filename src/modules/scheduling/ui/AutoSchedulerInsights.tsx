@@ -5,10 +5,13 @@
  * now runs ONE fixed lexicographic policy (coverage » wellbeing guardrails »
  * cost), so instead of asking the manager to tune weights we SHOW them:
  *
- *   • U2 — a four-pillar scorecard (Coverage / Fairness / Fatigue / Cost),
+ *   • U2 — a scorecard (Coverage / Wellbeing / Fairness / Compliance),
  *   • U5 — a constraint banner explaining any shifts left uncovered,
  *   • U3 — a Pareto "what-if" trade-off explorer (radar) comparing the chosen
- *          roster to the cheapest / most-balanced alternatives.
+ *          roster to the cost-first / most-balanced alternatives.
+ *
+ * No dollar figures: labour cost is shown in Gross Pay alone (decision
+ * 2026-10-09). The solver still optimises cost as its last tier.
  *
  * All data comes from the solver via AutoSchedulerResult (pillars,
  * bindingConstraints, alternatives). Purely presentational.
@@ -18,7 +21,7 @@ import { motion } from 'framer-motion';
 import {
     Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend,
 } from 'recharts';
-import { AlertTriangle, ShieldCheck, Scale, BatteryCharging, DollarSign, CalendarCheck } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, Scale, BatteryCharging, CalendarCheck } from 'lucide-react';
 import { Card } from '@/modules/core/ui/primitives/card';
 import { Alert, AlertDescription, AlertTitle } from '@/modules/core/ui/primitives/alert';
 import type {
@@ -35,9 +38,6 @@ function band(score: number): { text: string; bar: string; chip: string } {
 // Cost is a $ value, not a 0-100 score — give it a neutral (non-graded) treatment
 // so it reads as "a figure", not "a passing grade".
 const NEUTRAL_BAND = { text: 'text-sky-600 dark:text-sky-400', bar: 'bg-sky-500', chip: 'bg-sky-500/10 text-sky-600 dark:text-sky-400' };
-
-const fmtMoney = (n: number) =>
-    new Intl.NumberFormat(undefined, { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n);
 
 // ── one pillar card — the SINGLE uniform metric card used across the scorecard ──
 // `score` (0-100) drives the colour band, the "/100" chip and the bar fill.
@@ -116,16 +116,12 @@ export function AutoSchedulerInsights({
             { key: 'chosen', label: 'Chosen', pillars },
             ...alternatives.map(a => ({ key: a.key, label: a.label, pillars: a.pillars })),
         ];
-        // Cost → a 0-100 "cost value" where the cheapest option scores 100.
-        const costs = options.map(o => o.pillars.cost.total);
-        const minCost = Math.min(...costs);
-        const maxCost = Math.max(...costs, minCost + 1);
-        const costScore = (c: number) => 100 - Math.round(((c - minCost) / (maxCost - minCost)) * 100);
+        // No cost axis: labour cost is shown in Gross Pay alone (decision
+        // 2026-10-09). The solver still weighs it as its last tier.
         const rows = [
             toRadarRow('Coverage', p => p.coverage.score, options),
             toRadarRow('Fairness', p => p.fairness.score, options),
             toRadarRow('Wellbeing', p => p.fatigue.score, options),
-            { axis: 'Cost value', ...Object.fromEntries(options.map(o => [o.key, costScore(o.pillars.cost.total)])) },
         ];
         return { rows, options };
     }, [pillars, alternatives]);
@@ -133,7 +129,6 @@ export function AutoSchedulerInsights({
     if (!pillars) return null;
 
     const cheapest = alternatives.find(a => a.key === 'cheapest');
-    const costDelta = cheapest ? pillars.cost.total - cheapest.pillars.cost.total : 0;
     const fairnessDelta = cheapest ? pillars.fairness.score - cheapest.pillars.fairness.score : 0;
 
     // Compliance pass-rate — folded into the single scorecard as a 5th pillar
@@ -174,8 +169,9 @@ export function AutoSchedulerInsights({
                 single source of truth: the old second stats grid (Total Cost /
                 Avg Fatigue / Uncovered / Coverage / Compliance) duplicated four of
                 these and split fatigue into two conflicting numbers, so it was
-                removed. Per-person fatigue/cost live in the staff table below. */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                removed. Per-person fatigue lives in the staff table below. Labour
+                cost is shown in Gross Pay alone (decision 2026-10-09). */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <PillarCard
                     index={0}
                     icon={<CalendarCheck className="h-3.5 w-3.5" />}
@@ -212,14 +208,6 @@ export function AutoSchedulerInsights({
                     value={`${compliancePct}%`}
                     sub={`${result.passing}/${result.totalProposals} passing`}
                 />
-                <PillarCard
-                    index={4}
-                    icon={<DollarSign className="h-3.5 w-3.5" />}
-                    label="Labour cost"
-                    unit="AUD"
-                    value={fmtMoney(pillars.cost.total)}
-                    sub={`${fmtMoney(pillars.cost.avg_per_shift)}/shift avg`}
-                />
             </div>
 
             {/* U5 — constraint banner */}
@@ -243,14 +231,10 @@ export function AutoSchedulerInsights({
                 <Card className="border-border bg-card p-4">
                     <h4 className="mb-1.5 text-sm font-semibold text-foreground">What else was possible?</h4>
                     <p className="text-xs leading-relaxed text-muted-foreground">
-                        The <span className="font-medium text-amber-600 dark:text-amber-400">cheapest</span> roster
-                        would
-                        {costDelta > 0
-                            ? <> have saved <span className="font-semibold text-foreground">{fmtMoney(costDelta)}</span></>
-                            : <> have cost about the same</>}
+                        The <span className="font-medium text-amber-600 dark:text-amber-400">cost-first</span> roster
                         {fairnessDelta > 0
-                            ? <>, but fairness drops <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
-                            : <>.</>}
+                            ? <> drops fairness by <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
+                            : <> scores about the same on fairness.</>}
                         {' '}This roster is optimised for wellbeing before cost.
                     </p>
                 </Card>
@@ -288,16 +272,13 @@ export function AutoSchedulerInsights({
                         <div className="text-xs text-muted-foreground max-w-[16rem] space-y-2">
                             {cheapest && (
                                 <p>
-                                    The <span className="font-medium text-amber-600 dark:text-amber-400">cheapest</span> roster would
-                                    {costDelta > 0
-                                        ? <> save <span className="font-semibold text-foreground">{fmtMoney(costDelta)}</span></>
-                                        : <> cost about the same</>}
+                                    The <span className="font-medium text-amber-600 dark:text-amber-400">cost-first</span> roster
                                     {fairnessDelta > 0
-                                        ? <>, but fairness drops <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
-                                        : <>.</>}
+                                        ? <> drops fairness by <span className="font-semibold text-foreground">{fairnessDelta} pts</span>.</>
+                                        : <> scores about the same on fairness.</>}
                                 </p>
                             )}
-                            <p>Higher is better on every axis (cost shown as value-for-money). The chosen roster is optimised for wellbeing before cost.</p>
+                            <p>Higher is better on every axis. The chosen roster is optimised for wellbeing before cost.</p>
                         </div>
                     </div>
                 </Card>

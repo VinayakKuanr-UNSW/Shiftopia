@@ -107,11 +107,7 @@ const SORT_LABELS: Record<SortField, string> = {
     fatigue: 'Fatigue',
     shifts: 'Shifts',
     compliance: 'Compliance',
-    cost: 'Est. cost',
 };
-
-const money = (n: number) =>
-    new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n || 0);
 
 /* ═══════════════════════════════════════════════════════════════════════
    PRIMITIVES
@@ -340,7 +336,7 @@ const StaffCard: React.FC<{ group: EmployeeGroup }> = ({ group }) => {
                 />
             </button>
 
-            <div className="grid grid-cols-3 gap-3 border-t border-border/60 px-3 py-2.5">
+            <div className="grid grid-cols-2 gap-3 border-t border-border/60 px-3 py-2.5">
                 <div className="min-w-0">
                     <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
                         Utilisation
@@ -356,7 +352,6 @@ const StaffCard: React.FC<{ group: EmployeeGroup }> = ({ group }) => {
                     </div>
                 </div>
                 <Metric label="Fatigue" value={group.avgFatigue.toFixed(1)} className={fatigueTone} />
-                <Metric label="Est. cost" value={money(group.totalCost)} />
             </div>
 
             {expanded && (

@@ -25,7 +25,6 @@
  */
 
 import type { TemplateGroupType } from '../../shift.entity';
-import type { ShiftCostBreakdown, ShiftPayTermsField } from '../utils/cost/types';
 
 // ── Projection Modes ──────────────────────────────────────────────────────────
 
@@ -77,10 +76,6 @@ export interface WorkerShiftDTO {
   roleId: string | null;
   roleName: string | null;
   remunerationLevel: number | null;
-  remunerationRate: number | null;
-  actualHourlyRate: number | null;
-  /** The linked contract's pay terms (shifts.shift_pay_terms) when visible. */
-  payTerms?: ShiftPayTermsField | null;
 
   // ── Level info (denormalised from join) ──
   levelName: string | null;
@@ -96,27 +91,6 @@ export interface WorkerShiftDTO {
 
   // ── Events ──
   eventIds: string[];
-
-  // ── Cost engine inputs ──
-  targetEmploymentType: string | null;
-  allowances: {
-    meal?: boolean;
-    firstAid?: boolean;
-    proteinSpill?: boolean;
-    splitShift?: boolean;
-  } | null;
-  isAnnualLeave?: boolean;
-  isPersonalLeave?: boolean;
-  isCarerLeave?: boolean;
-  previousWage?: number;
-
-  // ── Weekly overtime (cl 42) — pipeline-computed, NOT mapper-populated ──────
-  // Ordinary hours the assigned member already banked earlier in the SAME ISO
-  // week (before this shift). This is inherently cross-shift: a single shift has
-  // no way to know it in isolation, so `shiftToDTO` leaves it undefined and the
-  // pipeline fills it in `buildStats` after grouping each employee's shifts by
-  // ISO week and ordering them. Undefined ⇒ the engine's weekly OT stays OFF.
-  priorOrdinaryHoursThisWeek?: number;
 
   // ── Roster structure ──
   rosterSubgroupId: string | null;
@@ -273,15 +247,6 @@ export interface ProjectedShiftResult {
   /** Unpaid break minutes — retained so fatigue can be recomputed post-merge.
    *  Only the people projector populates it; optional for other modes. */
   unpaidBreakMinutes?: number;
-  estimatedCost: number;
-  costBreakdown: {
-    base: number;
-    penalty: number;
-    overtime: number;
-    allowance: number;
-    leave: number;
-  };
-  detailedCost: ShiftCostBreakdown;
   stateId: string;
   roleName: string;
   roleId: string | null;
@@ -303,7 +268,6 @@ export interface ProjectedShiftResult {
   // Legacy compat
   role: string;
   hours: number;
-  pay: number;
   status: 'Open' | 'Assigned' | 'Completed' | 'Draft';
   lifecycleStatus: 'draft' | 'published';
   assignmentStatus: 'assigned' | 'unassigned';
@@ -319,14 +283,6 @@ export interface ProjectionStatsResult {
   openShifts: number;
   publishedShifts: number;
   totalNetMinutes: number;
-  estimatedCost: number;
-  costBreakdown: {
-    base: number;
-    penalty: number;
-    overtime: number;
-    allowance: number;
-    leave: number;
-  };
 }
 
 /**

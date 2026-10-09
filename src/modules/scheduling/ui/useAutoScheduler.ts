@@ -56,7 +56,8 @@ export interface ScopeBreakdown {
     startingSoon: number;
 }
 
-export type SortField = 'name' | 'utilization' | 'shifts' | 'compliance' | 'cost' | 'fatigue';
+/** No 'cost': labour cost is shown in Gross Pay alone (decision 2026-10-09). */
+export type SortField = 'name' | 'utilization' | 'shifts' | 'compliance' | 'fatigue';
 export type SortDirection = 'asc' | 'desc';
 
 export interface EmployeeGroup {
@@ -64,7 +65,6 @@ export interface EmployeeGroup {
     name: string;
     proposals: ValidatedProposal[];
     roleDistribution: Array<{ name: string; value: number }>;
-    totalCost: number;
     avgFatigue: number;
     utilization: number;
     employmentType: string;
@@ -149,7 +149,6 @@ export function sortEmployeeGroups(
             case 'utilization': return g.utilization;
             case 'shifts':      return g.proposals.length;
             case 'compliance':  return complianceRateOf(g);
-            case 'cost':        return g.totalCost;
             case 'fatigue':     return g.avgFatigue;
             case 'name':
             default:            return g.name;
@@ -450,8 +449,6 @@ export function useAutoScheduler({
                 const s = String(v ?? '');
                 return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
             };
-            const money = (n: number) =>
-                new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n || 0);
             const row = (...cells: (string | number)[]) => cells.map(csvEscape).join(',');
 
             /** HH:MM — the seconds in `05:30:00-16:30:00` are always zero and
@@ -557,7 +554,6 @@ export function useAutoScheduler({
                             : p.fatigue.amber > 0 ? `${p.fatigue.amber} near limit` : 'all well-rested'));
                 lines.push(row('Fairness', `${p.fairness.score}/100`, `${p.fairness.employees_used} staff · ${Math.round(p.fairness.spread_minutes / 60)}h spread`));
                 lines.push(row('Compliance', `${compliancePct}%`, `${result.passing}/${result.totalProposals} assignments passing`));
-                lines.push(row('Labour cost', money(p.cost.total), `${money(p.cost.avg_per_shift)}/shift avg`));
                 lines.push('');
             }
 
@@ -713,22 +709,21 @@ export function useAutoScheduler({
             // ── Booked roster — per-person totals first, then the detail. The
             //    flat list alone never showed that 5 people absorbed everything. ──
             lines.push('--- BOOKED — PER EMPLOYEE ---');
-            lines.push(row('Employee', 'Shifts', 'Est. cost'));
-            const perEmployee = new Map<string, { name: string; shifts: number; cost: number }>();
+            lines.push(row('Employee', 'Shifts'));
+            const perEmployee = new Map<string, { name: string; shifts: number }>();
             for (const pr of result.proposals) {
                 const e = perEmployee.get(pr.employeeId)
-                    ?? { name: pr.employeeName, shifts: 0, cost: 0 };
+                    ?? { name: pr.employeeName, shifts: 0 };
                 e.shifts += 1;
-                e.cost += pr.optimizerCost ?? 0;
                 perEmployee.set(pr.employeeId, e);
             }
             for (const e of [...perEmployee.values()].sort((a, b) => b.shifts - a.shifts || a.name.localeCompare(b.name))) {
-                lines.push(row(e.name, e.shifts, money(e.cost)));
+                lines.push(row(e.name, e.shifts));
             }
             lines.push('');
 
             lines.push('--- BOOKED ASSIGNMENTS ---');
-            lines.push(row('Date', 'Time', 'Employee', 'Role', 'Est. cost'));
+            lines.push(row('Date', 'Time', 'Employee', 'Role'));
             const sortedProposals = [...result.proposals].sort((a, b) =>
                 a.shiftDate.localeCompare(b.shiftDate)
                 || a.startTime.localeCompare(b.startTime)
@@ -738,7 +733,7 @@ export function useAutoScheduler({
                 // the hard gate, so a column reading PASS 70 times running carried
                 // no information. The policy is stated once in SUMMARY.
                 lines.push(row(pr.shiftDate, `${hhmm(pr.startTime)}-${hhmm(pr.endTime)}`,
-                    pr.employeeName, pr.roleName ?? '', money(pr.optimizerCost ?? 0)));
+                    pr.employeeName, pr.roleName ?? ''));
             }
 
             const blob = new Blob(['\ufeff', lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -758,15 +753,13 @@ export function useAutoScheduler({
     }, [result, startDate, endDate]);
 
     const { totals, employeeGroups } = useMemo(() => {
-        if (!result) return { totals: { cost: 0, fatigue: 0, p95Fatigue: 0, fairness: 0 }, employeeGroups: [] as EmployeeGroup[] };
+        if (!result) return { totals: { fatigue: 0, p95Fatigue: 0, fairness: 0 }, employeeGroups: [] as EmployeeGroup[] };
 
         const map = new Map<string, { name: string; proposals: ValidatedProposal[] }>();
-        let totalCost = 0;
 
         for (const p of result.proposals) {
             if (!map.has(p.employeeId)) map.set(p.employeeId, { name: p.employeeName, proposals: [] });
             map.get(p.employeeId)!.proposals.push(p);
-            totalCost += p.optimizerCost || 0;
         }
 
         const groups: EmployeeGroup[] = Array.from(map.entries()).map(([id, { name, proposals }]) => {
@@ -795,7 +788,6 @@ export function useAutoScheduler({
                 name,
                 proposals,
                 roleDistribution: sortedDist,
-                totalCost: proposals.reduce((acc, p) => acc + (p.optimizerCost || 0), 0),
                 avgFatigue: finalFatigue,
                 utilization,
                 employmentType: emp?.contract_type || 'Casual',
@@ -821,7 +813,6 @@ export function useAutoScheduler({
 
         return {
             totals: {
-                cost: totalCost,
                 fatigue: avgFatiguePerEmployee,
                 p95Fatigue,
                 fairness: aggregateFairness

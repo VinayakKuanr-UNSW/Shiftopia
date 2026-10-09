@@ -504,13 +504,15 @@ export function AutoSchedulerModal({
                                         {(() => {
                                             const breakdown = result.objective_breakdown;
                                             if (!breakdown) return null;
-                                            const entries = Object.entries(breakdown).filter(([, v]) => Number.isFinite(v));
+                                            // The cost term is money (cents) — shown in Gross Pay alone
+                                            // (decision 2026-10-09), so it is left out of this breakdown.
+                                            const entries = Object.entries(breakdown)
+                                                .filter(([cat, v]) => cat !== 'cost' && Number.isFinite(v));
                                             const total = entries.reduce((s, [, v]) => s + Math.abs(v), 0);
                                             if (total === 0) return null;
 
                                             const colorOf = (cat: string): string => {
                                                 switch (cat) {
-                                                    case 'cost': return 'bg-blue-500';
                                                     case 'fairness': return 'bg-purple-500';
                                                     case 'fatigue': return 'bg-amber-500';
                                                     case 'coverage': return 'bg-rose-500';
@@ -537,8 +539,6 @@ export function AutoSchedulerModal({
                                                         return 'Penalty points from soft limits (100M points/min over maximum hours; 100k points/min under contract floor). These are Tier-3 priority, meaning the solver will exceed them to guarantee coverage.';
                                                     case 'legal_hard':
                                                         return 'Penalty points from hard legal constraints (e.g. 12-hour daily spread). These are Tier-1 priority: the solver never auto-generates illegal shifts; unavoidable breaches are left uncovered.';
-                                                    case 'cost':
-                                                        return 'Labor cost penalty points (Tier-5). Used as a residual tie-breaker to find the cheapest compliant roster.';
                                                     case 'fatigue':
                                                         return 'Fatigue penalty points used to balance staff fatigue. Part of Tier-4 (Wellbeing) to distribute hours and prevent burnout.';
                                                     case 'fairness':
@@ -553,8 +553,7 @@ export function AutoSchedulerModal({
                                                 }
                                             };
 
-                                            const fmtValue = (cat: string, v: number): string =>
-                                                cat === 'cost' ? `$${Math.round(v / 100).toLocaleString()}` : Math.round(v).toLocaleString();
+                                            const fmtValue = (_cat: string, v: number): string => Math.round(v).toLocaleString();
                                             const sorted = [...entries].sort(([, a], [, b]) => Math.abs(b) - Math.abs(a));
 
                                             return (
@@ -746,16 +745,6 @@ export function AutoSchedulerModal({
                                                     Compliance
                                                     {sortField === 'compliance' ? (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />}
                                                 </button>
-                                                <button 
-                                                    onClick={() => {
-                                                        if (sortField === 'cost') setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                                                        else { setSortField('cost'); setSortDirection('desc'); }
-                                                    }}
-                                                    className="w-28 flex items-center justify-end gap-1.5 hover:text-foreground transition-colors group"
-                                                >
-                                                    Est. Cost
-                                                    {sortField === 'cost' ? (sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />}
-                                                </button>
                                             </div>
                                             
                                             {sortEmployeeGroups(employeeGroups, sortField, sortDirection).map(group => {
@@ -864,10 +853,6 @@ export function AutoSchedulerModal({
                                                             <span className="text-[7px] font-bold text-muted-foreground/40 uppercase tracking-widest">{passing}/{total} Passing</span>
                                                         </div>
                                                         
-                                                        <div className="w-28 text-right">
-                                                            <div className="text-sm font-black tracking-tight text-foreground/80">${group.totalCost.toLocaleString('en-AU')}</div>
-                                                            <div className="text-[8px] font-bold uppercase text-muted-foreground/20 tracking-tighter">Estimated</div>
-                                                        </div>
                                                     </div>
                                                 );
                                             })}

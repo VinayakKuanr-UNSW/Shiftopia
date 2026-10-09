@@ -80,6 +80,25 @@ export function snapToQuarterHour(value: string | null | undefined): string | nu
 }
 
 /**
+ * The raw clock time as 'HH:MM' venue wall-clock, to the minute — the
+ * un-snapped counterpart of {@link snapToQuarterHour}, for pricing what was
+ * actually clocked rather than what is billable. Accepts an ISO timestamp
+ * (read as Australia/Sydney) or a plain 'HH:MM[:SS]'. Null if unparseable.
+ */
+export function clockToWallTime(value: string | null | undefined): string | null {
+  if (isBlankSentinel(value)) return null;
+  const v = value as string;
+  if (v.includes('T') || (v.length > 8 && v.includes('-'))) {
+    const d = new Date(v);
+    if (isNaN(d.getTime())) return null;
+    return formatInTimezone(d, SYDNEY_TZ, 'HH:mm');
+  }
+  const [h, m] = v.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/**
  * Robust check to determine if a shift is physically over.
  * Accounts for date, time, and overnight status. A recorded actual_end always
  * means "finished" (whichever comes first — an early clock-out ends the

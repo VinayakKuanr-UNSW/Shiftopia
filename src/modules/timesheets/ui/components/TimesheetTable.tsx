@@ -18,7 +18,6 @@ import {
 } from "./TimesheetFilterDrawer";
 import { exportTimesheetXLSX, exportTimesheetPDF } from "./timesheet.export";
 import { isEntryReviewable } from "./TimesheetTable.utils";
-import { COST_ESTIMATE_LABEL, COST_ESTIMATE_DISCLAIMER } from "@/modules/rosters/domain/projections/utils/cost/constants";
 import { groupRows, isTodayBucketKey, type RowGroupBy } from "@/modules/core/lib/row-grouping";
 import { extractTimesheetGroupFields, timesheetGroupLabelFor } from "../../domain/timesheet-grouping";
 import { GroupSectionHeader } from "@/modules/core/ui/components/GroupSectionHeader";
@@ -326,8 +325,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <th colSpan={6} className="p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 bg-primary/5 border-r border-border/30">
                                             Adjusted (Inline Edit)
                                         </th>
-                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
-                                            Payroll & Diff
+                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                            Diff
                                         </th>
                                         <th colSpan={3} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
                                             Statuses
@@ -366,8 +365,6 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Paid</th>
                                         <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Unpaid</th>
                                         <SortableHeader field="netLength" label="Net" className="bg-primary/5 border-r border-border/30" />
-                                        {/* Estimated cost — award estimate, NOT payroll */}
-                                        <SortableHeader field="approximatePay" label={COST_ESTIMATE_LABEL} title={COST_ESTIMATE_DISCLAIMER} />
                                         <SortableHeader field="differential" label="Diff" className="border-r border-border/30" />
                                         {/* Statuses */}
                                         <SortableHeader field="liveStatus" label="Time Rules" />
@@ -382,7 +379,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                 <tbody>
                                     {sortedEntries.length === 0 ? (
                                         <tr>
-                                            <td colSpan={showDate ? 25 : 24} className="p-20 text-center text-muted-foreground">
+                                            <td colSpan={showDate ? 24 : 23} className="p-20 text-center text-muted-foreground">
                                                 <div className="flex flex-col items-center gap-4">
                                                     <div className="h-16 w-16 rounded-full bg-muted/20 flex items-center justify-center">
                                                         <XCircle className="h-8 w-8 text-muted-foreground/40" />
@@ -399,7 +396,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                             <React.Fragment key={bucket.key}>
                                                 {bucket.label && (
                                                     <tr className="bg-muted/30">
-                                                        <td colSpan={showDate ? 25 : 24} className="px-3 py-2 border-b border-border/40">
+                                                        <td colSpan={showDate ? 24 : 23} className="px-3 py-2 border-b border-border/40">
                                                             <GroupSectionHeader
                                                                 label={bucket.label}
                                                                 count={bucket.items.length}

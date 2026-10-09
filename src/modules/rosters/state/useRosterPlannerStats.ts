@@ -4,31 +4,18 @@ import { rosterSummaryQueries } from '../api/rosterSummary.queries';
 import { useMemo } from 'react';
 
 /**
- * Shared shape consumed by the Roster Planner stats footer.
- * Another agent depends on this exact interface — do not deviate.
+ * Shared shape consumed by the Roster Planner stats footer. Counts and hours
+ * only: labour cost and budget are shown in Gross Pay alone.
  */
 export interface RosterPlannerStats {
     totalShifts: number;
     assignedShifts: number;
     openShifts: number;
-    /** @deprecated Alias of {@link scheduledCost}. Prefer the explicit field. */
-    estimatedCost: number;
-    /** Pro-rated department budget for the window; 0 when none overlaps. */
-    budget: number;
-
-    /** The roster AS PLANNED — every live shift in view, filled or not. */
-    scheduledCost: number;
-    /** What was actually worked — only shifts with a real worked window. */
-    actualCost: number;
-    /** Scheduled minutes behind {@link scheduledCost}. */
+    /** Net minutes of every live shift in view, filled or not. */
     scheduledNetMinutes: number;
-    /** Worked minutes behind {@link actualCost}. */
+    /** Worked minutes — only shifts with a real worked window. */
     actualNetMinutes: number;
-    /** Live shifts that resolved a rate — the denominator for scheduledCost. */
-    costedShifts: number;
-    /** Live shifts with NO resolvable rate; they contribute $0 and deflate the total. */
-    uncostedShifts: number;
-    /** Live shifts that have actually been worked — the denominator for actualCost. */
+    /** Live shifts that have actually been worked. */
     actualShifts: number;
 }
 
@@ -36,14 +23,8 @@ const ZERO_STATS: RosterPlannerStats = {
     totalShifts: 0,
     assignedShifts: 0,
     openShifts: 0,
-    estimatedCost: 0,
-    budget: 0,
-    scheduledCost: 0,
-    actualCost: 0,
     scheduledNetMinutes: 0,
     actualNetMinutes: 0,
-    costedShifts: 0,
-    uncostedShifts: 0,
     actualShifts: 0,
 };
 
@@ -85,14 +66,8 @@ export function useRosterPlannerStats(
             totalShifts: data.total_shifts,
             assignedShifts: data.assigned_shifts,
             openShifts: data.open_shifts,
-            estimatedCost: data.scheduled_cost,
-            budget: data.budget_cost,
-            scheduledCost: data.scheduled_cost,
-            actualCost: data.actual_cost,
             scheduledNetMinutes: data.total_net_minutes,
             actualNetMinutes: data.actual_net_minutes,
-            costedShifts: data.costed_shifts,
-            uncostedShifts: data.uncosted_shifts,
             actualShifts: data.actual_shifts,
         };
     }, [data]);

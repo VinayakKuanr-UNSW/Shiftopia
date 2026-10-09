@@ -6,7 +6,6 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
-import { buildShiftCardPay } from '../../../ui/components/shift-card-pay';
 import type { ShiftOpportunity } from '../types';
 
 interface Props {
@@ -125,10 +124,6 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                             </div>
                         );
 
-                        // Was computed and then dropped on the floor — the drawer
-                        // never passed `estimatedPay`, so it showed "—" exactly
-                        // like the card behind it.
-                        const cardPay = buildShiftCardPay(rawShift);
                         const isPast = shiftStart.getTime() < Date.now();
 
                         return (
@@ -158,8 +153,6 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     isUrgent={opp.isUrgent}
                                     isPast={isPast}
                                     lifecycleStatus={opp.lifecycleStatus || 'Published'}
-                                    estimatedPay={cardPay.estimatedPay}
-                                    estimatedPayBreakdown={cardPay.estimatedPayBreakdown}
                                     groupVariant={
                                         opp.groupType === 'convention_centre' ? 'convention' :
                                         opp.groupType === 'exhibition_centre' ? 'exhibition' :

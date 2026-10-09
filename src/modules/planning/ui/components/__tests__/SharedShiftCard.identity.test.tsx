@@ -30,7 +30,7 @@ function cellValue(label: string) {
 }
 
 describe('SharedShiftCard — identity grid', () => {
-  it('renders nine cells in a fixed order, so the grid is always 3×3', () => {
+  it('renders seven cells in a fixed order, the lone last one spanning its row', () => {
     renderCard({ identityGrid: true, employeeName: 'Kurry Admin' });
 
     expect(
@@ -38,8 +38,9 @@ describe('SharedShiftCard — identity grid', () => {
     ).toEqual([
       'Org', 'Dept', 'Sub-Dept',
       'Group', 'Sub-Group', 'Role',
-      'Employee', 'Sched. Pay', 'Billable Pay',
+      'Employee',
     ]);
+    expect(screen.getByText('Employee').parentElement?.className).toContain('col-span-3');
 
     expect(cellValue('Org')).toBe('ICC Sydney');
     expect(cellValue('Dept')).toBe('Event Delivery');
@@ -79,37 +80,26 @@ describe('SharedShiftCard — identity grid', () => {
     expect(cellValue('Employee')).toBe('—Not set');
   });
 
-  it('carries pay in the grid instead of inside the collapsed sections', () => {
-    renderCard({
-      identityGrid: true,
-      estimatedPay: '$412.50',
-      billablePay: '$398.20',
-    });
-
-    expect(cellValue('Sched. Pay')).toBe('$412.50');
-    expect(cellValue('Billable Pay')).toBe('$398.20');
-
-    // …and not twice: the Scheduled section's own Est. Pay line stands down.
-    expect(screen.queryByText('Est. Pay')).not.toBeInTheDocument();
-  });
-
-  it('dashes a pay cell the caller has no figure for', () => {
-    renderCard({ identityGrid: true, estimatedPay: '$412.50' });
-
-    expect(cellValue('Sched. Pay')).toBe('$412.50');
-    expect(cellValue('Billable Pay')).toBe('—Not set');
-  });
-
-  it('keeps the itemised rate breakdown reachable from the pay cell', () => {
-    renderCard({
-      identityGrid: true,
+  it('shows no pay anywhere — pay is shown in Gross Pay alone', () => {
+    // Even a caller still passing the old pay props gets no figure: the card
+    // has no pay props, cells or lines any more (decision 2026-10-09).
+    const legacyPay = {
       estimatedPay: '$412.50',
       estimatedPayBreakdown: [{ description: 'Ordinary', hours: 7.5, amount: 412.5 }],
-    });
+      billablePay: '$398.20',
+      actualPay: '$401.00',
+    };
+    const { container } = renderCard({
+      identityGrid: true,
+      sectionLayout: 'columns',
+      clockIn: '05:28',
+      clockOut: '16:31',
+      ...legacyPay,
+    } as Record<string, unknown>);
 
-    expect(
-      screen.getByRole('button', { name: /sched\. pay rate breakdown/i }),
-    ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\$\d/);
+    expect(container.textContent).not.toMatch(/(Sched\.|Est\.|Billable|Actual) Pay/);
+    expect(screen.queryByRole('button', { name: /rate breakdown/i })).toBeNull();
   });
 
   it('falls back to shiftData for facts the caller did not spell out', () => {
@@ -170,14 +160,13 @@ describe('SharedShiftCard — identity grid', () => {
     // header, so its cards carry only what differs between them.
     renderCard({
       identityGrid: true,
-      identityFields: ['role', 'employee', 'schedPay', 'billablePay'],
+      identityFields: ['role', 'employee'],
       employeeName: 'Kurry Admin',
-      estimatedPay: '$400.89',
     });
 
     expect(
       screen.getAllByRole('term').map((t) => t.textContent?.trim()),
-    ).toEqual(['Role', 'Employee', 'Sched. Pay', 'Billable Pay']);
+    ).toEqual(['Role', 'Employee']);
     expect(screen.queryByText('Org')).not.toBeInTheDocument();
     expect(screen.queryByText('Sub-Group')).not.toBeInTheDocument();
   });
@@ -185,24 +174,11 @@ describe('SharedShiftCard — identity grid', () => {
   it('lays four cells out as 2×2 rather than leaving a ragged row', () => {
     const { container } = renderCard({
       identityGrid: true,
-      identityFields: ['role', 'employee', 'schedPay', 'billablePay'],
+      identityFields: ['org', 'dept', 'role', 'employee'],
     });
 
     expect(container.querySelector('.grid-cols-2')).not.toBeNull();
     expect(container.querySelector('.grid-cols-3')).toBeNull();
-  });
-
-  it('gives a pay figure back to its section when the grid is not showing it', () => {
-    // Suppressing the Scheduled section's Est. Pay line is only correct while
-    // the grid carries that number; a subset without it must not lose it.
-    renderCard({
-      identityGrid: true,
-      identityFields: ['role', 'employee'],
-      estimatedPay: '$400.89',
-      defaultExpandedSections: { scheduled: true },
-    });
-
-    expect(screen.getByText('Est. Pay')).toBeInTheDocument();
   });
 
   it('marks each collapsible section as an expandable control', () => {
@@ -239,7 +215,7 @@ describe('SharedShiftCard — identity grid', () => {
 
 describe('SharedShiftCard — columns layout (Office expand dialog)', () => {
   const columns = () => renderCard({
-    sectionLayout: 'columns', estimatedPay: '$273.07', billablePay: undefined,
+    sectionLayout: 'columns',
     defaultExpandedSections: { scheduled: false, actual: false, payroll: false, variance: false },
   });
 
@@ -262,17 +238,8 @@ describe('SharedShiftCard — columns layout (Office expand dialog)', () => {
     expect(within(panes[3]).getByText('Variance')).toBeInTheDocument();
   });
 
-  it('Actual carries a pay row like the other two — N/A when nothing prices it', () => {
-    const { container } = columns();
-    const actual = container.querySelector('[role="region"][id$="-actual"]') as HTMLElement;
-    expect(within(actual).getByText(/Actual Pay/i)).toBeInTheDocument();
-    expect(within(actual).getByText('N/A')).toBeInTheDocument();
-  });
-
-  it('the stacked layout is unchanged: toggles, and no Actual Pay row', () => {
+  it('the stacked layout is unchanged: toggles', () => {
     const { container } = renderCard({ defaultExpandedSections: { actual: true } });
     expect(container.querySelectorAll('button[aria-expanded]').length).toBeGreaterThanOrEqual(4);
-    const actual = container.querySelector('[role="region"][id$="-actual"]') as HTMLElement;
-    expect(within(actual).queryByText(/Actual Pay/i)).toBeNull();
   });
 });

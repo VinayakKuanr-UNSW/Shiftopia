@@ -1,5 +1,4 @@
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
-import type { ShiftCostBreakdown } from '@/modules/rosters/domain/projections/utils/cost/types';
 
 export interface PeopleModeShift {
     id: string;
@@ -12,7 +11,6 @@ export interface PeopleModeShift {
     group: string;
     groupColor: 'blue' | 'green' | 'red' | 'orange' | 'purple' | string;
     hours: number;
-    pay: number;
     status: 'Open' | 'Assigned' | 'Completed' | 'Draft';
     lifecycleStatus: 'draft' | 'published';
     assignmentStatus: 'assigned' | 'unassigned';
@@ -23,8 +21,6 @@ export interface PeopleModeShift {
     requiredSkills?: string[];
     /** Raw shift entity for SmartShiftCard rendering */
     rawShift?: Shift;
-    /** Pre-computed cost breakdown — avoids re-running the payroll engine in the card. */
-    detailedCost?: ShiftCostBreakdown;
 }
 
 export interface PeopleModeEmployee {
@@ -39,16 +35,8 @@ export interface PeopleModeEmployee {
     currentHours: number;
     /** True when scheduledHours > contractedHours */
     overHoursWarning?: boolean;
-    estimatedPay: number;
     fatigueScore: number;
     utilization: number;
-    payBreakdown: {
-      base: number;
-      penalty: number;
-      overtime: number;
-      allowance: number;
-      leave: number;
-    };
     shifts: Record<string, PeopleModeShift[]>;
 }
 

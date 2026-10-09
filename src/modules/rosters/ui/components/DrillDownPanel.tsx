@@ -628,7 +628,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                         // Org / Dept / Sub-Dept / Group / Sub-Group are stated
                         // once in the scope strip above and are identical on
                         // every card here, so the card carries only what varies.
-                        identityFields={['role', 'employee', 'schedPay', 'billablePay']}
+                        identityFields={['role', 'employee']}
                         isLocked={isPast && !isUnassigned}
                         isPast={isPast}
                         isDnDActive={false}

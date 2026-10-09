@@ -33,7 +33,7 @@ Supporting code **outside** the module:
 | Generic AutoPilot framework | [src/modules/core/autopilot/](../../src/modules/core/autopilot/) (`types.ts`, `useAutoPilot.ts`, `AutoPilotControl.tsx`, `AutoPilotDecisionChip.tsx`) |
 | Live-Rules engine + review gate | [src/modules/rosters/domain/shift-ui.ts](../../src/modules/rosters/domain/shift-ui.ts) (`getLiveRuleBadges`, `getPayrollRuleBadges`, `isTimesheetReviewable`) |
 | Attendance scorecard | [src/modules/rosters/domain/attendance-metrics.ts](../../src/modules/rosters/domain/attendance-metrics.ts) + `AttendanceMetricsBar` |
-| Cost estimate (award, not payroll) | [src/modules/rosters/domain/projections/utils/cost/](../../src/modules/rosters/domain/projections/utils/cost/) |
+| Pay for a timesheet (Scheduled / Actual / Billable) | Gross Pay only — [src/modules/payroll/data/shiftPayLedger.ts](../../src/modules/payroll/data/shiftPayLedger.ts). The timesheet grid shows no money (decision 2026-10-09). |
 | Payroll consumer of approved timesheets | [src/modules/payroll/data/grossPay.read.api.ts](../../src/modules/payroll/data/grossPay.read.api.ts) |
 | Auth / permissions | [src/platform/auth/access.policy.ts](../../src/platform/auth/access.policy.ts), [useAuth.ts](../../src/platform/auth/useAuth.ts) |
 | DB schema / triggers / RPCs | `supabase/migrations/*timesheet*.sql` + baseline `20251015000000_baseline_schema.sql` |
@@ -63,7 +63,6 @@ flowchart TD
       BE[billable-edit.ts]
       VR[variance-reasons.ts]
       SUI[shift-ui.ts · Live Rules + gate]
-      COST[cost estimator]
       AM[attendance-metrics.ts]
     end
     subgraph Database (Supabase / Postgres)
@@ -83,7 +82,7 @@ flowchart TD
     TP --> SUPA & TAP & AMB & APC
     TP --> TT --> TR
     TT --> TMV
-    TR --> THP & SUI & BE & VR & COST
+    TR --> THP & SUI & BE & VR
     TR --> TAP
     THP --> TAU
     APC --> UAP --> TAP
@@ -152,7 +151,6 @@ classDiagram
       +string|null adjustedStart/End
       +'manual'|'snapped'|'auto'|null adjustedStartSource/EndSource
       +number netLengthMinutes
-      +number|null estimatedPay
       +number editCount
       +number|null version
       +string|null arrival/departureVarianceReason

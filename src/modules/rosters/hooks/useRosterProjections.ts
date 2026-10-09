@@ -243,8 +243,6 @@ export function useRosterProjections(input: ProjectionInput): ProjectionResult {
         openShifts: result.stats.openShifts,
         publishedShifts: result.stats.publishedShifts,
         totalNetMinutes: result.stats.totalNetMinutes,
-        estimatedCost: result.stats.estimatedCost,
-        costBreakdown: result.stats.costBreakdown,
       });
       }); // end startTransition
     };

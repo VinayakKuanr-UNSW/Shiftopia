@@ -16,7 +16,10 @@ import type { PeriodGrossPay, EarningsLine } from '../model/gross-pay.types';
 import { formatCost } from '../../rosters/domain/projections/utils/cost';
 
 export interface EarningsLinesTableProps {
-  period: PeriodGrossPay;
+  /** A period, or one shift's figure — only the lines and their total are read. */
+  period: Pick<PeriodGrossPay, 'lines' | 'grossPay'>;
+  /** Footer label for the total (default "Gross pay"). */
+  totalLabel?: string;
   /** Optional extra classes on the wrapping <table>. */
   className?: string;
 }
@@ -32,7 +35,7 @@ function formatHours(hours: number | undefined): string {
  * Presentational table. Takes a fully-computed PeriodGrossPay via props and
  * renders its already-aggregated `lines` plus a gross total footer row.
  */
-export const EarningsLinesTable: React.FC<EarningsLinesTableProps> = ({ period, className }) => {
+export const EarningsLinesTable: React.FC<EarningsLinesTableProps> = ({ period, totalLabel = 'Gross pay', className }) => {
   const { lines, grossPay } = period;
 
   return (
@@ -78,7 +81,7 @@ export const EarningsLinesTable: React.FC<EarningsLinesTableProps> = ({ period, 
         ) : (
           lines.map((line: EarningsLine) => (
             <tr
-              key={line.code}
+              key={`${line.code}::${line.description}`}
               className="border-b border-slate-100 dark:border-white/5"
             >
               <td className="py-2 pr-4 text-slate-800 dark:text-slate-100">
@@ -101,7 +104,7 @@ export const EarningsLinesTable: React.FC<EarningsLinesTableProps> = ({ period, 
             scope="row"
             className="py-2 pr-4 text-left font-bold text-slate-900 dark:text-white"
           >
-            Gross pay
+            {totalLabel}
           </th>
           <td className="py-2 px-4" aria-hidden="true" />
           <td

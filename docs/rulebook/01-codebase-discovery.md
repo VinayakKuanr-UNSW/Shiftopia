@@ -120,11 +120,11 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 **Depends on:** `core` only.
 
 ### 2.13 `settings`
-**Purpose:** User/org-level preferences (appearance/theme, locale, notifications, account) plus an embedded pay-rate administration panel for org admins.
+**Purpose:** User/org-level preferences (appearance/theme, locale, notifications, account). The pay-rate panel moved to Gross Pay → Pay rates on 2026-10-09; `?section=pay-rates` redirects there.
 **Structure:** Small — `hooks/`, `pages/`, `ui/components/`.
 **Entry points:** `pages/SettingsPage.tsx` (tabs), `hooks/useSettings.ts`.
 **DB:** `organizations`, `profiles`.
-**Depends on:** `payroll` (embeds `PayRatesSettings`), `core`.
+**Depends on:** `core`.
 
 ### 2.14 `templates`
 **Purpose:** Reusable roster templates (recurring shift patterns per department/subgroup), capturable from a live roster, versioned, and published to generate future rosters in bulk.

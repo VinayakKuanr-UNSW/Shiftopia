@@ -1,7 +1,7 @@
 /**
  * A full-time shift, expanded: Scheduled · Actual · Payroll as three equal
- * panes, each with a pay row, and Variance full width beneath. Every section
- * open; none collapses.
+ * panes and Variance full width beneath. Every section open; none collapses.
+ * No pay: a shift's pay is shown in Gross Pay alone (decision 2026-10-09).
  *
  * Moved from the Office page's card (handover 2026-10-04, Phase 3) so the
  * Rosters page offers the same view from a shift's ⋯ menu. The roster keeps its
@@ -9,17 +9,8 @@
  * because every Office row WAS one employee.
  *
  * IT IS HANDED THE RAW SHIFT ROW, NOT A VIEW MODEL. `shiftData` drives the
- * card's status dot, its Live Rules badges and its payroll rows, and a
- * hand-built camelCase object loses `target_employment_type`,
- * `remuneration_level`, `remuneration_rate` and `roles.name` — the cost engine
- * does not fail on their absence, it returns a confident default rate.
- *
- * PAY IS SHOWN AS UNPRICED RATHER THAN WRONG. Full-time shifts often carry no
- * `remuneration_level` or `remuneration_rate`, and `buildShiftCardPay` on such
- * a row prices at the engine's `defaultRate` — Level 1 casual, no loading,
- * identical on every card. So the inputs are checked FIRST and the card says
- * "not priced" when they are missing. A visible gap is recoverable; a plausible
- * wrong number is not.
+ * card's status dot, its Live Rules badges and its payroll rows, which a
+ * hand-built camelCase object would silently lose.
  *
  * TIMES GO THROUGH `formatClockTime`: a full timestamp is converted to Sydney,
  * a naive `HH:mm` is already Sydney and must not move.
@@ -30,7 +21,6 @@ import { AlertTriangle, Layers, X } from 'lucide-react';
 
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
-import { buildShiftCardPay } from '@/modules/planning/ui/components/shift-card-pay';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
@@ -50,34 +40,6 @@ export function formatDuration(mins: number): string {
     const m = Math.round(mins % 60);
     return m === 0 ? `${h}h` : h === 0 ? `${m}m` : `${h}h ${m}m`;
 }
-
-/**
- * Can this shift be priced at all? `remuneration_rate` alone is enough (the
- * resolved hourly figure); `remuneration_level` alone is enough too, because
- * the engine looks the rate up from it. Neither means nothing but the default.
- */
-export function isPriceable(shift: Record<string, unknown>): boolean {
-    const level = shift.remuneration_level;
-    const rate = shift.remuneration_rate ?? shift.actual_hourly_rate;
-    return (typeof level === 'number' && level > 0)
-        || (rate != null && Number(rate) > 0);
-}
-
-const UNPRICED = (
-    <Tooltip>
-        <TooltipTrigger asChild>
-            <span className="text-[11px] font-semibold text-muted-foreground/70 cursor-help underline decoration-dotted">
-                Not priced
-            </span>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">
-            This shift carries no remuneration level or rate, so there is nothing to
-            price it from. Set the level on the shift to see pay here — the cost
-            engine would otherwise fall back to a flat default rate that is the same
-            on every card.
-        </TooltipContent>
-    </Tooltip>
-);
 
 /** A second shift on the same day. Shown, never hidden. */
 export const SplitShiftBadge: React.FC<{ alsoOnThisDay: readonly Shift[] }> = ({ alsoOnThisDay }) => (
@@ -111,13 +73,6 @@ export const SplitShiftBadge: React.FC<{ alsoOnThisDay: readonly Shift[] }> = ({
 
 export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, alsoOnThisDay = [], onOpenChange }) => {
     const row = (shift ?? {}) as unknown as Record<string, any>;
-
-    // Priced properly, or explicitly not priced. Never the engine's default.
-    const pay = React.useMemo(
-        () => (shift && isPriceable(row) ? buildShiftCardPay(row) : null),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [shift],
-    );
 
     if (!shift) return null;
 
@@ -165,8 +120,6 @@ export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, als
                     adjustedStartSource={row.adjusted_start_source ?? null}
                     adjustedEndSource={row.adjusted_end_source ?? null}
                     timesheetStatus={row.timesheet_status ?? undefined}
-                    estimatedPay={pay ? pay.estimatedPay : UNPRICED}
-                    estimatedPayBreakdown={pay?.estimatedPayBreakdown}
                     lifecycleStatus={row.lifecycle_status ?? undefined}
                     groupVariant={resolveGroupVariant(row, row.departments?.name, row.sub_departments?.name)}
                     sectionLayout="columns"

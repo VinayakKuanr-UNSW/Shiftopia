@@ -39,7 +39,8 @@
 export type MetricStatus = 'good' | 'warn' | 'critical' | 'neutral';
 
 /** How a value is rendered and compared. */
-export type MetricFormat = 'percent' | 'count' | 'hours' | 'currency' | 'ratio';
+/** No 'currency': money is shown in Gross Pay alone (decision 2026-10-09). */
+export type MetricFormat = 'percent' | 'count' | 'hours' | 'ratio';
 
 export interface MetricSpec {
     /** Canonical id. Matches the RPC column wherever one exists. */
@@ -332,7 +333,6 @@ export const METRIC_REGISTRY: Record<string, MetricSpec> = {
         id: 'punctuality_rate', label: 'Punctuality', format: 'percent',
         direction: 'higher', good: 95, warn: 85,
     }),
-    estimated_cost: spec({ id: 'estimated_cost', label: 'Labour cost', format: 'currency', direction: null }),
     scheduled_hours: spec({ id: 'scheduled_hours', label: 'Scheduled hours', format: 'hours', direction: null }),
     compliance_overrides: spec({
         id: 'compliance_overrides', label: 'Compliance overrides', format: 'count',
@@ -381,10 +381,6 @@ export function formatMetric(metricId: string, value: number | null | undefined)
         case 'percent':  return `${value.toFixed(1)}%`;
         case 'hours':    return `${value.toFixed(1)}h`;
         case 'ratio':    return value.toFixed(1);
-        case 'currency':
-            if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-            if (Math.abs(value) >= 1_000)     return `$${(value / 1_000).toFixed(1)}k`;
-            return `$${value.toFixed(0)}`;
         case 'count':
         default:         return String(Math.round(value));
     }
@@ -406,7 +402,6 @@ const ANALYSIS_METRIC_IDS: Readonly<Record<string, string>> = {
     shift_fill_rate:            'shift-fill-rate',
     fill_rate:                  'shift-fill-rate',
     no_show_rate:               'no-show-rate',
-    estimated_cost:             'estimated-cost',
     attendance_compliance_rate: 'attendance-compliance-rate',
     cancel_rate:                'cancellation-rate',
     total_cancel_rate:          'cancellation-rate',

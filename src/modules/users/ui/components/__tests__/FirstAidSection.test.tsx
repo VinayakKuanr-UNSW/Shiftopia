@@ -50,9 +50,10 @@ beforeEach(() => {
 });
 
 describe('FirstAidSection', () => {
-    it('shows the effective-dated rate and warns when no qualification is on record', () => {
-        render(<FirstAidSection employeeId="emp-1" employeeName="James" />);
-        expect(screen.getByText(/\$0\.59 per ordinary hour/)).toBeTruthy(); // FY26/27 rate on 2026-10-05
+    it('shows no rate (money is shown in Gross Pay alone) and warns when no qualification is on record', () => {
+        const { container } = render(<FirstAidSection employeeId="emp-1" employeeName="James" />);
+        expect(screen.getByText(/allowance per ordinary hour · cl 28\.2/)).toBeTruthy();
+        expect(container.textContent).not.toMatch(/\$/);
         expect(screen.getByRole('note').textContent).toMatch(/No current first-aid licence or skill/);
     });
 

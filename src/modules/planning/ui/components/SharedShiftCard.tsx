@@ -16,7 +16,6 @@ import {
     ChevronRight,
     User,
     Bot,
-    Receipt,
     ArrowUpRight,
     ArrowDownRight,
     Minus,
@@ -27,7 +26,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
-import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import {
     getProtectionContext,
@@ -38,13 +36,12 @@ import {
     resolveGroupVariant,
 } from '@/modules/rosters/domain/shift-ui';
 import { ShiftRuleHeader } from '@/modules/rosters/ui/components/ShiftRuleHeader';
-import type { EarningsLine } from '@/modules/payroll/model/gross-pay.types';
 import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
 
 export type ShiftIdentityField =
     | 'org' | 'dept' | 'subDept'
     | 'group' | 'subGroup' | 'role'
-    | 'employee' | 'schedPay' | 'billablePay';
+    | 'employee';
 
 interface SharedShiftCardProps {
     organization: string;
@@ -96,23 +93,6 @@ interface SharedShiftCardProps {
     wasToppedUpToMinEngagement?: boolean;
     /** The EBA minimum (minutes) that applied when `wasToppedUpToMinEngagement` is true. */
     requiredEngagementMinutes?: number | null;
-    estimatedPay?: React.ReactNode;
-    /** Itemised rate breakdown for `estimatedPay` — shown in a hover tooltip when non-empty. */
-    estimatedPayBreakdown?: EarningsLine[];
-    /**
-     * What payroll will actually pay, priced off the resolved BILLABLE window
-     * (vs `estimatedPay`, which prices the roster). Only meaningful once the
-     * billable window has resolved — omit/null before then.
-     */
-    billablePay?: React.ReactNode;
-    /** Itemised rate breakdown for `billablePay` — shown in a hover tooltip when non-empty. */
-    billablePayBreakdown?: EarningsLine[];
-    /**
-     * What the CLOCKED window prices at. Shown as the Actual section's pay row
-     * in the `columns` layout — "N/A" when omitted, never a guess, so the
-     * three panes read row for row.
-     */
-    actualPay?: React.ReactNode;
     /** When true, passes showPayrollRules to ShiftRuleHeader. */
     showPayrollRules?: boolean;
     /** Custom hex color (e.g. from groupColor) to style the department accent bar and theme */
@@ -165,15 +145,16 @@ interface SharedShiftCardProps {
      */
     identityGrid?: boolean;
     /**
-     * Which identity cells to render, and in what order. Defaults to all nine.
+     * Which identity cells to render, and in what order. Defaults to all seven.
+     * There are no pay cells: a shift's pay is shown in Gross Pay alone
+     * (decision 2026-10-09).
      *
      * For a surface that has already stated some of these facts, repeating them
      * on every card is noise: the roster drill-down is scoped to one group,
-     * sub-group and date, so five of the nine cells were identical across every
-     * card in the panel and the two that actually distinguished the shifts —
-     * role and assignee — were the smallest things on screen. Naming a subset
-     * lets that panel show `['role','employee','schedPay','billablePay']` as a
-     * 2×2 while every other surface keeps the full 3×3.
+     * sub-group and date, so five of the cells were identical across every card
+     * in the panel and the two that actually distinguished the shifts — role
+     * and assignee — were the smallest things on screen. Naming a subset lets
+     * that panel show just `['role','employee']`.
      */
     identityFields?: ShiftIdentityField[];
     /**
@@ -284,133 +265,6 @@ function formatSignedMins(deltaMins: number | null): string {
     return `${sign}${formatMins(Math.abs(deltaMins))}`;
 }
 
-/** "+$12.34" / "-$45.67" / "$0.00" — signed dollar delta for the variance section. */
-function formatSignedCurrency(delta: number | null): string {
-    if (delta === null || isNaN(delta)) return '--';
-    const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
-    return `${sign}$${Math.abs(delta).toFixed(2)}`;
-}
-
-/** Extracts the numeric amount from a formatted "$123.45" ReactNode, or null. */
-function parseCurrency(value: React.ReactNode): number | null {
-    if (typeof value !== 'string') return null;
-    const n = parseFloat(value.replace(/[^0-9.-]/g, ''));
-    return isNaN(n) ? null : n;
-}
-
-/**
- * A labelled pay figure with a small pressable receipt icon that opens the
- * itemised rate breakdown (Earnings / Hours / Amount, mirroring the Gross Pay
- * module's "Shift Calculations" table) in a click-to-open popover — a
- * hover-only tooltip doesn't work on touch, and the icon makes the
- * affordance visible rather than relying on a bare cursor change.
- * `Popover` is left uncontrolled with no `modal` prop (defaults to false) —
- * this card renders inside modals elsewhere (swap/bid dialogs), and a modal
- * popover there kills pointer events on the parent dialog.
- */
-/**
- * A pay amount inside an identity-grid cell.
- *
- * `PayAmountWithBreakdown` below prints its own label inline, which the grid
- * cell already supplies as the `<dt>`; this renders the amount alone and keeps
- * the itemised-rate popover.
- */
-const PayAmountValue: React.FC<{
-    label: string;
-    amount: React.ReactNode;
-    lines?: EarningsLine[];
-}> = ({ label, amount, lines }) => {
-    const hasBreakdown = !!lines && lines.length > 0;
-    return (
-        <span className="inline-flex items-center gap-1.5">
-            <span>{amount}</span>
-            {hasBreakdown && (
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <button
-                            type="button"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`${label} rate breakdown`}
-                            className="h-6 w-6 flex items-center justify-center rounded-md text-emerald-600/70 hover:text-emerald-600 hover:bg-emerald-500/10 active:scale-95 transition-colors shrink-0 dark:text-emerald-400/70 dark:hover:text-emerald-400"
-                        >
-                            <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                        align="start"
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-auto min-w-[220px] p-3 bg-popover border-border rounded-xl shadow-2xl z-[999]"
-                    >
-                        <div className="space-y-1">
-                            {lines!.map((line, i) => (
-                                <div key={i} className="flex items-center justify-between gap-4 text-xs">
-                                    <span className="text-muted-foreground">
-                                        {line.description}{line.hours ? ` · ${line.hours.toFixed(2)}h` : ''}
-                                    </span>
-                                    <span className="font-mono font-bold tabular-nums shrink-0">${line.amount.toFixed(2)}</span>
-                                </div>
-                            ))}
-                            <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-border/40 text-xs font-black">
-                                <span>Total</span>
-                                <span className="font-mono tabular-nums">${lines!.reduce((sum, l) => sum + l.amount, 0).toFixed(2)}</span>
-                            </div>
-                        </div>
-                    </PopoverContent>
-                </Popover>
-            )}
-        </span>
-    );
-};
-
-const PayAmountWithBreakdown: React.FC<{
-    label: string;
-    amount: React.ReactNode;
-    lines?: EarningsLine[];
-}> = ({ label, amount, lines }) => {
-    const hasBreakdown = !!lines && lines.length > 0;
-    return (
-        <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500/60">{label}</span>
-            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{amount}</span>
-            {hasBreakdown && (
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <button
-                            type="button"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`${label} rate breakdown`}
-                            className="h-5 w-5 flex items-center justify-center rounded-md text-emerald-500/50 hover:text-emerald-500 hover:bg-emerald-500/10 active:scale-95 transition-colors shrink-0"
-                        >
-                            <Receipt className="h-3 w-3" />
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                        side="top"
-                        align="start"
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-auto min-w-[220px] p-3 bg-popover border-border rounded-xl shadow-2xl z-[999]"
-                    >
-                        <div className="space-y-1">
-                            {lines!.map((line, i) => (
-                                <div key={i} className="flex items-center justify-between gap-4 text-xs">
-                                    <span className="text-muted-foreground">
-                                        {line.description}{line.hours ? ` · ${line.hours.toFixed(2)}h` : ''}
-                                    </span>
-                                    <span className="font-mono font-bold tabular-nums shrink-0">${line.amount.toFixed(2)}</span>
-                                </div>
-                            ))}
-                            <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-border/40 text-xs font-black">
-                                <span>Total</span>
-                                <span className="font-mono tabular-nums">${lines!.reduce((s, l) => s + l.amount, 0).toFixed(2)}</span>
-                            </div>
-                        </div>
-                    </PopoverContent>
-                </Popover>
-            )}
-        </div>
-    );
-};
-
 /**
  * A section's header row. A toggle normally; in the `columns` layout every
  * section is always open, so it is a plain row — a button that does nothing
@@ -473,11 +327,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     departureVarianceReason,
     wasToppedUpToMinEngagement,
     requiredEngagementMinutes,
-    estimatedPay,
-    estimatedPayBreakdown,
-    billablePay,
-    billablePayBreakdown,
-    actualPay,
     showPayrollRules,
     customColor,
     timesheetStatus,
@@ -614,9 +463,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
         if (!identityGrid) return null;
         const groupType = shiftData?.group_type ?? shiftData?.groupType;
         const str = (v?: string | null) => (v?.trim() ? v : null);
-        const money = (v: React.ReactNode) => (v == null || v === '' ? null : v);
-
-        const byField: Record<ShiftIdentityField, { label: string; value: React.ReactNode; breakdown?: EarningsLine[] }> = {
+        const byField: Record<ShiftIdentityField, { label: string; value: React.ReactNode }> = {
             org: { label: 'Org', value: str(organization) ?? str(shiftData?.organizations?.name) },
             dept: { label: 'Dept', value: str(department) ?? str(shiftData?.departments?.name) },
             subDept: { label: 'Sub-Dept', value: str(subDepartment) ?? str(shiftData?.sub_departments?.name) },
@@ -644,23 +491,17 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     str(employeeName) ??
                     (shiftData && 'assigned_employee_id' in shiftData ? 'Unassigned' : null),
             },
-            // Pay lives here rather than inside the Scheduled and Payroll
-            // sections. It was the one number people opened those sections to
-            // read, and two collapsed panels is a poor place to keep it.
-            schedPay: { label: 'Sched. Pay', value: money(estimatedPay), breakdown: estimatedPayBreakdown },
-            billablePay: { label: 'Billable Pay', value: money(billablePay), breakdown: billablePayBreakdown },
         };
 
         const order: ShiftIdentityField[] = identityFields ?? [
             'org', 'dept', 'subDept',
             'group', 'subGroup', 'role',
-            'employee', 'schedPay', 'billablePay',
+            'employee',
         ];
         return order.map((field) => byField[field]).filter(Boolean);
     }, [
         identityGrid, identityFields, organization, department, subDepartment, group, subGroup, role,
-        employeeName, estimatedPay, estimatedPayBreakdown, billablePay, billablePayBreakdown,
-        shiftData,
+        employeeName, shiftData,
     ]);
     // Several of these cards can share a page (an offers inbox, a swap list),
     // so the collapsible regions need ids that are unique per instance for
@@ -709,12 +550,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     const varianceSchedNetMins = varianceSchedGrossMins !== null ? Math.max(0, varianceSchedGrossMins - unpaidBreak) : null;
     const varianceBillGrossMins = calculateGrossMinutes(varianceBillableStart, varianceBillableEnd);
     const varianceBillNetMins = varianceBillGrossMins !== null ? Math.max(0, varianceBillGrossMins - unpaidBreak) : null;
-    const varianceSchedPay = (estimatedPayBreakdown && estimatedPayBreakdown.length > 0)
-        ? estimatedPayBreakdown.reduce((s, l) => s + l.amount, 0)
-        : parseCurrency(estimatedPay);
-    const varianceBillPay = (billablePayBreakdown && billablePayBreakdown.length > 0)
-        ? billablePayBreakdown.reduce((s, l) => s + l.amount, 0)
-        : parseCurrency(billablePay);
     const varianceRows: { label: string; delta: number | null; format: (d: number | null) => string }[] = [
         {
             label: 'Gross',
@@ -725,11 +560,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
             label: 'Net',
             delta: (varianceSchedNetMins !== null && varianceBillNetMins !== null) ? varianceBillNetMins - varianceSchedNetMins : null,
             format: formatSignedMins,
-        },
-        {
-            label: 'Pay',
-            delta: (varianceSchedPay !== null && varianceBillPay !== null) ? varianceBillPay - varianceSchedPay : null,
-            format: formatSignedCurrency,
         },
     ];
 
@@ -786,12 +616,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     }, [hidePayrollSection, isTimecard, showPayrollRules, adjustedStart, adjustedEnd, shiftData, isShiftFinished, payrollBadges, resolvedShiftData]);
 
     const isCardPast = isPast || isExpired;
-
-    // A pay figure only leaves its collapsible section if the grid is the one
-    // showing it — a caller that selects a subset without the pay cells keeps
-    // the Scheduled / Payroll lines it always had.
-    const gridShowsSchedPay = !!identityGridCells?.some((c) => c.label === 'Sched. Pay');
-    const gridShowsBillablePay = !!identityGridCells?.some((c) => c.label === 'Billable Pay');
 
     if (isTimecard) {
         const displayRole = role || 'Shift';
@@ -873,13 +697,13 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     </div>
                 )}
 
-                {/* Identity grid — three-up, so nine cells read as 3×3. */}
+                {/* Identity grid — three-up; the full seven read as 3+3+1, the last spanning. */}
                 {identityGridCells && identityGridCells.length > 0 && (
                     <dl className={cn(
                         'grid gap-2 mb-5',
-                        // Nine cells read as 3×3, four as 2×2 — the column count
-                        // follows the selection rather than being asserted, so a
-                        // subset never leaves a ragged trailing row.
+                        // The column count follows the selection rather than being
+                        // asserted — six read 3×2, four 2×2, and a lone cell left
+                        // over on a three-up row spans it — so none is ragged.
                         identityGridCells.length % 3 === 0 ? 'grid-cols-3'
                             : identityGridCells.length % 2 === 0 ? 'grid-cols-2'
                             : 'grid-cols-3',
@@ -888,34 +712,27 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                             `divide-*` is a `> * + *` rule, so in a grid it puts
                             a left border on the first cell of every row and a
                             top border across the first row. */}
-                        {identityGridCells.map(({ label, value, breakdown }) => {
-                            const isPay = breakdown !== undefined;
+                        {identityGridCells.map(({ label, value }, i) => {
+                            // A lone cell left on a three-up last row spans it.
+                            const spansRow = identityGridCells.length % 3 === 1
+                                && i === identityGridCells.length - 1;
                             return (
                                 <div
                                     key={label}
-                                    className="min-w-0 rounded-lg border border-border/60 bg-muted/20 p-2.5 dark:bg-zinc-900/50"
+                                    className={cn(
+                                        'min-w-0 rounded-lg border border-border/60 bg-muted/20 p-2.5 dark:bg-zinc-900/50',
+                                        spansRow && 'col-span-3',
+                                    )}
                                 >
-                                    <dt className={cn(
-                                        'block text-[11px] font-bold uppercase tracking-[0.12em]',
-                                        isPay && value != null
-                                            ? 'text-emerald-700 dark:text-emerald-400/80'
-                                            : 'text-muted-foreground',
-                                    )}>
+                                    <dt className="block text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                                         {label}
                                     </dt>
-                                    <dd className={cn(
-                                        'mt-1 text-sm font-semibold break-words',
-                                        isPay && value != null
-                                            ? 'text-emerald-700 dark:text-emerald-400 tabular-nums'
-                                            : 'text-foreground',
-                                    )}>
+                                    <dd className="mt-1 text-sm font-semibold break-words text-foreground">
                                         {value == null ? (
                                             <>
                                                 <span aria-hidden="true">—</span>
                                                 <span className="sr-only">Not set</span>
                                             </>
-                                        ) : isPay ? (
-                                            <PayAmountValue label={label} amount={value} lines={breakdown} />
                                         ) : (
                                             value
                                         )}
@@ -994,11 +811,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                         section's own Net below, masking any variance between them. */}
                                     Gross: {formatMins(calculateGrossMinutes(startTime, endTime))} · Net: {formatMins(Math.max(0, (calculateGrossMinutes(startTime, endTime) || 0) - unpaidBreak))}
                                 </div>
-                                {!gridShowsSchedPay && estimatedPay != null && estimatedPay !== '' && (
-                                    <div className="pt-1.5 border-t border-border/20">
-                                        <PayAmountWithBreakdown label="Est. Pay" amount={estimatedPay} lines={estimatedPayBreakdown} />
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
@@ -1049,11 +861,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                     <div className={cn("text-sm font-mono font-black", (clockIn && clockOut) ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40")}>
                                         Gross: {clockIn && clockOut ? formatMins(calculateGrossMinutes(clockIn, clockOut)) : '--'} · Net: {clockIn && clockOut ? formatMins(Math.max(0, (calculateGrossMinutes(clockIn, clockOut) || 0) - unpaidBreak)) : '--'}
                                     </div>
-                                    {isColumns && (
-                                        <div className="pt-1.5 border-t border-border/20">
-                                            <PayAmountWithBreakdown label="Actual Pay" amount={actualPay != null && actualPay !== '' ? actualPay : 'N/A'} />
-                                        </div>
-                                    )}
                                 </div>
                             )}
                         </div>
@@ -1158,16 +965,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                     <div className="text-sm font-mono font-black text-indigo-600 dark:text-indigo-400">
                                         Gross: {formatMins(calculateGrossMinutes(adjustedStart || clockIn || startTime, adjustedEnd || clockOut || endTime))} · Net: {formatMins(Math.max(0, (calculateGrossMinutes(adjustedStart || clockIn || startTime, adjustedEnd || clockOut || endTime) || 0) - unpaidBreak))}
                                     </div>
-                                    {/* Shift is finished (we're past the isShiftFinished branch above),
-                                        so always show this line — a null billablePay means the billable
-                                        window hasn't resolved yet (e.g. a missing punch), which must read
-                                        as "N/A", not silently disappear. The identity grid carries its own
-                                        Billable Pay cell, so this would be the same number twice. */}
-                                    {!gridShowsBillablePay && (
-                                    <div className="pt-1.5 border-t border-border/20">
-                                        <PayAmountWithBreakdown label="Billable Pay" amount={billablePay != null && billablePay !== '' ? billablePay : 'N/A'} lines={billablePayBreakdown} />
-                                    </div>
-                                    )}
                                     {wasToppedUpToMinEngagement && (
                                         <div
                                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black font-mono tracking-tight uppercase border w-fit"
@@ -1221,7 +1018,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                             Variance is available once the shift ends
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-3 rounded-xl border border-border/80 bg-muted/20 dark:bg-zinc-900/60 overflow-hidden divide-x divide-border/80">
+                                        <div className="grid grid-cols-2 rounded-xl border border-border/80 bg-muted/20 dark:bg-zinc-900/60 overflow-hidden divide-x divide-border/80">
                                             {varianceRows.map((row) => {
                                                 const isZero = row.delta === 0;
                                                 const isNeg = row.delta != null && row.delta < 0;
@@ -1344,15 +1141,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                         })()}
                     </span>
                 </div>
-
-                {estimatedPay && (
-                    <div className="mb-3 px-3 py-2 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center justify-between">
-                        <span className="text-[10px] font-black text-emerald-500/60 uppercase tracking-widest">Est. Pay</span>
-                        <div className="text-sm font-black text-emerald-500 tabular-nums">
-                            {estimatedPay}
-                        </div>
-                    </div>
-                )}
 
                 {/* COUNTDOWN */}
                 {timerText && (

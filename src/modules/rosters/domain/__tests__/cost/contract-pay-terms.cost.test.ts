@@ -5,9 +5,7 @@ import {
   resolveShiftPayInputs,
 } from '../../projections/utils/cost/index';
 import type { ShiftPayTermsField } from '../../projections/utils/cost/types';
-import { computeCostForShift } from '../../projections/pipeline/runProjectionPipeline';
 import { resolveRateSet } from '../../projections/utils/cost/rate-schedule';
-import type { WorkerShiftDTO } from '../../projections/worker/protocol';
 
 /**
  * Cards priced on the linked contract (shifts.shift_pay_terms, migration
@@ -105,48 +103,5 @@ describe('without contract terms: the shift’s own level, never a guess or an o
     const plain = estimateDetailedCostFromShift(shift({}));
     const overridden = estimateDetailedCostFromShift(shift({ remuneration_rate: 99, actual_hourly_rate: 99 }));
     expect(overridden.totalCost).toBe(plain.totalCost);
-  });
-});
-
-describe('roster projection pipeline', () => {
-  const dto = (o: Partial<WorkerShiftDTO>): WorkerShiftDTO => ({
-    id: 'p1', updatedAtMs: 1,
-    shiftDate: '2026-10-08', startTime: '09:00', endTime: '12:00', isOvernight: false,
-    scheduledLengthMinutes: 180, netLengthMinutes: 180, unpaidBreakMinutes: 0, paidBreakMinutes: 0,
-    assignedEmployeeId: 'E1', assignmentStatus: 'assigned', assignmentOutcome: null,
-    lifecycleStatus: 'Published', isCancelled: false, isLocked: false, isPublished: true, isDraft: false,
-    biddingStatus: 'not_on_bidding', tradeRequestedAt: null, tradingStatus: null,
-    organizationId: null, departmentId: 'd1', subDepartmentId: null, roleId: null,
-    roleName: 'F&B Team Member', remunerationLevel: 4, remunerationRate: null, actualHourlyRate: null,
-    levelName: null, levelNumber: null, groupType: null, subGroupName: null,
-    employeeFirstName: 'T', employeeLastName: 'U', eventIds: [], targetEmploymentType: 'Casual',
-    allowances: null, rosterSubgroupId: null, rosterSubgroupName: null, rosterGroupName: null,
-    rosterGroupExternalId: null, displayOrder: 0, notes: null, startAt: null, endAt: null,
-    fulfillmentStatus: 'none', requiredSkills: [],
-    ...o,
-  } as WorkerShiftDTO);
-
-  it('prices the contract’s higher duties like the cards (172.48)', () => {
-    const b = computeCostForShift(dto({
-      id: 'p-hd', remunerationLevel: 6,
-      payTerms: terms({ substantive_level: 4, paid_level: 6, higher_duties: true, base_rate: 43.12 }),
-    }), 180);
-    expect(b.totalCost).toBe(172.48);
-  });
-
-  it('without terms, prices the stored level — not a guess from the role name', () => {
-    // 'F&B Team Member' matches no keyword: the pipeline used to price it at
-    // the Level 1 casual default, ignoring remunerationLevel entirely.
-    const b = computeCostForShift(dto({ id: 'p-level', remunerationLevel: 4 }), 180);
-    expect(b.totalCost).toBe(Math.round(3 * resolveRateSet('2026-10-08').wageRates.LEVEL_4.casual * 100) / 100);
-  });
-
-  it('re-prices when the contract terms change but the shift does not', () => {
-    const before = computeCostForShift(dto({ id: 'p-same', payTerms: terms({}) }), 180);
-    const after = computeCostForShift(dto({
-      id: 'p-same', payTerms: terms({ substantive_level: 7, paid_level: 7, base_rate: 44.92 }),
-    }), 180);
-    expect(after.totalCost).toBeGreaterThan(before.totalCost);
-    expect(after.totalCost).toBe(134.76);
   });
 });

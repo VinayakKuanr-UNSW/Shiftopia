@@ -52,7 +52,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
-import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import { getUtilizationStatus } from '@/modules/rosters/domain/projections/utils/fairness';
 import { getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
 import {
@@ -702,7 +701,7 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
               </div>
             </div>
 
-            {/* Hours and Pay row */}
+            {/* Hours row */}
             <div className="flex items-center justify-between text-[11px] font-mono mt-1">
               <span className={cn(
                 'tabular-nums font-medium',
@@ -715,48 +714,6 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
                   <span className="text-muted-foreground/40">· no contract</span>
                 )}
               </span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="tabular-nums text-emerald-400 font-bold cursor-help hover:underline decoration-dotted transition-all">
-                    {formatCost(employee.estimatedPay)}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent className="w-52 p-3 bg-zinc-900 border-white/10 shadow-xl" side="right" sideOffset={15}>
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{employee.name.split(' ')[0]}'s Estimate</p>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/60">Base Pay</span>
-                        <span className="text-white font-medium">{formatCost(employee.payBreakdown.base)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/60">Penalties</span>
-                        <span className="text-emerald-400 font-medium">+{formatCost(employee.payBreakdown.penalty)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-white/60">Overtime</span>
-                        <span className="text-amber-400 font-medium">+{formatCost(employee.payBreakdown.overtime)}</span>
-                      </div>
-                      {employee.payBreakdown.allowance > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/60">Allowances</span>
-                          <span className="text-blue-400 font-medium">+{formatCost(employee.payBreakdown.allowance)}</span>
-                        </div>
-                      )}
-                      {employee.payBreakdown.leave > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/60">Leave Loading</span>
-                          <span className="text-purple-400 font-medium">+{formatCost(employee.payBreakdown.leave)}</span>
-                        </div>
-                      )}
-                      <div className="pt-1 border-t border-white/10 flex justify-between text-xs font-bold">
-                        <span className="text-white">Total</span>
-                        <span className="text-white">{formatCost(employee.estimatedPay)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
             </div>
 
             {/* Badges row */}
@@ -1048,7 +1005,6 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
                     isPast={isPast}
                     isDnDActive={isDnDModeActive}
                     showStatusIcons={true}
-                    detailedCost={shift.detailedCost}
                     onClick={() => onClickShift(shift)}
                     isPeopleMode={true}
                     dense={dense}
