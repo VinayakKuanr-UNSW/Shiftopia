@@ -141,8 +141,6 @@ export interface Role {
 export interface RemunerationLevel {
     level_number: number;
     level_name: string;
-    hourly_rate_min?: number;
-    hourly_rate_max?: number;
 }
 
 export interface Employee {
