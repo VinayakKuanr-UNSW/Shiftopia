@@ -18,7 +18,7 @@ invoked by the client or the worker. RLS is the authorization boundary (see
   groupType, roleId (server-side); searchQuery (client-side).
 - **Per-row computation:** billable resolution (`resolveBillableSide` ×2),
   `calculateNetMinutes`, clock-in/out variance vs `start_at`/`end_at` (overnight
-  aware), estimated pay = `netMins/60 × hourlyRate`, adjusted-source flags.
+  aware), adjusted-source flags. No pay: money is priced in Gross Pay alone.
 - **Errors:** never throws — logs and returns `[]` on any error/exception.
 - **Side effects:** none (read-only).
 
@@ -29,7 +29,7 @@ The single write path for the live grid (edit / approve / reject / metric
 override). Upserts the `timesheets` row keyed by `shift_id`.
 
 - **`updates`:** `clockIn/clockOut` (ISO only), `adjustedStart/adjustedEnd`,
-  `status`, `notes`, `rejectedReason`, `length/netLength/approximatePay`,
+  `status`, `notes`, `rejectedReason`, `length/netLength`,
   `paidBreak/unpaidBreak`, `arrival/departureVarianceReason`.
 - **`opts.expectedVersion`:** optimistic-lock CAS. When supplied, the UPDATE adds
   `.eq('version', expected)`; zero rows updated ⇒ throws `TimesheetConflictError`.
