@@ -67,6 +67,20 @@ export interface GrossPayInputWithProvenance {
   provenance: GrossPayInputProvenance;
 }
 
+/**
+ * A window priced in place of the billable one (see mapShiftRowToGrossPayInput).
+ * Times are 'HH:MM' venue wall-clock; overnight is read from their sign.
+ */
+export interface PricingWindow {
+  startTime: string;
+  endTime: string;
+  /** Net minutes before the minimum-engagement floor (the floor is applied as usual). */
+  rawNetMinutes: number;
+  hoursSource: GrossPayHoursSource;
+  /** Price it even if the shift is flagged no-show — the roster still scheduled it. */
+  ignoreNoShow?: boolean;
+}
+
 /** Scope + options for the period fetchers. */
 export interface GrossPayPeriodBounds extends PeriodBounds {
   organizationId?: string | null;
@@ -186,9 +200,14 @@ export function resolveRowEmploymentType(row: GrossPayShiftRow): EngineEmploymen
  * isNoShow  ⇐ attendance_status === 'no_show' OR timesheet.status === 'no_show'.
  * isCancelled ⇐ lifecycle_status === 'Cancelled' OR assignment_status ∈
  *               {declined, unassigned}.
+ *
+ * `window` prices a window OTHER than the billable one — the pay ledger's
+ * Scheduled (roster) and Actual (raw clock) columns — on exactly the same
+ * contract, classification and minimum-engagement context.
  */
 export function mapShiftRowToGrossPayInput(
   row: GrossPayShiftRow,
+  window?: PricingWindow,
 ): GrossPayShiftInput | null {
   const employeeId = row.assigned_employee_id;
   if (!employeeId) return null; // unassigned shift — nobody to pay.
@@ -235,7 +254,8 @@ export function mapShiftRowToGrossPayInput(
   // ── not-worked flags ─────────────────────────────────────────────────────
   const tsStatus = (ts?.status ?? '').toLowerCase();
   const attStatus = (row.attendance_status ?? '').toLowerCase();
-  const isNoShow = attStatus === ATTENDANCE_NO_SHOW || tsStatus === ATTENDANCE_NO_SHOW;
+  const isNoShow = !window?.ignoreNoShow
+    && (attStatus === ATTENDANCE_NO_SHOW || tsStatus === ATTENDANCE_NO_SHOW);
 
   const assignStatus = (row.assignment_status ?? '').toLowerCase();
   const isCancelled =
@@ -243,46 +263,69 @@ export function mapShiftRowToGrossPayInput(
     assignStatus === 'declined' ||
     assignStatus === 'unassigned';
 
-  // ── billable times — delegates to the SAME resolver the timesheet reader
-  // uses, so pricing can't drift from what the manager actually reviewed ────
-  const finished = isShiftFinished(
-    row.shift_date,
-    row.start_time ?? '',
-    row.end_time ?? '',
-    row.actual_end,
-  );
+  let rawNetMinutes: number | null;
+  let startTime: string | undefined;
+  let endTime: string | undefined;
+  let hoursSource: GrossPayHoursSource;
 
-  const managerEditedStart = !!ts?.start_time;
-  const managerEditedEnd = !!ts?.end_time;
-  const managerEdited = managerEditedStart || managerEditedEnd;
+  if (window) {
+    rawNetMinutes = window.rawNetMinutes;
+    startTime = window.startTime;
+    endTime = window.endTime;
+    hoursSource = window.hoursSource;
+  } else {
+    // ── billable times — delegates to the SAME resolver the timesheet reader
+    // uses, so pricing can't drift from what the manager actually reviewed ──
+    const finished = isShiftFinished(
+      row.shift_date,
+      row.start_time ?? '',
+      row.end_time ?? '',
+      row.actual_end,
+    );
 
-  const resolvedStart = resolveBillableSide(ts?.start_time, row.actual_start, finished);
-  const resolvedEnd = resolveBillableSide(ts?.end_time, row.actual_end, finished);
+    const managerEdited = !!ts?.start_time || !!ts?.end_time;
 
-  // A resolver 'missing' (finished, no edit, no actual — e.g. forgot to clock
-  // out) still gets a SCHEDULED estimate here for preview/estimate mode, but
-  // — unlike the old code — it is never mislabeled as 'actual' pay (see
-  // hoursSource below), and a shift in this state can no longer reach
-  // 'approved' status at all (guarded in timesheets.supabase.api.ts), so a
-  // real pay-run (approvedOnly=true) will simply never see it.
-  const startForCalc: BillableSide = resolvedStart.hhmm
-    ? resolvedStart
-    : { hhmm: row.start_time ?? null, source: resolvedStart.source };
-  const endForCalc: BillableSide = resolvedEnd.hhmm
-    ? resolvedEnd
-    : { hhmm: row.end_time ?? null, source: resolvedEnd.source };
+    const resolvedStart = resolveBillableSide(ts?.start_time, row.actual_start, finished);
+    const resolvedEnd = resolveBillableSide(ts?.end_time, row.actual_end, finished);
 
-  const unpaidBreak =
-    ts?.unpaid_break_minutes != null
-      ? ts.unpaid_break_minutes
-      : (row.unpaid_break_minutes ?? 0);
+    // A resolver 'missing' (finished, no edit, no actual — e.g. forgot to clock
+    // out) still gets a SCHEDULED estimate here for preview/estimate mode, but
+    // — unlike the old code — it is never mislabeled as 'actual' pay (see
+    // hoursSource below), and a shift in this state can no longer reach
+    // 'approved' status at all (guarded in timesheets.supabase.api.ts), so a
+    // real pay-run (approvedOnly=true) will simply never see it.
+    const startForCalc: BillableSide = resolvedStart.hhmm
+      ? resolvedStart
+      : { hhmm: row.start_time ?? null, source: resolvedStart.source };
+    const endForCalc: BillableSide = resolvedEnd.hhmm
+      ? resolvedEnd
+      : { hhmm: row.end_time ?? null, source: resolvedEnd.source };
 
-  // Overnight rollover is a pure sign check on these RESOLVED times inside
-  // calculateNetMinutes — it deliberately ignores row.is_overnight (the
-  // ORIGINAL schedule's flag). OR-ing that stale flag in used to double-count
-  // 24h whenever a manager corrected an overnight-scheduled shift to real
-  // times that didn't cross midnight (e.g. an early finish before midnight).
-  const rawNetMinutes = calculateNetMinutes(startForCalc, endForCalc, unpaidBreak);
+    const unpaidBreak =
+      ts?.unpaid_break_minutes != null
+        ? ts.unpaid_break_minutes
+        : (row.unpaid_break_minutes ?? 0);
+
+    // Overnight rollover is a pure sign check on these RESOLVED times inside
+    // calculateNetMinutes — it deliberately ignores row.is_overnight (the
+    // ORIGINAL schedule's flag). OR-ing that stale flag in used to double-count
+    // 24h whenever a manager corrected an overnight-scheduled shift to real
+    // times that didn't cross midnight (e.g. an early finish before midnight).
+    rawNetMinutes = calculateNetMinutes(startForCalc, endForCalc, unpaidBreak);
+    startTime = startForCalc.hhmm ?? undefined;
+    endTime = endForCalc.hhmm ?? undefined;
+
+    // 'actual' requires BOTH sides to have genuinely snapped from a real clock
+    // time. The old check only tested `row.actual_start != null`, so a shift
+    // with a clock-IN but no clock-OUT (start snaps, end silently falls back to
+    // the schedule above) was mislabeled 'actual' even though half its billable
+    // window was fabricated from the roster, not attendance.
+    hoursSource = managerEdited
+      ? 'adjusted'
+      : (finished && resolvedStart.source === 'snapped' && resolvedEnd.source === 'snapped')
+        ? 'actual'
+        : 'scheduled_fallback';
+  }
 
   // EBA minimum-engagement floor (F-locked 2026-07-28): the SAME resolver both
   // the timesheet reader and this payroll adapter share also applies the
@@ -308,8 +351,6 @@ export function mapShiftRowToGrossPayInput(
         employmentType,
         isSecurityRole,
       }).netMinutes;
-  const startTime = startForCalc.hhmm ?? undefined;
-  const endTime = endForCalc.hhmm ?? undefined;
 
   // ── rate & classification ─────────────────────────────────────────────────
   // MONEY-CRITICAL. The old sourcing was `hourly_rate_min ?? remuneration_rate`,
@@ -339,18 +380,6 @@ export function mapShiftRowToGrossPayInput(
   }
 
   const rate: number | null = classificationLevel ? null : (row.remuneration_rate != null ? Number(row.remuneration_rate) : null);
-
-  // ── hours provenance ──────────────────────────────────────────────────────
-  // 'actual' requires BOTH sides to have genuinely snapped from a real clock
-  // time. The old check only tested `row.actual_start != null`, so a shift
-  // with a clock-IN but no clock-OUT (start snaps, end silently falls back to
-  // the schedule above) was mislabeled 'actual' even though half its billable
-  // window was fabricated from the roster, not attendance.
-  const hoursSource: GrossPayHoursSource = managerEdited
-    ? 'adjusted'
-    : (finished && resolvedStart.source === 'snapped' && resolvedEnd.source === 'snapped')
-      ? 'actual'
-      : 'scheduled_fallback';
 
   return {
     shiftId: row.id,
@@ -482,78 +511,139 @@ export function payContractOn(
 
 // ───────────────────────── I/O fetchers ───────────────────────────────────
 
+/** PostgREST answers at most this many rows per request (the API's default cap). */
+const PAGE_SIZE = 1000;
+/** Ids per `.in()` filter — keeps the request URL well under proxy limits. */
+const IN_CHUNK = 200;
+
+type QueryResult<T> = PromiseLike<{ data: T[] | null; error: unknown }>;
+
+/**
+ * Every row of a query, page by page. A single PostgREST response is capped,
+ * and a capped response looks exactly like a complete one — so a period with
+ * more shifts than the cap used to be priced on a silent subset.
+ */
+async function fetchAllPages<T>(
+  page: (from: number, to: number) => QueryResult<T>,
+): Promise<{ rows: T[]; error: unknown }> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1);
+    if (error) return { rows, error };
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return { rows, error: null };
+  }
+}
+
+/** A `.in(column, ids)` lookup split into chunks, results concatenated. */
+async function selectInChunks<T>(
+  ids: readonly string[],
+  run: (chunk: string[]) => QueryResult<T>,
+): Promise<{ data: T[]; error: unknown }> {
+  const data: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const { data: part, error } = await run(ids.slice(i, i + IN_CHUNK));
+    if (error) return { data, error };
+    data.push(...(part ?? []));
+  }
+  return { data, error: null };
+}
+
+export interface FetchShiftRowsOptions {
+  /**
+   * Every shift in the period — all lifecycle states, assigned or not — for
+   * the pay ledger. Default: the payable set (live lifecycle, assigned).
+   */
+  allShifts?: boolean;
+}
+
 /**
  * Fetch the raw shift rows (payable lifecycle, not deleted) in the period +
  * scope, then attach each row's timesheet overlay and the assigned employee's
  * employment_type. Returns hydrated {@link GrossPayShiftRow}s (still un-mapped).
  */
-async function fetchHydratedShiftRows(
+export async function fetchHydratedShiftRows(
   bounds: GrossPayPeriodBounds,
+  opts: FetchShiftRowsOptions = {},
 ): Promise<GrossPayShiftRow[]> {
-  let query = supabase
-    .from('shifts')
-    .select(`
-      id,
-      shift_date,
-      start_time,
-      end_time,
-      start_at,
-      end_at,
-      is_overnight,
-      lifecycle_status,
-      assignment_status,
-      attendance_status,
-      actual_start,
-      actual_end,
-      paid_break_minutes,
-      unpaid_break_minutes,
-      net_length_minutes,
-      scheduled_length_minutes,
-      remuneration_level,
-      remuneration_rate,
-      target_employment_type,
-      user_contract_id,
-      assigned_employee_id,
-      assignment_outcome,
-      trading_status,
-      is_cancelled,
-      role_id,
-      is_first_aid_duty,
-      is_training,
-      roles(id, name),
-      remuneration_levels(level_number, level_name),
-      assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
-      roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
-    `)
-    .gte('shift_date', bounds.periodStart)
-    .lte('shift_date', bounds.periodEnd)
-    .in('lifecycle_status', LIFECYCLE_PAYABLE)
-    .is('deleted_at', null)
-    .not('assigned_employee_id', 'is', null)
-    .order('shift_date');
+  const buildQuery = () => {
+    let query = supabase
+      .from('shifts')
+      .select(`
+        id,
+        shift_date,
+        start_time,
+        end_time,
+        start_at,
+        end_at,
+        is_overnight,
+        lifecycle_status,
+        assignment_status,
+        attendance_status,
+        actual_start,
+        actual_end,
+        paid_break_minutes,
+        unpaid_break_minutes,
+        net_length_minutes,
+        scheduled_length_minutes,
+        remuneration_level,
+        remuneration_rate,
+        target_employment_type,
+        user_contract_id,
+        assigned_employee_id,
+        assignment_outcome,
+        trading_status,
+        is_cancelled,
+        role_id,
+        is_first_aid_duty,
+        is_training,
+        organization_id,
+        department_id,
+        sub_department_id,
+        roles(id, name),
+        remuneration_levels(level_number, level_name),
+        assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+        roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
+      `)
+      .gte('shift_date', bounds.periodStart)
+      .lte('shift_date', bounds.periodEnd)
+      .is('deleted_at', null)
+      // A stable total order, so consecutive pages neither skip nor repeat rows.
+      .order('shift_date')
+      .order('id');
 
-  if (bounds.organizationId) query = query.eq('organization_id', bounds.organizationId);
-  if (bounds.departmentId) query = query.eq('department_id', bounds.departmentId);
-  if (bounds.subDepartmentId) query = query.eq('sub_department_id', bounds.subDepartmentId);
+    if (!opts.allShifts) {
+      query = query
+        .in('lifecycle_status', LIFECYCLE_PAYABLE)
+        .not('assigned_employee_id', 'is', null);
+    }
 
-  if (bounds.orgIds?.length) query = query.in('organization_id', bounds.orgIds);
-  if (bounds.deptIds?.length) query = query.in('department_id', bounds.deptIds);
-  if (bounds.subDeptIds?.length) query = query.in('sub_department_id', bounds.subDeptIds);
+    if (bounds.organizationId) query = query.eq('organization_id', bounds.organizationId);
+    if (bounds.departmentId) query = query.eq('department_id', bounds.departmentId);
+    if (bounds.subDepartmentId) query = query.eq('sub_department_id', bounds.subDepartmentId);
 
-  const { data: shifts, error } = await query;
+    if (bounds.orgIds?.length) query = query.in('organization_id', bounds.orgIds);
+    if (bounds.deptIds?.length) query = query.in('department_id', bounds.deptIds);
+    if (bounds.subDeptIds?.length) query = query.in('sub_department_id', bounds.subDeptIds);
+    return query;
+  };
+
+  const { rows: shifts, error } = await fetchAllPages((from, to) => buildQuery().range(from, to));
   if (error) {
+    // Half a period priced as if it were the whole is worse than no figure.
     console.error('[grossPay.read] shifts query error:', error);
-    return [];
+    throw error;
   }
-  const rows = (shifts ?? []) as unknown as GrossPayShiftRow[];
+  const rows = shifts as unknown as GrossPayShiftRow[];
   if (rows.length === 0) return [];
 
   // Attach timesheet overlays (by shift_id).
   const shiftIds = rows.map((r) => r.id);
-  const { data: timesheets, error: tsErr } = await supabase
+  const { data: timesheets, error: tsErr } = await selectInChunks(shiftIds, (ids) => supabase
     .from('timesheets')
     .select('id, shift_id, start_time, end_time, unpaid_break_minutes, status')
-    .in('shift_id', shiftIds);
+    .in('shift_id', ids));
   if (tsErr) console.error('[grossPay.read] timesheets query error:', tsErr);
   const tsByShift = new Map(
     (timesheets ?? [])
@@ -579,23 +669,21 @@ async function fetchHydratedShiftRows(
   const payHistoryByContract = new Map<string, ContractPayTermsRow[]>();
 
   if (employeeIds.length > 0) {
-    const none = Promise.resolve({ data: [] as any[], error: null });
     const [pRes, cRes, linkedRes, historyRes] = await Promise.all([
-      supabase.from('profiles').select('id, employment_type').in('id', employeeIds),
+      selectInChunks<any>(employeeIds, (ids) =>
+        supabase.from('profiles').select('id, employment_type').in('id', ids)),
       // H1 audit fix: fetch apprentice/trainee/SWS columns that AddContractDialog writes.
-      supabase.from('user_contracts').select(CONTRACT_PAY_COLUMNS)
-        .in('user_id', employeeIds).eq('status', 'Active'),
-      linkedContractIds.length > 0
-        ? supabase.from('user_contracts').select(CONTRACT_PAY_COLUMNS).in('id', linkedContractIds)
-        : none,
+      selectInChunks<any>(employeeIds, (ids) =>
+        supabase.from('user_contracts').select(CONTRACT_PAY_COLUMNS).in('user_id', ids).eq('status', 'Active')),
+      selectInChunks<any>(linkedContractIds, (ids) =>
+        supabase.from('user_contracts').select(CONTRACT_PAY_COLUMNS).in('id', ids)),
       // RLS: payroll managers (delta access) read every row; others their own.
       // Unreadable history falls back to the contract's current terms, as the
       // SQL resolver does when a contract has no history row.
-      linkedContractIds.length > 0
-        ? (supabase as any).schema('hr').from('contract_pay_terms')
-            .select('contract_id, effective_from, pay_basis, remuneration_level, annual_salary')
-            .in('contract_id', linkedContractIds)
-        : none,
+      selectInChunks<any>(linkedContractIds, (ids) =>
+        (supabase as any).schema('hr').from('contract_pay_terms')
+          .select('contract_id, effective_from, pay_basis, remuneration_level, annual_salary')
+          .in('contract_id', ids)),
     ]);
 
     if (pRes.error) console.error('[grossPay.read] profiles query error:', pRes.error);
@@ -632,6 +720,7 @@ async function fetchHydratedShiftRows(
       ? payContractOn(own, payHistoryByContract.get(own.id) ?? [], r.shift_date)
       : null;
     const contract = own ?? (r.assigned_employee_id ? contractByEmployee.get(r.assigned_employee_id) : null);
+    r._hasActiveContract = !!contract;
     r._contractRemunerationLevel = contract?.remuneration_level ?? null;
     // H1 audit fix: apprentice/trainee/SWS fields from the active contract.
     if (contract) {
