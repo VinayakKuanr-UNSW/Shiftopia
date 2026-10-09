@@ -1,20 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { estimateDetailedShiftCost } from '../../projections/utils/cost/standard';
 import type { CostCalculatorOptions } from '../../projections/utils/cost/types';
-import { runProjectionPipeline } from '../../projections/pipeline/runProjectionPipeline';
-import type { WorkerShiftDTO, ProjectionRequest } from '../../projections/worker/protocol';
-import { resolveRateSet } from '../../projections/utils/cost/rate-schedule';
 
 /**
  * Weekly overtime (cl. 42) — the ordinary hours that push a member's running
  * weekly ordinary total past 38h become overtime instead of ordinary.
  *
- * Two layers are tested:
- *   1. ENGINE — estimateDetailedShiftCost with an explicit
- *      `priorOrdinaryHoursThisWeek`, incl. the safe-by-default no-op and the
- *      casual exclusion.
- *   2. PIPELINE — runProjectionPipeline accumulates prior ordinary hours per
- *      employee / ISO week and feeds them to the engine (the production wiring).
+ * The ENGINE is tested here — estimateDetailedShiftCost with an explicit
+ * `priorOrdinaryHoursThisWeek`, incl. the safe-by-default no-op and the casual
+ * exclusion. The production wiring that accumulates prior hours per employee
+ * and ISO week is the payroll aggregator (gross-pay.test.ts, and the shift pay
+ * ledger in shift-pay-ledger.test.ts); the roster projection no longer prices
+ * shifts (decision 2026-10-09: money is shown in Gross Pay alone).
  *
  * Dates: 2026-07-06=Mon … 2026-07-10=Fri (one ISO week, none are PH).
  */
@@ -98,132 +95,5 @@ describe('weekly OT — engine (cl. 42)', () => {
     expect(r.ordinaryHours).toBe(8);
     expect(r.overtimeHours).toBe(0);
     expect(r.totalCost).toBeCloseTo(8 * 37.5, 5); // 300
-  });
-});
-
-// ── Pipeline integration ──────────────────────────────────────────────────────
-
-/** Level 4 on 2026-07-06 (FY26/27 rates): permanent and casual-loaded. */
-const L4 = resolveRateSet('2026-07-06').wageRates.LEVEL_4;
-
-let idc = 0;
-function dto(o: Partial<WorkerShiftDTO>): WorkerShiftDTO {
-  return {
-    id: `s${idc++}`,
-    updatedAtMs: 1,
-    shiftDate: '2026-07-06',
-    startTime: '09:00',
-    endTime: '17:00',
-    isOvernight: false,
-    scheduledLengthMinutes: 480,
-    netLengthMinutes: 480,
-    unpaidBreakMinutes: 0,
-    paidBreakMinutes: 0,
-    assignedEmployeeId: 'E1',
-    assignmentStatus: 'assigned',
-    assignmentOutcome: null,
-    lifecycleStatus: 'Published',
-    isCancelled: false,
-    isLocked: false,
-    isPublished: true,
-    isDraft: false,
-    biddingStatus: 'not_on_bidding',
-    tradeRequestedAt: null,
-    tradingStatus: null,
-    organizationId: null,
-    departmentId: 'd1',
-    subDepartmentId: null,
-    roleId: null,
-    roleName: 'Attendant',
-    // Priced on the stored level — per-shift rate overrides are ignored
-    // (decision 2026-10-08, same as the budget SQL and payroll).
-    remunerationLevel: 4,
-    remunerationRate: null,
-    actualHourlyRate: null,
-    levelName: null,
-    levelNumber: null,
-    groupType: null,
-    subGroupName: null,
-    employeeFirstName: 'Test',
-    employeeLastName: 'User',
-    eventIds: [],
-    targetEmploymentType: 'Full-Time',
-    allowances: null,
-    rosterSubgroupId: null,
-    rosterSubgroupName: null,
-    rosterGroupName: null,
-    rosterGroupExternalId: null,
-    displayOrder: 0,
-    notes: null,
-    startAt: null,
-    endAt: null,
-    fulfillmentStatus: 'none',
-    requiredSkills: [],
-    ...o,
-  };
-}
-
-function request(shifts: WorkerShiftDTO[]): ProjectionRequest {
-  return {
-    requestId: 1,
-    mode: 'people',
-    shifts,
-    employees: [],
-    roles: [],
-    levels: [],
-    events: [],
-    rosterStructures: [],
-    filters: {
-      roleId: null, skillIds: [], lifecycleStatus: 'all', assignmentStatus: 'all',
-      assignmentOutcome: 'all', biddingStatus: 'all', tradingStatus: 'all',
-      stateId: null, searchQuery: '',
-    },
-    nowIso: '2026-07-06T00:00:00.000Z',
-  };
-}
-
-describe('weekly OT — pipeline accumulation (production wiring)', () => {
-  it('accumulates prior ordinary hours across a FT member\'s week and spills past 38h', () => {
-    idc = 0;
-    // 5 weekday 8h shifts Mon–Fri (same ISO week) = 40h ordinary before weekly OT.
-    const dates = ['2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10'];
-    const shifts = dates.map(d => dto({ shiftDate: d }));
-
-    const res = runProjectionPipeline(request(shifts));
-    expect(res).not.toBeNull();
-
-    // Shifts 1–4 (prior 0/8/16/24) stay ordinary: 4 × 8h = 32h.
-    // Shift 5 (prior 32, room 6): 6h ordinary; 2h OT @1.5.
-    //   base ordinary = 38h × L4; overtime = 2h × 1.5 × L4.
-    const r = L4.permanent;
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(38 * r, 4);
-    expect(res!.stats.costBreakdown.overtime).toBeCloseTo(2 * 1.5 * r, 4);
-    expect(res!.stats.estimatedCost).toBeCloseTo(38 * r + 3 * r, 4);
-  });
-
-  it('does NOT accumulate across DIFFERENT ISO weeks (each week resets to 0)', () => {
-    idc = 0;
-    // Two weeks, 5×8h each — every shift under 38h/week ⇒ zero weekly OT.
-    const wk1 = ['2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09'];
-    const wk2 = ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'];
-    const shifts = [...wk1, ...wk2].map(d => dto({ shiftDate: d }));
-
-    const res = runProjectionPipeline(request(shifts));
-    // 8 shifts × 8h = 64h ordinary, no OT (each week peaks at 32h).
-    expect(res!.stats.costBreakdown.overtime).toBeCloseTo(0, 4);
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(64 * L4.permanent, 4);
-  });
-
-  it('leaves casual members untouched — no weekly OT even past 38h in a week', () => {
-    idc = 0;
-    const dates = ['2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10'];
-    const shifts = dates.map(d => dto({
-      shiftDate: d, targetEmploymentType: 'Casual',
-    }));
-
-    const res = runProjectionPipeline(request(shifts));
-    // 5 × 8h at the loaded casual rate, no OT.
-    expect(res!.stats.costBreakdown.overtime).toBeCloseTo(0, 4);
-    expect(res!.stats.costBreakdown.base).toBeCloseTo(40 * L4.casual, 4);
   });
 });

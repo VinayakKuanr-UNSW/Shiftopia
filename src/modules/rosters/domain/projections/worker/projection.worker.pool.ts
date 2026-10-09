@@ -55,7 +55,7 @@ const DEFAULT_DEBOUNCE_MS = 50;
 
 /**
  * Merge an array of partial ProjectionStatsResult into a single aggregate.
- * All numeric fields are summed; cost is rounded at the end.
+ * All numeric fields are summed.
  */
 function mergeStats(partials: ProjectionStatsResult[]): ProjectionStatsResult {
   const merged: ProjectionStatsResult = {
@@ -64,8 +64,6 @@ function mergeStats(partials: ProjectionStatsResult[]): ProjectionStatsResult {
     openShifts: 0,
     publishedShifts: 0,
     totalNetMinutes: 0,
-    estimatedCost: 0,
-    costBreakdown: { base: 0, penalty: 0, overtime: 0, allowance: 0, leave: 0 },
   };
 
   for (const p of partials) {
@@ -74,15 +72,8 @@ function mergeStats(partials: ProjectionStatsResult[]): ProjectionStatsResult {
     merged.openShifts += p.openShifts;
     merged.publishedShifts += p.publishedShifts;
     merged.totalNetMinutes += p.totalNetMinutes;
-    merged.estimatedCost += p.estimatedCost;
-    merged.costBreakdown.base += p.costBreakdown.base;
-    merged.costBreakdown.penalty += p.costBreakdown.penalty;
-    merged.costBreakdown.overtime += p.costBreakdown.overtime;
-    merged.costBreakdown.allowance += p.costBreakdown.allowance;
-    merged.costBreakdown.leave += p.costBreakdown.leave;
   }
 
-  merged.estimatedCost = Math.round(merged.estimatedCost * 100) / 100;
   return merged;
 }
 
@@ -129,16 +120,9 @@ function mergePeople(partials: any[], rangeDays?: number): any {
         employeeMap.set(emp.id, {
           ...emp,
           shifts: { ...emp.shifts },
-          payBreakdown: { ...emp.payBreakdown },
         });
       } else {
         existing.currentHours += emp.currentHours;
-        existing.estimatedPay += emp.estimatedPay;
-        existing.payBreakdown.base += emp.payBreakdown.base;
-        existing.payBreakdown.penalty += emp.payBreakdown.penalty;
-        existing.payBreakdown.overtime += emp.payBreakdown.overtime;
-        existing.payBreakdown.allowance += emp.payBreakdown.allowance;
-        existing.payBreakdown.leave += emp.payBreakdown.leave;
 
         for (const [date, shifts] of Object.entries(emp.shifts)) {
           existing.shifts[date] = [...(existing.shifts[date] || []), ...(shifts as any[])];
@@ -204,9 +188,9 @@ function mergeGroups(partials: any[]): any {
           subGroups: g.subGroups.map((sg: any) => ({
             ...sg,
             shiftsByDate: { ...sg.shiftsByDate },
-            stats: { ...sg.stats, costBreakdown: { ...sg.stats.costBreakdown } },
+            stats: { ...sg.stats },
           })),
-          stats: { ...g.stats, costBreakdown: { ...g.stats.costBreakdown } },
+          stats: { ...g.stats },
         };
         groupMap.set(g.id, existing);
       } else {
@@ -214,12 +198,6 @@ function mergeGroups(partials: any[]): any {
         existing.stats.totalShifts += g.stats.totalShifts;
         existing.stats.assignedShifts += g.stats.assignedShifts;
         existing.stats.totalHours += g.stats.totalHours;
-        existing.stats.estimatedCost += g.stats.estimatedCost;
-        existing.stats.costBreakdown.base += g.stats.costBreakdown.base;
-        existing.stats.costBreakdown.penalty += g.stats.costBreakdown.penalty;
-        existing.stats.costBreakdown.overtime += g.stats.costBreakdown.overtime;
-        existing.stats.costBreakdown.allowance += g.stats.costBreakdown.allowance;
-        existing.stats.costBreakdown.leave += g.stats.costBreakdown.leave;
 
         // Merge subGroups
         for (const sg of g.subGroups) {
@@ -228,18 +206,12 @@ function mergeGroups(partials: any[]): any {
             existing.subGroups.push({
               ...sg,
               shiftsByDate: { ...sg.shiftsByDate },
-              stats: { ...sg.stats, costBreakdown: { ...sg.stats.costBreakdown } },
+              stats: { ...sg.stats },
             });
           } else {
             existingSg.stats.totalShifts += sg.stats.totalShifts;
             existingSg.stats.assignedShifts += sg.stats.assignedShifts;
             existingSg.stats.totalHours += sg.stats.totalHours;
-            existingSg.stats.estimatedCost += sg.stats.estimatedCost;
-            existingSg.stats.costBreakdown.base += sg.stats.costBreakdown.base;
-            existingSg.stats.costBreakdown.penalty += sg.stats.costBreakdown.penalty;
-            existingSg.stats.costBreakdown.overtime += sg.stats.costBreakdown.overtime;
-            existingSg.stats.costBreakdown.allowance += sg.stats.costBreakdown.allowance;
-            existingSg.stats.costBreakdown.leave += sg.stats.costBreakdown.leave;
 
             for (const [date, shifts] of Object.entries(sg.shiftsByDate)) {
               existingSg.shiftsByDate[date] = [...(existingSg.shiftsByDate[date] || []), ...(shifts as any[])];
@@ -281,14 +253,12 @@ function mergeRoles(partials: any[]): any {
         });
       } else {
         existingLvl.totalHours += lvl.totalHours;
-        existingLvl.totalCost += lvl.totalCost;
         for (const r of lvl.roles) {
           const existingR = existingLvl.roles.find((er: any) => er.id === r.id);
           if (!existingR) {
             existingLvl.roles.push({ ...r, shiftsByDate: { ...r.shiftsByDate } });
           } else {
             existingR.totalHours += r.totalHours;
-            existingR.totalCost += r.totalCost;
             for (const [date, shifts] of Object.entries(r.shiftsByDate)) {
               existingR.shiftsByDate[date] = [...(existingR.shiftsByDate[date] || []), ...(shifts as any[])];
             }
@@ -304,7 +274,6 @@ function mergeRoles(partials: any[]): any {
         unassignedRoleMap.set(r.id, { ...r, shiftsByDate: { ...r.shiftsByDate } });
       } else {
         existingR.totalHours += r.totalHours;
-        existingR.totalCost += r.totalCost;
         for (const [date, shifts] of Object.entries(r.shiftsByDate)) {
           existingR.shiftsByDate[date] = [...(existingR.shiftsByDate[date] || []), ...(shifts as any[])];
         }

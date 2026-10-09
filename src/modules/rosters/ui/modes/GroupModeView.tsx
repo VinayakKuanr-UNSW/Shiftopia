@@ -424,32 +424,21 @@ interface GroupModeViewProps {
   summaryData?: Map<string, import('@/modules/rosters/api/rosterSummary.queries').RosterSummaryCellDTO>;
   /** Callback to open drill-down panel */
   onDrillDown?: (date: string, groupType: string, subGroupName?: string) => void;
+  /**
+   * Shift counts and hours for the footer. No cost or budget: labour cost is
+   * shown in Gross Pay alone (decision 2026-10-09).
+   */
   footerStats?: {
     totalShifts: number;
     assignedShifts: number;
     unfilledShifts: number;
-    estimatedCost: number;
-    budget: number;
-    remainingBudget: number;
     /** Roster as planned — all live shifts in view, filled or not. */
-    scheduledCost: number;
-    /** What was actually worked. */
-    actualCost: number;
     scheduledNetMinutes: number;
+    /** What was actually worked. */
     actualNetMinutes: number;
-    costedShifts: number;
-    /** Live shifts with no resolvable rate — they silently contribute $0. */
-    uncostedShifts: number;
-    /** Live shifts actually worked — denominator for actualCost. */
+    /** Live shifts actually worked — denominator for actualNetMinutes. */
     actualShifts: number;
   };
-  /**
-   * Show the Budget / Remaining stat blocks in the footer. Defaults to false:
-   * budget hidden until a real budget source (e.g. planning_periods) is wired —
-   * the current budget is a hardcoded placeholder that yields a fake negative
-   * "Remaining". Est. Cost is always shown regardless of this flag.
-   */
-  showBudget?: boolean;
 }
 
 interface VisualGroup {
@@ -489,7 +478,6 @@ interface ShiftDisplay {
   isUrgent: boolean;
   isLocked?: boolean;
   assignmentOutcome?: string;
-  detailedCost?: import('@/modules/rosters/domain/projections/utils/cost/types').ShiftCostBreakdown;
 }
 
 /* ============================================================
@@ -605,35 +593,28 @@ const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
    COVERAGE SIGNAL BAR — segmented LED strip for group headers
    ============================================================ */
 
-/** `420` → `7h 0m`; used as each cost panel's supporting hours figure. */
+/** `420` → `7h 0m`. */
 const formatNetMinutes = (mins: number): string => {
   const safe = Math.max(0, Math.round(mins));
   return `${Math.floor(safe / 60)}h ${safe % 60}m`;
 };
 
-interface CostPanelProps {
+interface HoursPanelProps {
   label: string;
-  amount: number;
   minutes: number;
-  /** Denominator line — what the amount is actually over. */
+  /** Denominator line — what the hours are actually over. */
   countLabel: string;
-  /** Amber tint: some shifts in scope resolved no rate, so the total is short. */
-  warn?: boolean;
-  /** Dim the amount when it is a structural zero rather than a real $0. */
+  /** Dim the hours when they are a structural zero (nothing worked yet). */
   muted?: boolean;
   tone: 'planned' | 'actual';
 }
 
 /**
- * One cost total for the CURRENT view, with its own denominator.
- *
- * The denominator is the point: a bare "$0.00" cannot distinguish "nothing has
- * been worked yet" from "nothing could be priced" from "genuinely free". The
- * previous single Est. Cost read $0.00 across a fully-costed 156-shift roster
- * because it silently counted only ASSIGNED shifts.
+ * One hours total for the CURRENT view, with its own denominator — a bare
+ * "0h" cannot distinguish "nothing worked yet" from "nothing rostered".
  */
-const CostPanel: React.FC<CostPanelProps> = ({
-  label, amount, minutes, countLabel, warn = false, muted = false, tone,
+const HoursPanel: React.FC<HoursPanelProps> = ({
+  label, minutes, countLabel, muted = false, tone,
 }) => (
   <div
     className={cn(
@@ -652,9 +633,6 @@ const CostPanel: React.FC<CostPanelProps> = ({
       >
         {label}
       </span>
-      <span className="text-[10px] text-muted-foreground/60 tabular-nums">
-        {formatNetMinutes(minutes)}
-      </span>
     </div>
     <div
       className={cn(
@@ -662,15 +640,9 @@ const CostPanel: React.FC<CostPanelProps> = ({
         muted ? 'text-muted-foreground/50' : 'text-foreground',
       )}
     >
-      ${amount.toFixed(2)}
+      {formatNetMinutes(minutes)}
     </div>
-    <div
-      className={cn(
-        'text-[10px] leading-tight',
-        warn ? 'text-amber-400' : 'text-muted-foreground/50',
-      )}
-      title={warn ? 'Some shifts in view have no resolvable pay rate and contribute $0 to this total.' : undefined}
-    >
+    <div className="text-[10px] leading-tight text-muted-foreground/50">
       {countLabel}
     </div>
   </div>
@@ -1424,7 +1396,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   summaryData,
   onDrillDown,
   footerStats,
-  showBudget = false,
 }) => {
   const { toast } = useToast();
   const { isDark } = useTheme();
@@ -2274,7 +2245,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                 rawShift: ps.raw,
                 isUrgent: ps.isUrgent,
                 isLocked: ps.isLocked,
-                detailedCost: ps.detailedCost,
               })),
             ])
           ),
@@ -2855,7 +2825,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
           isPast={isPastDate}
           isDnDActive={isDnDModeActive}
-          detailedCost={shift.detailedCost}
           onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
         />
       </div>
@@ -2915,27 +2884,18 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-4">
-                        {/* Two cost panels, both scoped to the CURRENT view (the
+                        {/* Two hours panels, both scoped to the CURRENT view (the
                             stats RPC takes the same org/date/department filters
                             as the grid). Scheduled = the plan; Actual = what was
-                            worked. Each carries its own denominator so a $0.00
-                            can't be mistaken for "free" when it means "nothing
-                            worked yet" or "nothing priced". */}
-                        <CostPanel
+                            worked. Labour cost and budget live in Gross Pay. */}
+                        <HoursPanel
                           label="Scheduled"
-                          amount={footerStats.scheduledCost}
                           minutes={footerStats.scheduledNetMinutes}
-                          countLabel={
-                            footerStats.uncostedShifts > 0
-                              ? `${footerStats.costedShifts} of ${footerStats.totalShifts} priced`
-                              : `${footerStats.totalShifts} shift${footerStats.totalShifts === 1 ? '' : 's'}`
-                          }
-                          warn={footerStats.uncostedShifts > 0}
+                          countLabel={`${footerStats.totalShifts} shift${footerStats.totalShifts === 1 ? '' : 's'}`}
                           tone="planned"
                         />
-                        <CostPanel
+                        <HoursPanel
                           label="Actual"
-                          amount={footerStats.actualCost}
                           minutes={footerStats.actualNetMinutes}
                           countLabel={
                             footerStats.actualShifts === 0
@@ -2945,30 +2905,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                           muted={footerStats.actualShifts === 0}
                           tone="actual"
                         />
-                        {/* Budget / Remaining hidden until a real budget source
-                            (e.g. planning_periods) is wired — the current budget
-                            is a hardcoded placeholder yielding a fake negative. */}
-                        {showBudget && (
-                          <>
-                            <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 hidden md:block" />
-                            <div>
-                              <span className="text-muted-foreground/60 font-medium">Budget:</span>
-                              <span className="ml-2 font-semibold text-foreground">${footerStats.budget.toFixed(2)}</span>
-                            </div>
-                            <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 hidden md:block" />
-                            <div>
-                              <span className="text-muted-foreground/60 font-medium">Remaining:</span>
-                              <span
-                                className={cn(
-                                  'ml-2 font-semibold',
-                                  footerStats.remainingBudget >= 0 ? 'text-emerald-400' : 'text-red-400'
-                                )}
-                              >
-                                ${footerStats.remainingBudget.toFixed(2)}
-                              </span>
-                            </div>
-                          </>
-                        )}
                       </div>
                     </div>
                   </div>

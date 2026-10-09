@@ -26,9 +26,7 @@ import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
-import { isShiftFinished, isEntryReviewable, cleanTime, calculateHoursBetween } from './TimesheetTable.utils';
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
+import { isShiftFinished, isEntryReviewable, cleanTime } from './TimesheetTable.utils';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { validateBillableEdit, billableVarianceVsRoster } from '../../domain/billable-edit';
@@ -155,80 +153,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     >(null);
     const [arrivalReason, setArrivalReason] = useState('');
     const [departureReason, setDepartureReason] = useState('');
-
-    // Estimated pay for the SCHEDULED shift (award estimate, not payroll) — shown
-    // in the Scheduled section, with an itemised rate breakdown on hover. This
-    // is a lightweight preview (`estimateDetailedCostFromShift`), NOT the
-    // authoritative payroll calculation — the Gross Pay module is that, and
-    // already resolves employmentType precisely (incl. Flexible Part-Time,
-    // which this shared estimator's own regex-based mapping collapses into
-    // plain Part-Time — a pre-existing, documented imprecision of the
-    // "quick estimate" utility, not something this tooltip can fully correct).
-    const scheduledCost = useMemo(() => {
-        if (!entry.scheduledStart || !entry.scheduledEnd) return null;
-        try {
-            return estimateDetailedCostFromShift({
-                shift_date: String(entry.date),
-                start_time: entry.scheduledStart,
-                end_time: entry.scheduledEnd,
-                roles: { name: entry.role },
-                remuneration_level: entry.remunerationLevelNumber,
-                shift_pay_terms: entry.payTerms,
-                employmentType: entry.employmentType,
-                is_training: entry.isTraining,
-                unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
-                scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
-            });
-        } catch {
-            return null;
-        }
-    }, [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.role, entry.remunerationLevelNumber, entry.payTerms, entry.employmentType, entry.isTraining, entry.unpaidBreak]);
-    // A salaried shift has no per-shift pay — the salary is paid per period.
-    const scheduledPay = scheduledCost
-        ? (scheduledCost.payBasis === 'salary' ? 'Salaried' : `$${scheduledCost.totalCost.toFixed(2)}`)
-        : null;
-    const scheduledPayLines = useMemo(
-        () => scheduledCost && scheduledCost.payBasis !== 'salary'
-            ? buildOrdinaryEarningsLines(scheduledCost, { isSecurityRole: !!entry.isSecurityRole, shiftDate: String(entry.date), startTime: entry.scheduledStart })
-            : [],
-        [scheduledCost, entry.isSecurityRole, entry.date, entry.scheduledStart],
-    );
-
-    // Estimated pay for the BILLABLE window — what payroll will actually pay,
-    // priced off the resolved billable start/end and the EBA-floored net
-    // minutes (`entry.netLengthMinutes`, already topped up if applicable —
-    // see billable-time.ts) rather than letting the estimator re-derive net
-    // minutes from the raw times, so a topped-up shift prices at the floor
-    // here too, not the shorter raw span. Only shown once the billable window
-    // has actually resolved (mirrors "not surfaced until the shift ends").
-    const billableCost = useMemo(() => {
-        if (!entry.adjustedStart || !entry.adjustedEnd || entry.netLengthMinutes == null) return null;
-        try {
-            return estimateDetailedCostFromShift({
-                shift_date: String(entry.date),
-                start_time: entry.adjustedStart,
-                end_time: entry.adjustedEnd,
-                roles: { name: entry.role },
-                remuneration_level: entry.remunerationLevelNumber,
-                shift_pay_terms: entry.payTerms,
-                employmentType: entry.employmentType,
-                is_training: entry.isTraining,
-                unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
-                scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
-            }, entry.netLengthMinutes);
-        } catch {
-            return null;
-        }
-    }, [entry.date, entry.adjustedStart, entry.adjustedEnd, entry.netLengthMinutes, entry.role, entry.remunerationLevelNumber, entry.payTerms, entry.employmentType, entry.isTraining, entry.unpaidBreak, entry.scheduledStart, entry.scheduledEnd]);
-    const billablePay = billableCost
-        ? (billableCost.payBasis === 'salary' ? 'Salaried' : `$${billableCost.totalCost.toFixed(2)}`)
-        : null;
-    const billablePayLines = useMemo(
-        () => billableCost && billableCost.payBasis !== 'salary'
-            ? buildOrdinaryEarningsLines(billableCost, { isSecurityRole: !!entry.isSecurityRole, shiftDate: String(entry.date), startTime: entry.adjustedStart ?? undefined })
-            : [],
-        [billableCost, entry.isSecurityRole, entry.date, entry.adjustedStart],
-    );
 
     const { toast } = useToast();
 
@@ -477,10 +401,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             departureVarianceReason={entry.departureVarianceReason}
             wasToppedUpToMinEngagement={entry.wasToppedUpToMinEngagement}
             requiredEngagementMinutes={entry.requiredEngagementMinutes}
-            estimatedPay={scheduledPay}
-            estimatedPayBreakdown={scheduledPayLines}
-            billablePay={billablePay}
-            billablePayBreakdown={billablePayLines}
             showPayrollRules
             timesheetStatus={entry.timesheetStatus}
             shiftData={{

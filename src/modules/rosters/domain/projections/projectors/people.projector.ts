@@ -17,8 +17,6 @@ import type {
 import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { UNASSIGNED_BUCKET_ID, dicebearUrl } from '../constants';
 import { minutesToHours } from '../utils/duration';
-import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
-import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
 import { determineShiftState } from '../../shift-state.utils';
 import { GROUP_COLORS, UNASSIGNED_COLORS, ALL_GROUP_TYPES } from '../constants';
 import { computeUtilizationPct, isOverContractedHours, periodContractedHours, computePeakFatigue } from '../utils/workload';
@@ -52,27 +50,15 @@ function makeEmployee(
     currentHours: 0,
     overHoursWarning: false,
     shifts: {},
-    estimatedPay: 0,
     fatigueScore: 0,
     utilization: 0,
-    payBreakdown: {
-      base: 0,
-      penalty: 0,
-      overtime: 0,
-      allowance: 0,
-      leave: 0,
-    }
   };
 }
 
 function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
-  const isAssigned = !!shift.assignedEmployeeId;
   const netMinutes = shift.netLengthMinutes ?? shift.scheduledLengthMinutes;
   
   // Try to get cost from cache, default to zero if not computed (pipeline should compute it)
-  const key = makeCacheKey(shift.id, shift.updatedAtMs);
-  const detail = isAssigned ? (getCachedCost(key) ?? ZERO_COST_BREAKDOWN) : ZERO_COST_BREAKDOWN;
-  const estimatedCost = detail.totalCost;
 
   const groupType = shift.groupType ?? null;
   const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
@@ -94,15 +80,6 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
     endTime: shift.endTime,
     netMinutes,
     unpaidBreakMinutes: shift.unpaidBreakMinutes ?? 0,
-    estimatedCost,
-    costBreakdown: {
-      base: detail.ordinaryCost,
-      penalty: detail.penaltyCost,
-      overtime: detail.overtimeCost,
-      allowance: detail.allowanceCost ?? 0,
-      leave: 0,
-    },
-    detailedCost: detail,
     stateId,
     roleName: shift.roleName ?? 'Shift',
     roleId: shift.roleId,
@@ -124,7 +101,6 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
     
     role: shift.roleName ?? 'Shift',
     hours: minutesToHours(netMinutes),
-    pay: estimatedCost,
     status: shift.isCancelled ? 'Draft' : (shift.assignedEmployeeId ? (shift.isDraft ? 'Draft' : 'Assigned') : 'Open'),
     lifecycleStatus: shift.isPublished ? 'published' : 'draft',
     assignmentStatus: shift.assignedEmployeeId ? 'assigned' : 'unassigned',
@@ -206,13 +182,6 @@ export function projectPeople(
 
     if (!shift.isCancelled && shift.assignedEmployeeId) {
       emp.currentHours = Math.round((emp.currentHours + ps.hours) * 100) / 100;
-      emp.estimatedPay += ps.pay;
-      
-      emp.payBreakdown.base += ps.costBreakdown.base;
-      emp.payBreakdown.penalty += ps.costBreakdown.penalty;
-      emp.payBreakdown.overtime += ps.costBreakdown.overtime;
-      emp.payBreakdown.allowance += ps.costBreakdown.allowance;
-      emp.payBreakdown.leave += ps.costBreakdown.leave;
     }
   });
 
@@ -277,8 +246,6 @@ export function projectPeople(
         openShifts: 0,
         publishedShifts: 0,
         totalNetMinutes: 0,
-        estimatedCost: 0,
-        costBreakdown: { base: 0, penalty: 0, overtime: 0, allowance: 0, leave: 0 },
     },
   };
 }

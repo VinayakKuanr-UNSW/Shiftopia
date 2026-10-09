@@ -17,7 +17,6 @@ function pivotTrend(rows: TrendRow[]): TrendChartPoint[] {
         }
         const point = map.get(label)!;
         point[row.dept_name] = row.fill_rate;
-        point[`${row.dept_name}_cost`] = row.estimated_cost;
     }
 
     return Array.from(map.values());

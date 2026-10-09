@@ -4,8 +4,6 @@ import type { Shift } from '../../shift.entity';
 import type { RoleRecord, LevelRecord } from '../../projections/types';
 import type { WorkerShiftDTO } from '../../projections/worker/protocol';
 import { shiftToDTO, rolesToDTO, levelsToDTO } from '../../projections/worker/mappers';
-import { setCachedCost, makeCacheKey } from '../../projections/cache/projection.cache';
-import { ZERO_COST_BREAKDOWN } from '../../projections/utils/cost/constants';
 
 // ── Factories ─────────────────────────────────────────────────────────────────
 
@@ -104,15 +102,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
   } as unknown as Shift));
 }
 
-/** Seed the projection cost cache so an assigned shift carries a known cost. */
-function seedCost(dto: WorkerShiftDTO, totalCost: number): void {
-  setCachedCost(makeCacheKey(dto.id, dto.updatedAtMs), {
-    ...ZERO_COST_BREAKDOWN,
-    ordinaryCost: totalCost,
-    totalCost,
-  });
-}
-
 const ROLES: RoleRecord[] = [
   { id: 'role-1', name: 'V8Stage Hand',  code: 'SH',  remuneration_level: 3 },
   { id: 'role-2', name: 'AV Tech',     code: 'AVT', remuneration_level: 3 },
@@ -183,20 +172,15 @@ describe('projectRoles — shiftsByDate', () => {
   });
 });
 
-describe('projectRoles — totalHours / totalCost aggregation', () => {
+describe('projectRoles — totalHours aggregation', () => {
   it('level totalHours sums across all roles in that level', () => {
-    // Cost is employee-dependent: assigned shifts read their cost from the
-    // projection cache (seeded here), unassigned shifts contribute zero.
     const s1 = makeShift({ assigned_employee_id: 'emp-1', role_id: 'role-1', remuneration_level: 3, net_length_minutes: 480, remuneration_rate: 30 });
     const s2 = makeShift({ assigned_employee_id: 'emp-2', role_id: 'role-2', remuneration_level: 3, net_length_minutes: 240, remuneration_rate: 30,
       roles: { id: 'role-2', name: 'AV Tech' },
     });
-    seedCost(s1, 240); // 8h * 30
-    seedCost(s2, 120); // 4h * 30
     const result = projectRoles([s1, s2], { roles: rolesToDTO(ROLES), levels: levelsToDTO(LEVELS) });
     const lv = result.levels.find(l => l.id === '3')!;
     expect(lv.totalHours).toBeCloseTo(12); // 8h + 4h
-    expect(lv.totalCost).toBeCloseTo(360);  // 8*30 + 4*30
   });
 });
 

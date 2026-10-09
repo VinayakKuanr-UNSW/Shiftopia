@@ -68,17 +68,13 @@ export interface Shift {
     /** The assignee's contract this shift is worked under (trg_shift_z_link_contract). */
     user_contract_id?: string | null;
     /**
-     * Computed field: the linked contract's pay terms on the shift date, when
-     * the viewer is the assignee or a delta-access manager (migration
-     * 20261008232922). Cost estimates price on it — see resolveShiftPayInputs.
+     * Computed field: the linked contract's pay terms on the shift date
+     * (migration 20261008232922). The app no longer selects it — money is
+     * shown in Gross Pay alone, which reads hr.contract_pay_terms itself — but
+     * the cost adapters still price on it when a caller supplies it; see
+     * resolveShiftPayInputs.
      */
     shift_pay_terms?: ShiftPayTermsField | null;
-    /**
-     * Computed field: what the VIEWER would be paid on this shift — their own
-     * contract the link trigger would choose (migration 20261009022054). For
-     * open bids; select it explicitly.
-     */
-    my_shift_pay_terms?: ShiftPayTermsField | null;
     remuneration_rate: number | null;
     actual_hourly_rate: number | null;
     currency: string;

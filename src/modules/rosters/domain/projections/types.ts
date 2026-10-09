@@ -16,7 +16,6 @@
 import type { Shift, TemplateGroupType } from '../shift.entity';
 import type { ShiftStateID } from '../shift-state.utils';
 import type { CoverageHealth } from './utils/coverage';
-import type { ShiftCostBreakdown } from './utils/cost/types';
 
 // ── Styling token set (lives in constants.ts, typed here) ─────────────────────
 
@@ -49,21 +48,9 @@ export interface ProjectedShift {
   startTime:       string;
   endTime:         string;
 
-  // Timing & cost (derived from net_length_minutes / remuneration_rate)
+  // Timing (derived from net_length_minutes). No cost: money is shown in
+  // Gross Pay alone (decision 2026-10-09).
   netMinutes:      number;
-  estimatedCost:   number;
-  costBreakdown: {
-    base: number;
-    penalty: number;
-    overtime: number;
-    allowance: number;
-    leave: number;
-  };
-  /**
-   * Full ICC EA cost breakdown — pre-computed once at projection time so the
-   * UI doesn't re-run the payroll engine for every card on every render.
-   */
-  detailedCost:    ShiftCostBreakdown;
 
   // Domain classification
   stateId:         ShiftStateID;
@@ -94,7 +81,6 @@ export interface ProjectedShift {
   // Legacy UI compatibility fields (computed once in projector)
   role:            string;
   hours:           number;
-  pay:             number;
   status:          'Open' | 'Assigned' | 'Completed' | 'Draft';
   lifecycleStatus: 'draft' | 'published';
   assignmentStatus: 'assigned' | 'unassigned';
@@ -120,15 +106,6 @@ export interface ProjectionStats {
   publishedShifts:  number;
   /** Sum of net_length_minutes across all non-cancelled shifts */
   totalNetMinutes:  number;
-  /** Estimated labour cost at remuneration_rate */
-  estimatedCost:    number;
-  costBreakdown: {
-    base: number;
-    penalty: number;
-    overtime: number;
-    allowance: number;
-    leave: number;
-  };
 }
 
 // ── Group mode ─────────────────────────────────────────────────────────────────
@@ -137,14 +114,6 @@ export interface SubGroupStats {
   totalShifts:    number;
   assignedShifts: number;
   totalHours:     number;
-  estimatedCost:  number;
-  costBreakdown: {
-    base: number;
-    penalty: number;
-    overtime: number;
-    allowance: number;
-    leave: number;
-  };
 }
 
 export interface GroupStats extends SubGroupStats {
@@ -183,7 +152,6 @@ export interface ProjectedRole {
   /** Keyed by ISO date string YYYY-MM-DD */
   shiftsByDate: Record<string, ProjectedShift[]>;
   totalHours:   number;
-  totalCost:    number;
 }
 
 export interface ProjectedLevel {
@@ -194,7 +162,6 @@ export interface ProjectedLevel {
   colorClass:   string;
   roles:        ProjectedRole[];
   totalHours:   number;
-  totalCost:    number;
 }
 
 export interface RolesProjection {
@@ -228,16 +195,8 @@ export interface ProjectedEmployee {
   /** Keyed by ISO date string YYYY-MM-DD */
   shifts:           Record<string, ProjectedShift[]>;
   /** Derived statistics for the employee window */
-  estimatedPay:     number;
   fatigueScore:     number;
   utilization:      number;
-  payBreakdown: {
-    base:      number;
-    penalty:   number;
-    overtime:  number;
-    allowance: number;
-    leave:     number;
-  };
 }
 
 export interface PeopleProjection {

@@ -26,7 +26,6 @@ import type {
 import type { EmployeeRecord, RoleRecord, LevelRecord, EventRecord } from '../types';
 import type { RosterStructure } from '../../../model/roster.types';
 import type { AdvancedFilters } from '../../../state/useRosterStore';
-import { resolveShiftAllowances } from '../utils/cost/shift-allowances';
 
 // ── Shift → WorkerShiftDTO ────────────────────────────────────────────────────
 
@@ -71,9 +70,6 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     roleId: shift.role_id,
     roleName: shift.roles?.name ?? null,
     remunerationLevel: shift.remuneration_level,
-    remunerationRate: shift.remuneration_rate,
-    actualHourlyRate: shift.actual_hourly_rate,
-    payTerms: shift.shift_pay_terms ?? null,
 
     // Level info
     levelName: shift.remuneration_levels?.level_name ?? null,
@@ -89,18 +85,6 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
 
     // Events
     eventIds: shift.event_ids ?? [],
-
-    // Cost engine inputs
-    targetEmploymentType: shift.target_employment_type ?? null,
-    allowances: resolveShiftAllowances(shift) ?? null,
-    isAnnualLeave: shift.isAnnualLeave,
-    isPersonalLeave: shift.isPersonalLeave,
-    isCarerLeave: shift.isCarerLeave,
-    previousWage: shift.previousWage,
-    // priorOrdinaryHoursThisWeek is intentionally NOT set here — it is a
-    // cross-shift accumulation (ordinary hours earlier in the same ISO week) that
-    // only the pipeline can compute once it has all of an employee's shifts. See
-    // buildStats() in runProjectionPipeline.ts. Left undefined ⇒ weekly OT OFF.
 
     // Roster structure
     rosterSubgroupId: shift.roster_subgroup?.name ? (shift as any).roster_subgroup_id ?? null : null,

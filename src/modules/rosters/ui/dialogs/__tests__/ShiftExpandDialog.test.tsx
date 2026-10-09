@@ -3,8 +3,8 @@
  * Rosters page (moved from the Office card, 2026-10-04).
  *
  * `SharedShiftCard` is stubbed to echo the props that decide the expanded
- * layout and the pay row — re-testing a 1400-line shared card through this one
- * is not the point.
+ * layout — re-testing a 1400-line shared card through this one is not the
+ * point.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -14,16 +14,20 @@ import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+const cardProps = vi.hoisted(() => ({ last: {} as Record<string, unknown> }));
+
 vi.mock('@/modules/planning/ui/components/SharedShiftCard', () => ({
-    SharedShiftCard: (p: { sectionLayout?: string; topContent?: React.ReactNode; estimatedPay?: React.ReactNode }) => (
-        <div data-testid="full-card" data-layout={p.sectionLayout}>
-            {p.topContent}
-            <div data-testid="pay">{p.estimatedPay}</div>
-        </div>
-    ),
+    SharedShiftCard: (p: { sectionLayout?: string; topContent?: React.ReactNode }) => {
+        cardProps.last = p as Record<string, unknown>;
+        return (
+            <div data-testid="full-card" data-layout={p.sectionLayout}>
+                {p.topContent}
+            </div>
+        );
+    },
 }));
 
-const { ShiftExpandDialog, isPriceable } = await import('../ShiftExpandDialog');
+const { ShiftExpandDialog } = await import('../ShiftExpandDialog');
 
 const shift = {
     id: 'sh-1', shift_date: '2026-10-05', start_time: '08:00', end_time: '16:06',
@@ -55,16 +59,10 @@ describe('ShiftExpandDialog', () => {
         expect(within(dialog).getByTestId('full-card')).toHaveAttribute('data-layout', 'columns');
     });
 
-    it('says "Not priced" rather than showing the engine default for a shift with no rate', () => {
-        wrap(<ShiftExpandDialog shift={shift} onOpenChange={() => {}} />);
-        expect(screen.getByTestId('pay')).toHaveTextContent('Not priced');
-    });
-
-    it('treats a level or a rate as enough to price', () => {
-        expect(isPriceable({})).toBe(false);
-        expect(isPriceable({ remuneration_level: 3 })).toBe(true);
-        expect(isPriceable({ remuneration_rate: 41.2 })).toBe(true);
-        expect(isPriceable({ remuneration_level: 0, remuneration_rate: 0 })).toBe(false);
+    it('shows no pay — that lives in Gross Pay alone', () => {
+        wrap(<ShiftExpandDialog shift={{ ...shift, remuneration_level: 3 } as Shift} onOpenChange={() => {}} />);
+        const payProps = Object.keys(cardProps.last).filter((k) => /^(estimated|billable|actual)Pay/.test(k));
+        expect(payProps).toEqual([]);
     });
 
     it('flags a second shift the same day', () => {

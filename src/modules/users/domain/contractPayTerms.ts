@@ -185,15 +185,14 @@ export function evaluatePayTerms(input: PayTermsInput): PayEvaluation {
 
         const threshold = salaryThreshold(input.eaTopAnnualRate, employmentStatus, input.contractedWeeklyHours);
         if (threshold != null && input.annualSalary > 0 && input.annualSalary <= threshold) {
-            const at = formatMoney(threshold, 0);
             if (input.exclusionReason === 'above_threshold') {
                 warnings.push({
-                    message: `cl 2.2(b) only excludes someone paid more than the EA's highest rate (${at} a year${employmentStatus === 'Part-Time' ? ' pro rata' : ''}). At this salary they are probably covered by the EA.`,
+                    message: `cl 2.2(b) only excludes someone paid more than the EA's highest rate${employmentStatus === 'Part-Time' ? ' (pro rata)' : ''}. At this salary they are probably covered by the EA.`,
                     clause: 'cl 2.2(b)',
                 });
             } else if (input.exclusionReason === 'managerial') {
                 warnings.push({
-                    message: `This pays no more than an EA Level 7 earns (${at} a year${employmentStatus === 'Part-Time' ? ' pro rata' : ''}). Check the role really is managerial.`,
+                    message: `This pays no more than an EA Level 7 earns${employmentStatus === 'Part-Time' ? ' (pro rata)' : ''}. Check the role really is managerial.`,
                     clause: 'cl 2.2(a)',
                 });
             }
@@ -330,75 +329,4 @@ export function eaTopAnnualRate(schedule: readonly EbaRateSetLike[], onDate: str
     return l7 ? round2(l7.ordinaryHourlyRate * ORDINARY_WEEK_HOURS * WEEKS_PER_YEAR) : null;
 }
 
-export interface PayQuote {
-    headline: string;
-    detail: string;
-}
-
-/** What this contract pays, for display. Null when there is nothing to quote yet. */
-export function quotePay(params: {
-    payBasis: PayBasis;
-    employmentStatus: string;
-    level: number | '';
-    annualSalary: number;
-    contractedWeeklyHours: number;
-    schedule: readonly EbaRateSetLike[];
-    onDate: string;
-}): PayQuote | null {
-    const { payBasis, employmentStatus, level, schedule, onDate } = params;
-
-    if (payBasis === 'salary') {
-        if (!(params.annualSalary > 0)) return null;
-        const weekly = employmentStatus === 'Full-Time' ? ORDINARY_WEEK_HOURS : params.contractedWeeklyHours;
-        return {
-            headline: `${formatMoney(params.annualSalary, 0)}/yr`,
-            detail: weekly > 0
-                ? `≈ ${formatMoney(params.annualSalary / WEEKS_PER_YEAR / weekly)}/h over ${weekly}h a week · outside the EA`
-                : 'outside the EA',
-        };
-    }
-
-    if (level === '') return null;
-
-    if (payBasis === 'eba_security_annualised') {
-        const rate = resolveEbaRate(schedule, ebaClassificationKey(level, payBasis), 'annualised', onDate);
-        if (!rate) return null;
-        return {
-            headline: `≈ ${formatMoney(rate.paidHourlyRate * SECURITY_ROSTER_WEEK_HOURS * WEEKS_PER_YEAR, 0)}/yr`,
-            detail: `${formatMoney(rate.paidHourlyRate)}/h annualised × ${SECURITY_ROSTER_WEEK_HOURS}h roster · Sch 2 §2`,
-        };
-    }
-
-    const isCasual = employmentStatus === 'Casual';
-    const rate = resolveEbaRate(schedule, ebaClassificationKey(level, payBasis), isCasual ? 'casual' : 'permanent', onDate);
-    if (!rate) return null;
-    if (isCasual) {
-        return {
-            headline: `${formatMoney(rate.paidHourlyRate)}/h`,
-            detail: 'casual rate, includes the 25% loading · cl 12.5(b)',
-        };
-    }
-    if (employmentStatus === 'Full-Time') {
-        return {
-            headline: `${formatMoney(rate.ordinaryHourlyRate * ORDINARY_WEEK_HOURS)}/week`,
-            detail: `${formatMoney(rate.ordinaryHourlyRate)}/h × ${ORDINARY_WEEK_HOURS}h · Sch 2 §1`,
-        };
-    }
-    return {
-        headline: `${formatMoney(rate.ordinaryHourlyRate)}/h`,
-        detail: 'ordinary hourly rate · Sch 2 §1',
-    };
-}
-
-// ── Formatting ─────────────────────────────────────────────────────────────
-
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-export function formatMoney(amount: number, fractionDigits = 2): string {
-    return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        minimumFractionDigits: fractionDigits,
-        maximumFractionDigits: fractionDigits,
-    }).format(amount);
-}

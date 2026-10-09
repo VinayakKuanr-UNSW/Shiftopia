@@ -13,6 +13,7 @@ import {
     statusFor,
     labelFor,
     formatMetric,
+    analysisHref,
 } from '../metric-registry';
 import { REPORT_THRESHOLDS, METRIC_THRESHOLDS } from '@/modules/users/hooks/usePerformanceMetrics';
 import { KPI_THRESHOLDS } from '../marketplace-kpis.types';
@@ -188,10 +189,9 @@ describe('formatMetric', () => {
         expect(formatMetric('avg_bids_per_open_shift', 2.44)).toBe('2.4');
     });
 
-    it('scales currency', () => {
-        expect(formatMetric('estimated_cost', 940)).toBe('$940');
-        expect(formatMetric('estimated_cost', 12_400)).toBe('$12.4k');
-        expect(formatMetric('estimated_cost', 2_500_000)).toBe('$2.50M');
+    it('carries no money metric — labour cost is shown in Gross Pay alone', () => {
+        expect(METRIC_REGISTRY.estimated_cost).toBeUndefined();
+        expect(analysisHref('estimated_cost', 'Q3 2026')).toBeUndefined();
     });
 
     it('renders missing data as an em dash, distinct from a real zero', () => {

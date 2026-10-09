@@ -9,7 +9,6 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import { cn } from '@/modules/core/lib/utils';
 import { todayISO } from '@/modules/core/lib/date.utils';
-import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
 import {
     allowedActions,
     appointmentStatus,
@@ -71,7 +70,6 @@ const QualificationNotice: React.FC<{ qualifications: FirstAidQualification[] | 
 
 const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeName = 'this person' }) => {
     const today = todayISO();
-    const ratePerHour = resolveRateSet(today).allowances.firstAidPerHour;
 
     const { data: appointments, isLoading } = useFirstAidAppointments(employeeId);
     const { data: organisations } = useEmployeeOrganisations(employeeId);
@@ -142,7 +140,7 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                         First Aid
                     </h3>
                     <p className="text-[11px] text-muted-foreground">
-                        {isAppointedToday ? 'Appointed first aider' : 'Not appointed'} · cl 28.2 · ${ratePerHour.toFixed(2)} per ordinary hour
+                        {isAppointedToday ? 'Appointed first aider' : 'Not appointed'} · allowance per ordinary hour · cl 28.2
                     </p>
                 </div>
                 {canManage && (

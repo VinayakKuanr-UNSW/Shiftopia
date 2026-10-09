@@ -38,7 +38,6 @@ interface Role {
 interface RemunerationLevel {
   id: string;
   level: string;
-  hourlyRate: number;
 }
 
 export interface RosterShiftData {
@@ -307,7 +306,7 @@ export const RosterShiftModal: React.FC<RosterShiftModalProps> = ({
               <SelectContent>
                 {remunerationLevels.map((level) => (
                   <SelectItem key={level.id} value={level.id}>
-                    {level.level} - ${level.hourlyRate}/hr
+                    {level.level}
                   </SelectItem>
                 ))}
               </SelectContent>

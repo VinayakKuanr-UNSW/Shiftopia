@@ -32,9 +32,7 @@ import { text } from '@/modules/core/ui/typography';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCasualConversionStatus } from '../../domain/casualConversion';
 import { getSwsTrialStatus } from '../../domain/swsTrial';
-import { EXCLUSION_REASON_LABELS, quotePay, type EbaExclusionReason, type PayBasis } from '../../domain/contractPayTerms';
-import { useEbaRates } from '@/modules/payroll/state/useEbaRates';
-import { todayISO } from '@/modules/core/lib/date.utils';
+import { EXCLUSION_REASON_LABELS, type EbaExclusionReason } from '../../domain/contractPayTerms';
 
 interface SectionProps {
     employeeId: string;
@@ -49,19 +47,6 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
     const queryClient = useQueryClient();
     const { user: currentUser } = useAuth();
     const isAuthorizedAdmin = currentUser?.highestAccessLevel === 'epsilon';
-
-    // What each contract pays today, from the effective-dated EA schedule.
-    const { schedule: ebaSchedule } = useEbaRates(true);
-    const today = todayISO();
-    const payFor = (c: any) => quotePay({
-        payBasis: (c.pay_basis ?? 'eba_level') as PayBasis,
-        employmentStatus: c.employment_status ?? '',
-        level: c.remuneration_level != null ? Number(c.remuneration_level) : '',
-        annualSalary: Number(c.annual_salary) || 0,
-        contractedWeeklyHours: Number(c.contracted_weekly_hours) || 0,
-        schedule: ebaSchedule,
-        onDate: today,
-    });
 
     const { data: contracts, isLoading } = useQuery({
         queryKey: ['user_contracts', employeeId],
@@ -287,7 +272,6 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                     <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Role</th>
                                                     <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Type</th>
                                                     <th scope="col" className="px-3.5 py-2.5 text-right text-[10px] font-black uppercase tracking-wider text-muted-foreground">Hours</th>
-                                                    <th scope="col" className="px-3.5 py-2.5 text-right text-[10px] font-black uppercase tracking-wider text-muted-foreground">Pay</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-border">
@@ -297,7 +281,6 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                     const levelNumber = c.remuneration_level != null ? Number(c.remuneration_level) : -1;
                                                     const status = c.employment_status || '';
                                                     const isSalaried = c.pay_basis === 'salary';
-                                                    const pay = payFor(c);
                                                     const reason = c.eba_exclusion_reason as EbaExclusionReason | null;
 
                                                     return (
@@ -313,6 +296,9 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                             </td>
                                                             <th scope="row" className="px-3.5 py-2.5 text-left font-bold text-sm text-foreground">
                                                                 {c.roles?.name || 'Unknown role'}
+                                                                {isSalaried && reason && (
+                                                                    <span className="block text-[11px] font-normal text-muted-foreground">{EXCLUSION_REASON_LABELS[reason]}</span>
+                                                                )}
                                                             </th>
                                                             <td className="px-3.5 py-2.5">
                                                                 <span className={cn(
@@ -337,18 +323,6 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                                                 {weekly > 0 ? `${weekly} h/wk`
                                                                     : annual > 0 ? `${annual} h/yr`
                                                                         : <span className="text-muted-foreground/40 font-normal">—</span>}
-                                                            </td>
-                                                            <td className="px-3.5 py-2.5 text-right">
-                                                                {pay ? (
-                                                                    <>
-                                                                        <span className="block font-mono font-bold text-xs text-foreground">{pay.headline}</span>
-                                                                        {isSalaried && reason && (
-                                                                            <span className="block text-[11px] text-muted-foreground">{EXCLUSION_REASON_LABELS[reason]}</span>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground/40 text-xs">—</span>
-                                                                )}
                                                             </td>
                                                         </tr>
                                                     );

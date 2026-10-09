@@ -21,7 +21,6 @@ const COLUMNS: { header: string; key: keyof TimesheetRow }[] = [
     { header: 'Paid Break (min)',    key: 'paidBreak' },
     { header: 'Unpaid Break (min)', key: 'unpaidBreak' },
     { header: 'Net Length',         key: 'netLength' },
-    { header: 'Est. cost (not payroll)', key: 'approximatePay' },
     { header: 'Variance (min)',      key: 'differential' },
     { header: 'Lifecycle',          key: 'liveStatus' },
     { header: 'Timesheet Status',   key: 'timesheetStatus' },

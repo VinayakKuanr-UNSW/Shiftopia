@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Plus, Loader2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -11,7 +11,6 @@ import {
     useContractWizardForm,
     computeMixedPermanentConflict,
     evaluateWizardTerms,
-    FULL_TIME_WEEKLY_HOURS,
     type ContractClass,
     type WizardPayContext,
 } from '../../hooks/useContractWizardForm';
@@ -20,7 +19,6 @@ import {
     allowedPayBases,
     defaultPayBasis,
     eaTopAnnualRate,
-    quotePay,
     SECURITY_ANNUALISED_LEVELS,
     type RoleBand,
 } from '../../../domain/contractPayTerms';
@@ -82,8 +80,9 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
     );
 
     // ── Pay ──────────────────────────────────────────────────────────────────
-    // Rates are the effective-dated EA schedule on today's Sydney date (the
-    // contract starts today); the role contributes its band and whether it is a
+    // The EA's top rate on today's Sydney date (the contract starts today) feeds
+    // the cl 2.2 salary cautions only — no rate is shown here (money is shown
+    // in Gross Pay alone). The role contributes its band and whether it is a
     // Security role (Schedule 3 — the same name test the cost engine uses).
     const { schedule: ebaSchedule } = useEbaRates(open);
     const onDate = todayISO();
@@ -105,29 +104,6 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
         [formData, ceilingContracts, payContext],
     );
     const allowedBases = allowedPayBases(formData.employment_status, isSecurityRole);
-    const quoteWeeklyHours = formData.employment_status === 'Full-Time'
-        ? FULL_TIME_WEEKLY_HOURS
-        : formData.contracted_weekly_hours;
-
-    const rateFor = useCallback((level: number) => quotePay({
-        payBasis: formData.pay_basis,
-        employmentStatus: formData.employment_status,
-        level,
-        annualSalary: 0,
-        contractedWeeklyHours: quoteWeeklyHours,
-        schedule: ebaSchedule,
-        onDate,
-    })?.headline ?? null, [formData.pay_basis, formData.employment_status, quoteWeeklyHours, ebaSchedule, onDate]);
-
-    const quote = quotePay({
-        payBasis: formData.pay_basis,
-        employmentStatus: formData.employment_status,
-        level: formData.remuneration_level,
-        annualSalary: formData.annual_salary,
-        contractedWeeklyHours: quoteWeeklyHours,
-        schedule: ebaSchedule,
-        onDate,
-    });
 
     /** The role's default pay basis for this employment type (a casual is always on a level). */
     const applyDefaultPayBasis = (status: string, forRole: any) => {
@@ -300,8 +276,6 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
                             onPayBasisChange={(basis) => updateField('pay_basis', basis)}
                             band={payContext.band}
                             allowedLevels={formData.pay_basis === 'eba_security_annualised' ? SECURITY_ANNUALISED_LEVELS : undefined}
-                            rateFor={rateFor}
-                            quote={quote}
                             levelOutsideBand={terms.pay.levelOutsideBand}
                             level_note={formData.level_note}
                             onLevelNoteChange={(note) => updateField('level_note', note)}

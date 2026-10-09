@@ -1,16 +1,19 @@
 /**
- * KPI › Overview — coverage, cost, compliance and department performance.
+ * KPI › Overview — coverage, compliance and department performance.
  *
  * Implements the minimal, consistent analytics dashboard aesthetic with:
- *  - Top 5 sparkline KPI cards with ambient wave gradients
+ *  - Top sparkline KPI cards with ambient wave gradients
  *  - High-clarity multi-department trend lines
  *  - Smart Operational Insights AI card
- *  - Department cost distribution & detail breakdown
+ *  - Department shift volume & fill-rate breakdown
+ *
+ * No labour cost: money is shown in Gross Pay alone (decision 2026-10-09) —
+ * Gross Pay → Labour cost has cost by department against budget.
  */
 
 import React from 'react';
 import {
-    ChartBar, DollarSign, CheckCircle2, Clock, Users, Zap, TrendingUp, AlertTriangle, ShieldCheck,
+    ChartBar, CheckCircle2, Clock, Users, Zap, TrendingUp, AlertTriangle, ShieldCheck,
 } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
@@ -33,12 +36,6 @@ const DEPT_COLORS = [
     '#3b82f6', '#8b5cf6', '#14b8a6', '#f97316',
     '#64748b', '#ec4899', '#06b6d4', '#84cc16',
 ];
-
-function fmt$(n: number) {
-    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-    if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-    return `$${n.toFixed(0)}`;
-}
 
 interface OverviewKpiTabProps {
     filters: KpiFilters;
@@ -107,13 +104,11 @@ export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) 
         type: 'line' as const,
     }));
 
-    const costBarData = deptRows.map((r) => ({
+    const volumeBarData = deptRows.map((r) => ({
         bucket: r.dept_name.length > 14 ? r.dept_name.slice(0, 14) + '…' : r.dept_name,
-        cost: Number(r.estimated_cost),
+        total: Number(r.shifts_total),
+        assigned: Number(r.shifts_assigned),
     }));
-
-    const costPerHour = s && s.scheduled_hours > 0 ? s.estimated_cost / s.scheduled_hours : 0;
-    const prevCostPerHour = p && (p.scheduled_hours ?? 0) > 0 ? (p.estimated_cost ?? 0) / (p.scheduled_hours ?? 1) : undefined;
 
     // Build intelligent operational takeaways
     const smartInsights: InsightItem[] = [];
@@ -170,9 +165,9 @@ export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) 
 
     return (
         <div className="flex flex-col gap-8">
-            {/* ── Band A: 5-Card Top Headline Grid with Ambient Sparklines ── */}
+            {/* ── Band A: Headline Grid with Ambient Sparklines ── */}
             <section aria-label="Key Performance Indicators">
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                     <KpiTile
                         label="Shift Fill Rate"
                         value={loading ? null : `${s?.shift_fill_rate ?? 0}%`}
@@ -185,29 +180,6 @@ export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) 
                         sparklineColor="purple"
                         loading={loading}
                         href={analysisHref('shift_fill_rate', period.label)}
-                    />
-                    <KpiTile
-                        label="Total Labour Cost"
-                        value={loading ? null : fmt$(s?.estimated_cost ?? 0)}
-                        status="neutral"
-                        denominator={`${s?.scheduled_hours ?? 0}h scheduled`}
-                        tooltip="Total estimated labour cost across all rostered shifts in scope."
-                        delta={delta(s?.estimated_cost, p?.estimated_cost, 'percent')}
-                        deltaGoodDirection="down"
-                        icon={DollarSign}
-                        sparklineColor="emerald"
-                        loading={loading}
-                    />
-                    <KpiTile
-                        label="Cost per Hour"
-                        value={loading ? null : (costPerHour > 0 ? fmt$(costPerHour) : '—')}
-                        status="neutral"
-                        denominator="Estimated cost ÷ scheduled hours"
-                        tooltip="Average hourly labour rate across all active contracts."
-                        delta={delta(costPerHour, prevCostPerHour, 'percent')}
-                        deltaGoodDirection="down"
-                        sparklineColor="blue"
-                        loading={loading}
                     />
                     <KpiTile
                         label="No-Show Rate"
@@ -277,17 +249,17 @@ export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) 
                 </div>
             </div>
 
-            {/* ── Band C: Secondary Operational Breakdown (Labour Cost & Distribution) ── */}
+            {/* ── Band C: Secondary Operational Breakdown (Shift Volume & Distribution) ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
                 <KpiBand
-                    title="Labour Cost by Department"
-                    description="Estimated expenditure per department."
+                    title="Shift Volume by Department"
+                    description="Shifts rostered and filled per department."
                 >
                     {depts.isError ? (
                         <PageState
                             state="error"
                             scope="inline"
-                            title="Couldn't load cost data"
+                            title="Couldn't load department data"
                             onRetry={() => depts.refetch()}
                         />
                     ) : depts.isLoading ? (
@@ -298,12 +270,13 @@ export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) 
                         </p>
                     ) : (
                         <KpiTrendChart
-                            data={costBarData}
+                            data={volumeBarData}
                             xKey="bucket"
-                            caption={`Labour cost by department, ${period.label}`}
-                            emptyMessage="No cost data available."
+                            caption={`Shifts by department, ${period.label}`}
+                            emptyMessage="No shift data available."
                             series={[
-                                { key: 'cost', label: 'Estimated Cost', color: SERIES_COLORS.good, type: 'bar' },
+                                { key: 'total', label: 'Rostered', color: SERIES_COLORS.muted, type: 'bar' },
+                                { key: 'assigned', label: 'Filled', color: SERIES_COLORS.good, type: 'bar' },
                             ]}
                             height={240}
                         />

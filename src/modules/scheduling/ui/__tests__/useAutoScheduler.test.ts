@@ -110,7 +110,6 @@ describe('sortEmployeeGroups', () => {
         name: 'X',
         proposals: [],
         roleDistribution: [],
-        totalCost: 0,
         avgFatigue: 0,
         utilization: 0,
         employmentType: 'Casual',

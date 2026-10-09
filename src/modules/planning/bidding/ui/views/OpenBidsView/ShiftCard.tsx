@@ -21,7 +21,6 @@ import { cn } from '@/modules/core/lib/utils';
 
 import type { ManagerBidShift, OpenShift, TimeRemaining } from './types';
 import { formatTimeRemaining } from './utils';
-import { buildShiftCardPay } from '../../../../ui/components/shift-card-pay';
 
 interface ShiftCardProps {
   /** `group.items` is `ManagerBidShift[]`; this card only reads `group` and
@@ -68,15 +67,6 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   const assignedName = shift.assignedEmployeeName || (shift as any).assigned_employee_name || (shift as any).employeeName;
   const isAssigned = !!(shift.assignedEmployeeId || assignedName);
 
-  // Priced through the shared adapter, from the RAW shift row.
-  //
-  // This used to call `estimateDetailedShiftCost` directly with a hand-built
-  // options object that carried no `employmentType` and no
-  // `classificationLevel`, and a `rate` the mapper had already dropped — so
-  // every card in the venue priced at the engine's $33.70 default instead of
-  // the shift's own level and employment target. See `shift-card-pay.ts`.
-  const cardPay = React.useMemo(() => buildShiftCardPay(shift), [shift]);
-
   const footerActions = (
     <div className="flex flex-col gap-2 mt-2 w-full">
       {isAssigned ? (
@@ -115,8 +105,6 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         subDepartment={shift.subDepartment}
         role={shift.role}
         employeeName={assignedName}
-        estimatedPay={cardPay.estimatedPay ?? (shift as any).estimatedPay ?? (shift as any).estimated_pay}
-        estimatedPayBreakdown={cardPay.estimatedPayBreakdown}
         shiftDate={shift.date}
         startTime={shift.startTime}
         endTime={shift.endTime}

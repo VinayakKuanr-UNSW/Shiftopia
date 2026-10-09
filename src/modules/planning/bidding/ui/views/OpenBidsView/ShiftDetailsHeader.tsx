@@ -1,7 +1,7 @@
 // src/modules/planning/bidding/ui/views/OpenBidsView/ShiftDetailsHeader.tsx
 
 import React from 'react';
-import { Clock, DollarSign, Building, Calendar, Coffee, Ban } from 'lucide-react';
+import { Clock, Layers, Building, Calendar, Coffee, Ban } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
@@ -71,9 +71,9 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
             <span className="text-foreground">{shift.date}</span>
           </div>
           {shift.remunerationLevel && (
-            <div className="flex items-center gap-2 bg-emerald-500/5 px-3 py-1.5 rounded-xl border border-emerald-500/10">
-              <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-emerald-600 dark:text-emerald-400">{shift.remunerationLevel}</span>
+            <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border/50">
+              <Layers className="h-4 w-4 text-primary" />
+              <span className="text-foreground">{shift.remunerationLevel}</span>
             </div>
           )}
           <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border/50">
