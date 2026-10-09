@@ -184,8 +184,6 @@ export interface Shift {
     remuneration_levels?: {
         level_number: number;
         level_name: string;
-        hourly_rate_min?: number;
-        hourly_rate_max?: number;
     } | null;
     assigned_profiles?: {
         first_name: string;

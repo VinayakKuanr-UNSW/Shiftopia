@@ -27,7 +27,6 @@ export interface GrossPayTimesheetRow {
 export interface GrossPayRemLevelEmbed {
   level_number?: number | null;
   level_name?: string | null;
-  hourly_rate_min?: number | null;
 }
 
 /** Nested roles embed. */

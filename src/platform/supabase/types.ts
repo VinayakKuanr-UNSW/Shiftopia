@@ -7510,7 +7510,6 @@ export type Database = {
           contracted_weekly_hours: number | null
           created_at: string | null
           created_by: string | null
-          custom_hourly_rate: number | null
           department_id: string | null
           eba_exclusion_reason: string | null
           employment_status:
@@ -7561,7 +7560,6 @@ export type Database = {
           contracted_weekly_hours?: number | null
           created_at?: string | null
           created_by?: string | null
-          custom_hourly_rate?: number | null
           department_id?: string | null
           eba_exclusion_reason?: string | null
           employment_status?:
@@ -7612,7 +7610,6 @@ export type Database = {
           contracted_weekly_hours?: number | null
           created_at?: string | null
           created_by?: string | null
-          custom_hourly_rate?: number | null
           department_id?: string | null
           eba_exclusion_reason?: string | null
           employment_status?:

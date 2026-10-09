@@ -181,8 +181,7 @@ export function resolveRowEmploymentType(row: GrossPayShiftRow): EngineEmploymen
  *   • startTime / endTime returned as 'HH:MM'.
  *
  * rate = null + the classificationLevel (the engine resolves the effective-dated
- * EBA rate) ELSE remuneration_levels.hourly_rate_min as a last resort. There is
- * no per-shift rate override: someone on a level is paid that level.
+ * EBA rate). There is no per-shift rate override: someone on a level is paid that level.
  * isSecurityRole = an annualised-Security contract, or the role name says so.
  * isNoShow  ⇐ attendance_status === 'no_show' OR timesheet.status === 'no_show'.
  * isCancelled ⇐ lifecycle_status === 'Cancelled' OR assignment_status ∈
@@ -323,8 +322,7 @@ export function mapShiftRowToGrossPayInput(
   // the effective-dated Schedule 2 rate, choosing the casual vs permanent
   // column from employment type. There is no per-shift rate override (user
   // decision 2026-10-08: someone on a level is paid that level; the SQL budget
-  // ignores shifts.remuneration_rate too). hourly_rate_min is only a last
-  // resort when the row has a rem-level embed without a level_number.
+  // ignores shifts.remuneration_rate too).
   //
   // Linked: the contract's level is the classification; a higher shift level
   // is cl 29 higher duties, which the engine prices on the whole shift with a
