@@ -3,6 +3,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { RosterSummaryCellDTO } from '../../api/rosterSummary.queries';
 import { AlertCircle, Maximize2, Plus } from 'lucide-react';
+import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 
 interface GroupSummaryCellProps {
   date: Date;
@@ -42,6 +43,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   };
 
   const colors = colorMap[accent] || colorMap.gray;
+  const holidayName = getPublicHolidayName(date);
   // Without this the cell announces as an unnamed "button" — the visible content
   // is icons and abbreviations, none of which identifies the group or the date it belongs to.
   const dateLabel = format(date, 'd MMMM yyyy');
@@ -53,11 +55,19 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
         onClick={isBulkMode ? undefined : onClick}
         aria-label={`Open ${groupName} roster details for ${dateLabel}: no shifts`}
         className={cn(
-          "w-full h-[68px] rounded-xl border border-dashed border-border/50 bg-muted/20 flex flex-col items-center justify-center transition-colors group",
-          !isBulkMode && "hover:bg-muted/40 hover:border-border/80 cursor-pointer"
+          "w-full h-[68px] rounded-xl border border-dashed flex flex-col items-center justify-center transition-colors group",
+          holidayName
+            ? "border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 hover:border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+            : "border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border/80",
+          !isBulkMode && "cursor-pointer"
         )}
       >
-        <Plus className="w-5 h-5 text-purple-500/80 group-hover:text-purple-400 group-hover:scale-110 transition-all duration-200" />
+        <Plus className={cn(
+          "w-5 h-5 transition-all duration-200",
+          holidayName
+            ? "text-amber-400 group-hover:text-amber-300 group-hover:scale-110"
+            : "text-purple-500/80 group-hover:text-purple-400 group-hover:scale-110"
+        )} />
       </Component>
     );
   }
@@ -83,7 +93,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       className={cn(
         "w-full rounded-xl border p-3 flex flex-col gap-2.5 transition-all group relative text-left",
         colors.bg,
-        colors.border,
+        holidayName ? "border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.15)]" : colors.border,
         !isBulkMode && colors.hover,
         !isBulkMode && "cursor-pointer",
         isBulkMode && !isLoading && selectableCount > 0 && "cursor-pointer hover:shadow-sm",

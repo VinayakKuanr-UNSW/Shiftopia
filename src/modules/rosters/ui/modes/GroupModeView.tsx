@@ -1033,15 +1033,15 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                     key={idx}
                     className={cn(
                       'px-3 py-2.5 text-center bg-muted/30 border-b transition-colors',
-                      idx < dates.length - 1 && 'border-r border-border',
+                      idx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-border'),
                       // Public holiday highlight styling
                       holidayName && 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30',
                       // Ghost cell styling
                       isGhost && 'bg-muted/40 border-dashed border-border opacity-50',
                       // Today highlighting (only if not ghost and not holiday)
                       !isGhost && dateIsToday && !holidayName && 'bg-primary/5',
-                      // Past date styling (only if not ghost and not today)
-                      !isGhost && dateIsPast && !dateIsToday && 'opacity-50'
+                      // Past date styling (only if not ghost and not today and not holiday)
+                      !isGhost && dateIsPast && !dateIsToday && !holidayName && 'opacity-50'
                     )}
                   >
                     <div className="flex flex-col items-center gap-1 pt-0.5">
@@ -1212,6 +1212,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                     const cellIsToday = isToday(date);
                     const cellIsPast = isSydneyPast(date);
                     const isGhost = !isDateInTemplate(date);
+                    const holidayName = getPublicHolidayName(date);
 
                     const bucketKey = `${dateKey}::${group.type}::${subGroup.name}`;
                     const bucketShifts = shiftsByBucketKey.get(bucketKey) || [];
@@ -1245,14 +1246,16 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                         role="cell"
                         key={dateIdx}
                         className={cn(
-                          'px-2 py-3 min-h-[100px] relative group',
-                          dateIdx < dates.length - 1 && 'border-r border-border',
+                          'px-2 py-3 min-h-[100px] relative group transition-colors',
+                          dateIdx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-border'),
+                          // Public holiday highlight styling (fully golden, matching header)
+                          !isGhost && holidayName && 'bg-amber-500/10 dark:bg-amber-500/15',
                           // Ghost cell styling
                           isGhost && 'bg-muted/30 border-dashed border-border cursor-pointer hover:bg-muted/50',
-                          // Today highlighting (only if not ghost)
-                          !isGhost && cellIsToday && 'bg-primary/5',
-                          // Past date styling (only if not ghost and not today)
-                          !isGhost && cellIsPast && !cellIsToday && 'opacity-50'
+                          // Today highlighting (only if not ghost and not holiday)
+                          !isGhost && cellIsToday && !holidayName && 'bg-primary/5',
+                          // Past date styling (only if not ghost and not today and not holiday)
+                          !isGhost && cellIsPast && !cellIsToday && !holidayName && 'opacity-50'
                         )}
                         onClick={isGhost && onNavigateToMonth ? () => onNavigateToMonth(date) : undefined}
                       >
@@ -1350,19 +1353,21 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                                   onClick={() => handleAddShift(group, subGroup, date)}
                                   className={cn(
                                     "flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
-                                    "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
-                                    "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
+                                    holidayName
+                                      ? "bg-amber-500/30 text-amber-400 dark:text-amber-300 border border-amber-500/40 backdrop-blur-md hover:bg-amber-500/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
+                                      : "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
                                     cellShifts.length > 0
                                       ? "w-9 h-9 opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100"
                                       : "w-9 h-9 opacity-40 scale-90 hover:opacity-100 [@media(hover:none)]:opacity-100",
                                     "group/add",
                                     (!isDnDModeActive && summaryData) ? "hidden" : ""
                                   )}
-                                  title="Add Shift"
+                                  title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
                                 >
                                   <Plus className={cn(
                                     cellShifts.length > 0 ? "h-4 w-4" : "h-5 w-5",
-                                    "transition-transform group-hover/add:rotate-90"
+                                    "transition-transform group-hover/add:rotate-90",
+                                    holidayName ? "text-amber-400 dark:text-amber-300" : "text-primary"
                                   )} />
                                 </button>
                               </div>
