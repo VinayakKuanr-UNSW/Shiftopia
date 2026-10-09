@@ -27,6 +27,14 @@ function jsonError(status: number, message: string): Response {
   );
 }
 
+/** A client that acts as the CALLER (their JWT), so RLS and auth.uid() apply. */
+function callerClient(req: Request) {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+    auth: { persistSession: false },
+  });
+}
+
 // ── Authorisation ─────────────────────────────────────────────────────────────
 // Every read in this function uses the SERVICE ROLE, so row-level security does
 // not protect it. `verify_jwt` alone was never enough: the publishable anon key
@@ -46,10 +54,7 @@ async function authoriseRosterRead(
   deptIds: string[],
   subDeptIds: string[],
 ): Promise<Response | null> {
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
-    auth: { persistSession: false },
-  });
+  const userClient = callerClient(req);
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) return jsonError(401, "Sign in required");
 
@@ -93,7 +98,7 @@ const SHIFT_SELECT = `
   departments(id, name),
   sub_departments(id, name),
   roles!shifts_role_id_fkey(id, name),
-  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
+  remuneration_levels(level_number, level_name),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
 `;
 
@@ -129,6 +134,38 @@ function getCache<T>(map: Map<string, CacheEntry<T>>, key: string): T | null {
 
 function setCache<T>(map: Map<string, CacheEntry<T>>, key: string, data: T, ttlMs: number): void {
   map.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+// ── Contract pay terms (per caller, never cached) ─────────────────────────────
+// `shift_pay_terms` is a computed field answered by auth.uid(): the assignee or
+// a delta-access manager gets the linked contract's terms, anyone else NULL
+// (migration 20261008232922). The service-role read above has no uid, and the
+// shift cache is shared between callers, so the terms are fetched with the
+// CALLER's token on every request and merged into copies of the cached rows.
+// On failure the cards price on the shift's own terms, as they did before.
+async function withPayTerms(
+  req: Request,
+  shifts: Record<string, unknown>[],
+): Promise<Record<string, unknown>[]> {
+  const ids = shifts
+    .filter((s) => s["user_contract_id"] && s["assigned_employee_id"])
+    .map((s) => s["id"] as string);
+  if (ids.length === 0) return shifts;
+
+  const { data, error } = await callerClient(req).rpc("get_shift_pay_terms", { p_shift_ids: ids });
+  if (error) {
+    console.error("[get-roster-view] get_shift_pay_terms failed:", error.message);
+    return shifts;
+  }
+  const termsById = new Map<string, unknown>(
+    ((data ?? []) as { shift_id: string; pay_terms: unknown }[])
+      .filter((r) => r.pay_terms !== null)
+      .map((r) => [r.shift_id, r.pay_terms]),
+  );
+  if (termsById.size === 0) return shifts;
+  return shifts.map((s) =>
+    termsById.has(s["id"] as string) ? { ...s, shift_pay_terms: termsById.get(s["id"] as string) } : s
+  );
 }
 
 // ── Helper ──────────────────────────────────────────────────────────────────────────────────────
@@ -181,7 +218,7 @@ Deno.serve(async (req: Request) => {
 
     if (cachedShifts && cachedLookups) {
       return Response.json(
-        { ...cachedLookups, shifts: cachedShifts, _cached: true },
+        { ...cachedLookups, shifts: await withPayTerms(req, cachedShifts), _cached: true },
         { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
       );
     }
@@ -268,7 +305,9 @@ Deno.serve(async (req: Request) => {
           .from("remuneration_levels")
           // public.remuneration_levels has no `id` column — naming one 400s the
           // query and the planner silently gets no pay levels (matches prod v11).
-          .select("level_number, level_name, hourly_rate_min, hourly_rate_max, description")
+          // Nor money columns: hr.remuneration_levels lost hourly_rate_* /
+          // salary_* on 2026-10-08 (rates live in eba_rate).
+          .select("level_number, level_name, description")
           .order("level_number");
 
     // ── 5. Events ───────────────────────────────────────────────────────────────
@@ -367,7 +406,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return Response.json(
-      { ...lookups, shifts },
+      { ...lookups, shifts: await withPayTerms(req, shifts) },
       { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {

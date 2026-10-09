@@ -358,12 +358,14 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             start_time: adjustedStart,
             end_time: adjustedEnd,
             roles: { name: entry.role },
+            remuneration_level: entry.remunerationLevelNumber,
+            shift_pay_terms: entry.payTerms,
             employmentType: entry.employmentType,
             is_training: entry.isTraining,
             unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
             scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
         });
-        const approximatePay = `$${cost.totalCost.toFixed(2)}`;
+        const approximatePay = cost.payBasis === 'salary' ? 'Salaried' : `$${cost.totalCost.toFixed(2)}`;
 
         // Persist ONLY the sides the manager changed — an untouched side keeps
         // its snapped/auto provenance and must not become a manual override.

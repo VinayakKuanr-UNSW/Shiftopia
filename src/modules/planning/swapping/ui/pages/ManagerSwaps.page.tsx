@@ -325,12 +325,20 @@ const computeShiftHours = (s: { startTime: string; endTime: string; unpaidBreakM
     } catch { return 0; }
 };
 
-const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement => {
-    const getShiftValue = (shift?: any) => {
+/** Exported for tests (swap pay delta). */
+export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement => {
+    // `asRequester` prices the shift on the REQUESTER's contract
+    // (requester_pay_terms, attached by swapsApi.fetchSwapRequests) — the pay
+    // delta is the requester's, beside their change in hours. Without it, the
+    // shift's own linked terms: what its current holder is paid.
+    const getShiftValue = (shift?: any, asRequester = false) => {
         if (!shift) return { rate: 0, durationHours: 0, value: 0 };
         const netLength = shift?.net_length_minutes ?? shift?.netLength ?? 0;
         const durationHours = netLength / 60;
-        const totalCost = estimateDetailedCostFromShift(shift).totalCost || 0;
+        const priced = asRequester && shift.requester_pay_terms
+            ? { ...shift, shift_pay_terms: shift.requester_pay_terms }
+            : shift;
+        const totalCost = estimateDetailedCostFromShift(priced).totalCost || 0;
         const rate = durationHours > 0 ? totalCost / durationHours : 0;
         return { rate, durationHours, value: totalCost };
     };
@@ -364,9 +372,9 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
             ? (offerDurationHours - reqVal.durationHours)
             : -reqVal.durationHours;
     const payDiff = apiData.requestedShift
-        ? (recVal.value - reqVal.value)
+        ? (getShiftValue(apiData.requestedShift, true).value - reqVal.value)
         : activeOffer?.offered_shift
-            ? (offerVal.value - reqVal.value)
+            ? (getShiftValue(activeOffer.offered_shift, true).value - reqVal.value)
             : -reqVal.value;
 
     // Auto-compute priority from shift date/time (shared TTS utility)

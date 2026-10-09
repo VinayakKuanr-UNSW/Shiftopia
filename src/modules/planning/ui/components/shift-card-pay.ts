@@ -50,8 +50,16 @@ export function buildShiftCardPay(shift: any): ShiftCardPayProps {
   if (!shift) return NO_PAY;
 
   try {
-    const breakdown = estimateDetailedCostFromShift(shift);
+    // An open shift has no contract yet: price it on what the VIEWER would be
+    // paid (`my_shift_pay_terms` — their own contract the link trigger would
+    // choose) when the query selected it; otherwise the shift's linked terms.
+    const priced = shift.my_shift_pay_terms
+      ? { ...shift, shift_pay_terms: shift.my_shift_pay_terms }
+      : shift;
+    const breakdown = estimateDetailedCostFromShift(priced);
     if (!breakdown || !breakdown.totalCost) return NO_PAY;
+    // A salaried contract has no per-shift pay — the salary is paid per period.
+    if (breakdown.payBasis === 'salary') return { estimatedPay: 'Salaried' };
 
     const roleName = shift.roles?.name ?? shift.roleName ?? shift.role;
 
