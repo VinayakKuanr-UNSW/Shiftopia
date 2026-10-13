@@ -184,11 +184,51 @@ describe('clock in / clock out', () => {
     });
 });
 
-describe('timesheet approval gate', () => {
+describe('timesheet approval', () => {
+    const status = () => db(`SELECT status FROM public.timesheets WHERE id = '${TIMESHEET_S1}'`)[0][0];
+    const approve = (p: Persona) =>
+        personaClient(p).from('timesheets').update({ status: 'approved' }, { count: 'exact' }).eq('id', TIMESHEET_S1);
+
     it('refuses to approve a timesheet before its shift reaches a final attendance state', async () => {
-        const r = await personaClient('D').from('timesheets').update({ status: 'approved' }).eq('id', TIMESHEET_S1);
+        const r = await approve('D');
         expect(r.error?.code).toBe('23514');
         expect(r.error?.message).toMatch(/final attendance state/i);
-        expect(db(`SELECT status FROM public.timesheets WHERE id = '${TIMESHEET_S1}'`)[0][0]).toBe('draft');
+        expect(status()).toBe('draft');
+    });
+
+    describe('once the employee has clocked out', () => {
+        beforeEach(() => {
+            db(`SET session_replication_role = replica;
+                UPDATE public.timesheets SET clock_out = clock_in + interval '3 hours' WHERE id = '${TIMESHEET_S1}';
+                RESET session_replication_role;`);
+        });
+
+        it('an employee cannot approve their own timesheet', async () => {
+            const r = await approve('X');
+            expect(r.error?.code).toBe('42501');
+            expect(status()).toBe('draft');
+        });
+
+        it('a manager outside the timesheet\'s scope approves nothing', async () => {
+            const r = await approve('DD');
+            expect(r.error).toBeNull();
+            expect(r.count).toBe(0);
+            expect(status()).toBe('draft');
+        });
+
+        it('the shift\'s manager approves it', async () => {
+            const r = await approve('D');
+            expect(r.error).toBeNull();
+            expect(r.count).toBe(1);
+            expect(status()).toBe('approved');
+        });
+    });
+});
+
+describe('the gateway does not delete', () => {
+    it('refuses its delete op and points to sm_delete_shift, the one deletion path', async () => {
+        const r = await gateway('D', S2, 1, 'delete');
+        expect(r.data).toMatchObject({ ok: false, code: 'WRITE_REJECTED', note: 'USE_SM_DELETE_SHIFT' });
+        expect(shift(S2)).not.toBeNull();
     });
 });

@@ -26,7 +26,7 @@ CI runs the suite in the `api-integration` job (`.github/workflows/ci.yml`).
 | `security/storage.int.test.ts` | The public `broadcast-attachments` bucket. Someone who can't post to a broadcast can't upload; an employee can't delete someone else's file; a broadcast manager can, and the file is really gone afterwards (before 2026-10-13 every delete was a silent no-op). |
 | `security/edge-functions.int.test.ts` | `get-roster-view` refuses the anon key (the 2026-10-05 pre-auth leak), other organisations, out-of-scope managers and employees, even when its shared cache already holds the answer. It serves an in-scope manager only their scope. `evaluate-compliance` answers only the employee and their managers. |
 
-| `flows/shift-lifecycle.int.test.ts` | The core shift flows the UI drives. Through the gateway: publish and unpublish with version checks, stale-version refusal, double-booking refusal, impossible transitions reported, no shift moved onto a day without a roster, employees and other-department managers refused. Bulk publish: in scope only, the whole batch refused when any shift is out of scope, and the real caller recorded as actor (a regression test for the 2026-10-13 fix). Also: permanent delete, emergency assignment, clock in and out, and the timesheet approval gate. |
+| `flows/shift-lifecycle.int.test.ts` | The core shift flows the UI drives. Through the gateway: publish and unpublish with version checks, stale-version refusal, double-booking refusal, impossible transitions reported, no shift moved onto a day without a roster, employees and other-department managers refused. Bulk publish: in scope only, the whole batch refused when any shift is out of scope, and the real caller recorded as actor (a regression test for the 2026-10-13 fix). Also: permanent delete; the gateway's `delete` op refused with a pointer to `sm_delete_shift`; emergency assignment; clock in and out. Timesheets: approval only after the shift reaches a final attendance state, never by the employee themselves, and only by a manager whose scope covers the shift. |
 
 ## Personas
 
@@ -39,9 +39,6 @@ Update `supabase/tests/access_matrix/expected_matrix.txt`; both matrix tests fol
 The list is empty. Migration `20261013120936_close_anon_surface` closed the five exposures the 2026-10-13 review found: the org tables' `public_read` policies, and the venue event schedule and model coefficients the ML service read with the anon key. The ML service now requires `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Not yet covered
-
-- **Timesheet self-approval.** Only the approval gate is covered: a timesheet can't be approved before its shift reaches a final attendance state. Testing who may approve needs a shift that has really finished.
-- **The gateway's `delete` operation is broken.** `sm_apply_shift_op(…, 'delete', …)` fails on the `shifts_no_soft_delete` check, because it still soft-deletes. The app deletes through `sm_delete_shift` instead, which is tested. Fix the branch or remove it.
 
 The older SQL harnesses in `supabase/tests/` don't run against the real schema, so they're not part of this suite. Porting each means rewriting its setup against today's schema; `fairness_ledger_parity.sql`, for example, also inserts shifts without columns now required, references employees that don't exist, and deletes every bid in the database.
 
