@@ -210,7 +210,7 @@ describe('PersonaProvider', () => {
 describe('resolvePersonaRoute', () => {
     it('maps employee routes to paired employer routes', () => {
         expect(resolvePersonaRoute('/my-roster', 'employer')).toBe('/rosters');
-        expect(resolvePersonaRoute('/my-availabilities', 'employer')).toBe('/team-availability');
+        expect(resolvePersonaRoute('/my-availabilities', 'employer')).toBe('/grid');
         expect(resolvePersonaRoute('/my-bids', 'employer')).toBe('/management/bids');
         expect(resolvePersonaRoute('/my-swaps', 'employer')).toBe('/management/swaps');
         expect(resolvePersonaRoute('/my-leave', 'employer')).toBe('/management/leave');
@@ -265,6 +265,8 @@ describe('personaForPath', () => {
         expect(personaForPath('/management/bids')).toBe('employer');
         expect(personaForPath('/insights/fill-rate')).toBe('employer');
         expect(personaForPath('/team-availability')).toBe('employer');
+        expect(personaForPath('/grid')).toBe('employer');
+        expect(personaForPath('/payroll')).toBe('employer');
         expect(personaForPath('/users')).toBe('employer');
     });
 

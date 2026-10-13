@@ -9,6 +9,11 @@
  *
  * HOURS ARE NOT TYPED. They are derived from the roster / contract
  * (`resolveRequestedLeaveHours`) and shown read-only with how they were worked out.
+ * The one exception is TOIL: it is often taken as part of a day ("leave two
+ * hours early"), so its hours start at the derived figure and can be changed.
+ *
+ * TOIL IS BLOCKED, NOT WARNED, past what is available — it cannot be taken
+ * before it is earned (the database refuses it too: `trg_toil_leave_guard`).
  *
  * IT SHOWS THE CONSEQUENCE BEFORE SUBMITTING. The shifts already rostered in
  * the range are listed as the dates are typed. They are also what the hours are
@@ -49,6 +54,8 @@ import { createLeaveRequest } from '../../api/leave.api';
 import { useLeaveConflicts, useLeaveInvalidation } from '../../hooks/useLeave';
 import { LedgerFigure, periodLabel } from './LedgerCards';
 import { CardDialogClose, LeaveCardDialog, cardDivide, cardField, cardSection } from './LeaveCardDialog';
+import type { ToilPosition } from '@/modules/toil/model/toil.types';
+import { fmtToil, isPartialDayToil, rosteredSpanMinutes, toilRequestCheck } from '@/modules/toil/domain/toil-rules';
 
 /** Weekdays in a range — the certificate threshold counts working days. */
 function weekdaysBetween(start: string, end: string): number {
@@ -80,11 +87,13 @@ export interface RequestLeaveDialogProps {
     leaveType: LeaveTypeCode;
     /** The ledger the page already built — the header shows the chosen type's figure. */
     entries?: readonly LedgerEntry[];
+    /** TOIL position — what a TOIL request is measured against. */
+    toil?: ToilPosition | null;
 }
 
 export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
     open, onOpenChange, employeeId, balances, requests, policies, isCasual,
-    contractedWeeklyHours, ordinaryDays, serviceStart = null, leaveType: type, entries,
+    contractedWeeklyHours, ordinaryDays, serviceStart = null, leaveType: type, entries, toil = null,
 }) => {
     const { toast } = useToast();
     const invalidate = useLeaveInvalidation();
@@ -95,10 +104,13 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
     const [reason, setReason] = React.useState('');
     const [error, setError] = React.useState<string | null>(null);
     const [submitting, setSubmitting] = React.useState(false);
+    /** TOIL only: hours typed over the derived figure ('' = use the derived figure). */
+    const [toilHoursText, setToilHoursText] = React.useState('');
+    const isToil = type === 'toil';
 
     const reset = () => {
         setElection(''); setStart(''); setEnd('');
-        setReason(''); setError(null);
+        setReason(''); setError(null); setToilHoursText('');
     };
 
     const rangeValid = Boolean(start && end && start <= end);
@@ -120,7 +132,10 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
     }),
     [type, start, end, contractedWeeklyHours, ordinaryDays, conflicts.data]);
 
-    const hours = derived.hours;
+    const hours = isToil && toilHoursText !== ''
+        ? Math.max(0, Math.round((Number(toilHoursText) || 0) * 100) / 100)
+        : derived.hours;
+    const toilCheck = isToil ? toilRequestCheck(hours, toil) : null;
 
     const policy = policies[type];
     const needsElection = ELECTION_LEAVE_TYPES.includes(type);
@@ -162,7 +177,8 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
         : []), [rangeValid, hours, type, start, requests, isCasual, contractedWeeklyHours, serviceStart]);
 
     const canSubmit = rangeValid && hours > 0 && !submitting
-        && (!needsElection || election !== '');
+        && (!needsElection || election !== '')
+        && !toilCheck?.blockedReason;
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -189,6 +205,9 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
     };
 
     const shifts = conflicts.data ?? [];
+    // Part of a rostered day as TOIL: the shift stays (see `approveLeaveRequest`).
+    const rosteredFtMinutes = rosteredSpanMinutes(shifts.filter(sh => sh.targetEmploymentType === 'FT' && !sh.started));
+    const partialToil = isToil && isPartialDayToil(hours, rosteredFtMinutes);
     const def = LEDGER_TYPES.find(d => d.type === type);
     const entry = entries?.find(e => e.def.type === type);
 
@@ -271,14 +290,47 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
                     </div>
                 </div>
 
-                <div className={cn(section, 'grid gap-5', drawType && line && 'sm:grid-cols-2')}>
-                    <div>
-                        <p className={text.caption}>Hours</p>
-                        <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums" aria-live="polite">
-                            {rangeValid ? `${hours}h` : '—'}
-                        </p>
-                        <p className={cn(text.caption, 'mt-1')}>{derived.explanation}</p>
-                    </div>
+                <div className={cn(section, 'grid gap-5', ((drawType && line) || isToil) && 'sm:grid-cols-2')}>
+                    {isToil ? (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="toil-request-hours">Hours</Label>
+                            <Input
+                                id="toil-request-hours"
+                                type="number"
+                                inputMode="decimal"
+                                step="0.25"
+                                min={0.25}
+                                value={toilHoursText}
+                                placeholder={rangeValid ? String(derived.hours) : ''}
+                                onChange={(e) => setToilHoursText(e.target.value)}
+                                className={cn(field, 'max-w-[10rem] text-lg font-bold tabular-nums')}
+                            />
+                            <p className={text.caption}>
+                                {derived.explanation} Change it to take part of a day.
+                            </p>
+                        </div>
+                    ) : (
+                        <div>
+                            <p className={text.caption}>Hours</p>
+                            <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums" aria-live="polite">
+                                {rangeValid ? `${hours}h` : '—'}
+                            </p>
+                            <p className={cn(text.caption, 'mt-1')}>{derived.explanation}</p>
+                        </div>
+                    )}
+                    {isToil && toilCheck && (
+                        <div role={toilCheck.blockedReason ? 'alert' : undefined}>
+                            <p className={text.caption}>Left after this</p>
+                            <p className={cn('mt-1 text-3xl font-bold tracking-tight tabular-nums',
+                                toilCheck.blockedReason && 'text-red-600 dark:text-red-400')}>
+                                {fmtToil(toilCheck.afterMinutes)}
+                            </p>
+                            <p className={cn(text.caption, 'mt-1 tabular-nums', toilCheck.blockedReason && 'text-red-600 dark:text-red-400')}>
+                                {toilCheck.blockedReason
+                                    ?? `of ${fmtToil(toilCheck.availableMinutes)} available${toil && toil.heldMinutes > 0 ? ` · ${fmtToil(toil.heldMinutes)} held by other requests` : ''}`}
+                            </p>
+                        </div>
+                    )}
                     {drawType && line && (
                         /* A warning, never a block: leave in advance is allowed and
                            the manager decides (2026-09-30). */
@@ -305,7 +357,11 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
                         <div className="min-w-0 space-y-2 text-xs font-medium">
                             {shifts.length > 0 && (
                                 <div>
-                                    <p>If approved, {shifts.length === 1 ? 'this shift comes' : 'these shifts come'} off your roster:</p>
+                                    <p>
+                                        {partialToil
+                                            ? `This covers part of your rostered day, so ${shifts.length === 1 ? 'the shift stays' : 'the shifts stay'} on the roster — agree the new finish with your manager:`
+                                            : <>If approved, {shifts.length === 1 ? 'this shift comes' : 'these shifts come'} off your roster:</>}
+                                    </p>
                                     <ul className="mt-1 space-y-0.5 text-muted-foreground">
                                         {shifts.map(sh => (
                                             <li key={sh.shiftId} className="flex items-center gap-1.5 tabular-nums">

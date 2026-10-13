@@ -35,6 +35,10 @@ export interface ExistingContract {
     status: string | null;
     /** Not used by the ceiling — carried for the cl 13 multi-hire check. */
     role_id?: string | null;
+    /** Not used by the ceiling — carried for the one-contract-per-role check (contractPlacement.ts). */
+    organization_id?: string | null;
+    department_id?: string | null;
+    sub_department_id?: string | null;
 }
 
 export interface CapacityResult {

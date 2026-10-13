@@ -31,6 +31,8 @@ export type EarningsCode =
   | 'long_service_leave'// cl 49 / LSL Act 1955 (NSW) — paid at ordinary rate
   | 'jury_duty'         // cl 53 — make-up pay (first 10 days; court-pay offset is a manual adjustment)
   | 'supporting_carer'  // cl 52 — ONE week paid, permanents only
+  | 'toil_taken'        // time off in lieu taken — salaried contracts only (paid within the salary)
+  | 'toil_payout'       // time off in lieu paid out: on request, at 6 months, or when the salaried contract ends
   | 'rest_gap_penalty'; // cl 40.1 — double-time floor when rest gap breached
 
 export interface EarningsLine {

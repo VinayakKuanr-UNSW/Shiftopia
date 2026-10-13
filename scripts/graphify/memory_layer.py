@@ -20,17 +20,18 @@ from __future__ import annotations
 import json, re
 from pathlib import Path
 
+from graph_ids import db_label_index, file_node_index, load_graph_nodes, load_sql_layer_nodes
+
 ROOT = Path(__file__).resolve().parents[2]
 MEM = Path.home() / ".claude/projects/-Users-vinayakkuanr-Documents-Superman-ULTIMATE/memory"
-GRAPH = json.loads((ROOT / "graphify-out/graph.json").read_text())
-N = {n["id"]: n for n in GRAPH["nodes"]}
+# Code from graph.json; DB objects from sql_layer's own output (graph_ids.py).
+N = load_graph_nodes()
+for _i, _n in load_sql_layer_nodes().items():
+    N.setdefault(_i, _n)
 
-# label -> id for DB objects, and known repo file paths
-db_by_label = {}
-for i, n in N.items():
-    if i.startswith(("db_fn_", "db_tbl_")):
-        db_by_label.setdefault(re.sub(r"\(\)$", "", n["label"]).lower(), i)
-paths = {(n.get("source_file") or "").lower(): i for i, n in N.items() if n.get("source_file")}
+# label -> id for DB objects, and repo file paths -> their FILE node
+db_by_label = db_label_index(N)
+paths = file_node_index(N)
 
 def nid(s: str) -> str:
     return "mem_" + re.sub(r"[^a-z0-9_]", "_", s.lower()).strip("_")

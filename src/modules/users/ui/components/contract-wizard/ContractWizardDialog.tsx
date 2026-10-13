@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Plus, Loader2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Loader2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
@@ -11,10 +11,12 @@ import {
     useContractWizardForm,
     computeMixedPermanentConflict,
     evaluateWizardTerms,
+    formStateFromContract,
     type ContractClass,
     type WizardPayContext,
 } from '../../hooks/useContractWizardForm';
 import { validateContractHours, type ExistingContract } from '../../../domain/contractHoursCeiling';
+import { rolesHeldAt } from '../../../domain/contractPlacement';
 import {
     allowedPayBases,
     defaultPayBasis,
@@ -32,6 +34,8 @@ export interface ContractWizardDialogProps {
     employeeId: string;
     employeeName: string;
     existingContracts?: any[];
+    /** Edit this contract instead of adding one. Its placement is fixed; its terms are not. */
+    existingContract?: any;
     trigger?: React.ReactNode;
     onSuccess?: () => void;
 }
@@ -41,8 +45,9 @@ const STEP_LABELS: [string, string, string, string] = ['Class', 'Hierarchy', 'Te
 const fmtHours = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
-    employeeId, employeeName, existingContracts = [], trigger, onSuccess,
+    employeeId, employeeName, existingContracts = [], existingContract, trigger, onSuccess,
 }) => {
+    const isEdit = !!existingContract;
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -51,7 +56,7 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
         isLoading: isLoadingRefs, loadReferenceData,
     } = useReferenceData(open);
 
-    const { formData, isSubmitting, updateField, reset, submit, hoursRule } =
+    const { formData, setFormData, isSubmitting, updateField, reset, submit, hoursRule } =
         useContractWizardForm(employeeId, () => {
             setOpen(false);
             setStep(1);
@@ -62,21 +67,39 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
         setOpen(next);
         if (next) {
             loadReferenceData();
+            if (existingContract) setFormData(formStateFromContract(existingContract));
         } else {
             reset();
             setStep(1);
         }
     };
 
+    // The person's OTHER contracts. When editing, the contract itself is left
+    // out so its own hours, type and role are not counted against it.
     const ceilingContracts: ExistingContract[] = useMemo(() =>
-        (existingContracts ?? []).map((c: any) => ({
-            id: c.id,
-            employment_status: c.employment_status ?? null,
-            contracted_weekly_hours: c.contracted_weekly_hours ?? null,
-            status: c.status ?? null,
-            role_id: c.role_id ?? null,
-        })),
-        [existingContracts],
+        (existingContracts ?? [])
+            .filter((c: any) => c.id !== existingContract?.id)
+            .map((c: any) => ({
+                id: c.id,
+                employment_status: c.employment_status ?? null,
+                contracted_weekly_hours: c.contracted_weekly_hours ?? null,
+                status: c.status ?? null,
+                role_id: c.role_id ?? null,
+                organization_id: c.organization_id ?? null,
+                department_id: c.department_id ?? null,
+                sub_department_id: c.sub_department_id ?? null,
+            })),
+        [existingContracts, existingContract?.id],
+    );
+
+    // One contract per role in a place: roles already held here can't be picked.
+    const heldRoleIds = useMemo(
+        () => rolesHeldAt(ceilingContracts, {
+            organization_id: formData.organization_id,
+            department_id: formData.department_id,
+            sub_department_id: formData.sub_department_id,
+        }),
+        [ceilingContracts, formData.organization_id, formData.department_id, formData.sub_department_id],
     );
 
     // ── Pay ──────────────────────────────────────────────────────────────────
@@ -134,7 +157,7 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
 
     // Per-step "can advance" gating.
     const step1Valid = formData.contractClass !== null;
-    const step2Valid = !!formData.role_id;
+    const step2Valid = !!formData.role_id && !heldRoleIds.has(formData.role_id);
     const step3Valid = !!formData.employment_status
         && terms.pay.errors.length === 0
         && terms.engagement.errors.length === 0
@@ -151,13 +174,22 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
     const canSubmit = step1Valid && step2Valid && step3Valid;
 
     const handleSubmit = async () => {
-        await submit(ceilingContracts, payContext);
+        await submit(ceilingContracts, payContext, existingContract?.id);
     };
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-                {trigger || (
+                {trigger || (isEdit ? (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl transition-all duration-300 bg-white/5 hover:bg-primary/20 text-muted-foreground hover:text-primary border-white/10"
+                    >
+                        <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                        Edit
+                    </Button>
+                ) : (
                     <Button
                         variant="outline"
                         size="sm"
@@ -166,7 +198,7 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
                         <Plus className="w-4 h-4 mr-2" />
                         Add Contract
                     </Button>
-                )}
+                ))}
             </DialogTrigger>
 
             <DialogContent className="w-[96vw] max-w-3xl h-[88vh] max-h-[88vh] flex flex-col gap-0 bg-background dark:bg-[#0b0e14]/98 border border-border text-foreground shadow-2xl backdrop-blur-3xl rounded-[2.5rem] overflow-hidden p-0">
@@ -182,7 +214,7 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
                                 </div>
                                 <div className="text-left">
                                     <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-                                        Add Contract
+                                        {isEdit ? 'Edit Contract' : 'Add Contract'}
                                         <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
                                             {employeeName}
                                         </span>
@@ -247,6 +279,8 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
                                 updateField('role_id', val);
                                 applyDefaultPayBasis(formData.employment_status, roles.find((r: any) => r.id === val));
                             }}
+                            heldRoleIds={heldRoleIds}
+                            locked={isEdit}
                         />
                     )}
                     {step === 3 && (
@@ -349,8 +383,8 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
                                         </>
                                     ) : (
                                         <span className="flex items-center gap-2">
-                                            <Plus className="w-4 h-4" />
-                                            Add Contract
+                                            {isEdit ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                            {isEdit ? 'Save Changes' : 'Add Contract'}
                                         </span>
                                     )}
                                 </Button>

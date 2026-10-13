@@ -129,7 +129,7 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
       >
         {/* ── GOLD STANDARD HEADER ── */}
         <GoldStandardHeader
-          title="Gross Pay"
+          title="Payroll"
           Icon={Wallet}
           mode="managerial"
           scope={scope}
@@ -250,4 +250,5 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
   );
 };
 
+export const PayrollPage = GrossPayPage;
 export default GrossPayPage;

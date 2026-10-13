@@ -22,3 +22,4 @@ export {
   type PeriodBounds,
   type PeriodConfig,
 } from './domain/aggregatePeriodGrossPay';
+export { PayrollPage, GrossPayPage } from './ui/GrossPayPage';

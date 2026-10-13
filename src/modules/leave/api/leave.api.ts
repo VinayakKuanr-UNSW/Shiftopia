@@ -20,6 +20,7 @@ import { LEAVE_POLICIES } from '../domain/leave-policy';
 import type { EmployeeUnit } from '../domain/leave-approval';
 import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { isPartialDayToil, rosteredSpanMinutes } from '@/modules/toil/domain/toil-rules';
 
 // ── Balances ─────────────────────────────────────────────────────────────────
 
@@ -373,6 +374,8 @@ export async function approveLeaveRequest(
   removalFailures: Array<{ conflict: LeaveShiftConflict; reason: string }>;
   /** Shifts inside the leave dates that had already started (worked or not) — left untouched, for the manager to reconcile. */
   keptWorked: LeaveShiftConflict[];
+  /** TOIL covering only part of the rostered day: the shifts stay — the person works the rest of it. */
+  keptPartial: LeaveShiftConflict[];
 }>> {
   const { data: req, error: fetchErr } = await (supabase as any)
     .from('leave_requests')
@@ -428,8 +431,18 @@ export async function approveLeaveRequest(
   // leave or the shift is wrong.
   const keptWorked = allConflicts.filter(c => c.started);
   const unworked = allConflicts.filter(c => !c.started);
-  const fullTime = unworked.filter(c => c.targetEmploymentType === 'FT');
-  const conflictingShifts = unworked.filter(c => c.targetEmploymentType !== 'FT');
+  let fullTime = unworked.filter(c => c.targetEmploymentType === 'FT');
+  let conflictingShifts = unworked.filter(c => c.targetEmploymentType !== 'FT');
+
+  // TOIL is often part of a day ("leave two hours early"). Then nothing comes
+  // off the roster: the person still works the rest of the shift, and any
+  // other job that day is untouched.
+  let keptPartial: LeaveShiftConflict[] = [];
+  if (req.leave_type === 'toil' && isPartialDayToil(Number(req.requested_hours ?? 0), rosteredSpanMinutes(fullTime))) {
+    keptPartial = unworked;
+    fullTime = [];
+    conflictingShifts = [];
+  }
 
   const removedShifts: LeaveShiftConflict[] = [];
   const removalFailures: Array<{ conflict: LeaveShiftConflict; reason: string }> = [];
@@ -449,7 +462,7 @@ export async function approveLeaveRequest(
     }
   }
 
-  return { data: { conflictingShifts, removedShifts, removalFailures, keptWorked } };
+  return { data: { conflictingShifts, removedShifts, removalFailures, keptWorked, keptPartial } };
 }
 
 /**

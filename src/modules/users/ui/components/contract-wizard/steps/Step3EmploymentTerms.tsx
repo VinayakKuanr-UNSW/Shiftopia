@@ -14,8 +14,13 @@ import {
     type PayIssue,
     type RoleBand,
 } from '../../../../domain/contractPayTerms';
-import { FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../../../hooks/useContractForm';
-import { FULL_TIME_WEEKLY_HOURS, type ContractClass, type HoursRule } from '../../../hooks/useContractWizardForm';
+import {
+    FLEXIBLE_PT_ANNUAL_HOURS_MIN,
+    FLEXIBLE_PT_ANNUAL_HOURS_MAX,
+    FULL_TIME_WEEKLY_HOURS,
+    type ContractClass,
+    type HoursRule,
+} from '../../../hooks/useContractWizardForm';
 
 const PAY_BASIS_HINTS: Record<PayBasis, string> = {
     eba_level: 'Paid the EA rate for a level · Sch 2 §1',
@@ -66,8 +71,8 @@ export interface Step3EmploymentTermsProps {
 
     // ── cl 13 multi-hire ──
     isMultiHire: boolean;
-    multi_hire_request_ref: string;
-    onMultiHireRefChange: (ref: string) => void;
+    multi_hire_request_ref?: string;
+    onMultiHireRefChange?: (ref: string) => void;
 }
 
 export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
@@ -256,6 +261,13 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
                             ))}
                         </div>
                     </div>
+
+                    {/* What a salaried contract gets for extra hours — see modules/toil. */}
+                    <p className="text-[11px] text-muted-foreground pl-1 leading-relaxed">
+                        <span className="font-semibold text-foreground">Time in lieu, not overtime pay.</span>{' '}
+                        Approved hours over 7.6 in a day, or over the contracted week, are banked hour for hour.
+                        They are taken as leave within 6 months or paid out, and the employee can ask for a payout at any time.
+                    </p>
                 </>
             ) : (
                 <div className="flex flex-col gap-1.5 w-full">
@@ -289,22 +301,15 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
 
             {/* cl 13 — a casual engagement beside a permanent one */}
             {isMultiHire && (
-                <div className="flex flex-col gap-1.5 w-full p-4 rounded-2xl border border-border bg-muted/20">
+                <div className="flex flex-col gap-1.5 w-full p-4 rounded-2xl border border-border bg-muted/20 text-left">
                     <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <Info className="w-4 h-4 text-primary shrink-0" />
                         Multi-hire engagement · cl 13
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground leading-relaxed">
                         This person already holds a permanent contract, so this casual engagement is a multi-hire:
                         work outside their usual job, requested by them on a Request to Multi-Hire form.
                     </span>
-                    <Input
-                        aria-label="Request to Multi-Hire form reference"
-                        value={multi_hire_request_ref}
-                        onChange={(e) => onMultiHireRefChange(e.target.value)}
-                        placeholder="Request to Multi-Hire reference"
-                        className="h-12 rounded-xl mt-1"
-                    />
                 </div>
             )}
 

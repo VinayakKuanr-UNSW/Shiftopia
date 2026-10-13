@@ -22,7 +22,6 @@ import {
     Pencil
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { AddContractDialog } from './AddContractDialog';
 import { ContractWizardDialog } from './contract-wizard/ContractWizardDialog';
 import { RemunerationLevelBadge } from './RemunerationLevelBadge';
 import { AccessCertificateDialog } from './AddAccessCertificateDialog';
@@ -91,16 +90,14 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
     });
 
     /**
-     * ONE CARD PER SUB-DEPARTMENT.
+     * ONE TABLE, ONE ROW PER CONTRACT.
      *
-     * Not per row, and not per `position_id` either. A person can hold several
-     * positions in one sub-department — Full-Time as a Supervisor and Casual as
-     * an Usher in Set-up is exactly the arrangement EBA cl 13 (Multi-Hiring)
-     * contemplates — and splitting those across cards repeats the organisation,
-     * department and sub-department three times to say one thing: where this
-     * person works. The sub-department is the place; the roles are what they do
-     * there; the employment type belongs to each role, which is why it sits on
-     * the role row rather than on the card.
+     * A contract is one role in one place, and a person holds a role in a place
+     * at most once (contractPlacement.ts). They can hold several roles in one
+     * sub-department — Full-Time as a Supervisor and Casual as an Usher in
+     * Set-up is what EBA cl 13 (Multi-Hiring) contemplates — each its own
+     * contract, added, edited and removed on its own row. Rows are grouped by
+     * place so a person's roles in one sub-department sit together.
      *
      * Keyed on the full org/dept/sub-dept triple rather than sub-department
      * alone: a null sub-department is a DEPARTMENT-WIDE engagement, and two of
@@ -112,31 +109,28 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
             const key = [c.organization_id ?? '-', c.department_id ?? '-', c.sub_department_id ?? '-'].join('|');
             byScope.set(key, [...(byScope.get(key) ?? []), c]);
         }
-        // Roles highest level first, so a card reads as the ladder it covers.
+        // Roles highest level first within a place, so it reads as the ladder it covers.
         return [...byScope.entries()].map(([key, rows]) => ({
             key,
             rows: [...rows].sort((a, b) => (b.remuneration_level ?? -1) - (a.remuneration_level ?? -1)),
         }));
     }, [contracts]);
 
-    /**
-     * Remove an entire engagement — every role held in that sub-department.
-     *
-     * There is no per-role delete on the card by design: a role is removed by
-     * unticking it in the edit dialog, which is the same control that added it.
-     * Two ways to do one thing invites the pair to drift.
-     */
-    const handleDeleteScope = async (rows: any[], placeName: string) => {
-        const ids = rows.map(r => r.id);
-        const roleNames = rows.map(r => r.roles?.name ?? 'Unknown role').join(', ');
-        if (!confirm(
-            `Remove ${employeeName}'s engagement in ${placeName}?\n\n`
-            + `This deletes ${ids.length} contract${ids.length === 1 ? '' : 's'}: ${roleNames}.`
-        )) return;
+    const tableRows = React.useMemo(() => scopes.flatMap((s) => s.rows), [scopes]);
 
-        const { error } = await supabase.from('user_contracts').delete().in('id', ids);
+    /** Remove one contract. Its other roles in the same place are untouched. */
+    const handleDeleteContract = async (c: any, placeName: string) => {
+        const roleName = c.roles?.name ?? 'Unknown role';
+        if (!confirm(`Remove ${employeeName}'s ${roleName} contract in ${placeName}?`)) return;
+
+        const { error } = await supabase.from('user_contracts').delete().eq('id', c.id);
         if (error) {
             console.error('Delete error:', error);
+            // 23503: a pay record still points at the contract — today, its
+            // time-in-lieu ledger, which must be kept (Fair Work record rules).
+            alert(error.code === '23503'
+                ? `The ${roleName} contract has time-in-lieu records, which must be kept, so it can't be deleted. Ask an administrator to end it (give it an end date) instead — any banked time in lieu is then paid out.`
+                : `The contract could not be removed: ${error.message}`);
             return;
         }
         queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
@@ -151,7 +145,7 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                     </div>
                     Employment Contracts
                     <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border ml-1">
-                        {contracts?.length ?? 0} role{(contracts?.length ?? 0) === 1 ? '' : 's'}
+                        {contracts?.length ?? 0} contract{(contracts?.length ?? 0) === 1 ? '' : 's'}
                         {scopes.length > 0 && ` across ${scopes.length} sub-department${scopes.length === 1 ? '' : 's'}`}
                     </span>
                 </CardTitle>
@@ -179,189 +173,168 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                         <p className="text-xs max-w-xs mt-1">Add organizational role contracts to assign departments and positions.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                        {scopes.map(({ key, rows }) => {
-                            const head = rows[0];
-                            const placeName = head.sub_departments?.name
-                                ?? `${head.departments?.name ?? 'Unknown department'} (department-wide)`;
-                            const conversion = rows
-                                .map((c: any) => getCasualConversionStatus({
-                                    employmentStatus: c.employment_status,
-                                    contractStatus: c.status,
-                                    startDate: c.start_date,
-                                }))
-                                .find((r: any) => r.eligible);
-                            const swsOverrun = rows
-                                .map((c: any) => getSwsTrialStatus({
-                                    isSws: c.is_sws,
-                                    isSwsTrial: c.is_sws_trial,
-                                    swsTrialStartDate: c.sws_trial_start_date,
-                                }))
-                                .find((r: any) => r.overrun);
+                    <div className="rounded-xl border border-border overflow-x-auto">
+                        <table className="w-full border-collapse text-sm">
+                            <caption className="sr-only">Employment contracts for {employeeName}</caption>
+                            <thead>
+                                <tr className="border-b border-border bg-muted/40">
+                                    {['Place', 'Lvl', 'Role', 'Type', 'Hours', 'Status', 'Created'].map((h) => (
+                                        <th
+                                            key={h}
+                                            scope="col"
+                                            className={cn(
+                                                "px-4 py-3 text-[10px] font-black uppercase tracking-wider text-muted-foreground whitespace-nowrap",
+                                                h === 'Hours' ? 'text-right' : 'text-left'
+                                            )}
+                                        >
+                                            {h}
+                                        </th>
+                                    ))}
+                                    {isAuthorizedAdmin && (
+                                        <th scope="col" className="w-24 px-4 py-3"><span className="sr-only">Actions</span></th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {tableRows.map((c: any) => {
+                                    const weekly = Number(c.contracted_weekly_hours) || 0;
+                                    const annual = Number(c.annual_guaranteed_hours) || 0;
+                                    const levelNumber = c.remuneration_level != null ? Number(c.remuneration_level) : -1;
+                                    const status = c.employment_status || '';
+                                    const isSalaried = c.pay_basis === 'salary';
+                                    const reason = c.eba_exclusion_reason as EbaExclusionReason | null;
+                                    const isActive = c.status === 'Active';
+                                    const placeName = c.sub_departments?.name
+                                        ?? `${c.departments?.name ?? 'Unknown department'} (department-wide)`;
+                                    const conversion = getCasualConversionStatus({
+                                        employmentStatus: c.employment_status,
+                                        contractStatus: c.status,
+                                        startDate: c.start_date,
+                                    });
+                                    const sws = getSwsTrialStatus({
+                                        isSws: c.is_sws,
+                                        isSwsTrial: c.is_sws_trial,
+                                        swsTrialStartDate: c.sws_trial_start_date,
+                                    });
 
-                            const created = rows
-                                .map((c: any) => c.created_at)
-                                .filter(Boolean)
-                                .sort()[0];
-                            const anyActive = rows.some((c: any) => c.status === 'Active');
-
-                            return (
-                                <section
-                                    key={key}
-                                    aria-label={`Engagement in ${placeName}`}
-                                    className="rounded-2xl border border-border bg-card p-6 shadow-md backdrop-blur-xl group hover:border-primary/40 transition-all duration-300 relative space-y-5"
-                                >
-                                    {/* ── Header: Hierarchy Breadcrumb & Admin Actions ── */}
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="space-y-1.5 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                                                <span className="flex items-center gap-1.5 text-foreground font-semibold">
-                                                    <Building2 className="w-3.5 h-3.5 text-primary" />
-                                                    {head.organizations?.name || 'Organisation'}
-                                                </span>
-                                                <ChevronRight className="w-3 h-3 text-muted-foreground/40" />
-                                                <span className="flex items-center gap-1.5 text-foreground font-semibold">
-                                                    <Users className="w-3.5 h-3.5 text-primary" />
-                                                    {head.departments?.name || 'Department'}
-                                                </span>
-                                            </div>
-                                            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                                                <span>{head.sub_departments?.name ?? 'Department-wide'}</span>
-                                            </h3>
-                                        </div>
-
-                                        {isAuthorizedAdmin && (
-                                            <div className="flex shrink-0 items-center gap-2">
-                                                <AddContractDialog
-                                                    employeeId={employeeId}
-                                                    employeeName={employeeName}
-                                                    existingScope={rows}
-                                                    existingContracts={contracts ?? []}
-                                                    trigger={
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-8 px-3 rounded-xl border-border bg-background hover:bg-primary/15 hover:text-primary text-xs font-bold transition-all"
+                                    return (
+                                        <tr key={c.id} className="hover:bg-muted/30 transition-colors align-middle">
+                                            <td className="px-4 py-3 min-w-[16rem]">
+                                                <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap">
+                                                    <Building2 className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" aria-hidden="true" />
+                                                    <span className="text-muted-foreground">{c.organizations?.name || 'Organisation'}</span>
+                                                    <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
+                                                    <span className="text-muted-foreground">{c.departments?.name || 'Department'}</span>
+                                                    <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" aria-hidden="true" />
+                                                    <span className="text-foreground font-semibold">
+                                                        {c.sub_departments?.name ?? 'Department-wide'}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                {isSalaried ? (
+                                                    <span className="px-2.5 py-1 rounded-lg text-xs font-black border inline-block bg-muted text-foreground border-border">
+                                                        Salary
+                                                    </span>
+                                                ) : (
+                                                    <RemunerationLevelBadge level={levelNumber} />
+                                                )}
+                                            </td>
+                                            <th scope="row" className="px-4 py-3 text-left font-bold text-foreground min-w-[10rem]">
+                                                {c.roles?.name || 'Unknown role'}
+                                                {isSalaried && reason && (
+                                                    <span className="block text-[11px] font-normal text-muted-foreground">{EXCLUSION_REASON_LABELS[reason]}</span>
+                                                )}
+                                            </th>
+                                            <td className="px-4 py-3">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className={cn(
+                                                        "px-2 py-0.5 rounded-lg text-[11px] font-bold border whitespace-nowrap",
+                                                        status === 'Full-Time' ? "bg-primary/15 text-primary border-primary/30" :
+                                                        status === 'Part-Time' ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30" :
+                                                        status === 'Flexible Part-Time' ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
+                                                        "bg-muted text-muted-foreground border-border"
+                                                    )}>
+                                                        {status || '—'}
+                                                    </span>
+                                                    {c.engagement_kind === 'multi_hire' && (
+                                                        <span
+                                                            className="px-2 py-0.5 rounded-lg text-[11px] font-bold border whitespace-nowrap bg-muted text-muted-foreground border-border"
+                                                            title={c.multi_hire_request_ref ? `Request to Multi-Hire: ${c.multi_hire_request_ref}` : undefined}
                                                         >
-                                                            <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                                                            Edit
+                                                            Multi-hire · cl 13
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-mono font-bold text-xs text-foreground whitespace-nowrap">
+                                                {weekly > 0 ? `${weekly} h/wk`
+                                                    : annual > 0 ? `${annual} h/yr`
+                                                        : <span className="text-muted-foreground/40 font-normal">—</span>}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className={cn(
+                                                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border inline-flex items-center gap-1.5 whitespace-nowrap",
+                                                        isActive
+                                                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                                                            : "bg-muted text-muted-foreground border-border"
+                                                    )}>
+                                                        <span className={cn("w-1.5 h-1.5 rounded-full", isActive ? "bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-muted-foreground/40")} />
+                                                        {c.status ?? 'Inactive'}
+                                                    </span>
+                                                    {conversion.eligible && (
+                                                        <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-semibold whitespace-nowrap">
+                                                            Conversion eligible ({conversion.tenureMonths} mo)
+                                                        </span>
+                                                    )}
+                                                    {sws.overrun && (
+                                                        <span className="px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-semibold whitespace-nowrap">
+                                                            SWS trial overrun ({sws.weeksElapsed} wks)
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                                                {c.created_at ? format(parseISO(c.created_at), 'd MMM yyyy') : '—'}
+                                            </td>
+                                            {isAuthorizedAdmin && (
+                                                <td className="px-2 py-1.5">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <ContractWizardDialog
+                                                            employeeId={employeeId}
+                                                            employeeName={employeeName}
+                                                            existingContract={c}
+                                                            existingContracts={contracts ?? []}
+                                                            trigger={
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    aria-label={`Edit ${c.roles?.name ?? 'role'} contract`}
+                                                                    className="h-11 w-11 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                                >
+                                                                    <Pencil className="w-4 h-4" aria-hidden="true" />
+                                                                </Button>
+                                                            }
+                                                            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] })}
+                                                        />
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            aria-label={`Remove ${c.roles?.name ?? 'role'} contract`}
+                                                            onClick={() => handleDeleteContract(c, placeName)}
+                                                            className="h-11 w-11 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" aria-hidden="true" />
                                                         </Button>
-                                                    }
-                                                    onSuccess={() => queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] })}
-                                                />
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    aria-label={`Remove engagement in ${placeName}`}
-                                                    onClick={() => handleDeleteScope(rows, placeName)}
-                                                    className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                                                >
-                                                    <Trash2 className="w-4 h-4" aria-hidden="true" />
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* ── Roles Table ── */}
-                                    <div className="rounded-xl border border-border bg-muted/20 overflow-hidden">
-                                        <table className="w-full border-collapse">
-                                            <caption className="sr-only">Roles held in {placeName}</caption>
-                                            <thead>
-                                                <tr className="border-b border-border bg-muted/40">
-                                                    <th scope="col" className="w-14 px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Lvl</th>
-                                                    <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Role</th>
-                                                    <th scope="col" className="px-3.5 py-2.5 text-left text-[10px] font-black uppercase tracking-wider text-muted-foreground">Type</th>
-                                                    <th scope="col" className="px-3.5 py-2.5 text-right text-[10px] font-black uppercase tracking-wider text-muted-foreground">Hours</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-border">
-                                                {rows.map((c: any) => {
-                                                    const weekly = Number(c.contracted_weekly_hours) || 0;
-                                                    const annual = Number(c.annual_guaranteed_hours) || 0;
-                                                    const levelNumber = c.remuneration_level != null ? Number(c.remuneration_level) : -1;
-                                                    const status = c.employment_status || '';
-                                                    const isSalaried = c.pay_basis === 'salary';
-                                                    const reason = c.eba_exclusion_reason as EbaExclusionReason | null;
-
-                                                    return (
-                                                        <tr key={c.id} className="hover:bg-muted/30 transition-colors">
-                                                            <td className="px-3.5 py-2.5">
-                                                                {isSalaried ? (
-                                                                    <span className="px-2.5 py-1 rounded-lg text-xs font-black border inline-block bg-muted text-foreground border-border">
-                                                                        Salary
-                                                                    </span>
-                                                                ) : (
-                                                                    <RemunerationLevelBadge level={levelNumber} />
-                                                                )}
-                                                            </td>
-                                                            <th scope="row" className="px-3.5 py-2.5 text-left font-bold text-sm text-foreground">
-                                                                {c.roles?.name || 'Unknown role'}
-                                                                {isSalaried && reason && (
-                                                                    <span className="block text-[11px] font-normal text-muted-foreground">{EXCLUSION_REASON_LABELS[reason]}</span>
-                                                                )}
-                                                            </th>
-                                                            <td className="px-3.5 py-2.5">
-                                                                <span className={cn(
-                                                                    "px-2 py-0.5 rounded-lg text-[11px] font-bold border inline-block",
-                                                                    status === 'Full-Time' ? "bg-primary/15 text-primary border-primary/30" :
-                                                                    status === 'Part-Time' ? "bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30" :
-                                                                    status === 'Flexible Part-Time' ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
-                                                                    "bg-muted text-muted-foreground border-border"
-                                                                )}>
-                                                                    {status || '—'}
-                                                                </span>
-                                                                {c.engagement_kind === 'multi_hire' && (
-                                                                    <span
-                                                                        className="ml-1.5 px-2 py-0.5 rounded-lg text-[11px] font-bold border inline-block bg-muted text-muted-foreground border-border"
-                                                                        title={c.multi_hire_request_ref ? `Request to Multi-Hire: ${c.multi_hire_request_ref}` : undefined}
-                                                                    >
-                                                                        Multi-hire · cl 13
-                                                                    </span>
-                                                                )}
-                                                            </td>
-                                                            <td className="px-3.5 py-2.5 text-right font-mono font-bold text-xs text-foreground">
-                                                                {weekly > 0 ? `${weekly} h/wk`
-                                                                    : annual > 0 ? `${annual} h/yr`
-                                                                        : <span className="text-muted-foreground/40 font-normal">—</span>}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    {/* ── Footer Tags ── */}
-                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <span className={cn(
-                                                "px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5",
-                                                anyActive 
-                                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" 
-                                                    : "bg-muted text-muted-foreground border-border"
-                                            )}>
-                                                <span className={cn("w-1.5 h-1.5 rounded-full", anyActive ? "bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-muted-foreground/40")} />
-                                                {anyActive ? 'Active' : (head.status ?? 'Inactive')}
-                                            </span>
-                                            <span className="text-muted-foreground text-[11px]">
-                                                Created {created ? format(parseISO(created), 'd MMM yyyy') : '—'}
-                                            </span>
-                                        </div>
-
-                                        {conversion && (
-                                            <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-semibold">
-                                                Conversion eligible ({conversion.tenureMonths} mo)
-                                            </span>
-                                        )}
-                                        {swsOverrun && (
-                                            <span className="px-2 py-0.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-semibold">
-                                                SWS trial overrun ({swsOverrun.weeksElapsed} wks)
-                                            </span>
-                                        )}
-                                    </div>
-                                </section>
-                            );
-                        })}
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </CardContent>
@@ -399,16 +372,26 @@ export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, 
         enabled: !!employeeId
     });
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to revoke this certificate?')) return;
-        
-        const { error } = await supabase
-            .from('app_access_certificates')
-            .delete()
-            .eq('id', id);
+    /**
+     * Revoking deactivates the certificate; it is never deleted, so
+     * access_certificate_events keeps the whole history. When the caller may
+     * not change this certificate (an epsilon revoking another epsilon) the
+     * policy matches no row instead of erroring, hence the empty-result check.
+     */
+    const handleRevoke = async (cert: { id: string; access_level: string }) => {
+        if (!confirm(`Revoke ${employeeName}'s ${cert.access_level} access?`)) return;
 
-        if (error) {
+        const { data, error } = await supabase
+            .from('app_access_certificates')
+            .update({ is_active: false })
+            .eq('id', cert.id)
+            .select('id');
+
+        if (error || !data?.length) {
             console.error('Revoke error:', error);
+            alert(error?.message?.includes('last active zeta')
+                ? 'This is the last zeta certificate, so it cannot be revoked. Grant zeta to someone else first.'
+                : error?.message ?? 'You are not allowed to revoke this certificate.');
             return;
         }
 
@@ -531,14 +514,18 @@ export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, 
                                                     </Button>
                                                 }
                                             />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDelete(cert.id)}
-                                                className="text-muted-foreground hover:text-destructive transition-all"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
+                                            {cert.is_active !== false && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    aria-label={`Revoke ${cert.access_level} access`}
+                                                    title="Revoke access"
+                                                    onClick={() => handleRevoke(cert)}
+                                                    className="text-muted-foreground hover:text-destructive transition-all"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                         </>
                                     )}
                                     <div className={cn(

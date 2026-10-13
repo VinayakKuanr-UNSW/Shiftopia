@@ -199,6 +199,20 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
     clause: 'cl 58.2',
     description: 'Gender affirmation leave — up to 10 days per calendar year, taken EITHER as accrued paid annual leave OR as unpaid leave, at the Team Member\u2019s election.',
   },
+  toil: {
+    leaveType: 'toil',
+    // A paid absence: the day is time already worked, taken back.
+    ordinaryHoursCredit: 'CREDITS',
+    accrualRateHoursPerYear: null, // earned from approved timesheets, not by the year
+    maxBalanceHours: null,
+    requiresCertificate: false,
+    certificateThresholdDays: null,
+    paidForCasual: false,
+    // Held in `toil_ledger`, not `leave_balances` — and it may NOT go negative.
+    balanceTracked: false,
+    clause: 'Contract (cl 2.2)',
+    description: 'Time off in lieu — hours worked beyond 7.6 a day, or beyond your contracted week, on a salaried contract, taken back hour for hour. It cannot be taken before it is earned, and any not taken within 6 months is paid out.',
+  },
 };
 
 /**

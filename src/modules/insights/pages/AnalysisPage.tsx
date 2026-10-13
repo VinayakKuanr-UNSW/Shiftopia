@@ -47,9 +47,9 @@ const AnalysisPage: React.FC = () => {
       <PageState
         state="empty"
         scope="page"
-        title="Labour cost is in Gross Pay"
-        description="Labour cost by department, sub-department, role and employee — against budget — is under Gross Pay → Labour cost."
-        action={{ label: 'Open labour cost', onClick: () => navigate('/management/payroll?tab=labour') }}
+        title="Labour cost is in Payroll"
+        description="Labour cost by department, sub-department, role and employee — against budget — is under Payroll → Labour cost."
+        action={{ label: 'Open labour cost', onClick: () => navigate('/payroll?tab=labour') }}
       />
     );
   }

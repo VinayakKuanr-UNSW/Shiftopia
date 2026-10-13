@@ -31,6 +31,11 @@
  *   unpaid    No entitlement figure at all: Community Service (cl 54) and
  *             Unpaid Leave (cl 57). Shown as hours taken this year.
  *
+ *   toil      Time off in lieu, held in `toil_ledger` (see modules/toil). Only a
+ *             SALARIED full-time or part-time contract earns it — the EBA has no
+ *             TOIL clause, so EBA overtime is paid (cl 42.4). Unlike `balance`,
+ *             it may NOT go negative: TOIL cannot be taken before it is earned.
+ *
  * WHO IS ENTITLED. A casual's 25% loading is "full recompense" for paid
  * annual, personal and compassionate leave (cl 12.5(b)), and cl 51–58 each
  * exclude casuals by name. A type that does not apply is `applicable: false`
@@ -39,16 +44,17 @@
  */
 import { ledgerFor, type LedgerLine } from './leave-approval';
 import type { LeaveBalance, LeaveRequest, LeaveTypeCode } from '../model/leave.types';
+import type { ToilPosition } from '@/modules/toil/model/toil.types';
 
-export type LedgerKind = 'balance' | 'capped' | 'occasion' | 'unpaid';
+export type LedgerKind = 'balance' | 'capped' | 'occasion' | 'unpaid' | 'toil';
 
 export interface LedgerTypeDef {
     type: LeaveTypeCode;
     label: string;
     clause: string;
     kind: LedgerKind;
-    /** Who has it: everyone, permanents only, or casuals only. */
-    eligible: 'all' | 'permanent' | 'casual';
+    /** Who has it: everyone, permanents only, casuals only, or salaried class-1 contracts (TOIL). */
+    eligible: 'all' | 'permanent' | 'casual' | 'salaried';
     /** `capped`: the cap, in days. */
     capDays?: number;
     /** `capped`: what the cap is counted over. */
@@ -89,6 +95,9 @@ export const LEDGER_TYPES: readonly LedgerTypeDef[] = [
     { type: 'gender_affirmation', label: 'Gender Affirmation Leave', clause: 'cl 58', kind: 'capped',
         eligible: 'permanent', capDays: 10, capPeriod: 'tenure',
         basis: 'Up to 10 days for your whole time with ICC Sydney — one allowance, never reset. From annual leave or unpaid — your choice.' },
+    { type: 'toil', label: 'Time in Lieu (TOIL)', clause: 'Salaried', kind: 'toil', eligible: 'salaried',
+        basis: 'Salaried contracts only. Hours over 7.6 a day, or over your contracted week, are banked hour for hour. '
+            + 'Take them within 6 months or they are paid out; you can ask for a payout at any time.' },
 ];
 
 export interface LedgerEntry {
@@ -122,6 +131,8 @@ export interface LedgerEntry {
      * nothing is calculated, because guessing service is guessing a payout.
      */
     lsl?: LslPosition;
+    /** TOIL only: the position from `toil_ledger`. Absent when it was not loaded. */
+    toil?: ToilPosition;
 }
 
 export interface LslPosition {
@@ -169,12 +180,19 @@ export interface BuildLedgerInput {
      * Omit when `requests` is already all-time (My Leave loads everything).
      */
     tenureRequests?: readonly LedgerRequest[];
+    /**
+     * This person's TOIL position (`get_toil_balances`). The TOIL entry is
+     * applicable when they hold a salaried class-1 contract today, or still
+     * have TOIL banked from one (it is paid out, never lost).
+     */
+    toil?: ToilPosition | null;
 }
 
 const h1 = (n: number) => Math.round(n * 10) / 10;
 
-function isEligible(def: LedgerTypeDef, isCasual: boolean): boolean {
+function isEligible(def: LedgerTypeDef, isCasual: boolean, toil: ToilPosition | null | undefined): boolean {
     if (def.eligible === 'all') return true;
+    if (def.eligible === 'salaried') return Boolean(toil && (toil.eligible || toil.balanceMinutes !== 0));
     return def.eligible === 'casual' ? isCasual : !isCasual;
 }
 
@@ -193,7 +211,7 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
     }
 
     return LEDGER_TYPES.map(def => {
-        const applicable = isEligible(def, isCasual);
+        const applicable = isEligible(def, isCasual, input.toil);
         const mine = def.capPeriod === 'tenure'
             ? allTime.filter(r => r.leaveType === def.type)
             : requests.filter(r => r.leaveType === def.type && inYear(r));
@@ -220,6 +238,7 @@ export function buildLedger(input: BuildLedgerInput): LedgerEntry[] {
         return {
             fdvDays,
             lsl,
+            toil: def.kind === 'toil' ? (input.toil ?? undefined) : undefined,
             def,
             applicable,
             line,

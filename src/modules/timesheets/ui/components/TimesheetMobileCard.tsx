@@ -401,6 +401,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             departureVarianceReason={entry.departureVarianceReason}
             wasToppedUpToMinEngagement={entry.wasToppedUpToMinEngagement}
             requiredEngagementMinutes={entry.requiredEngagementMinutes}
+            toilMinutes={entry.toilMinutes}
             showPayrollRules
             timesheetStatus={entry.timesheetStatus}
             shiftData={{

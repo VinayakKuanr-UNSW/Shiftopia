@@ -1220,38 +1220,39 @@ async function resolveCaller(req: Request): Promise<{ id: string } | null> {
 
 /**
  * Cert-based authorization (00 §8): the caller must hold an ACTIVE manager cert
- * (gamma/delta/epsilon/zeta) for the requested org (and dept/sub-dept when given).
- * `is_manager_or_above()` is broken in prod, so we read the cert table directly.
+ * (gamma/delta/epsilon/zeta) whose scope CONTAINS the requested scope.
  */
 async function isManagerForScope(
   service: SupabaseClient,
   userId: string,
   scope: AssignmentScope,
 ): Promise<boolean> {
+  // Not filtered on organization_id: a zeta cert is global and carries none.
   const { data, error } = await service
     .from('app_access_certificates')
-    .select('id, access_level, department_id, sub_department_id')
+    .select('access_level, organization_id, department_id, sub_department_id')
     .eq('user_id', userId)
-    .eq('organization_id', scope.organization_id)
     .eq('is_active', true)
     .in('access_level', MANAGER_CERT_LEVELS);
-  if (error || !data || data.length === 0) return false;
+  if (error || !data) return false;
+  return data.some((c: Record<string, unknown>) => certCoversScope(c, scope));
+}
 
-  // A cert grants the requested scope if it is at/above it: org-only cert
-  // covers any dept; a dept cert must match the requested dept; etc.
-  return data.some((c: Record<string, unknown>) => {
-    if (scope.department_id && c.department_id && c.department_id !== scope.department_id) {
-      return false;
-    }
-    if (
-      scope.sub_department_id &&
-      c.sub_department_id &&
-      c.sub_department_id !== scope.sub_department_id
-    ) {
-      return false;
-    }
-    return true;
-  });
+/**
+ * Each level covers exactly one tier: zeta everything, epsilon its org, delta
+ * its department, gamma its sub-department. A request that leaves a tier
+ * unset asks for all of it, so an org-wide run needs epsilon+ and a
+ * department-wide run delta+. The old check skipped any comparison whose
+ * requested side was null, which let a gamma run the whole organization.
+ */
+function certCoversScope(c: Record<string, unknown>, scope: AssignmentScope): boolean {
+  if (c.access_level === 'zeta') return true;
+  if (c.organization_id !== scope.organization_id) return false;
+  if (c.access_level === 'epsilon') return true;
+  if (c.access_level === 'delta') {
+    return !!scope.department_id && c.department_id === scope.department_id;
+  }
+  return !!scope.sub_department_id && c.sub_department_id === scope.sub_department_id;
 }
 
 // =============================================================================

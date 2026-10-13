@@ -14,6 +14,7 @@
 // ============================================================================
 
 export { default as AvailabilityPage } from './pages/AvailabilityPage';
+export { GridPage, default as TeamAvailabilityPage } from './pages/TeamAvailabilityPage';
 
 // ============================================================================
 // SCREEN & PANES (for custom layouts)

@@ -503,8 +503,8 @@ const SettingsPage: React.FC = () => {
     navigate(`/settings/${newSection}`);
   };
 
-  // Pay rates moved to Gross Pay (money lives there alone, 2026-10-09).
-  if (section === 'pay-rates') return <Navigate to="/management/payroll?tab=rates" replace />;
+  // Pay rates moved to Payroll (money lives there alone, 2026-10-09).
+  if (section === 'pay-rates') return <Navigate to="/payroll?tab=rates" replace />;
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">

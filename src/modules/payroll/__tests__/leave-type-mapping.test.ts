@@ -28,6 +28,8 @@ const EXPECTED: Record<LeaveTypeCode, LeaveFlags | null> = {
   // cases below — only an ANNUAL election is paid.
   religious_cultural: null,
   gender_affirmation: null,
+  // Salaried contracts only; spread by the request's hours (toilLeaveDayMinutes).
+  toil: { isToilLeave: true },
 };
 
 describe('leaveTypeToFlags × canonical LeaveTypeCode taxonomy', () => {

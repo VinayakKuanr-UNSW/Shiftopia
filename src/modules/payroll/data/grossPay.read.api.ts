@@ -50,6 +50,7 @@ import type {
   GrossPayInputProvenance,
 } from './types';
 import { getLeaveGrossPayInputs } from './leaveGrossPay';
+import { getToilPeriodFacts } from './toilGrossPay';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
   classificationForLevel,
@@ -672,7 +673,7 @@ export async function fetchHydratedShiftRows(
     const [pRes, cRes, linkedRes, historyRes] = await Promise.all([
       selectInChunks<any>(employeeIds, (ids) =>
         supabase.from('profiles').select('id, employment_type').in('id', ids)),
-      // H1 audit fix: fetch apprentice/trainee/SWS columns that AddContractDialog writes.
+      // H1 audit fix: fetch apprentice/trainee/SWS columns that the contract wizard writes.
       selectInChunks<any>(employeeIds, (ids) =>
         supabase.from('user_contracts').select(CONTRACT_PAY_COLUMNS).in('user_id', ids).eq('status', 'Active')),
       selectInChunks<any>(linkedContractIds, (ids) =>
@@ -832,15 +833,31 @@ export async function getPeriodGrossPay(
   // shift (`scheduled_fallback` hours) YIELDS to approved leave — the member
   // was absent on leave, so pricing the rostered line as worked would both
   // drop the leave pay and fabricate attendance.
-  const leaveKeys = new Set(leaveInputs.map((i) => `${i.employeeId}:${i.shiftDate}`));
+  //
+  // TOIL is the exception both ways: it is taken in hours, often part of a day
+  // the person also works, so a TOIL day neither displaces the shift nor is
+  // displaced by it.
+  const leaveKeys = new Set(leaveInputs.filter((i) => !i.isToilLeave).map((i) => `${i.employeeId}:${i.shiftDate}`));
   const keptShifts = shiftInputs.filter(
     (i) => !(leaveKeys.has(`${i.employeeId}:${i.shiftDate}`) && i.hoursSource === 'scheduled_fallback'),
   );
   const workedKeys = new Set(keptShifts.map((i) => `${i.employeeId}:${i.shiftDate}`));
-  const mergedLeave = leaveInputs.filter((i) => !workedKeys.has(`${i.employeeId}:${i.shiftDate}`));
+  const mergedLeave = leaveInputs.filter((i) => i.isToilLeave || !workedKeys.has(`${i.employeeId}:${i.shiftDate}`));
+
+  // TOIL payouts are lines of their own, and the hours banked in the period
+  // come from the ledger (salaried staff earn TOIL instead of overtime pay).
+  const toil = opts.includeLeave === false
+    ? { payoutInputs: [] as GrossPayShiftInput[], accruedHoursByEmployee: new Map<string, number>() }
+    : await getToilPeriodFacts({
+        periodStart: bounds.periodStart,
+        periodEnd: bounds.periodEnd,
+        orgIds: bounds.orgIds,
+        deptIds: bounds.deptIds,
+        subDeptIds: bounds.subDeptIds,
+      });
 
   const byEmployee = new Map<string, GrossPayShiftInput[]>();
-  for (const input of [...keptShifts, ...mergedLeave, ...leadInInputs]) {
+  for (const input of [...keptShifts, ...mergedLeave, ...toil.payoutInputs, ...leadInInputs]) {
     const arr = byEmployee.get(input.employeeId);
     if (arr) arr.push(input);
     else byEmployee.set(input.employeeId, [input]);
@@ -852,7 +869,11 @@ export async function getPeriodGrossPay(
   };
   const results: PeriodGrossPay[] = [];
   for (const [employeeId, empInputs] of byEmployee) {
-    results.push(computeEmployeePeriodGrossPay(employeeId, empInputs, periodBounds, { leadInStart }));
+    const accrued = toil.accruedHoursByEmployee.get(employeeId);
+    results.push(computeEmployeePeriodGrossPay(employeeId, empInputs, periodBounds, {
+      leadInStart,
+      toil: accrued != null ? { accruedHours: accrued } : undefined,
+    }));
   }
   return results;
 }

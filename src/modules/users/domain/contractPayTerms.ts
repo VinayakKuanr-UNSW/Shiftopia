@@ -269,12 +269,6 @@ export function evaluateEngagement(
             clause: 'cl 13.1(a)',
         });
     }
-    if (requestRef.trim() === '') {
-        errors.push({
-            message: 'Record the Request to Multi-Hire form reference — the Team Member asks for a multi-hire engagement.',
-            clause: 'cl 13.1(d)',
-        });
-    }
     return { kind: 'multi_hire', errors };
 }
 

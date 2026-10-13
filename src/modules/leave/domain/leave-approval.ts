@@ -232,6 +232,8 @@ export interface ApprovalOutcome {
     unassignSucceeded: number;
     /** Shifts inside the leave dates that had already started — deliberately left alone. */
     keptWorked?: number;
+    /** Shifts kept because TOIL covered only part of the rostered day. */
+    keptPartial?: number;
 }
 
 /**
@@ -251,6 +253,11 @@ export function summarizeApproval(o: ApprovalOutcome): { description: string; ne
     if (kept > 0) {
         parts.push(`${n(kept, 'shift')} inside the leave dates had already started, so ${kept === 1 ? 'it was' : 'they were'} kept `
             + `— check whether the leave or the roster is right`);
+    }
+    const partial = o.keptPartial ?? 0;
+    if (partial > 0) {
+        parts.push(`${n(partial, 'shift')} kept — the time in lieu covers part of the day, so shorten `
+            + `${partial === 1 ? 'it' : 'them'} on the roster if the finish changes`);
     }
     return {
         description: parts.length === 0 ? 'Nothing was rostered on those dates.' : `${parts.join('. ')}.`,

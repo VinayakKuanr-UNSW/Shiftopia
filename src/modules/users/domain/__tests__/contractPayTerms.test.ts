@@ -206,9 +206,9 @@ describe('evaluateEngagement — cl 13 multi-hire', () => {
         expect(r).toEqual({ kind: 'multi_hire', errors: [] });
     });
 
-    it('needs the Request to Multi-Hire reference', () => {
+    it('does not require the Request to Multi-Hire reference', () => {
         const r = evaluateEngagement('Casual', 'role-usher', [fullTime], '  ');
-        expect(clauses(r.errors)).toEqual(['cl 13.1(d)']);
+        expect(r).toEqual({ kind: 'multi_hire', errors: [] });
     });
 
     it('refuses the person\'s usual job', () => {
