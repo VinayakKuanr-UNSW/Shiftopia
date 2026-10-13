@@ -1,0 +1,67 @@
+name: Database drift check
+
+# Proves supabase/migrations + supabase/seeds still rebuild exactly what the
+# deployed database runs (scripts/db/verify-baseline.sh: every table, function,
+# policy, trigger, view, enum and grant, plus reference-data row counts).
+#
+# It fails the day a migration reaches the database without its repo file, or
+# a repo file differs from what ran — the drift that went unnoticed for months
+# and forced the 2026-07-02 and 2026-10-13 re-baselines.
+#
+# Read-only against the deployed database. Migrations are applied there before
+# their PR merges, so on a PR this also checks the new file matches what ran.
+
+on:
+  schedule:
+    - cron: '0 18 * * *'   # 05:00 AEDT
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/seeds/**'
+      - 'scripts/db/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Repo rebuilds the deployed database
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Guard — require SUPABASE_DB_URL
+        id: guard
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::warning::SUPABASE_DB_URL secret not set — skipping the drift check."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v5
+        if: steps.guard.outputs.ok == 'true'
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (for the supabase CLI)
+        if: steps.guard.outputs.ok == 'true'
+        run: |
+          npm ci
+          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Rebuild locally and compare with the deployed database
+        if: steps.guard.outputs.ok == 'true'
+        run: scripts/db/verify-baseline.sh

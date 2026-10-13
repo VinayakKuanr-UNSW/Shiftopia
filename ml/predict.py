@@ -166,7 +166,7 @@ def _verify_manifest_hashes() -> None:
         return
 
     url = os.getenv('VITE_SUPABASE_URL')
-    key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('VITE_SUPABASE_ANON_KEY')
+    key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')  # server-side; never the anon key
     if not url or not key:
         raise RuntimeError("ML_VERIFY_MANIFEST_HASHES=true requires Supabase credentials in env.")
 

@@ -17,18 +17,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { migrationPath } from '@/test/migrations';
 import { resolveRateSet } from '../../projections/utils/cost/rate-schedule';
 import { deriveRateSetFromMigration } from '../../../../../../scripts/gen-eba-rate-schedule.mjs';
 
 const FY2026_EFFECTIVE_FROM = '2026-07-06';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATION_PATH = resolve(
-  __dirname,
-  '../../../../../../supabase/migrations/20260712000000_eba_rate_fy2026.sql',
-);
+const MIGRATION_PATH = migrationPath('20260712000000_eba_rate_fy2026.sql');
 
 const sql = readFileSync(MIGRATION_PATH, 'utf8');
 const fromDb = deriveRateSetFromMigration(sql, FY2026_EFFECTIVE_FROM);

@@ -35,14 +35,15 @@
  *      inspects migrations at or after CUTOFF, and there are none yet, so on
  *      its own it would pass whatever it did. The synthetic cases prove it can
  *      still tell a violation from a compliant policy.
+ *
+ * AFTER A RE-BASELINE the live policies sit in the baseline file — a dump of
+ * production taken after CUTOFF, but named 20251015000000, before it — and the
+ * migrations that wrote them move to an archive. So the baseline is checked as
+ * the current state, against an explicit list of exceptions.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve, basename } from 'node:path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = resolve(__dirname, '../../../../supabase/migrations');
+import { readFileSync } from 'node:fs';
+import { allMigrationFiles, BASELINE_FILE, migrationPath } from '@/test/migrations';
 
 /**
  * Migrations from this version onward must not inline the ladder. Everything
@@ -86,10 +87,26 @@ export function violatesLadderRule(statement: string): boolean {
     return !/user_has_action_in_scope/i.test(statement);
 }
 
-function migrationFiles(): string[] {
-    return readdirSync(MIGRATIONS_DIR)
-        .filter((f) => f.endsWith('.sql'))
-        .sort();
+/** Every migration ever applied — live and archived — sorted by version. */
+function migrationFiles(): { name: string; path: string }[] {
+    return allMigrationFiles();
+}
+
+/**
+ * Policies on tables that cannot reach an organization, so a level is all they
+ * can check. Each table says so in a COMMENT ON TABLE.
+ */
+const LADDER_EXCEPTIONS = new Set([
+    'manager_insert_demand_templates',
+    'manager_update_demand_templates',
+    'manager_delete_demand_templates',
+]);
+
+/** Quoted names exist in this schema ("Managers can view all shift events"),
+ *  so match a quoted string OR a bare identifier — not `[\w ]+`, which
+ *  swallows the ` ON public` that follows. */
+function policyName(statement: string): string {
+    return statement.match(/CREATE\s+POLICY\s+("[^"]+"|\w+)/i)?.[1]?.replace(/^"|"$/g, '') ?? '?';
 }
 
 describe('the ladder is stated once', () => {
@@ -161,10 +178,8 @@ describe('the ladder is stated once', () => {
         // a green result after the cutoff means the rule holds rather than that
         // the matcher never matches anything.
         const historical = files
-            .filter((f) => f < CUTOFF)
-            .flatMap((f) =>
-                createPolicyStatements(readFileSync(resolve(MIGRATIONS_DIR, f), 'utf8')),
-            )
+            .filter((f) => f.name < CUTOFF)
+            .flatMap((f) => createPolicyStatements(readFileSync(f.path, 'utf8')))
             .filter(violatesLadderRule);
         expect(historical.length).toBeGreaterThan(0);
     });
@@ -173,16 +188,10 @@ describe('the ladder is stated once', () => {
         const offenders: string[] = [];
 
         for (const file of migrationFiles()) {
-            if (basename(file) < CUTOFF) continue;
-            const sql = readFileSync(resolve(MIGRATIONS_DIR, file), 'utf8');
+            if (file.name < CUTOFF) continue;
+            const sql = readFileSync(file.path, 'utf8');
             for (const statement of createPolicyStatements(sql)) {
-                if (violatesLadderRule(statement)) {
-                    // Quoted names exist in this schema ("Managers can view all shift
-                    // events"), so match a quoted string OR a bare identifier —
-                    // not `[\w ]+`, which swallows the ` ON public` that follows.
-                    const name = statement.match(/CREATE\s+POLICY\s+("[^"]+"|\w+)/i)?.[1] ?? '?';
-                    offenders.push(`${file} → ${name}`);
-                }
+                if (violatesLadderRule(statement)) offenders.push(`${file.name} → ${policyName(statement)}`);
             }
         }
 
@@ -193,5 +202,14 @@ describe('the ladder is stated once', () => {
             + 'or — if the table genuinely cannot reach an organization, as demand_templates '
             + 'cannot — say so in a COMMENT ON TABLE and add it to the exceptions here.',
         ).toEqual([]);
+    });
+
+    it('the current baseline — production\'s live policies — inlines the ladder only where excepted', () => {
+        const live = createPolicyStatements(readFileSync(migrationPath(BASELINE_FILE), 'utf8'))
+            .filter(violatesLadderRule)
+            .map(policyName);
+        // The exceptions really are present, or this check matches nothing.
+        expect(live.filter((n) => LADDER_EXCEPTIONS.has(n)).sort()).toEqual([...LADDER_EXCEPTIONS].sort());
+        expect(live.filter((n) => !LADDER_EXCEPTIONS.has(n))).toEqual([]);
     });
 });

@@ -127,5 +127,5 @@ def client(monkeypatch, patched_predict, mock_supabase_client):
 
     monkeypatch.setattr(api, 'create_client', lambda *a, **kw: mock_supabase_client)
     monkeypatch.setenv('VITE_SUPABASE_URL', 'http://fake-supabase')
-    monkeypatch.setenv('VITE_SUPABASE_ANON_KEY', 'fake-key')
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', 'fake-key')
     return TestClient(api.app)

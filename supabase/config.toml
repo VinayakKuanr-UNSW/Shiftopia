@@ -6,3 +6,13 @@ project_id = "srfozdlphoempdattvtx"
 # (Settings > API > Exposed schemas) — config.toml alone does not change a linked remote project.
 schemas = ["public", "graphql_public", "hr"]
 extra_search_path = ["public", "extensions"]
+
+[db]
+# Production runs PostgreSQL 17.6 — keep local and CI on the same major.
+major_version = 17
+
+[db.seed]
+enabled = true
+# Reference data first (generated from production by
+# scripts/db/rebaseline-from-prod.sh), then the venue-ops sample data.
+sql_paths = ["./seeds/reference.sql", "./seed.sql"]
