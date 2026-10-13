@@ -19,14 +19,12 @@ Shifts: 1 = S1 (assigned X), 2 = S2 (same department), 3 = D2 / S3 (assigned X),
 
 ## Running it
 
-The repo's migrations do not replay cleanly with `supabase start` (a duplicate version, cron jobs that exist only in prod, data-dependent migrations), and the permission matrix rows (`rbac_actions`, `rbac_permissions`) are data that lives only in prod. So:
+Since the 2026-10-13 re-baseline the migrations rebuild production exactly, and `supabase/seeds/reference.sql` carries the `rbac_actions` / `rbac_permissions` rows and the org / department / sub-department rows the fixtures use (see `docs/operations/database-baseline.md`). So:
 
-1. Start Docker, then `supabase start` in a scratch workdir with an **empty** `supabase/migrations`.
-2. Apply every file in `supabase/migrations` in order with `psql -1 -f`, letting individual files fail.
-3. Copy from prod: the `rbac_actions` / `rbac_permissions` rows, the org / department / sub-department rows the fixtures use, and the live `pg_get_functiondef` of any function a failed migration left behind. Compare `md5(pg_get_functiondef(...))` and the policy text locally against prod for every object under test, and only trust results once they match.
-4. `psql -f 01_fixtures.sql`, then `psql -f 02_matrix_by_level.sql` and `psql -f 03_legacy_flag.sql`. Both test files run inside `BEGIN … ROLLBACK`.
+1. Start Docker, then `supabase start` — or `KEEP=1 scripts/db/verify-baseline.sh`, which also proves the local database matches production first.
+2. `psql -f 01_fixtures.sql`, then `psql -f 02_matrix_by_level.sql` and `psql -f 03_legacy_flag.sql`, e.g. `docker exec -i supabase_db_<project_id> psql -U postgres -f - < 01_fixtures.sql`. Both test files run inside `BEGIN … ROLLBACK`.
 
-`02` prints one line per persona. Compare it with `expected_matrix.txt` (the state after migrations `20261011005610` … `20261011005853`).
+`02` prints one line per persona. Compare it with `expected_matrix.txt` (the state after migrations `20261011005610` … `20261011005853`). Last reproduced line-for-line on a database rebuilt from the baseline: 2026-10-13.
 
 ## Reading a line
 

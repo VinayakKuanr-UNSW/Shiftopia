@@ -1,0 +1,16 @@
+# Object definitions that differ in text between production and a database
+# rebuilt from the dump, but are proven to mean the same thing. Read by
+# scripts/db/verify-baseline.sh: a difference is accepted only when BOTH hashes
+# match a line here, so any real change to one of these objects fails again.
+#
+# kind	name	production md5	rebuilt md5	why it is equivalent
+#
+# CHECK constraints whose expression Postgres re-deparses after the dump is
+# re-parsed: production stores `= ANY ((ARRAY['X'::varchar, …])::text[])`, the
+# rebuild `= ANY (ARRAY[('X'::varchar)::text, …])`, and the rebuild drops one
+# redundant pair of parentheses around an AND chain. Same predicate. Compared
+# by hand 2026-10-13.
+constraint	hr.user_contracts.user_contracts_ordinary_days_valid	04680e3ae2d2ac7bf05df4068aea236d	a166dc97ea983ddffb4e247d9e83a661	redundant parentheses around AND chain
+constraint	public.app_access_certificates.chk_certificate_type	eb3b9c92f5e271bae3b0b2f208d6f27e	d70a8c55f545d1215cd918ac84a1d033	array cast moved onto each element
+constraint	public.planning_periods.planning_periods_status_check	0b89195671746d067e12fe05f74fa8b0	b3b695b1332def0e7e5d518d8457f4a0	array cast moved onto each element
+constraint	public.supervisor_feedback.supervisor_feedback_slice_chk	72d2342e7e6dc5c06863cb3635af3218	485ed99abe0ea70228e193320ec08aae	redundant parentheses around AND chain
