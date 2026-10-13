@@ -162,7 +162,7 @@ class PredictRequest(BaseModel):
 def _get_supabase_client():
     return create_client(
         os.getenv('VITE_SUPABASE_URL'),
-        os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('VITE_SUPABASE_ANON_KEY'),
+        os.getenv('SUPABASE_SERVICE_ROLE_KEY'),  # server-side; never the anon key
     )
 
 

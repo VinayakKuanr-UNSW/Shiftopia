@@ -22,22 +22,12 @@ const EXPOSED_SCHEMAS = ['public', 'hr'];  // supabase/config.toml [api] schemas
 /**
  * Relations an anonymous caller can read rows from — each one a reviewed
  * decision. Adding to this list is a security decision; say why.
+ *
+ * Empty since the 2026-10-13 review closed the five it found (org structure via
+ * `public_read`; the venue event schedule and model coefficients the ML service
+ * read with the anon key). No signed-out screen reads any table.
  */
-const ANON_READABLE: Record<string, string> = {
-    'public.organizations':
-        'KNOWN EXPOSURE (2026-10-13 review): `public_read` policy, includes the org phone/email. '
-        + 'No pre-login screen reads it; signed-in users have their own policy. Proposed fix: drop `public_read`.',
-    'public.departments':
-        'KNOWN EXPOSURE (2026-10-13 review): `public_read` policy. Same fix as organizations.',
-    'public.sub_departments':
-        'KNOWN EXPOSURE (2026-10-13 review): `public_read` policy. Same fix as organizations.',
-    'public.venueops_ml_features':
-        'KNOWN EXPOSURE (2026-10-13 review): the venue event schedule (times, attendance, rooms). '
-        + 'The ML service reads it with the anon key when SUPABASE_SERVICE_ROLE_KEY is unset '
-        + '(ml/*.py, docker-compose.yml). Fix: give the ML service the service-role key, then drop `anon_read_*`.',
-    'public.labor_correction_factors':
-        'Model coefficients, low sensitivity; read by the ML service as above.',
-};
+const ANON_READABLE: Record<string, string> = {};
 
 /** Created by supabase/tests/access_matrix/01_fixtures.sql; exists only in test databases. */
 const TEST_ONLY = new Set(['public._t_persona']);
@@ -62,6 +52,29 @@ describe('anonymous attack surface', () => {
               FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE n.nspname IN (${schemaList}) AND c.relkind = 'v'
                AND NOT coalesce(c.reloptions::text[] && ARRAY['security_invoker=true', 'security_invoker=on'], false)
+             ORDER BY 1`);
+        expect(rows.map((r) => r[0])).toEqual([]);
+    });
+
+    it('anon can write to nothing: no INSERT / UPDATE / DELETE / TRUNCATE on any table or view', () => {
+        const rows = psql(stack().dbContainer, `
+            SELECT c.oid::regclass::text
+              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname IN (${schemaList}) AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+               AND (has_table_privilege('anon', c.oid, 'INSERT') OR has_table_privilege('anon', c.oid, 'UPDATE')
+                    OR has_table_privilege('anon', c.oid, 'DELETE') OR has_table_privilege('anon', c.oid, 'TRUNCATE'))
+             ORDER BY 1`);
+        expect(rows.map((r) => r[0])).toEqual([]);
+    });
+
+    it('no client role holds TRUNCATE, REFERENCES, TRIGGER or MAINTAIN (PostgREST never needs them)', () => {
+        const rows = psql(stack().dbContainer, `
+            SELECT c.oid::regclass::text || ' ' || r.role
+              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace,
+                   unnest(ARRAY['anon', 'authenticated']) AS r(role)
+             WHERE n.nspname IN (${schemaList}) AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+               AND (has_table_privilege(r.role, c.oid, 'TRUNCATE') OR has_table_privilege(r.role, c.oid, 'REFERENCES')
+                    OR has_table_privilege(r.role, c.oid, 'TRIGGER') OR has_table_privilege(r.role, c.oid, 'MAINTAIN'))
              ORDER BY 1`);
         expect(rows.map((r) => r[0])).toEqual([]);
     });

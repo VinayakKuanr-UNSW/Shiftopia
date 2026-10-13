@@ -61,7 +61,7 @@ def main() -> int:
         encoders_hash = sha256_of(encoders_path)
 
     url = os.getenv('VITE_SUPABASE_URL')
-    key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('VITE_SUPABASE_ANON_KEY')
+    key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')  # server-side; never the anon key
     if not url or not key:
         print("ERROR: VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required", file=sys.stderr)
         return 1
