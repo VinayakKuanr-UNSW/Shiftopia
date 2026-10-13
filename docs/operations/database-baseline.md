@@ -25,7 +25,18 @@ Not reproduced locally, on purpose:
 
 Same as before: apply it to production through the MCP, then add the file under `supabase/migrations/` using **the version production recorded**. Check it with `select version, name from supabase_migrations.schema_migrations order by version desc limit 5`. It sorts after the baseline and replays on top of it.
 
+On the PR, the **Database drift check** workflow rebuilds the database from the repo and compares it with production. A file that doesn't match what ran fails it.
+
 **A migration production already ran before the baseline was taken must not go in `supabase/migrations/`.** The baseline already contains it, so replaying it again fails. Put it in that baseline's archive folder instead. This applies to `toil_ledger` and `toil_fmt_hours` (both applied 2026-10-10).
+
+## Drift check
+
+`.github/workflows/db-drift.yml` runs `scripts/db/verify-baseline.sh` in CI:
+- daily at 05:00 AEDT;
+- on demand (Actions → Database drift check → Run workflow);
+- on PRs that touch `supabase/migrations/`, `supabase/seeds/` or `scripts/db/`.
+
+It's read-only against production and uses the `SUPABASE_DB_URL` secret the RLS guard already uses. A failure lists every object that differs. Usually the cause is a migration applied without its repo file, or a file that doesn't match what ran. Add or fix the file. If the drift is wide, re-baseline.
 
 ## Re-baselining
 
@@ -33,6 +44,7 @@ Do this when `verify-baseline.sh` reports differences that the newer migration f
 
 ```sh
 # Needs Docker, the supabase CLI, and SUPABASE_DB_PASSWORD in .env.local
+# (or SUPABASE_DB_URL in the environment — the form CI uses)
 scripts/db/rebaseline-from-prod.sh   # read-only against production
 scripts/db/verify-baseline.sh        # must end "schema: matches production"
 ```
