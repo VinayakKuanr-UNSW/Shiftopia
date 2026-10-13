@@ -24,9 +24,20 @@ INSERT INTO public._t_persona VALUES
  ('DD', 'a0000000-0000-4000-8000-000000000009');  -- delta  @ D2
 GRANT SELECT ON public._t_persona TO authenticated;
 
-INSERT INTO auth.users (id, email, aud, role, raw_user_meta_data)
-SELECT id, lower(n) || '.persona@test.invalid', 'authenticated', 'authenticated', '{}'::jsonb FROM public._t_persona
-ON CONFLICT (id) DO NOTHING;
+-- Shaped so GoTrue can load them too (tests/integration calls edge functions,
+-- which check the caller with auth.getUser()): GoTrue looks users up by the
+-- default instance_id and cannot read NULL token columns.
+INSERT INTO auth.users (instance_id, id, email, aud, role, raw_app_meta_data, raw_user_meta_data,
+                        email_confirmed_at, created_at, updated_at,
+                        confirmation_token, recovery_token, email_change_token_new, email_change)
+SELECT '00000000-0000-0000-0000-000000000000', id, lower(n) || '.persona@test.invalid', 'authenticated', 'authenticated',
+       '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now(), now(), '', '', '', ''
+  FROM public._t_persona
+ON CONFLICT (id) DO UPDATE SET instance_id = EXCLUDED.instance_id,
+    raw_app_meta_data = EXCLUDED.raw_app_meta_data,
+    email_confirmed_at = coalesce(auth.users.email_confirmed_at, now()),
+    created_at = coalesce(auth.users.created_at, now()), updated_at = now(),
+    confirmation_token = '', recovery_token = '', email_change_token_new = '', email_change = '';
 INSERT INTO public.profiles (id, email, first_name, last_name)
 SELECT id, lower(n) || '.persona@test.invalid', 'P-' || n, 'Test' FROM public._t_persona
 ON CONFLICT (id) DO NOTHING;
