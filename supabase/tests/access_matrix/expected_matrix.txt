@@ -1,0 +1,9 @@
+A  see[sh=- ts=- bid=- swp=13 ctr=0 cert=0] upd=.... del2=0 op=1F3F rdel2=F bulk13=F cxl3=F ctrS2=. grantX=. revD=0 revE2=0 delD=0
+D  see[sh=12 ts=1 bid=1 swp=13 ctr=1 cert=0] upd=12.. del2=1 op=1y3F rdel2=y bulk13=F cxl3=F ctrS2=y grantX=. revD=0 revE2=0 delD=0
+DD see[sh=3 ts=3 bid=3 swp=13 ctr=0 cert=0] upd=..3. del2=0 op=1F3y rdel2=F bulk13=F cxl3=y ctrS2=. grantX=. revD=0 revE2=0 delD=0
+E  see[sh=123 ts=13 bid=13 swp=13 ctr=1 cert=5] upd=123. del2=1 op=1y3y rdel2=y bulk13=y cxl3=y ctrS2=y grantX=y revD=1 revE2=0 delD=0
+E2 see[sh=123 ts=13 bid=13 swp=13 ctr=1 cert=5] upd=123. del2=1 op=1y3y rdel2=y bulk13=y cxl3=y ctrS2=y grantX=y revD=1 revE2=0 delD=0
+F  see[sh=4 ts=- bid=- swp=- ctr=0 cert=0] upd=...4 del2=0 op=1F3F rdel2=F bulk13=F cxl3=F ctrS2=. grantX=. revD=0 revE2=0 delD=0
+G  see[sh=1 ts=1 bid=1 swp=13 ctr=0 cert=0] upd=1... del2=0 op=1y3F rdel2=F bulk13=F cxl3=F ctrS2=. grantX=. revD=0 revE2=0 delD=0
+X  see[sh=13 ts=13 bid=13 swp=13 ctr=1 cert=0] upd=1.3. del2=0 op=1F3F rdel2=F bulk13=F cxl3=y ctrS2=. grantX=. revD=0 revE2=0 delD=0
+Z  see[sh=1234 ts=13 bid=13 swp=13 ctr=1 cert=7] upd=1234 del2=1 op=1y3y rdel2=y bulk13=y cxl3=y ctrS2=y grantX=y revD=1 revE2=1 delD=1 lastZeta=refused:The last active zeta certificate cannot 
