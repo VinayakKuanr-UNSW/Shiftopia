@@ -16,11 +16,12 @@ Run and **paste the actual output** as proof. Never claim green without it.
 | Gate | Command |
 |---|---|
 | Frontend (canonical) | `npm run verify`  ⟶ `tsc --noEmit && vitest run && vite build` |
-| Optimizer (Python) | `cd optimizer-service && OPTIMIZER_AUTH_DISABLED=true python3 -m pytest tests/` |
+| Optimizer (Python) | `cd optimizer-service && python3 -m pytest tests/` |
+| ML service (Python) | `cd ml && python3 -m pytest` |
 
-- The optimizer tests are **not** part of `npm run verify` — run them separately whenever you
-  touch anything under `optimizer-service/`. Without `OPTIMIZER_AUTH_DISABLED=true`, several
-  tests 503-fail.
+- The Python tests are **not** part of `npm run verify` — run them separately whenever you
+  touch anything under `optimizer-service/` or `ml/`. CI runs both (`python-tests` job).
+  Each conftest defaults that service's auth bypass on, so no env var is needed.
 - If the venv has no pip, `python3 -m ensurepip` first.
 
 ### Do NOT use these as a gate
