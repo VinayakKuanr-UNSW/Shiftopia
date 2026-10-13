@@ -1,12 +1,12 @@
 # API integration tests
 
-These tests make real HTTP calls (PostgREST, RPCs and edge functions) to a **local** Supabase stack built from `supabase/migrations` and `supabase/seeds`. That stack matches production; `scripts/db/verify-baseline.sh` proves it. The tests cover what unit tests with a mocked Supabase client cannot: grants, RLS, PostgREST exposure, the JWT → `auth.uid()` path, and edge-function authorisation.
+These tests make real HTTP calls (PostgREST, RPCs, Storage and edge functions) to a **local** Supabase stack built from `supabase/migrations` and `supabase/seeds`. That stack matches production; `scripts/db/verify-baseline.sh` proves it. The tests cover what unit tests with a mocked Supabase client cannot: grants, RLS, PostgREST exposure, the JWT → `auth.uid()` path, and edge-function authorisation.
 
 ## Run
 
 ```sh
 supabase start -x studio,imgproxy,mailpit,logflare,vector,postgres-meta,supavisor,realtime
-npm run test:integration        # ~12 s
+npm run test:integration        # ~15 s
 npm run type-check:integration
 ```
 
@@ -22,8 +22,11 @@ CI runs the suite in the `api-integration` job (`.github/workflows/ci.yml`).
 |---|---|
 | `security/access-matrix-http.int.test.ts` | For each persona, the reads, RLS writes, shift RPCs, contract write and certificate operations **over HTTP** produce exactly `supabase/tests/access_matrix/expected_matrix.txt`. |
 | `security/access-matrix-sql.int.test.ts` | The same matrix inside the database (`02_matrix_by_level.sql`), plus the retired legacy admin flag (`03_legacy_flag.sql`). If the two matrix files disagree, the difference is in API exposure, not the database rules. |
-| `security/anon-surface.int.test.ts` | Covers what someone holding only the public anon key can reach. No `SECURITY DEFINER` routine is executable by them, and every one refuses them over HTTP. Every view runs as the caller, and no materialized view is client-readable. They read no rows outside a reviewed list. |
+| `security/anon-surface.int.test.ts` | Covers what someone holding only the public anon key can reach. No `SECURITY DEFINER` routine is executable by them, and every one refuses them over HTTP. They can write to nothing, and no client role holds TRUNCATE, REFERENCES, TRIGGER or MAINTAIN. Every view runs as the caller, and no materialized view is client-readable. They read no rows outside a reviewed list (empty since 2026-10-13). |
+| `security/storage.int.test.ts` | The public `broadcast-attachments` bucket. Someone who can't post to a broadcast can't upload; an employee can't delete someone else's file; a broadcast manager can, and the file is really gone afterwards (before 2026-10-13 every delete was a silent no-op). |
 | `security/edge-functions.int.test.ts` | `get-roster-view` refuses the anon key (the 2026-10-05 pre-auth leak), other organisations, out-of-scope managers and employees, even when its shared cache already holds the answer. It serves an in-scope manager only their scope. `evaluate-compliance` answers only the employee and their managers. |
+
+| `flows/shift-lifecycle.int.test.ts` | The core shift flows the UI drives. Through the gateway: publish and unpublish with version checks, stale-version refusal, double-booking refusal, impossible transitions reported, no shift moved onto a day without a roster, employees and other-department managers refused. Bulk publish: in scope only, the whole batch refused when any shift is out of scope, and the real caller recorded as actor (a regression test for the 2026-10-13 fix). Also: permanent delete, emergency assignment, clock in and out, and the timesheet approval gate. |
 
 ## Personas
 
@@ -33,14 +36,14 @@ Callers are the fixture personas in `supabase/tests/access_matrix/01_fixtures.sq
 
 Update `supabase/tests/access_matrix/expected_matrix.txt`; both matrix tests follow it. Make **new** exposure to the anon key a recorded decision: add it to `ANON_READABLE` in `anon-surface.int.test.ts` with the reason.
 
-Current reviewed exposures (2026-10-13), all known issues with proposed fixes in that list:
-
-- `organizations`, `departments`, `sub_departments` (`public_read` policies)
-- `venueops_ml_features`, `labor_correction_factors` (read by the ML service with the anon key)
+The list is empty. Migration `20261013120936_close_anon_surface` closed the five exposures the 2026-10-13 review found: the org tables' `public_read` policies, and the venue event schedule and model coefficients the ML service read with the anon key. The ML service now requires `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Not yet covered
 
-The older SQL harnesses in `supabase/tests/` don't run against the real schema, so they're not part of this suite. Each needs porting:
+- **Timesheet self-approval.** Only the approval gate is covered: a timesheet can't be approved before its shift reaches a final attendance state. Testing who may approve needs a shift that has really finished.
+- **The gateway's `delete` operation is broken.** `sm_apply_shift_op(…, 'delete', …)` fails on the `shifts_no_soft_delete` check, because it still soft-deletes. The app deletes through `sm_delete_shift` instead, which is tested. Fix the branch or remove it.
+
+The older SQL harnesses in `supabase/tests/` don't run against the real schema, so they're not part of this suite. Porting each means rewriting its setup against today's schema; `fairness_ledger_parity.sql`, for example, also inserts shifts without columns now required, references employees that don't exist, and deletes every bid in the database.
 
 | Harness | Fails with | Why |
 |---|---|---|
