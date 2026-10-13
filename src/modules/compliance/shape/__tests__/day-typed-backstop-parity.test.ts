@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readMigrationFile } from '@/test/migrations';
 import { evaluateShiftShape } from '../evaluate';
 import { requiredMinEngagementMinutes } from '../evaluate';
 import { DAY_TYPED_SHAPE_RULES, DEFAULT_SHAPE_CONFIG } from '../types';
@@ -25,8 +25,8 @@ import { DAY_TYPED_SHAPE_RULES, DEFAULT_SHAPE_CONFIG } from '../types';
  * source can. Same technique as `solver-threshold-parity.test.ts`.
  */
 
-const MIGRATION = 'supabase/migrations/20260819120000_shift_shape_day_typed_backstop.sql';
-const raw = readFileSync(MIGRATION, 'utf8');
+const MIGRATION = '20260819120000_shift_shape_day_typed_backstop.sql';
+const raw = readMigrationFile(MIGRATION);
 
 /**
  * The migration with `--` comments stripped.
