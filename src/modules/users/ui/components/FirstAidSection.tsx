@@ -8,6 +8,7 @@ import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import { cn } from '@/modules/core/lib/utils';
+import { CommandSelector } from './CommandSelector';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
 import {
@@ -245,17 +246,14 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                     <div className="space-y-4 mt-2">
                         <QualificationNotice qualifications={qualifications} />
                         {organisations && organisations.length > 1 && (
-                            <div>
-                                <Label htmlFor="fa-org" className="text-xs font-bold">Organisation</Label>
-                                <select
-                                    id="fa-org"
-                                    value={activeOrgId ?? ''}
-                                    onChange={e => setOrganisationId(e.target.value)}
-                                    className="mt-1 w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm"
-                                >
-                                    {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                                </select>
-                            </div>
+                            // The page's picker design, as the contract's own organization picker
+                            <CommandSelector
+                                label="Organisation"
+                                placeholder="Select organisation"
+                                value={activeOrgId ?? ''}
+                                onValueChange={setOrganisationId}
+                                options={organisations.map(o => ({ id: o.id, name: o.name }))}
+                            />
                         )}
                         <div className="grid grid-cols-2 gap-3">
                             <div>

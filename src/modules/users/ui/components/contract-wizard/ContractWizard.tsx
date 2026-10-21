@@ -1,7 +1,6 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Plus, Loader2, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
@@ -12,10 +11,9 @@ import {
     computeMixedPermanentConflict,
     evaluateWizardTerms,
     FULL_TIME_WEEKLY_HOURS,
-    type ContractClass,
     type WizardPayContext,
 } from '../../hooks/useContractWizardForm';
-import { validateContractHours, type ExistingContract } from '../../../domain/contractHoursCeiling';
+import { concurrentWith, validateContractHours, type ExistingContract } from '../../../domain/contractHoursCeiling';
 import {
     allowedPayBases,
     defaultPayBasis,
@@ -25,67 +23,84 @@ import {
     type RoleBand,
 } from '../../../domain/contractPayTerms';
 import { WizardStepHeader } from './WizardStepHeader';
-import { Step1ContractClass } from './steps/Step1ContractClass';
+import { Step1EmploymentType } from './steps/Step1EmploymentType';
 import { Step2Hierarchy } from './steps/Step2Hierarchy';
 import { Step3EmploymentTerms } from './steps/Step3EmploymentTerms';
 import { Step4AwardSchedules } from './steps/Step4AwardSchedules';
 
-export interface ContractWizardDialogProps {
+/**
+ * The contract wizard: add a contract, or edit one, in four steps. Renders no
+ * dialog of its own, so it fits the Users page's edit panel (Contract tab).
+ */
+export interface ContractWizardProps {
     employeeId: string;
     employeeName: string;
+    /** All of the person's contracts: the 38-hour and Full-Time rules weigh every one. */
     existingContracts?: any[];
-    trigger?: React.ReactNode;
-    onSuccess?: () => void;
+    /** Shown and ready: loads reference data, and the contract (or a fresh form) each time it becomes active. */
+    active: boolean;
+    /** A saved contract to edit; absent to add one. */
+    contract?: Record<string, any> | null;
+    /** Saved. */
+    onDone: () => void;
+    /** Cancelled from the first step. */
+    onCancel: () => void;
+    /** The heading elements, e.g. a dialog's Title and Description; plain h3 / p by default. */
+    TitleTag?: React.ElementType;
+    DescriptionTag?: React.ElementType;
 }
 
-const STEP_LABELS: [string, string, string, string] = ['Class', 'Hierarchy', 'Terms', 'Schedules'];
+const STEP_LABELS: [string, string, string, string] = ['Type', 'Position', 'Terms', 'Schedules'];
 
 const fmtHours = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
-export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
-    employeeId, employeeName, existingContracts = [], trigger, onSuccess,
+export const ContractWizard: React.FC<ContractWizardProps> = ({
+    employeeId, employeeName, existingContracts = [], active, contract, onDone, onCancel,
+    TitleTag = 'h3', DescriptionTag = 'p',
 }) => {
-    const [open, setOpen] = useState(false);
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+    const isEditing = !!contract;
 
     const {
         organizations, departments, subDepartments, roles, remLevels,
         isLoading: isLoadingRefs, loadReferenceData,
-    } = useReferenceData(open);
+    } = useReferenceData(active);
 
-    const { formData, isSubmitting, updateField, reset, submit, hoursRule } =
-        useContractWizardForm(employeeId, () => {
-            setOpen(false);
-            setStep(1);
-            if (onSuccess) onSuccess();
-        });
+    const { formData, isSubmitting, updateField, reset, submit, hoursRule, loadContract } =
+        useContractWizardForm(employeeId, onDone);
 
-    const handleOpenChange = (next: boolean) => {
-        setOpen(next);
-        if (next) {
-            loadReferenceData();
-        } else {
-            reset();
-            setStep(1);
-        }
-    };
+    // Opening starts a fresh add, or loads the contract being edited.
+    useEffect(() => {
+        if (!active) return;
+        loadReferenceData();
+        setStep(1);
+        if (contract) loadContract(contract);
+        else reset();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [active, contract?.id]);
 
-    const ceilingContracts: ExistingContract[] = useMemo(() =>
-        (existingContracts ?? []).map((c: any) => ({
+    // The person's OTHER contracts that run alongside this one's dates: the one
+    // being edited must not count against itself, and one that ends before this
+    // starts doesn't count at all (the database's test).
+    const ceilingContracts: ExistingContract[] = useMemo(() => concurrentWith(
+        (existingContracts ?? []).filter((c: any) => c.id !== contract?.id).map((c: any) => ({
             id: c.id,
             employment_status: c.employment_status ?? null,
             contracted_weekly_hours: c.contracted_weekly_hours ?? null,
             status: c.status ?? null,
             role_id: c.role_id ?? null,
+            start_date: c.start_date ?? null,
+            end_date: c.end_date ?? null,
         })),
-        [existingContracts],
-    );
+        formData.start_date,
+        formData.end_date,
+    ), [existingContracts, contract?.id, formData.start_date, formData.end_date]);
 
     // ── Pay ──────────────────────────────────────────────────────────────────
     // Rates are the effective-dated EA schedule on today's Sydney date (the
     // contract starts today); the role contributes its band and whether it is a
     // Security role (Schedule 3 — the same name test the cost engine uses).
-    const { schedule: ebaSchedule } = useEbaRates(open);
+    const { schedule: ebaSchedule } = useEbaRates(active);
     const onDate = todayISO();
 
     const role = useMemo(
@@ -157,8 +172,9 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
     );
 
     // Per-step "can advance" gating.
-    const step1Valid = formData.contractClass !== null;
-    const step2Valid = !!formData.role_id;
+    const step1Valid = !!formData.employment_status;
+    const step2Valid = !!formData.role_id && !!formData.start_date
+        && !(formData.end_date && formData.end_date < formData.start_date);
     const step3Valid = !!formData.employment_status
         && terms.pay.errors.length === 0
         && terms.engagement.errors.length === 0
@@ -166,9 +182,8 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
         && !mixedPermanentConflict
         && (hoursRule?.valid ?? true);
 
-    // Shown only once a Class 1 sub-class is chosen — before that there are no
-    // contracted hours to describe, and Class 2 never has any.
-    const showHoursBadge = step >= 3 && formData.contractClass === 1 && !!hoursRule;
+    // Shown from the terms step on, for the types that carry contracted hours.
+    const showHoursBadge = step >= 3 && !!hoursRule;
     const isHoursBadgeBad = showHoursBadge && (!hoursRule!.valid || isCeilingExceeded);
 
     const canGoNext = step === 1 ? step1Valid : step === 2 ? step2Valid : step === 3 ? step3Valid : true;
@@ -179,79 +194,52 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
     };
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogTrigger asChild>
-                {trigger || (
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="ml-auto rounded-xl transition-all duration-300 bg-primary/10 hover:bg-primary/20 border-primary/30 text-primary font-bold shadow-md shadow-primary/10"
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Contract
-                    </Button>
-                )}
-            </DialogTrigger>
-
-            <DialogContent className="w-[96vw] max-w-3xl h-[88vh] max-h-[88vh] flex flex-col gap-0 bg-background dark:bg-[#0b0e14]/98 border border-border text-foreground shadow-2xl backdrop-blur-3xl rounded-[2.5rem] overflow-hidden p-0">
-                <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-primary/5 pointer-events-none" />
-
-                {/* ── Top Header ────────────────────────────────────────────── */}
-                <div className="p-6 sm:p-8 pb-5 flex-shrink-0 border-b border-border bg-muted/20 dark:bg-white/[0.02]">
-                    <DialogHeader className="mb-0">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3.5">
-                                <div className="p-2.5 rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/30 shadow-inner">
-                                    <Sparkles className="w-5 h-5" />
-                                </div>
-                                <div className="text-left">
-                                    <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-                                        Add Contract
-                                        <span className="text-xs font-semibold px-3 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
-                                            {employeeName}
-                                        </span>
-                                    </DialogTitle>
-                                    <DialogDescription className="text-muted-foreground text-xs sm:text-sm mt-0.5">
-                                        Step {step} of 4 — configure this engagement.
-                                    </DialogDescription>
-                                </div>
+        <div className="flex flex-1 min-h-0 flex-col bg-background text-foreground">
+                {/* ── Header ───────────────────────────────────────────────── */}
+                <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-border">
+                    <div>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="text-left min-w-0">
+                                <TitleTag className="text-lg font-semibold tracking-tight text-foreground">
+                                    {isEditing ? 'Edit contract' : 'Add contract'}
+                                </TitleTag>
+                                <DescriptionTag className="text-muted-foreground text-sm mt-0.5 truncate">
+                                    {employeeName} · step {step} of 4
+                                </DescriptionTag>
                             </div>
 
                             {showHoursBadge && (
                                 <div className={cn(
-                                    "hidden lg:flex items-center gap-3 px-4 py-2 rounded-2xl border backdrop-blur-md transition-all",
+                                    "hidden md:flex flex-col text-right px-3 py-1.5 rounded-lg border",
                                     isHoursBadgeBad
-                                        ? "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-300"
-                                        : "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300"
+                                        ? "border-destructive/40 text-destructive"
+                                        : "border-border text-muted-foreground"
                                 )}>
-                                    <div className="flex flex-col text-right">
-                                        <span className="text-[9px] font-black uppercase tracking-wider opacity-70">
-                                            {hoursRule!.label} · {hoursRule!.clause}
-                                        </span>
-                                        <span className="text-xs font-bold font-mono">
-                                            {fmtHours(hoursRule!.value)}h{hoursRule!.cadence} · {hoursRule!.limitText}
-                                        </span>
-                                    </div>
-                                    <div className={cn(
-                                        "w-2.5 h-2.5 rounded-full",
-                                        isHoursBadgeBad ? "bg-rose-500 animate-pulse" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
-                                    )} />
+                                    <span className="text-[11px] font-medium">
+                                        {hoursRule!.label} · {hoursRule!.clause}
+                                    </span>
+                                    <span className="text-xs font-semibold tabular-nums text-foreground">
+                                        {fmtHours(hoursRule!.value)}h{hoursRule!.cadence} · {hoursRule!.limitText}
+                                    </span>
                                 </div>
                             )}
                         </div>
-                    </DialogHeader>
+                    </div>
 
-                    <div className="mt-5">
+                    <div className="mt-4">
                         <WizardStepHeader currentStep={step} labels={STEP_LABELS} />
                     </div>
                 </div>
 
                 {/* ── Scrollable Body ──────────────────────────────────────── */}
-                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6 sm:p-8 space-y-8 scrollbar-thin scrollbar-thumb-muted-foreground/30 overscroll-contain">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6 space-y-8 overscroll-contain">
                     {step === 1 && (
-                        <Step1ContractClass
-                            contractClass={formData.contractClass}
-                            onSelect={(value: ContractClass) => updateField('contractClass', value)}
+                        <Step1EmploymentType
+                            value={formData.employment_status}
+                            onSelect={(type) => {
+                                updateField('employment_status', type);
+                                applyDefaultPayBasis(type, role);
+                            }}
                         />
                     )}
                     {step === 2 && (
@@ -271,20 +259,24 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
                                 updateField('role_id', val);
                                 applyDefaultPayBasis(formData.employment_status, roles.find((r: any) => r.id === val));
                             }}
+                            access_level={formData.access_level}
+                            onAccessChange={(level) => updateField('access_level', level)}
+                            start_date={formData.start_date}
+                            end_date={formData.end_date}
+                            savedStartDate={contract?.start_date ?? undefined}
+                            onDatesChange={(patch) => {
+                                if (patch.start_date !== undefined) updateField('start_date', patch.start_date);
+                                if (patch.end_date !== undefined) updateField('end_date', patch.end_date);
+                            }}
                         />
                     )}
                     {step === 3 && (
                         <Step3EmploymentTerms
-                            contractClass={formData.contractClass}
                             employment_status={formData.employment_status}
                             contracted_weekly_hours={formData.contracted_weekly_hours}
                             annual_guaranteed_hours={formData.annual_guaranteed_hours}
                             remuneration_level={formData.remuneration_level}
                             remLevels={remLevels}
-                            onEmploymentStatusChange={(status) => {
-                                updateField('employment_status', status);
-                                applyDefaultPayBasis(status, role);
-                            }}
                             onHoursChange={(patch) => {
                                 if (patch.contracted_weekly_hours !== undefined) updateField('contracted_weekly_hours', patch.contracted_weekly_hours);
                                 if (patch.annual_guaranteed_hours !== undefined) updateField('annual_guaranteed_hours', patch.annual_guaranteed_hours);
@@ -325,68 +317,56 @@ export const ContractWizardDialog: React.FC<ContractWizardDialogProps> = ({
                     )}
                 </div>
 
-                {/* ── Fixed Sticky Footer ──────────────────────────────────── */}
-                <div className="p-6 px-8 bg-muted/20 dark:bg-white/[0.02] border-t border-border flex-shrink-0">
-                    <DialogFooter className="flex-row items-center justify-between gap-4 w-full">
-                        <div>
-                            {step > 1 ? (
+                {/* ── Footer ───────────────────────────────────────────────── */}
+                <div className="px-6 py-4 border-t border-border flex-shrink-0">
+                    <div className="flex flex-row items-center justify-between gap-3 w-full">
+                        <Button
+                            variant="ghost"
+                            onClick={() => (step > 1 ? setStep((s) => (s - 1) as 1 | 2 | 3 | 4) : onCancel())}
+                            className="min-h-11"
+                        >
+                            {step > 1 ? <><ChevronLeft className="w-4 h-4 mr-1" aria-hidden="true" /> Back</> : 'Cancel'}
+                        </Button>
+
+                        <div className="flex items-center gap-2">
+                            {/* Editing: save from any step once the contract is valid. */}
+                            {isEditing && step < 4 && (
                                 <Button
-                                    variant="ghost"
-                                    onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3 | 4)}
-                                    className="rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+                                    variant="outline"
+                                    onClick={handleSubmit}
+                                    disabled={isSubmitting || isLoadingRefs || !canSubmit}
+                                    className="min-h-11 border-border bg-background hover:bg-muted/60"
                                 >
-                                    <ChevronLeft className="w-4 h-4 mr-1" /> Back
-                                </Button>
-                            ) : (
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => setOpen(false)}
-                                    className="rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-                                >
-                                    Cancel
+                                    Save changes
                                 </Button>
                             )}
-                        </div>
-
-                        <div className="flex items-center gap-3">
                             {step < 4 ? (
                                 <Button
                                     onClick={() => setStep((s) => (s + 1) as 1 | 2 | 3 | 4)}
                                     disabled={!canGoNext || isLoadingRefs}
-                                    className="rounded-xl px-8 h-11 font-bold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/30"
+                                    className="min-h-11 px-6"
                                 >
-                                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                                    Next <ChevronRight className="w-4 h-4 ml-1" aria-hidden="true" />
                                 </Button>
                             ) : (
                                 <Button
                                     onClick={handleSubmit}
                                     disabled={isSubmitting || isLoadingRefs || !canSubmit}
-                                    className={cn(
-                                        "rounded-xl px-8 h-11 transition-all duration-300 font-bold shadow-md",
-                                        canSubmit
-                                            ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/30 active:scale-95 cursor-pointer"
-                                            : "bg-muted text-muted-foreground cursor-not-allowed"
-                                    )}
+                                    className="min-h-11 px-6"
                                 >
                                     {isSubmitting ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
                                             Saving…
                                         </>
-                                    ) : (
-                                        <span className="flex items-center gap-2">
-                                            <Plus className="w-4 h-4" />
-                                            Add Contract
-                                        </span>
-                                    )}
+                                    ) : isEditing ? 'Save changes' : 'Add contract'}
                                 </Button>
                             )}
                         </div>
-                    </DialogFooter>
+                    </div>
                 </div>
-            </DialogContent>
-        </Dialog>
+        </div>
     );
 };
 
-export default ContractWizardDialog;
+export default ContractWizard;

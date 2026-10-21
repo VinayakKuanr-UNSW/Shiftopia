@@ -1,8 +1,12 @@
 import React, { useMemo } from 'react';
-import { Building2, Users, ChevronRight, ChevronDown, Briefcase } from 'lucide-react';
+import { Building2, Users, ChevronRight, Briefcase } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { CommandSelector } from '../../CommandSelector';
 import { formatBand } from '../../../../domain/contractPayTerms';
+import { text } from '@/modules/core/ui/typography';
+import type { AccessLevel } from '@/platform/auth/types';
+import { AccessLevelPicker, roleLeadsTeam } from '../AccessLevelPicker';
+import { ContractDateFields } from '../ContractDateFields';
 
 interface RefRow {
     id: string;
@@ -23,6 +27,13 @@ export interface Step2HierarchyProps {
     onDeptChange: (id: string) => void;
     onSubDeptChange: (id: string) => void;
     onRoleChange: (id: string) => void;
+    access_level: AccessLevel | null;
+    onAccessChange: (level: AccessLevel) => void;
+    start_date: string;
+    end_date: string;
+    onDatesChange: (patch: { start_date?: string; end_date?: string }) => void;
+    /** The saved start date when editing a contract. */
+    savedStartDate?: string;
 }
 
 const cleanRoleName = (name: string) => name.replace(/\s*\(L\d+\)$/i, '').trim();
@@ -33,29 +44,13 @@ const roleSubtitle = (r: any): string => [
     r.typically_salaried ? 'usually salaried' : null,
 ].filter(Boolean).join(' · ');
 
-/** Vertical glow connector, ported verbatim from AddContractDialog.tsx. */
-const Connector: React.FC<{ active: boolean }> = ({ active }) => (
-    <div className="flex flex-col items-center my-1 select-none">
-        <div className={cn(
-            "w-0.5 h-4 transition-all duration-500",
-            active ? "bg-gradient-to-b from-primary to-primary/60 shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border",
-        )} />
-        <div className={cn(
-            "w-2 h-2 rounded-full border-2 transition-all duration-500",
-            active ? "bg-primary border-primary ring-2 ring-primary/20 scale-110" : "bg-muted border-border",
-        )} />
-        <div className={cn(
-            "w-0.5 h-4 transition-all duration-500",
-            active ? "bg-gradient-to-b from-primary/60 to-primary shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border",
-        )} />
-    </div>
-);
-
-/** Step 2 — Org → Dept → Sub-Dept → Role, the existing glow-connector chain extended one level. */
+/** Step 2 — the position: where (organization → department → sub-department), which role, and the access it gives. */
 export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
     organizations, departments, subDepartments, roles,
     organization_id, department_id, sub_department_id, role_id,
     onOrgChange, onDeptChange, onSubDeptChange, onRoleChange,
+    access_level, onAccessChange,
+    start_date, end_date, onDatesChange, savedStartDate,
 }) => {
     const isOrgSelected = !!organization_id;
     const isDeptSelected = !!department_id;
@@ -77,28 +72,31 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
         .sort((a, b) => a.name.localeCompare(b.name)),
     [roles, sub_department_id]);
 
+    const place = {
+        organization: organizations.find(o => o.id === organization_id)?.name ?? null,
+        department: departments.find(d => d.id === department_id)?.name ?? null,
+        subDepartment: subDepartments.find(sd => sd.id === sub_department_id)?.name ?? null,
+    };
+    const roleName = roles.find(r => r.id === role_id)?.name ?? null;
+
     return (
-        <div className="max-w-md mx-auto flex flex-col items-center justify-center text-center w-full">
-            <div className="mb-3">
-                <span className="text-[10px] font-black tracking-[0.25em] uppercase text-primary bg-primary/10 px-3.5 py-1 rounded-full border border-primary/20">
-                    Hierarchy Selection
-                </span>
+        <div className="max-w-md mx-auto w-full space-y-4">
+            <div>
+                <h3 className={text.heading}>Position</h3>
+                <p className={text.bodyMuted}>Where they work, in which role, when, and the access it gives.</p>
             </div>
 
-            <div className="w-full relative z-40 shadow-md">
+            <div className="relative z-40">
                 <CommandSelector
                     label="Organization"
                     placeholder="Select organization"
                     value={organization_id}
                     options={organizations.map(o => ({ id: o.id, name: o.name }))}
                     onValueChange={onOrgChange}
-                    icon={<Building2 className="w-5 h-5 text-primary" />}
+                    icon={<Building2 className="w-5 h-5 text-muted-foreground" />}
                 />
             </div>
-
-            <Connector active={isOrgSelected} />
-
-            <div className={cn("w-full transition-all duration-300 relative z-30 shadow-md", !isOrgSelected && "opacity-40 pointer-events-none")}>
+            <div className={cn("relative z-30", !isOrgSelected && "opacity-50 pointer-events-none")}>
                 <CommandSelector
                     label="Department"
                     placeholder={isOrgSelected ? "Select department" : "Select organization first"}
@@ -106,41 +104,23 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
                     disabled={!isOrgSelected}
                     options={filteredDepartments.map(d => ({ id: d.id, name: d.name }))}
                     onValueChange={onDeptChange}
-                    icon={<Users className="w-5 h-5 text-primary" />}
+                    icon={<Users className="w-5 h-5 text-muted-foreground" />}
                 />
             </div>
-
-            <Connector active={isDeptSelected} />
-
-            <div className={cn("w-full transition-all duration-300 relative z-20 shadow-md", !isDeptSelected && "opacity-40 pointer-events-none")}>
+            <div className={cn("relative z-20", !isDeptSelected && "opacity-50 pointer-events-none")}>
                 <CommandSelector
-                    label="Sub-Department"
+                    label="Sub-department"
                     placeholder={isDeptSelected ? "Select sub-department" : "Select department first"}
                     value={sub_department_id}
                     disabled={!isDeptSelected}
                     options={filteredSubDepartments.map(sd => ({ id: sd.id, name: sd.name }))}
                     onValueChange={onSubDeptChange}
-                    icon={<ChevronRight className="w-5 h-5 text-primary" />}
+                    icon={<ChevronRight className="w-5 h-5 text-muted-foreground" />}
                 />
             </div>
-
-            {/* Flow Pipe Connector down to the Role picker */}
-            <div className="flex flex-col items-center my-1 select-none">
-                <div className={cn(
-                    "w-0.5 h-6 transition-all duration-500",
-                    isSubDeptSelected ? "bg-gradient-to-b from-primary to-primary/60 shadow-[0_0_10px_rgba(99,102,241,0.5)]" : "bg-border",
-                )} />
-                <div className={cn(
-                    "p-1 rounded-full border transition-all duration-500",
-                    isSubDeptSelected ? "bg-primary/20 border-primary text-primary shadow-[0_0_15px_rgba(99,102,241,0.6)]" : "border-border text-muted-foreground/40",
-                )}>
-                    <ChevronDown className="w-3.5 h-3.5" />
-                </div>
-            </div>
-
-            <div className={cn("w-full transition-all duration-300 relative z-10 shadow-md", !isSubDeptSelected && "opacity-40 pointer-events-none")}>
+            <div className={cn("relative z-10", !isSubDeptSelected && "opacity-50 pointer-events-none")}>
                 <CommandSelector
-                    label="Role / Position Title"
+                    label="Role"
                     placeholder={isSubDeptSelected
                         ? (roleOptions.length === 0 ? 'No roles catalogued here' : 'Select role')
                         : 'Select sub-department first'}
@@ -148,9 +128,18 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
                     disabled={!isSubDeptSelected || roleOptions.length === 0}
                     options={roleOptions}
                     onValueChange={onRoleChange}
-                    icon={<Briefcase className="w-5 h-5 text-primary" />}
+                    icon={<Briefcase className="w-5 h-5 text-muted-foreground" />}
                 />
             </div>
+
+            <ContractDateFields start_date={start_date} end_date={end_date} onChange={onDatesChange} savedStart={savedStartDate} />
+
+            <AccessLevelPicker
+                value={access_level}
+                onChange={onAccessChange}
+                place={place}
+                roleLeadsTeam={roleLeadsTeam(roleName)}
+            />
         </div>
     );
 };

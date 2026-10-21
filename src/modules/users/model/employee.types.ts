@@ -3,7 +3,8 @@
 // Extracted from src/api/models/types.ts
 
 export type AccessLevel = 'Alpha' | 'Beta' | 'Gamma' | 'Delta';
-export type ContractStatus = 'Active' | 'Inactive' | 'Terminated';
+/** Set by the database from the contract's dates (contract dates drive the contract). */
+export type ContractStatus = 'Upcoming' | 'Active' | 'Expired';
 
 export interface UserContract {
     id: string;

@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { AlertTriangle, Lock, Info } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
-import { EmploymentTypeDropdown, STANDARD_EMPLOYMENT_TYPES } from '../../EmploymentTypeDropdown';
+import { text } from '@/modules/core/ui/typography';
 import { RemunerationLevelPicker, type RemunerationLevelRow } from '../RemunerationLevelPicker';
 import { MAX_CONTRACTED_WEEKLY_HOURS } from '../../../../domain/contractHoursCeiling';
 import {
@@ -15,8 +15,8 @@ import {
     type PayQuote,
     type RoleBand,
 } from '../../../../domain/contractPayTerms';
-import { FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../../../hooks/useContractForm';
-import { FULL_TIME_WEEKLY_HOURS, type ContractClass, type HoursRule } from '../../../hooks/useContractWizardForm';
+import { FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../../../hooks/useContractWizardForm';
+import { FULL_TIME_WEEKLY_HOURS, type HoursRule } from '../../../hooks/useContractWizardForm';
 
 const PAY_BASIS_HINTS: Record<PayBasis, string> = {
     eba_level: 'Paid the EA rate for a level · Sch 2 §1',
@@ -28,18 +28,13 @@ const fieldLabel = 'text-[10px] font-bold uppercase tracking-widest text-muted-f
 
 const fmtHours = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
-const CLASS_1_TYPES = STANDARD_EMPLOYMENT_TYPES
-    .filter(t => t.id !== 'Casual')
-    .map(t => t.id === 'Part-Time' ? { ...t, description: 'Under 38h/wk' } : t);
 
 export interface Step3EmploymentTermsProps {
-    contractClass: ContractClass | null;
     employment_status: string;
     contracted_weekly_hours: number;
     annual_guaranteed_hours: number;
     remuneration_level: number | '';
     remLevels: RemunerationLevelRow[];
-    onEmploymentStatusChange: (status: string) => void;
     onHoursChange: (patch: { contracted_weekly_hours?: number; annual_guaranteed_hours?: number }) => void;
     onLevelChange: (level: number) => void;
     hoursRule: HoursRule | null;
@@ -74,9 +69,9 @@ export interface Step3EmploymentTermsProps {
 }
 
 export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
-    contractClass, employment_status, contracted_weekly_hours, annual_guaranteed_hours,
+    employment_status, contracted_weekly_hours, annual_guaranteed_hours,
     remuneration_level, remLevels,
-    onEmploymentStatusChange, onHoursChange, onLevelChange,
+    onHoursChange, onLevelChange,
     hoursRule, existingWeeklyHours, isCeilingExceeded, ceilingProposedTotal, mixedPermanentConflict,
     pay_basis, allowedPayBases, onPayBasisChange, band, allowedLevels, rateFor, quote,
     levelOutsideBand, level_note, onLevelNoteChange,
@@ -84,7 +79,7 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
     payErrors, payWarnings,
     isMultiHire, multi_hire_request_ref, onMultiHireRefChange,
 }) => {
-    const isCasual = contractClass === 2;
+    const isCasual = employment_status === 'Casual';
     const isFullTime = employment_status === 'Full-Time';
     const isFlexible = employment_status === 'Flexible Part-Time';
     const isRuleInvalid = !!hoursRule && !hoursRule.valid;
@@ -97,25 +92,11 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
                 </span>
             </div>
 
-            {/* Employment Type */}
-            <div className="flex flex-col gap-1.5 w-full">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 pl-1">
-                    Employment Type
-                </span>
-                {isCasual ? (
-                    <div className="h-14 px-4 rounded-xl border border-border bg-muted/20 flex items-center text-sm font-semibold text-foreground">
-                        Casual — Hourly / No min
-                    </div>
-                ) : (
-                    <EmploymentTypeDropdown
-                        value={employment_status}
-                        onChange={onEmploymentStatusChange}
-                        options={CLASS_1_TYPES}
-                        widthClassName="w-full"
-                        ariaLabel="Employment type"
-                    />
-                )}
-            </div>
+            {/* Employment type — chosen in step 1 */}
+            <p className={cn(text.bodyMuted, 'text-center')}>
+                <span className="font-semibold text-foreground">{employment_status || 'No employment type'}</span>
+                {' '}— change it in step 1.
+            </p>
 
             {/* Contracted Hours & Cadence */}
             <div className="flex flex-col gap-1.5 w-full">
