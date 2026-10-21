@@ -3,10 +3,14 @@
  * UI drive — with the persona fixtures (supabase/tests/access_matrix/). Each
  * test starts from freshly applied fixtures.
  *
- * Shift 1 (S1, assigned X) and shift 2 (S2, unassigned) sit in manager D's
- * department and run 09:00–12:00 on the same day; shift 4 belongs to another
- * organisation. X is an employee with a contract in S1 only. DD manages a
- * different department; F is in another organisation.
+ * Shift 1 (S1, assigned X) and shift 2 (S2, unassigned) sit in department D1
+ * and run 09:00–12:00 on the same day; shift 4 belongs to another
+ * organisation. X is an employee with a contract in S1 only.
+ *
+ * Writers are gammas, the managerial level with full rights in one
+ * sub-department: G manages S1, G2 manages S2. D (delta, D1) and E (epsilon)
+ * are view-only since the 2026-10-14 access suites, and are refused here like
+ * DD (another department) and F (another organisation).
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -41,37 +45,37 @@ beforeEach(() => resetFixtures(stack().dbContainer));
 
 describe('shift gateway (sm_apply_shift_op)', () => {
     it('a manager publishes and unpublishes a draft; every write advances the version', async () => {
-        const pub = await gateway('D', S2, 1, 'publish');
+        const pub = await gateway('G2', S2, 1, 'publish');
         expect(pub.error).toBeNull();
         expect(pub.data).toMatchObject({ ok: true, code: 'APPLIED', state: 'S5', version: 2 });
         expect(shift(S2)).toMatchObject({ lifecycle: 'Published', version: '2' });
 
-        const unpub = await gateway('D', S2, 2, 'unpublish', { reason: 'integration test' });
+        const unpub = await gateway('G2', S2, 2, 'unpublish', { reason: 'integration test' });
         expect(unpub.data).toMatchObject({ ok: true, code: 'APPLIED', state: 'S1', version: 3 });
         expect(shift(S2)).toMatchObject({ lifecycle: 'Draft', version: '3' });
     });
 
     it('refuses a write against a stale version and changes nothing (optimistic concurrency)', async () => {
-        expect((await gateway('D', S2, 1, 'publish')).data).toMatchObject({ ok: true });
-        const stale = await gateway('D', S2, 1, 'unpublish', { reason: 'stale' });
+        expect((await gateway('G2', S2, 1, 'publish')).data).toMatchObject({ ok: true });
+        const stale = await gateway('G2', S2, 1, 'unpublish', { reason: 'stale' });
         expect(stale.data).toMatchObject({ ok: false, code: 'VERSION_CONFLICT' });
         expect(stale.data.server_row.version).toBe(2);
         expect(shift(S2)).toMatchObject({ lifecycle: 'Published', version: '2' });
     });
 
     it('refuses to double-book an employee who already works that time', async () => {
-        const r = await gateway('D', S2, 1, 'assign', { employee_id: personaId('X') });
+        const r = await gateway('G2', S2, 1, 'assign', { employee_id: personaId('X') });
         expect(r.data).toMatchObject({ ok: false, code: 'WRITE_REJECTED', note: 'CANDIDATE_OVERLAP' });
         expect(shift(S2)).toMatchObject({ assignment: 'unassigned', assignee: '' });
     });
 
     it('reports an impossible transition instead of applying it', async () => {
-        const r = await gateway('D', S2, 1, 'unassign');
+        const r = await gateway('G2', S2, 1, 'unassign');
         expect(r.data).toMatchObject({ ok: false, code: 'ILLEGAL_TRANSITION', current_state: 'S1' });
     });
 
     it('will not move a shift onto a day that has no roster', async () => {
-        const r = await gateway('D', S2, 1, 'edit', { shift_date: '2026-12-05' });
+        const r = await gateway('G2', S2, 1, 'edit', { shift_date: '2026-12-05' });
         expect(r.data).toMatchObject({ ok: false });
         expect(r.data.error).toMatch(/no roster/i);
         expect(shift(S2)?.date).toBe('2026-12-01');
@@ -79,7 +83,10 @@ describe('shift gateway (sm_apply_shift_op)', () => {
 
     it.each([
         ['X', 'an employee'],
-        ['DD', 'a manager of another department'],
+        ['G', 'a gamma of another sub-department'],
+        ['DD', 'a delta of another department'],
+        ['D', 'the department\'s delta — view-only'],
+        ['E', 'an epsilon — view-only'],
     ] as const)('refuses %s (%s) publishing', async (p, _who) => {
         expect((await gateway(p, S2, 1, 'publish')).data).toMatchObject({ ok: false, code: 'FORBIDDEN' });
         expect(shift(S2)?.lifecycle).toBe('Draft');
@@ -88,11 +95,11 @@ describe('shift gateway (sm_apply_shift_op)', () => {
 
 describe('bulk publish (sm_bulk_publish_shifts)', () => {
     it('publishes a manager\'s in-scope shifts and records the real caller, not the claimed actor', async () => {
-        const r = await personaClient('D').rpc('sm_bulk_publish_shifts', {
+        const r = await personaClient('G2').rpc('sm_bulk_publish_shifts', {
             p_shift_ids: [S2], p_actor_id: personaId('X'),
         });
         expect(r.data).toMatchObject({ success: true, success_count: 1 });
-        expect(shift(S2)).toMatchObject({ lifecycle: 'Published', modifiedBy: personaId('D') });
+        expect(shift(S2)).toMatchObject({ lifecycle: 'Published', modifiedBy: personaId('G2') });
     });
 
     // Regression: until 2026-10-13 this RPC had no authorisation check at all.
@@ -104,7 +111,7 @@ describe('bulk publish (sm_bulk_publish_shifts)', () => {
     });
 
     it('refuses the whole batch when any shift is outside the manager\'s scope', async () => {
-        const r = await personaClient('D').rpc('sm_bulk_publish_shifts', { p_shift_ids: [S2, S4], p_actor_id: personaId('D') });
+        const r = await personaClient('G2').rpc('sm_bulk_publish_shifts', { p_shift_ids: [S2, S4], p_actor_id: personaId('G2') });
         expect(r.data).toMatchObject({ success: false });
         expect(shift(S2)?.lifecycle).toBe('Draft');
         expect(shift(S4)?.lifecycle).toBe('Draft');
@@ -118,8 +125,14 @@ describe('deleting a shift (sm_delete_shift)', () => {
         expect(shift(S1)).not.toBeNull();
     });
 
-    it('lets the manager delete an unworked shift — permanently', async () => {
+    it('refuses a view-only delta and leaves the shift', async () => {
         const r = await personaClient('D').rpc('sm_delete_shift', { p_shift_id: S2 });
+        expect(r.data).toMatchObject({ success: false, code: 'FORBIDDEN' });
+        expect(shift(S2)).not.toBeNull();
+    });
+
+    it('lets the shift\'s gamma delete an unworked shift — permanently', async () => {
+        const r = await personaClient('G2').rpc('sm_delete_shift', { p_shift_id: S2 });
         expect(r.data).toMatchObject({ success: true });
         expect(shift(S2)).toBeNull();
     });
@@ -127,7 +140,7 @@ describe('deleting a shift (sm_delete_shift)', () => {
 
 describe('emergency assignment (sm_emergency_assign)', () => {
     beforeEach(async () => {
-        expect((await gateway('D', S2, 1, 'publish')).data).toMatchObject({ ok: true, state: 'S5' });
+        expect((await gateway('G2', S2, 1, 'publish')).data).toMatchObject({ ok: true, state: 'S5' });
     });
 
     it('refuses an employee', async () => {
@@ -139,8 +152,8 @@ describe('emergency assignment (sm_emergency_assign)', () => {
     });
 
     it('refuses to assign an employee with no contract in the shift\'s sub-department', async () => {
-        const r = await personaClient('D').rpc('sm_emergency_assign', {
-            p_shift_id: S2, p_employee_id: personaId('X'), p_reason: 'test', p_user_id: personaId('D'),
+        const r = await personaClient('G2').rpc('sm_emergency_assign', {
+            p_shift_id: S2, p_employee_id: personaId('X'), p_reason: 'test', p_user_id: personaId('G2'),
         });
         expect(r.error?.code).toBe('23514');
         expect(r.error?.message).toMatch(/no active contract/i);
@@ -190,7 +203,7 @@ describe('timesheet approval', () => {
         personaClient(p).from('timesheets').update({ status: 'approved' }, { count: 'exact' }).eq('id', TIMESHEET_S1);
 
     it('refuses to approve a timesheet before its shift reaches a final attendance state', async () => {
-        const r = await approve('D');
+        const r = await approve('G');
         expect(r.error?.code).toBe('23514');
         expect(r.error?.message).toMatch(/final attendance state/i);
         expect(status()).toBe('draft');
@@ -216,8 +229,17 @@ describe('timesheet approval', () => {
             expect(status()).toBe('draft');
         });
 
+        it.each(['D', 'E'] as const)('a view-only %s sees the timesheet but approves nothing', async (p) => {
+            const seen = await personaClient(p).from('timesheets').select('id').eq('id', TIMESHEET_S1);
+            expect(seen.data).toHaveLength(1);
+            const r = await approve(p);
+            expect(r.error).toBeNull();
+            expect(r.count).toBe(0);
+            expect(status()).toBe('draft');
+        });
+
         it('the shift\'s manager approves it', async () => {
-            const r = await approve('D');
+            const r = await approve('G');
             expect(r.error).toBeNull();
             expect(r.count).toBe(1);
             expect(status()).toBe('approved');
@@ -226,8 +248,9 @@ describe('timesheet approval', () => {
 });
 
 describe('the gateway does not delete', () => {
+    // Asked by someone who holds shift.delete, so the refusal is the pointer, not FORBIDDEN.
     it('refuses its delete op and points to sm_delete_shift, the one deletion path', async () => {
-        const r = await gateway('D', S2, 1, 'delete');
+        const r = await gateway('G2', S2, 1, 'delete');
         expect(r.data).toMatchObject({ ok: false, code: 'WRITE_REJECTED', note: 'USE_SM_DELETE_SHIFT' });
         expect(shift(S2)).not.toBeNull();
     });
