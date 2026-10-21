@@ -51,6 +51,10 @@ describe('sm_bulk_publish_shifts — lock first, then decide', () => {
 describe('trg_shift_notifications — confirmed is not an offer', () => {
     const notice = (id: string) => db(`SELECT title, message FROM public.notifications WHERE dedup_key = 'SHIFT_ASSIGNED_${id}'`);
 
+    // The notice is deduped per shift and fixtures reset doesn't clear it: without this the
+    // second test reads the first test's row.
+    beforeEach(() => { db(`DELETE FROM public.notifications WHERE dedup_key = 'SHIFT_ASSIGNED_${S1}'`); });
+
     it('a shift published straight to Confirmed tells the employee it is confirmed', () => {
         db(`UPDATE public.shifts
                SET lifecycle_status = 'Published', assignment_outcome = 'confirmed',

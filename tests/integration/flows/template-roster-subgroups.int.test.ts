@@ -55,7 +55,7 @@ function setUp(): void {
                    today - 7  - ((extract(dow FROM today - 7)::int - 3 + 7) % 7)  AS p
               FROM d)
         INSERT INTO public.rosters (id, organization_id, department_id, sub_department_id, start_date, end_date, status, is_locked)
-        SELECT '${R_F}',  '${ORG}', '${D1}', '${S2}', f,     f,     'draft', false FROM days UNION ALL
+        SELECT '${R_F}'::uuid,  '${ORG}'::uuid, '${D1}'::uuid, '${S2}'::uuid, f,     f,     'draft', false FROM days UNION ALL
         SELECT '${R_F2}', '${ORG}', '${D1}', '${S2}', f + 1, f + 1, 'draft', false FROM days UNION ALL
         SELECT '${R_P}',  '${ORG}', '${D1}', '${S2}', p,     p,     'draft', false FROM days;
 
