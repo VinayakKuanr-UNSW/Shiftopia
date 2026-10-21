@@ -1,9 +1,12 @@
 name: CI & Deploy
 
 # Single gated pipeline:
-#   verify  → type-check + unit tests + build (runs on every push & PR)
-#   deploy  → runs ONLY if verify passes. main push → production,
-#             PR → preview (URL auto-commented). A red build never ships.
+#   verify           → type-check + unit tests + build (runs on every push & PR)
+#   rls-audit        → RLS regression guard against the Supabase dev database
+#   api-integration  → HTTP + SQL access suites on a throwaway Supabase built
+#                      from supabase/migrations + supabase/seeds
+#   deploy           → runs ONLY if all three pass. main push → production,
+#                      PR → preview (URL auto-commented). A red build never ships.
 #
 # Activation: the deploy job is guarded on the VERCEL_TOKEN secret. Until that
 # secret exists it skips cleanly (green) so the pipeline is safe to land before
@@ -97,8 +100,10 @@ jobs:
   # throwaway local Supabase built from supabase/migrations + supabase/seeds —
   # the same database production runs (docs/operations/database-baseline.md).
   # Proves the access matrix over HTTP and pins what the anon key can reach.
-  # Nothing here touches production. Not a gate on the Vercel deploy: database
-  # and edge-function changes ship through the MCP, not this pipeline.
+  # Nothing here touches the Supabase project. Database and edge-function
+  # changes ship through the MCP (Supabase is the source of truth; the drift
+  # check proves the repo matches it), but the app deploys only when this
+  # suite is green: the frontend relies on the access rules it pins.
   api-integration:
     name: API integration (local Supabase)
     runs-on: ubuntu-latest
@@ -129,7 +134,7 @@ jobs:
 
   deploy:
     name: Deploy (Vercel)
-    needs: verify
+    needs: [verify, rls-audit, api-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
