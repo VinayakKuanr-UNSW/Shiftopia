@@ -15,7 +15,7 @@ import type { StackEnv } from './stack';
 // Untyped schemas: the tests address tables by name across `public` and `hr`.
 export type Client = SupabaseClient<any, any, any>;
 
-export type Persona = 'A' | 'D' | 'DD' | 'E' | 'E2' | 'F' | 'G' | 'X' | 'Z';
+export type Persona = 'A' | 'B' | 'D' | 'DD' | 'E' | 'E2' | 'F' | 'G' | 'G2' | 'X' | 'Z';
 
 export function stack(): StackEnv {
     return inject('stack');

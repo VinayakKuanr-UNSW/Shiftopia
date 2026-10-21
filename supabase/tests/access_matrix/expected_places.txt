@@ -1,0 +1,9 @@
+retire sub-dept, 1 holder: refused(23514): Cannot retire sub-department "Probe Sub": 1 contract carries access there (Manager — P-A Test). Change the access on that contract on the Users page first.
+delete sub-dept, 1 holder: refused(23503): Cannot delete sub-department "Probe Sub": 1 contract carries access there (Manager — P-A Test). Change the access on that contract on the Users page first.
+retire department, 1 holder: refused(23514): Cannot retire department "Probe Dept": 1 contract carries access there (Manager — P-A Test). Change the access on that contract on the Users page first.
+delete sub-dept, 2 holders: refused(23503): Cannot delete sub-department "Probe Sub": 2 contracts carry access there (Manager — P-A Test, Manager — P-X Test). Change the access on those contracts on the Users page first.
+delete sub-dept, contracts recorded: refused(23503): Cannot delete sub-department "Probe Sub": 2 contracts are recorded there. Retire it instead, so the records keep their place.
+retire sub-dept, only revoked: allowed
+grant in retired sub-dept: refused(23514): Access cannot be granted in a retired organization, department or sub-department.
+reactivate in retired sub-dept: refused(23514): Access cannot be granted in a retired organization, department or sub-department.
+rename and restore sub-dept: allowed

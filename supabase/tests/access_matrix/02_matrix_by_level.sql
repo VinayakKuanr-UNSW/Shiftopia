@@ -11,9 +11,10 @@ DECLARE
     k int;
     sid uuid;
     j jsonb;
-    c_d  constant uuid := 'ce000000-0000-4000-8000-00000000000c';  -- D's delta cert
-    c_e2 constant uuid := 'ce000000-0000-4000-8000-00000000000f';  -- E2's epsilon cert
-    c_z  constant uuid := 'ce000000-0000-4000-8000-00000000000e';  -- Z's zeta cert
+    k_x  constant uuid := 'c0c00000-0000-4000-8000-000000000001';  -- X's alpha contract (S1)
+    k_d  constant uuid := 'c0c00000-0000-4000-8000-000000000012';  -- D's delta contract
+    k_e2 constant uuid := 'c0c00000-0000-4000-8000-000000000015';  -- E2's epsilon contract
+    k_z  constant uuid := 'c0c00000-0000-4000-8000-000000000014';  -- Z's zeta contract
     x    constant uuid := 'a0000000-0000-4000-8000-000000000006';
 BEGIN
     FOR p IN SELECT * FROM public._t_persona ORDER BY n LOOP
@@ -109,44 +110,56 @@ BEGIN
         END;
         r := r || ' ctrS2=' || res;
 
-        -- ── certificates (triggers ON: validation, audit, last-zeta guard) ──
+        -- ── access, set on contracts (triggers ON: mirror, validation, audit, last-zeta guard) ──
         RESET ROLE;
         SET LOCAL session_replication_role = origin;
         SET LOCAL ROLE authenticated;
+        -- raise X's contract to gamma
+        n := 0;
         BEGIN
-            INSERT INTO public.app_access_certificates (user_id, certificate_type, access_level, organization_id, department_id, sub_department_id)
-            VALUES (x, 'Y', 'gamma', '00000000-0000-0000-0000-000000000001', '54c4c466-8d56-41c1-bf36-98ee4d7364f3', 'ed004483-7cb4-40cf-a151-57053e009ea8');
-            res := 'y';
+            UPDATE public.user_contracts SET access_level = 'gamma' WHERE id = k_x;
+            GET DIAGNOSTICS n = ROW_COUNT;
             RAISE EXCEPTION USING ERRCODE = 'P0099';
-        EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
-                  WHEN insufficient_privilege THEN res := '.';
-                  WHEN OTHERS THEN res := '!' || SQLSTATE;
+        EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL; WHEN OTHERS THEN n := -1;
         END;
-        r := r || ' grantX=' || res;
+        r := r || ' grantX=' || n;
+        -- lower D's and E2's contracts to alpha (revoking their access)
         FOR k IN 1..2 LOOP
-            sid := CASE k WHEN 1 THEN c_d ELSE c_e2 END;
+            sid := CASE k WHEN 1 THEN k_d ELSE k_e2 END;
             n := 0;
             BEGIN
-                UPDATE public.app_access_certificates SET is_active = false WHERE id = sid;
+                UPDATE public.user_contracts SET access_level = 'alpha' WHERE id = sid;
                 GET DIAGNOSTICS n = ROW_COUNT;
                 RAISE EXCEPTION USING ERRCODE = 'P0099';
             EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL; WHEN OTHERS THEN n := -1;
             END;
             r := r || CASE k WHEN 1 THEN ' revD=' ELSE ' revE2=' END || n;
         END LOOP;
+        -- delete D's contract (its access goes with it)
         n := 0;
         BEGIN
-            DELETE FROM public.app_access_certificates WHERE id = c_d;
+            DELETE FROM public.user_contracts WHERE id = k_d;
             GET DIAGNOSTICS n = ROW_COUNT;
             RAISE EXCEPTION USING ERRCODE = 'P0099';
         EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL; WHEN OTHERS THEN n := -1;
         END;
         r := r || ' delD=' || n;
+        -- write a certificate directly: refused for everyone, zeta included
+        BEGIN
+            INSERT INTO public.app_access_certificates (user_id, certificate_type, access_level, organization_id, department_id, sub_department_id, contract_id)
+            VALUES (x, 'Y', 'gamma', '00000000-0000-0000-0000-000000000001', '54c4c466-8d56-41c1-bf36-98ee4d7364f3', '707b57f8-77f5-4751-8bfd-5f652ef84fcd', k_x);
+            res := 'y';
+            RAISE EXCEPTION USING ERRCODE = 'P0099';
+        EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
+                  WHEN insufficient_privilege THEN res := '.';
+                  WHEN OTHERS THEN res := '!' || SQLSTATE;
+        END;
+        r := r || ' certW=' || res;
         IF p.n = 'Z' THEN
             BEGIN
-                UPDATE public.app_access_certificates SET is_active = false WHERE id = c_z;
+                UPDATE public.user_contracts SET access_level = 'alpha' WHERE id = k_z;
                 GET DIAGNOSTICS n = ROW_COUNT;
-                res := 'revoked(' || n || ')';
+                res := 'lowered(' || n || ')';
                 RAISE EXCEPTION USING ERRCODE = 'P0099';
             EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
                       WHEN OTHERS THEN res := 'refused:' || left(SQLERRM, 40);

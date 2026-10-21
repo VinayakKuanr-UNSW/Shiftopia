@@ -25,16 +25,18 @@ const shift = (k: number) => `b1000000-0000-4000-8000-00000000000${k}`;
 const TIMESHEETS = ['70000000-0000-4000-8000-000000000001', '70000000-0000-4000-8000-000000000003'];
 const BIDS = ['b0b00000-0000-4000-8000-000000000001', 'b0b00000-0000-4000-8000-000000000003'];
 const SWAPS = ['5a000000-0000-4000-8000-000000000001', '5a000000-0000-4000-8000-000000000003'];
-const CERT = {
-    D: 'ce000000-0000-4000-8000-00000000000c',
-    E2: 'ce000000-0000-4000-8000-00000000000f',
-    Z: 'ce000000-0000-4000-8000-00000000000e',
+// Contracts carry access (supabase/tests/access_matrix/01_fixtures.sql).
+const CONTRACT = {
+    X: 'c0c00000-0000-4000-8000-000000000001',
+    D: 'c0c00000-0000-4000-8000-000000000012',
+    E2: 'c0c00000-0000-4000-8000-000000000015',
+    Z: 'c0c00000-0000-4000-8000-000000000014',
 };
 const ORG = '00000000-0000-0000-0000-000000000001';
 const DEPT_D1 = '54c4c466-8d56-41c1-bf36-98ee4d7364f3';
 const SUB_S2 = 'ed004483-7cb4-40cf-a151-57053e009ea8';
 
-const PERSONAS: Persona[] = ['A', 'D', 'DD', 'E', 'E2', 'F', 'G', 'X', 'Z'];
+const PERSONAS: Persona[] = ['A', 'B', 'D', 'DD', 'E', 'E2', 'F', 'G', 'G2', 'X', 'Z'];
 
 const expected: Record<string, string> = Object.fromEntries(
     readFileSync(resolve(REPO_ROOT, 'supabase/tests/access_matrix/expected_matrix.txt'), 'utf8')
@@ -132,25 +134,29 @@ async function matrixLine(p: Persona): Promise<string> {
     });
     line += ' ctrS2=' + (!ctrIns.error ? 'y' : ctrIns.error.code === '42501' ? '.' : '!' + ctrIns.error.code);
 
-    // ── certificates ─────────────────────────────────────────────────────────
+    // ── access, set on contracts ───────────────────────────────────────────────
     fresh();
-    const grant = await c.from('app_access_certificates').insert({
-        user_id: x, certificate_type: 'Y', access_level: 'gamma',
-        organization_id: ORG, department_id: DEPT_D1, sub_department_id: SUB_S2,
-    });
-    line += ' grantX=' + (!grant.error ? 'y' : grant.error.code === '42501' ? '.' : '!' + grant.error.code);
-    for (const [label, id] of [['revD', CERT.D], ['revE2', CERT.E2]] as const) {
+    const grant = await c.from('user_contracts').update({ access_level: 'gamma' }, { count: 'exact' }).eq('id', CONTRACT.X);
+    line += ` grantX=${grant.error ? -1 : grant.count}`;
+    for (const [label, id] of [['revD', CONTRACT.D], ['revE2', CONTRACT.E2]] as const) {
         fresh();
-        const r = await c.from('app_access_certificates').update({ is_active: false }, { count: 'exact' }).eq('id', id);
+        const r = await c.from('user_contracts').update({ access_level: 'alpha' }, { count: 'exact' }).eq('id', id);
         line += ` ${label}=${r.error ? -1 : r.count}`;
     }
     fresh();
-    const delD = await c.from('app_access_certificates').delete({ count: 'exact' }).eq('id', CERT.D);
+    const delD = await c.from('user_contracts').delete({ count: 'exact' }).eq('id', CONTRACT.D);
     line += ` delD=${delD.error ? -1 : delD.count}`;
+    // certificates mirror contracts: nobody writes them, zeta included
+    fresh();
+    const certW = await c.from('app_access_certificates').insert({
+        user_id: x, certificate_type: 'Y', access_level: 'gamma',
+        organization_id: ORG, department_id: DEPT_D1, sub_department_id: SUB_S2, contract_id: CONTRACT.X,
+    });
+    line += ' certW=' + (!certW.error ? 'y' : certW.error.code === '42501' ? '.' : '!' + certW.error.code);
     if (p === 'Z') {
         fresh();
-        const r = await c.from('app_access_certificates').update({ is_active: false }, { count: 'exact' }).eq('id', CERT.Z);
-        line += ' lastZeta=' + (r.error ? 'refused:' + r.error.message.slice(0, 40) : `revoked(${r.count})`);
+        const r = await c.from('user_contracts').update({ access_level: 'alpha' }, { count: 'exact' }).eq('id', CONTRACT.Z);
+        line += ' lastZeta=' + (r.error ? 'refused:' + r.error.message.slice(0, 40) : `lowered(${r.count})`);
     }
 
     fresh();

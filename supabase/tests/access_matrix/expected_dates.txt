@@ -1,0 +1,16 @@
+start 90 days ago: Active · access mirrored=t
+start in 14 days: Upcoming · access mirrored=none
+sweep moved 2: started → Active (access granted), last day passed → Expired (access revoked)
+edit an expired contract: allowed
+reinstate an expired contract: allowed
+end now: Expired · last day today=t · access revoked
+last day in 30 days: Active
+last day before the start: refused(23514): The last day (<date>) is before the start date (<date>).
+end an upcoming contract: refused(23514): This contract hasn't started yet, so there is nothing to end. Delete it instead.
+old status Inactive: refused(23514): A contract is Upcoming, Active or Expired, and its dates decide which. To end it, give it a last day (or set it to Expired).
+delete as zeta — with a shift: refused(23503): 1 shift is rostered under this contract. Reassign or unassign it before deleting the contract. · in force, no shifts: deleted 1 · upcoming: deleted 1
+last day before an assigned shift: refused(23514): 1 shift assigned under this contract falls outside these dates (the first on 1 Dec 2026). Reassign or unassign it first.
+start after an assigned shift: refused(23514): 1 shift assigned under this contract falls outside these dates (the first on 1 Dec 2026). Reassign or unassign it first.
+Part-Time 20h upcoming, overlapping a 25h one: refused(23514): Total contracted hours across all Part-Time contracts cannot exceed 38 hours per week (attempted total: 45.0h/week).
+Part-Time 20h starting after the 25h one ends: allowed
+end date on the only Administrator: refused(23514): This contract carries the only Administrator access, so it can't have an end date: it would expire and leave nobody to manage access. Give another contract Administrator access first.
