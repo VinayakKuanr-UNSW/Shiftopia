@@ -55,6 +55,8 @@ interface AutoSchedulerModalProps {
     /** Org scope for the F1 fairness ledger. When omitted, the ledger is skipped. */
     organizationId?: string;
     queryFilters?: ShiftFilters;
+    /** The window to open on (the roster period on screen). */
+    initialRange?: { startDate: string; endDate: string };
 }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -101,6 +103,7 @@ export function AutoSchedulerModal({
     onComplete,
     organizationId,
     queryFilters,
+    initialRange,
 }: AutoSchedulerModalProps) {
     // All run behaviour lives in useAutoScheduler so the desktop console below and
     // the mobile flow are two views of ONE pipeline. Only view state stays here.
@@ -132,7 +135,7 @@ export function AutoSchedulerModal({
         handleCommit,
         handleClose,
         handleDownloadAudit,
-    } = useAutoScheduler({ open, onClose, onComplete, shifts: initialShifts, employees, organizationId, queryFilters });
+    } = useAutoScheduler({ open, onClose, onComplete, shifts: initialShifts, employees, organizationId, queryFilters, initialRange });
 
     const isMobile = useIsMobile();
     const [sortField, setSortField] = useState<SortField>('name');

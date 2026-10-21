@@ -27,6 +27,10 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       storageKey: 'icc-workforce-auth-token',
+      // Bypass Navigator LockManager to prevent Web Locks deadlock / 10s timeout on concurrent queries
+      lock: async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
+        return await fn();
+      },
     },
     global: {
       // Fixes the spread argument error by using explicit parameters

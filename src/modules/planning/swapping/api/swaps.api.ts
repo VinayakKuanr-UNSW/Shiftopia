@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { SwapRequestWithDetails } from '../model/swap.types';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
@@ -938,12 +939,13 @@ export const swapsApi = {
     async rejectTrade(offerId: string): Promise<void> {
         console.log('[API] Rejecting trade offer:', offerId);
 
-        const { error } = await db
+        const rejected = await db
             .from('swap_offers')
-            .update({ status: 'REJECTED' })
+            .update({ status: 'REJECTED' }, { count: 'exact' })
             .eq('id', offerId);
 
-        if (error) throw error;
+        if (rejected.error) throw rejected.error;
+        assertWrote(rejected, 'decline this offer');
     }
 };
 

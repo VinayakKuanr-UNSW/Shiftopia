@@ -51,44 +51,44 @@ export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
         !transparent && "rounded-2xl p-1.5",
       )}
     >
-      <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-row sm:items-center sm:overflow-x-auto sm:scrollbar-none sm:py-0.5">
-        {sections.map((section) => {
-          const Icon = section.icon;
-          const isActive = activeSection === section.id;
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-row sm:items-center sm:overflow-x-auto sm:scrollbar-none sm:py-0.5">
+          {sections.map((section) => {
+            const Icon = section.icon;
+            const isActive = activeSection === section.id;
 
-          return (
-            <button
-              key={section.id}
-              onClick={() => onSectionChange(section.id)}
-              className={cn(
-                "flex min-w-0 items-center justify-center gap-1.5 h-10 lg:h-11 px-2 sm:px-4 rounded-xl text-[9px] sm:text-[10px] lg:text-[11px] font-black transition-all uppercase tracking-widest sm:flex-shrink-0",
-                isActive
-                  ? isDark
-                    ? "bg-primary text-white shadow-lg shadow-primary/20"
-                    : "bg-primary text-white shadow-md shadow-primary/20"
-                  : isDark
-                    ? "bg-[#111827]/60 text-white/40 hover:text-white hover:bg-[#1c2333]"
-                    : "bg-white/60 text-slate-900/40 hover:text-slate-900 hover:bg-white border border-slate-200/50",
-              )}
-            >
-              <Icon
+            return (
+              <button
+                key={section.id}
+                onClick={() => onSectionChange(section.id)}
                 className={cn(
-                  "h-3.5 w-3.5 lg:h-4 lg:w-4",
-                  isActive ? "text-white" : "opacity-50",
+                  "flex min-w-0 items-center justify-center gap-1.5 h-10 lg:h-11 px-2.5 sm:px-4 rounded-xl text-[9px] sm:text-[10px] lg:text-[11px] font-black transition-all uppercase tracking-widest sm:flex-shrink-0",
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+                    : isDark
+                      ? "bg-[#111827]/60 text-muted-foreground hover:text-foreground hover:bg-[#1c2333]"
+                      : "bg-white/80 text-slate-700 hover:text-slate-950 hover:bg-white border border-slate-200/80 shadow-2xs",
                 )}
-              />
-              <span className="min-w-0 truncate">{section.label}</span>
-            </button>
-          );
-        })}
-      </div>
+              >
+                <Icon
+                  className={cn(
+                    "h-3.5 w-3.5 lg:h-4 lg:w-4",
+                    isActive ? "text-primary-foreground" : "opacity-70",
+                  )}
+                />
+                <span className="min-w-0 truncate">{section.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Right side info/status if needed */}
-      <div className="hidden md:flex items-center gap-3 px-3">
-        <div className="h-6 w-px bg-border/20 mx-1" />
-        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]"></span>
-          <span>Status: Verified</span>
+        {/* Right side info/status */}
+        <div className="flex items-center gap-2 px-1 md:px-3 flex-shrink-0">
+          <div className="hidden md:block h-6 w-px bg-border/40 mx-1" />
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+            <span>Status: Verified</span>
+          </div>
         </div>
       </div>
     </div>

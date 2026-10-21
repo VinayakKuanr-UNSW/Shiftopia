@@ -53,7 +53,9 @@ const VIEWS: ReadonlyArray<{ key: View; label: string; Icon: typeof Grid3X3 }> =
 ];
 
 const LeaveApprovalsPage: React.FC = () => {
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
+    // Delta and epsilon see every request in scope but decide none (access suites).
+    const canDecide = hasPermission('managerial-write');
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const invalidate = useLeaveInvalidation();
     const meId = user?.id ?? '';
@@ -212,6 +214,7 @@ const LeaveApprovalsPage: React.FC = () => {
                     meId={meId}
                     today={today}
                     onClose={() => setReviewing(null)}
+                    readOnly={!canDecide}
                 />
             )}
         </LeavePageShell>

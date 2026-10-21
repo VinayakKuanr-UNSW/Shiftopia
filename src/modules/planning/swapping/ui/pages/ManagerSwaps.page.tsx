@@ -508,7 +508,9 @@ const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId
 
 export const ManagerSwapsPage: React.FC = () => {
     const { toast } = useToast();
-    const { user, activeContract } = useAuth();
+    const { user, activeContract, hasPermission } = useAuth();
+    // Delta and epsilon see every swap request in scope but decide none (access suites).
+    const canEdit = hasPermission('managerial-write');
     const isMobile = useIsMobile();
     const orgSelection = useOrgSelection();
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
@@ -604,6 +606,7 @@ export const ManagerSwapsPage: React.FC = () => {
 
     // ==================== HANDLERS ====================
     const handleAction = (ids: string[], status: 'approved' | 'rejected') => {
+        if (!canEdit) return;
         // Single-item approval → open compliance gate modal
         if (status === 'approved' && ids.length === 1) {
             const target = swapRequests.find(r => r.id === ids[0]);
@@ -617,7 +620,7 @@ export const ManagerSwapsPage: React.FC = () => {
     };
 
     const handleConfirmAction = async () => {
-        if (!actionConfirm) return;
+        if (!actionConfirm || !canEdit) return;
 
         const { ids, status } = actionConfirm;
         const previousState = [...swapRequests];
@@ -944,7 +947,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                         </td>
                                                         <td className="py-3 px-4 text-right">
                                                             <div className="flex items-center justify-end gap-1.5">
-                                                                {request.status === 'MANAGER_PENDING' ? (
+                                                                {request.status === 'MANAGER_PENDING' && canEdit ? (
                                                                     <>
                                                                         <Button
                                                                             onClick={() => setComplianceApprovalTarget(request)}
@@ -1092,7 +1095,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                 </div>
 
                                                 {/* Actions */}
-                                                {request.status === 'MANAGER_PENDING' ? (
+                                                {request.status === 'MANAGER_PENDING' && canEdit ? (
                                                     <div className="flex flex-col gap-2 w-full">
                                                         {/* Re-check compliance */}
                                                         <Button
@@ -1142,7 +1145,7 @@ export const ManagerSwapsPage: React.FC = () => {
 
             {/* ── BULK ACTION BAR ── */}
             <AnimatePresence>
-                {selectedIds.size > 0 && (
+                {canEdit && selectedIds.size > 0 && (
                     <motion.div
                         initial={{ y: 80, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}

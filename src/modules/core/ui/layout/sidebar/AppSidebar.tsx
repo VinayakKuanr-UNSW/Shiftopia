@@ -16,7 +16,6 @@ import {
   ChevronRight,
   ChevronDown,
   HelpCircle,
-  Settings,
   TrendingUp,
   UserCircle2,
   Shield,
@@ -27,7 +26,6 @@ import {
   LucideIcon,
   ClipboardList,
   FileText,
-  LogOut,
   Activity,
   BarChart3,
   Fingerprint,
@@ -36,10 +34,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
-import { Button } from '@/modules/core/ui/primitives/button';
-import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { ThemeSelector } from '@/modules/core/ui/components/ThemeSelector';
 import { useNotifications } from '@/modules/core/hooks/useNotifications';
 import { ACCESS_LEVEL_CONFIG } from '@/platform/auth/constants';
 import { usePersona } from '@/platform/auth/PersonaProvider';
@@ -247,6 +242,7 @@ const AppSidebar: React.FC = () => {
   const { persona } = usePersona();
   const isEmployee = persona === 'employee';
   const isEmployer = persona === 'employer';
+  const isAdmin = persona === 'admin';
   const { unreadCount } = useNotifications();
   const queryClient = useQueryClient();
 
@@ -470,17 +466,6 @@ const AppSidebar: React.FC = () => {
                 />
               )}
 
-              {hasPermission('rosters') && (
-                <NavigationItem
-                  to="/labor-demand"
-                  icon={Activity}
-                  iconColor={iconColorMap.laborDemand}
-                  label={t('nav.labor_demand')}
-                  isActive={isRouteActive('/labor-demand')}
-                  description="Demand forecasting"
-                />
-              )}
-
               {hasPermission('timesheet-view') && (
                 <NavigationItem
                   to="/timesheet"
@@ -547,16 +532,6 @@ const AppSidebar: React.FC = () => {
               isActive={isRouteActive('/management/payroll')}
               description="Itemised employee earnings"
             />
-
-            <NavigationItem
-              to="/compliance/rejections"
-              icon={ShieldX}
-              iconColor={iconColorMap.complianceRejections}
-              label={t('nav.compliance_rejections', 'Compliance Rejections')}
-              isActive={isRouteActive('/compliance/rejections')}
-              description="Why actions were blocked"
-              onMouseEnter={() => handlePrefetch('/compliance/rejections')}
-            />
           </CollapsibleSection>
         )}
 
@@ -596,31 +571,45 @@ const AppSidebar: React.FC = () => {
             </CollapsibleSection>
           )}
 
-        {/* ---------- Admin Section ---------- */}
-        {isEmployer && (hasPermission('insights') || hasPermission('management')) && (
+        {/* ---------- Availability for Analysts (insights without management) ---------- */}
+        {isEmployer && hasPermission('insights') && !hasPermission('management') && (
           <CollapsibleSection
             icon={Shield}
             title={t('common.admin')}
             color={iconColorMap.sectionManagement}
             defaultOpen={true}
           >
-            {/* The Annual Shift Grid used to live here. It is now the hours and
-                compliance half of the Availability Manager, which managers
-                already reach from the Management section above — so this renders
-                only for analysts who hold `insights` WITHOUT `management`, who
-                would otherwise have no way in. */}
-            {hasPermission('insights') && !hasPermission('management') && (
+            <NavigationItem
+              to="/team-availability"
+              icon={CalendarDays}
+              iconColor={iconColorMap.insights}
+              label={t('nav.team_availability', 'Team Availability')}
+              isActive={isRouteActive('/team-availability') || isRouteActive('/grid')}
+              description="Hours, compliance & availability"
+            />
+          </CollapsibleSection>
+        )}
+
+        {/* ---------- Admin Mode ---------- */}
+        {isAdmin && (
+          <CollapsibleSection
+            icon={Shield}
+            title={t('common.admin', 'Admin')}
+            color={iconColorMap.sectionManagement}
+            defaultOpen={true}
+          >
+            {hasPermission('labor-demand') && (
               <NavigationItem
-                to="/team-availability"
-                icon={CalendarDays}
-                iconColor={iconColorMap.insights}
-                label={t('nav.team_availability', 'Team Availability')}
-                isActive={isRouteActive('/team-availability') || isRouteActive('/grid')}
-                description="Hours, compliance & availability"
+                to="/labor-demand"
+                icon={Activity}
+                iconColor={iconColorMap.laborDemand}
+                label={t('nav.labor_demand')}
+                isActive={isRouteActive('/labor-demand')}
+                description="Demand forecasting"
               />
             )}
 
-            {hasPermission('management') && (
+            {hasPermission('users') && (
               <NavigationItem
                 to="/users"
                 icon={Users}
@@ -630,6 +619,18 @@ const AppSidebar: React.FC = () => {
                 description="Manage users"
               />
             )}
+
+            {hasPermission('compliance') && (
+              <NavigationItem
+                to="/compliance/rejections"
+                icon={ShieldX}
+                iconColor={iconColorMap.complianceRejections}
+                label={t('nav.compliance_rejections', 'Compliance Rejections')}
+                isActive={isRouteActive('/compliance/rejections')}
+                description="Why actions were blocked"
+                onMouseEnter={() => handlePrefetch('/compliance/rejections')}
+              />
+            )}
           </CollapsibleSection>
         )}
 
@@ -637,25 +638,7 @@ const AppSidebar: React.FC = () => {
       </div>
 
       {/* ==================== FOOTER ==================== */}
-      <div className="p-4 border-t border-border/50 space-y-4">
-        {/* Quick Actions */}
-        <div className="flex items-center gap-2">
-          <ThemeSelector />
-          <Button
-            variant="ghost"
-            size="icon"
-            asChild
-            className="rounded-full h-10 w-10 hover:bg-white/5 text-slate-400 hover:text-white transition-all"
-          >
-            <NavLink to="/settings" title={t('common.settings')}>
-              <Settings className="h-5 w-5" />
-            </NavLink>
-          </Button>
-        </div>
-
-        <Separator className="bg-border/30" />
-
-        {/* User Profile */}
+      <div className="p-2 border-t border-border/50">
         <SidebarUser />
       </div>
     </div>

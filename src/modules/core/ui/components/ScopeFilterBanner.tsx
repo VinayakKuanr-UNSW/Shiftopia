@@ -1,17 +1,16 @@
 // src/modules/core/ui/components/ScopeFilterBanner.tsx
 // Unified scope filter banner component for page integration (Phase 5)
 
-import React, { useContext } from 'react';
-import { AuthContext } from '@/platform/auth/AuthProvider';
+import React from 'react';
 import { PersonalScopeFilter } from './PersonalScopeFilter';
 import type { ScopeLevel } from './GlobalScopeFilter';
 import { ManagerialScopeFilter } from './ManagerialScopeFilter';
 import type { ScopeSelection } from '@/platform/auth/types';
-import type { ScopeMode } from '@/platform/auth/useScopeFilter';
+import { useScopeFilter, type ScopeMode } from '@/platform/auth/useScopeFilter';
 import { cn } from '@/modules/core/lib/utils';
 
 interface ScopeFilterBannerProps {
-    /** Whether this page uses personal (Type X) or managerial (Type Y) scope */
+    /** Personal (contracted sub-departments), managerial or Timesheets scope */
     mode: ScopeMode;
     /** Called when scope selection changes */
     onScopeChange: (scope: ScopeSelection) => void;
@@ -32,7 +31,8 @@ interface ScopeFilterBannerProps {
  * ScopeFilterBanner
  *
  * Thin wrapper that renders the correct scope filter component based on mode.
- * Checks auth context to avoid rendering an empty wrapper when no certs exist.
+ * Renders nothing when this mode's tree is empty — no contract reaches a place —
+ * so the page shows no empty wrapper.
  */
 export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
     mode,
@@ -43,18 +43,13 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
     className,
     compactOnMobile = false,
 }) => {
-    const context = useContext(AuthContext);
-    const { permissionObject } = context || {};
+    // The same tree the filter offers. It used to ask for a Type X (personal) or
+    // Type Y (managerial) certificate instead, and alpha contracts mint no
+    // certificate, so most employees never saw their personal filter.
+    const { scopeTree } = useScopeFilter(mode);
 
     if (hidden) return null;
-
-    // Don't render the wrapper if the child component would return null
-    if (mode === 'personal' && (!permissionObject || !permissionObject.typeX?.length)) {
-        return null;
-    }
-    if (mode === 'managerial' && (!permissionObject?.typeY || !permissionObject?.allowed_scope_tree)) {
-        return null;
-    }
+    if (!scopeTree?.organizations?.length) return null;
 
     // Default multiSelect based on mode if not provided
     // Personal mode defaults to multi-select (true)
@@ -76,6 +71,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
                 />
             ) : (
                 <ManagerialScopeFilter
+                    mode={mode}
                     onScopeChange={onScopeChange}
                     multiSelect={effectiveMultiSelect}
                     compactOnMobile={compactOnMobile}
@@ -86,4 +82,3 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
 };
 
 export default ScopeFilterBanner;
-

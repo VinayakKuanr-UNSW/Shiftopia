@@ -15,6 +15,7 @@
  */
 
 import React from 'react';
+import { ACCESS_LEVEL_CONFIG } from '@/platform/auth/constants';
 import { motion } from 'framer-motion';
 import { Building2, Layers, GitBranch, Lock, ChevronDown, Shield, ChevronRight, Loader2 } from 'lucide-react';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
@@ -41,13 +42,10 @@ const ACCESS_LEVEL_COLORS: Record<string, { bg: string; text: string; glow: stri
     epsilon: { bg: 'bg-violet-500/20', text: 'text-violet-300', glow: 'shadow-violet-500/20', border: 'border-violet-500/30' },
 };
 
-const ACCESS_LEVEL_LABELS: Record<string, string> = {
-    alpha: 'Team Member',
-    beta: 'Team Lead',
-    gamma: 'Supervisor',
-    delta: 'Manager',
-    epsilon: 'Global Admin',
-};
+// The names people see for each level (platform/auth/constants.ts).
+const ACCESS_LEVEL_LABELS: Record<string, string> = Object.fromEntries(
+    Object.entries(ACCESS_LEVEL_CONFIG).map(([level, c]) => [level, c.label]),
+);
 
 export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
     title,
@@ -396,7 +394,7 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                     <p className="text-[10px] text-white/30 font-mono tracking-wide">
                         <span className={cn("font-bold", levelColors.text)}>ACCESS CERTIFICATE</span>
                         <span className="mx-2 text-white/20">|</span>
-                        {accessLevel === 'epsilon' ? (
+                        {accessLevel === 'epsilon' || accessLevel === 'zeta' ? (
                             departmentId ? (
                                 subDepartmentId ? (
                                     <span className="text-amber-300">Viewing {subDepartmentName}</span>

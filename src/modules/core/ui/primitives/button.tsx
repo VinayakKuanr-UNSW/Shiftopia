@@ -10,19 +10,19 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 hover:shadow-primary/40",
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm hover:shadow-destructive/25",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
         outline:
-          "border border-white/10 bg-transparent hover:bg-white/5 hover:text-accent-foreground hover:border-white/20 hover:shadow-glow transition-all",
+          "border border-white/10 bg-transparent hover:bg-white/5 hover:text-accent-foreground hover:border-white/20 shadow-none transition-all",
         secondary:
           "bg-white/5 backdrop-blur-sm border border-white/10 text-secondary-foreground hover:bg-white/10 hover:border-white/20 shadow-sm",
         ghost: "hover:bg-accent/10 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        glass: "backdrop-blur-md bg-white/5 border border-white/10 hover:bg-white/10 text-foreground shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/30",
-        gaming: "bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 hover:brightness-110",
-        solid: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md",
-        warning: "bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-500/20",
+        glass: "backdrop-blur-md bg-white/5 border border-white/10 hover:bg-white/10 text-foreground shadow-sm",
+        gaming: "bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-sm hover:brightness-110",
+        solid: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+        warning: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
       },
       size: {
         default: "h-10 px-5 py-2.5",

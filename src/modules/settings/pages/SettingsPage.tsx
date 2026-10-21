@@ -121,96 +121,139 @@ const AppearanceSettings: React.FC = () => {
   return (
     <div className="space-y-10">
       {/* Brand Color Section */}
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">{t('settings.brand_color')}</h3>
-          <p className="text-sm text-blue-200/60 mt-1">
+          <h3 className="text-base font-semibold text-foreground">{t('settings.brand_color')}</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             Global color for your organization.
           </p>
         </div>
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-4 p-6 rounded-2xl bg-white/5 border border-white/5">
+          <div className="flex items-center gap-4 p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs">
             <div 
-              className="h-12 w-12 rounded-xl ring-2 ring-white/10 shadow-lg transition-colors duration-300" 
+              className="h-11 w-11 rounded-xl ring-2 ring-border shadow-xs transition-colors duration-300 flex-shrink-0" 
               style={{ backgroundColor: /^[0-9A-F]{6}$/i.test(brandColor.replace('#','')) ? brandColor : '#333' }}
-            ></div>
+              aria-label="Current brand color preview"
+            />
             <div className="relative flex-1 max-w-[200px]">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-white/40 font-mono">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground font-mono text-sm">
                 #
               </div>
               <Input
                 value={brandColor.replace('#', '')}
                 onChange={(e) => handleBrandColorChange(e.target.value)}
                 maxLength={6}
-                className={`pl-8 h-12 bg-black/20 border-white/10 text-white font-mono tracking-wide transition-all ${
-                  hexError ? 'border-red-500/50 ring-1 ring-red-500/20' : 'focus:border-primary/50'
-                }`}
+                aria-label="Hex color value"
+                className={cn(
+                  "pl-7 h-10 bg-background border-input text-foreground font-mono tracking-wide transition-all",
+                  hexError ? "border-destructive ring-1 ring-destructive/30" : "focus:border-primary"
+                )}
               />
             </div>
             <Button 
               variant="ghost" 
               size="sm" 
               onClick={handleReset}
-              className="text-white/40 hover:text-white hover:bg-white/5"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               {t('common.cancel')}
             </Button>
           </div>
-          {hexError && <p className="text-xs text-red-400 ml-1">Please enter a valid hex code (e.g. A48AFB)</p>}
+          {hexError && <p className="text-xs text-destructive ml-1">Please enter a valid hex code (e.g. A48AFB)</p>}
         </div>
       </div>
 
-      <div className="h-px bg-white/5 w-full"></div>
+      <div className="h-px bg-border/60 w-full" />
 
       {/* Chart Style Section */}
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">{t('settings.chart_style')}</h3>
-          <p className="text-sm text-blue-200/60 mt-1">
+          <h3 className="text-base font-semibold text-foreground">{t('settings.chart_style')}</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             Visual style for analytics.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {['default', 'simplified', 'custom-css'].map((style) => (
-            <div 
-              key={style}
-              onClick={() => setChartStyle(style)}
-              className={`relative group cursor-pointer transition-all duration-300 ${
-                chartStyle === style ? 'scale-[1.02]' : ''
-              }`}
-            >
-              <div className={`overflow-hidden rounded-xl border-2 bg-[#1a2744]/50 transition-all ${
-                chartStyle === style ? 'border-primary shadow-glow/20' : 'border-white/10 hover:border-white/20'
-              }`}>
-                <div className="bg-white/5 p-3 text-xs font-medium text-white/80 border-b border-white/5 capitalize">
-                  {style.replace('-', ' ')}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[
+            { id: 'default', label: 'Default', desc: 'Standard multi-bar display' },
+            { id: 'simplified', label: 'Simplified', desc: 'Minimal clean presentation' },
+            { id: 'custom-css', label: 'Custom CSS', desc: 'Organization custom styles' },
+          ].map(({ id: style, label, desc }) => {
+            const isSelected = chartStyle === style;
+            return (
+              <button
+                key={style}
+                type="button"
+                onClick={() => setChartStyle(style)}
+                aria-pressed={isSelected}
+                className={cn(
+                  "relative group text-left cursor-pointer transition-all duration-200 rounded-xl overflow-hidden border-2 bg-card focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                  isSelected
+                    ? "border-primary shadow-sm ring-1 ring-primary/20"
+                    : "border-border/80 hover:border-foreground/30 hover:shadow-xs"
+                )}
+              >
+                {/* Header */}
+                <div className={cn(
+                  "px-4 py-2.5 text-xs font-semibold border-b transition-colors flex items-center justify-between",
+                  isSelected
+                    ? "bg-primary/5 text-primary border-primary/20"
+                    : "bg-muted/40 text-muted-foreground border-border/70 group-hover:text-foreground"
+                )}>
+                  <span>{label}</span>
+                  {isSelected && <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Active</span>}
                 </div>
-                <div className="p-6 h-36 flex items-center justify-center">
-                  <div className={`w-full h-full bg-primary/20 rounded-lg flex items-end gap-1 p-2 ${chartStyle !== style ? 'grayscale opacity-50' : ''}`}>
-                    <div className="w-1/4 h-[40%] bg-primary/40 rounded-sm"></div>
-                    <div className="w-1/4 h-[70%] bg-primary/60 rounded-sm"></div>
-                    <div className="w-1/4 h-[50%] bg-primary/40 rounded-sm"></div>
-                    <div className="w-1/4 h-[90%] bg-primary rounded-sm shadow-[0_0_10px_rgba(var(--primary),0.5)]"></div>
+
+                {/* Preview Box */}
+                <div className="p-4 h-32 flex flex-col justify-between bg-muted/15">
+                  <div className={cn(
+                    "w-full h-20 rounded-lg p-2.5 flex items-end gap-2 transition-all border",
+                    isSelected ? "bg-card border-border/80 shadow-xs" : "bg-muted/30 border-border/40 opacity-70 group-hover:opacity-100"
+                  )}>
+                    {style === 'default' && (
+                      <>
+                        <div className="w-1/4 h-[40%] bg-primary/35 rounded-sm" />
+                        <div className="w-1/4 h-[75%] bg-primary/60 rounded-sm" />
+                        <div className="w-1/4 h-[50%] bg-primary/45 rounded-sm" />
+                        <div className="w-1/4 h-[95%] bg-primary rounded-sm shadow-xs" />
+                      </>
+                    )}
+                    {style === 'simplified' && (
+                      <>
+                        <div className="w-1/3 h-[45%] bg-primary/35 rounded-sm" />
+                        <div className="w-1/3 h-[65%] bg-primary/60 rounded-sm" />
+                        <div className="w-1/3 h-[85%] bg-primary rounded-sm shadow-xs" />
+                      </>
+                    )}
+                    {style === 'custom-css' && (
+                      <div className="w-full h-full flex flex-col justify-center items-center gap-1.5 border border-dashed border-border rounded-sm">
+                        <span className="font-mono text-[11px] font-semibold text-muted-foreground">{'/* custom.css */'}</span>
+                        <div className="w-24 h-1.5 bg-primary/50 rounded-full" />
+                      </div>
+                    )}
                   </div>
+                  <span className="text-[11px] text-muted-foreground/80 line-clamp-1">{desc}</span>
                 </div>
-              </div>
-              {chartStyle === style && (
-                <div className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary border-4 border-[#0d1424] flex items-center justify-center shadow-lg z-10 animate-scale-in">
-                  <Check className="h-3.5 w-3.5 text-white" />
-                </div>
-              )}
-            </div>
-          ))}
+
+                {/* Selection Checkmark Badge */}
+                {isSelected && (
+                  <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                    <Check className="h-3 w-3 stroke-[3]" />
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="h-px bg-white/5 w-full"></div>
+      <div className="h-px bg-border/60 w-full" />
 
       {/* Language Section */}
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">{t('settings.language')}</h3>
-          <p className="text-sm text-blue-200/60 mt-1">
+          <h3 className="text-base font-semibold text-foreground">{t('settings.language')}</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             {t('settings.language_description')}
           </p>
         </div>
@@ -231,18 +274,18 @@ const AppearanceSettings: React.FC = () => {
               }
             );
           }}>
-            <SelectTrigger className="w-full sm:w-[280px] h-11 bg-white/5 border-white/10 text-white hover:bg-white/10 focus:border-primary/50">
+            <SelectTrigger className="w-full sm:w-[280px] h-11 bg-background border-input text-foreground hover:bg-accent/40 focus:ring-2 focus:ring-primary/20 focus:border-primary">
               <div className="flex items-center gap-3">
-                <span className="text-lg">
+                <span className="text-lg" aria-hidden="true">
                   {SUPPORTED_LOCALES.find(l => l.code === language)?.flag ?? '🌐'}
                 </span>
                 <SelectValue placeholder="Select language" />
               </div>
             </SelectTrigger>
-            <SelectContent className="bg-[#1a2744] border-white/10 text-white backdrop-blur-xl">
+            <SelectContent className="bg-popover border-border text-popover-foreground shadow-lg">
               {SUPPORTED_LOCALES.map(({ code, label, flag }) => (
-                <SelectItem key={code} value={code} className="focus:bg-white/10 focus:text-white">
-                  {flag} {label}
+                <SelectItem key={code} value={code} className="focus:bg-accent focus:text-accent-foreground cursor-pointer">
+                  <span className="mr-2" aria-hidden="true">{flag}</span> {label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -250,83 +293,112 @@ const AppearanceSettings: React.FC = () => {
         </div>
       </div>
 
-      <div className="h-px bg-white/5 w-full"></div>
+      <div className="h-px bg-border/60 w-full" />
 
       {/* Cookie Banner Section */}
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">{t('settings.cookie_banner')}</h3>
-          <p className="text-sm text-blue-200/60 mt-1">
+          <h3 className="text-base font-semibold text-foreground">{t('settings.cookie_banner')}</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             Display cookie banners to visitors.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {['default', 'simplified', 'none'].map((option) => (
-            <div 
-              key={option}
-              onClick={() => setCookieBanner(option)}
-              className={`relative group cursor-pointer transition-all duration-300 ${
-                cookieBanner === option ? 'scale-[1.02]' : ''
-              }`}
-            >
-              <div className={`overflow-hidden rounded-xl border-2 bg-[#1a2744]/50 transition-all ${
-                cookieBanner === option ? 'border-primary shadow-glow/20' : 'border-white/10 hover:border-white/20'
-              }`}>
-                <div className="bg-white/5 p-3 text-xs font-medium text-white/80 border-b border-white/5 capitalize">
-                  {option}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[
+            { id: 'default', label: 'Default', desc: 'Full width banner with details' },
+            { id: 'simplified', label: 'Simplified', desc: 'Compact bottom toast' },
+            { id: 'none', label: 'None', desc: 'Do not show cookie consent banner' },
+          ].map(({ id: option, label, desc }) => {
+            const isSelected = cookieBanner === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setCookieBanner(option)}
+                aria-pressed={isSelected}
+                className={cn(
+                  "relative group text-left cursor-pointer transition-all duration-200 rounded-xl overflow-hidden border-2 bg-card focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                  isSelected
+                    ? "border-primary shadow-sm ring-1 ring-primary/20"
+                    : "border-border/80 hover:border-foreground/30 hover:shadow-xs"
+                )}
+              >
+                {/* Header */}
+                <div className={cn(
+                  "px-4 py-2.5 text-xs font-semibold border-b transition-colors flex items-center justify-between",
+                  isSelected
+                    ? "bg-primary/5 text-primary border-primary/20"
+                    : "bg-muted/40 text-muted-foreground border-border/70 group-hover:text-foreground"
+                )}>
+                  <span>{label}</span>
+                  {isSelected && <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Active</span>}
                 </div>
-                <div className="p-4 h-32 flex items-end justify-center">
-                  {option === 'none' ? (
-                    <div className="text-xs text-white/30 font-medium px-3 py-1 bg-white/5 rounded-full mb-4">No banner</div>
-                  ) : (
-                    <div className={`w-full h-8 ${option === 'simplified' ? 'h-6 w-3/4' : ''} bg-primary/20 rounded-md border border-primary/30 flex items-center justify-center mb-2`}>
-                      <div className="w-12 h-1.5 bg-primary/40 rounded-full"></div>
-                    </div>
-                  )}
+
+                {/* Preview Box */}
+                <div className="p-4 h-32 flex flex-col justify-between bg-muted/15">
+                  <div className="w-full h-20 rounded-lg p-2.5 flex items-end justify-center bg-muted/30 border border-border/40">
+                    {option === 'none' ? (
+                      <span className="text-xs text-muted-foreground font-medium px-3 py-1 bg-card rounded-full border border-border/60 shadow-2xs mb-2">
+                        No banner
+                      </span>
+                    ) : (
+                      <div className={cn(
+                        "w-full bg-card rounded-md border border-border/80 shadow-xs flex items-center justify-between px-2.5 py-1.5 mb-1 transition-all",
+                        option === 'simplified' ? "w-3/4" : "w-full"
+                      )}>
+                        <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
+                        <div className="w-4 h-2 bg-primary/80 rounded-xs" />
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-muted-foreground/80 line-clamp-1">{desc}</span>
                 </div>
-              </div>
-              {cookieBanner === option && (
-                <div className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-primary border-4 border-[#0d1424] flex items-center justify-center shadow-lg z-10">
-                  <Check className="h-3.5 w-3.5 text-white" />
-                </div>
-              )}
-            </div>
-          ))}
+
+                {/* Selection Checkmark Badge */}
+                {isSelected && (
+                  <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                    <Check className="h-3 w-3 stroke-[3]" />
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="h-px bg-white/5 w-full"></div>
+      <div className="h-px bg-border/60 w-full" />
 
       {/* Group Coloring Section */}
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">Advanced coloring</h3>
-          <p className="text-sm text-blue-200/60 mt-1">
+          <h3 className="text-base font-semibold text-foreground">Advanced coloring</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             Group-based card themes.
           </p>
         </div>
-        <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
+        <div className="p-5 sm:p-6 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
               <Palette className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-sm font-medium text-white">Group-based Card Coloring</p>
-              <p className="text-xs text-blue-200/40 mt-0.5">Automatically color-code timecards by center (Convention, Exhibition, Theatre).</p>
+              <p className="text-sm font-semibold text-foreground">Group-based Card Coloring</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Automatically color-code timecards by center (Convention, Exhibition, Theatre).</p>
             </div>
           </div>
           <Switch 
             checked={enableGroupColoring} 
             onCheckedChange={setEnableGroupColoring}
+            aria-label="Toggle group-based card coloring"
           />
         </div>
       </div>
 
-      <div className="pt-6 border-t border-white/5 flex justify-end">
+      <div className="pt-6 border-t border-border/60 flex justify-end">
         <Button 
           onClick={handleSave} 
           disabled={updateBranding.isPending}
-          className="bg-primary hover:bg-primary/90 text-white h-11 px-8 rounded-xl shadow-glow transition-all"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 px-8 rounded-xl shadow-sm transition-all"
         >
           {updateBranding.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
           {t('common.save')}
@@ -367,47 +439,47 @@ const ProfileSettings: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 max-w-2xl">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-6 max-w-2xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label className="text-white/60">First name</Label>
+          <Label className="text-foreground text-sm font-semibold">First name</Label>
           <Input 
             value={formData.firstName} 
             onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-            className="bg-white/5 border-white/10 text-white" 
+            className="bg-background border-input text-foreground focus-visible:ring-primary" 
           />
         </div>
         <div className="space-y-2">
-          <Label className="text-white/60">Last name</Label>
+          <Label className="text-foreground text-sm font-semibold">Last name</Label>
           <Input 
             value={formData.lastName} 
             onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-            className="bg-white/5 border-white/10 text-white" 
+            className="bg-background border-input text-foreground focus-visible:ring-primary" 
           />
         </div>
       </div>
       <div className="space-y-2">
-        <Label className="text-white/60">Email address</Label>
+        <Label className="text-foreground text-sm font-semibold">Email address</Label>
         <Input 
           value={formData.email} 
           disabled
-          className="bg-white/5 border-white/10 text-white/40 cursor-not-allowed" 
+          className="bg-muted/50 border-input text-muted-foreground cursor-not-allowed" 
         />
-        <p className="text-xs text-blue-200/40">Email cannot be changed directly for security reasons.</p>
+        <p className="text-xs text-muted-foreground">Email cannot be changed directly for security reasons.</p>
       </div>
       <div className="space-y-2">
-        <Label className="text-white/60">Phone number</Label>
+        <Label className="text-foreground text-sm font-semibold">Phone number</Label>
         <Input 
           value={formData.phone} 
           onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-          className="bg-white/5 border-white/10 text-white" 
+          className="bg-background border-input text-foreground focus-visible:ring-primary" 
         />
       </div>
       <div className="pt-4 flex justify-end">
         <Button 
           onClick={handleSave} 
           disabled={updateProfile.isPending}
-          className="bg-primary hover:bg-primary/90 text-white px-8 rounded-xl h-11"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 rounded-xl h-11 shadow-sm"
         >
           {updateProfile.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Update Profile
@@ -442,18 +514,18 @@ const SecuritySettings: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="p-6 rounded-2xl bg-card border border-border/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h4 className="text-white font-medium">Password</h4>
-            <p className="text-sm text-blue-200/60 mt-1">Change your account password regularly for better security.</p>
+            <h4 className="text-foreground font-semibold">Password</h4>
+            <p className="text-sm text-muted-foreground mt-1">Change your account password regularly for better security.</p>
           </div>
           <Button 
             variant="outline" 
             onClick={handleResetPassword}
             disabled={isLoading}
-            className="border-white/10 text-white hover:bg-white/5"
+            className="border-input text-foreground hover:bg-accent hover:text-accent-foreground sm:flex-shrink-0"
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request Password Reset"}
           </Button>
@@ -463,13 +535,13 @@ const SecuritySettings: React.FC = () => {
       {/* Native-only: renders nothing in a browser (see BiometricToggle). */}
       <BiometricToggle />
 
-      <div className="p-6 rounded-2xl bg-white/5 border border-white/10 opacity-50 cursor-not-allowed">
-        <div className="flex items-center justify-between">
+      <div className="p-6 rounded-2xl bg-card/50 border border-border/60 opacity-60 cursor-not-allowed">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h4 className="text-white font-medium">Two-factor Authentication</h4>
-            <p className="text-sm text-blue-200/60 mt-1">Add an extra layer of security to your account.</p>
+            <h4 className="text-foreground font-semibold">Two-factor Authentication</h4>
+            <p className="text-sm text-muted-foreground mt-1">Add an extra layer of security to your account.</p>
           </div>
-          <Button variant="ghost" disabled className="text-white/40">Coming Soon</Button>
+          <Button variant="ghost" disabled className="text-muted-foreground sm:flex-shrink-0">Coming Soon</Button>
         </div>
       </div>
     </div>
@@ -477,14 +549,14 @@ const SecuritySettings: React.FC = () => {
 };
 
 const NotificationSettings: React.FC = () => (
-  <div className="space-y-8">
+  <div className="space-y-6">
     <div className="flex items-center gap-3">
-      <div className="p-2 rounded-xl bg-white/5 border border-white/10">
-        <Bell className="h-5 w-5 text-white/70" />
+      <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20">
+        <Bell className="h-5 w-5 text-primary" />
       </div>
       <div>
-        <h3 className="text-lg font-medium text-white">Notifications</h3>
-        <p className="text-sm text-blue-200/60">Choose how Shiftopia reaches you on this device.</p>
+        <h3 className="text-lg font-semibold text-foreground">Notifications</h3>
+        <p className="text-sm text-muted-foreground">Choose how Shiftopia reaches you on this device.</p>
       </div>
     </div>
     <NotificationToggle />
@@ -516,7 +588,7 @@ const SettingsPage: React.FC = () => {
             "rounded-[32px] p-4 lg:p-6 transition-all border",
             isDark 
                 ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                : "bg-card/80 backdrop-blur-md border-border/80 shadow-xl shadow-slate-200/40"
         )}>
           {/* Row 1 & 2: Identity & Scope Filter */}
           <PersonalPageHeader
@@ -532,7 +604,6 @@ const SettingsPage: React.FC = () => {
             onSectionChange={handleSectionChange}
             transparent
             showPayRates={canManageRates}
-
           />
         </div>
       </div>
@@ -543,7 +614,7 @@ const SettingsPage: React.FC = () => {
             "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10",
             isDark 
                 ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                : "bg-card/80 backdrop-blur-md border-border/80 shadow-xl shadow-slate-200/40"
         )}>
           <Tabs value={section} className="w-full">
             <TabsContent value="appearance">
@@ -560,12 +631,12 @@ const SettingsPage: React.FC = () => {
                 <PayRatesSettings />
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                  <div className="p-4 rounded-full bg-white/5 border border-white/10">
-                    <Shield className="h-8 w-8 text-white/40" />
+                  <div className="p-4 rounded-full bg-muted border border-border">
+                    <Shield className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-medium text-white">Not authorised</h3>
-                    <p className="text-blue-200/60 max-w-sm mt-1">Pay-rate administration is restricted to managers.</p>
+                    <h3 className="text-lg font-semibold text-foreground">Not authorised</h3>
+                    <p className="text-muted-foreground max-w-sm mt-1 text-sm">Pay-rate administration is restricted to managers.</p>
                   </div>
                 </div>
               )}
@@ -579,15 +650,15 @@ const SettingsPage: React.FC = () => {
             {['account', 'billing', 'integrations'].map(tab => (
               <TabsContent key={tab} value={tab}>
                 <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                  <div className="p-4 rounded-full bg-white/5 border border-white/10">
-                    {tab === 'notifications' ? <Bell className="h-8 w-8 text-white/40" /> : 
-                     tab === 'billing' ? <CreditCard className="h-8 w-8 text-white/40" /> : 
-                     tab === 'integrations' ? <Link className="h-8 w-8 text-white/40" /> :
-                     <User className="h-8 w-8 text-white/40" />}
+                  <div className="p-4 rounded-full bg-muted border border-border">
+                    {tab === 'notifications' ? <Bell className="h-8 w-8 text-muted-foreground" /> : 
+                     tab === 'billing' ? <CreditCard className="h-8 w-8 text-muted-foreground" /> : 
+                     tab === 'integrations' ? <Link className="h-8 w-8 text-muted-foreground" /> :
+                     <User className="h-8 w-8 text-muted-foreground" />}
                   </div>
                   <div>
-                    <h3 className="text-lg font-medium text-white capitalize">{tab} Settings</h3>
-                    <p className="text-blue-200/60 max-w-sm mt-1">This section is currently under development.</p>
+                    <h3 className="text-lg font-semibold text-foreground capitalize">{tab} Settings</h3>
+                    <p className="text-muted-foreground max-w-sm mt-1 text-sm">This section is currently under development.</p>
                   </div>
                 </div>
               </TabsContent>

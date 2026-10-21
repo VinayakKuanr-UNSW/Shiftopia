@@ -8315,14 +8315,16 @@ export type Database = {
       clone_roster_subgroup_v2: {
         Args: {
           p_dept_id: string
+          p_dry_run?: boolean
           p_end_date: string
           p_group_external_id: string
           p_new_name: string
           p_org_id: string
           p_source_name: string
           p_start_date: string
+          p_sub_dept_id: string
         }
-        Returns: undefined
+        Returns: Json
       }
       compute_employee_quarter_metrics: {
         Args: { p_employee_id: string; p_quarter_year: string }
@@ -8384,13 +8386,15 @@ export type Database = {
       delete_roster_subgroup_v2: {
         Args: {
           p_dept_id: string
+          p_dry_run?: boolean
           p_end_date: string
           p_group_external_id: string
           p_name: string
           p_org_id: string
           p_start_date: string
+          p_sub_dept_id: string
         }
-        Returns: undefined
+        Returns: Json
       }
       delete_template_shifts_cascade: {
         Args: { p_template_id: string }
@@ -9322,6 +9326,16 @@ export type Database = {
             Returns: undefined
           }
         | { Args: { args?: string[] }; Returns: undefined }
+      preview_template_application: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_target_department_id?: string
+          p_target_sub_department_id?: string
+          p_template_id: string
+        }
+        Returns: Json
+      }
       process_shift_time_transitions: { Args: never; Returns: undefined }
       process_shift_timers: {
         Args: never
@@ -9447,14 +9461,16 @@ export type Database = {
       rename_roster_subgroup_v2: {
         Args: {
           p_dept_id: string
+          p_dry_run?: boolean
           p_end_date: string
           p_group_external_id: string
           p_new_name: string
           p_old_name: string
           p_org_id: string
           p_start_date: string
+          p_sub_dept_id: string
         }
-        Returns: undefined
+        Returns: Json
       }
       request_fairness_ledger_recompute: {
         Args: { p_as_of?: string; p_org_id: string }
@@ -9978,7 +9994,10 @@ export type Database = {
       }
       undo_template_batch:
         | { Args: { p_batch_id: string }; Returns: Json }
-        | { Args: { p_batch_id: string; p_user_id?: string }; Returns: Json }
+        | {
+            Args: { p_batch_id: string; p_dry_run?: boolean; p_user_id?: string }
+            Returns: Json
+          }
       unpublish_roster_day: {
         Args: {
           p_reason?: string

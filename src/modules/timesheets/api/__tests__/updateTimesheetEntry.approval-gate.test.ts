@@ -267,11 +267,24 @@ describe('updateTimesheetEntry — optimistic concurrency (F18)', () => {
     ctx.mock.enqueue(
       { data: EXISTING, error: null },
       { data: RESOLVED_SHIFT, error: null },
-      { data: [], error: null },  // empty, but ignored because no expectedVersion
+      { data: [{ id: 'ts-1' }], error: null },
     );
 
-    // No conflict thrown even though the update returned no rows.
     const result = await updateTimesheetEntry('shift-1', { adjustedStart: '09:15' });
     expect(result).toBe(true);
+  });
+
+  // Until 2026-10-14 this returned true: a write row-level security refused
+  // (zero rows, no error) read as saved. Without a version it is still not a
+  // CONFLICT — nothing says the row changed under us — but it is not a save.
+  it('reports a refused write (zero rows, no version) as not saved, not as a conflict', async () => {
+    ctx.mock.enqueue(
+      { data: EXISTING, error: null },
+      { data: RESOLVED_SHIFT, error: null },
+      { data: [], error: null },
+    );
+
+    const result = await updateTimesheetEntry('shift-1', { adjustedStart: '09:15' });
+    expect(result).toBe(false);
   });
 });

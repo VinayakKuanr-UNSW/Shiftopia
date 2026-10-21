@@ -862,6 +862,8 @@ interface OpenBidsViewProps {
   onAutoAssignReady?: (fn: { run: () => void; isRunning: boolean }) => void;
   startDate?: Date;
   endDate?: Date;
+  /** View-only manager (delta, epsilon): bids and compliance show, nothing is assigned. */
+  readOnly?: boolean;
 }
 
 export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
@@ -877,6 +879,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   onAutoAssignReady,
   startDate,
   endDate,
+  readOnly = false,
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1462,7 +1465,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
             <Button
               onClick={handleAutoAssign}
-              disabled={isAutoAssigning}
+              disabled={readOnly || isAutoAssigning}
               size="sm"
               className="h-9 px-5 text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/15"
             >
@@ -1733,7 +1736,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     <motion.div whileTap={{ scale: hardBlocked ? 1 : 0.98 }}>
                       <Button
                         onClick={handleAssign}
-                        disabled={isAssigning || hardBlocked}
+                        disabled={readOnly || isAssigning || hardBlocked}
+                        title={readOnly ? 'View-only access — you cannot assign this shift' : undefined}
                         className={cn(
                           'w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider shadow-lg',
                           hardBlocked
@@ -2020,7 +2024,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     ) : (
                       <Button
                         onClick={handleAssign}
-                        disabled={isAssigning || hardBlocked}
+                        disabled={readOnly || isAssigning || hardBlocked}
+                        title={readOnly ? 'View-only access — you cannot assign this shift' : undefined}
                         className={cn(
                           'w-full h-11 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all duration-300',
                           hardBlocked

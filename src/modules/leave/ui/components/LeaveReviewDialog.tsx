@@ -54,12 +54,14 @@ export interface LeaveReviewDialogProps {
     meId: string;
     today: string;
     onClose: () => void;
+    /** View-only manager (delta, epsilon): reads the request, decides nothing. */
+    readOnly?: boolean;
 }
 
 type Mode = 'idle' | 'reject' | 'revoke';
 
 export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
-    request, member, personRequests = [], nameOf, meId, today, onClose,
+    request, member, personRequests = [], nameOf, meId, today, onClose, readOnly = false,
 }) => {
     const { toast } = useToast();
     const invalidate = useLeaveInvalidation();
@@ -182,9 +184,12 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
             kind={def?.kind}
             footer={
                 <>
-                    {request.status === 'pending' && mode === 'idle' && isSelf
+                    {readOnly
+                        ? <p className={text.caption}>View-only access — you can&apos;t decide leave.</p>
+                        : request.status === 'pending' && mode === 'idle' && isSelf
                         ? <p className={text.caption}>You can&apos;t decide your own leave.</p>
                         : <span />}
+                    {!readOnly && (
                     <div className="flex flex-1 flex-wrap justify-end gap-2">
                         {request.status === 'pending' && mode === 'idle' && (
                             <>
@@ -214,6 +219,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                             </>
                         )}
                     </div>
+                    )}
                 </>
             }
         >

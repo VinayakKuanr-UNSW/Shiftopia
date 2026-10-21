@@ -40,7 +40,7 @@ import {
   useBroadcastNotifications,
 } from "@/modules/broadcasts/state/useBroadcasts";
 import { useAuth } from "@/platform/auth/useAuth";
-import { usePersona, resolvePersonaRoute } from "@/platform/auth/PersonaProvider";
+import { usePersona, resolvePersonaRoute, type Persona } from "@/platform/auth/PersonaProvider";
 import { useTheme } from "@/modules/core/contexts/ThemeContext";
 
 type MoreNavPermission =
@@ -51,7 +51,9 @@ type MoreNavPermission =
   | "templates"
   | "broadcast"
   | "insights"
-  | "users";
+  | "users"
+  | "labor-demand"
+  | "compliance";
 
 type BottomNavItem = {
   label: string;
@@ -122,15 +124,19 @@ const employerItems: BottomNavItem[] = [
   { label: "Swaps", icon: ArrowLeftRight, path: "/management/swaps", requiredPermission: "management" },
   { label: "Leave Appr", icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
   { label: "Templates", icon: LayoutTemplate, path: "/templates", requiredPermission: "templates" },
-  { label: "Demand", icon: TrendingUp, path: "/labor-demand", requiredPermission: "rosters" },
   { label: "Times", icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
   { label: "Broadcast", icon: Megaphone, path: "/broadcast", requiredPermission: "broadcast" },
-  { label: "Compliance", icon: ShieldAlert, path: "/compliance/rejections", requiredPermission: "management" },
-  { label: "Users", icon: Users, path: "/users", requiredPermission: "users" },
   // /management/payroll is deliberately ABSENT. It is in the router but NOT in
   // ALLOWED_MOBILE_ROUTES, so a tab or drawer entry for it would land on the
   // Desktop Only screen — the same failure the Leave button used to have.
   // Allowlisting a wide payroll table is a design decision, not a nav one.
+];
+
+/** Admin suite: Demand, Users, Compliance. Zeta only, each on its own key. */
+const adminItems: BottomNavItem[] = [
+  { label: "Demand", icon: TrendingUp, path: "/labor-demand", requiredPermission: "labor-demand" },
+  { label: "Users", icon: Users, path: "/users", requiredPermission: "users" },
+  { label: "Compliance", icon: ShieldAlert, path: "/compliance/rejections", requiredPermission: "compliance" },
 ];
 
 /**
@@ -294,7 +300,7 @@ const BottomNavbar: React.FC = () => {
 
   // UNREAD COUNTS INTEGRATION
   const { logout, hasPermission } = useAuth();
-  const { persona, canSwitch, togglePersona } = usePersona();
+  const { persona, setPersona, canSwitch, canAccessAdmin, availablePersonas, togglePersona } = usePersona();
   const { groups: broadcastGroups } = useEmployeeBroadcastGroups();
   const { unreadCount: notificationsUnread } = useBroadcastNotifications();
 
@@ -312,7 +318,12 @@ const BottomNavbar: React.FC = () => {
   // Filter BEFORE slicing: an employer holding only `insights` must get KPI in
   // a tab, not three dead tabs and one real one.
   const accessiblePersonaItems = useMemo(() => {
-    const source = persona === "employer" ? employerItems : employeeItems;
+    const source =
+      persona === "admin"
+        ? adminItems
+        : persona === "employer"
+          ? employerItems
+          : employeeItems;
     return source.filter(
       (item) => !item.requiredPermission || hasPermission(item.requiredPermission),
     );
@@ -432,8 +443,18 @@ const BottomNavbar: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    const nextPersona = persona === "employee" ? "employer" : "employee";
-                    togglePersona();
+                    const available: Persona[] = (availablePersonas && availablePersonas.length > 1)
+                      ? availablePersonas
+                      : ['employee', 'employer'];
+                    const currentIndex = available.indexOf(persona);
+                    const nextPersona = available[(currentIndex + 1) % available.length];
+                    if (persona === 'employee' && nextPersona === 'employer') {
+                      togglePersona();
+                    } else if (persona === 'employer' && nextPersona === 'employee') {
+                      togglePersona();
+                    } else {
+                      setPersona(nextPersona);
+                    }
                     setMoreOpen(false);
                     const targetPath = resolvePersonaRoute(location.pathname, nextPersona, hasPermission);
                     if (targetPath && targetPath !== location.pathname) {
@@ -443,7 +464,9 @@ const BottomNavbar: React.FC = () => {
                   aria-label={
                     persona === "employee"
                       ? "Switch to employer view"
-                      : "Switch to employee view"
+                      : persona === "employer" && canAccessAdmin
+                        ? "Switch to admin view"
+                        : "Switch to employee view"
                   }
                   className={cn(
                     touch.target,
@@ -452,13 +475,17 @@ const BottomNavbar: React.FC = () => {
                 >
                   {persona === "employee" ? (
                     <Briefcase className="h-5 w-5 text-indigo-500" aria-hidden="true" />
+                  ) : persona === "employer" && canAccessAdmin ? (
+                    <ShieldAlert className="h-5 w-5 text-rose-500" aria-hidden="true" />
                   ) : (
                     <UserRound className="h-5 w-5 text-emerald-500" aria-hidden="true" />
                   )}
                   <span className={text.overlineBare}>
                     {persona === "employee"
                       ? "Switch to employer view"
-                      : "Switch to employee view"}
+                      : persona === "employer" && canAccessAdmin
+                        ? "Switch to admin view"
+                        : "Switch to employee view"}
                   </span>
                 </button>
               )}

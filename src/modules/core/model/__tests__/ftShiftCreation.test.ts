@@ -145,12 +145,15 @@ describe('editing and cloning on the roster', () => {
 });
 
 describe('templates cannot seed a full-time shift', () => {
-    it('the template editor does not fall back to FT', () => {
+    it('the template editor does not fall back to FT (or any guessed type)', () => {
         // `template_shifts` refuses full-time rows outright
         // (trg_no_ft_template_shifts), so a dropped type defaulting to 'FT'
-        // would make the save fail with a bare 400.
-        const src = read('src/modules/templates/ui/components/TemplateEditor.tsx');
-        expect(src).not.toMatch(/editShift\?\.targetEmploymentType \|\| 'FT'/);
-        expect(src).toMatch(/editShift\?\.targetEmploymentType \|\| 'Casual'/);
+        // would make the save fail with a bare 400. A 'Casual' default is no
+        // better: it silently re-types a shift whose target was lost upstream
+        // (v_template_full once dropped the column entirely). The target must
+        // come from the form or the stored shift — never be invented.
+        const src = stripComments(read('src/modules/templates/ui/components/TemplateEditor.tsx'));
+        expect(src).not.toMatch(/editShift\?\.targetEmploymentType\s*(\|\||\?\?)\s*'(FT|PT|Casual)'/);
+        expect(src).toMatch(/editShift\?\.targetEmploymentType\s*\?\?\s*null/);
     });
 });

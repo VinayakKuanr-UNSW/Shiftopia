@@ -1,6 +1,7 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
 import { ScopeSelection } from '@/platform/auth/types';
+import type { ScopeMode } from '@/platform/auth/scope-selection';
 import { PersonalPageHeader } from './PersonalPageHeader';
 import type { ScopeLevel } from './GlobalScopeFilter';
 import { UnifiedModuleFunctionBar } from './UnifiedModuleFunctionBar';
@@ -42,7 +43,7 @@ interface ScopeRowProps {
     scope?: ScopeSelection;
     setScope?: (scope: ScopeSelection) => void;
     isGammaLocked?: boolean;
-    mode?: 'personal' | 'managerial';
+    mode?: ScopeMode;
     multiSelect?: boolean;
     /** Levels forced to a single choice — see `GlobalScopeFilterProps`. */
     singleSelectLevels?: ScopeLevel[];

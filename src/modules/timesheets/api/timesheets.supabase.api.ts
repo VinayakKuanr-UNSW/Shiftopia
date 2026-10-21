@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
@@ -786,6 +787,10 @@ export async function updateTimesheetEntry(
             if (opts?.expectedVersion != null && (!updatedRows || updatedRows.length === 0)) {
                 throw new TimesheetConflictError(shiftId);
             }
+            // Without a version, zero rows means row-level security refused the
+            // caller (timesheet.approve where the shift sits) — it must not read
+            // as saved. The catch below turns it into the honest `false`.
+            assertWrote({ error, data: updatedRows }, 'change this timesheet');
         } else {
             // Get shift details for new timesheet
             const { data: shift } = await supabase
@@ -922,18 +927,23 @@ export async function markShiftAsNoShow(
 ): Promise<boolean> {
     try {
         // Update shift status
-        const { error: shiftError } = await supabase
+        const { error: shiftError, count: shiftsMarked } = await supabase
             .from('shifts')
             .update({
                 attendance_status: 'no_show',
                 lifecycle_status: 'Completed',
                 updated_at: new Date().toISOString(),
                 last_modified_by: userId
-            })
+            }, { count: 'exact' })
             .eq('id', shiftId);
 
         if (shiftError) {
             console.error('[markShiftAsNoShow] Shift error:', shiftError);
+            return false;
+        }
+        // Zero rows: row-level security refused the caller. Not a no-show.
+        if (shiftsMarked === 0) {
+            console.error('[markShiftAsNoShow] Refused: no shift updated (outside the caller\'s access?)', shiftId);
             return false;
         }
 

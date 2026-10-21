@@ -80,6 +80,13 @@ interface UseAutoSchedulerOptions {
     employees: EmployeeMeta[];
     organizationId?: string;
     queryFilters?: ShiftFilters;
+    /**
+     * The window to open on — the roster period on screen. Without it the
+     * window defaulted to the span of the page's unassigned drafts, which is
+     * empty in Month + Group (that view loads no shifts), so the modal opened
+     * on "Please select both start and end dates".
+     */
+    initialRange?: { startDate: string; endDate: string };
 }
 
 /**
@@ -172,6 +179,7 @@ export function useAutoScheduler({
     employees,
     organizationId,
     queryFilters,
+    initialRange,
 }: UseAutoSchedulerOptions) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -206,8 +214,8 @@ export function useAutoScheduler({
     const defaultStart = useMemo(() => initialShifts.length > 0 ? [...initialShifts].sort((a, b) => a.shift_date.localeCompare(b.shift_date))[0].shift_date : '', [initialShifts]);
     const defaultEnd = useMemo(() => initialShifts.length > 0 ? [...initialShifts].sort((a, b) => b.shift_date.localeCompare(a.shift_date))[0].shift_date : '', [initialShifts]);
 
-    const [startDate, setStartDate] = useState(defaultStart);
-    const [endDate, setEndDate] = useState(defaultEnd);
+    const [startDate, setStartDate] = useState(initialRange?.startDate ?? defaultStart);
+    const [endDate, setEndDate] = useState(initialRange?.endDate ?? defaultEnd);
 
     const validationError = useMemo(() => {
         if (!startDate || !endDate) {
