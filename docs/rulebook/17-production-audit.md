@@ -58,7 +58,7 @@
 
 | Item | Detail | Source |
 |---|---|---|
-| `HANDOVER.md` + `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/*.md` | Still say `is_manager_or_above()` is "BROKEN in prod" — it was fixed, and a 2026-07-30 migration relies on it directly | Ch.8 §4 |
+| `HANDOVER.md` + `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/*.md` | Still say `is_manager_or_above()` is "BROKEN in prod" — it was fixed, and a 2026-07-30 migration relies on it directly | Ch.8 §5 — **CLOSED 2026-10-14**: handover rewritten, investigation docs corrected |
 | `GrossPayPage.tsx` header comment | Claims the route is "intentionally NOT wired into the route table" — it is (`AppRouter.tsx:199`) | Ch.6 §12 |
 | A leave-overlap-constraint migration header | Says "NOT YET APPLIED — pending sign-off" for a constraint that has been live and enforcing since the commit that shipped it | Ch.7 §4.6 |
 | Two schema eras with thin cross-referencing | A squashed Oct-2025 baseline followed by 60 hand-written migrations, several existing purely to *restore* what the squash silently dropped — this pattern is the traceable root cause of both live bugs fixed this session | Ch.1 §5, Ch.7 §5 |

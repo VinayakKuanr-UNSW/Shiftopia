@@ -50,8 +50,8 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 | Bulk unassign | Roster | gateway op `unassign` | UNASSIGN | ✗ | ✗ |
 | Cancel shift | Planner card → Cancel | `sm_manager_cancel` | CANCEL | ✗ | ✗ |
 | Unpublish | Card / bulk | `sm_unpublish_shift` | → Draft (not a removal) | client only | — |
-| Delete roster sub-group | Roster sub-group menu | `delete_roster_subgroup_v2` | HARD, all its shifts | ✗ | ✗ |
-| Clear / undo a template application | Templates, roster | `sm_clear_template_application`, `undo_template_batch` | HARD | ✗ | ✗ |
+| Delete roster sub-group | Roster sub-group menu (confirm shows a dry run) | `delete_roster_subgroup_v2` | HARD, unstarted shifts of that group and sub-department only (since 2026-10-17; was every same-named shift on the roster) | ✓ days before today untouched; started shifts kept | ✗ |
+| Clear / undo a template application | Roster → Templates → Recent applications → Undo (confirm shows a dry run) | `undo_template_batch`; `sm_clear_template_application` has no caller | HARD, that application's unstarted shifts, plus sub-groups it empties (since 2026-10-17) | ✓ started shifts kept | ✗ |
 | Delete template's shifts | Templates | `delete_template_shifts_cascade` | HARD | ✗ | ✗ |
 | Delete template's shifts (client) | `shiftsCommands.deleteShiftsByTemplateId` | direct `DELETE` | HARD | ✗ | ✗ — no UI caller found |
 | Bulk delete (repo layer) | `deleteShift.command` → `shiftsRepo.bulkDeleteShifts` | direct `DELETE … IN (ids)` | HARD | ✗ | ✗ — exported, no UI caller found |
