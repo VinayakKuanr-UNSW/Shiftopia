@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import {
     Template,
     TemplateBatch,
@@ -19,6 +20,9 @@ import {
     frontendToDbGroups,
 } from '../../model/templates.types';
 import { captureRosterAsTemplate } from '../../api/templates.service';
+import { undoTemplateApplication } from '@/modules/rosters/api/rosterSubgroups.api';
+import { shiftKeys } from '@/modules/rosters/api/queryKeys';
+import { ROSTER_STRUCTURE_KEY } from '@/modules/rosters/state/useRosterStructure';
 
 /* ============================================================
    QUERY KEYS
@@ -262,12 +266,13 @@ export function useDeleteTemplate() {
             await (supabase.rpc as any)('delete_template_shifts_cascade', { p_template_id: id });
 
             // Then delete the template
-            const { error } = await supabase
+            const deleted = await supabase
                 .from('roster_templates')
-                .delete()
+                .delete({ count: 'exact' })
                 .eq('id', id);
 
-            if (error) throw error;
+            if (deleted.error) throw deleted.error;
+            assertWrote(deleted, 'delete this template');
         },
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: templateKeys.all });
@@ -404,29 +409,26 @@ export function useUndoTemplateBatch() {
     const queryClient = useQueryClient();
 
     return useMutation({
+        // Removes only the shifts this application created that have not started;
+        // the confirmation previews the same call with dryRun (RosterTemplatesDialog).
         mutationFn: async ({ batchId }: { batchId: string }) => {
             const { data: auth } = await supabase.auth.getUser();
             if (!auth?.user) throw new Error('Not authenticated');
-
-            const { data, error } = await supabase.rpc('undo_template_batch', {
-                p_batch_id: batchId,
-                p_user_id: auth.user.id,
-            });
-
-            if (error) throw error;
-            return data;
+            return undoTemplateApplication(batchId, auth.user.id, false);
         },
-        onSuccess: async (data: any) => {
-            // Invalidate the generic list and the specific history for this template
-            const templateId = data?.template_id;
-            const queries = [
+        onSuccess: async (result) => {
+            await Promise.all([
                 queryClient.invalidateQueries({ queryKey: templateKeys.all }),
-            ];
-            if (templateId) {
-                queries.push(queryClient.invalidateQueries({ queryKey: templateKeys.history(templateId) }));
-            }
-            await Promise.all(queries);
-            toast.success('Application undone successfully');
+                queryClient.invalidateQueries({ queryKey: templateKeys.history(result.templateId) }),
+                // The shifts left the roster, so the roster views must refetch too.
+                queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] }),
+                queryClient.invalidateQueries({ queryKey: shiftKeys.lists }),
+                queryClient.invalidateQueries({ queryKey: shiftKeys.summaries }),
+            ]);
+            toast.success(
+                `Removed ${result.shiftsDeleted} shift${result.shiftsDeleted !== 1 ? 's' : ''}` +
+                (result.shiftsKept > 0 ? `; ${result.shiftsKept} that had already started stay.` : '.'),
+            );
         },
         onError: (error: Error) => {
             toast.error(error.message || 'Failed to undo application');

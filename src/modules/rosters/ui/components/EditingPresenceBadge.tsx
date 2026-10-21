@@ -56,7 +56,7 @@ export function EditingPresenceBadge({
             className,
           )}
         >
-          <Pencil className="h-2.5 w-2.5 shrink-0 animate-pulse" />
+          <Pencil className="h-2.5 w-2.5 shrink-0" />
           <span className="truncate max-w-[120px]">{label}</span>
         </span>
       </TooltipTrigger>

@@ -22,6 +22,8 @@ export interface TemplateFunctionBarProps {
   onViewModeChange?: (view: 'list' | 'grid') => void;
   className?: string;
   transparent?: boolean;
+  /** View-only manager (delta, epsilon): no New Template button. */
+  readOnly?: boolean;
 }
 
 const FILTERS: { value: StatusFilter; label: string; countKey: keyof TemplateFunctionBarProps['counts']; dot: string; active: string }[] = [
@@ -36,6 +38,7 @@ export const TemplateFunctionBar: React.FC<TemplateFunctionBarProps> = ({
   searchQuery,
   onSearchQueryChange,
   onCreateTemplate,
+  readOnly = false,
   counts,
   viewMode = 'list',
   onViewModeChange,
@@ -165,6 +168,7 @@ export const TemplateFunctionBar: React.FC<TemplateFunctionBarProps> = ({
         <div className="h-6 w-px bg-border/20 flex-shrink-0" aria-hidden="true" />
 
         {/* 4. Create New Button */}
+        {!readOnly && (
         <Button
           onClick={onCreateTemplate}
           className={cn(
@@ -175,6 +179,7 @@ export const TemplateFunctionBar: React.FC<TemplateFunctionBarProps> = ({
           <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
           New Template
         </Button>
+        )}
       </div>
     </div>
   );

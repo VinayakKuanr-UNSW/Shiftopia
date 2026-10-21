@@ -108,6 +108,9 @@ import {
 } from '@/modules/templates/hooks/queries/useTemplateQueries';
 import type { TemplateBatch } from '@/modules/templates/model/templates.types';
 import type { TemplateSummary } from '@/modules/rosters/api/shifts.queries';
+import { previewTemplateApplication, undoTemplateApplication } from '@/modules/rosters/api/rosterSubgroups.api';
+import { ImpactConfirmDialog } from './ImpactConfirmDialog';
+import { describeTemplateStacking, describeTemplateUndo, type ChangeSummary } from './rosterChangeCopy';
 
 // ── Range presets ────────────────────────────────────────────────────────────
 
@@ -220,20 +223,14 @@ const RangePreview: React.FC<{
 
 const HistoryItem: React.FC<{ batch: TemplateBatch }> = ({ batch }) => {
     const undo = useUndoTemplateBatch();
-    const [isConfirming, setIsConfirming] = useState(false);
+    const { user } = useAuth();
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
-    const handleUndo = async () => {
-        if (!isConfirming) {
-            setIsConfirming(true);
-            setTimeout(() => setIsConfirming(false), 3000);
-            return;
-        }
-        try {
-            await undo.mutateAsync({ batchId: batch.id });
-            toast.success('Application reversed');
-        } catch {
-            toast.error('Failed to undo application');
-        }
+    // Undo removes this application's shifts that have not started, and only
+    // those. The dialog shows the database's dry run of exactly that first.
+    const loadUndoPreview = async (): Promise<ChangeSummary> => {
+        if (!user) throw new Error('Sign in again to undo this application.');
+        return describeTemplateUndo(await undoTemplateApplication(batch.id, user.id, true));
     };
 
     return (
@@ -256,20 +253,24 @@ const HistoryItem: React.FC<{ batch: TemplateBatch }> = ({ batch }) => {
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={handleUndo}
+                    onClick={() => setIsConfirmOpen(true)}
                     disabled={undo.isPending}
-                    className={cn(
-                        'h-7 px-2.5 rounded-lg text-xs font-semibold transition-all',
-                        isConfirming
-                            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25'
-                            : 'text-muted-foreground hover:text-red-400 hover:bg-red-500/10',
-                    )}
+                    className="h-7 px-2.5 rounded-lg text-xs font-semibold transition-all text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                 >
                     {undo.isPending
                         ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                        : <><RotateCcw className="h-3 w-3 mr-1" aria-hidden="true" />{isConfirming ? 'Confirm?' : 'Undo'}</>}
+                        : <><RotateCcw className="h-3 w-3 mr-1" aria-hidden="true" />Undo</>}
                 </Button>
             </div>
+            <ImpactConfirmDialog
+                open={isConfirmOpen}
+                onOpenChange={setIsConfirmOpen}
+                title="Undo this template application?"
+                description={<>Applied {formatInTimezone(new Date(batch.appliedAt), SYDNEY_TZ, 'd MMM, HH:mm')} by {batch.appliedByName || 'System'}.</>}
+                load={loadUndoPreview}
+                onConfirm={async () => { await undo.mutateAsync({ batchId: batch.id }); }}
+                acknowledgementLabel="I understand these shifts are removed for good, including ones staff are assigned to."
+            />
         </div>
     );
 };
@@ -286,6 +287,30 @@ interface RosterTemplatesDialogProps {
 }
 
 const NO_TEMPLATE = '__none__';
+
+
+/**
+ * Why Capture is unavailable, or null. Pure, so the wording is tested.
+ * A failed shift count blocks with its own message — it used to be read as a
+ * count of zero ("No shifts in this range to capture").
+ */
+export function captureBlockerFor(input: {
+    subDepartmentId: string | null | undefined;
+    isRangeValid: boolean;
+    nameError: string | null;
+    trimmedName: string;
+    captureCount: number | null;
+    countError: string | null;
+}): string | null {
+    const { subDepartmentId, isRangeValid, nameError, trimmedName, captureCount, countError } = input;
+    if (!subDepartmentId) return 'Select a single sub-department to capture from';
+    if (!isRangeValid) return 'End date is before the start date';
+    if (nameError) return nameError;
+    if (trimmedName.length === 0) return 'Name the template';
+    if (countError) return `Could not count the shifts in this range (${countError}) — try again`;
+    if (captureCount === 0) return 'No shifts in this range to capture';
+    return null;
+}
 
 export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
     isOpen,
@@ -335,6 +360,8 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
 
     const isTemplateMode = selectedId !== NO_TEMPLATE;
     const isApplyBusy = applyTemplate.isPending || ensureRosters.isPending;
+    const [isCheckingStack, setIsCheckingStack] = useState(false);
+    const [stackSummary, setStackSummary] = useState<(ChangeSummary & { needsConfirmation: boolean }) | null>(null);
 
     const scopedSubDeptIds: (string | null)[] = useMemo(
         () => (subDepartmentId ? [subDepartmentId] : (subDepts as { id: string }[]).map(s => s.id)),
@@ -382,35 +409,74 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
         : dayCount > 0 && pastDayCount === dayCount ? 'Every day in this range is already past'
         : null;
 
-    const canApply = !applyBlocker && !isApplyBusy;
+    const canApply = !applyBlocker && !isApplyBusy && !isCheckingStack;
 
-    const handleApply = async () => {
-        if (!organizationId || !departmentId || !user || applyBlocker) return;
+    const applySelectedTemplate = async () => {
+        if (!user || !departmentId) return;
+        await applyTemplate.mutateAsync({
+            templateId: selectedId,
+            startDate: startDateStr,
+            endDate: endDateStr,
+            userId: user.id,
+            source: 'roster_modal',
+            targetDepartmentId: departmentId,
+            targetSubDepartmentId: subDepartmentId || undefined,
+            includeStartedShifts: false,
+        });
+        onOpenChange(false);
+    };
+
+    // A second template ADDS on top of what is there; nothing is replaced. When
+    // the days already hold shifts, say so (and what would be duplicated) before
+    // writing. On empty days there is nothing to weigh, so it applies directly.
+    const handleApplyTemplate = async () => {
+        setIsCheckingStack(true);
+        let summary: ChangeSummary & { needsConfirmation: boolean };
         try {
-            if (isTemplateMode) {
-                await applyTemplate.mutateAsync({
+            summary = describeTemplateStacking(
+                await previewTemplateApplication({
                     templateId: selectedId,
                     startDate: startDateStr,
                     endDate: endDateStr,
-                    userId: user.id,
-                    source: 'roster_modal',
-                    targetDepartmentId: departmentId,
+                    targetDepartmentId: departmentId || undefined,
                     targetSubDepartmentId: subDepartmentId || undefined,
-                    forceStack: false,
-                });
-            } else {
-                await ensureRosters.mutateAsync({
-                    organizationId,
-                    departmentId,
-                    subDepartmentIds: scopedSubDeptIds.length ? scopedSubDeptIds : [subDepartmentId],
-                    startDate: startDateStr,
-                    endDate: endDateStr,
-                });
-            }
+                }),
+                selectedTemplate?.name ?? 'This template',
+            );
+        } catch (err) {
+            toast.error(`Could not check what is already on these days: ${err instanceof Error ? err.message : 'unknown error'}`);
+            return;
+        } finally {
+            setIsCheckingStack(false);
+        }
+        if (summary.needsConfirmation) {
+            setStackSummary(summary);
+            return;
+        }
+        try {
+            await applySelectedTemplate();
+        } catch {
+            // useApplyTemplate surfaces its own destructive toast.
+        }
+    };
 
+    const handleApply = async () => {
+        if (!organizationId || !departmentId || !user || applyBlocker) return;
+        if (isTemplateMode) {
+            await handleApplyTemplate();
+            return;
+        }
+        try {
+            await ensureRosters.mutateAsync({
+                organizationId,
+                departmentId,
+                subDepartmentIds: scopedSubDeptIds.length ? scopedSubDeptIds : [subDepartmentId],
+                startDate: startDateStr,
+                endDate: endDateStr,
+            });
             onOpenChange(false);
         } catch {
-            // Both mutations surface their own destructive toast.
+            // useEnsureRosters surfaces its own destructive toast.
         }
     };
 
@@ -422,7 +488,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
 
     const [templateName, setTemplateName] = useState('');
     const [nameDirty, setNameDirty] = useState(false);
-    const [captureResult, setCaptureResult] = useState<{ templateId: string; shiftsCaptured: number } | null>(null);
+    const [captureResult, setCaptureResult] = useState<{ templateId: string; shiftsCaptured: number; shiftsSkippedFullTime: number } | null>(null);
     const [captureError, setCaptureError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -434,16 +500,19 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
 
     // Live count of what would be captured.
     const [captureCount, setCaptureCount] = useState<number | null>(null);
+    const [countError, setCountError] = useState<string | null>(null);
     const [isCounting, setIsCounting] = useState(false);
     const countReqRef = useRef(0);
 
     useEffect(() => {
         if (tab !== 'capture' || !subDepartmentId || !isRangeValid) {
             setCaptureCount(null);
+            setCountError(null);
             return;
         }
         const reqId = ++countReqRef.current;
         setIsCounting(true);
+        setCountError(null);
         supabase
             .from('shifts')
             .select('id', { count: 'exact', head: true })
@@ -451,10 +520,19 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
             .gte('shift_date', startDateStr)
             .lte('shift_date', endDateStr)
             .neq('lifecycle_status', 'Cancelled')
+            // Templates cannot hold full-time shifts; capture leaves them out.
+            .neq('target_employment_type', 'FT')
             .is('deleted_at', null)
-            .then(({ count }) => {
+            .then(({ count, error }) => {
                 if (reqId !== countReqRef.current) return;
-                setCaptureCount(count ?? 0);
+                // A failed count is not zero shifts: it used to read as "No
+                // shifts in this range to capture".
+                if (error) {
+                    setCaptureCount(null);
+                    setCountError(error.message);
+                } else {
+                    setCaptureCount(count ?? 0);
+                }
                 setIsCounting(false);
             });
     }, [tab, subDepartmentId, isRangeValid, startDateStr, endDateStr]);
@@ -466,13 +544,9 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
         : trimmedName.length > 100 ? 'Name must be fewer than 100 characters.'
         : null;
 
-    const captureBlocker =
-        !subDepartmentId ? 'Select a single sub-department to capture from'
-        : !isRangeValid ? 'End date is before the start date'
-        : nameError ? nameError
-        : trimmedName.length === 0 ? 'Name the template'
-        : captureCount === 0 ? 'No shifts in this range to capture'
-        : null;
+    const captureBlocker = captureBlockerFor({
+        subDepartmentId, isRangeValid, nameError, trimmedName, captureCount, countError,
+    });
 
     const canCapture = !captureBlocker && !isCounting && !snapTemplate.isPending;
 
@@ -795,8 +869,8 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                             <div className="flex items-center gap-2 w-full sm:w-auto">
                                 <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl text-xs font-semibold flex-1 sm:flex-initial min-h-[40px]">Cancel</Button>
                                 <Button onClick={handleApply} disabled={!canApply} size="sm" className="flex-1 sm:flex-initial min-w-[160px] min-h-[44px] rounded-xl font-bold text-xs sm:text-sm bg-primary text-primary-foreground shadow-md hover:opacity-95 transition-all">
-                                    {isApplyBusy
-                                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />Working…</>
+                                    {isApplyBusy || isCheckingStack
+                                        ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />{isCheckingStack ? 'Checking…' : 'Working…'}</>
                                         : <><Check className="mr-2 h-4 w-4" aria-hidden="true" />
                                             {isTemplateMode ? 'Apply Template' : 'Prepare Days'}</>}
                                 </Button>
@@ -813,6 +887,12 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                         <Check className="h-4 w-4 text-emerald-400" aria-hidden="true" />
                                         Captured {captureResult.shiftsCaptured} shift{captureResult.shiftsCaptured !== 1 ? 's' : ''} into “{trimmedName}”.
                                     </p>
+                                    {captureResult.shiftsSkippedFullTime > 0 && (
+                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                            {captureResult.shiftsSkippedFullTime} full-time shift{captureResult.shiftsSkippedFullTime !== 1 ? 's were' : ' was'} left
+                                            out: templates cannot hold full-time shifts.
+                                        </p>
+                                    )}
                                     <p className="text-xs text-muted-foreground leading-relaxed">
                                         Saved as a draft. Open it to review and publish before it can be applied.
                                     </p>
@@ -925,6 +1005,16 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                     </TabsContent>
                 </Tabs>
             </DialogContent>
+
+            <ImpactConfirmDialog
+                open={!!stackSummary}
+                onOpenChange={open => { if (!open) setStackSummary(null); }}
+                tone="default"
+                title="Add on top of what is already there?"
+                description={<>{selectedTemplate?.name ?? 'This template'} · {isRangeValid ? `${format(range.start, 'd MMM')} – ${format(range.end, 'd MMM yyyy')}` : ''}</>}
+                load={() => (stackSummary ? Promise.resolve(stackSummary) : Promise.reject(new Error('Nothing to confirm.')))}
+                onConfirm={applySelectedTemplate}
+            />
         </Dialog>
     );
 };

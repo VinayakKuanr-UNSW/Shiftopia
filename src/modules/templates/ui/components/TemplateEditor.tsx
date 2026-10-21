@@ -32,6 +32,7 @@ import {
   getTemplateStats,
 } from '../../model/templates.types';
 import { AddSubGroupDialog } from '@/modules/rosters/ui/dialogs/AddSubGroupDialog';
+import { hasFixedSubgroup, OFFICE_SUBGROUP_NAME } from '@/modules/rosters/domain/subgroupRules';
 import { EditSubGroupDialog } from '@/modules/rosters/ui/dialogs/EditSubGroupDialog';
 import ShiftCard from './ShiftCard';
 import { EnhancedAddShiftModal } from '@/modules/rosters';
@@ -41,6 +42,8 @@ import { TemplateHeader } from './TemplateHeader';
 
 interface TemplateEditorProps {
   template: Template;
+  /** View-only manager (delta, epsilon): the editor shows, nothing changes. */
+  readOnly?: boolean;
   isSaving: boolean;
   hasUnsavedChanges: boolean;
   onBack: () => void;
@@ -125,11 +128,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
   onUpdateShift,
   onDeleteShift,
   onUpdateStatus,
+  readOnly = false,
 }) => {
   const isPublished = template.status === 'published';
   const isArchived = template.status === 'archived';
   const isDraft = template.status === 'draft';
-  const isReadOnly = isPublished || isArchived;
+  const isReadOnly = readOnly || isPublished || isArchived;
 
   // Collapse states
   const [expandedGroups, setExpandedGroups] = useState<Set<string | number>>(
@@ -268,17 +272,22 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       // (a zod enum), so dropping it here was what made every new template shift
       // fail to save with a 400 once the column became mandatory.
       targetEmploymentType:
-        // NOT 'FT'. Templates can no longer hold full-time rows — the database
-        // refuses them (`enforce_no_ft_template_shifts`) because a template
-        // stamps one shape on everyone and cannot reconcile a full-time
-        // employee's cycle ceiling. A stale 'FT' fallback here would make a
-        // template shift with a dropped type fail to save with a 400.
-        shiftData.target_employment_type || shiftData.targetEmploymentType || editShift?.targetEmploymentType || 'Casual',
+        // No guessed fallback ('FT' or 'Casual'). Templates cannot hold FT rows
+        // (`enforce_no_ft_template_shifts`), and inventing 'Casual' silently
+        // re-typed shifts whose target was lost upstream. The modal's zod enum
+        // guarantees a value; if it is ever missing, the NOT NULL column makes
+        // the save fail loudly rather than persist a made-up target.
+        shiftData.target_employment_type ?? shiftData.targetEmploymentType ?? editShift?.targetEmploymentType ?? null,
       targetRequiresFlexible:
         shiftData.target_requires_flexible ?? shiftData.targetRequiresFlexible ?? false,
-      // 0 = Sunday .. 6 = Saturday; null is the "any day" wildcard, and the two
-      // are distinct states — see TemplateShift.dayOfWeek.
-      dayOfWeek: shiftData.day_of_week ?? shiftData.dayOfWeek ?? editShift?.dayOfWeek ?? null,
+      dayOfWeek:
+        shiftData.day_of_week !== undefined
+          ? shiftData.day_of_week
+          : shiftData.dayOfWeek !== undefined
+            ? shiftData.dayOfWeek
+            : editShift?.dayOfWeek !== undefined
+              ? editShift.dayOfWeek
+              : null,
     };
 
     console.log('[TemplateEditor] shiftPayload to save:', shiftPayload);
@@ -329,6 +338,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
         onArchive={() => onUpdateStatus(String(template.id), 'archived')}
         onDownload={() => console.log('[TemplateEditor] Download requested')}
         onUpdateStatus={(status) => onUpdateStatus(String(template.id), status)}
+        readOnly={readOnly}
       />
 
       {/* Groups Content */}
@@ -340,11 +350,13 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
               group={group}
               isExpanded={expandedGroups.has(group.id)}
               onToggleExpand={() => toggleGroup(group.id)}
-              onAddSubgroup={() => {
+              // Office has one fixed sub-group, as on the roster: nothing to add.
+              onAddSubgroup={hasFixedSubgroup(group.name) ? undefined : () => {
                 if (isReadOnly) return;
                 setAddSubGroupTarget(group.id);
                 setAddSubGroupOpen(true);
               }}
+              note={hasFixedSubgroup(group.name) ? `Always one sub-group, ${OFFICE_SUBGROUP_NAME}, matching the roster.` : undefined}
               renderSubgroups={(grp) =>
                 grp.subGroups.map((subGroup) => {
                   const subKey = `${grp.id}-${subGroup.id}`;
@@ -355,18 +367,19 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                       groupColor={getGroupColor(grp.name)}
                       isExpanded={expandedSubgroups.has(subKey)}
                       onToggleExpand={() => toggleSubgroup(subKey)}
+                      isFixed={hasFixedSubgroup(grp.name)}
                       onUpdateName={
-                        !isReadOnly
+                        !isReadOnly && !hasFixedSubgroup(grp.name)
                           ? (name) => onUpdateSubgroup(grp.id, subGroup.id, { name })
                           : undefined
                       }
                       onDelete={
-                        !isReadOnly
+                        !isReadOnly && !hasFixedSubgroup(grp.name)
                           ? () => onDeleteSubgroup(grp.id, subGroup.id)
                           : undefined
                       }
                       onClone={
-                        !isReadOnly
+                        !isReadOnly && !hasFixedSubgroup(grp.name)
                           ? () => onCloneSubgroup(grp.id, subGroup.id)
                           : undefined
                       }
@@ -377,35 +390,54 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                       }
                       renderShifts={(sg) =>
                         sg.shifts && sg.shifts.length > 0 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {sg.shifts.map((shift) => (
-                              <ShiftCard
-                                key={String(shift.id)}
-                                shift={shift}
-                                isReadOnly={isReadOnly}
-                                groupColor={getGroupColor(grp.name)}
-                                onEdit={() =>
-                                  openEditShiftModal(grp, subGroup, shift)
-                                }
-                                onDelete={() =>
-                                  onDeleteShift(grp.id, subGroup.id, shift.id)
-                                }
-                                onClone={
-                                  !isReadOnly
-                                    ? () => {
-                                      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                      const { id, ...shiftData } = shift;
-                                      // Cloned shifts keep the same role name - roles can have multiple employees
-                                      onAddShift(grp.id, subGroup.id, {
-                                        ...shiftData,
-                                        // Keep original name (role name), don't add "(Copy)"
-                                        name: shiftData.name || shiftData.roleName,
-                                      });
+                          <div className="flex flex-col gap-1.5 w-full">
+                            <div className="rounded-xl border border-white/10 dark:border-white/10 bg-slate-900/60 dark:bg-slate-900/60 overflow-hidden divide-y divide-white/[0.06] dark:divide-white/[0.06] shadow-sm w-full">
+                              {[...sg.shifts]
+                                .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+                                .map((shift) => (
+                                  <ShiftCard
+                                    key={String(shift.id)}
+                                    shift={shift}
+                                    isReadOnly={isReadOnly}
+                                    groupColor={getGroupColor(grp.name)}
+                                    onEdit={() =>
+                                      openEditShiftModal(grp, subGroup, shift)
                                     }
-                                    : undefined
-                                }
-                              />
-                            ))}
+                                    onDelete={() =>
+                                      onDeleteShift(grp.id, subGroup.id, shift.id)
+                                    }
+                                    onClone={
+                                      !isReadOnly
+                                        ? () => {
+                                          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                          const { id, ...shiftData } = shift;
+                                          // Cloned shifts keep the same role name - roles can have multiple employees
+                                          onAddShift(grp.id, subGroup.id, {
+                                            ...shiftData,
+                                            skills: [...(shiftData.skills || [])],
+                                            licenses: [...(shiftData.licenses || [])],
+                                            siteTags: [...(shiftData.siteTags || [])],
+                                            eventTags: [...(shiftData.eventTags || [])],
+                                            // Keep original name (role name), don't add "(Copy)"
+                                            name: shiftData.name || shiftData.roleName,
+                                          });
+                                        }
+                                        : undefined
+                                    }
+                                  />
+                                ))}
+                            </div>
+                            {!isReadOnly && (
+                              <button
+                                type="button"
+                                onClick={() => openAddShiftModal(grp, subGroup)}
+                                title="Add shift"
+                                aria-label="Add shift"
+                                className="w-full h-7 rounded-lg border border-dashed border-white/10 hover:border-primary/40 bg-slate-900/40 hover:bg-primary/10 flex items-center justify-center text-slate-400 hover:text-primary transition-all cursor-pointer select-none group/add-strip"
+                              >
+                                <Plus className="h-4 w-4 transition-transform duration-200 group-hover/add-strip:scale-110" />
+                              </button>
+                            )}
                           </div>
                         ) : null
                       }

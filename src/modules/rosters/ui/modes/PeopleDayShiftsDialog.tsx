@@ -173,8 +173,8 @@ export function PeopleDayShiftsDialog({
             })}
           </div>
 
-          <div className="relative z-10 border-t border-white/10 bg-background/40 p-4 backdrop-blur-xl">
-            <Button type="button" onClick={handleAddShift} className="h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-blue-500 font-black shadow-lg shadow-primary/25 transition-transform active:scale-[0.98]">
+          <div className="relative z-10 border-t border-border bg-background p-4">
+            <Button type="button" onClick={handleAddShift} className="h-12 w-full rounded-2xl bg-primary text-primary-foreground font-bold shadow-sm transition-transform active:scale-[0.98]">
               <Plus className="mr-2 h-4 w-4" />
               Add Shift
             </Button>

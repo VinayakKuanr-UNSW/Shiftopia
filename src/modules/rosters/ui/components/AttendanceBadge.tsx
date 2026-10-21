@@ -83,7 +83,6 @@ export const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
         className={cn(
           'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
           primaryCls,
-          pulse && 'animate-pulse',
         )}
       >
         {primaryLabel}

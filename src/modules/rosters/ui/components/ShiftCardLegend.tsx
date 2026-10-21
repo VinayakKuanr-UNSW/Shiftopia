@@ -37,7 +37,7 @@ interface BadgeCodeItem {
 // LEGEND DATA (Unified Source of Truth)
 // ============================================================================
 
-const BADGE_CODES: BadgeCodeItem[] = [
+export const BADGE_CODES: BadgeCodeItem[] = [
     // PLANNING
     { type: 'Planning', dot: '#3B82F6', code: 'S1-S5', icon: <Edit className="h-3 w-3" />, label: 'Normal', description: '> 24h until shift start' },
     { type: 'Planning', dot: '#F59E0B', code: 'S3-S5', icon: <Zap className="h-3 w-3" />, label: 'Urgent', description: '< 24h until shift start' },
@@ -139,7 +139,7 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
                                         <td className="px-2 py-2.5 text-center">
                                             {item.dot ? (
                                                 <div 
-                                                    className="inline-block h-2 w-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.2)] ring-1 ring-black/10" 
+                                                    className="inline-block h-2 w-2 rounded-full shadow-sm ring-1 ring-black/10" 
                                                     style={{ backgroundColor: item.dot }} 
                                                 />
                                             ) : (

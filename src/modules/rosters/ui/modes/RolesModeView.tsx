@@ -12,7 +12,10 @@ import {
   Briefcase,
   Zap,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Trash2,
+  ShieldCheck,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
@@ -26,8 +29,12 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
+import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import * as import_GroupSummaryCell from '@/modules/rosters/ui/components/GroupSummaryCell';
-import { useShiftsByDateRange, useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift } from '@/modules/rosters/state/useRosterShifts';
+import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
+import { useShiftsByDateRange, useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
+import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
+import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
@@ -62,10 +69,6 @@ import {
   AlertDialogTitle,
 } from '@/modules/core/ui/primitives/alert-dialog';
 
-// Per-cell card cap — see GroupModeView. At high shift volume a single
-// (role, date) cell can hold dozens of shifts; we render the first N and
-// collapse the rest behind a "+N more" toggle to bound the DOM-node count.
-const MAX_CARDS_PER_CELL = 4;
 
 // Month view is bounded to the selected month ± this many days (calendar
 // continuity buffer). Matches RostersPlannerPage / GroupModeView.
@@ -242,14 +245,15 @@ interface DroppableRoleCellProps {
   onMove: (shiftId: string, targetContext: any) => void;
   onAssignUnfilled: (unfilled: UnfilledShift) => void;
   isDnDModeActive: boolean;
+  hasShifts?: boolean;
   children: React.ReactNode;
 }
 
 // Base cell class shared by the active (droppable) and inert variants so the
 // table column widths/borders are identical whether or not DnD is registered.
-const ROLE_CELL_BASE_CLASS = 'min-w-[200px] px-2 py-2 border-l border-b border-border align-top relative group/cell transition-[background-color,box-shadow,transform] duration-300';
+const ROLE_CELL_BASE_CLASS = 'min-w-[180px] px-3 py-3 border-r border-b border-border relative group/cell transition-colors h-full';
 
-const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleId, roleName, onMove, onAssignUnfilled, isDnDModeActive, children }) => {
+const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleId, roleName, onMove, onAssignUnfilled, isDnDModeActive, hasShifts = false, children }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: [DND_SHIFT_TYPE, DND_UNFILLED_SHIFT],
     canDrop: (item: any) => {
@@ -290,8 +294,9 @@ const DroppableRoleCellActive: React.FC<DroppableRoleCellProps> = ({ date, roleI
       ref={drop}
       className={cn(
         ROLE_CELL_BASE_CLASS,
-        holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-l-amber-500/20' : isTodayDate && 'bg-primary/5',
-        isOver && canDrop && 'bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset shadow-[inset_0_0_20px_rgba(16,185,129,0.2)] scale-[1.01] z-10',
+        hasShifts ? 'align-top' : 'align-middle',
+        holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-r-amber-500/20' : isTodayDate && 'bg-primary/5',
+        isOver && canDrop && 'bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset scale-[1.01] z-10',
         isOver && !canDrop && 'bg-red-500/10 ring-2 ring-red-500/50 ring-inset cursor-no-drop opacity-60'
       )}
     >
@@ -310,7 +315,8 @@ const DroppableRoleCell: React.FC<DroppableRoleCellProps> = (props) => {
     return (
       <td className={cn(
         ROLE_CELL_BASE_CLASS,
-        holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-l-amber-500/20' : isTodayDate && 'bg-primary/5'
+        props.hasShifts ? 'align-top' : 'align-middle',
+        holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-r-amber-500/20' : isTodayDate && 'bg-primary/5'
       )}>
         {props.children}
       </td>
@@ -369,18 +375,13 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const openShiftForm = useShiftFormNav();
   const [confirmV8ShiftId, setConfirmV8ShiftId] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [expandedShift, setExpandedShift] = useState<Shift | null>(null);
+  const [auditedShift, setAuditedShift] = useState<Shift | null>(null);
+  const [shiftToDelete, setShiftToDelete] = useState<Shift | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const deleteShiftMutation = useDeleteShift();
   const [collapsedLevels, setCollapsedLevels] = useState<Set<number>>(new Set());
 
-  // Per-cell "+N more" expansion (session-only), keyed by `roleId::date`.
-  const [expandedCells, setExpandedCells] = useState<Set<string>>(() => new Set());
-  const toggleCellExpanded = React.useCallback((cellKey: string) => {
-    setExpandedCells(prev => {
-      const next = new Set(prev);
-      if (next.has(cellKey)) next.delete(cellKey);
-      else next.add(cellKey);
-      return next;
-    });
-  }, []);
 
   const handleCloneShift = async (shift: Shift) => {
     try {
@@ -427,6 +428,28 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     }
   };
 
+  const handleDeleteShift = async (shift: any) => {
+    try {
+      await deleteShiftMutation.mutateAsync({
+        shiftId: shift.id,
+        expectedVersion: shift.version,
+      });
+      toast({
+        title: 'Shift Deleted',
+        description: 'The shift has been removed.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Delete Failed',
+        description: error.message || 'Could not delete shift.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setShiftToDelete(null);
+    }
+  };
+
   const buildShiftMenu = (shift: any) => {
     const { isPast } = resolveShiftStatus(shift);
 
@@ -434,25 +457,14 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
-            className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
+            className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
             onClick={(e) => e.stopPropagation()}
           >
-            <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
+            <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
-          <DropdownMenuItem
-            disabled={isPast}
-            onClick={() => onEditShift?.(shift)}
-            className={cn(
-              "text-popover-foreground hover:bg-accent cursor-pointer",
-              isPast && "text-muted-foreground/50 cursor-not-allowed"
-            )}
-          >
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit Shift {isPast && '(Locked)'}
-          </DropdownMenuItem>
-
+        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
+          {/* 1. Clone */}
           <DropdownMenuItem
             disabled={isPast}
             onClick={() => handleCloneShift(shift)}
@@ -465,21 +477,67 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             Clone Shift {isPast && '(Locked)'}
           </DropdownMenuItem>
 
+          {/* 2. Edit */}
+          <DropdownMenuItem
+            disabled={isPast}
+            onClick={() => onEditShift?.(shift)}
+            className={cn(
+              "text-popover-foreground hover:bg-accent cursor-pointer",
+              isPast && "text-muted-foreground/50 cursor-not-allowed"
+            )}
+          >
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit Shift {isPast && '(Locked)'}
+          </DropdownMenuItem>
+
+          {/* 3. Audit */}
+          <DropdownMenuItem
+            onClick={() => setAuditedShift(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
+          >
+            <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
+            Audit Compliance
+          </DropdownMenuItem>
+
+          {/* 4. More: Scheduled vs Actual vs Billable & Variance */}
+          <DropdownMenuItem
+            onClick={() => setExpandedShift(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
+          >
+            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
+            More (Variance & Pay)
+          </DropdownMenuItem>
+
           {shift.lifecycle_status === 'Published' && !isPast && (
-            <>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem
-                onClick={() => {
-                  setConfirmV8ShiftId(shift.id);
-                  setIsConfirmOpen(true);
-                }}
-                className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-              >
-                <Undo2 className="h-4 w-4 mr-2" />
-                Unpublish Shift
-              </DropdownMenuItem>
-            </>
+            <DropdownMenuItem
+              onClick={() => {
+                setConfirmV8ShiftId(shift.id);
+                setIsConfirmOpen(true);
+              }}
+              className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+            >
+              <Undo2 className="h-4 w-4 mr-2" />
+              Unpublish Shift
+            </DropdownMenuItem>
           )}
+
+          <DropdownMenuSeparator className="bg-border" />
+
+          {/* 5. Delete */}
+          <DropdownMenuItem
+            disabled={isPast}
+            onClick={() => {
+              setShiftToDelete(shift);
+              setIsDeleteDialogOpen(true);
+            }}
+            className={cn(
+              "text-destructive hover:bg-destructive/10 cursor-pointer",
+              isPast && "text-muted-foreground/50 cursor-not-allowed"
+            )}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete Shift {isPast && '(Locked)'}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -555,7 +613,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   };
 
   const handleCellClick = (roleId: string, date: Date) => {
-    if (!canEdit) return;
+    if (!canEdit || isSydneyPast(date)) return;
     openShiftForm({
       context: {
         mode: 'roles',
@@ -579,95 +637,41 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   return (
     <div className="flex flex-col h-full bg-background relative overflow-hidden">
       {isDnDModeActive && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-500">
-          <Badge className="px-6 py-2 bg-emerald-500/90 text-white backdrop-blur-md border border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center gap-2 text-sm font-medium rounded-full">
-            <Zap className="h-4 w-4 animate-pulse" />
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+          <Badge className="px-4 py-1.5 bg-emerald-600 text-white border border-emerald-500/40 shadow-sm flex items-center gap-2 text-xs font-semibold rounded-full">
+            <Zap className="h-3.5 w-3.5" />
             DnD Mode Active
           </Badge>
         </div>
       )}
 
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card/90 backdrop-blur-xl shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-1.5 rounded-md bg-indigo-100 dark:bg-indigo-500/10"><Briefcase className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /></div>
-          <div>
-            <h2 className="text-[13px] font-bold text-foreground uppercase tracking-[0.08em]">Roles Mode</h2>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono tracking-[0.12em] mt-0.5">
-              <span>Coverage per Role</span>
-              {(activeSubDeptId || activeDeptId) && <span className="text-indigo-400/80 font-semibold">Filtered</span>}
-              <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="text-emerald-400/60 cursor-help hover:text-emerald-300 transition-colors">
-                            {totalHours}h · ${estCost.toFixed(0)}
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent className="w-56 p-3 bg-zinc-900 border-white/10 shadow-xl" side="bottom">
-                        <div className="space-y-2">
-                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Role Mode Estimate</p>
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-white/60">Base Pay</span>
-                                    <span className="text-white font-medium">{formatCost(projection?.stats?.costBreakdown.base || 0)}</span>
-                                </div>
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-white/60">Penalties</span>
-                                    <span className="text-emerald-400 font-medium">+{formatCost(projection?.stats?.costBreakdown.penalty || 0)}</span>
-                                </div>
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-white/60">Overtime</span>
-                                    <span className="text-amber-400 font-medium">+{formatCost(projection?.stats?.costBreakdown.overtime || 0)}</span>
-                                </div>
-                                {(projection?.stats?.costBreakdown.allowance || 0) > 0 && (
-                                    <div className="flex justify-between text-xs">
-                                        <span className="text-white/60">Allowances</span>
-                                        <span className="text-blue-400 font-medium">+{formatCost(projection?.stats?.costBreakdown.allowance || 0)}</span>
-                                    </div>
-                                )}
-                                {(projection?.stats?.costBreakdown.leave || 0) > 0 && (
-                                    <div className="flex justify-between text-xs">
-                                        <span className="text-white/60">Leave Loading</span>
-                                        <span className="text-purple-400 font-medium">+{formatCost(projection?.stats?.costBreakdown.leave || 0)}</span>
-                                    </div>
-                                )}
-                                <div className="pt-2 border-t border-white/10 flex justify-between text-sm font-bold">
-                                    <span className="text-white">Total</span>
-                                    <span className="text-white">{formatCost(estCost)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-auto relative">
+      {/* Grid Container — Grid is the container itself */}
+      <div className="flex-1 min-h-0 overflow-auto relative custom-scrollbar bg-background">
         <table className="border-collapse min-w-full">
-          <thead>
-            <tr className="bg-muted/30">
-              <th className="sticky top-0 left-0 z-[40] w-64 min-w-[256px] px-4 py-3 text-left bg-muted/80 backdrop-blur-xl border-b border-r border-border shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Role Description</span>
-              </th>
-              {dates.map(date => {
-                const holidayName = getPublicHolidayName(date);
-                const isToday = format(date, 'yyyy-MM-dd') === todayISO();
-                return (
-                  <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-border bg-muted/30 transition-colors", holidayName ? "bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30" : isToday && "bg-primary/5")}>
-                    <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", holidayName ? "text-amber-400 font-extrabold" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
-                    <div className={cn("text-sm font-mono tabular-nums mt-0.5", holidayName ? "text-amber-300 font-bold" : "text-muted-foreground/50")}>{format(date, 'MMM d')}</div>
-                    {holidayName && (
-                      <div className="mt-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[9px] font-black uppercase tracking-wider truncate max-w-full shadow-sm" title={`ANZ Public Holiday: ${holidayName}`}>
-                        {holidayName}
-                      </div>
-                    )}
+              <thead>
+                <tr className="bg-muted/80 backdrop-blur-md dark:bg-muted/40 border-b border-border">
+                  <th className="sticky top-0 left-0 z-[30] w-[240px] min-w-[240px] px-3 py-2 text-left bg-muted/90 backdrop-blur-md dark:bg-muted/50 border-b border-r border-border shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)]">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Role Description</span>
                   </th>
-                );
-              })}
-            </tr>
-          </thead>
+                  {dates.map(date => {
+                    const holidayName = getPublicHolidayName(date);
+                    const isToday = format(date, 'yyyy-MM-dd') === todayISO();
+                    return (
+                      <th key={date.toISOString()} data-today={isToday ? "true" : undefined} className={cn("sticky top-0 z-20 min-w-[180px] px-3 py-2.5 text-center transition-colors bg-muted/80 backdrop-blur-md dark:bg-muted/40", holidayName ? "bg-amber-500/10 dark:bg-amber-500/15 border-b-0" : "border-b border-border", isToday && "bg-primary/5")}>
+                        <div className={cn("text-[11px] font-bold uppercase tracking-[0.12em] font-mono leading-tight", holidayName ? "text-amber-400 font-extrabold" : isToday ? "text-primary font-bold" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
+                        <div className="flex items-center justify-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className={cn("text-sm font-mono tabular-nums leading-none", holidayName ? "text-amber-300 font-bold" : isToday ? "text-primary font-bold" : "text-muted-foreground/60 font-medium")}>{format(date, 'MMM d')}</span>
+                          {holidayName && (
+                            <span className="text-xs italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
+                              {holidayName}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
           {levelGroups.map((group) => (
             <tbody
               key={group.levelNumber}
@@ -676,13 +680,17 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
               <tr className="bg-indigo-500/10 border-y border-indigo-500/20">
                 <td colSpan={dates.length + 1} className="px-4 py-2 sticky left-0 z-30">
                   <div className="flex items-center gap-2">
-                     <button onClick={() => toggleLevelCollapse(group.levelNumber)} className="p-1 hover:bg-white/10 rounded transition-colors">
+                     <button
+                      onClick={() => toggleLevelCollapse(group.levelNumber)}
+                      className="p-1 hover:bg-white/10 rounded transition-colors"
+                      aria-label={collapsedLevels.has(group.levelNumber) ? `Expand ${group.levelLabel}` : `Collapse ${group.levelLabel}`}
+                    >
                       {collapsedLevels.has(group.levelNumber) ? <ChevronRight className="w-4 h-4 text-indigo-400" /> : <ChevronDown className="w-4 h-4 text-indigo-400" />}
                     </button>
-                    <span className="text-xs font-bold uppercase tracking-widest text-indigo-400 font-mono">
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 font-mono">
                       {group.levelLabel}
                     </span>
-                    <Badge variant="outline" className="text-[10px] h-5 bg-indigo-500/5 border-indigo-500/20 text-indigo-300 px-2 font-mono">
+                    <Badge variant="outline" className="text-[11px] font-bold font-mono h-5 bg-indigo-500/10 border-indigo-500/30 text-indigo-300 px-2">
                       {group.roles.length} Roles
                     </Badge>
                   </div>
@@ -690,72 +698,62 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
               </tr>
 
               {!collapsedLevels.has(group.levelNumber) && group.roles.map((role, idx) => (
-                <tr key={role.id} className={cn("group transition-[background-color]", idx % 2 === 0 ? "bg-card" : "bg-muted/30", "hover:bg-accent/30")}>
-                  <td className="sticky left-0 z-20 w-64 min-w-[256px] px-4 py-3 align-middle border-r border-b border-border bg-card/80 backdrop-blur-md group-hover:bg-accent/40 transition-[background-color] shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]">
-                    <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-foreground transition-[color]">{role.name}</span>
+                <tr key={role.id} className={cn("group transition-colors", idx % 2 === 0 ? "bg-card" : "bg-muted/20", "hover:bg-muted/40")}>
+                  <td className="sticky left-0 z-20 w-[240px] min-w-[240px] px-4 py-3 align-middle border-r border-b border-border bg-card/90 backdrop-blur-md group-hover:bg-accent/40 transition-colors shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)]">
+                    <span className="text-sm font-semibold text-foreground/90 group-hover:text-foreground transition-colors">{role.name}</span>
                   </td>
                   {dates.map(date => {
                     const dStr = format(date, 'yyyy-MM-dd');
                     const holidayName = getPublicHolidayName(date);
-                    const cellShifts = role.shiftsByDate[dStr] || [];
-                    const cellKey = `${role.id}::${dStr}`;
-                    const isExpandedCell = expandedCells.has(cellKey);
-                    const visibleCellShifts = isExpandedCell ? cellShifts : cellShifts.slice(0, MAX_CARDS_PER_CELL);
+                    const rawCellShifts = role.shiftsByDate[dStr] || [];
+                    const cellShifts = [...rawCellShifts].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
                     return (
-                      <DroppableRoleCell key={`${role.id}-${dStr}`} date={dStr} roleId={role.id} roleName={role.name} onMove={onMoveShift || (() => {})} onAssignUnfilled={() => {}} isDnDModeActive={isDnDModeActive}>
-                        <div className="flex flex-col gap-1 min-h-[52px]">
-                          {(!isDnDModeActive && summaryData) ? (
-                            <div className="w-full h-full flex flex-col items-center justify-center min-h-[60px] p-1">
-                              <import_GroupSummaryCell.GroupSummaryCell
-                                date={date}
-                                groupName={role.name}
-                                summary={summaryData.get(`${dStr}::${(cellShifts[0] as any)?.group_type ?? 'role'}::${(cellShifts[0] as any)?.sub_group_name ?? role.name}`)}
-                                accent="gray"
-                                onClick={() => onDrillDown?.(dStr, (cellShifts[0] as any)?.group_type ?? 'role', (cellShifts[0] as any)?.sub_group_name ?? role.name)}
-                              />
-                            </div>
-                          ) : (
-                            <>
-                              {visibleCellShifts.map(s => (
-                                <DraggableShiftCard
-                                  key={s.id}
-                                  shift={s}
-                                  isDnDModeActive={isDnDModeActive}
-                                  onEdit={sh => onEditShift?.(sh)}
-                                  isSelected={selectedV8ShiftIdsSet.has(s.id)}
-                                  onToggleSelection={onToggleShiftSelection || (() => {})}
-                                  isBulkMode={isBulkMode ?? false}
-                                  onAssignEmployee={onAssignShift || (() => {})}
-                                  headerAction={buildShiftMenu(s)}
-                                  detailedCost={(s as any).detailedCost}
-                                />
-                              ))}
-                              {cellShifts.length > MAX_CARDS_PER_CELL && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); toggleCellExpanded(cellKey); }}
-                                  className="relative z-10 w-full text-[11px] font-semibold text-primary/80 hover:text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-md px-2 py-1 transition-colors"
-                                >
-                                  {isExpandedCell ? 'Show less' : `+${cellShifts.length - MAX_CARDS_PER_CELL} more`}
-                                </button>
+                      <DroppableRoleCell key={`${role.id}-${dStr}`} date={dStr} roleId={role.id} roleName={role.name} onMove={onMoveShift || (() => {})} onAssignUnfilled={() => {}} isDnDModeActive={isDnDModeActive} hasShifts={cellShifts.length > 0}>
+                        <div className={cn("flex flex-col gap-1 min-h-[80px] h-full relative", cellShifts.length === 0 && "justify-center items-center")}>
+                          {cellShifts.map(s => (
+                            <DraggableShiftCard
+                              key={s.id}
+                              shift={s}
+                              isDnDModeActive={isDnDModeActive}
+                              onEdit={sh => onEditShift?.(sh)}
+                              isSelected={selectedV8ShiftIdsSet.has(s.id)}
+                              onToggleSelection={onToggleShiftSelection || (() => {})}
+                              isBulkMode={isBulkMode ?? false}
+                              onAssignEmployee={onAssignShift || (() => {})}
+                              headerAction={buildShiftMenu(s)}
+                              detailedCost={(s as any).detailedCost}
+                            />
+                          ))}
+                          {/* For cells WITH shifts: Horizontal container with + in the middle */}
+                          {canEdit && !isBulkMode && !isSydneyPast(date) && cellShifts.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCellClick(role.id, date);
+                              }}
+                              title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
+                              aria-label={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
+                              className={cn(
+                                "w-full h-7 rounded-lg border border-dashed transition-all flex items-center justify-center cursor-pointer select-none group/add-strip",
+                                holidayName
+                                  ? "border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-amber-400"
+                                  : "border-white/10 hover:border-primary/40 bg-slate-900/40 hover:bg-primary/10 text-slate-400 hover:text-primary"
                               )}
-                            </>
+                            >
+                              <Plus className="h-4 w-4 transition-transform duration-200 group-hover/add-strip:scale-110" />
+                            </button>
                           )}
-                          {canEdit && !isBulkMode && !isShiftLocked(dStr, '23:59', 'roster_management') && (
-                            <div className={cn("absolute inset-0 flex pointer-events-none z-10", cellShifts.length > 0 ? "items-end justify-end p-2" : "items-center justify-center")}>
-                              <button
+
+                          {/* For EMPTY cells: Centered add button */}
+                          {canEdit && !isBulkMode && !isSydneyPast(date) && cellShifts.length === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                              <RosterCellAddButton
                                 onClick={() => handleCellClick(role.id, date)}
-                                className={cn(
-                                  "flex items-center justify-center rounded-full transition-[transform,background-color,opacity,box-shadow] duration-200 pointer-events-auto",
-                                  holidayName
-                                    ? "bg-amber-500/30 text-amber-400 dark:text-amber-300 border border-amber-500/40 backdrop-blur-md hover:bg-amber-500/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
-                                    : "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
-                                  "w-9 h-9 opacity-40 group-hover/cell:opacity-100",
-                                  (!isDnDModeActive && summaryData) ? "hidden" : ""
-                                )}
+                                hasShifts={false}
+                                holidayName={holidayName}
                                 title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
-                              >
-                                <Plus className={cn("h-5 w-5", holidayName ? "text-amber-400 dark:text-amber-300" : "text-primary")} />
-                              </button>
+                              />
                             </div>
                           )}
                         </div>
@@ -767,6 +765,15 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             </tbody>
           ))}
         </table>
+        {roles.length === 0 && (
+          <div className="p-12 flex items-center justify-center">
+            <RosterEmptyState
+              icon={Briefcase}
+              title="No roles found"
+              description="No roles have been configured or assigned for this department."
+            />
+          </div>
+        )}
       </div>
 
       <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
@@ -775,6 +782,29 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleConfirmUnpublish} className="bg-amber-600">Unpublish</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="bg-background border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete Shift</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete this shift? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShiftToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => shiftToDelete && handleDeleteShift(shiftToDelete)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
+      <ShiftAuditDialog shift={auditedShift} onOpenChange={(o) => { if (!o) setAuditedShift(null); }} />
     </div>
   );
 };

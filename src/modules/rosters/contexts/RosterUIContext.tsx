@@ -22,8 +22,8 @@
  * 'month', update the Zustand store default back to 'day' or '3day' to keep the
  * initial fetch set small and avoid the SHIFT_RENDER_BUDGET advisory banner.
  *
- * selectedDate (_selectedDateISO) is NOT persisted — it always resets to today
- * on each page load (see useRosterStore partialize config).
+ * selectedDate (_selectedDateISO) IS persisted with the rest of the view state
+ * (useRosterStore partialize): a reload returns to the date last viewed.
  */
 
 import React, { useCallback, useMemo, useEffect } from 'react';

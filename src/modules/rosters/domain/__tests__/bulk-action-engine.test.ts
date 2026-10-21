@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { planPublishRoster } from '../bulk-action-engine';
+import {
+    planPublishRoster,
+    processInChunks,
+    processInBatches,
+    DEFAULT_CHUNK_CONCURRENCY,
+    DEFAULT_BATCH_PAYLOAD_SIZE,
+} from '../bulk-action-engine';
 import type { Shift } from '../shift.entity';
 
 // ─── planPublishRoster — one-click Publish partition ─────────────────────────
@@ -30,6 +36,8 @@ describe('planPublishRoster', () => {
         fullTimeIds: [],
         fullTimeUnassignedIds: [],
         onLeaveIds: [],
+        pastIds: [],
+        noPermissionIds: [],
         alreadyPublishedCount: 0,
     };
 
@@ -91,15 +99,39 @@ describe('planPublishRoster', () => {
         const plan = planPublishRoster([
             mk('al', { assigned_employee_id: 'emp-1', start_at: iso(-1 * HOUR), end_at: iso(+2 * HOUR) }),
         ]);
-        // Past-start assigned draft: not dead, not publishable → skipped entirely.
-        expect(plan).toEqual(empty);
+        // Past-start assigned draft: not dead, not publishable → reported as too late.
+        expect(plan).toEqual({ ...empty, pastIds: ['al'] });
     });
 
-    it('skips an unassigned draft whose window has fully ended (Closed, not Live)', () => {
+    it('reports an unassigned draft whose window has fully ended as too late (Closed, not Live)', () => {
         const plan = planPublishRoster([
             mk('closed', { assigned_employee_id: null, start_at: iso(-9 * HOUR), end_at: iso(-1 * HOUR) }),
         ]);
-        expect(plan).toEqual(empty);
+        // It used to fall into no bucket at all, so a view of only past drafts
+        // claimed there were "No draft shifts in the current view".
+        expect(plan).toEqual({ ...empty, pastIds: ['closed'] });
+    });
+
+    it('reports drafts the manager may not publish there, before any other bucket', () => {
+        const mayPublish = (s: Shift) => (s as any).sub_department_id === 'mine';
+        const plan = planPublishRoster([
+            mk('mine-a', { assigned_employee_id: 'e1', sub_department_id: 'mine' } as Partial<Shift>),
+            mk('theirs-a', { assigned_employee_id: 'e1', sub_department_id: 'theirs' } as Partial<Shift>),
+            mk('theirs-past', { assigned_employee_id: null, sub_department_id: 'theirs', start_at: iso(-9 * HOUR), end_at: iso(-1 * HOUR) } as Partial<Shift>),
+            mk('theirs-pub', { lifecycle_status: 'Published', sub_department_id: 'theirs' } as Partial<Shift>),
+        ], undefined, mayPublish);
+        expect(plan).toEqual({
+            ...empty,
+            assignedIds: ['mine-a'],
+            noPermissionIds: ['theirs-a', 'theirs-past'],
+            alreadyPublishedCount: 1,
+        });
+    });
+
+    it('treats every shift as publishable when no permission check is given', () => {
+        const plan = planPublishRoster([mk('a', { assigned_employee_id: 'e1' })]);
+        expect(plan.noPermissionIds).toEqual([]);
+        expect(plan.assignedIds).toEqual(['a']);
     });
 
     it('leaves published, cancelled and deleted shifts untouched (published counted only)', () => {
@@ -144,5 +176,111 @@ describe('planPublishRoster', () => {
         expect(plan.emergentUnassignedIds).toEqual(['eu']);
         expect(plan.deadIds).toEqual(['dead1']);
         expect(plan.alreadyPublishedCount).toBe(1);
+    });
+});
+
+// ─── processInChunks & processInBatches — async concurrency control ───────────
+
+describe('bulk-action-engine concurrency controls (F-06)', () => {
+    it('exports safe default concurrency and batch payload constants', () => {
+        expect(DEFAULT_CHUNK_CONCURRENCY).toBe(5);
+        expect(DEFAULT_BATCH_PAYLOAD_SIZE).toBe(200);
+    });
+
+    describe('processInChunks', () => {
+        it('processes all items with default concurrency = 5 and bounds in-flight executions', async () => {
+            const ids = Array.from({ length: 23 }, (_, i) => `id-${i}`);
+            let inFlight = 0;
+            let maxInFlight = 0;
+
+            const results = await processInChunks(ids, async (id) => {
+                inFlight++;
+                maxInFlight = Math.max(maxInFlight, inFlight);
+                await new Promise((r) => setTimeout(r, 10));
+                inFlight--;
+                return `res-${id}`;
+            });
+
+            expect(results).toHaveLength(23);
+            expect(maxInFlight).toBeLessThanOrEqual(DEFAULT_CHUNK_CONCURRENCY);
+            expect(results.every((r) => r.ok && r.value.startsWith('res-'))).toBe(true);
+        });
+
+        it('handles custom chunk sizes properly', async () => {
+            const ids = ['a', 'b', 'c', 'd', 'e'];
+            let inFlight = 0;
+            let maxInFlight = 0;
+
+            const results = await processInChunks(
+                ids,
+                async (id) => {
+                    inFlight++;
+                    maxInFlight = Math.max(maxInFlight, inFlight);
+                    await new Promise((r) => setTimeout(r, 5));
+                    inFlight--;
+                    return id.toUpperCase();
+                },
+                2,
+            );
+
+            expect(maxInFlight).toBeLessThanOrEqual(2);
+            expect(results.map((r) => (r.ok ? r.value : null))).toEqual(['A', 'B', 'C', 'D', 'E']);
+        });
+
+        it('isolates failures and captures errors without aborting other items', async () => {
+            const ids = ['ok-1', 'err-1', 'ok-2'];
+
+            const results = await processInChunks(ids, async (id) => {
+                if (id.startsWith('err')) {
+                    throw new Error(`Failed for ${id}`);
+                }
+                return `success-${id}`;
+            });
+
+            expect(results).toHaveLength(3);
+            expect(results[0]).toEqual({ id: 'ok-1', ok: true, value: 'success-ok-1' });
+            expect(results[1]).toEqual({ id: 'err-1', ok: false, error: 'Failed for err-1' });
+            expect(results[2]).toEqual({ id: 'ok-2', ok: true, value: 'success-ok-2' });
+        });
+
+        it('returns empty array when given empty input', async () => {
+            const results = await processInChunks([], async () => 'foo');
+            expect(results).toEqual([]);
+        });
+    });
+
+    describe('processInBatches', () => {
+        it('batches items into chunks of batchSize and bounds batch concurrency', async () => {
+            const items = Array.from({ length: 450 }, (_, i) => i);
+            const batchSizesReceived: number[] = [];
+            let inFlightBatches = 0;
+            let maxInFlightBatches = 0;
+
+            const results = await processInBatches(
+                items,
+                async (batch) => {
+                    batchSizesReceived.push(batch.length);
+                    inFlightBatches++;
+                    maxInFlightBatches = Math.max(maxInFlightBatches, inFlightBatches);
+                    await new Promise((r) => setTimeout(r, 10));
+                    inFlightBatches--;
+                    return batch.map((n) => n * 2);
+                },
+                200,
+                2,
+            );
+
+            expect(results).toHaveLength(450);
+            expect(results[0]).toBe(0);
+            expect(results[449]).toBe(898);
+            // 450 items with batchSize 200 => 3 batches of 200, 200, 50
+            expect(batchSizesReceived).toEqual([200, 200, 50]);
+            expect(maxInFlightBatches).toBeLessThanOrEqual(2);
+        });
+
+        it('returns empty array when given empty items', async () => {
+            const results = await processInBatches([], async (b) => b);
+            expect(results).toEqual([]);
+        });
     });
 });

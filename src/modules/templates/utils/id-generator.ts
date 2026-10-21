@@ -6,7 +6,8 @@
  * Format: `{prefix}-{timestamp}-{random}`
  */
 export function generateTempId(prefix: string = 'temp'): string {
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    const cleanPrefix = prefix.startsWith('temp') ? prefix : `temp-${prefix}`;
+    return `${cleanPrefix}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 /**

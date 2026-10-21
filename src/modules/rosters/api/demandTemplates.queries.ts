@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 
 /**
  * Demand Engine L9 — demand_templates read/write queries.
@@ -102,10 +103,11 @@ export const demandTemplatesQueries = {
 
     /** Soft-retire a template by id (set is_active = false). */
     async deactivate(id: string): Promise<void> {
-        const { error } = await supabase
+        const result = await supabase
             .from('demand_templates')
-            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .update({ is_active: false, updated_at: new Date().toISOString() }, { count: 'exact' })
             .eq('id', id);
-        if (error) throw new Error(`demandTemplates.deactivate failed: ${error.message}`);
+        if (result.error) throw new Error(`demandTemplates.deactivate failed: ${result.error.message}`);
+        assertWrote(result, 'retire this demand template');
     },
 };

@@ -38,6 +38,8 @@ interface TemplateSubgroupCardProps {
     onAddShift?: () => void;
     renderShifts?: (subgroup: SubGroup) => React.ReactNode;
     className?: string;
+    /** A fixed sub-group (Office's Administration): shown as such, with no rename / duplicate / delete. */
+    isFixed?: boolean;
 }
 
 export function TemplateSubgroupCard({
@@ -51,7 +53,9 @@ export function TemplateSubgroupCard({
     onAddShift,
     renderShifts,
     className,
+    isFixed = false,
 }: TemplateSubgroupCardProps) {
+    const hasActions = !!(onUpdateName || onClone || onDelete);
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState(subgroup.name);
 
@@ -145,6 +149,11 @@ export function TemplateSubgroupCard({
                     )}
 
                     <div className="flex shrink-0 items-center gap-0.5">
+                        {isFixed && (
+                            <span className="px-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                Fixed<span className="sr-only">: Office always has exactly this one sub-group</span>
+                            </span>
+                        )}
                         {onAddShift && (
                             <Button
                                 variant="ghost"
@@ -156,6 +165,7 @@ export function TemplateSubgroupCard({
                             </Button>
                         )}
 
+                        {hasActions && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -169,10 +179,12 @@ export function TemplateSubgroupCard({
                             <DropdownMenuContent align="end">
                                 {/* Seed from the current name, not whatever it was at
                                     mount — `editName` initialises once. */}
-                                <DropdownMenuItem onClick={() => { setEditName(subgroup.name); setIsEditing(true); }}>
-                                    <Edit2 className="h-4 w-4 mr-2" aria-hidden="true" />
-                                    Rename
-                                </DropdownMenuItem>
+                                {onUpdateName && (
+                                    <DropdownMenuItem onClick={() => { setEditName(subgroup.name); setIsEditing(true); }}>
+                                        <Edit2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                                        Rename
+                                    </DropdownMenuItem>
+                                )}
                                 {onClone && (
                                     <DropdownMenuItem onClick={onClone}>
                                         <Copy className="h-4 w-4 mr-2" aria-hidden="true" />
@@ -190,6 +202,7 @@ export function TemplateSubgroupCard({
                                 )}
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        )}
                     </div>
                 </div>
 

@@ -293,6 +293,8 @@ export interface CaptureTemplateInput {
 export interface CaptureTemplateResult {
   templateId: string;
   shiftsCaptured: number;
+  /** Full-time shifts in the range, left out because templates cannot hold them. */
+  shiftsSkippedFullTime: number;
 }
 
 /* ============================================================
@@ -361,7 +363,13 @@ export function dbShiftToFrontend(dbShift: any): TemplateShift {
     assignedEmployeeName: dbShift.assignedEmployeeName || dbShift.assigned_employee_name || null,
     // `?? null`, never `?? 0` — 0 is Sunday, not "unset". Coercing here made
     // every weekday-less shift claim to be a Sunday shift.
-    dayOfWeek: dbShift.dayOfWeek ?? dbShift.day_of_week ?? null,
+    // Check !== undefined explicitly so null (the "every day" choice) is not skipped.
+    dayOfWeek:
+      dbShift.dayOfWeek !== undefined
+        ? dbShift.dayOfWeek
+        : dbShift.day_of_week !== undefined
+          ? dbShift.day_of_week
+          : null,
     targetEmploymentType: dbShift.targetEmploymentType ?? dbShift.target_employment_type ?? null,
     targetRequiresFlexible: dbShift.targetRequiresFlexible ?? dbShift.target_requires_flexible ?? false,
   };

@@ -147,9 +147,17 @@ export const useTemplateHandlers = ({
         subGroups: groupToClone.subGroups.map((sg) => ({
           ...sg,
           id: Date.now() + Math.random(),
-          shifts: sg.shifts.map((s) => ({
+          shifts: sg.shifts.map((s, idx) => ({
             ...s,
             id: Date.now() + Math.random(),
+            sortOrder: idx,
+            skills: [...(s.skills || [])],
+            licenses: [...(s.licenses || [])],
+            siteTags: [...(s.siteTags || [])],
+            eventTags: [...(s.eventTags || [])],
+            dayOfWeek: s.dayOfWeek !== undefined ? s.dayOfWeek : null,
+            targetEmploymentType: s.targetEmploymentType ?? null,
+            targetRequiresFlexible: s.targetRequiresFlexible ?? false,
           })),
         })),
       };

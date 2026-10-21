@@ -1,13 +1,4 @@
 import React, { useState, Suspense, lazy } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/modules/core/ui/primitives/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import {
   Tooltip,
   TooltipContent,
@@ -15,15 +6,10 @@ import {
   TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
 import {
-  ChevronLeft,
-  ChevronRight,
   RefreshCw,
-  PanelRight,
-  Send,
   CalendarPlus,
   Layers,
   Box,
-  Calendar,
   Users,
   CalendarDays,
   Briefcase,
@@ -31,15 +17,12 @@ import {
   Hand,
   FolderPlus,
 } from 'lucide-react';
-import { format, addDays, startOfMonth, endOfMonth, addMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
-import {
-  useTemplates,
-  useRostersLookup,
-} from '@/modules/rosters/state/useRosterShifts';
 import { UnifiedRosterNavigator, type ViewType, computeRange, formatRangeLabel } from './UnifiedRosterNavigator';
 export type { ViewType } from './UnifiedRosterNavigator';
 import { RosterFilterPopover } from './RosterFilterPopover';
+import { BadgeLegendPopover } from './BadgeLegendPopover';
 import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 import { Separator } from '@/modules/core/ui/primitives/separator';
@@ -71,39 +54,19 @@ import type { PublishRosterPlan } from '@/modules/rosters/domain/bulk-action-eng
    TYPES
    ============================================================ */
 
-interface RosterData {
-  id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-}
-
-interface TemplateData {
-  id: string;
-  name: string;
-  description?: string;
-  department_id: string;
-  sub_department_id: string;
-  status: string;
-  published_month?: string;
-  start_date?: string;
-  end_date?: string;
-}
-
-interface RangeOption {
-  label: string;
-  startDate: Date;
-  endDate: Date;
-}
+/** Shown on every write control a view-only manager (delta, epsilon) sees disabled. */
+const VIEW_ONLY_TIP = 'View-only access — you can see this roster but not change it';
 
 export interface RosterFunctionBarProps {
   selectedOrganizationId: string | null;
-  selectedRosterId: string | null;
 
-  onRosterChange: (id: string | null) => void;
-  onTemplateChange?: (id: string | null, groups?: any[]) => void;
   onTemplateDatesChange?: (startDate: Date | undefined, endDate: Date | undefined) => void;
 
+  /**
+   * The department / sub-department, ONLY when the scope names exactly one
+   * (soleId). Templates and Add Subgroup act on one roster, so with several in
+   * scope they must not pick the first one silently.
+   */
   selectedDepartmentId?: string | null;
   selectedSubDepartmentId?: string | null;
 
@@ -112,14 +75,9 @@ export interface RosterFunctionBarProps {
   onDateChange: (date: Date) => void;
   onViewTypeChange: (viewType: ViewType) => void;
 
-  showAvailabilities: boolean;
-  showUnfilledPanel: boolean;
   isRefreshing?: boolean;
 
-  onAvailabilitiesToggle: () => void;
-  onUnfilledPanelToggle: () => void;
   onRefresh: () => void;
-  onFiltersClick: () => void;
 
   canEdit?: boolean;
 
@@ -129,17 +87,16 @@ export interface RosterFunctionBarProps {
 
   /**
    * One-click "Publish" action. When both callbacks are provided, a Publish
-   * button is shown in the right-hand actions group. `loadPublishPlan` fetches
-   * + partitions the current roster (assigned → offers, unassigned → bidding,
-   * dead → delete); `executePublishRoster` applies the confirmed plan.
-   * `canPublish` gates the trigger (edit permission + org selected).
+   * button is shown in the right-hand actions group. `loadPublishPlan` reads +
+   * partitions the period on screen (assigned → offers, unassigned → bidding;
+   * started, on-leave, view-only and similar drafts are skipped and listed);
+   * `executePublishRoster` applies the confirmed plan. `canPublish` gates the
+   * trigger (edit permission + org selected).
    */
   loadPublishPlan?: () => Promise<PublishRosterPlan>;
   executePublishRoster?: (plan: PublishRosterPlan) => Promise<PublishRosterResult>;
   canPublish?: boolean;
 
-  /** Number of active filters — shows an orange dot badge on the Filter button when > 0 */
-  activeFilterCount?: number;
   transparent?: boolean;
   /** Tighten heights/padding below `md` so the bar fits a phone. */
   compactOnMobile?: boolean;
@@ -174,20 +131,24 @@ const IconButton: React.FC<{
     ghost: 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10',
   };
 
+  // aria-disabled, not `disabled`: a natively disabled button leaves the tab
+  // order and (in most browsers) gets no pointer events, so its tooltip — the
+  // only place that says WHY it is off ("select a department first", view-only)
+  // — could never be reached by keyboard. The click is swallowed instead.
+  const inert = disabled || isLoading;
   return (
-    <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
-            onClick={onClick}
-            disabled={disabled || isLoading}
+            type="button"
+            onClick={inert ? undefined : onClick}
+            aria-disabled={inert || undefined}
             aria-label={tooltip}
             aria-pressed={isActive}
             className={cn(
-              'h-9 w-9 min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] sm:h-9 sm:w-9 flex items-center justify-center rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950',
+              'h-9 w-9 min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] sm:h-9 sm:w-9 flex items-center justify-center rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
               variantClasses[variant],
               disabled && 'opacity-40 cursor-not-allowed',
-              isLoading && 'animate-pulse',
               className
             )}
           >
@@ -205,7 +166,6 @@ const IconButton: React.FC<{
           {tooltip}
         </TooltipContent>
       </Tooltip>
-    </TooltipProvider>
   );
 };
 
@@ -216,19 +176,12 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   selectedOrganizationId,
   selectedDepartmentId,
   selectedSubDepartmentId,
-  selectedRosterId,
-  onRosterChange,
-  onTemplateChange,
   onTemplateDatesChange,
   selectedDate,
   viewType,
   onDateChange,
   onViewTypeChange,
-  showAvailabilities,
-  showUnfilledPanel,
   isRefreshing,
-  onAvailabilitiesToggle,
-  onUnfilledPanelToggle,
   onRefresh,
   canEdit = true,
   isBulkMode = false,
@@ -237,7 +190,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   loadPublishPlan,
   executePublishRoster,
   canPublish = true,
-  activeFilterCount = 0,
   transparent = false,
   compactOnMobile = false,
 }) => {
@@ -245,9 +197,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     activeMode,
     setActiveMode,
     selectedDepartmentIds,
-    selectedSubDepartmentIds,
-    navigateNext,
-    navigatePrevious,
   } = useRosterUI();
 
   const {
@@ -262,51 +211,26 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     })),
   );
 
-  const queryClient = useQueryClient();
-
-  const { data: rosters = [] } = useRostersLookup(
-    selectedOrganizationId || undefined,
-    {
-      departmentIds: selectedDepartmentIds,
-      subDepartmentIds: selectedSubDepartmentIds,
-    }
-  );
-  const { data: templates = [] } = useTemplates(selectedSubDepartmentId || undefined, selectedDepartmentId || undefined);
-
   const [isTemplatesDialogOpen, setIsTemplatesDialogOpen] = useState(false);
   const [isAddSubGroupOpen, setIsAddSubGroupOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  // Auto-Schedule works over the whole scope (queryFilters), so any department
+  // will do; Templates / Add Subgroup need exactly one (selectedDepartmentId).
+  const hasDepartmentInScope = selectedDepartmentIds.length > 0;
 
-  // `subDepartmentName` + its scopeTree walk lived here only to feed the Snap
-  // dialog's default template name. RosterTemplatesDialog derives it from
-  // useSubDepartments instead, so the whole lookup went with the merge.
-
-  // Auto-select template
-  React.useEffect(() => {
-    if (templates.length > 0 && !selectedTemplateId) {
-      const baseTemplate = (templates as TemplateData[]).find((t: TemplateData) =>
-        t.name.includes('Base Template')
-      ) || (templates as TemplateData[])[0];
-      setSelectedTemplateId(baseTemplate.id);
-      onTemplateChange?.(baseTemplate.id, undefined);
-    }
-  }, [templates, selectedTemplateId, onTemplateChange]);
-
-  // Fetch structure for the selected date to know applied templates
+  // Templates applied to the selected day's roster — the blue badge. Only
+  // meaningful for ONE roster, so it reads only when a single sub-department is
+  // in scope (structures[0] of several was an arbitrary one).
   const { data: structures = [] } = useRosterStructure(
-    selectedOrganizationId || undefined,
+    selectedSubDepartmentId ? (selectedOrganizationId || undefined) : undefined,
     format(selectedDate, 'yyyy-MM-dd'),
     format(selectedDate, 'yyyy-MM-dd'),
     {
       departmentIds: selectedDepartmentId ? [selectedDepartmentId] : [],
-      subDepartmentIds: selectedSubDepartmentId ? [selectedSubDepartmentId] : (selectedDepartmentId ? [] : undefined)
+      subDepartmentIds: selectedSubDepartmentId ? [selectedSubDepartmentId] : [],
     }
   );
 
-  const currentRosterStructure = structures[0];
-  const appliedCount = currentRosterStructure?.appliedTemplateIds?.length || 0;
-
-  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+  const appliedCount = structures[0]?.appliedTemplateIds?.length || 0;
 
   const activeRangeBounds = React.useMemo(() => {
     // Broaden bounds to allow navigation within a 2-year window
@@ -316,21 +240,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     return { monthStart, monthEnd };
   }, []);
 
-  // Compute the date range matching the currently viewed period for AutoScheduler
-  const autoScheduleRange = React.useMemo(() => {
-    switch (viewType) {
-      case 'day':
-        return { start: selectedDate, end: selectedDate };
-      case '3day':
-        return { start: selectedDate, end: addDays(selectedDate, 2) };
-      case 'week':
-        return { start: selectedDate, end: addDays(selectedDate, 6) };
-      case 'month':
-      default:
-        return { start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) };
-    }
-  }, [selectedDate, viewType]);
-
   React.useEffect(() => {
     if (onTemplateDatesChange) {
       onTemplateDatesChange(activeRangeBounds.monthStart, activeRangeBounds.monthEnd);
@@ -339,6 +248,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className={cn(
       "w-full min-h-16 md:h-16 flex-shrink-0 z-50 px-4 py-2 md:py-0 flex items-center relative transition-all",
       compactOnMobile && 'min-h-0 px-0 py-0 md:h-16 md:px-4',
@@ -358,7 +268,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         {/* Left Section: Context & Modes */}
         <div className="w-full md:w-auto flex-shrink-0 flex items-center justify-start">
           <div className={cn(
-            'w-full md:w-auto flex items-center bg-slate-100/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm',
+            'w-full md:w-auto flex items-center bg-slate-100 dark:bg-black/20 border border-slate-300 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm',
             compactOnMobile && 'h-[34px] rounded-lg p-0.5 md:h-10 md:rounded-xl md:p-1',
           )}>
             <ToggleGroup
@@ -380,7 +290,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
                   // announces as an unnamed toggle on every phone.
                   aria-label={`${m.label} roster mode`}
                   className={cn(
-                    'flex-1 md:flex-none h-8 px-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 transition-all border-none shadow-none',
+                    'flex-1 md:flex-none h-8 px-2.5 text-[11px] font-bold uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-foreground data-[state=on]:shadow-sm text-slate-700 dark:text-muted-foreground hover:text-slate-900 dark:hover:text-foreground transition-all border-none shadow-none',
                     compactOnMobile && 'h-[30px] px-2 md:h-8 md:px-2.5',
                   )}
                 >
@@ -404,6 +314,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             onViewTypeChange={onViewTypeChange}
             minDate={activeRangeBounds.monthStart}
             maxDate={activeRangeBounds.monthEnd}
+            showToday
           />
         </div>
 
@@ -424,6 +335,9 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             return (
               <PublishRosterButton
                 disabled={!canPublish}
+                disabledReason={!canEdit
+                  ? VIEW_ONLY_TIP
+                  : !selectedOrganizationId ? 'Publish — select one organisation first' : undefined}
                 loadPlan={loadPublishPlan}
                 execute={executePublishRoster}
                 selectedViewType={viewTypeLabel}
@@ -439,53 +353,53 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               Children get shrink-0 so they keep their tap target rather than
               being squeezed to nothing. */}
           <div className={cn(
-            'w-full md:w-auto flex items-center justify-between md:justify-start gap-1 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none',
+            'w-full md:w-auto flex items-center justify-between md:justify-start gap-1 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none',
             'overflow-x-auto scrollbar-none [&>*]:shrink-0 md:overflow-x-visible',
             compactOnMobile && 'h-[34px] rounded-lg px-1 gap-0.5 md:h-10 md:rounded-xl md:px-1.5 md:gap-1',
           )}>
 
-            {/* ── Data group: Refresh + Filter ───────────────────────── */}
+            {/* ── Data group: Refresh + Legend + Filter ───────────────────────── */}
             <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Reload data" onClick={onRefresh} isLoading={isRefreshing} />
-            <div className="relative">
-              <RosterFilterPopover />
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-orange-500 rounded-full border border-slate-100 dark:border-slate-900 flex items-center justify-center pointer-events-none">
-                  <span className="text-[8px] font-black text-white leading-none">{activeFilterCount > 9 ? '9+' : activeFilterCount}</span>
-                </span>
-              )}
-            </div>
+            <BadgeLegendPopover />
+            <RosterFilterPopover />
 
-            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
+            <Separator orientation="vertical" className="h-5 bg-slate-300 dark:bg-white/10 mx-0.5" />
 
             {/* ── Planning group ─────────────────────────────────────── */}
             {activeMode === 'group' && (
               <IconButton
                 icon={<FolderPlus className="h-4 w-4" />}
-                tooltip={selectedDepartmentId ? "Add Subgroup" : "Add Subgroup — select a department first"}
+                tooltip={!canEdit
+                  ? VIEW_ONLY_TIP
+                  : selectedSubDepartmentId ? "Add Subgroup" : "Add Subgroup — select one sub-department first"}
                 onClick={() => setIsAddSubGroupOpen(true)}
                 variant="success"
-                disabled={!selectedDepartmentId || !canEdit}
+                disabled={!selectedSubDepartmentId || !canEdit}
               />
             )}
             <IconButton
               icon={<Wand2 className="h-4 w-4" />}
-              tooltip={selectedDepartmentId ? "Auto-Schedule" : "Auto-Schedule — select a department first"}
+              tooltip={!canEdit
+                ? VIEW_ONLY_TIP
+                : hasDepartmentInScope ? "Auto-Schedule" : "Auto-Schedule — select a department first"}
               onClick={() => onAutoScheduleClick?.()}
               variant="success"
-              disabled={!selectedDepartmentId}
+              disabled={!hasDepartmentInScope || !canEdit}
             />
             <div className="relative">
               <IconButton
                 icon={<CalendarPlus className="h-4 w-4" />}
-                tooltip={selectedDepartmentId
-                  ? "Templates — apply one to a date range, or capture this roster as a new one"
-                  : "Templates — select a department first"}
+                tooltip={!canEdit
+                  ? VIEW_ONLY_TIP
+                  : selectedDepartmentId
+                    ? "Templates — apply one to a date range, or capture this roster as a new one"
+                    : "Templates — select one department first"}
                 onClick={() => setIsTemplatesDialogOpen(true)}
                 variant="success"
-                disabled={!selectedDepartmentId}
+                disabled={!selectedDepartmentId || !canEdit}
               />
               {appliedCount > 0 && (
-                <div className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 rounded-full border border-slate-100 dark:border-slate-900 flex items-center justify-center pointer-events-none shadow-lg">
+                <div className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 rounded-full border border-slate-100 dark:border-slate-900 flex items-center justify-center pointer-events-none shadow-sm">
                   <span className="text-[9px] font-black text-white leading-none">{appliedCount}</span>
                 </div>
               )}
@@ -493,7 +407,9 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             <IconButton
               icon={<Hand className="h-4 w-4" />}
               tooltip={
-                activeMode === 'events'
+                !canEdit
+                  ? VIEW_ONLY_TIP
+                  : activeMode === 'events'
                   ? 'DnD Mode — not available in Events mode'
                   : isBulkMode
                     ? 'DnD Mode — not available in Bulk selection mode'
@@ -512,16 +428,18 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               }}
               isActive={isDnDModeActive}
               variant={isDnDModeActive ? 'warning' : 'default'}
-              disabled={activeMode === 'events' || isBulkMode}
+              disabled={activeMode === 'events' || isBulkMode || !canEdit}
             />
 
-            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
+            <Separator orientation="vertical" className="h-5 bg-slate-300 dark:bg-white/10 mx-0.5" />
 
             {/* ── View group ─────────────────────────────────────────── */}
             <IconButton
               icon={<Layers className="h-4 w-4" />}
               tooltip={
-                isDnDModeActive
+                !canEdit
+                  ? VIEW_ONLY_TIP
+                  : isDnDModeActive
                   ? "Bulk Selection — not available in DnD mode"
                   : isBulkMode
                     ? "Exit Bulk Selection (Esc)"
@@ -529,7 +447,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               }
               onClick={onBulkModeToggle || (() => { })}
               isActive={isBulkMode}
-              disabled={isDnDModeActive}
+              disabled={isDnDModeActive || !canEdit}
             />
           </div>
 
@@ -566,6 +484,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
       )}
 
     </div>
+    </TooltipProvider>
   );
 };
 

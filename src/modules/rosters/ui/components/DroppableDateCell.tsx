@@ -115,7 +115,7 @@ const DroppableDateCellImpl: React.FC<DroppableDateCellProps> = ({
       className={cn(
         className,
         'transition-[background-color,box-shadow,transform,ring-color] duration-300 relative overflow-hidden',
-        isOver && canDrop  && 'ring-2 ring-emerald-400 ring-inset bg-emerald-500/10 shadow-[inset_0_0_20px_rgba(16,185,129,0.2)] scale-[1.02] z-10',
+        isOver && canDrop  && 'ring-2 ring-emerald-400 ring-inset bg-emerald-500/10 scale-[1.02] z-10',
         isOver && !canDrop && 'ring-2 ring-red-400 ring-inset bg-red-500/5 opacity-60 cursor-no-drop',
       )}
       onClick={onClick}

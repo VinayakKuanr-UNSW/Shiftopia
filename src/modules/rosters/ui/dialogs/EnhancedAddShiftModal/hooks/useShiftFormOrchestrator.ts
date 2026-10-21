@@ -517,14 +517,14 @@ export function useShiftFormOrchestrator({
                     ?? false,
                 // Roster shifts arrive snake_cased, TEMPLATE shifts camelCased --
                 // the same split that blanked target_employment_type on edit.
-                // `?? undefined` rather than `?? null`: a stored null means the
-                // author chose "every day", but a row that predates the control
-                // has no choice recorded, and both read back as null here. The
-                // template branch below re-supplies null explicitly on save.
+                // We check !== undefined explicitly because null is the legitimate
+                // "every day" choice, and `null ?? undefined` would turn null into undefined.
                 day_of_week:
-                    existingShift.day_of_week
-                    ?? existingShift.dayOfWeek
-                    ?? undefined,
+                    existingShift.day_of_week !== undefined
+                        ? existingShift.day_of_week
+                        : existingShift.dayOfWeek !== undefined
+                            ? existingShift.dayOfWeek
+                            : undefined,
             });
             if (!selectedRosterId && existingShift.roster_id) {
                 setSelectedRosterId(existingShift.roster_id);

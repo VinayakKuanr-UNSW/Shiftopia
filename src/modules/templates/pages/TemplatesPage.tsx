@@ -21,6 +21,7 @@ import {
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useAuth } from '@/platform/auth/useAuth';
 import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { TemplateFunctionBar } from '../ui/components/TemplateFunctionBar';
@@ -30,6 +31,8 @@ import { useTheme } from '@/modules/core/contexts/ThemeContext';
 const TemplatesPage: React.FC = () => {
   const { toast } = useToast();
   const { scope, setScope, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('managerial');
+  // Delta and epsilon see every template in scope but change none (access suites).
+  const canEdit = useAuth().hasPermission('managerial-write');
 
   const {
     templates,
@@ -313,6 +316,7 @@ const TemplatesPage: React.FC = () => {
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
                 onCreateTemplate={() => setCreateDialogOpen(true)}
+                readOnly={!canEdit}
                 counts={counts}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
@@ -350,6 +354,7 @@ const TemplatesPage: React.FC = () => {
             <div className="flex-1 overflow-hidden flex flex-col h-full animate-in fade-in-50 duration-200">
               <TemplateEditor
                 template={localTemplate}
+                readOnly={!canEdit}
                 isSaving={isSaving}
                 hasUnsavedChanges={hasUnsavedChanges}
                 onBack={handleBack}
@@ -375,11 +380,12 @@ const TemplatesPage: React.FC = () => {
                 onSelectTemplate={handleSelectTemplate}
                 onOpenTemplate={handleOpenTemplate}
                 onCreateTemplate={() => setCreateDialogOpen(true)}
-                onDuplicateTemplate={duplicateTemplate}
+                onDuplicateTemplate={canEdit ? duplicateTemplate : undefined}
                 onDeleteTemplate={deleteTemplate}
-                onRenameTemplate={renameTemplate}
+                onRenameTemplate={canEdit ? renameTemplate : undefined}
                 onArchiveTemplate={handleArchiveTemplate}
-                onRestoreTemplate={handleRestoreTemplate}
+                onRestoreTemplate={canEdit ? handleRestoreTemplate : undefined}
+                readOnly={!canEdit}
                 isLoading={isLoading}
                 statusFilter={statusFilter}
                 searchQuery={searchQuery}

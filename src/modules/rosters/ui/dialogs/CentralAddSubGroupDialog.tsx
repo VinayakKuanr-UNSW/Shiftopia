@@ -31,9 +31,13 @@ import {
     endOfMonth,
     addWeeks,
     addMonths,
+    parseISO,
+    isValid,
+    differenceInCalendarDays,
 } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useAddSubGroupRange } from '@/modules/rosters/state/useRosterMutations';
+import { hasFixedSubgroup } from '@/modules/rosters/domain/subgroupRules';
 
 interface CentralAddSubGroupDialogProps {
     open: boolean;
@@ -46,13 +50,20 @@ interface CentralAddSubGroupDialogProps {
 
 type PeriodPreset = 'current-month' | 'next-month' | 'this-week' | 'next-week' | 'custom';
 
-const GROUP_OPTIONS = [
+/** Longest range one request may cover. The RPC creates a roster day per date. */
+const MAX_RANGE_DAYS = 366;
+
+const ALL_GROUP_OPTIONS = [
     { value: 'convention_centre', label: 'Convention Centre' },
     { value: 'exhibition_centre', label: 'Exhibition Centre' },
     { value: 'theatre', label: 'Theatre' },
     { value: 'the_cutaway', label: 'The Cutaway' },
     { value: 'office', label: 'Office' },
 ];
+
+// Office is not offered: it has one fixed sub-group, Administration, which every
+// roster already has (seed_standard_roster_groups). The database refuses others.
+const GROUP_OPTIONS = ALL_GROUP_OPTIONS.filter(o => !hasFixedSubgroup(o.value));
 
 export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> = ({
     open,
@@ -96,9 +107,11 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
                 };
             case 'custom':
             default:
+                // parseISO: local-midnight calendar days. `new Date('yyyy-MM-dd')`
+                // is UTC midnight and shifts a day west of GMT.
                 return {
-                    start: new Date(customStart),
-                    end: new Date(customEnd),
+                    start: parseISO(customStart),
+                    end: parseISO(customEnd),
                 };
         }
     }, [preset, selectedDate, customStart, customEnd]);
@@ -111,7 +124,21 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
         }
     }, [computedRange]);
 
-    const canSubmit = name.trim().length > 0 && !addSubGroupMutation.isPending;
+    // A bad custom range used to make Submit silently do nothing: format()
+    // threw inside the try before the mutation, and nothing was shown.
+    const rangeError = useMemo(() => {
+        const { start, end } = computedRange;
+        if (!isValid(start) || !isValid(end)) return 'Enter both a start and an end date.';
+        if (end < start) return 'The end date is before the start date.';
+        if (differenceInCalendarDays(end, start) + 1 > MAX_RANGE_DAYS) {
+            return `A range can cover at most ${MAX_RANGE_DAYS} days.`;
+        }
+        return null;
+    }, [computedRange]);
+
+    // A sub-group lives on one sub-department's roster. Without one chosen, the
+    // RPC would create a roster day belonging to no sub-department at all.
+    const canSubmit = !!subDepartmentId && name.trim().length > 0 && !rangeError && !addSubGroupMutation.isPending;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -157,6 +184,11 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
                         <DialogDescription id="central-add-subgroup-description" className="text-xs text-muted-foreground mt-1 leading-relaxed">
                             Create a new subgroup for managing shifts and assignments.
                         </DialogDescription>
+                        {!subDepartmentId && (
+                            <p role="alert" className="mt-3 text-xs font-medium text-amber-600 dark:text-amber-300">
+                                Choose one sub-department in the scope filter first: a subgroup belongs to one team's roster.
+                            </p>
+                        )}
                     </div>
 
                     {/* Body */}
@@ -229,6 +261,8 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
                                         value={customEnd}
                                         onChange={(e) => setCustomEnd(e.target.value)}
                                         aria-label="End date"
+                                        aria-invalid={rangeError ? true : undefined}
+                                        aria-describedby={rangeError ? 'central-subgroup-range-error' : undefined}
                                         className="flex-1 h-10 rounded-lg border border-border bg-muted/50 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                     />
                                 </div>
@@ -236,6 +270,11 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
                                 <div className="text-[11px] text-muted-foreground font-semibold px-1">
                                     Range: <span className="text-foreground">{formattedRangeLabel}</span>
                                 </div>
+                            )}
+                            {rangeError && (
+                                <p id="central-subgroup-range-error" role="alert" className="text-xs text-destructive px-1">
+                                    {rangeError}
+                                </p>
                             )}
                         </div>
 
@@ -276,7 +315,7 @@ export const CentralAddSubGroupDialog: React.FC<CentralAddSubGroupDialogProps> =
                         <Button
                             type="submit"
                             disabled={!canSubmit}
-                            className="w-full sm:w-auto h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 font-black text-xs uppercase tracking-[0.15em] transition-all active:scale-95 flex items-center justify-center gap-2"
+                            className="w-full sm:w-auto h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-black text-xs uppercase tracking-[0.15em] transition-all active:scale-95 flex items-center justify-center gap-2"
                             aria-label={addSubGroupMutation.isPending ? "Adding subgroup..." : "Add Subgroup"}
                             aria-busy={addSubGroupMutation.isPending}
                         >

@@ -474,7 +474,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
 
             {/* Selection badge */}
             <div className="col-span-2 flex flex-col items-center sm:items-start w-full sm:w-auto min-w-0 sm:min-w-[120px] sm:col-span-1">
-              <Badge variant="glass" className="px-3 py-1.5 text-sm font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-glow whitespace-nowrap flex-shrink-0">
+              <Badge variant="glass" className="px-3 py-1.5 text-sm font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-sm whitespace-nowrap flex-shrink-0">
                 {isAllSelected ? `All ${selectedCount}` : selectedCount} Selected
               </Badge>
               <div className="flex gap-2 mt-1 px-1">
@@ -539,7 +539,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                       disabled={isBusy || !publishEnabled}
                       onClick={handleClickPublish}
                       className={cn(
-                        'gap-2 shadow-glow rounded-full',
+                        'gap-2 shadow-sm rounded-full',
                         publishEnabled
                           ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
                           : 'bg-muted text-muted-foreground/30',
@@ -582,7 +582,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                       className={cn(
                         'gap-2 rounded-full',
                         unpublishEnabled
-                          ? 'bg-transparent border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 shadow-glow'
+                          ? 'bg-transparent border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 shadow-sm'
                           : 'bg-muted text-muted-foreground/30',
                       )}
                     >

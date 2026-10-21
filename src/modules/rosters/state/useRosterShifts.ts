@@ -859,9 +859,11 @@ export function useBulkUnpublishShifts() {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
       const snapshot = snapshotLists(queryClient);
 
+      // Set lookup: `ids.includes` inside `map` was N×M (55 ms at 5,000 shifts).
+      const ids = new Set(shiftIds);
       patchLists(queryClient, (old) =>
         old.map(s =>
-          shiftIds.includes(s.id)
+          ids.has(s.id)
             ? {
                 ...s,
                 lifecycle_status: 'Draft' as const,
@@ -881,9 +883,10 @@ export function useBulkUnpublishShifts() {
       // Revert only failed IDs back to Published — successful ones keep Draft
       if (result.failed.length > 0) {
         const failedIds = result.failed.map(f => f.id);
+        const failed = new Set(failedIds);
         patchLists(queryClient, (old) =>
           old.map(s =>
-            failedIds.includes(s.id)
+            failed.has(s.id)
               ? { ...s, lifecycle_status: 'Published' as const, is_published: true, is_draft: false }
               : s,
           ),
@@ -922,9 +925,11 @@ export function useBulkPublishShifts() {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
       const snapshot = snapshotLists(queryClient);
 
+      // Set lookup: `ids.includes` inside `map` was N×M (55 ms at 5,000 shifts).
+      const ids = new Set(shiftIds);
       patchLists(queryClient, (old) =>
         old.map(s =>
-          shiftIds.includes(s.id)
+          ids.has(s.id)
             ? { ...s, lifecycle_status: 'Published' as const }
             : s,
         ),
@@ -940,9 +945,10 @@ export function useBulkPublishShifts() {
         ...result.dbFailed.map(f => f.id),
       ];
       if (failedIds.length > 0) {
+        const failed = new Set(failedIds);
         patchLists(queryClient, (old) =>
           old.map(s =>
-            failedIds.includes(s.id)
+            failed.has(s.id)
               ? { ...s, lifecycle_status: 'Draft' as const }
               : s,
           ),
@@ -987,7 +993,8 @@ export function useBulkDeleteShifts() {
     onSuccess: (result) => {
       // Surgically remove only confirmed-deleted shifts from all list caches.
       if (result.deletedIds.length > 0) {
-        patchLists(queryClient, (old) => old.filter(s => !result.deletedIds.includes(s.id)));
+        const deleted = new Set(result.deletedIds);
+        patchLists(queryClient, (old) => old.filter(s => !deleted.has(s.id)));
         result.deletedIds.forEach(id => queryClient.removeQueries({ queryKey: shiftKeys.detail(id) }));
       }
     },
@@ -1029,8 +1036,9 @@ export function useBulkUpdateShiftTimes() {
       const snapshot = snapshotLists(queryClient);
 
       // Single surgical patch for all affected shifts
+      const ids = new Set(shiftIds);
       patchLists(queryClient, (old) =>
-        old.map(s => (shiftIds.includes(s.id) ? { ...s, ...updates } as Shift : s))
+        old.map(s => (ids.has(s.id) ? { ...s, ...updates } as Shift : s))
       );
 
       // Also patch detail views if loaded
@@ -1417,30 +1425,41 @@ export function useShiftDeltaSync(params: {
 
       const deleted = new Set(rows.filter(r => r.deleted_at !== null).map(r => r.id));
       const updated = rows.filter(r => r.deleted_at === null);
+      const updatedMap = new Map(updated.map(r => [r.id, r]));
 
       queryClient.setQueriesData<Shift[]>({ queryKey: shiftKeys.lists }, (old) => {
         if (!old || !Array.isArray(old)) return old;
 
+        // Check if any row in old is actually affected
+        const hasDeleted = deleted.size > 0 && old.some(s => deleted.has(s.id));
+        const hasUpdated = updatedMap.size > 0 && old.some(s => updatedMap.has(s.id));
+        if (!hasDeleted && !hasUpdated) {
+          // No changes apply to this query cache entry; return same reference to prevent re-render churn
+          return old;
+        }
+
         // Remove soft-deleted rows
-        let next = old.filter(s => !deleted.has(s.id));
+        let next = hasDeleted ? old.filter(s => !deleted.has(s.id)) : old;
 
         // Patch updated rows (only update fields that are in the delta)
-        next = next.map(s => {
-          const delta = updated.find(r => r.id === s.id);
-          if (!delta) return s;
-          return {
-            ...s,
-            shift_date:          delta.shift_date          ?? s.shift_date,
-            start_time:          delta.start_time          ?? s.start_time,
-            end_time:            delta.end_time            ?? s.end_time,
-            lifecycle_status:    (delta.lifecycle_status   ?? s.lifecycle_status) as Shift['lifecycle_status'],
-            assignment_status:   (delta.assignment_status  ?? s.assignment_status) as Shift['assignment_status'],
-            assigned_employee_id: delta.assigned_employee_id !== undefined
-              ? delta.assigned_employee_id
-              : s.assigned_employee_id,
-            version:             delta.version             ?? s.version,
-          };
-        });
+        if (hasUpdated) {
+          next = next.map(s => {
+            const delta = updatedMap.get(s.id);
+            if (!delta) return s;
+            return {
+              ...s,
+              shift_date:          delta.shift_date          ?? s.shift_date,
+              start_time:          delta.start_time          ?? s.start_time,
+              end_time:            delta.end_time            ?? s.end_time,
+              lifecycle_status:    (delta.lifecycle_status   ?? s.lifecycle_status) as Shift['lifecycle_status'],
+              assignment_status:   (delta.assignment_status  ?? s.assignment_status) as Shift['assignment_status'],
+              assigned_employee_id: delta.assigned_employee_id !== undefined
+                ? delta.assigned_employee_id
+                : s.assigned_employee_id,
+              version:             delta.version             ?? s.version,
+            };
+          });
+        }
 
         return next;
       });

@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import { Group, SubGroup, Template } from '../model/templates.types';
 import type { Shift } from '@/modules/rosters/model/shift.types';
 import type { CaptureTemplateInput, CaptureTemplateResult } from '../model/templates.types';
@@ -140,6 +141,8 @@ export const templatesService = {
       .select('*')
       .single();
 
+    // PGRST116 = no row came back: row-level security refused the update.
+    if (error?.code === 'PGRST116') throw new WriteRefusedError('change this template');
     if (error) throw error;
     return dbToAppTemplate(data);
   },
@@ -161,12 +164,13 @@ export const templatesService = {
     }
 
     // Now delete the template itself
-    const { error } = await supabase
+    const deleted = await supabase
       .from('roster_templates')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('id', id);
 
-    if (error) throw error;
+    if (deleted.error) throw deleted.error;
+    assertWrote(deleted, 'delete this template');
   },
 
   /* ============================================================
@@ -289,6 +293,8 @@ export async function captureRosterAsTemplate(
       throw new Error('Template name must be between 3 and 100 characters.');
     if (msg.includes('DUPLICATE_TEMPLATE_NAME'))
       throw new Error('A template with this name already exists in this subdepartment.');
+    if (msg.includes('ONLY_FULL_TIME_IN_RANGE'))
+      throw new Error('Every shift in this range is full-time, and templates cannot hold full-time shifts.');
     if (msg.includes('NO_SHIFTS_IN_RANGE'))
       throw new Error('No shifts found in the selected date range.');
     if (msg.includes('DATE_RANGE_TOO_LARGE'))
@@ -308,5 +314,6 @@ export async function captureRosterAsTemplate(
   return {
     templateId: d.templateId || d.template_id,
     shiftsCaptured: d.shiftsCaptured ?? d.shifts_captured,
+    shiftsSkippedFullTime: d.shifts_skipped_full_time ?? 0,
   };
 }

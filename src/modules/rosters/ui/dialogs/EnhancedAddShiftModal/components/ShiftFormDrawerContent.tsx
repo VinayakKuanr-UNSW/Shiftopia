@@ -223,12 +223,14 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     const watchEmployeeId = form.watch('assigned_employee_id');
     const watchTargetType = form.watch('target_employment_type');
     const watchTargetFlex = form.watch('target_requires_flexible');
+    const watchDayOfWeek = form.watch('day_of_week');
 
     /* ── Step Validation Gates ── */
     const isRoleStepValid = !!watchGroup && !!watchSubGroupName && !!watchV8RoleId;
     const isRequirementsStepValid = true; // Optional step
     const isTimingsStepValid = shape.status !== 'INCOMPLETE'
         && (isTemplateMode || !!watchShiftDate)
+        && (!isTemplateMode || watchDayOfWeek !== undefined)
         && !shape.blocking;
     const isAssignmentStepValid = true;   // Optional step
     const isComplianceStepValid = true;   // Review step

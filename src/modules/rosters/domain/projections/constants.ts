@@ -21,7 +21,7 @@ export const GROUP_COLORS: Record<TemplateGroupType, GroupColorSet> = {
     badge:          'bg-blue-100 text-blue-700 border-blue-200',
     accent:         'blue',
     dndHighlight:   'ring-blue-400',
-    glassContainer: 'bg-blue-500/5 backdrop-blur-xl border border-blue-500/20 shadow-[0_8px_32px_rgba(59,130,246,0.15)]',
+    glassContainer: 'bg-blue-500/5 backdrop-blur-xl border border-blue-500/20 shadow-sm',
     glassHeader:    'bg-gradient-to-r from-blue-600/90 to-blue-500/80 backdrop-blur-md border-b border-blue-400/30',
   },
   exhibition_centre: {
@@ -30,7 +30,7 @@ export const GROUP_COLORS: Record<TemplateGroupType, GroupColorSet> = {
     badge:          'bg-emerald-100 text-emerald-700 border-emerald-200',
     accent:         'emerald',
     dndHighlight:   'ring-emerald-400',
-    glassContainer: 'bg-emerald-500/5 backdrop-blur-xl border border-emerald-500/20 shadow-[0_8px_32px_rgba(16,185,129,0.15)]',
+    glassContainer: 'bg-emerald-500/5 backdrop-blur-xl border border-emerald-500/20 shadow-sm',
     glassHeader:    'bg-gradient-to-r from-emerald-600/90 to-emerald-500/80 backdrop-blur-md border-b border-emerald-400/30',
   },
   theatre: {
@@ -39,7 +39,7 @@ export const GROUP_COLORS: Record<TemplateGroupType, GroupColorSet> = {
     badge:          'bg-red-100 text-red-700 border-red-200',
     accent:         'red',                    // ← RED — never purple
     dndHighlight:   'ring-red-400',
-    glassContainer: 'bg-red-500/5 backdrop-blur-xl border border-red-500/20 shadow-[0_8px_32px_rgba(239,68,68,0.15)]',
+    glassContainer: 'bg-red-500/5 backdrop-blur-xl border border-red-500/20 shadow-sm',
     glassHeader:    'bg-gradient-to-r from-red-600/90 to-red-500/80 backdrop-blur-md border-b border-red-400/30',
   },
   the_cutaway: {                              // ← "Warmest white" — warm amber/cream
@@ -48,7 +48,7 @@ export const GROUP_COLORS: Record<TemplateGroupType, GroupColorSet> = {
     badge:          'bg-amber-100 text-amber-700 border-amber-200',
     accent:         'amber',
     dndHighlight:   'ring-amber-400',
-    glassContainer: 'bg-amber-500/5 backdrop-blur-xl border border-amber-500/20 shadow-[0_8px_32px_rgba(245,158,11,0.15)]',
+    glassContainer: 'bg-amber-500/5 backdrop-blur-xl border border-amber-500/20 shadow-sm',
     glassHeader:    'bg-gradient-to-r from-amber-600/90 to-amber-500/80 backdrop-blur-md border-b border-amber-400/30',
   },
   office: {                                   // ← Full-time shifts. Cyan: clear of blue, emerald and the purple fallback
@@ -57,7 +57,7 @@ export const GROUP_COLORS: Record<TemplateGroupType, GroupColorSet> = {
     badge:          'bg-cyan-100 text-cyan-700 border-cyan-200',
     accent:         'cyan',
     dndHighlight:   'ring-cyan-400',
-    glassContainer: 'bg-cyan-500/5 backdrop-blur-xl border border-cyan-500/20 shadow-[0_8px_32px_rgba(6,182,212,0.15)]',
+    glassContainer: 'bg-cyan-500/5 backdrop-blur-xl border border-cyan-500/20 shadow-sm',
     glassHeader:    'bg-gradient-to-r from-cyan-600/90 to-cyan-500/80 backdrop-blur-md border-b border-cyan-400/30',
   },
 };
@@ -69,7 +69,7 @@ export const UNASSIGNED_COLORS: GroupColorSet = {
   badge:          'bg-gray-100 text-gray-700 border-gray-200',
   accent:         'gray',
   dndHighlight:   'ring-gray-400',
-  glassContainer: 'bg-gray-500/5 backdrop-blur-xl border border-gray-500/30 border-dashed shadow-[0_8px_32px_rgba(107,114,128,0.15)]',
+  glassContainer: 'bg-gray-500/5 backdrop-blur-xl border border-gray-500/30 border-dashed shadow-sm',
   glassHeader:    'bg-gradient-to-r from-gray-600/90 to-gray-500/80 backdrop-blur-md border-b border-gray-400/30',
 };
 

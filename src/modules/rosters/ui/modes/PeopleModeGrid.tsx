@@ -4,8 +4,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import {
-  Activity,
-  Scale,
   Plus,
   MoreHorizontal,
   Undo2,
@@ -13,18 +11,25 @@ import {
   Zap,
   Flame,
   Maximize2,
+  Users,
+  Search,
+  X,
+  ShieldCheck,
+  Layers,
+  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
-import { AvailabilityBar } from '@/modules/rosters/ui/components/AvailabilityBar';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDateCell';
-import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import { useApprovedLeaveDays } from '@/modules/rosters/hooks/useApprovedLeaveDays';
 import { LeaveDayCard } from '@/modules/rosters/ui/components/LeaveDayCard';
+import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
+import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
+import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import type { RawLeaveDay } from '@/modules/office/domain/types';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
@@ -53,7 +58,6 @@ import {
   DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
-import { getUtilizationStatus } from '@/modules/rosters/domain/projections/utils/fairness';
 import { getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
 import {
   Tooltip,
@@ -87,7 +91,7 @@ const VIRT_OVERSCAN = 5;
 // never drift. This replaced the old <table>, whose absolutely-positioned
 // virtual <tr>s left the table's column model and misaligned the grid lines.
 const PEOPLE_COL_EMP_W = 240; // px — sticky employee column
-const PEOPLE_COL_DAY_W = 160; // px — per-day column
+const PEOPLE_COL_DAY_W = 180; // px — per-day column (standardized across modes)
 const peopleGridCols = (dayCount: number) =>
   `${PEOPLE_COL_EMP_W}px repeat(${dayCount}, minmax(${PEOPLE_COL_DAY_W}px, 1fr))`;
 
@@ -100,7 +104,6 @@ interface PeopleModeGridProps {
   employees: PeopleModeEmployee[];
   dates: Date[];
   canEdit: boolean;
-  showAvailabilities: boolean;
   isBulkMode?: boolean;
   selectedShifts?: string[];
   onToggleShiftSelection?: (shiftId: string) => void;
@@ -120,6 +123,10 @@ interface PeopleModeGridProps {
   onAssignShift?: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   /** Called when an existing shift is moved */
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
+
+  /** Integrated column header search */
+  searchTerm?: string;
+  onSearchChange?: (term: string) => void;
 }
 
 /* ============================================================
@@ -200,11 +207,11 @@ interface ShiftRowMenuProps {
   onEdit: (shift: PeopleModeShift) => void;
   onClone: (shift: PeopleModeShift) => void;
   onUnpublish?: (shiftId: string) => void;
-  /** Full-time shifts only: the expanded Scheduled · Actual · Payroll view. */
   onExpand?: (shift: PeopleModeShift) => void;
+  onAudit?: (shift: PeopleModeShift) => void;
 }
 
-const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, onUnpublish, onExpand }) => {
+const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, onUnpublish, onExpand, onAudit }) => {
   const { isPast } = resolveShiftStatus(shift);
 
   return (
@@ -214,35 +221,14 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, on
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button
-          className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
+          className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
           onClick={(e) => e.stopPropagation()}
         >
-          <MoreHorizontal className="h-3 w-3 text-muted-foreground dark:text-white/60" />
+          <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
-        {onExpand && shift.rawShift?.target_employment_type === 'FT' && (
-          <DropdownMenuItem
-            onClick={() => onExpand(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            Expand
-          </DropdownMenuItem>
-        )}
-
-        <DropdownMenuItem
-          disabled={isPast}
-          onClick={() => onEdit(shift)}
-          className={cn(
-            "text-popover-foreground hover:bg-accent cursor-pointer",
-            isPast && "text-muted-foreground/50 cursor-not-allowed"
-          )}
-        >
-          <Edit2 className="h-4 w-4 mr-2" />
-          Edit Shift {isPast && '(Locked)'}
-        </DropdownMenuItem>
-
+      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
+        {/* 1. Clone */}
         <DropdownMenuItem
           disabled={isPast}
           onClick={() => onClone(shift)}
@@ -255,17 +241,58 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, on
           Clone Shift {isPast && '(Locked)'}
         </DropdownMenuItem>
 
+        {/* 2. Edit */}
+        <DropdownMenuItem
+          disabled={isPast}
+          onClick={() => onEdit(shift)}
+          className={cn(
+            "text-popover-foreground hover:bg-accent cursor-pointer",
+            isPast && "text-muted-foreground/50 cursor-not-allowed"
+          )}
+        >
+          <Edit2 className="h-4 w-4 mr-2" />
+          Edit Shift {isPast && '(Locked)'}
+        </DropdownMenuItem>
+
+        {/* 3. Audit */}
+        {onAudit && (
+          <DropdownMenuItem
+            onClick={() => onAudit(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
+          >
+            <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
+            Audit Compliance
+          </DropdownMenuItem>
+        )}
+
+        {/* 4. More: Scheduled vs Actual vs Billable & Variance */}
+        {onExpand && shift.rawShift?.target_employment_type === 'FT' && (
+          <DropdownMenuItem
+            onClick={() => onExpand(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
+          >
+            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
+            More (Variance & Pay)
+          </DropdownMenuItem>
+        )}
+        {onExpand && shift.rawShift?.target_employment_type !== 'FT' && (
+          <DropdownMenuItem
+            onClick={() => onExpand(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
+          >
+            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
+            More (Variance & Pay)
+          </DropdownMenuItem>
+        )}
+
         {canUnpublish(shift) && !isPast && onUnpublish && (
-          <>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem
-              onClick={() => onUnpublish(shift.id)}
-              className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-            >
-              <Undo2 className="h-4 w-4 mr-2" />
-              Unpublish Shift
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem
+            onClick={() => onUnpublish(shift.id)}
+            className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+          >
+            <Undo2 className="h-4 w-4 mr-2" />
+            Unpublish Shift
+          </DropdownMenuItem>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -280,7 +307,6 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   employees,
   dates,
   canEdit,
-  showAvailabilities,
   isBulkMode: propIsBulkMode = false,
   selectedShifts: propsSelectedShifts = [],
   onToggleShiftSelection,
@@ -295,7 +321,14 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
 
   onAssignShift,
   onMoveShift,
+  searchTerm = '',
+  onSearchChange,
 }) => {
+  const [isSearchOpen, setIsSearchOpen] = React.useState(Boolean(searchTerm));
+  React.useEffect(() => {
+    if (searchTerm) setIsSearchOpen(true);
+  }, [searchTerm]);
+
   const { toast } = useToast();
   const createShiftMutation = useCreateShift();
   const {
@@ -323,8 +356,14 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   );
 
   const [expandedShift, setExpandedShift] = React.useState<Shift | null>(null);
+  const [auditedShift, setAuditedShift] = React.useState<Shift | null>(null);
+
   const handleExpandShift = useCallback((shift: PeopleModeShift) => {
     if (shift.rawShift) setExpandedShift(shift.rawShift as Shift);
+  }, []);
+
+  const handleAuditShift = useCallback((shift: PeopleModeShift) => {
+    if (shift.rawShift) setAuditedShift(shift.rawShift as Shift);
   }, []);
 
   const handleCloneShift = useCallback(async (shift: PeopleModeShift) => {
@@ -399,15 +438,9 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
 
   const stableOnAssign = onAssignShift ?? NOOP_ASSIGN;
   const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
-  // Get all profile IDs for availability lookup
+  // Profile IDs for the approved-leave lookup. (The availability overlay that
+  // also read these is retired: availability is managed on Team Availability.)
   const profileIds = useMemo(() => employees.map(e => e.id), [employees]);
-
-  // Fetch resolved availability from database
-  const { getAvailability } = useResolvedAvailability(
-    profileIds,
-    dates,
-    showAvailabilities // Only fetch when availabilities are shown
-  );
 
   // Approved leave — a leave card on the day, and the day closed to rostering.
   const { getLeave } = useApprovedLeaveDays(profileIds, dates);
@@ -443,8 +476,8 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     <TooltipProvider delayDuration={200}>
       {showFatigueHeatmap && (
         <div className="absolute top-4 right-4 z-[60] flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
-          <Badge className="px-4 py-2 bg-amber-500/90 text-white backdrop-blur-md border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.2)] flex items-center gap-2 text-xs font-bold rounded-full">
-            <Flame className="h-3.5 w-3.5 animate-pulse" />
+          <Badge className="px-3.5 py-1.5 bg-amber-600 text-white border border-amber-500/40 shadow-sm flex items-center gap-2 text-xs font-bold rounded-full">
+            <Flame className="h-3.5 w-3.5" />
             HEALTH MODE
           </Badge>
           
@@ -465,27 +498,87 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
       {/* DnD Mode Indicator */}
       {isDnDModeActive && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-500 pointer-events-none">
-          <Badge className="px-6 py-2 bg-emerald-500/90 text-white backdrop-blur-md border border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center gap-2 text-sm font-medium rounded-full">
-            <Zap className="h-4 w-4 animate-pulse" />
+          <Badge className="px-4 py-1.5 bg-emerald-600 text-white border border-emerald-500/40 shadow-sm flex items-center gap-2 text-xs font-semibold rounded-full">
+            <Zap className="h-3.5 w-3.5" />
             DnD Mode Active
           </Badge>
         </div>
       )}
 
-      <div className="h-full flex flex-col min-h-0 overflow-hidden">
-        <div className="p-6 flex-1 flex flex-col min-h-0">
-          {/* ==================== TABLE CONTAINER ==================== */}
-          <div className="border border-border rounded-lg flex-1 flex flex-col min-h-0 bg-card overflow-hidden">
-            <div
-              ref={scrollContainerRef}
-              className="overflow-auto flex-1 custom-scrollbar"
-            >
-              <div role="table" className="relative" style={{ width: 'max-content', minWidth: '100%' }}>
+      {/* ==================== TABLE CONTAINER — Grid is the container itself ==================== */}
+      <div
+        ref={scrollContainerRef}
+        className="overflow-auto flex-1 h-full min-h-0 custom-scrollbar relative isolate bg-background"
+      >
+        <div role="table" className="relative" style={{ width: 'max-content', minWidth: '100%' }}>
                 {/* ==================== HEADER ROW ==================== */}
-                <div role="row" className="grid bg-zinc-900" style={{ gridTemplateColumns: peopleGridCols(dates.length) }}>
-                  {/* Employee Column Header */}
-                  <div role="columnheader" className="sticky top-0 left-0 z-30 flex items-center bg-zinc-900 border-r border-b border-border px-4 py-3 text-left">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Employee</span>
+                <div role="row" className="grid sticky top-0 z-30 bg-muted/80 backdrop-blur-md dark:bg-muted/40 border-b border-border shadow-xs" style={{ gridTemplateColumns: peopleGridCols(dates.length) }}>
+                  {/* Employee Column Header with Integrated Search */}
+                  <div role="columnheader" className="sticky top-0 left-0 z-30 flex items-center bg-muted/90 backdrop-blur-md dark:bg-muted/50 border-r border-b border-border px-3 py-2 text-left shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)]">
+                    {isSearchOpen && onSearchChange ? (
+                      <div className="flex items-center gap-1.5 w-full bg-background/90 rounded-md px-2 py-1 border border-border shadow-xs focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 transition-all">
+                        <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <input
+                          autoFocus
+                          value={searchTerm}
+                          onChange={(e) => onSearchChange(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              setIsSearchOpen(false);
+                              if (searchTerm) onSearchChange('');
+                            }
+                          }}
+                          placeholder="Search staff…"
+                          className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/60 outline-none font-sans"
+                        />
+                        {searchTerm ? (
+                          <button
+                            type="button"
+                            onClick={() => onSearchChange('')}
+                            className="p-0.5 hover:text-foreground text-muted-foreground rounded transition-colors cursor-pointer"
+                            title="Clear search"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSearchOpen(false);
+                            if (searchTerm) onSearchChange('');
+                          }}
+                          className="p-0.5 hover:text-foreground text-muted-foreground rounded transition-colors cursor-pointer"
+                          title="Close search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Employee</span>
+                          {searchTerm && (
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                              Filtered
+                            </span>
+                          )}
+                        </div>
+                        {onSearchChange && (
+                          <button
+                            type="button"
+                            onClick={() => setIsSearchOpen(true)}
+                            className={cn(
+                              "p-1 rounded-md hover:bg-background/80 transition-colors cursor-pointer text-muted-foreground hover:text-foreground",
+                              searchTerm && "text-primary bg-primary/10 hover:bg-primary/20"
+                            )}
+                            aria-label="Search employees"
+                            title="Search employees by name"
+                          >
+                            <Search className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Date Column Headers */}
@@ -496,21 +589,25 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                       <div
                         role="columnheader"
                         key={idx}
+                        data-today={dateIsToday ? "true" : undefined}
                         className={cn(
-                          'sticky top-0 z-20 bg-zinc-900 border-b border-border px-3 py-2.5 text-center transition-colors',
-                          idx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r'),
-                          holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30' : dateIsToday && 'bg-primary/5'
+                          'sticky top-0 z-20 bg-muted/80 backdrop-blur-md dark:bg-muted/40 px-3 py-2.5 text-center transition-colors',
+                          idx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-border'),
+                          holidayName ? 'bg-amber-500/10 dark:bg-amber-500/15 border-b-0' : 'border-b border-border',
+                          dateIsToday && 'bg-primary/5'
                         )}
                       >
-                        <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", holidayName ? "text-amber-400 font-extrabold" : dateIsToday ? "text-primary" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
-                        <div className={cn("text-sm font-mono tabular-nums mt-0.5", holidayName ? "text-amber-300 font-bold" : dateIsToday ? "text-primary font-bold" : "text-muted-foreground/50 font-medium")}>
-                          {format(date, 'MMM d')}
+                        <div className={cn("text-[11px] font-bold uppercase tracking-[0.12em] font-mono leading-tight", holidayName ? "text-amber-400 font-extrabold" : dateIsToday ? "text-primary font-bold" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
+                        <div className="flex items-center justify-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className={cn("text-sm font-mono tabular-nums leading-none", holidayName ? "text-amber-300 font-bold" : dateIsToday ? "text-primary font-bold" : "text-muted-foreground/60 font-medium")}>
+                            {format(date, 'MMM d')}
+                          </span>
+                          {holidayName && (
+                            <span className="text-xs italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
+                              {holidayName}
+                            </span>
+                          )}
                         </div>
-                        {holidayName && (
-                          <div className="mt-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[9px] font-black uppercase tracking-wider truncate max-w-full shadow-sm" title={`ANZ Public Holiday: ${holidayName}`}>
-                            {holidayName}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -520,56 +617,63 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                 {/* `height` + `position: relative` give the virtualizer the
                     full scroll-bounding box; rows are absolutely positioned
                     by `translateY` so only the visible window mounts. */}
-                <div style={{ height: totalSize, position: 'relative' }}>
-                  {virtualItems.map((vi) => {
-                    const employee = employees[vi.index];
-                    if (!employee) return null;
-                    return (
-                      <EmployeeRow
-                        key={employee.id}
-                        ref={rowVirtualizer.measureElement}
-                        data-index={vi.index}
-                        gridTemplateColumns={peopleGridCols(dates.length)}
-                        employee={employee}
-                        empIdx={vi.index}
-                        isLastRow={vi.index === employees.length - 1}
-                        dates={dates}
-                        canEdit={canEdit}
-                        isBulkMode={isBulkMode}
-                        showAvailabilities={showAvailabilities}
-                        showFatigueHeatmap={showFatigueHeatmap}
-                        fatigueWindowLabel={fatigueWindowLabel}
-                        cardVariant={cardVariant}
-                        complianceMap={complianceMap}
-                        currentSelectedShifts={currentSelectedShiftsSet}
-                        isDnDModeActive={isDnDModeActive}
-                        getAvailability={getAvailability}
-                        getLeave={getLeave}
-                        onAddShift={onAddShift}
-                        onClickShift={handleShiftClick}
-                        onEditShift={handleEditShift}
-                        onCloneShift={handleCloneShift}
-                        onExpandShift={handleExpandShift}
-                        onUnpublishShift={onUnpublishShift}
-                        onAssign={stableOnAssign}
-                        onMoveShift={onMoveShift}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          transform: `translateY(${vi.start}px)`,
-                        }}
-                      />
-                    );
-                  })}
-                </div>
+                {employees.length === 0 ? (
+                  <div className="p-12 flex items-center justify-center min-w-[600px]">
+                    <RosterEmptyState
+                      icon={Users}
+                      title="No employees found"
+                      description="No employees match your search query or assigned department filter."
+                    />
+                  </div>
+                ) : (
+                  <div style={{ height: totalSize, position: 'relative', width: '100%' }}>
+                    {virtualItems.map((vi) => {
+                      const employee = employees[vi.index];
+                      if (!employee) return null;
+                      return (
+                        <EmployeeRow
+                          key={employee.id}
+                          ref={rowVirtualizer.measureElement}
+                          data-index={vi.index}
+                          gridTemplateColumns={peopleGridCols(dates.length)}
+                          employee={employee}
+                          empIdx={vi.index}
+                          isLastRow={vi.index === employees.length - 1}
+                          dates={dates}
+                          canEdit={canEdit}
+                          isBulkMode={isBulkMode}
+                          showFatigueHeatmap={showFatigueHeatmap}
+                          fatigueWindowLabel={fatigueWindowLabel}
+                          cardVariant={cardVariant}
+                          complianceMap={complianceMap}
+                          currentSelectedShifts={currentSelectedShiftsSet}
+                          isDnDModeActive={isDnDModeActive}
+                          getLeave={getLeave}
+                          onAddShift={onAddShift}
+                          onClickShift={handleShiftClick}
+                          onEditShift={handleEditShift}
+                          onCloneShift={handleCloneShift}
+                          onExpandShift={handleExpandShift}
+                          onAuditShift={handleAuditShift}
+                          onUnpublishShift={onUnpublishShift}
+                          onAssign={stableOnAssign}
+                          onMoveShift={onMoveShift}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            transform: `translateY(${vi.start}px)`,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        </div>
-      </div>
       <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
+      <ShiftAuditDialog shift={auditedShift} onOpenChange={(o) => { if (!o) setAuditedShift(null); }} />
     </TooltipProvider>
   );
 };
@@ -587,7 +691,6 @@ interface EmployeeRowProps {
   dates: Date[];
   canEdit: boolean;
   isBulkMode: boolean;
-  showAvailabilities: boolean;
   showFatigueHeatmap: boolean;
   /** Human label for the days shown — surfaced in the FTG tooltip for clarity. */
   fatigueWindowLabel: string;
@@ -595,13 +698,13 @@ interface EmployeeRowProps {
   complianceMap?: Record<string, ComplianceInfo>;
   currentSelectedShifts: Set<string>;
   isDnDModeActive: boolean;
-  getAvailability: (employeeId: string, dateKey: string) => any;
   getLeave: (employeeId: string, dateKey: string) => RawLeaveDay | undefined;
   onAddShift: (employee: PeopleModeEmployee, date: Date) => void;
   onClickShift: (shift: PeopleModeShift) => void;
   onEditShift: (shift: PeopleModeShift) => void;
   onCloneShift: (shift: PeopleModeShift) => void;
   onExpandShift?: (shift: PeopleModeShift) => void;
+  onAuditShift?: (shift: PeopleModeShift) => void;
   onUnpublishShift?: (shiftId: string) => void;
   onAssign: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
@@ -621,20 +724,19 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
   dates,
   canEdit,
   isBulkMode,
-  showAvailabilities,
   showFatigueHeatmap,
   fatigueWindowLabel,
   cardVariant,
   complianceMap,
   currentSelectedShifts,
   isDnDModeActive,
-  getAvailability,
   getLeave,
   onAddShift,
   onClickShift,
   onEditShift,
   onCloneShift,
   onExpandShift,
+  onAuditShift,
   onUnpublishShift,
   onAssign,
   onMoveShift,
@@ -650,7 +752,6 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
   // nothing to measure utilization against, so we suppress the UTL bands, the
   // "/ Yh" fraction, and the progress bar for these rows.
   const hasContractBaseline = employee.periodContractedHours > 0;
-  const utilStatus = getUtilizationStatus(employee.utilization);
   const isOffRoster = (employee as { isOffRoster?: boolean }).isOffRoster === true;
 
   return (
@@ -758,130 +859,6 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
                 </TooltipContent>
               </Tooltip>
             </div>
-
-            {/* Badges row */}
-            <div className="flex items-center gap-1.5 pt-0.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className={cn(
-                    'flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm',
-                    fatigueBand === 'ok' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5 shadow-[0_0_10px_rgba(52,211,153,0.1)]' :
-                    fatigueBand === 'risk' ? 'text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]' :
-                    'text-red-400 border-red-400/30 bg-red-400/10 shadow-[0_0_15px_rgba(248,113,113,0.2)] animate-pulse'
-                  )}>
-                    <Activity className="h-2.5 w-2.5" />
-                    FTG {employee.fatigueScore.toFixed(0)}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        'p-2 rounded-lg',
-                        fatigueBand === 'ok' ? 'bg-emerald-400/20' :
-                        fatigueBand === 'risk' ? 'bg-amber-400/20' : 'bg-red-400/20'
-                      )}>
-                        <Activity className={cn(
-                          'h-4 w-4',
-                          fatigueBand === 'ok' ? 'text-emerald-400' :
-                          fatigueBand === 'risk' ? 'text-amber-400' : 'text-red-400'
-                        )} />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fatigue Health</p>
-                        <p className="text-xs font-bold text-white">Peak {employee.fatigueScore.toFixed(1)}</p>
-                        {fatigueWindowLabel && (
-                          <p className="text-[9px] text-white/40 mt-0.5">over {fatigueWindowLabel} · incl. prior 7 days</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          'h-full',
-                          fatigueBand === 'ok' ? 'bg-emerald-400' :
-                          fatigueBand === 'risk' ? 'bg-amber-400' : 'bg-red-400'
-                        )}
-                        style={{ width: `${Math.min((employee.fatigueScore / 40) * 100, 100)}%` }}
-                      />
-                    </div>
-                    <p className="text-[10px] text-white/70 leading-relaxed italic">
-                      {fatigueBand === 'ok' ? 'Healthy workload. Recovery is keeping pace with normal shifts.' :
-                        fatigueBand === 'risk' ? 'Elevated fatigue from night work or accumulation. Monitor rest.' :
-                          'Critical fatigue detected. Mandatory rest recommended per MA000080.'}
-                    </p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className={cn(
-                    'flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm',
-                    !hasContractBaseline ? 'text-muted-foreground border-border bg-muted/40' :
-                    utilStatus === 'under' ? 'text-blue-400 border-blue-500/20 bg-blue-500/5 shadow-[0_0_8px_rgba(96,165,250,0.1)]' :
-                    utilStatus === 'ideal' ? 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5 shadow-[0_0_8px_rgba(52,211,153,0.1)]' :
-                    'text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]'
-                  )}>
-                    <Scale className="h-2.5 w-2.5" />
-                    {hasContractBaseline ? `UTL ${employee.utilization.toFixed(0)}%` : 'UTL —'}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
-                  {!hasContractBaseline ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-white/10">
-                          <Scale className="h-4 w-4 text-white/60" />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fairness / Utilization</p>
-                          <p className="text-xs font-bold text-white">Not applicable</p>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-white/70 leading-relaxed italic">
-                        Utilization needs a contract baseline to measure against. This employee (e.g. casual staff) has no contracted hours, so there is nothing to compare scheduled hours to.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'p-2 rounded-lg',
-                          utilStatus === 'under' ? 'bg-blue-400/20' :
-                          utilStatus === 'ideal' ? 'bg-emerald-400/20' : 'bg-amber-400/20'
-                        )}>
-                          <Scale className={cn(
-                            'h-4 w-4',
-                            utilStatus === 'under' ? 'text-blue-400' :
-                            utilStatus === 'ideal' ? 'text-emerald-400' : 'text-amber-400'
-                          )} />
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fairness / Utilization</p>
-                          <p className="text-xs font-bold text-white">{employee.utilization.toFixed(0)}% of Contract</p>
-                        </div>
-                      </div>
-                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div
-                          className={cn(
-                            'h-full',
-                            utilStatus === 'under' ? 'bg-blue-400' :
-                            utilStatus === 'ideal' ? 'bg-emerald-400' : 'bg-amber-400'
-                          )}
-                          style={{ width: `${Math.min(employee.utilization, 120)}%` }}
-                        />
-                      </div>
-                      <p className="text-[10px] text-white/70 leading-relaxed italic">
-                        {utilStatus === 'under' ? 'Under-utilized. Priority candidate for additional shifts.' :
-                          utilStatus === 'ideal' ? 'Perfect balance. Meeting contractual obligations.' :
-                            'Over-utilized. High risk of overtime penalties and burnout.'}
-                      </p>
-                    </div>
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </div>
           </div>
         </div>
       </div>
@@ -895,18 +872,17 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
           isLastCol={dateIdx === dates.length - 1}
           canEdit={canEdit}
           isBulkMode={isBulkMode}
-          showAvailabilities={showAvailabilities}
           cardVariant={cardVariant}
           complianceMap={complianceMap}
           currentSelectedShifts={currentSelectedShifts}
           isDnDModeActive={isDnDModeActive}
-          getAvailability={getAvailability}
           getLeave={getLeave}
           onAddShift={onAddShift}
           onClickShift={onClickShift}
           onEditShift={onEditShift}
           onCloneShift={onCloneShift}
           onExpandShift={onExpandShift}
+          onAuditShift={onAuditShift}
           onUnpublishShift={onUnpublishShift}
           onAssign={onAssign}
           onMoveShift={onMoveShift}
@@ -930,18 +906,17 @@ interface EmployeeDateCellProps {
   isLastCol: boolean;
   canEdit: boolean;
   isBulkMode: boolean;
-  showAvailabilities: boolean;
   cardVariant: 'compact' | 'detailed';
   complianceMap?: Record<string, ComplianceInfo>;
   currentSelectedShifts: Set<string>;
   isDnDModeActive: boolean;
-  getAvailability: (employeeId: string, dateKey: string) => any;
   getLeave: (employeeId: string, dateKey: string) => RawLeaveDay | undefined;
   onAddShift: (employee: PeopleModeEmployee, date: Date) => void;
   onClickShift: (shift: PeopleModeShift) => void;
   onEditShift: (shift: PeopleModeShift) => void;
   onCloneShift: (shift: PeopleModeShift) => void;
   onExpandShift?: (shift: PeopleModeShift) => void;
+  onAuditShift?: (shift: PeopleModeShift) => void;
   onUnpublishShift?: (shiftId: string) => void;
   onAssign: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
@@ -954,18 +929,17 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   isLastCol,
   canEdit,
   isBulkMode,
-  showAvailabilities,
   cardVariant,
   complianceMap,
   currentSelectedShifts,
   isDnDModeActive,
-  getAvailability,
   getLeave,
   onAddShift,
   onClickShift,
   onEditShift,
   onCloneShift,
   onExpandShift,
+  onAuditShift,
   onUnpublishShift,
   onAssign,
   onMoveShift,
@@ -973,7 +947,6 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
 }) => {
   const dateKey = format(date, 'yyyy-MM-dd');
   const shifts = employee.shifts[dateKey] ?? [];
-  const availability = getAvailability(employee.id, dateKey);
   const leave = getLeave(employee.id, dateKey);
   const datePast = isSydneyPast(date);
   /** Approved leave closes the day to rostering. */
@@ -1010,7 +983,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
       onAssign={onAssign}
       onMove={onMoveShift}
     >
-      <div className={cn('space-y-2', showAvailabilities ? 'min-h-[110px]' : 'min-h-[80px]')}>
+      <div className="space-y-2 min-h-[80px]">
         {leave && <LeaveDayCard leave={leave} hasConflictingShift={shifts.length > 0} />}
 
         {shifts.length > 0
@@ -1035,6 +1008,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
                           onEdit={onEditShift}
                           onClone={onCloneShift}
                           onExpand={onExpandShift}
+                          onAudit={onAuditShift}
                           onUnpublish={onUnpublishShift}
                         />
                       ) : undefined
@@ -1065,32 +1039,15 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
               shifts.length > 0 ? 'items-end justify-end p-2' : 'items-center justify-center'
             )}
           >
-            <button
-              className={cn(
-                'flex items-center justify-center rounded-full transition-[transform,background-color,opacity,box-shadow] duration-200 pointer-events-auto',
-                holidayName
-                  ? 'bg-amber-500/30 text-amber-400 dark:text-amber-300 border border-amber-500/40 backdrop-blur-md hover:bg-amber-500/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.3)]'
-                  : 'bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]',
-                shifts.length > 0
-                  ? 'w-7 h-7 opacity-0 scale-75 group-hover/cell:opacity-100 group-hover/cell:scale-100'
-                  : 'w-9 h-9 opacity-40 scale-90 hover:opacity-100',
-                'group/add'
-              )}
+            <RosterCellAddButton
               onClick={handleAddClick}
+              hasShifts={shifts.length > 0}
+              holidayName={holidayName}
               title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
-            >
-              <Plus className={cn(
-                shifts.length > 0 ? 'h-4 w-4' : 'h-5 w-5',
-                'transition-transform group-hover/add:rotate-90',
-                holidayName ? 'text-amber-400 dark:text-amber-300' : 'text-primary'
-              )} />
-            </button>
+            />
           </div>
         )}
 
-        {showAvailabilities && (
-          <AvailabilityBar availability={availability} className="pt-1" />
-        )}
       </div>
     </DroppableDateCell>
   );

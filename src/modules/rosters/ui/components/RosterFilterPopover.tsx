@@ -29,6 +29,9 @@ export const RosterFilterPopover: React.FC = () => {
         setAdvancedFilters({ [key]: value === 'all' ? (key === 'stateId' ? null : 'all') : value });
     };
 
+    // Counts every field selectHasActiveFilters checks, so the badge and the
+    // pressed state agree (role, skills, compliance and search used to be left
+    // out: the button showed "active" with no number).
     const activeCount = [
         advancedFilters.stateId,
         advancedFilters.lifecycleStatus !== 'all',
@@ -36,27 +39,33 @@ export const RosterFilterPopover: React.FC = () => {
         advancedFilters.assignmentOutcome !== 'all',
         advancedFilters.biddingStatus !== 'all',
         advancedFilters.tradingStatus !== 'all',
+        advancedFilters.roleId,
+        advancedFilters.skillIds.length > 0,
+        advancedFilters.complianceStatus !== 'all',
+        advancedFilters.searchQuery.trim() !== '',
     ].filter(Boolean).length;
 
     return (
         <Popover>
             <PopoverTrigger asChild>
-                <Button
-                    variant={hasActiveFilters ? "secondary" : "outline"}
-                    size="icon"
+                <button
+                    type="button"
                     aria-label={`Roster filters${activeCount > 0 ? `, ${activeCount} active` : ''}`}
+                    aria-pressed={hasActiveFilters}
                     className={cn(
-                        "h-[32px] w-[32px] transition-all",
-                        hasActiveFilters && "bg-primary/20 text-primary hover:bg-primary/30 border-primary/50"
+                        "h-9 w-9 min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] sm:h-9 sm:w-9 flex items-center justify-center rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 relative",
+                        hasActiveFilters
+                            ? "bg-slate-200 dark:bg-white/20 text-slate-900 dark:text-white font-bold shadow-sm"
+                            : "text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10"
                     )}
                 >
                     <Filter className="h-4 w-4" />
                     {activeCount > 0 && (
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground shadow-sm">
-                            {activeCount}
+                        <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-500 text-[8px] font-bold text-white shadow-sm pointer-events-none">
+                            {activeCount > 9 ? '9+' : activeCount}
                         </span>
                     )}
-                </Button>
+                </button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-4 bg-background/95 backdrop-blur-md border-border/50" align="end">
                 <div className="space-y-4">

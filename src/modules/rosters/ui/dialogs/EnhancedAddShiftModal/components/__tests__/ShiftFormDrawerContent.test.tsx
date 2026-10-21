@@ -219,4 +219,53 @@ describe('ShiftFormDrawerContent — 5-Stepper and Top Tabs Redesign', () => {
         fireEvent.click(submitBtn);
         expect(onSubmit).toHaveBeenCalledTimes(1);
     });
+
+    it('disables Save & Continue on Step 3 in template mode when day_of_week is undefined', () => {
+        render(<TestWrapper defaultValues={{ day_of_week: undefined }} drawerProps={{ isTemplateMode: true }} />);
+
+        // Advance from Step 1 to Step 2
+        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+        // Advance from Step 2 to Step 3
+        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+
+        expect(screen.getByRole('tabpanel', { name: /timings & breaks/i })).toBeInTheDocument();
+
+        // On Step 3 with day_of_week undefined, Save & Continue must be disabled
+        const continueBtn = screen.getByRole('button', { name: /save & continue/i });
+        expect(continueBtn).toBeDisabled();
+    });
+
+    it('enables Save & Continue on Step 3 in template mode when day_of_week is null (Every day)', () => {
+        render(<TestWrapper defaultValues={{ day_of_week: null }} drawerProps={{ isTemplateMode: true }} />);
+
+        // Advance to Step 3
+        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+
+        expect(screen.getByRole('tabpanel', { name: /timings & breaks/i })).toBeInTheDocument();
+
+        const continueBtn = screen.getByRole('button', { name: /save & continue/i });
+        expect(continueBtn).not.toBeDisabled();
+
+        // Advance to Step 4
+        fireEvent.click(continueBtn);
+        expect(screen.getByRole('tabpanel', { name: /assignment/i })).toBeInTheDocument();
+    });
+
+    it('enables Save & Continue on Step 3 in template mode when day_of_week is 0 (Sunday)', () => {
+        render(<TestWrapper defaultValues={{ day_of_week: 0 }} drawerProps={{ isTemplateMode: true }} />);
+
+        // Advance to Step 3
+        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+
+        expect(screen.getByRole('tabpanel', { name: /timings & breaks/i })).toBeInTheDocument();
+
+        const continueBtn = screen.getByRole('button', { name: /save & continue/i });
+        expect(continueBtn).not.toBeDisabled();
+
+        // Advance to Step 4
+        fireEvent.click(continueBtn);
+        expect(screen.getByRole('tabpanel', { name: /assignment/i })).toBeInTheDocument();
+    });
 });

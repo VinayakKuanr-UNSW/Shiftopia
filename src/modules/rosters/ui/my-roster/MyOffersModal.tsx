@@ -89,6 +89,7 @@ interface OfferData {
             level_number?: number;
         } | null;
         group_type?: string | null;
+        sub_group_name?: string | null;
     };
 }
 
@@ -197,6 +198,12 @@ const OfferItem: React.FC<{
         offer.shift.departments?.name ||
         '';
 
+    const subGroupName =
+        offer.shift.sub_group_name ||
+        (offer.shift as any).roster_subgroup?.name ||
+        offer.shift.sub_departments?.name ||
+        undefined;
+
     const urgency = computeShiftUrgency(offer.shift.shift_date, offer.shift.start_time);
 
     const footerActions = showActions ? (
@@ -277,7 +284,7 @@ const OfferItem: React.FC<{
                 department={offer.shift.departments?.name || ''}
                 subDepartment={offer.shift.sub_departments?.name}
                 group={groupName}
-                subGroup={(offer.shift as any).sub_group_name}
+                subGroup={subGroupName}
                 role={roleLabel}
                 shiftDate={formatCalendarDate(offer.shift.shift_date, 'EEE, MMM d, yyyy')}
                 startTime={offer.shift.start_time?.slice(0, 5) ?? '--:--'}
@@ -288,7 +295,7 @@ const OfferItem: React.FC<{
                 timerText={(showActions && !isProcessingThis && offer.status === 'Pending') ? timerText : null}
                 isExpired={isExpired || isLocked}
                 urgency={urgency}
-                shiftData={offer.shift as any}
+                shiftData={{ ...offer.shift, sub_group_name: subGroupName } as any}
                 hideGlow
                 groupVariant={
                     offer.shift.group_type === 'convention_centre' ? 'convention' :
