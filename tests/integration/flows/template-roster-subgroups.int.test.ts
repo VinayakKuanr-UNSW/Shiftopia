@@ -250,6 +250,7 @@ describe('a second template adds on top', () => {
         expect(amBaseOnF2()).toEqual(['1', '2']);
 
         const undo = await personaClient('G2').rpc('undo_template_batch', { p_batch_id: a2.data.batch_id });
+        expect(undo.error).toBeNull();
         expect(undo.data).toMatchObject({ success: true, shifts_deleted: 1 });
         expect(amBaseOnF2()).toEqual(['1', '1']); // T1's shift is untouched
     });
