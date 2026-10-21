@@ -11,6 +11,12 @@ import {
     TemplateShift,
 } from '../model/templates.types';
 import { generateTempId } from '../utils/id-generator';
+import {
+    hasFixedSubgroup,
+    OFFICE_SUBGROUP_NAME,
+    sameSubgroupName,
+    uniqueCopyName,
+} from '@/modules/rosters/domain/subgroupRules';
 import { sanitizeString, sanitizeTemplateName } from '../utils/template-sanitizer';
 
 /* ============================================================
@@ -220,6 +226,15 @@ export function useTemplateEditor(): UseTemplateEditorReturn {
                 groups: prev.groups.map(g => {
                     if (g.id !== groupId) return g;
 
+                    if (hasFixedSubgroup(g.name)) {
+                        toast({
+                            title: 'Office has one sub-group',
+                            description: `Office always has exactly one sub-group, ${OFFICE_SUBGROUP_NAME}.`,
+                            variant: 'destructive',
+                        });
+                        return g;
+                    }
+
                     // Check for duplicate name
                     if (g.subGroups.some(sg =>
                         sg.name.toLowerCase() === sanitizedName.toLowerCase()
@@ -261,6 +276,20 @@ export function useTemplateEditor(): UseTemplateEditorReturn {
 
         setLocalTemplate(prev => {
             if (!prev) return null;
+            const group = prev.groups.find(g => g.id === groupId);
+            if (updates.name !== undefined && group) {
+                // The name is how a template sub-group finds its roster sub-group, so
+                // it is unique within the group (case-insensitively) and Office's is fixed.
+                const refusal = hasFixedSubgroup(group.name)
+                    ? `Office's sub-group is always ${OFFICE_SUBGROUP_NAME}.`
+                    : group.subGroups.some(sg => sg.id !== subgroupId && sameSubgroupName(sg.name, updates.name))
+                        ? `A subgroup named "${updates.name}" already exists`
+                        : null;
+                if (refusal) {
+                    toast({ title: 'Cannot rename', description: refusal, variant: 'destructive' });
+                    return prev;
+                }
+            }
             const updated = {
                 ...prev,
                 groups: prev.groups.map(g => {
@@ -276,7 +305,7 @@ export function useTemplateEditor(): UseTemplateEditorReturn {
             pushHistory(updated);
             return updated;
         });
-    }, [pushHistory]);
+    }, [pushHistory, toast]);
 
     const deleteLocalSubgroup = useCallback((
         groupId: string | number,
@@ -287,7 +316,8 @@ export function useTemplateEditor(): UseTemplateEditorReturn {
             const updated = {
                 ...prev,
                 groups: prev.groups.map(g => {
-                    if (g.id !== groupId) return g;
+                    // Office's Administration is fixed; the database keeps it anyway.
+                    if (g.id !== groupId || hasFixedSubgroup(g.name)) return g;
                     return {
                         ...g,
                         subGroups: g.subGroups.filter(sg => sg.id !== subgroupId),
@@ -309,7 +339,7 @@ export function useTemplateEditor(): UseTemplateEditorReturn {
             const updated = {
                 ...prev,
                 groups: prev.groups.map(g => {
-                    if (g.id !== groupId) return g;
+                    if (g.id !== groupId || hasFixedSubgroup(g.name)) return g;
 
                     const original = g.subGroups.find(sg => sg.id === subgroupId);
                     if (!original) return g;
@@ -317,12 +347,24 @@ export function useTemplateEditor(): UseTemplateEditorReturn {
                     const cloned: SubGroup = {
                         ...deepClone(original),
                         id: generateTempId('subgroup'),
-                        name: `${original.name} (Copy)`,
-                        shifts: original.shifts.map(s => ({
+                        // "(Copy)", then "(Copy 2)": names are unique within a group.
+                        name: uniqueCopyName(original.name, g.subGroups.map(sg => sg.name)),
+                        description: original.description,
+                        sortOrder: g.subGroups.length,
+                        shifts: original.shifts.map((s, idx) => ({
                             ...s,
                             id: generateTempId('shift'),
+                            sortOrder: idx,
+                            skills: [...(s.skills || [])],
+                            licenses: [...(s.licenses || [])],
+                            siteTags: [...(s.siteTags || [])],
+                            eventTags: [...(s.eventTags || [])],
+                            dayOfWeek: s.dayOfWeek !== undefined ? s.dayOfWeek : null,
+                            targetEmploymentType: s.targetEmploymentType ?? null,
+                            targetRequiresFlexible: s.targetRequiresFlexible ?? false,
+                            assignedEmployeeId: s.assignedEmployeeId ?? null,
+                            assignedEmployeeName: s.assignedEmployeeName ?? null,
                         })),
-                        sortOrder: g.subGroups.length,
                     };
 
                     return {
@@ -362,18 +404,23 @@ export function useTemplateEditor(): UseTemplateEditorReturn {
                                 shifts: [
                                     ...sg.shifts,
                                     {
+                                        ...shift,
                                         id: generateTempId('shift'),
-                                        name: sanitizeString(shift.name) || 'New Shift',
+                                        name: shift.name ? sanitizeString(shift.name) : (shift.roleName || 'New Shift'),
                                         startTime: shift.startTime || '09:00',
                                         endTime: shift.endTime || '17:00',
-                                        paidBreakDuration: shift.paidBreakDuration || 0,
-                                        unpaidBreakDuration: shift.unpaidBreakDuration || 0,
-                                        skills: shift.skills || [],
-                                        licenses: shift.licenses || [],
-                                        siteTags: shift.siteTags || [],
-                                        eventTags: shift.eventTags || [],
+                                        paidBreakDuration: shift.paidBreakDuration ?? 0,
+                                        unpaidBreakDuration: shift.unpaidBreakDuration ?? 0,
+                                        skills: [...(shift.skills || [])],
+                                        licenses: [...(shift.licenses || [])],
+                                        siteTags: [...(shift.siteTags || [])],
+                                        eventTags: [...(shift.eventTags || [])],
                                         sortOrder: sg.shifts.length,
-                                        ...shift,
+                                        dayOfWeek: shift.dayOfWeek !== undefined ? shift.dayOfWeek : null,
+                                        targetEmploymentType: shift.targetEmploymentType ?? null,
+                                        targetRequiresFlexible: shift.targetRequiresFlexible ?? false,
+                                        assignedEmployeeId: shift.assignedEmployeeId ?? null,
+                                        assignedEmployeeName: shift.assignedEmployeeName ?? null,
                                     } as TemplateShift,
                                 ],
                             };

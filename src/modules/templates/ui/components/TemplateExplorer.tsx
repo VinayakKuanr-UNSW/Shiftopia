@@ -9,6 +9,7 @@ import {
   MoreVertical,
   Pencil,
   Copy,
+  Archive,
   Trash2,
   RotateCw,
   Clock,
@@ -104,6 +105,8 @@ export interface TemplateExplorerProps {
   viewMode: 'list' | 'grid';
   onViewModeChange?: (view: 'list' | 'grid') => void;
   onSwitchToDraft?: () => void;
+  /** View-only manager (delta, epsilon): open and browse, never change. */
+  readOnly?: boolean;
 }
 
 function safeDate(input?: string | null): Date | null {
@@ -127,6 +130,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
   onRenameTemplate,
   onArchiveTemplate,
   onRestoreTemplate,
+  readOnly = false,
   isLoading = false,
   statusFilter,
   searchQuery,
@@ -321,6 +325,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
               <p className="text-xs text-muted-foreground mt-1 max-w-sm">
                 Create your first shift template to start organizing subgroups, shift patterns, and roles.
               </p>
+              {!readOnly && (
               <Button
                 onClick={onCreateTemplate}
                 className="mt-5 h-11 px-5 rounded-xl font-bold gap-2 text-xs uppercase tracking-wider bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
@@ -328,6 +333,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                 <Plus className="h-4 w-4" />
                 Create Template
               </Button>
+              )}
             </>
           )}
         </div>
@@ -576,9 +582,9 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                               </DropdownMenuItem>
                             )}
 
-                            {!isArchived ? (
+                            {readOnly ? null : !isArchived ? (
                               <DropdownMenuItem onClick={() => onArchiveTemplate(template.id)}>
-                                <Trash2 className="h-4 w-4 mr-2" />
+                                <Archive className="h-4 w-4 mr-2" />
                                 Archive
                               </DropdownMenuItem>
                             ) : (
@@ -590,6 +596,8 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                               )
                             )}
 
+                            {!readOnly && (
+                            <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => handleOpenDelete(template)}
@@ -598,6 +606,8 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete Permanently
                             </DropdownMenuItem>
+                            </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -697,9 +707,9 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                               </DropdownMenuItem>
                             )}
 
-                            {!isArchived ? (
+                            {readOnly ? null : !isArchived ? (
                               <DropdownMenuItem onClick={() => onArchiveTemplate(template.id)}>
-                                <Trash2 className="h-4 w-4 mr-2" />
+                                <Archive className="h-4 w-4 mr-2" />
                                 Archive
                               </DropdownMenuItem>
                             ) : (
@@ -711,6 +721,8 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                               )
                             )}
 
+                            {!readOnly && (
+                            <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => handleOpenDelete(template)}
@@ -719,6 +731,8 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete Permanently
                             </DropdownMenuItem>
+                            </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>

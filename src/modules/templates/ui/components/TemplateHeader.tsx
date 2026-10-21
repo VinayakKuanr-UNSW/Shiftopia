@@ -5,7 +5,7 @@ import React, { useMemo } from 'react';
 import {
   ArrowLeft,
   Save,
-  Trash2,
+  Archive,
   Upload,
   Loader2,
   Lock,
@@ -42,6 +42,8 @@ interface TemplateHeaderProps {
     onArchive: () => void;
     onDownload?: () => void;
     onUpdateStatus: (status: 'draft' | 'published' | 'archived') => void;
+    /** View-only manager (delta, epsilon): no save, delete, publish or unlock. */
+    readOnly?: boolean;
 }
 
 /* ============================================================
@@ -88,6 +90,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
     onArchive,
     onDownload,
     onUpdateStatus,
+    readOnly = false,
 }) => {
     const isPublished = template.status === 'published';
     const isDraft = template.status === 'draft';
@@ -95,7 +98,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
 
     const canPublish = isDraft && !isSaving && !hasUnsavedChanges;
     const canSave = hasUnsavedChanges && !isSaving;
-    const canDelete = !isSaving;
+    const canArchive = !isSaving && !isArchived;
 
     const employmentTypeSummary = useMemo(
       () => deriveEmploymentTypeSummary(template),
@@ -186,7 +189,12 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
                     )}
                 </div>
 
-                {/* Right Side: Save | Delete | Publish */}
+                {/* Right Side: Save | Delete | Publish — or, for view-only access, a label */}
+                {readOnly ? (
+                    <span className="shrink-0 self-end sm:self-center text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 bg-slate-500/10 px-3 py-1.5 rounded-full border border-slate-500/20">
+                        View only
+                    </span>
+                ) : (
                 <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
                     {/* Save */}
                     <TooltipProvider>
@@ -216,29 +224,31 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
                         </Tooltip>
                     </TooltipProvider>
 
-                    {/* Delete */}
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={onArchive}
-                                    disabled={!canDelete}
-                                    aria-label="Delete template"
-                                    className={cn(
-                                        "h-10 w-10 min-h-[44px] min-w-[44px] rounded-lg transition-all",
-                                        canDelete
-                                            ? "text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/20"
-                                            : "text-slate-300 dark:text-slate-600 cursor-not-allowed"
-                                    )}
-                                >
-                                    <Trash2 className="h-5 w-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Delete template</TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    {/* Archive (only when not already archived) */}
+                    {!isArchived && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={onArchive}
+                                        disabled={!canArchive}
+                                        aria-label="Archive template"
+                                        className={cn(
+                                            "h-10 w-10 min-h-[44px] min-w-[44px] rounded-lg transition-all",
+                                            canArchive
+                                                ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-500/20"
+                                                : "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                                        )}
+                                    >
+                                        <Archive className="h-5 w-5" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Archive template</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
 
                     {/* Publish / Unlock / Restore */}
                     {isDraft ? (
@@ -323,6 +333,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
                         </p>
                     )}
                 </div>
+                )}
             </div>
         </header>
     );

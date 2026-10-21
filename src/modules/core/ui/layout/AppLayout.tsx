@@ -45,7 +45,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
       {/* Sidebar - Fixed position, slides in/out (desktop only) */}
       <div
         className={cn(
-          "hidden md:block fixed left-0 top-0 h-screen z-40 transition-transform duration-300 ease-in-out",
+          "hidden md:block fixed left-0 top-0 h-screen z-50 isolate transition-transform duration-300 ease-in-out",
           isCollapsed ? "-translate-x-full" : "translate-x-0"
         )}
       >
@@ -60,7 +60,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
         aria-label={isCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
         aria-expanded={!isCollapsed}
         className={cn(
-          "hidden md:flex fixed top-4 z-40 h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
+          "hidden md:flex fixed top-4 z-50 h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
           isCollapsed ? "left-4" : "left-[268px]"
         )}
       >
@@ -76,15 +76,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
         id="main-content"
         tabIndex={-1}
         className={cn(
-        "flex-1 min-h-0 transition-all duration-300 ease-in-out safe-area-x",
+        "flex-1 min-h-0 min-w-0 transition-all duration-300 ease-in-out safe-area-x relative isolate",
           isCollapsed ? "md:ml-0" : "md:ml-[280px]",
           // Roster pages must not scroll at top level
           noPadding
             ? "p-0 overflow-hidden bg-background"
-            // Normal pages scroll normally. Bottom padding only needs to clear
+            // Normal pages scroll vertically. Bottom padding only needs to clear
             // the floating mobile nav — a hair above its top edge keeps info
             // density high instead of leaving a large dead gap.
-            : "p-4 sm:p-6 md:p-8 pb-[calc(var(--mobile-bottom-nav-clearance,90px)+0.75rem)] md:pb-8 overflow-auto bg-background"
+            // overflow-x-hidden ensures the entire page never scrolls horizontally under the fixed sidebar.
+            : "p-4 sm:p-6 md:p-8 pb-[calc(var(--mobile-bottom-nav-clearance,90px)+0.75rem)] md:pb-8 overflow-y-auto overflow-x-hidden bg-background"
         )}
       >
         <MobileSafeAreaShell>

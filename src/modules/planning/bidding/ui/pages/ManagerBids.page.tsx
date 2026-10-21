@@ -31,7 +31,9 @@ const bidAccentMap: Record<string, { bg: string; text: string; ring: string }> =
 };
 
 export const ManagerBidsPage: React.FC = () => {
-    const { activeContract, user } = useAuth();
+    const { activeContract, user, hasPermission } = useAuth();
+    // Delta and epsilon see every open bid in scope but assign none (access suites).
+    const canEdit = hasPermission('managerial-write');
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const { isDark } = useTheme();
 
@@ -187,7 +189,7 @@ export const ManagerBidsPage: React.FC = () => {
                 functionBarChildren={
                     <div className="flex items-center gap-2 flex-shrink-0">
 
-                        {autoAssignButton}
+                        {canEdit && autoAssignButton}
                         {statusFilterDropdown}
                     </div>
                 }
@@ -216,6 +218,7 @@ export const ManagerBidsPage: React.FC = () => {
                         onToggleChange={setActiveToggle}
                         onCountsChange={setCounts}
                         onAutoAssignReady={handleAutoAssignReady}
+                        readOnly={!canEdit}
                         startDate={startDate}
                         endDate={endDate}
                     />

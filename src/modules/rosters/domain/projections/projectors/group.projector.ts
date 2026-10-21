@@ -218,12 +218,17 @@ export function projectGroup(
 
   skeleton.forEach((_, gk) => projectedByGroupAndSubGroup.set(gk, new Map()));
 
-  const subGroupToCanonical = new Map<string, TemplateGroupType | 'unassigned'>();
+  // Which groups have a sub-group of each name. A shift belongs to the group it
+  // says it is in; the name is consulted only to place a shift that carries no
+  // group at all, and only when exactly one group has that name. (It used to
+  // map every name to the FIRST group holding it, so Theatre's "AM Base" shifts
+  // rendered under Convention Centre's "AM Base" here, while Bucket View put
+  // them under Theatre.)
+  const groupsBySubGroupName = new Map<string, Set<TemplateGroupType | 'unassigned'>>();
   skeleton.forEach((subMap, gk) => {
     subMap.forEach((_, sgName) => {
-      if (!subGroupToCanonical.has(sgName)) {
-        subGroupToCanonical.set(sgName, gk);
-      }
+      if (!groupsBySubGroupName.has(sgName)) groupsBySubGroupName.set(sgName, new Set());
+      groupsBySubGroupName.get(sgName)!.add(gk);
     });
   });
 
@@ -238,9 +243,11 @@ export function projectGroup(
 
     const subGroupName = shift.subGroupName?.trim() ?? shift.rosterSubgroupName?.trim() ?? 'General';
 
-    const canonicalKey = subGroupToCanonical.get(subGroupName);
+    const owners = groupsBySubGroupName.get(subGroupName);
     const groupKey: TemplateGroupType | 'unassigned' =
-      canonicalKey !== undefined ? canonicalKey : rawGroupKey;
+      rawGroupKey !== 'unassigned' ? rawGroupKey
+        : owners?.size === 1 ? [...owners][0]
+        : 'unassigned';
 
     const date     = shift.shiftDate;
     const groupMap = projectedByGroupAndSubGroup.get(groupKey)!;

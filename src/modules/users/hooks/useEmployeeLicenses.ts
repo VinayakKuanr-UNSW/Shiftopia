@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/hooks/use-toast';
 
 // Types
@@ -114,6 +115,8 @@ export const useUpdateEmployeeLicense = () => {
         `)
                 .single();
 
+            // PGRST116 = no row came back: row-level security refused the update.
+            if (error?.code === 'PGRST116') throw new WriteRefusedError('change this licence');
             if (error) throw error;
             return data as EmployeeLicense;
         },
@@ -138,12 +141,13 @@ export const useRemoveEmployeeLicense = () => {
 
     return useMutation({
         mutationFn: async ({ id, employeeId }: { id: string; employeeId: string }) => {
-            const { error } = await supabase
+            const removed = await supabase
                 .from('employee_licenses')
-                .delete()
+                .delete({ count: 'exact' })
                 .eq('id', id);
 
-            if (error) throw error;
+            if (removed.error) throw removed.error;
+            assertWrote(removed, 'remove this licence');
             return { id, employeeId };
         },
         onSuccess: async (data) => {

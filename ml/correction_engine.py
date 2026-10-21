@@ -19,7 +19,9 @@ from supabase import create_client
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 SUPABASE_URL = os.getenv('VITE_SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('VITE_SUPABASE_ANON_KEY')
+# Server-side only. The anon key reads nothing these scripts need (RLS), so
+# there is deliberately no fallback to it: a missing key fails loudly.
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 logger = logging.getLogger(__name__)
 

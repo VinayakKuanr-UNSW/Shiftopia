@@ -149,6 +149,8 @@ export const BulkPublishResponseSchema = z.object({
   success_count: z.number().int().optional(),
   failure_count: z.number().int().optional(),
   message: z.string().optional(),
+  /** Set on `success: false` — the RPC's EXCEPTION handler returns SQLERRM here. */
+  error: z.string().optional(),
   errors: z.array(z.object({
     shift_id: z.string(),
     reason: z.string(),

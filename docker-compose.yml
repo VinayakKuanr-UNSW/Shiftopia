@@ -53,7 +53,9 @@ services:
       - '8000:8000'
     environment:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      # Server-side reads and writes (features, forecasts, prediction log). Never
+      # the anon key: it ships in the web bundle and RLS gives it nothing here.
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     restart: unless-stopped
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']

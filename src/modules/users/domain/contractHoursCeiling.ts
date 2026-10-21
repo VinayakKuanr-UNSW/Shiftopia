@@ -35,6 +35,10 @@ export interface ExistingContract {
     status: string | null;
     /** Not used by the ceiling — carried for the cl 13 multi-hire check. */
     role_id?: string | null;
+    /** ISO yyyy-MM-dd. With the dates, `concurrentWith` can tell what runs alongside a proposal. */
+    start_date?: string | null;
+    /** ISO yyyy-MM-dd, inclusive; null while the contract is ongoing. */
+    end_date?: string | null;
 }
 
 export interface CapacityResult {
@@ -71,6 +75,33 @@ function toHours(value: number | string | null | undefined): number {
     if (value === null || value === undefined || value === '') return 0;
     const n = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+const OPEN_END = '9999-12-31';
+
+/**
+ * The held contracts that run at the same time as a proposed one — what the
+ * database's guardrails count since contract dates drive the contract
+ * (`hr.fn_check_user_contract_guardrails`, 2026-10-16): every contract whose
+ * dates overlap, whatever its status today. An expired contract still counts
+ * against a new one backdated into its dates; a contract that ends before the
+ * new one starts does not.
+ *
+ * The result is marked Active — in force alongside the proposal — because the
+ * checks below count Active rows. A row without dates is left as it is.
+ */
+export function concurrentWith(
+    existingContracts: readonly ExistingContract[],
+    startDate: string,
+    endDate?: string | null,
+): ExistingContract[] {
+    if (!startDate) return [...existingContracts];
+    const end = endDate || OPEN_END;
+    return existingContracts.flatMap(c => {
+        if (!c.start_date) return [c];
+        const overlaps = c.start_date <= end && startDate <= (c.end_date || OPEN_END);
+        return overlaps ? [{ ...c, status: 'Active' }] : [];
+    });
 }
 
 // ── Core Functions ─────────────────────────────────────────────────────────

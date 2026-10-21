@@ -402,7 +402,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                                 animate={{ opacity: 1 }}
                                                                 className="flex items-center gap-3 px-2 py-1"
                                                             >
-                                                                <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
+                                                                <div className="h-2 w-2 rounded-full bg-primary" />
                                                                 <span className="text-[11px] font-bold text-muted-foreground">
                                                                     Applying to <span className="text-foreground text-xs px-1.5 py-0.5 bg-muted rounded-md border border-border mx-0.5">{daysCount}</span> {daysCount === 1 ? 'day' : 'days'}
                                                                 </span>
@@ -428,7 +428,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                         "flex-1 h-16 rounded-[1.5rem] font-black text-md uppercase tracking-[0.2em] transition-all relative overflow-hidden active:scale-[0.97]",
                                                         !selectedId || !isFullyActivated
                                                             ? "bg-muted text-muted-foreground cursor-not-allowed border-border"
-                                                            : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 border-b-4 border-primary/20"
+                                                            : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm border-b-4 border-primary/20"
                                                     )}
                                                 >
                                                     {applyTemplate.isPending ? (

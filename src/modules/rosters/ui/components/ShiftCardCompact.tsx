@@ -298,8 +298,8 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 const urg = computeShiftUrgency(rawShift.shift_date, rawShift.start_time);
                 // An actively on-bidding shift (S5) is on bidding — emergent just
                 // means the start is imminent/passed, not that bidding expired.
-                if (urg === 'emergent') return <Flame className="w-4 h-4 text-rose-500 animate-[pulse_0.8s_ease-in-out_infinite]" />;
-                if (urg === 'urgent')   return <Flame className="w-4 h-4 text-orange-500 animate-pulse" />;
+                if (urg === 'emergent') return <Flame className="w-4 h-4 text-rose-500" />;
+                if (urg === 'urgent')   return <Flame className="w-4 h-4 text-orange-500" />;
                 return <Gavel className="w-4 h-4 text-blue-500" />;
               })()}
               <span className={cn("text-[9px] font-bold truncate w-full text-center", (() => {

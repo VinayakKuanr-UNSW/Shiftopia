@@ -248,7 +248,7 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
               <Button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 aria-label={isSubmitting ? "Adding department..." : "Add Department"}
                 aria-busy={isSubmitting}
               >

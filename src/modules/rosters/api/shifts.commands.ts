@@ -1,12 +1,12 @@
 import { supabase } from '@/platform/supabase/client';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { processInChunks } from '../domain/bulk-action-engine';
+import { processInChunks, EMERGENT_WINDOW_MS, DEFAULT_CHUNK_CONCURRENCY } from '../domain/bulk-action-engine';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
 import { complianceService } from '../services/compliance.service';
 import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/platform/supabase/rpc/client';
-import { shiftsQueries } from './shifts.queries';
-import { ComplianceError } from '@/platform/supabase/rpc/errors';
+import { shiftsQueries, type PublishCheckRow } from './shifts.queries';
+import { ComplianceError, ComplianceUnavailableError } from '@/platform/supabase/rpc/errors';
 import { assertShapeForRow, assertShapeForShiftId } from './shift-shape-gate';
 import {
     CreateShiftResponseSchema,
@@ -25,6 +25,16 @@ import {
     CloseBiddingResponseSchema,
     ApplyShiftOpResponseSchema,
 } from './contracts';
+
+/** Publish refuses a shift the compliance engine never answered for. */
+const COMPLIANCE_NOT_CHECKED =
+    'Compliance engine unreachable — this shift could not be checked, so it was not published. Try again.';
+
+/** Why a shift failed its compliance check: the rules it broke, or that it was never checked. */
+function complianceFailureReason(v: { status: string; violations: string[] }): string {
+    if (v.violations.length > 0) return v.violations.join(', ');
+    return v.status === 'unavailable' ? COMPLIANCE_NOT_CHECKED : 'Failed a compliance check (no rule was named).';
+}
 
 // ============================================================
 // BULK ACTION PARTIAL RESULT TYPES
@@ -165,6 +175,12 @@ export const shiftsCommands = {
                 netMinutes
             );
 
+            // An unreachable engine is not a pass: the local fallback sees only
+            // past dates and start=end, so saving on it would roster someone
+            // nobody checked. Say it was never checked, not that it failed a rule.
+            if (!validation.engineReached || validation.status === 'unavailable') {
+                throw new ComplianceUnavailableError(undefined, 'sm_create_shift');
+            }
             if (!validation.isValid) {
                 throw new ComplianceError(validation.violations, 'sm_create_shift');
             }
@@ -578,7 +594,6 @@ export const shiftsCommands = {
             }
         }
 
-        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
         const ttsMs = shift?.start_at
             ? new Date(shift.start_at).getTime() - Date.now()
             : shift
@@ -590,7 +605,7 @@ export const shiftsCommands = {
         // the shift-state-processor expires bidding inside the 4h lock, bouncing the
         // shift straight back to Draft (S1). Block it and steer the manager to
         // Emergency Assignment: assigning a worker publishes directly to Confirmed (S4).
-        if (!isAssigned && ttsMs <= FOUR_HOURS_MS) {
+        if (!isAssigned && ttsMs <= EMERGENT_WINDOW_MS) {
             throw new Error(
                 'This shift starts within 4 hours, so it can’t be opened for bidding — bids are locked in the emergency window and it would immediately revert to Draft. Assign an employee to emergency-publish it instead.',
             );
@@ -607,7 +622,7 @@ export const shiftsCommands = {
         // `supabase.from('shifts').update()` here with no row lock and no version CAS;
         // that gap is what docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §6
         // flagged as the exact race Reserve List needed closed before it could be safe.
-        if (isAssigned && ttsMs > 0 && ttsMs < FOUR_HOURS_MS) {
+        if (isAssigned && ttsMs > 0 && ttsMs <= EMERGENT_WINDOW_MS) {
             const envelope = await callRpc(
                 'sm_apply_shift_op',
                 {
@@ -661,22 +676,40 @@ export const shiftsCommands = {
         // Per-shift compliance pre-check — does NOT block the whole batch on a single failure.
         // Also identifies assigned shifts with TTS < 4h (emergency set) so they bypass the
         // offer flow and land directly on S4 (Confirmed) rather than S3 (Offered).
-        const FOUR_H_MS = 4 * 60 * 60 * 1000;
+        //
+        // Fails CLOSED. A shift that cannot be read, or whose compliance the engine
+        // never answered for, is not published. Both used to pass: each shift was
+        // re-read with getShiftById, whose `null` on any error looked like "no
+        // assignee", and an unreachable edge function fell back to a local check
+        // that reports `passed`.
         const emergencySet = new Set<string>();
 
-        const complianceChecks = await Promise.allSettled(
-            shiftIds.map(async (id) => {
-                const shift = await shiftsQueries.getShiftById(id);
+        // One batched read for every shift, instead of one request per shift.
+        let shiftById: Map<string, PublishCheckRow>;
+        try {
+            shiftById = await shiftsQueries.getPublishCheckRows(shiftIds);
+        } catch (e: any) {
+            const reason = `Could not load the shift to check it before publishing (${e?.message ?? 'unknown error'}). Nothing was published — try again.`;
+            return { publishedIds: [], complianceFailed: shiftIds.map(id => ({ id, reason })), dbFailed: [] };
+        }
+
+        // Bounded: at most DEFAULT_CHUNK_CONCURRENCY (5) compliance calls in flight (processInChunks).
+        // Firing all N at once is the burst most likely to make the edge function error (F-06).
+        const complianceChecks = await processInChunks(
+            shiftIds,
+            async (id) => {
+                const shift = shiftById.get(id);
+                if (!shift) {
+                    return { id, pass: false as const, reason: 'Shift not found — it may have been deleted. Reload the roster.' };
+                }
                 // Unassigned shifts: no compliance needed. BUT inside the 4h emergency
                 // window, opening bidding (S5) auto-expires back to Draft (S1) — so skip
                 // the no-op and surface the emergency-assignment hint instead of passing.
-                if (!shift?.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) {
-                    const ttsUnassigned = shift?.start_at
+                if (!shift.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) {
+                    const ttsUnassigned = shift.start_at
                         ? new Date(shift.start_at).getTime() - Date.now()
-                        : shift
-                            ? parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now()
-                            : Number.POSITIVE_INFINITY;
-                    if (ttsUnassigned <= FOUR_H_MS) {
+                        : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now();
+                    if (ttsUnassigned <= EMERGENT_WINDOW_MS) {
                         return {
                             id,
                             pass: false as const,
@@ -697,33 +730,35 @@ export const shiftsCommands = {
                     id,
                 );
                 if (!validation.isValid) {
-                    const rules = validation.violations.join(', ');
-                    return { id, pass: false as const, reason: rules };
+                    return { id, pass: false as const, reason: complianceFailureReason(validation) };
+                }
+                if (!validation.engineReached) {
+                    return { id, pass: false as const, reason: COMPLIANCE_NOT_CHECKED };
                 }
                 // Flag assigned shifts within the 4h lock window for emergency publish
                 const ttsMs = shift.start_at
                     ? new Date(shift.start_at).getTime() - Date.now()
                     : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now();
-                if (ttsMs > 0 && ttsMs < FOUR_H_MS) {
+                if (ttsMs > 0 && ttsMs <= EMERGENT_WINDOW_MS) {
                     emergencySet.add(id);
                 }
                 return { id, pass: true as const, reason: '' };
-            })
+            },
+            DEFAULT_CHUNK_CONCURRENCY,
         );
 
         const complianceFailed: Array<{ id: string; reason: string }> = [];
         const passIds: string[] = [];
 
-        complianceChecks.forEach((check, i) => {
-            const id = shiftIds[i];
-            if (check.status === 'rejected') {
-                complianceFailed.push({ id, reason: 'Compliance check error' });
+        for (const check of complianceChecks) {
+            if (!check.ok) {
+                complianceFailed.push({ id: check.id, reason: `Compliance check error: ${check.error}` });
             } else if (!check.value.pass) {
-                complianceFailed.push({ id, reason: check.value.reason });
+                complianceFailed.push({ id: check.id, reason: check.value.reason });
             } else {
-                passIds.push(id);
+                passIds.push(check.id);
             }
-        });
+        }
 
         // Nothing passes compliance — skip the DB round-trip entirely
         if (passIds.length === 0) {
@@ -748,7 +783,11 @@ export const shiftsCommands = {
 
                 if (result.success === false) {
                     // RPC signalled a hard failure — the whole batch was rejected.
-                    normalIds.forEach(id => dbFailed.push({ id, reason: result.message || 'Bulk publish failed' }));
+                    // The RPC's error branch sends `error` (SQLERRM), not `message`;
+                    // reading only `message` reduced every refusal to the same
+                    // "Bulk publish failed", whatever the cause.
+                    const reason = result.error || result.message || 'Bulk publish failed';
+                    normalIds.forEach(id => dbFailed.push({ id, reason }));
                 } else {
                     // Forward-compatibility: if a future RPC version returns a per-shift
                     // errors array, use it as the primary source of truth.
@@ -781,10 +820,39 @@ export const shiftsCommands = {
                         (typeof result.failure_count === 'number' && result.failure_count > 0)
                         || (typeof result.success_count === 'number' && result.success_count !== normalIds.length)
                     ) {
-                        const { data: rows, error: selectError } = await supabase
-                            .from('shifts')
-                            .select('id, lifecycle_status')
-                            .in('id', normalIds);
+                        // Chunk verification queries into batches of 100 IDs to avoid HTTP 414 URI too long
+                        const VERIFY_BATCH_SIZE = 100;
+                        const batches: string[][] = [];
+                        for (let i = 0; i < normalIds.length; i += VERIFY_BATCH_SIZE) {
+                            batches.push(normalIds.slice(i, i + VERIFY_BATCH_SIZE));
+                        }
+
+                        let selectError: { message: string } | null = null;
+                        const rows: Array<{ id: string; lifecycle_status: string }> = [];
+
+                        // Run in parallel batches of 6 to respect connection pools
+                        const BATCH_CONCURRENCY = 6;
+                        for (let i = 0; i < batches.length; i += BATCH_CONCURRENCY) {
+                            const currentSlice = batches.slice(i, i + BATCH_CONCURRENCY);
+                            const chunkResults = await Promise.all(
+                                currentSlice.map(ids =>
+                                    supabase
+                                        .from('shifts')
+                                        .select('id, lifecycle_status')
+                                        .in('id', ids)
+                                )
+                            );
+                            for (const chunkRes of chunkResults) {
+                                if (chunkRes.error) {
+                                    selectError = chunkRes.error;
+                                    break;
+                                }
+                                if (chunkRes.data) {
+                                    rows.push(...(chunkRes.data as Array<{ id: string; lifecycle_status: string }>));
+                                }
+                            }
+                            if (selectError) break;
+                        }
 
                         if (selectError) {
                             // Verification query itself failed. We cannot safely claim any
@@ -799,7 +867,7 @@ export const shiftsCommands = {
                             // Any other state means the RPC skipped this shift.
                             const postPublishStatuses = new Set(['Published', 'InProgress', 'Completed']);
                             const publishedSet = new Set(
-                                (rows ?? [])
+                                rows
                                     .filter((r: { id: string; lifecycle_status: string }) =>
                                         postPublishStatuses.has(r.lifecycle_status))
                                     .map((r: { id: string; lifecycle_status: string }) => r.id)
@@ -838,12 +906,30 @@ export const shiftsCommands = {
         // pattern. One RPC call per shift, since
         // the gateway is single-shift by design.
         if (emergencyIds.length > 0) {
-            const { data: preState } = await supabase
-                .from('shifts')
-                .select('id, version')
-                .in('id', emergencyIds);
+            const VERIFY_BATCH_SIZE = 100;
+            const batches: string[][] = [];
+            for (let i = 0; i < emergencyIds.length; i += VERIFY_BATCH_SIZE) {
+                batches.push(emergencyIds.slice(i, i + VERIFY_BATCH_SIZE));
+            }
+            const preStateRows: Array<{ id: string; version: number }> = [];
+            for (let i = 0; i < batches.length; i += 6) {
+                const currentSlice = batches.slice(i, i + 6);
+                const chunkResults = await Promise.all(
+                    currentSlice.map(ids =>
+                        supabase
+                            .from('shifts')
+                            .select('id, version')
+                            .in('id', ids)
+                    )
+                );
+                for (const chunkRes of chunkResults) {
+                    if (chunkRes.data) {
+                        preStateRows.push(...(chunkRes.data as Array<{ id: string; version: number }>));
+                    }
+                }
+            }
             const versionById = new Map(
-                (preState ?? []).map((s: { id: string; version: number }) => [s.id, s.version]),
+                preStateRows.map((s: { id: string; version: number }) => [s.id, s.version]),
             );
 
             await Promise.all(
@@ -1089,8 +1175,12 @@ export const shiftsCommands = {
                 );
 
                 if (!validation.isValid) {
-                    const rules = validation.violations.join(', ');
-                    return { id, category: 'compliance_failed' as const, reason: rules };
+                    return { id, category: 'compliance_failed' as const, reason: complianceFailureReason(validation) };
+                }
+                // Same rule as bulkPublishShifts, so the preview never promises a
+                // publish that the write will then refuse.
+                if (!validation.engineReached) {
+                    return { id, category: 'compliance_failed' as const, reason: COMPLIANCE_NOT_CHECKED };
                 }
 
                 return { id, category: 'eligible' as const, reason: '' };

@@ -32,11 +32,11 @@
     radial-gradient(circle at 85% 30%,
       rgba(16, 185, 129, 0.02) 0%,
       transparent 40%);
-  /* Page background - very light neutral for better surface separation */
-  --background-color: #F7F8FA;
+  /* Page background - soft neutral for clear surface separation against white cards */
+  --background-color: #F4F5F7;
 
   --background: 220 14% 96%;
-  /* Near-black for strong title contrast */
+  /* Near-black for strong title contrast (15.3:1) */
   --foreground: 221 39% 11%;
 
   /* Cards - pure white for clear separation from page bg */
@@ -46,7 +46,8 @@
   --popover: 0 0% 100%;
   --popover-foreground: 221 39% 11%;
 
-  --primary: 239 84% 67%;
+  /* WCAG AA Primary: 5.83:1 contrast against white */
+  --primary: 243 75% 54%;
   --primary-foreground: 0 0% 100%;
 
   /* Secondary - slightly tinted for inset areas */
@@ -55,8 +56,8 @@
 
   /* Muted - subtle tint for inset panels */
   --muted: 220 13% 95%;
-  /* Muted foreground - proper contrast ratio */
-  --muted-foreground: 220 9% 46%;
+  /* Muted foreground - slate-600 ensures >=6.5:1 contrast against white and muted */
+  --muted-foreground: 220 13% 36%;
 
   --accent: 220 14% 96%;
   --accent-foreground: 221 39% 11%;
@@ -64,10 +65,10 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Improved borders - matches #E5E7EB */
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 239 84% 67%;
+  /* Visible borders and inputs (slate-300 / slate-400 equivalent for UI boundaries) */
+  --border: 220 13% 80%;
+  --input: 220 13% 80%;
+  --ring: 243 75% 54%;
 
   /* Inset background for tables, KPI panels */
   --inset-bg: 220 14% 95%;
@@ -79,11 +80,11 @@
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: 220 14% 96%;
   --sidebar-accent-foreground: 221 39% 11%;
-  --sidebar-border: 220 13% 91%;
+  --sidebar-border: 220 13% 80%;
   --sidebar-ring: var(--ring);
 
   /* Chart */
-  --chart-1: 239 84% 67%;
+  --chart-1: 243 75% 54%;
   --chart-2: 160 60% 45%;
   --chart-3: 30 80% 55%;
   --chart-4: 280 65% 60%;

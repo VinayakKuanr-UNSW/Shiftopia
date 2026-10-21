@@ -10,6 +10,7 @@ import {
   MoreVertical,
   Pencil,
   Copy,
+  Archive,
   Trash2,
   Upload,
   FileText,
@@ -399,7 +400,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
 
             {!isArchived && (
               <DropdownMenuItem onClick={onArchive}>
-                <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                <Archive className="h-4 w-4 mr-2" aria-hidden="true" />
                 Archive
               </DropdownMenuItem>
             )}

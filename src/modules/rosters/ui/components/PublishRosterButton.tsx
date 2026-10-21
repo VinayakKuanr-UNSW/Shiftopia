@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { Button } from '@/modules/core/ui/primitives/button';
+import React, { useId, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,6 +9,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/modules/core/ui/primitives/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 import { Send, Loader2, Calendar } from 'lucide-react';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
@@ -26,10 +31,17 @@ interface PublishRosterButtonProps {
   /** Disables the trigger (e.g. no edit permission or no org selected). */
   disabled?: boolean;
   /**
+   * Why it is disabled. Shown on hover and focus and read as the button's
+   * description. The button stays focusable (aria-disabled, not `disabled`)
+   * so a keyboard user can reach the explanation at all.
+   */
+  disabledReason?: string;
+  /**
    * Loads the current roster and partitions it into the publish plan. Called
-   * when the button is clicked — runs a (cached) fetch so it works in every
-   * view, including the default Group Bucket View where the grid renders
-   * summary cells only and no per-shift list is loaded.
+   * when the button is clicked — a fresh, strict read (it throws rather than
+   * plan from a partial roster) so it works in every view, including the
+   * default Group Bucket View where the grid renders summary cells only and no
+   * per-shift list is loaded.
    */
   loadPlan: () => Promise<PublishRosterPlan>;
   /** Executes the plan: publishes the drafts. Started shifts are never deleted. */
@@ -55,8 +67,26 @@ type State =
  * started are reported and left alone: a started shift is never deleted.
  * Always confirms first — the action broadcasts to employees.
  */
+/**
+ * Group skip reasons for the result toast: most common first, a count when a
+ * reason repeats, the rest summarised. Without it the toast said "3 skipped"
+ * and the manager could not tell a compliance block from a timeout.
+ */
+export function summariseReasons(reasons: readonly string[], max = 2): string {
+  const counts = new Map<string, number>();
+  for (const r of reasons) {
+    if (!r) continue;
+    counts.set(r, (counts.get(r) ?? 0) + 1);
+  }
+  const sorted = [...counts].sort((a, b) => b[1] - a[1]);
+  const shown = sorted.slice(0, max).map(([r, n]) => (n > 1 ? `${r} (×${n})` : r));
+  const rest = sorted.length - shown.length;
+  return shown.join(' · ') + (rest > 0 ? ` · and ${rest} other reason${rest > 1 ? 's' : ''}` : '');
+}
+
 export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   disabled,
+  disabledReason,
   loadPlan,
   execute,
   selectedViewType,
@@ -64,6 +94,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
 }) => {
   const [state, setState] = useState<State>({ type: 'idle' });
   const { toast } = useToast();
+  const reasonId = useId();
 
   const isLoading = state.type === 'loading';
   const isExecuting = state.type === 'executing';
@@ -79,6 +110,8 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   const fullTimeCount = plan?.fullTimeIds.length ?? 0;
   const fullTimeUnassignedCount = plan?.fullTimeUnassignedIds.length ?? 0;
   const onLeaveCount = plan?.onLeaveIds?.length ?? 0;
+  const pastCount = plan?.pastIds?.length ?? 0;
+  const noPermissionCount = plan?.noPermissionIds?.length ?? 0;
   const alreadyPublishedCount = plan?.alreadyPublishedCount ?? 0;
 
   // What the Confirm button will actually change: publishes (X + Y + A).
@@ -89,8 +122,10 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   // The plan considered no shifts at all → nothing to show.
   const consideredCount =
     actionableCount + emergentUnassignedCount + alreadyPublishedCount + deadCount + fullTimeUnassignedCount
-    + onLeaveCount;
+    + onLeaveCount + pastCount + noPermissionCount;
   const nothingToDo = plan !== null && consideredCount === 0;
+  // Drafts exist, but every one is a skip: Confirm would change nothing.
+  const nothingPublishable = plan !== null && !nothingToDo && actionableCount === 0;
 
   // The calculations shown in the confirm dialog, in order.
   const steps: Array<{
@@ -128,6 +163,18 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
       title: `${onLeaveCount} On approved leave`,
       desc: 'The assignee is on approved leave that day — reassign or remove the shift (skipped)',
       tone: 'warning',
+    },
+    {
+      count: noPermissionCount,
+      title: `${noPermissionCount} Where you can only view`,
+      desc: 'You do not have publish rights in that department — skipped',
+      tone: 'warning',
+    },
+    {
+      count: pastCount,
+      title: `${pastCount} Already started or finished`,
+      desc: 'Too late to publish — skipped',
+      tone: 'muted',
     },
     {
       count: emergentAssignedCount,
@@ -172,14 +219,18 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   };
 
   const handleClick = async () => {
+    // aria-disabled, not `disabled`: the button stays focusable, so guard here.
+    if (disabled || state.type !== 'idle') return;
     setState({ type: 'loading' });
     try {
       const loaded = await loadPlan();
       setState({ type: 'confirming', plan: loaded });
-    } catch {
+    } catch (e) {
+      // No dialog on a failed or incomplete read: a plan built from part of the
+      // roster would publish part of it. Say why (e.g. a view over the row cap).
       toast({
         title: 'Could not prepare publish',
-        description: 'Failed to load the roster. Try again.',
+        description: e instanceof Error && e.message ? e.message : 'Failed to load the roster. Try again.',
         variant: 'destructive',
       });
       setState({ type: 'idle' });
@@ -195,9 +246,10 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
       const parts: string[] = [];
       if (result.published) parts.push(`${result.published} published`);
       if (result.failed) parts.push(`${result.failed} skipped`);
+      const why = result.failed ? summariseReasons(result.failedReasons ?? []) : '';
       toast({
         title: result.failed ? 'Roster published — with skips' : 'Roster published',
-        description: parts.length ? parts.join(' · ') : 'Nothing to publish.',
+        description: (parts.length ? parts.join(' · ') : 'Nothing to publish.') + (why ? ` — ${why}` : ''),
         variant: result.failed ? 'destructive' : 'default',
       });
       setState({ type: 'idle' });
@@ -213,24 +265,44 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
 
   return (
     <>
-      <Button
-        size="sm"
-        onClick={handleClick}
-        disabled={disabled || isLoading}
-        aria-label="Publish roster — send offers, open bidding"
-        className={cn(
-          'h-10 min-h-[44px] sm:min-h-[36px] sm:h-9 gap-2 rounded-xl px-4 text-xs font-extrabold uppercase tracking-wider shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950',
-          'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95',
-        )}
-        title="Publish roster — send offers, open bidding"
-      >
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
-        ) : (
-          <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
-        )}
-        Publish
-      </Button>
+      {(() => {
+        const inert = disabled || isLoading;
+        const explain = disabled && disabledReason ? disabledReason : undefined;
+        const trigger = (
+          <button
+            type="button"
+            onClick={handleClick}
+            // aria-disabled, not `disabled`: a natively disabled button leaves
+            // the tab order, so a keyboard user could never reach the reason.
+            aria-disabled={inert || undefined}
+            aria-describedby={explain ? reasonId : undefined}
+            aria-label="Publish roster — send offers, open bidding"
+            className={cn(
+              'h-10 min-h-[44px] sm:min-h-[36px] sm:h-9 gap-2 rounded-xl px-4 text-xs font-extrabold uppercase tracking-wider shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 flex items-center justify-center',
+              'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95',
+              'aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-emerald-600 aria-disabled:active:scale-100',
+            )}
+            title={explain ? undefined : 'Publish roster — send offers, open bidding'}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
+            ) : (
+              <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
+            Publish
+            {explain && <span id={reasonId} className="sr-only">{explain}</span>}
+          </button>
+        );
+        if (!explain) return trigger;
+        return (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">{explain}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      })()}
 
       <AlertDialog
         open={dialogOpen}
@@ -253,12 +325,16 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                 <span className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/40">
                   VIEW SELECTED
                 </span>
-                <span className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {selectedViewType || 'Week'}
-                </span>
-                <span className="text-sm text-slate-500 dark:text-white/60 font-semibold mt-0.5">
-                  {selectedViewRange || '6 Jul - 12 Jul'}
-                </span>
+                {selectedViewType && (
+                  <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                    {selectedViewType}
+                  </span>
+                )}
+                {selectedViewRange && (
+                  <span className="text-sm text-slate-500 dark:text-white/60 font-semibold mt-0.5">
+                    {selectedViewRange}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -271,7 +347,9 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                 ) : (
                   <>
                     <p className="text-slate-600 dark:text-slate-400 text-left text-sm font-semibold">
-                      The following will be applied to every draft shift in the current view:
+                      {nothingPublishable
+                        ? 'Nothing in this view can be published — every draft is skipped for a reason below.'
+                        : 'The following will be applied to every draft shift in the current view:'}
                     </p>
 
                     {/* Stepper / Timeline Checklist — every calculation */}
@@ -340,7 +418,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                 e.preventDefault();
                 handleConfirm();
               }}
-              disabled={isExecuting || nothingToDo}
+              disabled={isExecuting || nothingToDo || nothingPublishable}
             >
               {isExecuting ? (
                 <>

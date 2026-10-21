@@ -405,7 +405,9 @@ export async function approveLeaveRequest(
 
   if (updateErr) return { error: updateErr.message };
   if (!updatedRows || updatedRows.length === 0) {
-    return { error: 'This request is no longer pending (it may have just been actioned by someone else).' };
+    // Zero rows: someone else decided it first, OR row-level security refused this
+    // caller (no leave.approve where the employee works) — RLS never says which.
+    return { error: 'Nothing changed: this request is no longer pending, or deciding it is outside your access. Refresh and try again.' };
   }
 
   // The DB trigger `trg_leave_balance_deduction` will atomically deduct the balance.
@@ -479,7 +481,9 @@ export async function rejectLeaveRequest(
 
   if (error) return { error: error.message };
   if (!data || data.length === 0) {
-    return { error: 'This request is no longer pending (it may have just been actioned by someone else).' };
+    // Zero rows: someone else decided it first, OR row-level security refused this
+    // caller (no leave.approve where the employee works) — RLS never says which.
+    return { error: 'Nothing changed: this request is no longer pending, or deciding it is outside your access. Refresh and try again.' };
   }
   return {};
 }
@@ -515,7 +519,7 @@ export async function revokeLeaveRequest(
 
   if (error) return { error: error.message };
   if (!data || data.length === 0) {
-    return { error: 'Only approved leave that has not yet ended can be revoked.' };
+    return { error: 'Nothing changed: only approved leave that has not yet ended can be revoked, by a manager whose access covers it.' };
   }
   return {};
 }
@@ -524,13 +528,19 @@ export async function revokeLeaveRequest(
  * Cancel a leave request (only if still pending).
  */
 export async function cancelLeaveRequest(requestId: string): Promise<MutationResult> {
-  const { error } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from('leave_requests')
     .update({ status: 'cancelled' })
     .eq('id', requestId)
-    .eq('status', 'pending');
+    .eq('status', 'pending')
+    .select('id');
 
   if (error) return { error: error.message };
+  // Zero rows used to read as success: a request a manager had just approved
+  // looked cancelled to the employee until the next refresh.
+  if (!data || data.length === 0) {
+    return { error: 'Nothing changed: this request is no longer pending, so it can no longer be cancelled. Refresh to see its status.' };
+  }
   return {};
 }
 

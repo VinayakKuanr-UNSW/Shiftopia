@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import { Shift } from '@/modules/rosters';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOpUx } from '@/modules/rosters/domain/shift-ops.contract';
@@ -276,6 +277,8 @@ export const biddingApi = {
             .select()
             .single();
 
+        // PGRST116 = no row came back: row-level security refused the update.
+        if (error?.code === 'PGRST116') throw new WriteRefusedError('change this bid');
         if (error) {
             console.error(`Error updating bid status for ${id}:`, error);
             throw error;
@@ -313,12 +316,13 @@ export const biddingApi = {
      */
     async updateBulkBidStatus(ids: string[], status: BidStatus): Promise<void> {
         const dbStatus = mapBidStatusToDbStatus(status);
-        const { error } = await supabase
+        const updated = await supabase
             .from('shift_bids')
-            .update({ status: dbStatus } as any)
+            .update({ status: dbStatus } as any, { count: 'exact' })
             .in('id', ids);
 
-        if (error) throw error;
+        if (updated.error) throw updated.error;
+        if (ids.length > 0) assertWrote(updated, 'change these bids');
     },
 
     /* ============================================================

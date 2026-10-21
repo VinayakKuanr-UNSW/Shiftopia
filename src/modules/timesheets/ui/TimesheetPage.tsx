@@ -62,9 +62,13 @@ import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/Attendance
  */
 export const TimesheetPage: React.FC = () => {
     const { isDark } = useTheme();
-    const { isManagerOrAbove, hasPermission, user } = useAuth();
+    const { hasPermission, user } = useAuth();
 
-    const scopeMode: ScopeMode = isManagerOrAbove() ? 'managerial' : 'personal';
+    // Everyone here holds the page (route gate `timesheet-view`): the places are
+    // what their managerial contracts reach plus each Team Lead contract's
+    // sub-department. Beta used the personal tree, which also listed the
+    // sub-departments where they are ordinary staff.
+    const scopeMode: ScopeMode = 'timesheet';
     const canEdit = hasPermission('timesheet-edit');
 
     const { scope, setScope, isGammaLocked } = useScopeFilter(scopeMode);

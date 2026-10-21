@@ -8,6 +8,7 @@ import { Shield, CheckCircle, XCircle, AlertTriangle, AlertOctagon, Loader2, Tra
 import { format, parseISO } from 'date-fns';
 import { AddLicenseDialog } from './AddLicenseDialog';
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -34,12 +35,13 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
 
         setIsToggling(true);
         try {
-            const { error } = await supabase
+            const updated = await supabase
                 .from('employee_licenses')
-                .update({ has_restricted_work_limit: checked })
+                .update({ has_restricted_work_limit: checked }, { count: 'exact' })
                 .eq('id', workRight.id);
 
-            if (error) throw error;
+            if (updated.error) throw updated.error;
+            assertWrote(updated, 'change this work right');
 
             queryClient.invalidateQueries({ queryKey: ['employee_licenses', employeeId] });
             toast({

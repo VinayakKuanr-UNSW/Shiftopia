@@ -185,7 +185,16 @@ const AppRouter: React.FC = () => {
                             shifts live on the Rosters page, in the Office group.
                             Old links land there rather than on a 404. */}
                         <Route path="/office" element={<Navigate to="/rosters" replace />} />
+                    </Route>
+
+                    {/* Creating a shift is a managerial write: view-only levels
+                        (delta, epsilon) can open the Roster but not this form. */}
+                    <Route element={<FeatureGate feature="create" />}>
                         <Route path="/rosters/shift/new" element={<ShiftFormPage />} />
+                    </Route>
+
+                    {/* ── Admin suite (zeta only) ── */}
+                    <Route element={<FeatureGate feature="labor-demand" />}>
                         <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
                     </Route>
 
@@ -240,7 +249,7 @@ const AppRouter: React.FC = () => {
                         2026-08-19 — readable by any authenticated user — and had no
                         sidebar entry, so the exposure was invisible from both sides.
                         Gated with the rest of Management, and surfaced in the nav. */}
-                    <Route element={<FeatureGate feature="management" />}>
+                    <Route element={<FeatureGate feature="compliance" />}>
                         <Route path="/compliance/rejections" element={<ComplianceRejectionsPage />} />
                     </Route>
 

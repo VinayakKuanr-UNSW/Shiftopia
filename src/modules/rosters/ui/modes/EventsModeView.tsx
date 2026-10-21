@@ -1,14 +1,16 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Users, AlertTriangle, Plus, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2 } from 'lucide-react';
+import { Calendar, Users, AlertTriangle, Plus, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2, ShieldCheck, Layers, Trash2 } from 'lucide-react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Card } from '@/modules/core/ui/primitives/card';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { format, parseISO } from 'date-fns';
-import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { useEvents, useUnpublishShift, useCreateShift } from '@/modules/rosters/state/useRosterShifts';
 import { SmartShiftCard, ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
+import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
+import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
+import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { cn } from '@/modules/core/lib/utils';
@@ -61,6 +63,8 @@ interface EventsModeViewProps {
   /** Phase-2: typed projection snapshot from useRosterProjections */
   projection?: EventsProjection;
   onEditShift?: (shift: any) => void;
+  /** False for view-only managers (delta, epsilon): no shift menu, no add button. */
+  canEdit?: boolean;
 }
 
 // ── Normalised render structure (same shape from both data sources) ────────────
@@ -124,10 +128,10 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   complianceMap,
   projection,
   onEditShift,
+  canEdit = false,
 }) => {
   const { toast } = useToast();
   const createShiftMutation = useCreateShift();
-  const openShiftForm = useShiftFormNav();
   const [collapsedEvents, setCollapsedEvents] = useState<Set<string>>(new Set());
 
   // Per-event "+N more" expansion (session-only), keyed by eventId.
@@ -148,6 +152,8 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   const unpublishMutation = useUnpublishShift();
   const [confirmV8ShiftId, setConfirmV8ShiftId] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [expandedShift, setExpandedShift] = useState<Shift | null>(null);
+  const [auditedShift, setAuditedShift] = useState<Shift | null>(null);
 
   const handleRequestUnpublish = (shiftId: string) => {
     setConfirmV8ShiftId(shiftId);
@@ -218,38 +224,62 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
-            className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
+            className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
             onClick={(e) => e.stopPropagation()}
           >
-            <MoreHorizontal className="h-3 w-3 text-muted-foreground dark:text-white/60" />
+            <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
+        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
+          {canEdit && (
+            <>
+              {/* 1. Clone */}
+              <DropdownMenuItem
+                disabled={isPast}
+                onClick={() => handleCloneShift(shift)}
+                className={cn(
+                  "text-popover-foreground hover:bg-accent cursor-pointer",
+                  isPast && "text-muted-foreground/50 cursor-not-allowed"
+                )}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Clone Shift {isPast && '(Locked)'}
+              </DropdownMenuItem>
+
+              {/* 2. Edit */}
+              <DropdownMenuItem
+                disabled={isPast}
+                onClick={() => onEditShift?.(shift)}
+                className={cn(
+                  "text-popover-foreground hover:bg-accent cursor-pointer",
+                  isPast && "text-muted-foreground/50 cursor-not-allowed"
+                )}
+              >
+                <Edit2 className="h-4 w-4 mr-2" />
+                Edit Shift {isPast && '(Locked)'}
+              </DropdownMenuItem>
+            </>
+          )}
+
+          {/* 3. Audit */}
           <DropdownMenuItem
-            disabled={isPast}
-            onClick={() => onEditShift?.(shift)}
-            className={cn(
-              "text-popover-foreground hover:bg-accent cursor-pointer",
-              isPast && "text-muted-foreground/50 cursor-not-allowed"
-            )}
+            onClick={() => setAuditedShift(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
           >
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit Shift {isPast && '(Locked)'}
+            <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
+            Audit Compliance
           </DropdownMenuItem>
 
+          {/* 4. More: Scheduled vs Actual vs Billable & Variance */}
           <DropdownMenuItem
-            disabled={isPast}
-            onClick={() => handleCloneShift(shift)}
-            className={cn(
-              "text-popover-foreground hover:bg-accent cursor-pointer",
-              isPast && "text-muted-foreground/50 cursor-not-allowed"
-            )}
+            onClick={() => setExpandedShift(shift)}
+            className="text-popover-foreground hover:bg-accent cursor-pointer"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Clone Shift {isPast && '(Locked)'}
+            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
+            More (Variance & Pay)
           </DropdownMenuItem>
 
-          {canUnpublish(shift) && !isPast && (
+          {canEdit && canUnpublish(shift) && !isPast && (
             <>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem
@@ -400,17 +430,6 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     return 'Critical';
   };
 
-  const handleAddShiftClick = (group: EventGroup) => {
-    openShiftForm({
-      context: {
-        mode: 'events',
-        date: group.eventDate ? format(group.eventDate, 'yyyy-MM-dd') : format(selectedDate, 'yyyy-MM-dd'),
-        eventStartTime: group.startTime,
-        eventEndTime: group.endTime,
-        eventId: group.eventId !== '_no_event_' ? group.eventId : undefined,
-      },
-    });
-  };
 
   // ── Loading ────────────────────────────────────────────────────────────────
 
@@ -429,54 +448,54 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header strip */}
-      <div className="px-6 py-3 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-muted-foreground">
-          <span className="text-foreground tabular-nums">{eventGroups.length}</span> event{eventGroups.length !== 1 ? 's' : ''}
+      <div className="px-4 md:px-5 py-2.5 border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="text-xs font-mono tracking-wider text-muted-foreground">
+          <span className="text-foreground font-semibold tabular-nums">{eventGroups.length}</span> event{eventGroups.length !== 1 ? 's' : ''}
           <span className="mx-2 text-border">·</span>
-          <span className="text-foreground tabular-nums">{totalShifts}</span> shifts
+          <span className="text-foreground font-semibold tabular-nums">{totalShifts}</span> shifts
           {projection?.stats && (
             <>
               <span className="mx-2 text-border">·</span>
-              <span className="text-emerald-500/70 tabular-nums">{(projection.stats.totalNetMinutes / 60).toFixed(1)}h</span>
+              <span className="text-emerald-500/80 font-medium tabular-nums">{(projection.stats.totalNetMinutes / 60).toFixed(1)}h</span>
               <span className="mx-2 text-border">·</span>
               <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <span className="text-emerald-500/70 tabular-nums cursor-help hover:text-emerald-400 transition-colors">
+                        <span className="text-emerald-500/80 font-bold tabular-nums cursor-help hover:text-emerald-400 transition-colors">
                             ${projection.stats.estimatedCost.toFixed(0)}
                         </span>
                     </TooltipTrigger>
-                    <TooltipContent className="w-56 p-3 bg-zinc-900 border-white/10 shadow-xl" side="bottom">
+                    <TooltipContent className="w-56 p-3 bg-popover text-popover-foreground border-border shadow-xl" side="bottom">
                         <div className="space-y-2">
-                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Event Mode Estimate</p>
+                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest font-mono">Event Mode Estimate</p>
                             <div className="space-y-1.5">
                                 <div className="flex justify-between text-xs">
-                                    <span className="text-white/60">Base Pay</span>
-                                    <span className="text-white font-medium">{formatCost(projection.stats.costBreakdown.base)}</span>
+                                    <span className="text-muted-foreground">Base Pay</span>
+                                    <span className="text-foreground font-medium tabular-nums">{formatCost(projection.stats.costBreakdown.base)}</span>
                                 </div>
                                 <div className="flex justify-between text-xs">
-                                    <span className="text-white/60">Penalties</span>
-                                    <span className="text-emerald-400 font-medium">+{formatCost(projection.stats.costBreakdown.penalty)}</span>
+                                    <span className="text-muted-foreground">Penalties</span>
+                                    <span className="text-emerald-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.penalty)}</span>
                                 </div>
                                 <div className="flex justify-between text-xs">
-                                    <span className="text-white/60">Overtime</span>
-                                    <span className="text-amber-400 font-medium">+{formatCost(projection.stats.costBreakdown.overtime)}</span>
+                                    <span className="text-muted-foreground">Overtime</span>
+                                    <span className="text-amber-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.overtime)}</span>
                                 </div>
                                 {projection.stats.costBreakdown.allowance > 0 && (
                                     <div className="flex justify-between text-xs">
-                                        <span className="text-white/60">Allowances</span>
-                                        <span className="text-blue-400 font-medium">+{formatCost(projection.stats.costBreakdown.allowance)}</span>
+                                        <span className="text-muted-foreground">Allowances</span>
+                                        <span className="text-blue-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.allowance)}</span>
                                     </div>
                                 )}
                                 {projection.stats.costBreakdown.leave > 0 && (
                                     <div className="flex justify-between text-xs">
-                                        <span className="text-white/60">Leave Loading</span>
-                                        <span className="text-purple-400 font-medium">+{formatCost(projection.stats.costBreakdown.leave)}</span>
+                                        <span className="text-muted-foreground">Leave Loading</span>
+                                        <span className="text-purple-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.leave)}</span>
                                     </div>
                                 )}
-                                <div className="pt-2 border-t border-white/10 flex justify-between text-sm font-bold">
-                                    <span className="text-white">Total</span>
-                                    <span className="text-white">{formatCost(projection.stats.estimatedCost)}</span>
+                                <div className="pt-2 border-t border-border flex justify-between text-sm font-bold">
+                                    <span className="text-foreground">Total</span>
+                                    <span className="text-foreground tabular-nums">{formatCost(projection.stats.estimatedCost)}</span>
                                 </div>
                             </div>
                         </div>
@@ -489,7 +508,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-6 space-y-4">
+        <div className="p-4 md:p-5 space-y-4">
           {eventGroups.map((group, groupIdx) => {
             const isCollapsed = collapsedEvents.has(group.eventId);
             const badgeVariant = getBadgeVariant(group);
@@ -503,7 +522,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                 key={group.eventId}
                 style={{ contentVisibility: 'auto' as any, containIntrinsicSize: 'auto 400px' }}
                 className={cn(
-                  'overflow-hidden border border-border bg-card',
+                  'overflow-hidden border border-border bg-card shadow-sm rounded-xl',
                   group.eventId === '_no_event_' && 'border-dashed border-border/50'
                 )}
               >
@@ -511,29 +530,29 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                 <button
                   onClick={() => toggleEventCollapse(group.eventId)}
                   className={cn(
-                    'w-full px-5 py-4 flex items-start justify-between hover:bg-accent/50 transition-colors text-left border-t border-border',
-                    group.eventId === '_no_event_' && 'bg-muted/30'
+                    'w-full px-5 py-3.5 flex items-start justify-between hover:bg-muted/40 transition-colors text-left border-t border-border',
+                    group.eventId === '_no_event_' && 'bg-muted/20'
                   )}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="mt-1 text-slate-500">
+                    <div className="mt-0.5 text-muted-foreground">
                       {isCollapsed
                         ? <ChevronRight className="h-4 w-4" />
                         : <ChevronDown className="h-4 w-4" />}
                     </div>
                     <div>
-                      <h3 className="text-[13px] font-bold text-foreground tracking-[0.08em] uppercase">
+                      <h3 className="text-sm font-bold text-foreground tracking-tight">
                         {group.eventName}
                       </h3>
                       {/* Coverage LED bar + label */}
                       <div className="flex items-center gap-3 mt-1.5">
                         <EventCoverageBar pct={coveragePct} variant={badgeVariant} />
-                        <span className="text-[10px] font-mono tracking-[0.12em] text-muted-foreground">
+                        <span className="text-xs font-mono font-medium tracking-wide text-muted-foreground">
                           {group.assignedCount}/{group.shifts.length} filled
                         </span>
                       </div>
                       {group.eventDate && (
-                        <div className="flex items-center gap-2 mt-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.1em]">
+                        <div className="flex items-center gap-2 mt-1.5 text-xs font-mono text-muted-foreground tracking-wide">
                           <Calendar className="h-3 w-3" />
                           {format(group.eventDate, 'MMM d, yyyy')}
                           {group.startTime && (
@@ -546,16 +565,16 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <div className="text-right text-[10px] font-mono text-muted-foreground tabular-nums">
-                      <div className="flex items-center gap-1.5 justify-end">
+                    <div className="text-right text-xs font-mono text-muted-foreground tabular-nums">
+                      <div className="flex items-center gap-1.5 justify-end font-medium">
                         <Users className="h-3 w-3" />
                         <span>{group.assignedCount}/{group.shifts.length}</span>
                       </div>
-                      <div>{group.totalHours.toFixed(1)}h</div>
+                      <div className="text-[11px] text-muted-foreground/70">{group.totalHours.toFixed(1)}h</div>
                     </div>
                     <Badge
                       variant={badgeVariant}
-                      className="text-[9px] tracking-[0.12em] uppercase font-mono px-2 py-0.5"
+                      className="text-[11px] tracking-wider uppercase font-mono font-bold px-2 py-0.5"
                     >
                       {badgeLabel}
                     </Badge>
@@ -612,30 +631,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                       </button>
                     )}
 
-                    {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}
-                    <div className={cn(
-                      "absolute inset-0 flex pointer-events-none z-10",
-                      group.shifts.length > 0 ? "items-end justify-end p-4" : "items-center justify-center pt-10"
-                    )}>
-                      <button
-                        onClick={() => handleAddShiftClick(group)}
-                        className={cn(
-                          "flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
-                          "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
-                          "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
-                          group.shifts.length > 0 
-                            ? "w-8 h-8 opacity-0 scale-75 group-hover/cell:opacity-100 group-hover/cell:scale-100" 
-                            : "w-10 h-10 opacity-40 scale-90 hover:opacity-100",
-                          "group/add"
-                        )}
-                        title="Add shift to event"
-                      >
-                        <Plus className={cn(
-                          group.shifts.length > 0 ? "h-5 w-5" : "h-6 w-6",
-                          "transition-transform group-hover/add:rotate-90"
-                        )} />
-                      </button>
-                    </div>
+
                   </div>
                 )}
               </Card>
@@ -643,9 +639,11 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
           })}
 
           {eventGroups.length === 0 && (
-            <div className="text-center py-12 text-[10px] font-mono tracking-[0.12em] uppercase text-muted-foreground">
-              No events or shifts for this period
-            </div>
+            <RosterEmptyState
+              icon={Calendar}
+              title="No events or bookings"
+              description="There are no scheduled events or event-linked shifts within the selected date range."
+            />
           )}
         </div>
       </ScrollArea>
@@ -671,6 +669,9 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
+      <ShiftAuditDialog shift={auditedShift} onOpenChange={(o) => { if (!o) setAuditedShift(null); }} />
     </div>
   );
 };

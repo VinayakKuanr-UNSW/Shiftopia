@@ -1,108 +1,102 @@
-# Chapter 8 — RBAC Permission Matrix (Phase 8)
+# Chapter 8 — Access: suites, levels and the permission matrix
 
-**Confidence:** role model and gate mechanism are **Verified** (read directly, cross-checked client-vs-RLS). Individual matrix cells are graded per-row; anything not explicitly marked is **Strongly Inferred**.
+**Confidence:** Verified 2026-10-16 against a database rebuilt from `supabase/migrations` + `supabase/seeds`, with the per-level harness in `supabase/tests/access_matrix/` and the HTTP suite in `tests/integration/`. The design and its decisions are in `docs/architecture/access-suites-plan.md`; this chapter describes how it works.
 
-## 1. The role model
+## 1. The model
 
-Shiftopia does **not** use a single role enum. The live, authoritative model is a two-axis **certificate system** on `app_access_certificates`:
+Access is set on **contracts** (since 2026-10-15). Every row of `hr.user_contracts` — one position: organization, department, sub-department, role, employment type, remuneration — also carries the **access level** that position gives, and that access reaches the row's own place. A person's access is the union of their active contracts, so multi-hiring (EBA cl 13) needs nothing special: each position brings its own. Levels are named alpha to zeta in the database and by name on screen — Employee, Team Lead, Manager, Department Viewer, Organisation Viewer, Administrator (`ACCESS_LEVEL_CONFIG`; `access_level_label()` for database messages). Only an Administrator sets them, on the Users page table.
 
-| Access level | Axis | Meaning |
-|---|---|---|
-| `alpha` | Personal (Type X) | Employee — own data only |
-| `beta` | Personal (Type X) | Team Lead — read-only timesheets |
-| `gamma` | Managerial (Type Y) | Sub-Department Manager |
-| `delta` | Managerial (Type Y) | Department Manager |
-| `epsilon` | Managerial (Type Y) | Global Admin |
-| `zeta` | Managerial (Type Y) | System Admin |
+| Level | Personal suite | Managerial suite | Admin suite | Reaches |
+|---|---|---|---|---|
+| alpha | own data | — | — | the row's sub-department (every contract) |
+| beta | own data | Timesheets, view-only | — | the row's sub-department |
+| gamma | own data | full | — | the row's sub-department |
+| delta | own data | view-only | — | the row's department and all its sub-departments |
+| epsilon | own data | view-only | — | the row's organization |
+| zeta | own data | full, everything | full | everything |
 
-Source: `src/platform/auth/types.ts`, `src/platform/auth/constants.ts:5-54`. Each certificate carries an org/department/sub-department scope, so "manager" is always scope-bounded, not a global flag.
+`app_access_certificates` is a **read-only mirror** of the contracts: one row per contract above alpha, written only by `hr.apply_contract_access()` (fired by `trg_contract_access_sync`). Every policy and function reads the mirror, unchanged; nobody writes it directly. Type X (beta) and Type Y (gamma–zeta) survive only as its derived `certificate_type` column.
 
-A legacy flat `Role` type (`'admin' | 'manager' | 'teamlead' | 'member'`) still exists as a **derived, display-only** field (`auth.service.ts:108-113`: `zeta|epsilon→admin`, `delta|gamma→manager`, `beta→teamlead`, else `member`) and mirrored in the DB as `public.system_role` / `profiles.legacy_system_role` (column comment: `'DEPRECATED: Use user_contracts table instead.'`).
+Every access level sits on a real position, so anyone with access has the Personal suite; no contract means no access at all. Contracted hours follow the employment type (EBA cl 12.2–12.5, 35.3): Full-Time 38 a week, Part-Time more than 0 and under 38, Flexible Part-Time 624–1,976 a year, Casual none.
 
-**⚠ Finding (OPEN):** `broadcasts` is the one module confirmed to gate manager actions on the legacy `Role` string directly (`useBroadcasts.ts:242-248`: `user?.role === 'admin' || user?.role === 'manager'`) rather than `AccessLevel`. Its "manager" threshold therefore doesn't map cleanly onto the gamma/delta/epsilon ladder used everywhere else — treat Broadcasts' manager check as "legacy admin/manager role holder," not a specific access level, until reconciled.
+**Contract dates drive the contract** (since 2026-10-16). Every contract has a start date and, optionally, a last day, which is inclusive. The database sets the status from them on the Sydney calendar: **Upcoming** before the start, **Active**, then **Expired** after the last day. `hr.contract_lifecycle()` does this on every write, and `hr.run_contract_lifecycle()` sweeps hourly at :07 (pg_cron `contract_lifecycle_hourly`). The access mirror follows. An Upcoming contract gives no access until it starts, and an Expired one has its access revoked, logged like any other revocation.
 
-## 2. Client-side gate mechanism
+| Rule | Where |
+|---|---|
+| An expired contract can still be corrected; a later end date, or none, puts it back in force with its access (since 2026-10-16). | `contract_lifecycle` |
+| Any contract can be deleted unless a shift is rostered under it: shifts are priced on their contract. A contract ends by being given an end date; one of today or earlier ends it at once. | `contracts_delete_manager`, `contract_delete_guard` |
+| One role in one place at a time: the same role can be held again once the earlier contract has ended. | `user_contracts_one_role_one_place_at_a_time` (exclusion over the dates), `fn_check_user_contract_guardrails` |
+| An Upcoming contract can't be "ended": there is nothing to end, so delete it. | `contract_lifecycle` |
+| The status is never written directly. The old values `Inactive` / `Terminated` are refused, with a message saying how to end a contract. | `contract_lifecycle`, `user_contracts_status_check` |
+| A shift assigned under a contract must fall inside its dates, so a date change that would strand one is refused, naming the first such shift. | `contract_lifecycle` |
+| The Full-Time / Part-Time and 38-hour rules count every contract whose dates overlap, expired ones included, so a backdated contract can't double-book a period. A contract that ends before another starts doesn't count. | `fn_check_user_contract_guardrails` (the wizard mirrors it: `concurrentWith`) |
+| The only Administrator contract can't have a last day. | `contract_access_guard` |
+| A place with contracts recorded there can't be deleted, only retired, so the records keep their place. | `place_keep_access_scope` |
+| Backdating is allowed. Access applies from the moment of saving, and pay already processed is not recalculated. | the wizard says so |
 
-**Live, wired-in gate:** `FeatureGate` (`src/router/AppRouter.tsx:123-129`) wraps route groups and calls `useAuth().hasPermission(feature)` (`src/platform/auth/useAuth.ts:80-128`) — a hard-coded `Record<string, AccessLevel[]>` table (lines 84-115). `getEffectiveLevel()` (lines 38-51) resolves the caller's level from: active certificate → `zeta/epsilon/delta` superuser fallback on `highestAccessLevel` → active contract → default `'alpha'`.
+| Suite | Pages |
+|---|---|
+| Personal | My Roster, My Availabilities, My Timesheets (`/my-attendance`), My Bids, My Swaps, My Leave, My Broadcasts, My Performance |
+| Managerial | Roster, Templates, Timesheets, Open Bids, Swap Requests, Leave Approvals, Broadcast Centre, KPI (`/insights`), Grid (`/team-availability`), Payroll |
+| Admin | Labor Demand, Compliance Rejections, Users |
+| Everyone | Notifications, Settings, Profile |
 
-Convenience wrappers on the same hook: `isAdmin()`, `isManagerOrAbove()`, `isTeamLeadOrAbove()` (all threshold checks on `getEffectiveLevel()`), and `useScopeFilter(mode)` (`src/platform/auth/useScopeFilter.ts`) for page-level org/dept/sub-dept scoping, backed by the `resolve_user_permissions()` RPC.
+Broadcast group roles (admin / broadcaster / member) are a separate grant, by design: a delta made a group's broadcaster can post in that group. Zeta is admin of every group.
 
-**Confirmed dead code (do not treat as live spec):**
-- `src/platform/auth/access.policy.ts` — a second `hasAccess()`/`PERSONAL_PAGES`/`MANAGERIAL_PAGES` permission table. **Disagrees with the live `useAuth.hasPermission` map** on at least the Insights threshold (`delta` here vs. `gamma+` live) — nothing calls this file's exports, but it reads like a spec and is easy to cite by mistake.
-- `src/modules/auth/ui/ProtectedRoute.tsx` — a role/feature guard HOC, confirmed unimported anywhere.
-- `src/modules/auth/contexts/AuthContext.tsx`'s duplicate `Role`/`AuthContext` (explicitly commented `// DEBUG VERSION`), confirmed unimported.
-- `AuthProvider.hasAccess(feature, subDeptId?)` context method — exposed but never called anywhere in the app.
+## 2. Server side — the authority
 
-**⚠ Finding (OPEN):** delete or reconcile `access.policy.ts` — its presence as apparently-authoritative-looking code with a *different* answer than the live gate is a real onboarding hazard for a new team.
+**The matrix.** `rbac_permissions(access_level, action_code, scope)`, scope one of `SELF`, `SUB_DEPT`, `DEPT`, `ORG` (`CONTRACTED` remains in the enum, unused; a CHECK keeps it out). `user_has_action_in_scope(action, org, dept, sub)` answers "does the caller hold this action at this place": zeta anywhere; otherwise a certificate in the place's organization whose row reaches it — `ORG`, the certificate's department (`DEPT`) or its sub-department (`SUB_DEPT`). Each certificate mirrors one contract, so with several contracts the caller holds the action wherever any of them reaches. `SELF` rows never match a place; personal reads are written as `x = auth.uid()` in the policy itself.
 
-## 3. Server-side (RLS/RPC) gate mechanism
+**Place helpers**, used by RLS and RPC guards: `can_act_on_shift`, `can_act_on_employee` (any of the employee's active contracts), `can_act_on_timesheet`, `can_act_in_subdept`, `can_act_in_dept`, `can_act_on_swap`, `can_act_on_planning_request`, and `holds_action(action)` for rows with no place.
 
-Layered role-check SQL functions (all `SECURITY DEFINER`, baseline `20251015000000_baseline_schema.sql` unless noted):
+**Who holds what** (scope in brackets):
 
-| Function | Logic | Status |
-|---|---|---|
-| `is_admin()` | `legacy_system_role IN ('admin','manager')` OR active cert `zeta/epsilon` | **Verified working** — has an `EXCEPTION WHEN OTHERS → FALSE` guard |
-| `is_manager_or_above()` | same pattern, cert `gamma/delta/epsilon/zeta` | **Verified working now.** See §4 — this was previously broken, is now fixed, and several docs still incorrectly say otherwise |
-| `has_permission(_user_id, _target_sub_dept_id, _required_level)` (2 overloads) | zeta global bypass; else org/dept/sub-dept scope match at/above required level via `user_contracts`/`app_access_certificates` | Verified live — used directly in `shifts_insert/update/delete_managers` RLS |
-| `user_has_delta_access(_user_id)` | cert `delta/epsilon/zeta` OR legacy admin/manager | Verified live, OR'd alongside `has_permission()` on shifts/rosters/bids/swaps |
-| `user_has_action_in_scope(action_code, org_id, dept_id, sub_dept_id)` | finer-grained lookup against `rbac_permissions(access_level, action_code, scope)` | **Unknown** whether `rbac_permissions` is actually seeded in prod — no seed data found in migrations. Drives `*_rbac`-suffixed policies on rosters/shifts, OR'd with the coarser checks above so an empty table fails safe (harmlessly permissive-by-omission, not permissive-by-bug) |
-| `auth_can_manage_certificates()` | legacy admin OR active cert `epsilon/zeta` | Gates who can grant/revoke access levels (Users/Settings admin surface) |
-| `auth_can_manage_templates()` | cert `gamma/delta/epsilon/zeta` OR legacy admin/manager | |
-| `is_broadcast_system_manager()` | legacy admin/manager only | Global broadcast admin gate |
-| `get_broadcast_group_role(group_id)` | per-group role, independent of org RBAC | What Broadcasts actually reads as its "manager" check |
+| Action | gamma | delta | epsilon | zeta | Also |
+|---|---|---|---|---|---|
+| `roster.view`, `shift.view`, `timesheet.view`, `leave.view`, `user.view`, `broadcast.view`, `bid.view`, `swap.view`, `template.view`, `payroll.view`, `kpi.view`, `availability.view` | SUB_DEPT | DEPT | ORG | ORG | beta: `shift.view`, `timesheet.view`, `user.view` [SUB_DEPT — the team lead's own row] |
+| `contract.view` | — | DEPT | ORG | ORG | |
+| `shift.create/edit/assign/publish/delete`, `roster.edit/publish`, `bid.assign/close`, `swap.approve`, `timesheet.approve`, `leave.approve`, `broadcast.create`, `template.manage`, `availability.manage` | SUB_DEPT | — | — | ORG | |
+| `contract.manage`, `user.edit`, `access.manage`, `org.manage`, `demand.view/manage`, `compliance.view` | — | — | — | ORG | |
+| `bid.submit`, `swap.request` | | | | | alpha, beta [SELF]; alpha also holds the view actions at SELF, which match no place |
 
-## 4. ⚠ Finding: stale "is_manager_or_above() is broken" documentation (OPEN — docs only, not code)
+Two assertions in the migrations keep the shape honest: delta and epsilon hold no action outside `*.view`, and no Admin suite action is held below zeta.
 
-The function **is fixed and currently working** (confirmed both by reading its current body and by the fact that today's `get_quarterly_performance_report()` migration relies on it directly for a security-critical gate). The original bug (archived migration `20260615232747_fix_is_manager_or_above.sql`, reading a nonexistent `profiles.system_role` column, silently swallowed to always-FALSE) was fixed by switching to `legacy_system_role`.
+**Level-named helpers that remain**, each now defined through the matrix: `is_admin()` = `holds_action('org.manage')` (organization structure, pay periods, work rules, system config, cleanup rules); `is_org_admin(org)`; `can_read_certificates_in` = `access.manage` (`can_grant_certificate` / `can_change_certificate` remain but guard nothing: certificates are no longer written by clients); `auth_can_manage_templates()` = zeta, `auth_can_create_template(place)` = `template.manage` there. `is_manager_or_above()` and `user_has_delta_access()` gate nothing any more: no policy uses either, and the only function still naming the first, `auth_can_manage_rosters()`, has no callers itself.
 
-However, **`HANDOVER.md` (gotcha #8) and several files under `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/*.md` still say it's "BROKEN in prod"**, including at least one comment that postdates the actual fix. This has caused real downstream cost: developers avoided the helper and hand-rolled the same cert-check boilerplate inline across many RPCs (`sm_apply_shift_op`, `sm_bulk_assign`, `sm_swap_auto_decide`, etc.) instead of calling it. `docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md:185` already corrects the record for that one document. **Action item: correct `HANDOVER.md` and the `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/*.md` files** — this is pure documentation debt at this point, not a code fix.
+**Access rules**, all enforced in the database: only the Admin suite sets a contract's access (`trg_contract_access_guard`, on top of contract writes being zeta-only); the row must have the place its level reaches (`user_contracts_access_has_place`, with a readable message from the guard); the mirror's level matches its type and place (`chk_level_matches_type`, `chk_scope_nullability`), its department belongs to its organization and its sub-department to its department, and a mirror row stays with its contract (`validate_certificate_on_change`); the last active zeta can be neither lowered nor ended (`trg_access_certificate_keep_last_zeta`, break-glass runbook in `docs/operations/access-break-glass.md`); every change is logged with its actor (`access_certificate_events`). Lowering a contract to alpha, ending it, letting it expire or deleting it revokes its mirror; an Upcoming contract has no mirror until it starts. A place — organization, department, sub-department — that active access reaches can be neither deleted nor retired (`place_keep_access_scope`, with a message naming the holders); revoked access goes with a deleted place; nothing is set in a retired one.
 
-## 5. ⚠ Findings: the same bug class recurs, and a real live gap was found and fixed during this rulebook's research
+## 3. Client side — what to show
 
-**FIXED 2026-07-30** (during this rulebook's research — see `README.md` for the full writeup): `payroll_records_select` and `compliance_snapshots_select` RLS SELECT policies on `shift_payroll_records`/`shift_compliance_snapshots` used a correlated subquery (`s.organization_id IN (SELECT s.organization_id FROM profiles WHERE profiles.id = auth.uid())`) that — because `profiles` has no `organization_id` column — silently resolved as a self-referential check, collapsing to "does the caller have any profile row," with **no actual org, ownership, or manager scoping**. Verified live in prod: 107 profiles, any of which could read all 75 rows of both tables regardless of whose shift it was. Fixed by replacing both with the established self-or-manager idiom already used elsewhere in this schema (`employee_performance_metrics.perf_metrics_self_or_manager_read`: `(employee_id = auth.uid()) OR is_manager_or_above()`), applied via migration `20260730050000_fix_payroll_compliance_snapshot_rls_org_check.sql`, verified via `get_advisors` (0 new findings).
+`src/platform/auth/accessSuites.ts` decides, per suite, from every certificate (one per contract) a person holds — never from a single "effective level": gamma in one sub-department and delta in another is full access in the first and read-only in the second. Everything asks `useAuth().hasPermission(key)`:
 
-**OPEN — same bug class, not yet fixed** (reference to nonexistent `profiles.system_role`, same root cause as the original `is_manager_or_above()` bug, never swept when that one was patched):
+| Key | Who |
+|---|---|
+| `profile`, `read` | everyone signed in |
+| `my-roster`, `availabilities`, `bids`, `my-swaps`, `my-broadcasts`, `performance` | Type X or an active contract |
+| `timesheet-view` | beta and every Type Y |
+| `rosters`, `templates`, `management`, `broadcast`, `insights` | gamma, delta, epsilon, zeta |
+| `managerial-write`, `create`, `update`, `delete`, `timesheet-edit` | gamma, zeta |
+| `admin`, `users`, `labor-demand`, `compliance`, `configurations`, `audit` | zeta |
 
-| Function | Gates | Current blast radius |
-|---|---|---|
-| `auth_can_manage_rosters()` | `roster_shift_assignments` INSERT/UPDATE/DELETE | Low — confirmed the client never reads/writes this table (real assignment goes through `shifts.assigned_employee_id`); dormant table, but a live bug if ever wired up |
-| `get_my_role()` | `timesheets_member_select` (`get_my_role() = 'team_member' AND profile_id = auth.uid()`) | None — has an exception guard (silently NULL), and is masked by the newer, correct `timesheets_self_select`/`timesheets_manager_select` policies on the same table |
-| `get_user_role()` | none confirmed (generated-types only) | None — confirmed unused by client code |
-| `admin_delete_shift_rpc()` | shift deletion (legacy) | None — confirmed unused by client code |
-| `create_profile_for_user()` | profile creation (legacy) | None — confirmed unused; the real signup path is the `handle_new_user()` trigger, which is correct |
+Unknown keys are refused. Route guards (`FeatureGate` in `AppRouter.tsx`), the sidebar, the bottom nav and every in-page write control use these keys. Personas mirror the suites — employee, employer, admin — and a hat is offered only to someone holding that suite (`PersonaProvider.tsx`).
 
-**OPEN — always-true policies not caught by the 2026-07-19/20 hardening sweeps** (same "grants everyone" failure shape as the payroll/compliance finding, but via an explicit `USING(true)` rather than a subtle bug — should have been caught by those sweeps' own search pattern but apparently wasn't, worth re-running that grep):
+**The gap to remember:** an UPDATE or DELETE that RLS refuses returns 0 rows and no error through PostgREST. A write aimed at a particular record therefore asks for the count and passes the result to `assertWrote()` (`src/platform/supabase/writes.ts`), which raises a `PERMISSION_DENIED` AppError on zero rows. Bulk and idempotent writes, where zero rows is normal, do not. Keep the UI and the matrix in step anyway; the per-level tests are how.
 
-- `employee_leave_balances` — `"Public read for employee_leave_balances"` (`USING(true)`). Note the *newer* `leave_balances` table got proper cert-scoped policies; this looks like the legacy table was missed.
-- `shift_offers` — `"Enable insert/read/update for all users"` on all three commands (`USING(true)`/`WITH CHECK(true)`).
-- `roster_templates` — `"Authenticated users can delete templates"` (`USING(auth.uid() IS NOT NULL)`), OR'd alongside an intended admin-only delete policy — since RLS permissive policies OR together, the broadest wins: any authenticated user can currently delete any roster template.
+## 4. Testing access
 
-**OPEN — route/RLS threshold mismatch (inconsistent, not directly exploitable):** `/compliance/rejections` has no client-side `FeatureGate` at all (any authenticated user with an active contract can navigate there directly by URL — it's just not linked from either nav menu), while its RLS (`managers_read_compliance_rejections`) is `delta+`-only, excluding gamma unlike almost every other manager-gated table in this schema. Sub-delta users hitting the route see an empty table, not an error. Recommend deciding the intended threshold and making both layers agree.
+- `supabase/tests/access_matrix/` — fixtures (one persona per level, plus beta B contracted to two sub-departments in different departments), two per-level files, a place-guard file (`05`), contract access (`06`) and contract dates (`07`). `02` covers shifts, timesheets, bids, swaps, contracts and certificates. `04` covers availability, budgets, KPI, payroll, templates, the Admin suite tables, clock-in on someone's behalf, assignment runs, open-bid visibility, pay terms, the fairness recompute and broadcast membership. Each prints one line per persona to compare with `expected_matrix.txt` / `expected_suites.txt`. Local database only.
+- `tests/integration/` runs the same matrix over HTTP with real JWTs, plus the core shift flows and edge-function authorisation.
+- `src/platform/auth/__tests__/accessSuites.test.ts` pins the table in §1 for the client.
+- Changing access on purpose means changing the expected files, the seed (`supabase/seeds/reference.sql` — see the rebuild-order note in the plan) and this chapter together.
 
-## 6. Draft permission matrix
+## 5. Historical findings (2026-07-30 audit) — status
 
-Legend: **V** = Verified (client gate + matching RLS/RPC both confirmed), **SI** = Strongly Inferred, **WI** = Weakly Inferred, **U** = Unknown.
-
-| Feature area | Employee (alpha) | Team Lead (beta) | Sub-Dept Mgr (gamma) | Dept Mgr (delta) | Global/System Admin (epsilon/zeta) | Confidence |
-|---|---|---|---|---|---|---|
-| **Rosters/Scheduling** (`/rosters`, `FeatureGate: rosters`, gamma+) | View own via `/my-roster` only | Same as employee | View + edit planner (`hasPermission('update')`); RLS requires `has_permission(...,'Gamma')` OR delta+ | Dept-wide edit | Org/cross-org (zeta bypass) | **SI** — client + RLS agree on gamma+ for edit; "cross-department" is bounded by the cert's own scope field, not a separate check |
-| **Reserve List** (embedded panel in Rosters, no separate route) | No access | No access | Inherits Rosters' gamma+ gate | Same, wider scope | Full | **WI** — no dedicated RLS table; reuses `sm_apply_shift_op`'s gate |
-| **Timesheets** (`/timesheet`, `FeatureGate: timesheet-view`, beta+) | No access | View own only (`profile_id=auth.uid()`); no edit | View team + **edit** (`is_manager_or_above()`) | Dept-wide | Full (`is_admin()`) | **V** — client gate, `hasPermission` map, and RLS all align |
-| **Payroll** (`/management/payroll`, `FeatureGate: management`, gamma+) | No access | No access | View/export gross-pay for scope | Dept-wide | Full | **SI** — page gate gamma+; underlying `shifts`/`timesheets` RLS supports gamma+ reads. `gross_pay_records` itself is owner-only-read + service_role-write (no manager cross-employee RLS on that specific table, but the UI doesn't read it directly) |
-| **Leave** (`/my-leave` personal; `/management/leave`, gamma+) | Submit/view/cancel own | Same as employee | Approve team leave, sub-dept scoped | Dept-wide | Org-wide | **V** — client `isManager` check matches the gamma+ RLS branches exactly |
-| **Marketplace (Bids/Swaps)** (`/my-bids`,`/my-swaps` personal; `/management/*`, gamma+) | Bid/swap own shifts; view all open bids/swaps (intentionally open marketplace) | Same as employee | Approve/select winners, bulk-assign, manage own-scope approval rules | Dept-wide | Org-wide | **V** for the manager-approval gate; **SI** for cross-department (bounded by cert scope, not a separate block) |
-| **Compliance** (`/compliance/rejections`, no client gate) | Can navigate to route (unlinked); RLS blocks read | Same | RLS excludes gamma from reading rejections (delta+-only — see §5 finding) | Can read | Can read | **V** for the delta+-only RLS restriction; **SI** for practical effect (empty table, not error, for sub-delta) |
-| **Insights** (`/insights`, `FeatureGate: insights`) | No access | No access | View dashboards (live gate is gamma+; dead `access.policy.ts` says delta — see §2) | Dept-wide | Full | **SI** — the quarterly-performance RPC gate (gamma+, scope-clamped) matches the live client gate |
-| **Settings** (`/settings`, no route-level gate) | Can reach page, edit own profile/preferences | Same | Same, plus rate management (`hasPermission('configurations')`, delta+, client-only gate) | Manage rates | Manage rates + certificates (`auth_can_manage_certificates()`, epsilon/zeta or legacy admin) | **SI** — route itself is unguarded; sub-sections self-gate |
-| **Users** (`/users`, `FeatureGate: users`, epsilon+) | No access | No access | No access | No access | View/manage all users, grant certificates | **V** — client and RLS agree on epsilon+. Note `profiles` itself is broadly readable by any authenticated user (`profiles_select_all: USING(true)`) — a deliberate directory-style read (name/email/phone/DOB/emergency contact), not manager-gated |
-| **Notifications** (`/my-notifications`, no gate) | Full CRUD on own only | Same | Same | Same | Same | **V** — strictly self-scoped at RLS (`profile_id/user_id = auth.uid()`); no manager cross-employee read found anywhere |
-| **Broadcasts** (`/my-broadcasts` alpha+; `/broadcast` manager console, gamma+) | Read/participate per group membership | Same | Manage groups if legacy admin/manager OR per-group role (see §1 finding) | Same | Full (`is_broadcast_system_manager()`) | **WI** — the one module gating on the legacy `Role` string rather than `AccessLevel` |
-
-## 7. Phase-8 action items (carried forward for a future security/docs pass)
-
-1. Document the certificate model as canonical; explicitly deprecate the `Role` string as display-only except for Broadcasts.
-2. Correct `HANDOVER.md` and `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/*.md`'s stale "is_manager_or_above() is broken" language.
-3. Sweep the remaining `profiles.system_role` dangling references (`auth_can_manage_rosters()`, `get_my_role()`, `get_user_role()`, `admin_delete_shift_rpc()`, `create_profile_for_user()`) — low urgency given current dormancy, but same bug class as a fixed prior incident.
-4. Close the `employee_leave_balances` / `shift_offers` / `roster_templates` always-true policies.
-5. Reconcile or delete `access.policy.ts` so there's exactly one client-side permission spec.
-6. Decide and align `/compliance/rejections`' client gate vs. its delta+-only RLS.
+| Finding | Status |
+|---|---|
+| `payroll_records_select` / `compliance_snapshots_select` correlated-subquery no-op | Fixed 2026-07-30 (`20260730050000`); both now scoped by place |
+| `employee_leave_balances` / `shift_offers` / `roster_templates` always-true policies | Closed — none of those policies exists (checked 2026-10-14) |
+| Dangling `profiles.system_role` references | Closed — no function references it (checked 2026-10-14) |
+| Dead `access.policy.ts` second permission table | Deleted 2026-10-14 |
+| `/compliance/rejections` client gate vs delta+ RLS | Resolved — both are zeta (Admin suite) |
+| Broadcasts gated on the legacy `Role` string | Resolved — the client follows the database: group role, or zeta |
+| `HANDOVER.md` and `docs/investigations/2026-06-24_*` still say `is_manager_or_above()` is broken | Closed 2026-10-14 — handover gotcha #8 rewritten, dated corrections in the investigation docs |

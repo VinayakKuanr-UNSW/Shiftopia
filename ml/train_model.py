@@ -18,7 +18,9 @@ QUANTILES = [0.5, 0.9]
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 SUPABASE_URL = os.getenv('VITE_SUPABASE_URL')
-SUPABASE_KEY = os.getenv('VITE_SUPABASE_ANON_KEY')
+# Server-side only. The anon key reads nothing these scripts need (RLS), so
+# there is deliberately no fallback to it: a missing key fails loudly.
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 # ---------------------------------------------------------------------------
 # Feature schema — single source of truth shared with predict.py.

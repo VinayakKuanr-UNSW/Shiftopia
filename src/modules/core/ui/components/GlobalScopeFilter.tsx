@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ScopeTree, ScopeOrg, ScopeDept, ScopeSelection } from '@/platform/auth/types';
+import type { ScopeMode } from '@/platform/auth/scope-selection';
 import { ChevronDown, Lock, Building2, Layers, Users2, Filter, MoreHorizontal, Check, Settings2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
@@ -47,7 +48,7 @@ export interface GlobalScopeFilterProps {
     /** Optional: hide the filter entirely (e.g. for Gamma managerial) */
     hidden?: boolean;
     /** Optional: mode label */
-    mode?: 'personal' | 'managerial';
+    mode?: ScopeMode;
     /** Enable multi-select (checkboxes + select all). Default true for personal, false for managerial */
     multiSelect?: boolean;
     /**
@@ -139,6 +140,19 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
         }
     };
 
+    // Handle keyboard for closing. Above the mobile return: a hook after a
+    // conditional return breaks React when the breakpoint changes.
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsOpen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen]);
+
     if (isMobile) {
         return (
             <div className="flex flex-col gap-2">
@@ -147,7 +161,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                         {icon}
                         {label}
                     </label>
-                    {locked && <Lock className="w-3 h-3 text-amber-500/50" />}
+                    {locked && <Lock className="w-3 h-3 text-amber-500/50" aria-label="Locked" />}
                 </div>
                 
                 <div className="flex flex-wrap gap-2.5 min-h-[52px] p-3 rounded-2xl bg-muted/40 border border-border/40 shadow-inner">
@@ -156,17 +170,19 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                         return (
                             <button
                                 key={opt.id}
+                                type="button"
+                                aria-pressed={multiSelect ? isSelected : undefined}
                                 onClick={() => !isDisabled && toggleOption(opt.id)}
                                 disabled={isDisabled}
                                 className={cn(
                                     "flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[12px] font-black uppercase tracking-tight transition-all active:scale-90",
                                     isSelected 
-                                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
+                                        ? "bg-primary text-primary-foreground shadow-none" 
                                         : "bg-background/80 border border-border/80 text-muted-foreground hover:border-primary/40",
                                     isDisabled && "opacity-40 grayscale cursor-not-allowed"
                                 )}
                             >
-                                {isSelected && <Check className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={3} />}
+                                {isSelected && <Check className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={3} aria-hidden="true" />}
                                 {opt.name}
                             </button>
                         );
@@ -188,18 +204,6 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
         );
     }
 
-    // Handle keyboard for closing
-    useEffect(() => {
-        if (!isOpen) return;
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setIsOpen(false);
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen]);
-
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
@@ -208,10 +212,10 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                         "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
                         "border-0 min-w-[120px] sm:min-w-[180px] justify-between w-full h-14",
                         "hover:scale-[1.02] active:scale-[0.98] relative z-50",
-                        isOpen ? "ring-2 ring-primary bg-primary/5 shadow-primary/20" : "",
+                        isOpen ? "ring-2 ring-primary bg-primary/5 shadow-none" : "",
                         isDisabled
                             ? "bg-indigo-50/20 dark:bg-white/[0.02] text-slate-400 dark:text-white/40 cursor-not-allowed opacity-50"
-                            : "bg-white dark:bg-[#1c2333] text-slate-700 dark:text-white/80 hover:bg-indigo-50/50 dark:hover:bg-[#252d40] cursor-pointer shadow-lg shadow-black/5"
+                            : "bg-white dark:bg-[#1c2333] text-slate-700 dark:text-white/80 hover:bg-indigo-50/50 dark:hover:bg-[#252d40] cursor-pointer shadow-none"
                     )}
                     disabled={isDisabled}
                     type="button"
@@ -219,11 +223,12 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                     <div className="flex flex-col items-start gap-0.5">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">{label}</span>
                         <span className="truncate max-w-[120px] sm:max-w-[180px] text-xs sm:text-sm font-semibold">{displayText}</span>
+                        {locked && <span className="sr-only">(locked)</span>}
                     </div>
                     {locked ? (
-                        <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" />
+                        <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" aria-hidden="true" />
                     ) : (
-                        <ChevronDown className={cn(
+                        <ChevronDown aria-hidden="true" className={cn(
                             "w-3.5 h-3.5 text-slate-400 dark:text-white/40 flex-shrink-0 transition-transform",
                             isOpen && "rotate-180"
                         )} />
@@ -232,6 +237,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
             </PopoverTrigger>
 
             <PopoverContent 
+                aria-label={`Choose ${label}`}
                 className="w-[var(--radix-popover-trigger-width)] border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
                 sideOffset={10}
                 align="center"
@@ -264,6 +270,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                                     {multiSelect && options.length > 1 && (
                                         <CommandItem
                                             onSelect={toggleAll}
+                                            aria-checked={allSelected ? true : selectedCount > 0 ? 'mixed' : false}
                                             className="flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
                                         >
                                             <div className={cn(
@@ -272,7 +279,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                                                     ? "bg-white border-white text-primary" 
                                                     : "border-muted-foreground/30 group-aria-selected:border-white/40"
                                             )}>
-                                                {allSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                                {allSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} aria-hidden="true" />}
                                             </div>
                                             <span className="font-semibold text-sm sm:text-base">Select All</span>
                                             <CommandShortcut className="group-aria-selected:text-white/60">⌘A</CommandShortcut>
@@ -284,6 +291,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                                         return (
                                             <CommandItem
                                                 key={opt.id}
+                                                aria-checked={multiSelect ? isSelected : undefined}
                                                 onSelect={() => {
                                                     toggleOption(opt.id);
                                                 }}
@@ -298,7 +306,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                                                         ? "bg-white border-white text-primary" 
                                                         : "border-muted-foreground/30 group-aria-selected:border-white/40"
                                                 )}>
-                                                    {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                                    {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} aria-hidden="true" />}
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span className="font-semibold text-sm sm:text-base capitalize">{opt.name}</span>
@@ -341,7 +349,8 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     className,
     compactOnMobile = false,
 }) => {
-    const orgs = allowedScopeTree?.organizations || [];
+    // Memoised: a fresh `[]` each render would re-run every effect keyed on it.
+    const orgs = useMemo(() => allowedScopeTree?.organizations || [], [allowedScopeTree]);
 
     // Per-level multi-select. A level named in `singleSelectLevels` is single
     // whatever `multiSelect` says; every other level keeps today's behaviour.
@@ -354,7 +363,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     // Initialize selected IDs
     const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>(() => {
         const initial = defaultSelection?.org_ids || [];
-        if (initial.length > 0) return initial;
+        if (initial.length > 0) return orgMulti ? initial : [initial[0]];
         if (orgs.length === 0) return [];
         return orgMulti ? orgs.map(o => o.id) : [orgs[0].id];
     });
@@ -372,9 +381,23 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     // Sync state if defaultSelection changes (handles async permission loading)
     useEffect(() => {
         if (defaultSelection?.org_ids?.length && selectedOrgIds.length === 0) {
-            setSelectedOrgIds(defaultSelection.org_ids);
+            setSelectedOrgIds(orgMulti ? defaultSelection.org_ids : [defaultSelection.org_ids[0]]);
         }
-    }, [defaultSelection?.org_ids, selectedOrgIds.length]);
+    }, [defaultSelection?.org_ids, selectedOrgIds.length, orgMulti]);
+
+    // Keep the chosen organizations inside the tree. The tree is rebuilt from the
+    // user's contracts after an edit on the Users page, and an organization they
+    // no longer reach would otherwise stay selected and block every emit below.
+    useEffect(() => {
+        const valid = orgs.map(o => o.id);
+        setSelectedOrgIds(prev => {
+            const kept = prev.filter(id => valid.includes(id));
+            const next = kept.length > 0
+                ? (orgMulti ? kept : [kept[0]])
+                : (orgMulti ? valid : valid.slice(0, 1));
+            return next.length === prev.length && next.every((id, i) => id === prev[i]) ? prev : next;
+        });
+    }, [orgs, orgMulti]);
 
     useEffect(() => {
         if (defaultSelection?.dept_ids?.length && selectedDeptIds.length === 0) {

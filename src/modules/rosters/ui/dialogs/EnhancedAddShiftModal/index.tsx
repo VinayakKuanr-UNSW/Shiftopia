@@ -19,6 +19,7 @@ import { Loader2, X, Plus, Save, Undo2, CalendarPlus, CalendarCheck } from 'luci
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
+import { useOptionalSidebar } from '@/modules/core/ui/primitives/sidebar';
 import { ShiftFormDrawerContent } from './components/ShiftFormDrawerContent';
 import { ShiftFormSheet } from './components/ShiftFormSheet';
 import { useFocusTrap } from '@/modules/core/hooks/useFocusTrap';
@@ -34,6 +35,8 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
     const { isOpen, onClose } = props;
     const { isDark } = useTheme();
     const isMobile = useIsMobile();
+    const sidebar = useOptionalSidebar();
+    const isSidebarCollapsed = sidebar ? sidebar.state === 'collapsed' : false;
     const isTemplateMode = props.isTemplateMode ?? false;
     const editMode = props.editMode ?? false;
 
@@ -201,7 +204,10 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         <>
             {/* Backdrop overlay (z-40 so nested z-50 select dropdowns portal above) */}
             <div
-                className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200"
+                className={cn(
+                    "fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200 transition-[left] duration-300 ease-in-out",
+                    isSidebarCollapsed ? "left-0" : "md:left-[280px]"
+                )}
                 role="dialog"
                 aria-modal="true"
                 aria-label={editMode ? 'Edit Shift' : 'Create Shift'}

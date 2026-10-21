@@ -55,38 +55,38 @@ export function NotificationToggle() {
   };
 
   return (
-    <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="p-6 rounded-2xl bg-card border border-border/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h4 className="text-white font-medium">Device Notifications</h4>
-                <p className="text-sm text-blue-200/60 mt-1">
-                  Get policy-based shift, bid, and swap alerts in your device's notification tray.
-                </p>
-                {isNative && !remotePushEnabled && (
-                  <p className="text-xs text-amber-300/70 mt-2">
-                    Local alerts are available now. Closed-app delivery is pending Firebase access.
-                  </p>
-                )}
+          <h4 className="text-foreground font-semibold">Device Notifications</h4>
+          <p className="text-sm text-muted-foreground mt-1">
+            Get policy-based shift, bid, and swap alerts in your device's notification tray.
+          </p>
+          {isNative && !remotePushEnabled && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+              Local alerts are available now. Closed-app delivery is pending Firebase access.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           {!isNative ? (
-            <span className="text-sm text-white/40">Available in the mobile app</span>
+            <span className="text-sm text-muted-foreground">Available in the mobile app</span>
           ) : (
             <>
-              <span className="text-sm text-white/70">{enabled ? 'Enabled' : 'Disabled'}</span>
-              <Switch checked={enabled} onCheckedChange={onToggle} />
+              <span className="text-sm text-foreground font-medium">{enabled ? 'Enabled' : 'Disabled'}</span>
+              <Switch checked={enabled} onCheckedChange={onToggle} aria-label="Toggle device notifications" />
             </>
           )}
         </div>
       </div>
 
       {isNative && (
-        <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between gap-3">
-          <span className="text-sm text-blue-200/60">Send a sample notification to this device.</span>
+        <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
+          <span className="text-sm text-muted-foreground">Send a sample notification to this device.</span>
           <Button
             variant="outline"
             onClick={onSendTest}
-            className="border-white/10 text-white hover:bg-white/5 flex-shrink-0"
+            className="border-input text-foreground hover:bg-accent flex-shrink-0"
           >
             Send test
           </Button>

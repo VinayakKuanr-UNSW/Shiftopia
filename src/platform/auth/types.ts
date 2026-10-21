@@ -72,8 +72,29 @@ export interface PermissionCert {
 
 export interface PermissionObject {
     typeX: PermissionCert[];
+    /** The highest managerial (Type Y) certificate, when there are several. */
     typeY: PermissionCert | null;
+    /**
+     * Every managerial certificate — one per contract carrying gamma–zeta
+     * (contracts carry access, 2026-10-15). Absent only from an older server.
+     */
+    typeYs?: PermissionCert[];
+    /**
+     * Managerial pages' scope: the union of every place the user's gamma-and-above
+     * contracts reach. Built from hr.user_contracts (2026-10-18), not the mirror.
+     */
     allowed_scope_tree: ScopeTree;
+    /**
+     * The personal scope: every sub-department the user holds an active contract
+     * in (access suites, 2026-10-14). A Type X certificate names no place of its
+     * own any more. Absent only from a server older than that change.
+     */
+    contracted_scope_tree?: ScopeTree;
+    /**
+     * The Timesheets page's scope: the managerial reach plus each Team Lead (beta)
+     * contract's sub-department (2026-10-18). Absent from an older server.
+     */
+    timesheet_scope_tree?: ScopeTree;
 }
 
 // =============================================

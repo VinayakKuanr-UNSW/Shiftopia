@@ -37,7 +37,7 @@ const GroupSection: React.FC<GroupProps> = ({ id, name, subGroups, color }) => {
   };
   
   return (
-    <div className={`animate-float mb-6 rounded-lg overflow-hidden shadow-2xl ${getGroupCardClass()} hover-glow transition-all duration-500`}>
+    <div className={`mb-6 rounded-lg overflow-hidden border border-border/50 shadow-sm ${getGroupCardClass()} transition-all duration-300`}>
       <div className="relative p-6 flex items-center justify-between">
         <div className="fade-slide-up">
           <h3 className="text-xl font-medium">{name}</h3>

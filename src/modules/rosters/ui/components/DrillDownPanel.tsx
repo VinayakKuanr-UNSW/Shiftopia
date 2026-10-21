@@ -11,6 +11,7 @@ import {
   useBulkDeleteShifts,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
+import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
 import { X, Loader2, Edit2, Trash2, Send, Undo2, Lock } from 'lucide-react';
 import { isSydneyPast, isSydneyStarted, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
@@ -115,10 +116,14 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
     shiftFilters,
   );
 
+  // The toolbar filters apply here too, so the panel lists exactly the shifts
+  // the cell it was opened from counted (useCellSummaryMap).
+  const advancedFilters = useRosterStore(s => s.advancedFilters);
+
   // Filter shifts with robust fallback normalization, trimming, and case-insensitivity
   const filteredShifts = useMemo(() => {
     if (!isOpen || !date) return [];
-    return shifts.filter(s => {
+    return applyAdvancedFilters(shifts, advancedFilters).filter(s => {
       const sGroupType = (s.group_type || 'convention_centre').trim().toLowerCase();
       const targetGroupType = (groupType || 'convention_centre').trim().toLowerCase();
       if (sGroupType !== targetGroupType) return false;
@@ -130,7 +135,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
       }
       return true;
     });
-  }, [isOpen, date, shifts, groupType, subGroupName]);
+  }, [isOpen, date, shifts, groupType, subGroupName, advancedFilters]);
 
   /**
    * The org → sub-group scope, stated once.

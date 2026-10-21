@@ -12,11 +12,14 @@ import { cn } from '@/modules/core/lib/utils';
 
 // Components
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
+import { isSydneyPast } from '@/modules/core/lib/date.utils';
 import {
   RosterFunctionBar,
   ViewType,
 } from '@/modules/rosters/ui/components/RosterFunctionBar';
 import PeopleModeGrid, { EmployeeShift } from '@/modules/rosters/ui/modes/PeopleModeGrid';
+import { RosterPaginationFooter } from '@/modules/rosters/ui/components/RosterPaginationFooter';
+import { RosterMetricsFooter } from '@/modules/rosters/ui/components/RosterMetricsFooter';
 import type { PeopleModeEmployee, PeopleModeShift } from '@/modules/rosters/ui/modes/people-mode.types';
 import UnfilledShiftsPanel, {
   UnfilledShift,
@@ -31,7 +34,7 @@ import { BulkActionsToolbar, type BulkActionResult, type BulkPublishValidationRe
 import { RosterModals, type RosterModalsHandle } from '@/modules/rosters/ui/components/RosterModals';
 import { ShiftWizardModal } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal/ShiftWizardModal';
 import { useShiftFormModalStore } from '@/modules/rosters/state/useShiftFormModalStore';
-import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
+import { useRosterStore, selectHasActiveFilters } from '@/modules/rosters/state/useRosterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
 import { UNASSIGNED_BUCKET_ID } from '@/modules/rosters/domain/projections/constants';
@@ -59,7 +62,7 @@ import {
   useUnpublishShift,
   useShiftDeltaSync,
 } from '@/modules/rosters/state/useRosterShifts';
-import { useRosterSummary } from '@/modules/rosters/state/useRosterSummary';
+import { useRosterSummary, useCellSummaryMap } from '@/modules/rosters/state/useRosterSummary';
 import { useRosterPlannerStats } from '@/modules/rosters/state/useRosterPlannerStats';
 import { EligibilityService } from '@/modules/rosters/services/eligibility.service';
 import {
@@ -84,13 +87,14 @@ import {
   preflightPublish,
   preflightUnpublish,
   preflightDelete,
-  planPublishRoster,
   type PublishRosterPlan,
 } from '@/modules/rosters/domain/bulk-action-engine';
-import { loadLeaveDays } from '@/modules/office/api/office.loaders';
-import { indexApprovedLeaveDays } from '@/modules/rosters/hooks/useApprovedLeaveDays';
+import { loadRosterPublishPlan } from '@/modules/rosters/state/loadPublishPlan';
+import { reloadRosterData } from '@/modules/rosters/state/reloadRoster';
+import { computeRangeKeys } from '@/modules/rosters/domain/view-range';
+import { allowsShiftWriteAt } from '@/platform/auth/accessSuites';
 import type { PublishRosterResult } from '@/modules/rosters/ui/components/PublishRosterButton';
-import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
+import { shiftsQueries, INTERACTIVE_ROW_CAP } from '@/modules/rosters/api/shifts.queries';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { LayoutGrid, Search } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -174,11 +178,12 @@ const NewRostersPage: React.FC = () => {
   // ==================== GROUP BUCKET VIEW (scalability) ====================
   // Group-mode default summary grid in Month view when NOT in DnD mode
   // and NOT bulk mode. In this state the grid renders aggregate summary cells only.
-  const isGroupBucketView =
-    activeMode === 'group' &&
-    viewType === 'month' &&
-    !isDnDModeActive &&
-    !bulkModeActive;
+  //
+  // A toolbar filter turns it off: the server aggregate cannot see the filters,
+  // so the cells are built from the filtered shifts instead (useCellSummaryMap),
+  // and those have to be loaded.
+  const hasActiveFilters = useRosterStore(selectHasActiveFilters);
+  const isGroupBucketView = false;
 
   // Sync Unfilled/Contracted Panel with DnD Mode
   React.useEffect(() => {
@@ -230,10 +235,6 @@ const NewRostersPage: React.FC = () => {
   const [templateStartDate, setTemplateStartDate] = useState<Date | undefined>(undefined);
   const [templateEndDate, setTemplateEndDate] = useState<Date | undefined>(undefined);
 
-  // ==================== TOGGLE STATES ====================
-  // const [isLocked, setIsLocked] = useState(false); // REMOVED local state
-  const [showAvailabilities, setShowAvailabilities] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
 
   // ==================== MODAL REF ====================
   // All modal open/close state lives in RosterModals; page calls imperative methods.
@@ -257,9 +258,13 @@ const NewRostersPage: React.FC = () => {
         }
         break;
       case 'week': {
-        // Use selectedDate as start (not startOfWeek to avoid crossing month boundary)
+        // Monday–Sunday, the week GroupModeView / RolesModeView draw and the
+        // navigator labels. Counting 7 days from selectedDate fetched the wrong
+        // days whenever the anchor was not a Monday (e.g. after ghost-cell
+        // navigation), leaving the first columns empty.
+        const weekStart = startOfWeekAU(selectedDate);
         for (let i = 0; i < 7; i++) {
-          arr.push(addDays(selectedDate, i));
+          arr.push(addDays(weekStart, i));
         }
         break;
       }
@@ -369,7 +374,10 @@ const NewRostersPage: React.FC = () => {
   // Only Group mode (all views) and Roles mode (non-day) consume summaryMap, so
   // gate the fetch off in People/Events modes (and Roles day view) to avoid a
   // wasted network round-trip.
-  const summaryEnabled = activeMode === 'group' || (activeMode === 'roles' && viewType !== 'day');
+  // With a toolbar filter on, the cells come from the filtered shifts
+  // (useCellSummaryMap below), so the unfilterable server aggregate is skipped.
+  const summaryEnabled =
+    (activeMode === 'group' || (activeMode === 'roles' && viewType !== 'day')) && !hasActiveFilters;
   const {
     summaryMap,
     isLoading: isSummaryLoading,
@@ -380,6 +388,7 @@ const NewRostersPage: React.FC = () => {
     queryFilters,
     summaryEnabled
   );
+  const cellSummaryMap = useCellSummaryMap(shifts, summaryMap);
 
   // Server-sourced planner stats — single source of truth for the footer numbers
   // across ALL modes/views (replaces the old bucket-vs-projection branch which
@@ -540,6 +549,7 @@ const NewRostersPage: React.FC = () => {
     date?: Date,
     rosterId?: string
   ) => {
+    if (date && isSydneyPast(date)) return;
     const context: ShiftContext = {
       mode: 'group',
       launchSource: 'grid', // Date will be locked
@@ -577,12 +587,24 @@ const NewRostersPage: React.FC = () => {
     });
   };
 
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-    toast({
-      title: 'Refreshed',
-      description: 'Roster data has been refreshed.',
-    });
+  // Reload refetches every cache the grid draws from (lists, summary cells,
+  // footer stats, row structure) and reports only once they have loaded.
+  const [isReloading, setIsReloading] = useState(false);
+  const handleRefresh = async () => {
+    if (isReloading) return;
+    setIsReloading(true);
+    try {
+      await reloadRosterData(queryClient);
+      toast({ title: 'Refreshed', description: 'Roster data has been reloaded.' });
+    } catch (e) {
+      toast({
+        title: 'Could not reload',
+        description: `${e instanceof Error ? e.message : 'Something went wrong.'} The roster may be out of date — try again.`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsReloading(false);
+    }
   };
 
 
@@ -725,50 +747,35 @@ const NewRostersPage: React.FC = () => {
   };
 
   // ── One-click "Publish" (function bar) ────────────────────────────────────
-  // Publishes every draft shift in the current view (assigned → offers,
-  // unassigned → open bidding). Unassigned drafts already live are skipped —
-  // started shifts are never deleted. Loads on demand so it works in every view — the
-  // default Group Bucket View gates off the per-shift fetch, so we can't rely on
-  // the rendered `shifts` array here. `fetchQuery` reuses the cache when it's
-  // already warm (non-bucket views).
-  const loadPublishPlan = React.useCallback(async (): Promise<PublishRosterPlan> => {
-    const empty: PublishRosterPlan = {
-      assignedIds: [],
-      unassignedIds: [],
-      emergentAssignedIds: [],
-      emergentUnassignedIds: [],
-      deadIds: [],
-      fullTimeIds: [],
-      fullTimeUnassignedIds: [],
-      onLeaveIds: [],
-      alreadyPublishedCount: 0,
-    };
-    if (!selectedOrganizationId || !startDate || !endDate) return empty;
+  // Publishes every draft shift in the period the dialog names (assigned →
+  // offers, unassigned → open bidding). Unassigned drafts already live are
+  // skipped — started shifts are never deleted. Loads on demand so it works in
+  // every view — the default Group Bucket View gates off the per-shift fetch, so
+  // we can't rely on the rendered `shifts` array here. loadRosterPublishPlan
+  // reads that period (never Month's viewing buffer) strictly and uncached; see
+  // its header.
+  //
+  // Place-aware publish right (gamma in its sub-department, zeta anywhere), so a
+  // manager who is view-only somewhere in scope gets those shifts reported as
+  // skipped instead of the server refusing the whole batch.
+  const canPublishShift = React.useCallback(
+    (s: Shift) => allowsShiftWriteAt(user?.certificates, {
+      organizationId: s.organization_id,
+      subDepartmentId: s.sub_department_id,
+    }),
+    [user?.certificates],
+  );
 
-    const planShifts = await queryClient.fetchQuery({
-      queryKey: shiftKeys.byDateRange(selectedOrganizationId, startDate, endDate, queryFilters),
-      queryFn: () => shiftsQueries.getShiftsForDateRange(selectedOrganizationId, startDate, endDate, queryFilters),
-      staleTime: 30_000,
-    });
-
-    // Approved leave for everyone assigned to a draft in the range, so the dialog
-    // can say which shifts will be skipped for it (the database refuses them).
-    const draftAssignees = [...new Set(((planShifts ?? []) as Shift[])
-      .filter(s => s.lifecycle_status === 'Draft' && s.assigned_employee_id)
-      .map(s => s.assigned_employee_id as string))];
-    let isOnApprovedLeave: ((employeeId: string, dateKey: string) => boolean) | undefined;
-    if (draftAssignees.length > 0) {
-      try {
-        const leave = indexApprovedLeaveDays(await loadLeaveDays(draftAssignees, startDate, endDate));
-        isOnApprovedLeave = (employeeId, dateKey) => Boolean(leave.get(employeeId)?.has(dateKey));
-      } catch {
-        // Unreadable leave just means the dialog cannot pre-announce the skips;
-        // the database still refuses to publish onto approved leave.
-      }
-    }
-
-    return planPublishRoster((planShifts ?? []) as Shift[], isOnApprovedLeave);
-  }, [selectedOrganizationId, startDate, endDate, queryFilters, queryClient]);
+  const loadPublishPlan = React.useCallback(
+    (): Promise<PublishRosterPlan> => loadRosterPublishPlan({
+      organizationId: selectedOrganizationId,
+      selectedDate,
+      viewType,
+      filters: queryFilters,
+      canPublishShift,
+    }),
+    [selectedOrganizationId, selectedDate, viewType, queryFilters, canPublishShift],
+  );
 
   const executePublishRoster = React.useCallback(
     async (plan: PublishRosterPlan): Promise<PublishRosterResult> => {
@@ -818,6 +825,26 @@ const NewRostersPage: React.FC = () => {
   const employeesWithShifts = useMemo(() => {
     return (projection.people?.employees || []) as any[];
   }, [projection.people]);
+
+  // ── People Mode Client-Side Pagination ───────────────────────────────
+  const [peoplePage, setPeoplePage] = useState(1);
+  const [peoplePageSize, setPeoplePageSize] = useState<number>(15);
+
+  React.useEffect(() => {
+    setPeoplePage(1);
+  }, [employeeSearchTerm, selectedDepartmentIds, selectedSubDepartmentIds]);
+
+  const totalPeopleCount = employeesWithShifts.length;
+  const totalPeoplePages = peoplePageSize > 0 ? Math.max(1, Math.ceil(totalPeopleCount / peoplePageSize)) : 1;
+  const currentSafePeoplePage = Math.min(peoplePage, totalPeoplePages);
+
+  const paginatedEmployees = useMemo(() => {
+    if (peoplePageSize <= 0 || peoplePageSize >= totalPeopleCount) {
+      return employeesWithShifts;
+    }
+    const start = (currentSafePeoplePage - 1) * peoplePageSize;
+    return employeesWithShifts.slice(start, start + peoplePageSize);
+  }, [employeesWithShifts, currentSafePeoplePage, peoplePageSize, totalPeopleCount]);
 
   // ── Drag-and-drop assignment ─────────────────────────────────────────
   // shifts and employees churn on every optimistic mutation. If the DnD
@@ -1098,6 +1125,49 @@ const NewRostersPage: React.FC = () => {
     });
   };
 
+  // Auto-Scheduler inputs, memoised: built inline in JSX they were re-derived
+  // (one urgency computation per shift) on every page render.
+  const autoSchedulerShifts = useMemo(() => shifts
+      /* Autoscheduler scope: DRAFT + unassigned, outside the emergent
+         (TTS ≤ 4h) window — published shifts belong to bidding/offers,
+         emergent ones to the emergency-assignment flow. Must stay in
+         sync with the filter in AutoSchedulerModal.tsx. */
+      .filter((s) =>
+        !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
+        && (s.is_draft ?? true)
+        && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
+      .map((s) => ({
+        id: s.id,
+        shift_date: s.shift_date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        role_id: (s as any).role_id ?? null,
+        roleName: (s as any).role_name || (s as any).roles?.name || '',
+        unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+        /* Kept in step with the projection in useAutoScheduler.ts — see the
+           note there on why an omitted optional field silently disables a
+           hard rule rather than failing the type-check. */
+        target_employment_type: s.target_employment_type ?? null,
+        target_requires_flexible: s.target_requires_flexible ?? false,
+        is_training: s.is_training ?? false,
+        level: (s as any).remuneration_level ?? undefined,
+      })), [shifts]);
+  const autoSchedulerEmployees = useMemo(() => employees.map((e) => ({
+      id: e.id,
+      name: `${e.first_name} ${e.last_name}`.trim() || e.id,
+      contracted_weekly_hours: (e as any).contracted_weekly_hours,
+      contract_type: (e as any).contract_type,
+      contracted_role_ids: (e as any).contracted_role_ids,
+      /* The RAW in-scope `user_contracts.employment_status`, which is what
+         trg_shift_employment_target_2_enforce matches against. `contract_type`
+         alone cannot stand in for it: it collapses 'Flexible Part-Time' onto
+         'PT', losing the distinction `target_requires_flexible` needs.
+         EligibilityService already resolves both from the sub-department
+         contract — this mapper was dropping them. */
+      employment_status: (e as any).employment_status ?? null,
+      is_flexible: (e as any).is_flexible ?? false,
+    })), [employees]);
+
   // ==================== RENDER ====================
   return (
     <ShiftEditingPresenceProvider>
@@ -1125,13 +1195,12 @@ const NewRostersPage: React.FC = () => {
             <RosterFunctionBar
               transparent
               compactOnMobile
-              // Context state
+              // Context state. Department / sub-department only when the scope
+              // names exactly one: Templates and Add Subgroup act on one roster
+              // and used to take the FIRST of several, silently.
               selectedOrganizationId={selectedOrganizationId}
-              selectedRosterId={selectedRosterId}
-              selectedDepartmentId={selectedDepartmentIds[0] || null}
-              selectedSubDepartmentId={selectedSubDepartmentIds[0] || null}
-              // Context callbacks
-              onRosterChange={setSelectedRosterId}
+              selectedDepartmentId={soleId(selectedDepartmentIds)}
+              selectedSubDepartmentId={soleId(selectedSubDepartmentIds)}
               // Ghost Cell Navigation - receive template date bounds
               onTemplateDatesChange={(startDate, endDate) => {
                 setTemplateStartDate(startDate);
@@ -1142,21 +1211,15 @@ const NewRostersPage: React.FC = () => {
               viewType={viewType}
               onDateChange={setSelectedDate}
               onViewTypeChange={handleViewTypeChange}
-              // Toggle states
-              showAvailabilities={showAvailabilities}
-              showUnfilledPanel={showUnfilledPanel}
-              isRefreshing={isRefreshing}
-              // Toggle callbacks
-              onAvailabilitiesToggle={() => setShowAvailabilities(!showAvailabilities)}
-              onUnfilledPanelToggle={() => setShowUnfilledPanel(!showUnfilledPanel)}
+              isRefreshing={isReloading || isRefreshing}
               onRefresh={handleRefresh}
-              onFiltersClick={() => setShowFilters(!showFilters)}
               canEdit={canEdit}
               // Bulk Mode
               isBulkMode={bulkModeActive}
               onBulkModeToggle={() => handleBulkModeToggle(!bulkModeActive)}
-              onAutoScheduleClick={() => modalsRef.current?.openAutoScheduler()}
-              // One-click Publish (offers + bidding + dead-shift cleanup)
+              // Opens on the period on screen (never Month's viewing buffer).
+              onAutoScheduleClick={() => modalsRef.current?.openAutoScheduler(computeRangeKeys(selectedDate, viewType))}
+              // One-click Publish (offers + bidding; started drafts are skipped, never deleted)
               loadPublishPlan={loadPublishPlan}
               executePublishRoster={executePublishRoster}
               canPublish={canEdit && !!selectedOrganizationId}
@@ -1193,16 +1256,20 @@ const NewRostersPage: React.FC = () => {
         </div>
       )}
 
-      {/* Over-budget Banner — informational sky bar shown when the loaded shift count is large */}
-      {shifts.length >= SHIFT_RENDER_BUDGET && (
+      {/* Capped or Over-budget Banner */}
+      {shifts.length >= INTERACTIVE_ROW_CAP || (shifts as any).isTruncated ? (
+        <div className="flex-shrink-0 bg-amber-500/10 border-y border-amber-500/30 px-6 py-2 flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200 text-sm font-medium">
+          <span>Results capped at {INTERACTIVE_ROW_CAP.toLocaleString('en-AU')} shifts. Additional shifts exist in this period — narrow your date range or department filter to view and edit all shifts.</span>
+        </div>
+      ) : shifts.length >= SHIFT_RENDER_BUDGET ? (
         <div className="flex-shrink-0 bg-sky-500/10 border-y border-sky-500/30 px-6 py-2 flex items-center text-sky-700 dark:text-sky-300 text-sm">
           Showing {shifts.length} shifts — performance may degrade. Narrow the date range or department filter for best results.
         </div>
-      )}
+      ) : null}
 
       {/* ── Main Content Area ─────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full rounded-[24px] sm:rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2.5">
+        <div className="flex-1 min-h-0 rounded-[24px] sm:rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/95 backdrop-blur-md border-slate-300 shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
           {/* Mobile-only stats strip. The desktop footer is `hidden md:block`
               below — it is a wide multi-column row that does not survive a phone
               — so these numbers would otherwise be invisible on mobile.
@@ -1212,24 +1279,24 @@ const NewRostersPage: React.FC = () => {
           <div
             data-testid="mobile-roster-summary"
             className={cn(
-              'grid flex-shrink-0 divide-x divide-slate-200/70 border-b border-slate-200/70 bg-white/35 px-1.5 py-1.5 dark:divide-white/5 dark:border-white/5 dark:bg-black/10 md:hidden',
+              'grid flex-shrink-0 divide-x divide-slate-300 border-b border-slate-300 bg-slate-50/80 px-1.5 py-1.5 dark:divide-white/5 dark:border-white/5 dark:bg-black/10 md:hidden',
               showBudget ? 'grid-cols-5' : 'grid-cols-3',
             )}
             aria-label="Roster summary"
           >
             {[
-              { label: 'Total', value: String(totalShifts), tone: 'text-foreground' },
-              { label: 'Assigned', value: String(totalAssignedShifts), tone: 'text-emerald-500 dark:text-emerald-400' },
-              { label: 'Open', value: String(totalUnfilledShifts), tone: 'text-amber-500 dark:text-amber-400' },
+              { label: 'Total', value: String(totalShifts), tone: 'text-slate-900 dark:text-foreground' },
+              { label: 'Assigned', value: String(totalAssignedShifts), tone: 'text-emerald-700 dark:text-emerald-400' },
+              { label: 'Open', value: String(totalUnfilledShifts), tone: 'text-amber-700 dark:text-amber-400' },
               ...(showBudget
                 ? [
-                    { label: 'Cost', value: formatCost(estimatedCost), tone: 'text-foreground' },
-                    { label: 'Left', value: formatCost(remainingBudget), tone: remainingBudget < 0 ? 'text-rose-500 dark:text-rose-400' : 'text-emerald-500 dark:text-emerald-400' },
+                    { label: 'Cost', value: formatCost(estimatedCost), tone: 'text-slate-900 dark:text-foreground' },
+                    { label: 'Left', value: formatCost(remainingBudget), tone: remainingBudget < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400' },
                   ]
                 : []),
             ].map((metric) => (
               <div key={metric.label} className="flex min-w-0 flex-col items-center justify-center px-1">
-                <span className="text-[8px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                <span className="text-[8px] font-black uppercase tracking-[0.12em] text-slate-600 dark:text-muted-foreground">
                   {metric.label}
                 </span>
                 <span className={cn('max-w-full truncate text-[11px] font-bold leading-tight tabular-nums', metric.tone)}>
@@ -1253,49 +1320,26 @@ const NewRostersPage: React.FC = () => {
         {/* Grid Area - Using global background/layout */}
         <div
           className={cn(
-            'min-h-0 overflow-hidden transition-all duration-300 ease-in-out relative',
+            'min-h-0 overflow-hidden transition-all duration-300 ease-in-out relative flex flex-col h-full',
             showUnfilledPanel ? 'flex-1' : 'w-full'
           )}
         >
           {activeMode === 'people' && (
-            <>
-              <div className="flex items-center justify-between gap-3 px-6 pt-4 pb-2">
-                <div className="relative max-w-sm flex-1">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={employeeSearchInput}
-                    onChange={(e) => setEmployeeSearchInput(e.target.value)}
-                    placeholder="Search employees by name…"
-                    className="pl-8 h-9"
-                  />
-                </div>
-                <div className="text-xs font-mono tabular-nums text-muted-foreground">
-                  {employeesTruncated ? (
-                    <>
-                      Showing first <span className="text-foreground font-medium">{EMPLOYEE_PAGE_SIZE}</span>
-                      {employeeSearchTerm ? ' matches' : ' employees'} — refine search to see more
-                    </>
-                  ) : (
-                    <>
-                      Showing <span className="text-foreground font-medium">{employees.length}</span>
-                      {employeeSearchTerm ? ` match${employees.length === 1 ? '' : 'es'}` : ' employees'}
-                    </>
-                  )}
-                </div>
-              </div>
-              <PeopleModeGrid
-                employees={employeesWithShifts}
+            <PeopleModeGrid
+              employees={paginatedEmployees}
+              searchTerm={employeeSearchInput}
+              onSearchChange={setEmployeeSearchInput}
               onAssignShift={handleDndAssign}
               onMoveShift={(shiftId, targetEmployeeId, targetDate) =>
                 handleDndMove(shiftId, { employeeId: targetEmployeeId, shiftDate: targetDate })
               }
               canEdit={canEdit}
               dates={dates}
-              showAvailabilities={showAvailabilities}
               isBulkMode={bulkModeActive}
               selectedShifts={selectedV8ShiftIdsArray}
               onToggleShiftSelection={handleToggleShiftSelection}
               onAddShift={(employee, date) => {
+                if (date && isSydneyPast(date)) return;
                 const context: ShiftContext = {
                   mode: 'people',
                   launchSource: 'grid', // Date will be locked
@@ -1315,9 +1359,7 @@ const NewRostersPage: React.FC = () => {
               onSwapShift={handleSwapShift}
               onCancelShift={handleCancelSingleShift}
               onUnpublishShift={handleUnpublishShift}
-
-              />
-            </>
+            />
           )}
 
           {activeMode === 'group' && (
@@ -1350,7 +1392,6 @@ const NewRostersPage: React.FC = () => {
               // Data from unified hook
               shifts={shifts}
               isShiftsLoading={isLoading}
-              showLegend={true}
               projection={projection.group ?? undefined}
               footerStats={{
                 totalShifts,
@@ -1371,7 +1412,7 @@ const NewRostersPage: React.FC = () => {
               // Centralized DnD assignment (employee → shift card)
               onAssignShift={handleDndAssignToShift}
               // Bucket View summary + drill-down — default for Day / 3-Day / Week / Month
-              summaryData={summaryMap}
+              summaryData={cellSummaryMap}
               onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
             />
           )}
@@ -1386,6 +1427,7 @@ const NewRostersPage: React.FC = () => {
               organizationId={selectedOrganizationId || undefined}
               projection={projection.events ?? undefined}
               onEditShift={handleEditShift}
+              canEdit={canEdit}
             />
           )}
 
@@ -1406,7 +1448,7 @@ const NewRostersPage: React.FC = () => {
               selectedV8ShiftIds={selectedV8ShiftIdsArray}
               isBulkMode={bulkModeActive}
               onToggleShiftSelection={handleToggleShiftSelection}
-              summaryData={viewType !== 'day' ? summaryMap : undefined}
+              summaryData={viewType !== 'day' ? cellSummaryMap : undefined}
               onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
             />
           )}
@@ -1438,6 +1480,39 @@ const NewRostersPage: React.FC = () => {
           </div>
           </DndProvider>
         </div>
+
+        {/* Disconnected Pagination Footer (similar to toggles in myswaps) */}
+        {activeMode === 'people' && (
+          <RosterPaginationFooter
+            currentPage={currentSafePeoplePage}
+            totalPages={totalPeoplePages}
+            totalItems={totalPeopleCount}
+            pageSize={peoplePageSize}
+            onPageChange={setPeoplePage}
+            onPageSizeChange={setPeoplePageSize}
+            isTruncated={employeesTruncated}
+            itemLabel="employees"
+          />
+        )}
+
+        {/* Disconnected Metrics Footer (Scheduled vs Actual) */}
+        {activeMode !== 'people' && (
+          <RosterMetricsFooter
+            totalShifts={totalShifts}
+            assignedShifts={totalAssignedShifts}
+            unfilledShifts={totalUnfilledShifts}
+            scheduledCost={plannerStats.scheduledCost}
+            actualCost={plannerStats.actualCost}
+            scheduledNetMinutes={plannerStats.scheduledNetMinutes}
+            actualNetMinutes={plannerStats.actualNetMinutes}
+            costedShifts={plannerStats.costedShifts}
+            uncostedShifts={plannerStats.uncostedShifts}
+            actualShifts={plannerStats.actualShifts}
+            budget={budget}
+            remainingBudget={remainingBudget}
+            showBudget={showBudget}
+          />
+        )}
       </div>
 
       {/* Bulk Toolbar — kept mounted while bulkModeActive regardless of selection size
@@ -1469,46 +1544,8 @@ const NewRostersPage: React.FC = () => {
         ref={modalsRef}
         organizationId={selectedOrganizationId || undefined}
         queryFilters={queryFilters}
-        autoSchedulerShifts={shifts
-          /* Autoscheduler scope: DRAFT + unassigned, outside the emergent
-             (TTS ≤ 4h) window — published shifts belong to bidding/offers,
-             emergent ones to the emergency-assignment flow. Must stay in
-             sync with the filter in AutoSchedulerModal.tsx. */
-          .filter((s) =>
-            !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
-            && (s.is_draft ?? true)
-            && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
-          .map((s) => ({
-            id: s.id,
-            shift_date: s.shift_date,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            role_id: (s as any).role_id ?? null,
-            roleName: (s as any).role_name || (s as any).roles?.name || '',
-            unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
-            /* Kept in step with the projection in useAutoScheduler.ts — see the
-               note there on why an omitted optional field silently disables a
-               hard rule rather than failing the type-check. */
-            target_employment_type: s.target_employment_type ?? null,
-            target_requires_flexible: s.target_requires_flexible ?? false,
-            is_training: s.is_training ?? false,
-            level: (s as any).remuneration_level ?? undefined,
-          }))}
-        autoSchedulerEmployees={employees.map((e) => ({
-          id: e.id,
-          name: `${e.first_name} ${e.last_name}`.trim() || e.id,
-          contracted_weekly_hours: (e as any).contracted_weekly_hours,
-          contract_type: (e as any).contract_type,
-          contracted_role_ids: (e as any).contracted_role_ids,
-          /* The RAW in-scope `user_contracts.employment_status`, which is what
-             trg_shift_employment_target_2_enforce matches against. `contract_type`
-             alone cannot stand in for it: it collapses 'Flexible Part-Time' onto
-             'PT', losing the distinction `target_requires_flexible` needs.
-             EligibilityService already resolves both from the sub-department
-             contract — this mapper was dropping them. */
-          employment_status: (e as any).employment_status ?? null,
-          is_flexible: (e as any).is_flexible ?? false,
-        }))}
+        autoSchedulerShifts={autoSchedulerShifts}
+        autoSchedulerEmployees={autoSchedulerEmployees}
         onShiftSaved={handleShiftCreated}
         onAutoScheduleComplete={() => {}}
       />

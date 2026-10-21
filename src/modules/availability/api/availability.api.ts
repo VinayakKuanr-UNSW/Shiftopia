@@ -15,6 +15,7 @@
  */
 
 import { supabase } from "@/platform/supabase/client";
+import { assertWrote } from '@/platform/supabase/writes';
 import {
   AvailabilityRule,
   AvailabilitySlot,
@@ -169,12 +170,13 @@ export async function updateAvailabilityRule(): Promise<never> {
  * Slots are removed automatically via ON DELETE CASCADE.
  */
 export async function deleteAvailabilityRule(ruleId: string): Promise<void> {
-  const { error } = await supabase
+  const removed = await supabase
     .from("availability_rules")
-    .delete()
+    .delete({ count: "exact" })
     .eq("id", ruleId);
 
-  if (error) throw error;
+  if (removed.error) throw removed.error;
+  assertWrote(removed, "remove this availability rule");
 }
 
 /**
@@ -248,13 +250,15 @@ export async function deleteAvailabilityRulesInRange(
 
   if (doomed.length === 0) return 0;
 
-  const { error: delError } = await supabase
+  const removed = await supabase
     .from("availability_rules")
-    .delete()
+    .delete({ count: "exact" })
     .in("id", doomed);
 
-  if (delError) throw delError;
-  return doomed.length;
+  if (removed.error) throw removed.error;
+  assertWrote(removed, "replace this availability");
+  // What was actually removed, which row-level security may have narrowed.
+  return removed.count ?? doomed.length;
 }
 
 // ============================================================================

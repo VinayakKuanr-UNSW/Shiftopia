@@ -79,6 +79,9 @@ export interface ComplianceInput {
 
 const MAX_WEEKLY_HOURS = 48;
 
+/** `checksSkipped` marker: the edge function never answered; any verdict is local. */
+const REMOTE_ENGINE_SKIPPED = 'remote_evaluate_compliance';
+
 const UNAVAILABLE_RESULT: ComplianceResult = {
   status: 'unavailable',
   violations: [],
@@ -151,7 +154,7 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
       weeklyHours: 0,
       maxWeeklyHours: MAX_WEEKLY_HOURS,
       checksPerformed: ['local_hard_validation'],
-      checksSkipped: ['remote_evaluate_compliance'],
+      checksSkipped: [REMOTE_ENGINE_SKIPPED],
       qualificationViolations: [],
     };
   } catch {
@@ -162,7 +165,7 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
       weeklyHours: 0,
       maxWeeklyHours: MAX_WEEKLY_HOURS,
       checksPerformed: [],
-      checksSkipped: ['overlap', 'weekly_hours', 'rest_period', 'qualification'],
+      checksSkipped: [REMOTE_ENGINE_SKIPPED, 'overlap', 'weekly_hours', 'rest_period', 'qualification'],
       qualificationViolations: [],
     };
   }
@@ -195,9 +198,16 @@ export const complianceService = {
     // and no amount of editing the shift will help. Collapsing both into
     // isValid=false produced "Compliance check failed:" with nothing after the
     // colon, because an unreachable engine reports no violations to list.
+    //
+    // `engineReached` is false when the edge function could not be reached and
+    // the verdict came from the local fallback, which sees only past dates and
+    // start=end and so "passes" almost anything. isValid keeps its meaning for
+    // the callers that already rely on it; a write that must not proceed on an
+    // unchecked shift (bulk publish) requires engineReached as well.
     return {
       isValid: result.status === 'passed' || result.status === 'warned',
       status: result.status,
+      engineReached: !(result.checksSkipped ?? []).includes(REMOTE_ENGINE_SKIPPED),
       violations: result.violations,
       warnings: result.warnings,
       weeklyHours: result.weeklyHours,

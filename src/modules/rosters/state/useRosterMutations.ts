@@ -19,6 +19,12 @@ import { templateKeys } from '@/modules/templates/hooks/queries/useTemplateQueri
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import { rostersApi } from '@/modules/rosters/api/rosters.api';
 import {
+  cloneRosterSubgroup,
+  deleteRosterSubgroup,
+  renameRosterSubgroup,
+  type SubgroupScope,
+} from '@/modules/rosters/api/rosterSubgroups.api';
+import {
   validateTemplateApplication,
   describeTemplateApplicationFailures,
   templateShiftFromRow,
@@ -306,8 +312,12 @@ interface ApplyTemplateVariables {
    *  apply from the roster modal silently created shifts in the past — directly
    *  against the rule that shifts are never created, edited or updated in the past
    *  (decision 2026-08-05). Past shifts are now soft-skipped and reported through
-   *  `shifts_skipped`. Callers that genuinely need to backfill must opt in. */
-  forceStack?:            boolean;
+   *  `shifts_skipped`. Callers that genuinely need to backfill must opt in.
+   *
+   *  Sent as the RPC's `p_force_stack`, a misleading name kept only because
+   *  renaming a parameter means dropping the function: it has nothing to do with
+   *  stacking. A template always adds on top of what is already there. */
+  includeStartedShifts?:  boolean;
 }
 
 /**
@@ -418,7 +428,7 @@ export function useApplyTemplate() {
         p_source:                   vars.source,
         p_target_department_id:     vars.targetDepartmentId,
         p_target_sub_department_id: vars.targetSubDepartmentId,
-        p_force_stack:              vars.forceStack ?? false,
+        p_force_stack:              vars.includeStartedShifts ?? false,
       });
 
       if (error) throw error;
@@ -428,9 +438,11 @@ export function useApplyTemplate() {
     },
 
     onSuccess: (data, vars) => {
-      // Template application creates new rosters + shifts — structural refresh needed
+      // Template application creates new rosters + shifts — structural refresh needed.
+      // The summary too: Bucket View, the default, is built from it, not from lists.
       queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.summaries });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
       queryClient.invalidateQueries({ queryKey: templateKeys.history(vars.templateId) });
 
@@ -536,155 +548,87 @@ export function useClearTemplate() {
   });
 }
 
-// ── useDeleteSubGroup ─────────────────────────────────────────────────────────
+// ── Sub-group changes: delete / rename / clone ────────────────────────────────
+//
+// Each acts on ONE group of ONE sub-department's roster, from today to the end
+// of the range (days before today are never changed). The dialogs preview with
+// the same RPC in dry-run mode first; see api/rosterSubgroups.api.ts.
+
+/** Everything a sub-group change can make stale, including the Bucket View summary. */
+function invalidateRosterContent(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
+  queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+  queryClient.invalidateQueries({ queryKey: shiftKeys.summaries });
+  queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
+}
 
 export function useDeleteSubGroup() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
   return useMutation({
-    mutationFn: async ({
-      orgId,
-      deptId,
-      groupExternalId,
-      name,
-      startDate,
-      endDate
-    }: {
-      orgId: string;
-      deptId: string;
-      groupExternalId: string;
-      name: string;
-      startDate: string;
-      endDate: string;
-    }) => {
-      const { error } = await supabase.rpc('delete_roster_subgroup_v2', {
-        p_org_id: orgId,
-        p_dept_id: deptId,
-        p_group_external_id: groupExternalId,
-        p_name: name,
-        p_start_date: startDate,
-        p_end_date: endDate,
+    mutationFn: ({ scope, name }: { scope: SubgroupScope; name: string }) =>
+      deleteRosterSubgroup(scope, name, false),
+
+    onSuccess: (result, { name }) => {
+      invalidateRosterContent(queryClient);
+      toast({
+        title: result.daysKept > 0 ? `“${name}” partly deleted` : `“${name}” deleted`,
+        description:
+          `${result.shiftsDeleted} shift${result.shiftsDeleted !== 1 ? 's' : ''} deleted.` +
+          (result.shiftsKept > 0 ? ` ${result.shiftsKept} that had already started stay.` : ''),
       });
-
-      if (error) throw error;
-      return true;
-    },
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
-      toast({ title: 'Subgroup Deleted', description: 'The subgroup and its shifts have been removed across the active range.' });
     },
 
     onError: (err) => {
       console.error('[useDeleteSubGroup]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to delete subgroup'), variant: 'destructive' });
+      toast({ title: 'Could not delete the subgroup', description: errorMessage(err, 'Failed to delete subgroup'), variant: 'destructive' });
     },
   });
 }
-
-// ── useRenameSubGroup ─────────────────────────────────────────────────────────
 
 export function useRenameSubGroup() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
   return useMutation({
-    mutationFn: async ({
-      orgId,
-      deptId,
-      groupExternalId,
-      oldName,
-      newName,
-      startDate,
-      endDate
-    }: {
-      orgId: string;
-      deptId: string;
-      groupExternalId: string;
-      oldName: string;
-      newName: string;
-      startDate: string;
-      endDate: string;
-    }) => {
-      const { error } = await supabase.rpc('rename_roster_subgroup_v2', {
-        p_org_id: orgId,
-        p_dept_id: deptId,
-        p_group_external_id: groupExternalId,
-        p_old_name: oldName,
-        p_new_name: newName,
-        p_start_date: startDate,
-        p_end_date: endDate,
+    mutationFn: ({ scope, oldName, newName }: { scope: SubgroupScope; oldName: string; newName: string }) =>
+      renameRosterSubgroup(scope, oldName, newName, false),
+
+    onSuccess: (result, { newName }) => {
+      invalidateRosterContent(queryClient);
+      toast({
+        title: 'Subgroup renamed',
+        description: `Now “${newName}” on ${result.days} day${result.days !== 1 ? 's' : ''}.`,
       });
-
-      if (error) throw error;
-      return true;
-    },
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
-      toast({ title: 'Subgroup Renamed', description: 'The subgroup has been renamed across the active range.' });
     },
 
     onError: (err) => {
       console.error('[useRenameSubGroup]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to rename subgroup'), variant: 'destructive' });
+      toast({ title: 'Could not rename the subgroup', description: errorMessage(err, 'Failed to rename subgroup'), variant: 'destructive' });
     },
   });
 }
-
-// ── useCloneSubGroup ──────────────────────────────────────────────────────────
 
 export function useCloneSubGroup() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
   return useMutation({
-    mutationFn: async ({
-      orgId,
-      deptId,
-      groupExternalId,
-      sourceName,
-      newName,
-      startDate,
-      endDate
-    }: {
-      orgId: string;
-      deptId: string;
-      groupExternalId: string;
-      sourceName: string;
-      newName: string;
-      startDate: string;
-      endDate: string;
-    }) => {
-      const { data, error } = await supabase.rpc('clone_roster_subgroup_v2', {
-        p_org_id: orgId,
-        p_dept_id: deptId,
-        p_group_external_id: groupExternalId,
-        p_source_name: sourceName,
-        p_new_name: newName,
-        p_start_date: startDate,
-        p_end_date: endDate,
+    mutationFn: ({ scope, sourceName, newName }: { scope: SubgroupScope; sourceName: string; newName: string }) =>
+      cloneRosterSubgroup(scope, sourceName, newName, false),
+
+    onSuccess: (result, { newName }) => {
+      invalidateRosterContent(queryClient);
+      toast({
+        title: 'Subgroup cloned',
+        description: `“${newName}” created with ${result.shiftsCopied} shift${result.shiftsCopied !== 1 ? 's' : ''}.`,
       });
-
-      if (error) throw error;
-      return data;
-    },
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
-      toast({ title: 'Subgroup Cloned', description: 'The subgroup and its shifts have been duplicated across the active range.' });
     },
 
     onError: (err) => {
       console.error('[useCloneSubGroup]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to clone subgroup'), variant: 'destructive' });
+      toast({ title: 'Could not clone the subgroup', description: errorMessage(err, 'Failed to clone subgroup'), variant: 'destructive' });
     },
   });
 }

@@ -16,6 +16,7 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { fetchScopedContractBasis } from './contract-basis.api';
 import { scopeFilter } from './availability.api';
 import { FT_AVAILABILITY_ERROR, resolveProfileId } from './availability.service';
@@ -146,9 +147,10 @@ export async function createAvailabilityException(
 }
 
 export async function deleteAvailabilityException(id: string): Promise<void> {
-    const { error } = await (supabase as any)
+    const removed = await (supabase as any)
         .from('availability_exceptions')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('id', id);
-    if (error) throw error;
+    if (removed.error) throw removed.error;
+    assertWrote(removed, 'remove this availability exception');
 }

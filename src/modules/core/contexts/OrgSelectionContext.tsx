@@ -83,11 +83,12 @@ export const OrgSelectionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const [selectedSubDeptId, setSelectedSubDeptId] = useState<string | null>(null);
 
     // Determine what's locked based on access level
-    // epsilon: can select dept + subdept
+    // epsilon, zeta: can select dept + subdept (organization-wide reach)
     // delta: dept locked, can select subdept
     // gamma/beta/alpha: everything locked
-    const canSelectDept = accessScope?.accessLevel === 'epsilon';
-    const canSelectSubDept = accessScope?.accessLevel === 'epsilon' || accessScope?.accessLevel === 'delta';
+    // Zeta used to be locked out by an exact match on 'epsilon'.
+    const canSelectDept = accessScope?.accessLevel === 'epsilon' || accessScope?.accessLevel === 'zeta';
+    const canSelectSubDept = canSelectDept || accessScope?.accessLevel === 'delta';
 
     // The dept ID to use for fetching subdepts
     // For epsilon: use selected dept

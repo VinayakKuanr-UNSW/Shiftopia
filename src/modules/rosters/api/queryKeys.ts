@@ -64,8 +64,10 @@ export const rosterKeys = {
     ['rosters', 'lookup', orgId ?? null, filters ?? null] as const,
 };
 
-/** @deprecated Use rosterKeys.all. Kept for mutation file compat. */
-export const ROSTER_STRUCTURE_KEY = rosterKeys.all;
+// (A deprecated `ROSTER_STRUCTURE_KEY = rosterKeys.all` alias lived here with no
+// importers. It shared its name with the LIVE structure key in
+// state/useRosterStructure.ts ('rosterStructure') but not its value, so
+// importing the wrong one silently invalidated nothing. Removed 2026-10-18.)
 
 // ── Shift query keys ──────────────────────────────────────────────────────────
 

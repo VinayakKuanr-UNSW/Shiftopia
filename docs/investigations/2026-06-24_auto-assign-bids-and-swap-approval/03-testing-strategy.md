@@ -271,7 +271,7 @@ Real Postgres; two sessions race inside pgTAP / two parallel `functions.invoke`.
 
 ## 8. Security — authz, RLS, forged actor, SECURITY DEFINER boundary, abuse  (`SEC-*`)  **[P0]**
 
-Cert-based authz (`app_access_certificates`, `access_level ∈ gamma/delta/epsilon/zeta`, `is_active=true`, manager col `user_id` — `is_manager_or_above()` is BROKEN, [00 §8](00-contracts-and-conventions.md)).
+Cert-based authz (`app_access_certificates`, `access_level ∈ gamma/delta/epsilon/zeta`, `is_active=true`, manager col `user_id` — `is_manager_or_above()` is BROKEN, [00 §8](00-contracts-and-conventions.md)). *Correction 2026-10-14: fixed on 2026-06-15; see the note in 00 §8.*
 
 | ID | Title | Given / Precondition | Action | Expected | Maps-to |
 |---|---|---|---|---|---|

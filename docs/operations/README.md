@@ -4,6 +4,8 @@
 |---|---|
 | [operational-runbook.md](operational-runbook.md) | Something's broken in prod/dev — quick-reference table of symptom → first check → recovery (config, auth, shift lifecycle). |
 | [release-checklist.md](release-checklist.md) | You're about to ship — pre-deployment, migration-readiness, and post-deployment checklist. |
+| [access-break-glass.md](access-break-glass.md) | Nobody who can sign in holds a zeta certificate — how to restore one safely. |
+| [database-baseline.md](database-baseline.md) | You need a local database that matches production, are adding a migration, or `scripts/db/verify-baseline.sh` reports drift — how the baseline works and how to regenerate it. |
 | [planning-pre-migration-checks.sql](planning-pre-migration-checks.sql) | You're about to run the Unified Planning Request System backfill migration — integrity checks to run before (and after) the backfill step. |
 
 These are generic/durable references, not point-in-time snapshots — update in place as procedures change.

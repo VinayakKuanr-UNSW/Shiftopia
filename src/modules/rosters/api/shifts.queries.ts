@@ -200,9 +200,86 @@ const MAX_PAGES = 25;
 // reached in DnD / Bulk / Day modes (the default bucket view fetches no raw
 // shifts at all), and the planner now AUTO-NARROWS a heavy month to a week
 // before entering those modes, so 8k is ample headroom while halving the
-// worst-case payload. Rows beyond the cap are silently truncated — a
-// console.warn is emitted so it is visible in dev and in Sentry breadcrumbs.
-const INTERACTIVE_ROW_CAP = 8_000;
+// worst-case payload. Rows beyond the cap are truncated with a visible banner.
+export const INTERACTIVE_ROW_CAP = 8_000;
+
+// Maximum shifts allowed during Publish planning (unblocks org-month views up to 25k shifts).
+export const PUBLISH_PLAN_ROW_CAP = 25_000;
+
+/** Lightweight column selection for publish planning (no heavy joins or full audit columns). */
+export const PUBLISH_PLAN_SELECT = `
+  id,
+  organization_id,
+  department_id,
+  sub_department_id,
+  shift_date,
+  start_time,
+  end_time,
+  start_at,
+  end_at,
+  assigned_employee_id,
+  lifecycle_status,
+  is_cancelled,
+  deleted_at,
+  target_employment_type
+`;
+
+// Ids per `.in('id', …)` request in getPublishCheckRows. The ids travel in the
+// GET query string; 100 uuids is ~3.7 kB, well inside gateway URL limits.
+const ID_BATCH_SIZE = 100;
+
+/**
+ * A write path could not get the complete set of shifts it asked for. Thrown by
+ * the strict reads below, never by the grid's forgiving one: deciding a write
+ * from a partial read is how Publish once half-published a roster and said
+ * "Roster published".
+ */
+export class ShiftRangeIncompleteError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'ShiftRangeIncompleteError';
+    }
+}
+
+/** The fields bulk publish needs to route and compliance-check a shift. */
+export type PublishCheckRow = Pick<
+    Shift,
+    'id' | 'shift_date' | 'start_time' | 'end_time' | 'start_at' | 'unpaid_break_minutes' | 'assigned_employee_id'
+>;
+
+export interface DateRangeFilters {
+    departmentId?: string;
+    subDepartmentId?: string;
+    departmentIds?: string[];
+    subDepartmentIds?: string[];
+    groupType?: TemplateGroupType;
+    status?: ShiftStatus;
+    rowCap?: number;
+}
+
+/**
+ * The scope filters shared by the grid's range read and the strict one, so the
+ * shifts Publish decides from are exactly the shifts the grid shows.
+ */
+function applyRangeFilters<Q extends { eq: any; in: any }>(q: Q, filters?: DateRangeFilters): Q {
+    if (filters?.departmentId && isValidUuid(filters.departmentId)) {
+        q = q.eq('department_id', filters.departmentId);
+    } else if (filters?.departmentIds && filters.departmentIds.length > 0) {
+        q = q.in('department_id', filters.departmentIds.filter(isValidUuid));
+    }
+    if (filters?.subDepartmentId && isValidUuid(filters.subDepartmentId)) {
+        q = q.eq('sub_department_id', filters.subDepartmentId);
+    } else if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
+        q = q.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
+    }
+    if (filters?.groupType) {
+        q = q.eq('group_type', filters.groupType);
+    }
+    if (filters?.status) {
+        q = q.eq('status', filters.status);
+    }
+    return q;
+}
 
 /** Normalise a raw supabase row into our Shift interface shape */
 export function normalizeShiftRow(row: Record<string, any>): Shift {
@@ -400,14 +477,7 @@ export const shiftsQueries = {
         organizationId: string,
         startDate: string,
         endDate: string,
-        filters?: {
-            departmentId?: string;
-            subDepartmentId?: string;
-            departmentIds?: string[];
-            subDepartmentIds?: string[];
-            groupType?: TemplateGroupType;
-            status?: ShiftStatus;
-        }
+        filters?: DateRangeFilters
     ): Promise<Shift[]> {
         if (!isValidUuid(organizationId)) {
             console.warn('Invalid organization ID for getShiftsForDateRange:', organizationId);
@@ -417,7 +487,7 @@ export const shiftsQueries = {
         // Build a fresh filterable query for each page — supabase-js builders
         // are single-shot (you can't reuse one after `.range()` resolves).
         const buildQuery = () => {
-            let q = supabase
+            const q = supabase
                 .from('shifts')
                 .select(SHIFT_SELECT)
                 .eq('organization_id', organizationId)
@@ -425,23 +495,9 @@ export const shiftsQueries = {
                 .lte('shift_date', endDate)
                 .is('deleted_at', null);
 
-            if (filters?.departmentId && isValidUuid(filters.departmentId)) {
-                q = q.eq('department_id', filters.departmentId);
-            } else if (filters?.departmentIds && filters.departmentIds.length > 0) {
-                q = q.in('department_id', filters.departmentIds.filter(isValidUuid));
-            }
-            if (filters?.subDepartmentId && isValidUuid(filters.subDepartmentId)) {
-                q = q.eq('sub_department_id', filters.subDepartmentId);
-            } else if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
-                q = q.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
-            }
-            if (filters?.groupType) {
-                q = q.eq('group_type', filters.groupType);
-            }
-            if (filters?.status) {
-                q = q.eq('status', filters.status);
-            }
-            return q.order('shift_date').order('display_order').order('start_time');
+            // `id` last: the other keys tie, and OFFSET paging over a tied sort
+            // can skip or repeat rows at a page boundary.
+            return applyRangeFilters(q, filters).order('shift_date').order('display_order').order('start_time').order('id');
         };
 
         try {
@@ -451,6 +507,7 @@ export const shiftsQueries = {
             // `EXPLAIN (FORMAT JSON)` probe before every single query.
             const all: any[] = [];
             let page = 0;
+            let isTruncated = false;
             // Primary stop: INTERACTIVE_ROW_CAP (see module-scope constant).
             // Secondary stop: MAX_PAGES (absolute backstop for pathological queries).
             while (page < MAX_PAGES) {
@@ -459,6 +516,7 @@ export const shiftsQueries = {
                 // console.warn so the truncation is visible during development
                 // and in Sentry breadcrumbs. Does NOT throw.
                 if (all.length >= INTERACTIVE_ROW_CAP) {
+                    isTruncated = true;
                     console.warn(
                         `[shiftsQueries] Row cap reached (${INTERACTIVE_ROW_CAP}) — results truncated; narrow the date range or filters.`
                     );
@@ -469,7 +527,9 @@ export const shiftsQueries = {
                 const { data, error } = await buildQuery().range(from, to);
                 if (error) {
                     console.error('Error fetching shifts for date range:', error);
-                    return all.map(row => normalizeShiftRow(row as Record<string, unknown>));
+                    const res = all.map(row => normalizeShiftRow(row as Record<string, unknown>));
+                    if (isTruncated) (res as any).isTruncated = true;
+                    return res;
                 }
                 const rows = data ?? [];
                 all.push(...rows);
@@ -478,11 +538,96 @@ export const shiftsQueries = {
                 page += 1;
             }
 
-            return all.map(row => normalizeShiftRow(row as Record<string, unknown>));
+            const res = all.map(row => normalizeShiftRow(row as Record<string, unknown>));
+            if (isTruncated) (res as any).isTruncated = true;
+            return res;
         } catch (error) {
             console.error('Exception in getShiftsForDateRange:', error);
             return [];
         }
+    },
+
+    /**
+     * Every shift in a date range, or a {@link ShiftRangeIncompleteError}.
+     *
+     * The read a WRITE decides from (the toolbar's Publish plan). Same scope as
+     * getShiftsForDateRange, opposite failure policy: any failed page throws,
+     * and a view past PUBLISH_PLAN_ROW_CAP is refused rather than truncated.
+     *
+     * Pages by id (keyset) instead of by offset. Uses PUBLISH_PLAN_SELECT to
+     * fetch only the columns needed for publish routing without heavy joined
+     * tables, cutting wire size by ~90% and unblocking month views up to 25k shifts.
+     */
+    async getShiftsForDateRangeStrict(
+        organizationId: string,
+        startDate: string,
+        endDate: string,
+        filters?: DateRangeFilters,
+    ): Promise<Shift[]> {
+        if (!isValidUuid(organizationId)) {
+            throw new ShiftRangeIncompleteError('Select an organisation before publishing.');
+        }
+
+        const effectiveCap = filters?.rowCap ?? PUBLISH_PLAN_ROW_CAP;
+        const all: Array<Record<string, unknown>> = [];
+        let lastId: string | null = null;
+        // Terminates: every full page adds PAGE_SIZE rows, and past the cap we throw.
+        for (;;) {
+            let q = applyRangeFilters(
+                supabase
+                    .from('shifts')
+                    .select(PUBLISH_PLAN_SELECT)
+                    .eq('organization_id', organizationId)
+                    .gte('shift_date', startDate)
+                    .lte('shift_date', endDate)
+                    .is('deleted_at', null),
+                filters,
+            );
+            if (lastId) q = q.gt('id', lastId);
+
+            const { data, error } = await q.order('id').limit(PAGE_SIZE);
+            if (error) {
+                throw new ShiftRangeIncompleteError(
+                    `Could not load every shift in this view (${error.message}). Nothing was published — try again.`,
+                );
+            }
+            const rows = (data ?? []) as Array<Record<string, unknown>>;
+            all.push(...rows);
+            if (all.length > effectiveCap) {
+                throw new ShiftRangeIncompleteError(
+                    `This view holds more than ${effectiveCap.toLocaleString('en-AU')} shifts — too many to publish at once. Narrow the date range or department, then publish.`,
+                );
+            }
+            if (rows.length < PAGE_SIZE) break;
+            lastId = rows[rows.length - 1].id as string;
+        }
+
+        return all.map(row => normalizeShiftRow(row));
+    },
+
+    /**
+     * The routing + compliance fields for a set of shifts, in one batched read
+     * (ID_BATCH_SIZE ids per request) instead of one request per shift. Throws
+     * if any batch fails: bulk publish must never take "could not read" for
+     * "has no assignee". A shift absent from the map was not found.
+     */
+    async getPublishCheckRows(shiftIds: readonly string[]): Promise<Map<string, PublishCheckRow>> {
+        const batches: string[][] = [];
+        for (let i = 0; i < shiftIds.length; i += ID_BATCH_SIZE) {
+            batches.push(shiftIds.slice(i, i + ID_BATCH_SIZE));
+        }
+
+        const results = await Promise.all(batches.map(async (ids) => {
+            const { data, error } = await supabase
+                .from('shifts')
+                .select('id, shift_date, start_time, end_time, start_at, unpaid_break_minutes, assigned_employee_id')
+                .in('id', ids)
+                .is('deleted_at', null);
+            if (error) throw new Error(error.message);
+            return (data ?? []) as PublishCheckRow[];
+        }));
+
+        return new Map(results.flat().map(row => [row.id, row]));
     },
 
     /* ============================================================
@@ -1169,6 +1314,7 @@ export const shiftsQueries = {
                 offer_expires_at,
                 group_type,
                 sub_group_name,
+                roster_subgroup:roster_subgroups(name),
                 roles(name),
                 departments(id, name),
                 sub_departments(name),
@@ -1219,6 +1365,7 @@ export const shiftsQueries = {
                     offer_expires_at: (shift as any).offer_expires_at,
                     remuneration_levels: shift.remuneration_levels,
                     group_type: shift.group_type,
+                    sub_group_name: shift.sub_group_name || (shift as any).roster_subgroup?.name || null,
                 },
             }));
         } catch (error) {
@@ -1266,6 +1413,7 @@ export const shiftsQueries = {
                     offer_expires_at,
                     group_type,
                     sub_group_name,
+                    roster_subgroup:roster_subgroups(name),
                     roles(name),
                     departments(id, name),
                     sub_departments(name),
@@ -1337,6 +1485,7 @@ export const shiftsQueries = {
                     offer_expires_at: (shift as any).offer_expires_at,
                     remuneration_levels: shift.remuneration_levels,
                     group_type: shift.group_type,
+                    sub_group_name: shift.sub_group_name || (shift as any).roster_subgroup?.name || null,
                 },
             }));
         } catch (error) {

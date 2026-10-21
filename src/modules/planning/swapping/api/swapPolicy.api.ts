@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { WriteRefusedError } from '@/platform/supabase/writes';
 
 /**
  * Auto-Approve Swaps — policy + decision-feed API.
@@ -141,6 +142,8 @@ export const swapPolicyApi = {
                 .eq('id', existing.id)
                 .select()
                 .single();
+            // PGRST116 = no row came back: row-level security refused the update.
+            if (error?.code === 'PGRST116') throw new WriteRefusedError('change this approval rule');
             if (error) throw error;
             return data as SwapApprovalPolicy;
         }

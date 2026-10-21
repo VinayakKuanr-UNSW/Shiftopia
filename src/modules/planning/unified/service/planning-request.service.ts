@@ -349,15 +349,22 @@ async function withdrawOffer(params: {
     );
   }
 
-  const { error: updateError } = await db
+  const { error: updateError, count: updateCount } = await db
     .from('planning_offers')
-    .update({ status: 'WITHDRAWN' })
+    .update({ status: 'WITHDRAWN' }, { count: 'exact' })
     .eq('id', offerId);
 
   if (updateError) {
     throw createError(
       'OFFER_WITHDRAW_FAILED',
       `Failed to withdraw offer: ${updateError.message}`,
+    );
+  }
+  // Row-level security refuses an UPDATE silently: zero rows, no error.
+  if (updateCount === 0) {
+    throw createError(
+      'OFFER_WITHDRAW_FAILED',
+      "Nothing changed: you can't withdraw this offer, or it no longer exists. Refresh and try again.",
     );
   }
 }
@@ -624,15 +631,22 @@ async function selectOffer(params: SelectOfferParams): Promise<SelectOfferResult
   }
 
   // Mark the selected offer as SELECTED
-  const { error: selectError } = await db
+  const { error: selectError, count: selectCount } = await db
     .from('planning_offers')
-    .update({ status: 'SELECTED', updated_at: now })
+    .update({ status: 'SELECTED', updated_at: now }, { count: 'exact' })
     .eq('id', offer_id);
 
   if (selectError) {
     throw createError(
       'OFFER_SELECT_FAILED',
       `Failed to mark offer as SELECTED: ${selectError.message}`,
+    );
+  }
+  // Row-level security refuses an UPDATE silently: zero rows, no error.
+  if (selectCount === 0) {
+    throw createError(
+      'OFFER_SELECT_FAILED',
+      "Nothing changed: you can't select this offer, or it no longer exists. Refresh and try again.",
     );
   }
 
@@ -756,15 +770,22 @@ async function cancelRequest(
   }
 
   // Cancel the request
-  const { error: cancelError } = await db
+  const { error: cancelError, count: cancelCount } = await db
     .from('planning_requests')
-    .update({ status: 'CANCELLED', updated_at: now })
+    .update({ status: 'CANCELLED', updated_at: now }, { count: 'exact' })
     .eq('id', request_id);
 
   if (cancelError) {
     throw createError(
       'REQUEST_UPDATE_FAILED',
       `Failed to cancel request: ${cancelError.message}`,
+    );
+  }
+  // Row-level security refuses an UPDATE silently: zero rows, no error.
+  if (cancelCount === 0) {
+    throw createError(
+      'REQUEST_UPDATE_FAILED',
+      "Nothing changed: you can't cancel this request, or it no longer exists. Refresh and try again.",
     );
   }
 

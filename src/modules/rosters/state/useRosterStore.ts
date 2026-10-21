@@ -123,8 +123,9 @@ interface RosterState {
 
 // ── Custom storage with Date serialisation ────────────────────────────────────
 // We store selectedDate as an ISO string in localStorage.
-// The _selectedDateISO field is intentionally NOT in the persist partialize
-// so it always starts as today (session state).
+// _selectedDateISO IS persisted (see partialize): a reload returns to the date
+// last viewed, not to today. Its initial value below is only the first-ever
+// default.
 
 const rosterStorage = createJSONStorage(() => localStorage);
 
@@ -143,7 +144,7 @@ export const useRosterStore = create<RosterState>()(
       bulkModeActive: false,
       selectedV8ShiftIds: new Set(),
 
-      // ── Session-only (today, not persisted) ────────────────────────────────
+      // ── Initial values (the date is restored from storage when present) ────
       _selectedDateISO: formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd'),
       isDnDModeActive: false,
       showUnfilledPanel: false,
@@ -152,7 +153,14 @@ export const useRosterStore = create<RosterState>()(
 
       // ── Actions ────────────────────────────────────────────────────────────
       setViewType: (view) => set({ viewType: view }),
-      setActiveMode: (mode) => set({ activeMode: mode, selectedV8ShiftIds: new Set(), bulkModeActive: false }),
+      setActiveMode: (mode) => set({
+        activeMode: mode,
+        selectedV8ShiftIds: new Set(),
+        bulkModeActive: false,
+        // DnD does not exist in Events mode and its toggle is disabled there, so
+        // carrying it across left it on with no way off. End it on the way in.
+        ...(mode === 'events' ? { isDnDModeActive: false, showUnfilledPanel: false } : {}),
+      }),
       setBulkModeActive: (active) => set((s) => ({
         bulkModeActive: active,
         selectedV8ShiftIds: active ? s.selectedV8ShiftIds : new Set(),

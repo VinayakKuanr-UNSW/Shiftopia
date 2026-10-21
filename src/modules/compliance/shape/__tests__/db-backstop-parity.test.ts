@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readMigrationFile } from '@/test/migrations';
 import { DEFAULT_SHAPE_CONFIG } from '../types';
 import { requiredMinEngagementMinutes } from '../evaluate';
 
@@ -26,8 +26,8 @@ import { requiredMinEngagementMinutes } from '../evaluate';
  * source can.
  */
 
-const MIGRATION = 'supabase/migrations/20260818231137_shift_shape_check_backstop.sql';
-const raw = readFileSync(MIGRATION, 'utf8');
+const MIGRATION = '20260818231137_shift_shape_check_backstop.sql';
+const raw = readMigrationFile(MIGRATION);
 
 /**
  * The migration with `--` comments stripped.

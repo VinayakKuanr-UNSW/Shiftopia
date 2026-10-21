@@ -20,6 +20,8 @@ interface TemplateGroupCardProps {
     onAddSubgroup?: () => void;
     renderSubgroups?: (group: Group) => React.ReactNode;
     className?: string;
+    /** Shown under the subgroup count, e.g. why Office offers no "Add subgroup". */
+    note?: string;
 }
 
 export function TemplateGroupCard({
@@ -29,6 +31,7 @@ export function TemplateGroupCard({
     onAddSubgroup,
     renderSubgroups,
     className,
+    note,
 }: TemplateGroupCardProps) {
     const config = GROUP_CONFIG[group.name] || {
         gradient: 'from-gray-600/20 via-gray-500/10 to-transparent',
@@ -79,6 +82,9 @@ export function TemplateGroupCard({
                                 <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
                                     {group.subGroups.length} subgroups • {shiftCount} shifts
                                 </p>
+                                {note && (
+                                    <p className="text-xs text-slate-600 dark:text-slate-300">{note}</p>
+                                )}
                             </div>
                         </button>
                     </CollapsibleTrigger>

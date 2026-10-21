@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import {
@@ -142,11 +143,12 @@ export const useEndFirstAidAppointment = () => {
     const { toast } = useToast();
     return useMutation({
         mutationFn: async ({ id, effectiveTo }: { id: string; employeeId: string; effectiveTo: string }) => {
-            const { error } = await supabase
+            const ended = await supabase
                 .from('first_aid_appointments')
-                .update({ effective_to: effectiveTo })
+                .update({ effective_to: effectiveTo }, { count: 'exact' })
                 .eq('id', id);
-            if (error) throw error;
+            if (ended.error) throw ended.error;
+            assertWrote(ended, 'end this appointment');
         },
         onSuccess: async (_, { employeeId }) => {
             await invalidateCostViews(queryClient, employeeId);
@@ -163,8 +165,9 @@ export const useDeleteFirstAidAppointment = () => {
     const { toast } = useToast();
     return useMutation({
         mutationFn: async ({ id }: { id: string; employeeId: string }) => {
-            const { error } = await supabase.from('first_aid_appointments').delete().eq('id', id);
-            if (error) throw error;
+            const removed = await supabase.from('first_aid_appointments').delete({ count: 'exact' }).eq('id', id);
+            if (removed.error) throw removed.error;
+            assertWrote(removed, 'remove this appointment');
         },
         onSuccess: async (_, { employeeId }) => {
             await invalidateCostViews(queryClient, employeeId);

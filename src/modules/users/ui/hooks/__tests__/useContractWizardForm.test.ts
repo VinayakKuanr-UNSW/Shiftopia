@@ -3,8 +3,8 @@ import { renderHook, act } from '@testing-library/react';
 
 /**
  * The single-role wizard hook. One wizard run writes exactly one
- * `hr.user_contracts` row — no batching/grouping machinery, unlike
- * useContractForm. These pin: the insert payload shape, and that the
+ * `hr.user_contracts` row (one contract = one role). These pin: the insert
+ * payload shape, editing a saved contract in place, and that the
  * ceiling / FPT-bounds / mixed-permanent checks all short-circuit BEFORE
  * any insert is attempted.
  */
@@ -12,6 +12,8 @@ import { renderHook, act } from '@testing-library/react';
 const h = vi.hoisted(() => ({
     inserted: [] as any[],
     insertCalls: 0,
+    updates: [] as Array<{ patch: any; opts: any; id: string }>,
+    updateCount: 1 as number | null,
     error: null as unknown,
     toasts: [] as Array<{ title?: string; variant?: string; description?: string }>,
     invalidated: [] as any[],
@@ -26,6 +28,12 @@ vi.mock('@/platform/supabase/client', () => ({
                     h.inserted.push(rows);
                     return Promise.resolve({ error: h.error });
                 },
+                update: (patch: any, opts: any) => ({
+                    eq: (_col: string, id: string) => {
+                        h.updates.push({ patch, opts, id });
+                        return Promise.resolve({ error: h.error, count: h.updateCount });
+                    },
+                }),
             }),
         }),
     },
@@ -40,6 +48,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 const { useContractWizardForm } = await import('../useContractWizardForm');
+const { todayISO } = await import('@/modules/core/lib/date.utils');
 
 const ORG = '00000000-0000-0000-0000-000000000001';
 const DEPT = 'd0000000-0000-0000-0000-000000000001';
@@ -53,7 +62,6 @@ function setup() {
 
 function fillHierarchyAndRole(result: any, status: string, level = 2) {
     act(() => {
-        result.current.updateField('contractClass', status === 'Casual' ? 2 : 1);
         result.current.updateField('organization_id', ORG);
         result.current.updateField('department_id', DEPT);
         result.current.updateField('sub_department_id', SUBDEPT);
@@ -66,6 +74,8 @@ function fillHierarchyAndRole(result: any, status: string, level = 2) {
 beforeEach(() => {
     h.inserted = [];
     h.insertCalls = 0;
+    h.updates = [];
+    h.updateCount = 1;
     h.error = null;
     h.toasts = [];
     h.invalidated = [];
@@ -95,6 +105,41 @@ describe('useContractWizardForm', () => {
         });
         expect(rows[0].position_id).toBeTruthy();
         expect(h.invalidated).toHaveLength(1);
+        // starts today, ongoing; the database sets the status from the dates
+        expect(rows[0]).toMatchObject({ start_date: todayISO(), end_date: null });
+        expect(rows[0]).not.toHaveProperty('status');
+    });
+
+    it('sends the dates as given: a backdated start and a last day', async () => {
+        const result = setup();
+        fillHierarchyAndRole(result, 'Casual');
+        act(() => {
+            result.current.updateField('start_date', '2026-07-01');
+            result.current.updateField('end_date', '2026-12-24');
+        });
+        let ok: boolean | undefined;
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(ok).toBe(true);
+        expect(h.inserted[0][0]).toMatchObject({ start_date: '2026-07-01', end_date: '2026-12-24' });
+    });
+
+    it('refuses a last day before the start, and a missing start, without calling insert', async () => {
+        const result = setup();
+        fillHierarchyAndRole(result, 'Casual');
+        act(() => {
+            result.current.updateField('start_date', '2026-07-01');
+            result.current.updateField('end_date', '2026-06-30');
+        });
+        let ok: boolean | undefined;
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(ok).toBe(false);
+        expect(h.toasts.at(-1)?.description).toMatch(/A last day on or after the start date/);
+
+        act(() => { result.current.updateField('end_date', ''); result.current.updateField('start_date', ''); });
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(ok).toBe(false);
+        expect(h.toasts.at(-1)?.description).toMatch(/Start date/);
+        expect(h.insertCalls).toBe(0);
     });
 
     it('Casual (Class 2) writes zero hours', async () => {
@@ -186,7 +231,7 @@ describe('useContractWizardForm', () => {
 
     it('refuses submit when required fields are missing', async () => {
         const result = setup();
-        act(() => { result.current.updateField('contractClass', 1); });
+        act(() => { result.current.updateField('employment_status', 'Full-Time'); });
 
         let ok: boolean | undefined;
         await act(async () => { ok = await result.current.submit([]); });
@@ -373,13 +418,127 @@ describe('useContractWizardForm — pay terms', () => {
         expect(result.current.formData.remuneration_level).toBe(5);
     });
 
-    it('a casual class resets the basis to a level', () => {
+    it('choosing Casual resets the basis to a level', () => {
         const result = setup();
         fillHierarchyAndRole(result, 'Full-Time', 5);
         act(() => { result.current.updateField('pay_basis', 'salary'); });
-        act(() => { result.current.updateField('contractClass', 2); });
+        act(() => { result.current.updateField('employment_status', 'Casual'); });
 
         expect(result.current.formData.pay_basis).toBe('eba_level');
         expect(result.current.formData.employment_status).toBe('Casual');
+    });
+});
+
+/**
+ * Contracts carry access (2026-10-15): the access level is part of the row,
+ * and the wizard edits a saved contract in place.
+ */
+describe('useContractWizardForm — access and editing', () => {
+    it('a new contract sends its access only above Employee (the database defaults to Employee)', async () => {
+        const result = setup();
+        fillHierarchyAndRole(result, 'Casual');
+        expect(result.current.formData.access_level).toBe('alpha');
+        let ok: boolean | undefined;
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(ok).toBe(true);
+        expect(h.inserted[0][0]).not.toHaveProperty('access_level');
+
+        act(() => { result.current.reset(); });
+        fillHierarchyAndRole(result, 'Casual');
+        act(() => { result.current.updateField('access_level', 'beta'); });
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(h.inserted[1][0].access_level).toBe('beta');
+    });
+
+    it('edits a saved contract in place: an UPDATE by id, never a second row', async () => {
+        const result = setup();
+        act(() => {
+            result.current.loadContract({
+                start_date: '2026-03-02', id: 'k-1', organization_id: ORG, department_id: DEPT, sub_department_id: SUBDEPT, role_id: ROLE,
+                employment_status: 'Part-Time', contracted_weekly_hours: 20, pay_basis: 'eba_level',
+                remuneration_level: 3, access_level: 'gamma', position_id: 'pos-1',
+            });
+        });
+        expect(result.current.editingId).toBe('k-1');
+        expect(result.current.formData.access_level).toBe('gamma');
+        expect(result.current.formData.start_date).toBe('2026-03-02');
+        expect(result.current.formData.end_date).toBe('');
+        expect(result.current.formData.contracted_weekly_hours).toBe(20);
+
+        act(() => { result.current.updateField('remuneration_level', 4); });
+        let ok: boolean | undefined;
+        await act(async () => { ok = await result.current.submit([]); });
+
+        expect(ok).toBe(true);
+        expect(h.insertCalls).toBe(0);
+        expect(h.updates).toHaveLength(1);
+        expect(h.updates[0].id).toBe('k-1');
+        expect(h.updates[0].opts).toEqual({ count: 'exact' });
+        expect(h.updates[0].patch).toMatchObject({ remuneration_level: 4, employment_status: 'Part-Time' });
+        // access untouched in the form: not sent, so it stays exactly as stored
+        expect(h.updates[0].patch).not.toHaveProperty('access_level');
+        // the position and the person stay as they are
+        expect(h.updates[0].patch).not.toHaveProperty('position_id');
+        expect(h.updates[0].patch).not.toHaveProperty('user_id');
+        expect(h.updates[0].patch).not.toHaveProperty('notes');
+    });
+
+    it('says so when the database refused the edit (zero rows, no error)', async () => {
+        h.updateCount = 0;
+        const result = setup();
+        act(() => {
+            result.current.loadContract({
+                start_date: '2026-03-02', id: 'k-1', organization_id: ORG, department_id: DEPT, sub_department_id: SUBDEPT, role_id: ROLE,
+                employment_status: 'Casual', pay_basis: 'eba_level', remuneration_level: 2,
+            });
+        });
+        let ok: boolean | undefined;
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(ok).toBe(false);
+        expect(h.toasts.at(-1)).toMatchObject({ title: 'Contract not saved', variant: 'destructive' });
+        expect(h.toasts.at(-1)?.description).toMatch(/^Nothing changed/);
+    });
+
+    // 2026-10-15: the table showed an Administrator's contracts as "Employee" on a
+    // database where access still lives on certificates (contract access empty),
+    // and every save sent an access level that database refuses.
+    it('a contract with no access recorded loads as none — never as Employee — and saves without touching it', async () => {
+        const result = setup();
+        act(() => {
+            result.current.loadContract({
+                start_date: '2026-03-02', id: 'k-eis', organization_id: ORG, department_id: DEPT, sub_department_id: SUBDEPT, role_id: ROLE,
+                employment_status: 'Casual', pay_basis: 'eba_level', remuneration_level: 4, access_level: null,
+            });
+        });
+        expect(result.current.formData.access_level).toBeNull();
+        act(() => { result.current.updateField('remuneration_level', 5); });
+        let ok: boolean | undefined;
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(ok).toBe(true);
+        expect(h.updates[0].patch).not.toHaveProperty('access_level');
+    });
+
+    it('sends the access when it is changed', async () => {
+        const result = setup();
+        act(() => {
+            result.current.loadContract({
+                start_date: '2026-03-02', id: 'k-tl', organization_id: ORG, department_id: DEPT, sub_department_id: SUBDEPT, role_id: ROLE,
+                employment_status: 'Casual', pay_basis: 'eba_level', remuneration_level: 4, access_level: 'alpha',
+            });
+        });
+        act(() => { result.current.updateField('access_level', 'beta'); });
+        await act(async () => { await result.current.submit([]); });
+        expect(h.updates[0].patch.access_level).toBe('beta');
+    });
+
+    it('explains, in words, a database that cannot record access on contracts yet', async () => {
+        h.error = { message: 'new row for relation "user_contracts" violates check constraint "user_contracts_no_access_level"' };
+        const result = setup();
+        fillHierarchyAndRole(result, 'Casual');
+        act(() => { result.current.updateField('access_level', 'beta'); });
+        let ok: boolean | undefined;
+        await act(async () => { ok = await result.current.submit([]); });
+        expect(ok).toBe(false);
+        expect(h.toasts.at(-1)?.description).toMatch(/^Access can't be set on contracts until the pending database update is applied/);
     });
 });

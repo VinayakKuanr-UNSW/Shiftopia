@@ -1,12 +1,19 @@
 // src/platform/auth/useScopeFilter.ts
 // Shared hook for page-level scope state management (Phase 5)
 
-import { useState, useMemo, useCallback, useContext, useEffect } from 'react';
+import { useMemo, useCallback, useContext, useEffect } from 'react';
 import { AuthContext } from './AuthProvider';
 import { useGlobalScopeContext } from './ScopeFilterContext';
+import {
+    offersOnePlace,
+    reconcileScope,
+    scopeKeyOf,
+    scopeTreeFor,
+    type ScopeMode,
+} from './scope-selection';
 import type { ScopeSelection, ScopeTree } from './types';
 
-export type ScopeMode = 'personal' | 'managerial';
+export type { ScopeMode } from './scope-selection';
 
 interface UseScopeFilterOptions {
     /** Called whenever scope changes — use to reset pagination, sorting, etc. */
@@ -14,101 +21,32 @@ interface UseScopeFilterOptions {
 }
 
 interface UseScopeFilterReturn {
-    /** Current scope selection */
+    /** Current scope selection, always inside `scopeTree` */
     scope: ScopeSelection;
     /** Updates the scope selection */
     setScope: (scope: ScopeSelection) => void;
     /** Serialised key for use in React Query cache keys */
     scopeKey: string;
-    /** True if managerial gamma level — filter should be hidden, scope is fully fixed */
+    /**
+     * True when a managerial or Timesheets tree holds a single place (e.g. a gamma
+     * in one sub-department): there is nothing to choose, so the filter is hidden.
+     */
     isGammaLocked: boolean;
     /** Whether scope data is still loading from the permission object */
     isLoading: boolean;
-    /** The allowed scope tree from the permission object */
+    /** The places this mode may choose from, built from the user's contracts */
     scopeTree: ScopeTree | null;
     /** The mode this filter is operating in */
     mode: ScopeMode;
 }
 
 /**
- * Compute default "select all" from a scope tree.
- */
-function defaultSelectionFromTree(tree: ScopeTree | null | undefined): ScopeSelection {
-    if (!tree?.organizations?.length) {
-        return { org_ids: [], dept_ids: [], subdept_ids: [] };
-    }
-
-    return {
-        org_ids: tree.organizations.map(o => o.id),
-        dept_ids: tree.organizations.flatMap(o => o.departments.map(d => d.id)),
-        subdept_ids: tree.organizations.flatMap(o =>
-            o.departments.flatMap(d => d.subdepartments.map(sd => sd.id))
-        ),
-    };
-}
-
-/**
- * Build a personal scope tree from Type X certificates.
- */
-function buildPersonalScopeTree(typeX: Array<{
-    org_id: string; org_name: string;
-    dept_id: string | null; dept_name: string | null;
-    subdept_id: string | null; subdept_name: string | null;
-}>): ScopeTree {
-    if (!typeX?.length) return { organizations: [] };
-
-    const orgMap = new Map<string, {
-        id: string; name: string;
-        depts: Map<string, { id: string; name: string; subdepts: { id: string; name: string }[] }>;
-    }>();
-
-    typeX.forEach(cert => {
-        if (!orgMap.has(cert.org_id)) {
-            orgMap.set(cert.org_id, {
-                id: cert.org_id,
-                name: cert.org_name,
-                depts: new Map(),
-            });
-        }
-        const org = orgMap.get(cert.org_id)!;
-
-        if (cert.dept_id) {
-            if (!org.depts.has(cert.dept_id)) {
-                org.depts.set(cert.dept_id, {
-                    id: cert.dept_id,
-                    name: cert.dept_name || 'Department',
-                    subdepts: [],
-                });
-            }
-            if (cert.subdept_id) {
-                const dept = org.depts.get(cert.dept_id)!;
-                if (!dept.subdepts.find(sd => sd.id === cert.subdept_id)) {
-                    dept.subdepts.push({
-                        id: cert.subdept_id,
-                        name: cert.subdept_name || 'Sub-Department',
-                    });
-                }
-            }
-        }
-    });
-
-    return {
-        organizations: Array.from(orgMap.values()).map(org => ({
-            id: org.id,
-            name: org.name,
-            departments: Array.from(org.depts.values()).map(dept => ({
-                id: dept.id,
-                name: dept.name,
-                subdepartments: dept.subdepts,
-            })),
-        })),
-    };
-}
-
-/**
  * useScopeFilter — Page-level scope state management hook.
  *
- * @param mode - 'personal' (Type X certs) or 'managerial' (Type Y cert)
+ * @param mode - 'personal' (the contracted sub-departments), 'managerial' (what
+ *   gamma-and-above contracts reach) or 'timesheet' (that, plus Team Lead
+ *   contracts). Timesheets shares the managerial selection, so a place picked
+ *   on the Roster opens there too.
  * @param options - Optional callbacks
  */
 export function useScopeFilter(
@@ -117,70 +55,36 @@ export function useScopeFilter(
 ): UseScopeFilterReturn {
     const context = useContext(AuthContext);
     const { personalScope, setPersonalScope, managerialScope, setManagerialScope } = useGlobalScopeContext();
-    
+
     const permissionObject = context?.permissionObject ?? null;
     const isPermissionsLoading = context?.isPermissionsLoading ?? true;
 
-    // Current global scope for this mode
-    const currentGlobalScope = mode === 'personal' ? personalScope : managerialScope;
-    const setGlobalScope = mode === 'personal' ? setPersonalScope : setManagerialScope;
+    const savedScope = mode === 'personal' ? personalScope : managerialScope;
+    const setSavedScope = mode === 'personal' ? setPersonalScope : setManagerialScope;
 
-    // Derive the scope tree based on mode
-    const scopeTree = useMemo<ScopeTree | null>(() => {
-        if (!permissionObject) return null;
+    const scopeTree = useMemo(() => scopeTreeFor(permissionObject, mode), [permissionObject, mode]);
 
-        if (mode === 'personal') {
-            const tree = buildPersonalScopeTree(permissionObject.typeX);
-            // If admin has no Type X certs, they might still want to see everything
-            if (tree.organizations.length === 0 && context?.user?.highestAccessLevel === 'zeta') {
-                return permissionObject.allowed_scope_tree ?? null;
-            }
-            return tree;
-        }
+    // The saved choice, kept to what this person's contracts reach now.
+    const scope = useMemo(() => reconcileScope(savedScope, scopeTree), [savedScope, scopeTree]);
 
-        // Managerial: use the allowed_scope_tree from the RPC
-        return permissionObject.allowed_scope_tree ?? null;
-    }, [permissionObject, mode, context?.user?.highestAccessLevel]);
-
-    // Compute default selection
-    const defaultScope = useMemo(() => defaultSelectionFromTree(scopeTree), [scopeTree]);
-
-    // Sync scope when defaults change (e.g. permissions loaded)
-    // ONLY initialize if no global scope is already set (or if specific re-init is needed)
+    // First visit: save "everything" so pages in this mode share one choice.
     useEffect(() => {
-        if (!currentGlobalScope && defaultScope.org_ids.length > 0) {
-            setGlobalScope(defaultScope);
+        if (!savedScope && scope.org_ids.length > 0) {
+            setSavedScope(scope);
         }
-    }, [defaultScope, currentGlobalScope, setGlobalScope]);
+    }, [savedScope, scope, setSavedScope]);
 
-    // Is gamma locked? Only relevant for managerial mode
-    const isGammaLocked = useMemo(() => {
-        if (mode !== 'managerial') return false;
-        // Only lock if explicitly at gamma level. 
-        // If no typeY exists, it's either loading or unauthorized, but not "locked".
-        return permissionObject?.typeY?.level === 'gamma';
-    }, [mode, permissionObject]);
+    const isGammaLocked = useMemo(
+        () => mode !== 'personal' && offersOnePlace(scopeTree),
+        [mode, scopeTree],
+    );
 
-    // Final scope to return (fallback to default if global not yet set)
-    const scope = currentGlobalScope || defaultScope;
-
-    // Setter with global update and optional callback
     const setScope = useCallback((newScope: ScopeSelection) => {
-        setGlobalScope(newScope);
+        setSavedScope(newScope);
         options.onScopeChange?.();
-    }, [options.onScopeChange, setGlobalScope]);
+    }, [options.onScopeChange, setSavedScope]);
 
-    // Serialised key for React Query
-    const scopeKey = useMemo(() => {
-        const ids = [
-            ...scope.org_ids.sort(),
-            '|',
-            ...scope.dept_ids.sort(),
-            '|',
-            ...scope.subdept_ids.sort(),
-        ];
-        return ids.join(',');
-    }, [scope]);
+    const scopeKey = useMemo(() => scopeKeyOf(scope), [scope]);
 
     return {
         scope,
