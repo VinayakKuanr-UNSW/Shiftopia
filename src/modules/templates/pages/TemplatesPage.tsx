@@ -287,7 +287,7 @@ const TemplatesPage: React.FC = () => {
   );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden px-4 md:px-8 pb-24 md:pb-0 space-y-4">
+    <div className="h-full flex flex-col overflow-hidden px-4 lg:px-6 pb-24 md:pb-0 space-y-4">
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 pt-4 pb-2 lg:pb-4">
         <div className={cn(

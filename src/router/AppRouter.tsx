@@ -4,6 +4,7 @@ import AppLayout from '@/modules/core/ui/layout/AppLayout';
 import { useAuth } from '@/platform/auth/useAuth';
 import { MobileAccessGuard } from '@/modules/core/ui/components/MobileAccessGuard';
 import { ErrorBoundary } from '@/modules/core';
+import { isCanvasRoute } from './layoutRoutes';
 
 /* =======================
    EAGER LOADED PAGES
@@ -72,10 +73,7 @@ const PageLoader: React.FC = () => (
     </div>
 );
 
-/* =======================
-   ROUTES WHERE MAIN AREA HAS NO PADDING (fullscreen canvas pages)
-   ======================= */
-const NO_PADDING_ROUTES = new Set(['/rosters', '/rosters/shift/new', '/settings']);
+/* Main-area padding is opt-in; see ./layoutRoutes.ts */
 
 /* =======================
    PERSISTENT AUTH LAYOUT
@@ -85,7 +83,7 @@ const NO_PADDING_ROUTES = new Set(['/rosters', '/rosters/shift/new', '/settings'
 const AuthLayout: React.FC = () => {
     const { user, isAuthenticated, isLoading, hasActiveContracts } = useAuth();
     const location = useLocation();
-    const noPadding = NO_PADDING_ROUTES.has(location.pathname);
+    const noPadding = isCanvasRoute(location.pathname);
 
     if (isLoading) {
         return (
