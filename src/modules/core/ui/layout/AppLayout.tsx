@@ -7,6 +7,14 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/modules/cor
 import { useSidebar } from '@/modules/core/ui/primitives/sidebar';
 import { useTranslation } from 'react-i18next';
 
+/**
+ * How far page content starts from the left on desktop: the floating sidebar
+ * card (240px / 76px collapsed) plus its 16px gutter. Full-screen views that
+ * position themselves (fixed) must use this rather than a pixel guess.
+ */
+export const contentOffsetClass = (isCollapsed: boolean) =>
+  isCollapsed ? "md:left-[92px]" : "md:left-[256px]";
+
 interface AppLayoutProps {
   children: React.ReactNode;
   noPadding?: boolean;

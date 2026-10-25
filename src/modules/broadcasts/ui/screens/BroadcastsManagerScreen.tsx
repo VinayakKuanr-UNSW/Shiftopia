@@ -30,6 +30,8 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
+import { useOptionalSidebar } from '@/modules/core/ui/primitives/sidebar';
+import { contentOffsetClass } from '@/modules/core/ui/layout/AppLayout';
 import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 
 import { useBroadcastGroups } from '../../state/useBroadcasts';
@@ -80,6 +82,7 @@ export function BroadcastsManagerScreen({
   onCloseCreateDialog,
 }: BroadcastsManagerScreenProps) {
   const { toast } = useToast();
+  const sidebar = useOptionalSidebar();
 
   // ========================================
   // HIERARCHY STATE
@@ -195,7 +198,7 @@ export function BroadcastsManagerScreen({
 
   if (selectedGroupId) {
     return (
-      <div className="fixed inset-0 md:left-[280px] z-30 bg-background">
+      <div className={cn('fixed inset-0 z-30 bg-background', contentOffsetClass(sidebar?.state === 'collapsed'))}>
         <ControlRoom
           groupId={selectedGroupId}
           onBack={() => setSelectedGroupId(null)}
