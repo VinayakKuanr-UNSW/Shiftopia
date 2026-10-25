@@ -46,11 +46,32 @@ check(mem >= 100, f"memory nodes {mem}")
 #    Node ids lost their "_ts" suffix in the graphify upgrade (2026-10-25).
 #    shifts.commands.ts also calls it but the AST layer misses that edge.
 truth = {"src_modules_rosters_api_shifts_api",
+         "src_modules_rosters_api_shifts_commands",
          "supabase_functions_auto_assign_bids_index"}
 got = {e["source"] for e in E
        if e.get("target") == "db_fn_sm_apply_shift_op" and e.get("relation") == "calls_rpc"}
 check(got == truth, f"sm_apply_shift_op callers exact ({len(got)} found)"
       + ("" if got == truth else f" -- drift: {got ^ truth}"))
+
+# 3b. every direct RPC call site in source has its calls_rpc edge. Recomputed
+#     from source, not hand-listed, so a new call site or a regressed
+#     extractor (callRpc() was once only "invokes_rpc_indirectly") fails here.
+import re
+RPC = re.compile(r"""(?:\.rpc|\bcallRpc)(?:<[^>()]*>)?\(\s*['"]([a-zA-Z0-9_]+)['"]""")
+fns = {i for i in N if i.startswith("db_fn_")}
+have = {(e.get("source_file"), e["target"]) for e in E if e.get("relation") == "calls_rpc"}
+missing = []
+for root in ("src", "supabase/functions"):
+    for f in (ROOT / root).rglob("*.ts*"):
+        if "node_modules" in f.parts:
+            continue
+        r = str(f.relative_to(ROOT))
+        for name in set(RPC.findall(f.read_text(errors="ignore"))):
+            fid = "db_fn_" + name.lower()
+            if fid in fns and (r, fid) not in have:
+                missing.append(f"{r} -> {name}")
+check(not missing, f"direct RPC call sites with calls_rpc edge ({len(missing)} missing)"
+      + (f" -- e.g. {missing[:3]}" if missing else ""))
 
 # 4. no dangling endpoints
 dangling = sum(1 for e in E if e["source"] not in N or e["target"] not in N)

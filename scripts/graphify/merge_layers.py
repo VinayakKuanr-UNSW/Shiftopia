@@ -70,7 +70,9 @@ def derive_labels(comms, nodes_by_id):
             if lab and not lab.startswith("#") and len(lab) < 42 and not lab.endswith((".ts", ".tsx", ".md", ".py", ".sql")):
                 labs[lab] += 1
         if not dirs:
-            out[cid] = f"Community {cid}"
+            # No member has a source file: graphify's stubs for names it saw
+            # referenced but never defined (pydantic BaseModel, a table string).
+            out[cid] = "unresolved reference — " + ", ".join(sorted(labs)[:2]) if labs else f"Community {cid}"
             continue
         where = dirs.most_common(1)[0][0]
         where = where.replace("src/modules/", "").replace("supabase/", "").replace("docs/", "docs: ")

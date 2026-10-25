@@ -22,3 +22,11 @@ graphify-out/
 # Scratch dirs, not knowledge
 1/
 scratch/
+
+# Migrations belong to scripts/graphify/sql_layer.py (db_*/mig_* nodes).
+# graphify started parsing .sql after an upgrade; its parallel migration nodes
+# duplicated that layer, were ~disconnected from it, and left 54 sourceless
+# singleton communities from unresolved table references. supabase/tests,
+# seeds and audits stay in: docs link to them and sql_layer doesn't read them.
+supabase/migrations/
+supabase/migrations_archive_pre_baseline_*/
