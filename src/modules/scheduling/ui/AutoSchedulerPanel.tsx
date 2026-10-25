@@ -91,7 +91,7 @@ interface AutoSchedulerPanelProps {
 function HealthBadge({ health }: { health: OptimizerHealth | null }) {
     if (!health) {
         return (
-            <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
+            <Badge variant="outline" className="gap-1 text-[11px] text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Checking…
             </Badge>
@@ -99,14 +99,14 @@ function HealthBadge({ health }: { health: OptimizerHealth | null }) {
     }
     if (health.available) {
         return (
-            <Badge variant="outline" className="gap-1 text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+            <Badge variant="outline" className="gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
                 <CheckCircle2 className="h-3 w-3" />
                 OR-Tools ready {health.latencyMs != null ? `(${health.latencyMs}ms)` : ''}
             </Badge>
         );
     }
     return (
-        <Badge variant="outline" className="gap-1 text-xs text-red-500 border-red-500/30">
+        <Badge variant="outline" className="gap-1 text-[11px] text-red-500 border-red-500/30">
             <WifiOff className="h-3 w-3" />
             Optimizer offline
         </Badge>
@@ -147,14 +147,14 @@ function ProposalRow({ p, onSwap }: { p: ValidatedProposal; onSwap: () => void }
                 }}
             >
                 {statusIcon}
-                <span className="text-xs font-medium text-foreground">{p.shiftDate}</span>
-                <span className="text-xs text-muted-foreground">{p.startTime}–{p.endTime}</span>
+                <span className="text-[11px] font-medium text-foreground">{p.shiftDate}</span>
+                <span className="text-[11px] text-muted-foreground">{p.startTime}–{p.endTime}</span>
                 
                 {/* Health context if provided */}
                 <div className="flex items-center gap-2 ml-2">
                     {p.fatigueScore != null && (
                         <div className={cn(
-                            "flex items-center gap-0.5 text-[9px] font-bold px-1 rounded",
+                            "flex items-center gap-0.5 text-[11px] font-bold px-1 rounded",
                             p.fatigueScore < 10 ? "text-emerald-400" : p.fatigueScore < 20 ? "text-amber-400" : "text-red-400"
                         )}>
                             <Activity className="h-2.5 w-2.5" />
@@ -178,7 +178,7 @@ function ProposalRow({ p, onSwap }: { p: ValidatedProposal; onSwap: () => void }
                     </Button>
                     
                     {p.violations.length > 0 && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground">
                             {p.violations.length} issue{p.violations.length !== 1 ? 's' : ''}
                         </span>
                     )}
@@ -228,15 +228,15 @@ function EmployeeGroup({ employeeId, employeeName, proposals, onSwapShift }: {
                 onClick={() => setExpanded(!expanded)}
             >
                 <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm font-medium text-foreground flex-1">{employeeName}</span>
+                <span className="text-[13px] font-medium text-foreground flex-1">{employeeName}</span>
                 <div className="flex items-center gap-2">
                     {passing > 0 && (
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
                             {passing} ✓
                         </span>
                     )}
                     {failing > 0 && (
-                        <span className="text-xs text-red-500 font-medium">
+                        <span className="text-[11px] text-red-500 font-medium">
                             {failing} ✗
                         </span>
                     )}
@@ -246,7 +246,7 @@ function EmployeeGroup({ employeeId, employeeName, proposals, onSwapShift }: {
                 <div className="flex items-center gap-2 ml-2">
                   {proposals[0]?.fatigueScore != null && (
                     <div className={cn(
-                      "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border",
+                      "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold border",
                       proposals[0].fatigueScore < 10 ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5" :
                       proposals[0].fatigueScore < 20 ? "text-amber-500 border-amber-500/20 bg-amber-500/5" :
                       "text-red-500 border-red-500/20 bg-red-500/5"
@@ -257,7 +257,7 @@ function EmployeeGroup({ employeeId, employeeName, proposals, onSwapShift }: {
                   )}
                   {proposals[0]?.utilization != null && (
                     <div className={cn(
-                      "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border",
+                      "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] font-bold border",
                       proposals[0].utilization < 80 ? "text-blue-500 border-blue-500/20 bg-blue-500/5" :
                       proposals[0].utilization <= 105 ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5" :
                       "text-amber-500 border-amber-500/20 bg-amber-500/5"
@@ -291,15 +291,15 @@ function StatsBar({ result }: { result: AutoSchedulerResult }) {
     return (
         <div className="grid grid-cols-3 gap-2">
             <div className="text-center px-3 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{result.passing}</div>
+                <div className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400">{result.passing}</div>
                 <div className="text-[11px] text-muted-foreground">Passing</div>
             </div>
             <div className="text-center px-3 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
-                <div className="text-lg font-bold text-red-500">{result.failing}</div>
+                <div className="text-[15px] font-bold text-red-500">{result.failing}</div>
                 <div className="text-[11px] text-muted-foreground">Failing</div>
             </div>
             <div className="text-center px-3 py-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                <div className="text-lg font-bold text-amber-500">{result.uncoveredV8ShiftIds.length}</div>
+                <div className="text-[15px] font-bold text-amber-500">{result.uncoveredV8ShiftIds.length}</div>
                 <div className="text-[11px] text-muted-foreground">Uncovered</div>
             </div>
         </div>
@@ -726,7 +726,7 @@ export function AutoSchedulerPanel({
                         {/* Date Range Selection */}
                         {phase === 'idle' && !result && (
                             <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
-                                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
                                     <Calendar className="h-4 w-4 text-primary" />
                                     Optimization Range
                                 </div>
@@ -738,7 +738,7 @@ export function AutoSchedulerPanel({
                                             type="date"
                                             value={startDate}
                                             onChange={(e) => setStartDate(e.target.value)}
-                                            className="h-9 text-sm bg-background/50"
+                                            className="h-9 text-[13px] bg-background/50"
                                         />
                                     </div>
                                     <div className="space-y-1.5">
@@ -748,7 +748,7 @@ export function AutoSchedulerPanel({
                                             type="date"
                                             value={endDate}
                                             onChange={(e) => setEndDate(e.target.value)}
-                                            className="h-9 text-sm bg-background/50"
+                                            className="h-9 text-[13px] bg-background/50"
                                         />
                                     </div>
                                 </div>
@@ -769,12 +769,12 @@ export function AutoSchedulerPanel({
                                             </p>
                                             <ul className="mt-1 space-y-0.5 text-muted-foreground">
                                                 {preRunCapacity.deficits.slice(0, 3).map(d => (
-                                                    <li key={d.date} className="font-mono text-[10px]">
+                                                    <li key={d.date} className="font-mono text-[11px]">
                                                         {d.date}: {d.shiftCount} shifts, ~{Math.round(d.deficitMinutes / 60)}h short
                                                     </li>
                                                 ))}
                                                 {preRunCapacity.deficits.length > 3 && (
-                                                    <li className="text-[10px] italic">+ {preRunCapacity.deficits.length - 3} more day(s)</li>
+                                                    <li className="text-[11px] italic">+ {preRunCapacity.deficits.length - 3} more day(s)</li>
                                                 )}
                                             </ul>
                                         </div>
@@ -787,12 +787,12 @@ export function AutoSchedulerPanel({
                         {health && !health.available && (
                             <div className="flex items-start gap-3 p-3 bg-red-500/10 rounded-lg border border-red-500/20">
                                 <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
-                                <div className="text-sm">
+                                <div className="text-[13px]">
                                     <p className="font-medium text-red-600 dark:text-red-400">Optimizer service is offline</p>
-                                    <p className="text-muted-foreground text-xs mt-0.5">
+                                    <p className="text-muted-foreground text-[11px] mt-0.5">
                                         Start it with:
                                     </p>
-                                    <code className="block mt-1 text-xs bg-background/80 rounded px-2 py-1 font-mono">
+                                    <code className="block mt-1 text-[11px] bg-background/80 rounded px-2 py-1 font-mono">
                                         docker compose up optimizer<br />
                                         <span className="text-muted-foreground"># or manually:</span><br />
                                         cd optimizer-service &amp;&amp; python ortools_runner.py
@@ -805,7 +805,7 @@ export function AutoSchedulerPanel({
                         {result && (
                             <>
                                 {result.usedFallback && (
-                                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 rounded-lg border border-amber-500/20 text-xs text-amber-600 dark:text-amber-400">
+                                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 rounded-lg border border-amber-500/20 text-[11px] text-amber-600 dark:text-amber-400">
                                         <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                                         Greedy fallback used — optimizer was unavailable or returned no solution.
                                     </div>
@@ -813,7 +813,7 @@ export function AutoSchedulerPanel({
 
                                 <StatsBar result={result} />
 
-                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                         <Cpu className="h-3 w-3" />
                                         Solve: {result.solveTimeMs}ms
@@ -832,7 +832,7 @@ export function AutoSchedulerPanel({
                         {/* Employee groups */}
                         {employeeGroups.length > 0 && (
                             <div className="space-y-3">
-                                <h3 className="text-sm font-medium text-foreground">
+                                <h3 className="text-[13px] font-medium text-foreground">
                                     Proposed Assignments ({result?.totalProposals})
                                 </h3>
                                 {employeeGroups.map(g => (
@@ -864,7 +864,7 @@ export function AutoSchedulerPanel({
                         {result && result.uncoveredV8ShiftIds.length > 0 && (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                    <h3 className="text-[13px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                                         <AlertTriangle className="h-4 w-4" />
                                         {result.uncoveredV8ShiftIds.length} Unfilled Shift{result.uncoveredV8ShiftIds.length !== 1 ? 's' : ''}
                                     </h3>
@@ -886,24 +886,24 @@ export function AutoSchedulerPanel({
                                     {result.uncoveredAudit?.map(audit => (
                                         <div key={audit.shiftId} className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
                                             <div className="flex items-center justify-between mb-1.5">
-                                                <span className="text-xs font-bold text-foreground">{audit.shiftDate}</span>
-                                                <span className="text-[10px] text-muted-foreground">{audit.startTime}–{audit.endTime}</span>
+                                                <span className="text-[11px] font-bold text-foreground">{audit.shiftDate}</span>
+                                                <span className="text-[11px] text-muted-foreground">{audit.startTime}–{audit.endTime}</span>
                                             </div>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {Object.entries(audit.rejectionSummary).length > 0 ? (
                                                     Object.entries(audit.rejectionSummary).map(([type, count]) => (
-                                                        <Badge key={type} variant="secondary" className="text-[9px] h-4 px-1 bg-amber-500/20 text-amber-700 border-none">
+                                                        <Badge key={type} variant="secondary" className="text-[11px] h-4 px-1 bg-amber-500/20 text-amber-700 border-none">
                                                             {type}: {count}
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-[10px] text-muted-foreground italic">No eligible employees found</span>
+                                                    <span className="text-[11px] text-muted-foreground italic">No eligible employees found</span>
                                                 )}
                                             </div>
                                         </div>
                                     ))}
                                     {result.uncoveredV8ShiftIds.length > (result.uncoveredAudit?.length ?? 0) && (
-                                        <p className="text-[10px] text-muted-foreground text-center italic">
+                                        <p className="text-[11px] text-muted-foreground text-center italic">
                                             + {result.uncoveredV8ShiftIds.length - (result.uncoveredAudit?.length ?? 0)} more unfilled shifts (download report for full details)
                                         </p>
                                     )}
@@ -915,7 +915,7 @@ export function AutoSchedulerPanel({
                         {phase === 'idle' && !result && (
                             <div className="py-10 text-center text-muted-foreground">
                                 <Cpu className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                                <p className="text-sm">
+                                <p className="text-[13px]">
                                     {unfilledCount === 0
                                         ? 'No unfilled shifts in current view'
                                         : employees.length === 0
@@ -932,7 +932,7 @@ export function AutoSchedulerPanel({
                 {/* Footer */}
                 <div className="px-6 py-4 border-t border-border space-y-2">
                     {result && result.passing > 0 && !isCommitting && (
-                        <p className="text-xs text-center text-muted-foreground">
+                        <p className="text-[11px] text-center text-muted-foreground">
                             {result.failing > 0
                                 ? `${result.failing} shift(s) with blocking violations will be skipped`
                                 : 'All proposals passed compliance — ready to apply'}
@@ -1087,10 +1087,10 @@ function CandidateSwapDrawer({
           <div className="space-y-4">
             <div className="p-3 bg-muted/40 rounded-lg border flex items-center justify-between">
               <div>
-                <p className="text-[10px] uppercase font-bold text-muted-foreground">Current Assignment</p>
-                <p className="text-sm font-medium">{proposal.employeeName}</p>
+                <p className="text-[11px] uppercase font-bold text-muted-foreground">Current Assignment</p>
+                <p className="text-[13px] font-medium">{proposal.employeeName}</p>
               </div>
-              <Badge variant="outline" className="text-[10px]">Active Proposal</Badge>
+              <Badge variant="outline" className="text-[11px]">Active Proposal</Badge>
             </div>
 
             <div className="space-y-2">
@@ -1106,9 +1106,9 @@ function CandidateSwapDrawer({
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium">{cand.name}</span>
+                      <span className="text-[13px] font-medium">{cand.name}</span>
                     </div>
-                    {cand.isCurrent && <Badge className="h-4 text-[9px] px-1.5 bg-primary/20 text-primary border-none">Selected</Badge>}
+                    {cand.isCurrent && <Badge className="h-4 text-[11px] px-1.5 bg-primary/20 text-primary border-none">Selected</Badge>}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -1120,8 +1120,8 @@ function CandidateSwapDrawer({
                         <Activity className={cn("h-3 w-3", cand.projectedFatigue < 15 ? "text-emerald-500" : "text-red-500")} />
                       </div>
                       <div>
-                        <p className="text-[9px] text-muted-foreground leading-none">Fatigue</p>
-                        <p className="text-xs font-bold">{cand.projectedFatigue.toFixed(1)}</p>
+                        <p className="text-[11px] text-muted-foreground leading-none">Fatigue</p>
+                        <p className="text-[11px] font-bold">{cand.projectedFatigue.toFixed(1)}</p>
                       </div>
                     </div>
 
@@ -1133,8 +1133,8 @@ function CandidateSwapDrawer({
                         <Scale className={cn("h-3 w-3", cand.projectedUtilization < 105 ? "text-blue-500" : "text-amber-500")} />
                       </div>
                       <div>
-                        <p className="text-[9px] text-muted-foreground leading-none">Utilization</p>
-                        <p className="text-xs font-bold">{cand.projectedUtilization.toFixed(0)}%</p>
+                        <p className="text-[11px] text-muted-foreground leading-none">Utilization</p>
+                        <p className="text-[11px] font-bold">{cand.projectedUtilization.toFixed(0)}%</p>
                       </div>
                     </div>
                   </div>

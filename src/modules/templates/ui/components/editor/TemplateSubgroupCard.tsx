@@ -122,7 +122,7 @@ export function TemplateSubgroupCard({
                             }}
                             autoFocus
                             aria-label={`Rename subgroup ${subgroup.name}`}
-                            className="h-11 min-h-[44px] flex-1 text-base sm:text-sm font-semibold"
+                            className="h-11 min-h-[44px] flex-1 text-[14px] sm:text-[13px] font-semibold"
                         />
                     ) : (
                         <CollapsibleTrigger asChild>
@@ -137,11 +137,11 @@ export function TemplateSubgroupCard({
                                     <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" aria-hidden="true" />
                                 )}
 
-                                <span className={cn('font-bold text-sm tracking-tight truncate', colors.text)}>
+                                <span className={cn('font-bold text-[13px] tracking-tight truncate', colors.text)}>
                                     {subgroup.name}
                                 </span>
 
-                                <span className="shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                <span className="shrink-0 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                                     ({subgroup.shifts.length} shifts)
                                 </span>
                             </button>
@@ -150,7 +150,7 @@ export function TemplateSubgroupCard({
 
                     <div className="flex shrink-0 items-center gap-0.5">
                         {isFixed && (
-                            <span className="px-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            <span className="px-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                                 Fixed<span className="sr-only">: Office always has exactly this one sub-group</span>
                             </span>
                         )}
@@ -210,7 +210,7 @@ export function TemplateSubgroupCard({
                 <CollapsibleContent>
                     <div className="px-3 pb-3">
                         {subgroup.shifts.length === 0 ? (
-                            <div className="text-center py-4 text-slate-600 dark:text-slate-300 text-sm">
+                            <div className="text-center py-4 text-slate-600 dark:text-slate-300 text-[13px]">
                                 <p className="font-medium">No shifts yet</p>
                                 {onAddShift && (
                                     <Button

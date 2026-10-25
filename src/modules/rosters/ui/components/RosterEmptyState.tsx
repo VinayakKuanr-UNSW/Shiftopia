@@ -28,10 +28,10 @@ export const RosterEmptyState: React.FC<RosterEmptyStateProps> = ({
       <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4 shadow-xs">
         <Icon className="w-6 h-6 text-primary" aria-hidden="true" />
       </div>
-      <h3 className="text-base font-bold text-foreground tracking-tight mb-1">
+      <h3 className="text-[14px] font-bold text-foreground tracking-tight mb-1">
         {title}
       </h3>
-      <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
+      <p className="text-[11px] text-muted-foreground max-w-xs leading-relaxed">
         {description}
       </p>
       {action && <div className="mt-4">{action}</div>}

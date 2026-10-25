@@ -110,7 +110,7 @@ export default function BatchApplyModal({
   const hasPastDates = dateRange?.from && isBefore(startOfDay(dateRange.from), today);
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onClose} dialogClassName="sm:max-w-2xl" drawerClassName="h-[85dvh]">
+    <ResponsiveDialog open={open} onOpenChange={onClose} size="lg" drawerClassName="h-[85dvh]">
       <ResponsiveDialog.Header>
         <ResponsiveDialog.Title className="flex items-center gap-2">
           <Zap className="h-5 w-5" />
@@ -123,7 +123,7 @@ export default function BatchApplyModal({
 
       <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
         {isLocked && (
-          <div className="mb-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200 text-sm">
+          <div className="mb-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200 text-[13px]">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             <span>This calendar is locked. You cannot modify availability.</span>
           </div>
@@ -132,7 +132,7 @@ export default function BatchApplyModal({
 
           {/* Date Selection */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium flex items-center gap-2">
+            <Label className="text-[13px] font-medium flex items-center gap-2">
               <CalendarDays className="h-4 w-4" />
               Select Date Range
             </Label>
@@ -146,7 +146,7 @@ export default function BatchApplyModal({
               />
             </div>
             {hasPastDates && (
-              <div className="flex items-center gap-2 text-yellow-600 text-sm mt-2">
+              <div className="flex items-center gap-2 text-yellow-600 text-[13px] mt-2">
                 <AlertTriangle className="h-4 w-4" />
                 <span>Cannot select past dates. Please select future dates only.</span>
               </div>
@@ -155,7 +155,7 @@ export default function BatchApplyModal({
 
           {/* Time Configuration */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium flex items-center gap-2">
+            <Label className="text-[13px] font-medium flex items-center gap-2">
               <Clock className="h-4 w-4" />
               Configure Time Slots
             </Label>
@@ -180,7 +180,7 @@ export default function BatchApplyModal({
                     >
                       <div>
                         <div className="font-medium">{preset.name}</div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-[11px] text-muted-foreground">
                           {preset.timeSlots.map(slot => `${slot.startTime}-${slot.endTime}`).join(', ')}
                         </div>
                       </div>
@@ -200,7 +200,7 @@ export default function BatchApplyModal({
                         className="w-24"
                         disabled={isLocked}
                       />
-                      <span className="text-sm text-muted-foreground">to</span>
+                      <span className="text-[13px] text-muted-foreground">to</span>
                       <Input
                         type="time"
                         value={slot.endTime}
@@ -211,7 +211,7 @@ export default function BatchApplyModal({
                       <select
                         value={slot.status}
                         onChange={(e) => updateTimeSlot(index, 'status', e.target.value)}
-                        className="px-2 py-1 border rounded text-sm"
+                        className="px-2 py-1 border rounded text-[13px]"
                         disabled={isLocked}
                       >
                         <option value="Available">Available</option>
@@ -248,7 +248,7 @@ export default function BatchApplyModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label htmlFor="batch-notes" className="text-sm font-medium">Notes (Optional)</Label>
+            <Label htmlFor="batch-notes" className="text-[13px] font-medium">Notes (Optional)</Label>
             <Textarea
               id="batch-notes"
               placeholder="Add notes for all selected dates..."

@@ -410,20 +410,20 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             )}
             <div className="flex-1 min-w-0">
               {isAllFailed ? (
-                <p className="text-sm font-medium text-destructive">
+                <p className="text-[13px] font-medium text-destructive">
                   {action === 'publish' ? 'Publish failed' : 'Action failed'} — {result.failedCount} shift{result.failedCount !== 1 ? 's' : ''} could not be processed.
                 </p>
               ) : isPartial ? (
-                <p className="text-sm font-medium text-amber-300">
+                <p className="text-[13px] font-medium text-amber-300">
                   {result.successCount} succeeded · {result.failedCount} failed
                 </p>
               ) : (
-                <p className="text-sm font-medium text-emerald-300">
+                <p className="text-[13px] font-medium text-emerald-300">
                   {result.successCount} shift{result.successCount !== 1 ? 's' : ''} {action === 'publish' ? 'published' : action === 'unpublish' ? 'unpublished' : 'processed'} successfully.
                 </p>
               )}
               {result.failedDetails && result.failedDetails.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                   Reason{result.failedDetails.length > 1 ? 's' : ''}:{' '}
                   {Array.from(new Set(result.failedDetails.map(f => f.reason))).slice(0, 3).join(' · ')}
                 </p>
@@ -442,13 +442,13 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 size="sm"
                 onClick={handleRetry}
                 disabled={(actionState as any).type === 'processing'}
-                className="gap-1.5 h-7 text-xs rounded-full"
+                className="gap-1.5 h-7 text-[11px] rounded-full"
               >
                 <RefreshCw className="h-3 w-3" />
                 Retry {result.failedCount} Failed
               </Button>
-              <span className="text-xs text-muted-foreground">or</span>
-              <Button variant="ghost" size="sm" onClick={dismissResult} className="h-7 text-xs rounded-full text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">or</span>
+              <Button variant="ghost" size="sm" onClick={dismissResult} className="h-7 text-[11px] rounded-full text-muted-foreground">
                 Dismiss
               </Button>
             </div>
@@ -474,30 +474,30 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
 
             {/* Selection badge */}
             <div className="col-span-2 flex flex-col items-center sm:items-start w-full sm:w-auto min-w-0 sm:min-w-[120px] sm:col-span-1">
-              <Badge variant="glass" className="px-3 py-1.5 text-sm font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-sm whitespace-nowrap flex-shrink-0">
+              <Badge variant="glass" className="px-3 py-1.5 text-[13px] font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-sm whitespace-nowrap flex-shrink-0">
                 {isAllSelected ? `All ${selectedCount}` : selectedCount} Selected
               </Badge>
               <div className="flex gap-2 mt-1 px-1">
                 {/* Scope indicator */}
                 {totalVisibleCount !== undefined && !isAllSelected && (
-                  <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">of {totalVisibleCount} in view</span>
+                  <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap">of {totalVisibleCount} in view</span>
                 )}
                 {isAllSelected && (
-                  <span className="text-[10px] text-primary/70 whitespace-nowrap">entire view</span>
+                  <span className="text-[11px] text-primary/70 whitespace-nowrap">entire view</span>
                 )}
                 {stateCounts && selectedCount > 0 && (
                   <>
                     {stateCounts.assignedCount > 0 && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{stateCounts.assignedCount} assigned</span>
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{stateCounts.assignedCount} assigned</span>
                     )}
                     {stateCounts.unassignedCount > 0 && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{stateCounts.unassignedCount} unassigned</span>
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{stateCounts.unassignedCount} unassigned</span>
                     )}
                     {stateCounts.draftCount > 0 && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{stateCounts.draftCount} draft</span>
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{stateCounts.draftCount} draft</span>
                     )}
                     {stateCounts.publishedCount > 0 && (
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">{stateCounts.publishedCount} published</span>
+                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{stateCounts.publishedCount} published</span>
                     )}
                   </>
                 )}
@@ -634,7 +634,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {selectedCount} Shift{selectedCount > 1 ? 's' : ''}?</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-2 text-[13px] text-muted-foreground">
                 <p>This action cannot be undone.</p>
                 {preview && preview.warned > 0 && (
                   <p className="text-amber-400 font-medium">
@@ -662,7 +662,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               Publish {preview?.eligible ?? 0} Shift{(preview?.eligible ?? 0) !== 1 ? 's' : ''}?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-2 text-[13px] text-muted-foreground">
                 {/* Compliance validation ran — show detailed results */}
                 {actionState.type === 'confirming' && actionState.validatedIds ? (
                   <>
@@ -670,7 +670,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                       ✓ Compliance checked — {preview!.eligible} shift{preview!.eligible !== 1 ? 's' : ''} ready to publish.
                     </p>
                     {preview!.blocked > 0 && (
-                      <p className="text-destructive text-xs">
+                      <p className="text-destructive text-[11px]">
                         {preview!.blocked} shift{preview!.blocked !== 1 ? 's' : ''} failed compliance or were already published — excluded.
                       </p>
                     )}
@@ -679,13 +679,13 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                   <>
                     <p>Compliance will be checked during publishing. Only passing shifts will be published.</p>
                     {preview && preview.blocked > 0 && (
-                      <p className="text-muted-foreground/70 text-xs">
+                      <p className="text-muted-foreground/70 text-[11px]">
                         {preview.blocked} already-published/cancelled shift{preview.blocked !== 1 ? 's' : ''} will be skipped.
                       </p>
                     )}
                   </>
                 )}
-                <ul className="list-disc list-inside space-y-1 text-xs">
+                <ul className="list-disc list-inside space-y-1 text-[11px]">
                   <li>Assigned shifts will be sent as Offers to employees.</li>
                   <li>Unassigned shifts will go to Open Bidding.</li>
                 </ul>
@@ -715,10 +715,10 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               Unpublish {preview?.eligible ?? 0} Shift{(preview?.eligible ?? 0) !== 1 ? 's' : ''}?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-muted-foreground">
+              <div className="space-y-2 text-[13px] text-muted-foreground">
                 <p>Selected shifts will revert to Draft and be hidden from employees.</p>
                 {preview && preview.blocked > 0 && (
-                  <p className="text-muted-foreground/70 text-xs">
+                  <p className="text-muted-foreground/70 text-[11px]">
                     {preview.blocked} shift{preview.blocked !== 1 ? 's are' : ' is'} in bidding or not published — will be skipped.
                   </p>
                 )}

@@ -107,7 +107,7 @@ export const ControlRoomParticipants: React.FC<ControlRoomParticipantsProps> = (
 
                     return (
                         <div key={role} className="mb-4">
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold px-3 mb-2 flex items-center gap-2">
+                            <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold px-3 mb-2 flex items-center gap-2">
                                 <Shield className="h-3 w-3" />
                                 {role === 'admin' ? 'Admins' : role === 'broadcaster' ? 'Broadcasters' : 'Members'} ({roleParticipants.length})
                             </p>
@@ -126,7 +126,7 @@ export const ControlRoomParticipants: React.FC<ControlRoomParticipantsProps> = (
                 {(!group.participants || group.participants.length === 0) && (
                     <div className="text-center py-8">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-[13px] text-muted-foreground">
                             No participants yet
                         </p>
                     </div>

@@ -118,7 +118,7 @@ function RuleItem({ rule, onEdit, onDelete }: RuleItemProps) {
 
   return (
     <motion.div {...listItemSpring}>
-    <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-shadow">
+    <Card>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           {/* Left: Rule Details */}
@@ -138,7 +138,7 @@ function RuleItem({ rule, onEdit, onDelete }: RuleItemProps) {
             </div>
 
             {/* Date */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <Calendar className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">
                 {format(startDate, 'MMM dd, yyyy')}
@@ -152,7 +152,7 @@ function RuleItem({ rule, onEdit, onDelete }: RuleItemProps) {
             </div>
 
             {/* Time Range */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <Clock className="h-4 w-4 flex-shrink-0" />
               <span>
                 {formatTime(rule.start_time)} - {formatTime(rule.end_time)}
@@ -161,7 +161,7 @@ function RuleItem({ rule, onEdit, onDelete }: RuleItemProps) {
 
             {/* Repeat Info */}
             {hasRepeat && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
                 <Repeat className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">{formatRepeatType(rule)}</span>
               </div>
@@ -238,8 +238,8 @@ export function LogsPane({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-border flex-shrink-0">
-        <h2 className="text-lg font-black tracking-tight text-foreground">Availability Rules</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-[15px] font-black tracking-tight text-foreground">Availability Rules</h2>
+        <p className="text-[13px] text-muted-foreground">
           {rules.length} rule{rules.length !== 1 ? 's' : ''} configured
         </p>
       </div>
@@ -252,8 +252,8 @@ export function LogsPane({
               <div className="text-muted-foreground mb-2">
                 <Calendar className="mx-auto h-12 w-12 text-muted-foreground/40" />
               </div>
-              <h3 className="text-lg font-bold text-foreground">No availability rules</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+              <h3 className="text-[15px] font-bold text-foreground">No availability rules</h3>
+              <p className="text-[13px] text-muted-foreground mt-1 max-w-xs">
                 Use the Configure panel to create your first availability rule.
               </p>
             </div>

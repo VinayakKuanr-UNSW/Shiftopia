@@ -12,8 +12,8 @@ describe('layout routes', () => {
     expect(css).not.toMatch(/(html|body)[^{]*\{[^}]*transform\s*:\s*scale/);
   });
 
-  it('AppLayout main reserves the sidebar width only when expanded', () => {
+  it('AppLayout main reserves the sidebar width when expanded, and the icon rail width when collapsed', () => {
     const src = readFileSync('src/modules/core/ui/layout/AppLayout.tsx', 'utf8');
-    expect(src).toMatch(/isCollapsed \? "md:ml-0" : "md:ml-\[280px\]"/);
+    expect(src).toMatch(/isCollapsed \? "md:ml-\[92px\]" : "md:ml-\[256px\]"/);
   });
 });

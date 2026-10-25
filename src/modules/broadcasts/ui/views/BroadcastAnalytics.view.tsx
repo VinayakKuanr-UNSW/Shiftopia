@@ -56,12 +56,12 @@ export const BroadcastAnalytics: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Groups</CardTitle>
+                        <CardTitle>Total Groups</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{analytics.totalGroups}</div>
-                        <p className="text-xs text-muted-foreground">
+                        <div className="text-[20px] font-bold">{analytics.totalGroups}</div>
+                        <p className="text-[11px] text-muted-foreground">
                             Groups you manage
                         </p>
                     </CardContent>
@@ -69,12 +69,12 @@ export const BroadcastAnalytics: React.FC = () => {
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Broadcasts</CardTitle>
+                        <CardTitle>Total Broadcasts</CardTitle>
                         <MessageSquare className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{analytics.totalBroadcasts}</div>
-                        <p className="text-xs text-muted-foreground">
+                        <div className="text-[20px] font-bold">{analytics.totalBroadcasts}</div>
+                        <p className="text-[11px] text-muted-foreground">
                             Messages sent
                         </p>
                     </CardContent>
@@ -82,12 +82,12 @@ export const BroadcastAnalytics: React.FC = () => {
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Members</CardTitle>
+                        <CardTitle>Total Members</CardTitle>
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{analytics.totalMembers}</div>
-                        <p className="text-xs text-muted-foreground">
+                        <div className="text-[20px] font-bold">{analytics.totalMembers}</div>
+                        <p className="text-[11px] text-muted-foreground">
                             Across all groups
                         </p>
                     </CardContent>
@@ -95,16 +95,16 @@ export const BroadcastAnalytics: React.FC = () => {
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Avg. Reach</CardTitle>
+                        <CardTitle>Avg. Reach</CardTitle>
                         <Eye className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
+                        <div className="text-[20px] font-bold">
                             {analytics.totalGroups > 0
                                 ? Math.round(analytics.totalMembers / analytics.totalGroups)
                                 : 0}
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                             Members per group
                         </p>
                     </CardContent>
@@ -124,7 +124,7 @@ export const BroadcastAnalytics: React.FC = () => {
                         <div className="text-center py-8">
                             <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                             <p className="text-muted-foreground">No recent broadcasts</p>
-                            <p className="text-sm text-muted-foreground">Your recent broadcast activity will appear here</p>
+                            <p className="text-[13px] text-muted-foreground">Your recent broadcast activity will appear here</p>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -132,11 +132,11 @@ export const BroadcastAnalytics: React.FC = () => {
                                 <div key={broadcast.id} className="border rounded-lg p-4">
                                     <div className="flex justify-between items-start mb-2">
                                         <Badge variant="outline">{broadcast.groupName}</Badge>
-                                        <div className="text-sm text-muted-foreground">
+                                        <div className="text-[13px] text-muted-foreground">
                                             {new Date(broadcast.sentAt).toLocaleDateString()}
                                         </div>
                                     </div>
-                                    <p className="text-sm">{broadcast.subject}</p>
+                                    <p className="text-[13px]">{broadcast.subject}</p>
                                 </div>
                             ))}
                         </div>

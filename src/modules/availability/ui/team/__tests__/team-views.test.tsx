@@ -9,6 +9,7 @@ vi.mock('@/modules/core/contexts/ThemeContext', () => ({
 }));
 
 import TeamAvailabilityGrid from '../TeamAvailabilityGrid';
+import GridBadgeLegendPopover from '../GridBadgeLegendPopover';
 import TeamDayTimeline from '../TeamDayTimeline';
 import CoverageHeatmap from '../CoverageHeatmap';
 import NearMissPanel from '../NearMissPanel';
@@ -181,15 +182,8 @@ describe('TeamAvailabilityGrid', () => {
     });
 
     it('keeps the legend in step with the cells', () => {
-        const inputs = scenario();
-        render(
-            <TeamAvailabilityGrid
-                members={inputs.members}
-                dates={inputs.dates}
-                cells={buildTeamDayCells(inputs)}
-            />,
-        );
-        // The legend renders collapsed; expanding it must show every state.
+        render(<GridBadgeLegendPopover />);
+        // The legend opens via popover; clicking it must show every state.
         fireEvent.click(screen.getByRole('button', { name: /badge legend/i }));
         for (const label of Object.values(TEAM_DAY_STATE_LABELS)) {
             expect(screen.getAllByText(label).length).toBeGreaterThan(0);

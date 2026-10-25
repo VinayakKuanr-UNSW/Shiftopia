@@ -17,7 +17,7 @@ export const TimesheetStatusBadge: React.FC<TimesheetStatusBadgeProps> = ({ stat
             <Badge 
                 variant="outline" 
                 className={cn(
-                    "rounded-full border px-3 py-1 text-[9px] font-black tracking-[0.15em] uppercase transition-all duration-500",
+                    "rounded-full border px-3 py-1 text-[11px] font-black tracking-[0.15em] uppercase transition-all duration-500",
                     "backdrop-blur-md bg-emerald-500/15 text-emerald-400 border-emerald-500/20 flex items-center gap-1.5",
                     className
                 )}
@@ -33,7 +33,7 @@ export const TimesheetStatusBadge: React.FC<TimesheetStatusBadgeProps> = ({ stat
             <Badge 
                 variant="outline" 
                 className={cn(
-                    "rounded-full border px-3 py-1 text-[9px] font-black tracking-[0.15em] uppercase transition-all duration-500",
+                    "rounded-full border px-3 py-1 text-[11px] font-black tracking-[0.15em] uppercase transition-all duration-500",
                     "backdrop-blur-md bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex items-center gap-1.5",
                     className
                 )}
@@ -49,7 +49,7 @@ export const TimesheetStatusBadge: React.FC<TimesheetStatusBadgeProps> = ({ stat
             <Badge 
                 variant="outline" 
                 className={cn(
-                    "rounded-full border px-3 py-1 text-[9px] font-black tracking-[0.15em] uppercase transition-all duration-500",
+                    "rounded-full border px-3 py-1 text-[11px] font-black tracking-[0.15em] uppercase transition-all duration-500",
                     "backdrop-blur-md bg-rose-500/15 text-rose-400 border-rose-500/20 flex items-center gap-1.5",
                     className
                 )}
@@ -65,7 +65,7 @@ export const TimesheetStatusBadge: React.FC<TimesheetStatusBadgeProps> = ({ stat
             <Badge 
                 variant="outline" 
                 className={cn(
-                    "rounded-full border px-3 py-1 text-[9px] font-black tracking-[0.15em] uppercase transition-all duration-500",
+                    "rounded-full border px-3 py-1 text-[11px] font-black tracking-[0.15em] uppercase transition-all duration-500",
                     "backdrop-blur-md bg-red-600/20 text-red-500 border-red-600/20 font-bold flex items-center gap-1.5",
                     className
                 )}
@@ -80,7 +80,7 @@ export const TimesheetStatusBadge: React.FC<TimesheetStatusBadgeProps> = ({ stat
         <Badge 
             variant="outline" 
             className={cn(
-                "rounded-full border px-3 py-1 text-[9px] font-black tracking-[0.15em] uppercase transition-all duration-500",
+                "rounded-full border px-3 py-1 text-[11px] font-black tracking-[0.15em] uppercase transition-all duration-500",
                 "backdrop-blur-md bg-amber-500/10 text-amber-500 border-amber-500/20 flex items-center gap-1.5",
                 className
             )}

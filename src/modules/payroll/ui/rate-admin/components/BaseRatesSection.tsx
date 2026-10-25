@@ -7,6 +7,8 @@
  * status. Clicking a row opens the RateDetailDrawer.
  */
 
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableStateRow } from '@/modules/core/ui/primitives/table';
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useMemo, useState } from 'react';
 import { Search, ChevronRight, Info } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -104,8 +106,8 @@ const BaseRatesSection: React.FC<BaseRatesSectionProps> = ({ rateSet, isActive }
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div>
-            <h3 className="text-xl font-bold text-foreground">Base Rates</h3>
-            <p className="text-base text-muted-foreground mt-1">
+            <h3 className="text-[17px] font-bold text-foreground">Base Rates</h3>
+            <p className="text-[14px] text-muted-foreground mt-1">
               Schedule 2 — classification wage rates (ICC Sydney EA 2025)
             </p>
           </div>
@@ -118,7 +120,7 @@ const BaseRatesSection: React.FC<BaseRatesSectionProps> = ({ rateSet, isActive }
               placeholder="Search classifications..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 h-10 text-sm"
+              className="pl-10 h-10 text-[13px]"
               aria-label="Search classification base rates by name"
             />
           </div>
@@ -127,10 +129,10 @@ const BaseRatesSection: React.FC<BaseRatesSectionProps> = ({ rateSet, isActive }
         {/* Table */}
         <div className="rounded-xl border border-border/60 overflow-hidden bg-card/30 backdrop-blur-sm shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" aria-label="Base hourly wage rates by classification">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border bg-muted/30">
-                  <th scope="col" className="text-left font-bold py-4 px-5 text-xs uppercase tracking-wider">
+            <Table aria-label="Base hourly wage rates by classification">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">
                     <div className="flex items-center gap-2">
                       Classification
                       <Tooltip>
@@ -142,13 +144,13 @@ const BaseRatesSection: React.FC<BaseRatesSectionProps> = ({ rateSet, isActive }
                             <Info className="h-4 w-4" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent className="text-sm max-w-xs p-3">
+                        <TooltipContent className="text-[13px] max-w-xs p-3">
                           ICC Sydney EA 2025 Schedule 2 classifications. Click a row for full rate breakdown.
                         </TooltipContent>
                       </Tooltip>
                     </div>
-                  </th>
-                  <th scope="col" className="text-right font-bold py-4 px-5 text-xs uppercase tracking-wider">
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       Ordinary
                       <Tooltip>
@@ -160,14 +162,14 @@ const BaseRatesSection: React.FC<BaseRatesSectionProps> = ({ rateSet, isActive }
                             <Info className="h-4 w-4" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent className="text-sm p-3">
+                        <TooltipContent className="text-[13px] p-3">
                           Base ordinary hourly rate used for penalty/overtime calculations
                         </TooltipContent>
                       </Tooltip>
                     </div>
-                  </th>
-                  <th scope="col" className="text-right font-bold py-4 px-5 text-xs uppercase tracking-wider">FT/PT</th>
-                  <th scope="col" className="text-right font-bold py-4 px-5 text-xs uppercase tracking-wider">
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">FT/PT</TableHead>
+                  <TableHead scope="col" className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       Casual
                       <Tooltip>
@@ -179,20 +181,20 @@ const BaseRatesSection: React.FC<BaseRatesSectionProps> = ({ rateSet, isActive }
                             <Info className="h-4 w-4" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent className="text-sm p-3">
+                        <TooltipContent className="text-[13px] p-3">
                           Includes 25% casual loading (cl 12.5(b))
                         </TooltipContent>
                       </Tooltip>
                     </div>
-                  </th>
-                  <th scope="col" className="text-right font-bold py-4 px-5 text-xs uppercase tracking-wider">Effective</th>
-                  <th scope="col" className="text-right font-bold py-4 px-5 text-xs uppercase tracking-wider">Status</th>
-                  <th scope="col" className="w-10"></th>
-                </tr>
-              </thead>
-              <tbody className="text-foreground">
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">Effective</TableHead>
+                  <TableHead scope="col" className="text-right">Status</TableHead>
+                  <TableHead scope="col" className="w-10"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="text-foreground">
                 {filteredRows.map((row) => (
-                  <tr
+                  <TableRow
                     key={row.classification}
                     onClick={() => openDrawer(row)}
                     className={cn(
@@ -211,44 +213,42 @@ const BaseRatesSection: React.FC<BaseRatesSectionProps> = ({ rateSet, isActive }
                     aria-expanded={drawerDetail?.classification === row.classification}
                     aria-label={`${row.label} classification, ordinary rate ${money(row.ordinary)}, permanent rate ${row.permanent ? money(row.permanent) : 'not specified'}, casual rate ${row.casual ? money(row.casual) : 'not specified'}. Click to view penalty breakdowns.`}
                   >
-                    <td className="py-4 px-5 font-bold text-sm text-foreground">{row.label}</td>
-                    <td className="text-right py-4 px-5 tabular-nums text-muted-foreground font-semibold text-sm">
+                    <TableCell className="font-bold text-foreground">{row.label}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground font-semibold">
                       {money(row.ordinary)}
-                    </td>
-                    <td className="text-right py-4 px-5 tabular-nums font-bold text-sm">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-bold">
                       {row.permanent != null ? money(row.permanent) : '—'}
-                    </td>
-                    <td className="text-right py-4 px-5 tabular-nums font-bold text-sm">
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-bold">
                       {row.casual != null ? money(row.casual) : '—'}
-                    </td>
-                    <td className="text-right py-4 px-5 text-muted-foreground font-medium text-sm">
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground font-medium">
                       {effectiveLabel}
-                    </td>
-                    <td className="text-right py-4 px-5">
+                    </TableCell>
+                    <TableCell className="text-right">
                       {isActive ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-emerald-400">
+                        <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-emerald-400">
                           Active
                         </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                           Archived
                         </span>
                       )}
-                    </td>
-                    <td className="py-4 pr-4 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <ChevronRight className="h-5 w-5 text-muted-foreground inline" aria-hidden="true" />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
                 {filteredRows.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-base text-muted-foreground font-medium">
-                      No classifications match "{search}"
-                    </td>
-                  </tr>
+                  <TableStateRow colSpan={7}>
+                    <PageState state="empty" scope="inline" title={`No classifications match "${search}"`} description="Try a different search." />
+                  </TableStateRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
 

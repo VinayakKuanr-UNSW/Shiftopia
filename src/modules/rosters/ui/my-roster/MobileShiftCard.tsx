@@ -1,3 +1,4 @@
+import { cardTokens } from '@/modules/core/ui/primitives/card';
 import React from 'react';
 import { Clock, User, Coffee, Briefcase } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -160,11 +161,13 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
         }
       }}
       className={cn(
-        'group relative p-3 rounded-xl border transition-all duration-200 cursor-pointer active:scale-[0.98]',
+        cardTokens.shell,
+        cardTokens.interactive,
+        cardTokens.pad,
+        'group relative',
         colors.bg,
         colors.bgHover,
         colors.border,
-        'hover:border-opacity-60',
       )}
     >
       {/* Row 1: <Role> <Remuneration Level> */}
@@ -179,31 +182,31 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <h4 className="text-sm font-medium text-foreground truncate">
+            <h4 className={cn(cardTokens.title, 'truncate')}>
               {roleLabel}
             </h4>
             {remunerationLabel && (
-              <span className="text-xs text-muted-foreground font-normal shrink-0">
+              <span className={cn(cardTokens.meta, 'shrink-0')}>
                 {remunerationLabel}
               </span>
             )}
           </div>
           {(shift as any).name && (shift as any).roleName && (shift as any).name !== (shift as any).roleName && (
-            <p className="text-xs text-muted-foreground truncate">{(shift as any).name}</p>
+            <p className={cn(cardTokens.meta, 'truncate')}>{(shift as any).name}</p>
           )}
         </div>
       </div>
 
       {/* Row 2: Timings Net */}
       <div className="flex items-center gap-2 mb-2">
-        <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
-        <span className="text-sm text-foreground/80">
+        <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-[13px] tabular-nums text-foreground/80">
           {formatTimeDisplay(startTime.slice(0, 5))} -{' '}
           {formatTimeDisplay(endTime.slice(0, 5))}
         </span>
         <Badge
           variant="outline"
-          className="text-[10px] px-1.5 py-0 text-muted-foreground border-border"
+          className="text-[11px] px-1.5 py-0 text-muted-foreground border-border"
         >
           {netHours}h net
         </Badge>
@@ -212,10 +215,10 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
       {/* Row 3: Breaks */}
       {totalBreak > 0 && (
         <div className="flex items-center gap-2 mb-2">
-          <Coffee className="h-3.5 w-3.5 text-muted-foreground/70" />
-          <span className="text-xs text-muted-foreground">
+          <Coffee className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span className={cardTokens.meta}>
             {paidBreak > 0 && (
-              <span className="text-emerald-400/70">
+              <span className="text-emerald-600 dark:text-emerald-400">
                 {paidBreak}m paid
               </span>
             )}
@@ -229,8 +232,8 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
 
       {/* Row 4: <target employment type> */}
       <div className="flex items-center gap-2">
-        <Briefcase className="h-3.5 w-3.5 text-muted-foreground/70" />
-        <span className="text-xs text-muted-foreground">
+        <Briefcase className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className={cardTokens.meta}>
           {employmentTypeLabel}
         </span>
       </div>

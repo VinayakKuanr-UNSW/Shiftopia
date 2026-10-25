@@ -108,8 +108,9 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent 
-        className="w-[calc(100vw-2rem)] sm:max-w-[460px] p-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border bg-background text-foreground shadow-2xl backdrop-blur-xl ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+      <DialogContent
+        className="w-[calc(100vw-2rem)] p-0 overflow-hidden text-foreground ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+        size="md"
         aria-describedby="edit-group-description"
       >
         {/* Header */}
@@ -120,10 +121,10 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                 <Palette className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                <DialogTitle>
                   Edit Department Group
                 </DialogTitle>
-                <DialogDescription id="edit-group-description" className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                <DialogDescription id="edit-group-description" className="mt-0.5">
                   Update the name and visual theme of this roster group.
                 </DialogDescription>
               </div>
@@ -146,7 +147,7 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                   <FormItem className="space-y-2">
                     <FormLabel 
                       htmlFor="edit-group-name-input"
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between"
+                      className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between"
                     >
                       <span>
                         Group Name <span className="text-destructive" aria-hidden="true">*</span>
@@ -158,7 +159,7 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                     <FormControl>
                       <Input
                         id="edit-group-name-input"
-                        className="h-12 px-4 rounded-xl border border-input bg-background dark:bg-muted/20 text-foreground placeholder:text-muted-foreground/60 text-base sm:text-sm shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50"
+                        className="h-12 px-4 rounded-xl border border-input bg-background dark:bg-muted/20 text-foreground placeholder:text-muted-foreground/60 text-[14px] sm:text-[13px] shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50"
                         placeholder="e.g., Convention Centre"
                         maxLength={50}
                         autoFocus
@@ -167,7 +168,7 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage role="alert" className="text-xs font-medium text-destructive" />
+                    <FormMessage role="alert" className="text-[11px] font-medium text-destructive" />
                   </FormItem>
                 )}
               />
@@ -179,7 +180,7 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                   <FormItem className="space-y-2">
                     <FormLabel 
                       htmlFor="group-color-select"
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                      className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
                     >
                       Accent Color Theme
                     </FormLabel>
@@ -209,13 +210,13 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                                 className={cn("h-3.5 w-3.5 rounded-full ring-1 ring-border shrink-0", opt.colorClass)} 
                                 aria-hidden="true" 
                               />
-                              <span className="font-medium text-sm">{opt.label}</span>
+                              <span className="font-medium text-[13px]">{opt.label}</span>
                             </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage role="alert" className="text-xs font-medium text-destructive" />
+                    <FormMessage role="alert" className="text-[11px] font-medium text-destructive" />
                   </FormItem>
                 )}
               />
@@ -228,7 +229,7 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                 variant="outline" 
                 onClick={() => onOpenChange(false)} 
                 disabled={isSubmitting}
-                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-sm transition-all active:scale-[0.98]"
+                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-[13px] transition-all active:scale-[0.98]"
                 aria-label="Cancel and close dialog"
               >
                 Cancel
@@ -236,7 +237,7 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
               <Button 
                 type="submit" 
                 disabled={isSubmitting || !nameValue.trim()}
-                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-[13px] shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 aria-label={isSubmitting ? "Saving changes..." : "Save Changes"}
                 aria-busy={isSubmitting}
               >

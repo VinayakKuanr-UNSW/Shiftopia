@@ -71,7 +71,7 @@ type MoreNavItem = {
 };
 
 const activeIndicatorClasses =
-  "absolute inset-0 rounded-full bg-foreground shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_12px_rgba(255,255,255,0.05)]";
+  "absolute inset-0 rounded-[28px] bg-foreground shadow-sm";
 
 const activeIndicatorTransition = {
   type: "spring",
@@ -95,16 +95,16 @@ const activeIndicatorTransition = {
  */
 const employeeItems: BottomNavItem[] = [
   { label: "Roster", icon: Calendar, path: "/my-roster" },
-  { label: "Avail", icon: CalendarDays, path: "/my-availabilities" },
+  { label: "Availability", icon: CalendarDays, path: "/my-availabilities" },
   // "Requests" is one slot for the bids/swaps pair. Bids is the entry point;
   // Swaps sits beside it in More rather than spending a second tab on a pair.
   { label: "Requests", icon: BadgeCheck, path: "/my-bids" },
   { label: "Leave", icon: Palmtree, path: "/my-leave" },
   { label: "Swaps", icon: RefreshCw, path: "/my-swaps" },
-  { label: "Atten", icon: Fingerprint, path: "/my-attendance" },
+  { label: "Attendance", icon: Fingerprint, path: "/my-attendance" },
   { label: "Performance", icon: TrendingUp, path: "/performance" },
   {
-    label: "Radio",
+    label: "Broadcasts",
     icon: Radio,
     path: "/my-broadcasts",
     badgeKey: "broadcasts",
@@ -122,9 +122,9 @@ const employerItems: BottomNavItem[] = [
   // Broadcast or Compliance, which sit comfortably in More.
   { label: "Insights", icon: BarChart3, path: "/insights", requiredPermission: "insights" },
   { label: "Swaps", icon: ArrowLeftRight, path: "/management/swaps", requiredPermission: "management" },
-  { label: "Leave Appr", icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
+  { label: "Approvals", icon: Palmtree, path: "/management/leave", requiredPermission: "management" },
   { label: "Templates", icon: LayoutTemplate, path: "/templates", requiredPermission: "templates" },
-  { label: "Times", icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
+  { label: "Timesheets", icon: ClipboardList, path: "/timesheet", requiredPermission: "timesheet-view" },
   { label: "Broadcast", icon: Megaphone, path: "/broadcast", requiredPermission: "broadcast" },
   // /management/payroll is deliberately ABSENT. It is in the router but NOT in
   // ALLOWED_MOBILE_ROUTES, so a tab or drawer entry for it would land on the
@@ -145,7 +145,7 @@ const adminItems: BottomNavItem[] = [
  * application. Hiding any of them behind the toggle would strand it.
  */
 const sharedMoreItems: MoreNavItem[] = [
-  { label: "Notif", Icon: BellRing, path: "/my-notifications" },
+  { label: "Notifications", Icon: BellRing, path: "/my-notifications" },
   { label: "Profile", Icon: UserRound, path: "/profile" },
   { label: "Settings", Icon: Settings, path: "/settings" },
 ];
@@ -166,13 +166,12 @@ const MobileNavItem = ({
 }) => (
   <NavLink
     to={item.path}
-    aria-label={item.label}
     className={({ isActive }) =>
       cn(
-        "relative flex items-center justify-center h-full min-h-11 rounded-full transition-all duration-300 ease-out flex-shrink-0 overflow-hidden",
-        isActive
-          ? "text-background px-4 max-w-[160px] nav-item-active"
-          : "w-[52px] max-w-[52px] px-0 text-muted-foreground hover:bg-muted/50",
+        // Every tab shows its label (icon-only tabs are guesswork); the active
+        // pill still slides between them.
+        "relative flex flex-1 min-w-0 flex-col items-center justify-center h-full min-h-11 rounded-[28px] transition-colors overflow-hidden",
+        isActive ? "text-background" : "text-muted-foreground hover:bg-muted/50",
       )
     }
   >
@@ -187,11 +186,11 @@ const MobileNavItem = ({
             />
           )}
 
-          <div className="relative z-10 flex items-center gap-2">
+          <div className="relative z-10 flex min-w-0 flex-col items-center gap-0.5 px-1">
             <div className="relative">
               <item.icon
                 className={cn(
-                  "h-6 w-6 flex-shrink-0 transition-colors",
+                  "h-[22px] w-[22px] flex-shrink-0 transition-colors",
                   isActive ? "text-background" : "text-muted-foreground",
                 )}
                 strokeWidth={isActive ? 2.4 : 1.9}
@@ -211,16 +210,9 @@ const MobileNavItem = ({
               )}
             </div>
 
-            <div
-              className={cn(
-                "overflow-hidden transition-all duration-300 ease-out flex items-center",
-                isActive ? "max-w-[100px] opacity-100" : "max-w-0 opacity-0",
-              )}
-            >
-              <span className={cn(text.overlineBare, "whitespace-nowrap pt-[1px] block")}>
-                {item.label}
-              </span>
-            </div>
+            <span className="block max-w-full truncate text-[11px] font-semibold leading-tight">
+              {item.label}
+            </span>
           </div>
         </>
       );
@@ -242,7 +234,12 @@ const BottomNavbar: React.FC = () => {
       const activeElements = document.querySelectorAll(
         '[data-state="open"], [data-vaul-drawer], [data-hide-bottom-nav="true"]',
       );
-      let found = false;
+      // Any open modal dialog: the nav (z-60) would otherwise float over its
+      // scrim. Popovers also carry role=dialog but live in Radix's popper
+      // wrapper, so they are skipped.
+      let found = Array.from(
+        document.querySelectorAll('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'),
+      ).some((el) => !el.closest("[data-radix-popper-content-wrapper]"));
 
       activeElements.forEach((el) => {
         const className = el.className || "";
@@ -533,9 +530,9 @@ const BottomNavbar: React.FC = () => {
           }}
           transition={{ type: "spring", damping: 25, stiffness: 200 }}
           style={{ pointerEvents: isBottomDrawerActive ? "none" : "auto" }}
-          className="md:hidden fixed bottom-[var(--mobile-bottom-nav-offset,calc(env(safe-area-inset-bottom,0px)+1.5rem))] left-[calc(env(safe-area-inset-left,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[60] h-[var(--mobile-bottom-nav-height,72px)] bg-background/80 dark:bg-black/60 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_24px_40px_-10px_rgba(0,0,0,0.3)] rounded-[36px] flex items-center p-2 gap-2 overflow-hidden"
+          className="md:hidden fixed bottom-[var(--mobile-bottom-nav-offset,calc(env(safe-area-inset-bottom,0px)+1.5rem))] left-[calc(env(safe-area-inset-left,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[60] h-[var(--mobile-bottom-nav-height,72px)] bg-card border border-border/60 shadow-xl rounded-[36px] flex items-center p-2 gap-2 overflow-hidden"
         >
-          <div className="flex-1 h-full min-w-0 flex items-center justify-around px-2 relative">
+          <div className="flex-1 h-full min-w-0 flex items-center gap-1 relative">
             {visibleItems.map((item) => (
               <MobileNavItem
                 key={item.path}
@@ -556,7 +553,7 @@ const BottomNavbar: React.FC = () => {
             }
             aria-expanded={moreOpen}
             className={cn(
-              "relative flex items-center justify-center h-full min-h-11 w-[52px] rounded-full transition-colors duration-200 flex-shrink-0 z-10 overflow-hidden",
+              "relative flex flex-col items-center justify-center gap-0.5 h-full min-h-11 w-[64px] rounded-[28px] transition-colors duration-200 flex-shrink-0 z-10 overflow-hidden",
               moreOpen || isMoreRouteActive
                 ? "text-background"
                 : "bg-card text-foreground shadow-sm hover:bg-muted",
@@ -582,7 +579,7 @@ const BottomNavbar: React.FC = () => {
                   transition={{ duration: 0.16, ease: "easeOut" }}
                   className="relative z-10"
                 >
-                  <X className="h-6 w-6" strokeWidth={2.3} aria-hidden="true" />
+                  <X className="h-[22px] w-[22px]" strokeWidth={2.3} aria-hidden="true" />
                 </motion.span>
               ) : (
                 <motion.span
@@ -594,13 +591,16 @@ const BottomNavbar: React.FC = () => {
                   className="relative z-10"
                 >
                   <Menu
-                    className="h-6 w-6"
+                    className="h-[22px] w-[22px]"
                     strokeWidth={isMoreRouteActive ? 2.3 : 1.9}
                     aria-hidden="true"
                   />
                 </motion.span>
               )}
             </AnimatePresence>
+            <span className="relative z-10 text-[11px] font-semibold leading-tight" aria-hidden="true">
+              {moreOpen ? "Close" : "More"}
+            </span>
           </button>
         </motion.nav>
       </>

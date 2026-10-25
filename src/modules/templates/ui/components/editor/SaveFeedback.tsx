@@ -51,7 +51,7 @@ export function SaveFeedback({ status, message, className }: SaveFeedbackProps) 
     return (
         <div
             className={cn(
-                'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300',
+                'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all duration-300',
                 config.bg,
                 config.color,
                 status === 'saved' && 'animate-in fade-in zoom-in-95 duration-200',

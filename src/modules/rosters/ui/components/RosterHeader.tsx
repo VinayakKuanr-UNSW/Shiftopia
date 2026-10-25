@@ -91,7 +91,7 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
   return (
     <div className="flex flex-col space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-4">
-        <h1 className="text-2xl font-bold text-foreground flex items-center">
+        <h1 className="text-[20px] font-bold text-foreground flex items-center">
           <Users className="mr-2 text-primary" size={24} />
           Roster Management
         </h1>

@@ -107,13 +107,13 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
             <Workflow className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+            <h3 className="text-[14px] font-bold text-foreground flex items-center gap-2">
               <span>Shiftopia Multi-Layer Compliance & Solver Architecture</span>
-              <Badge variant="outline" className="font-mono text-xs font-semibold py-0 px-2">
+              <Badge variant="outline" className="font-mono text-[11px] font-semibold py-0 px-2">
                 4-Stage Pipeline
               </Badge>
             </h3>
-            <p className="text-xs sm:text-[13px] text-muted-foreground mt-0.5">
+            <p className="text-[11px] sm:text-[13px] text-muted-foreground mt-0.5">
               How Shift Shape, CP-SAT Solver Macro Constraints, V8 Labour Rules, and Database Locks synchronize.
             </p>
           </div>
@@ -121,7 +121,7 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
 
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-border/40 transition-colors"
+          className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground bg-muted/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-border/40 transition-colors"
         >
           <span>{isExpanded ? 'Collapse Diagram' : 'Expand Diagram'}</span>
           {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -152,12 +152,12 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
                 >
                   {/* Top Step & Layer Badge */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs font-extrabold text-muted-foreground">
+                    <span className="font-mono text-[11px] font-extrabold text-muted-foreground">
                       STAGE {stage.step}
                     </span>
                     <span
                       className={cn(
-                        'font-mono text-[10.5px] font-bold px-2 py-0.5 rounded-md border tracking-wide uppercase',
+                        'font-mono text-[11px] font-bold px-2 py-0.5 rounded-md border tracking-wide uppercase',
                         stage.badgeClass,
                       )}
                     >
@@ -173,7 +173,7 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
                         {stage.title}
                       </h4>
                     </div>
-                    <span className="text-xs font-semibold text-muted-foreground block">
+                    <span className="text-[11px] font-semibold text-muted-foreground block">
                       {stage.subtitle}
                     </span>
                   </div>
@@ -185,7 +185,7 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
 
                   {/* Constraints Tag List */}
                   <div className="pt-2 border-t border-border/40 space-y-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
                       Key Constraints Enforced:
                     </span>
                     <div className="flex flex-wrap gap-1">
@@ -205,7 +205,7 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
           </div>
 
           {/* Lexicographic Objective Hierarchy Callout */}
-          <div className="rounded-xl border border-border/60 bg-muted/30 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="rounded-xl border border-border/60 bg-muted/30 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[11px]">
             <div className="flex items-center gap-2 text-foreground font-semibold">
               <Scale className="h-4 w-4 text-primary shrink-0" />
               <span>Lexicographic Solver Hierarchy:</span>

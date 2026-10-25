@@ -89,7 +89,7 @@ export const TablePager: React.FC<Props> = ({
             )}
         >
             <p
-                className="text-[10px] font-bold tabular-nums text-muted-foreground"
+                className="text-[11px] font-bold tabular-nums text-muted-foreground"
                 // Announced so a screen-reader user knows the list changed under them.
                 role="status"
                 aria-live="polite"
@@ -102,14 +102,14 @@ export const TablePager: React.FC<Props> = ({
             {showControls && (
                 <div className="flex items-center gap-3">
                     <label className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                             Rows
                         </span>
                         <select
                             value={pageSize}
                             onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
                             className={cn(
-                                'h-11 md:h-8 rounded-lg px-2 text-[10px] font-bold tabular-nums border-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                                'h-11 md:h-8 rounded-lg px-2 text-[11px] font-bold tabular-nums border-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                                 isDark
                                     ? 'bg-[#111827]/60 text-foreground'
                                     : 'bg-slate-100 text-slate-900',
@@ -125,7 +125,7 @@ export const TablePager: React.FC<Props> = ({
 
                     <div className="flex items-center gap-1.5">
                         {navButton(-1, 'Previous page', ChevronLeft)}
-                        <span className="text-[10px] font-black tabular-nums text-foreground min-w-[52px] text-center">
+                        <span className="text-[11px] font-black tabular-nums text-foreground min-w-[52px] text-center">
                             {safePage} / {pages}
                         </span>
                         {navButton(1, 'Next page', ChevronRight)}

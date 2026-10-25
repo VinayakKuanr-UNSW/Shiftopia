@@ -310,8 +310,8 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                     <Building className="h-4 w-4 text-indigo-400" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black text-white tracking-tight leading-none">Your Shifts</h2>
-                                    <p className="text-[9px] text-slate-500 uppercase font-black tracking-[0.15em] mt-1.5 opacity-60">Select one to offer</p>
+                                    <h2 className="text-[15px] font-black text-white tracking-tight leading-none">Your Shifts</h2>
+                                    <p className="text-[11px] text-slate-500 uppercase font-black tracking-[0.15em] mt-1.5 opacity-60">Select one to offer</p>
                                 </div>
                             </div>
                         </div>
@@ -323,7 +323,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                             ) : !myShifts || myShifts.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-20 text-center opacity-30">
                                     <Calendar className="h-8 w-8 mb-4 stroke-[1]" />
-                                    <p className="text-[10px] font-black uppercase tracking-widest">No Shifts Found</p>
+                                    <p className="text-[11px] font-black uppercase tracking-widest">No Shifts Found</p>
                                 </div>
                             ) : (
                                 myShifts.map(shift => {
@@ -345,13 +345,13 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
 
                                     // Status override badge (urgency badges handled by SharedShiftCard)
                                     const statusBadge = isOfferedHere ? (
-                                        <Badge className="text-[7px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-slate-500/10 text-slate-500">Offered</Badge>
+                                        <Badge className="text-[11px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-slate-500/10 text-slate-500">Offered</Badge>
                                     ) : isOfferedElsewhere ? (
-                                        <Badge className="text-[7px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-slate-500/10 text-slate-500">Elsewhere</Badge>
+                                        <Badge className="text-[11px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-slate-500/10 text-slate-500">Elsewhere</Badge>
                                     ) : isIneligible ? (
-                                        <Badge className="text-[7px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-amber-500/10 text-amber-500">Ineligible</Badge>
+                                        <Badge className="text-[11px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-amber-500/10 text-amber-500">Ineligible</Badge>
                                     ) : hasWarnings ? (
-                                        <Badge className="text-[7px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-amber-500/10 text-amber-400">
+                                        <Badge className="text-[11px] h-3.5 px-1 font-black uppercase tracking-widest border-none bg-amber-500/10 text-amber-400">
                                             <AlertTriangle className="w-2 h-2 mr-0.5 inline" />Warning
                                         </Badge>
                                     ) : eligibilityLoading && !elig ? (
@@ -395,7 +395,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                                             disabled={isUnavailable}
                                                             className="h-4 w-4 rounded-full border-white/10 text-indigo-600 focus:ring-indigo-500/30 accent-indigo-600 cursor-pointer"
                                                         />
-                                                        <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">
+                                                        <span className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider">
                                                             {isSelected ? "Selected" : "Select"}
                                                         </span>
                                                     </div>
@@ -405,9 +405,9 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                             {isIneligible && elig?.reasons && elig.reasons.length > 0 && (
                                                 <div className="absolute left-full top-0 ml-2 z-50 hidden group-hover:block w-56">
                                                     <div className="bg-[#1a1d22] border border-rose-500/20 rounded-xl p-3 shadow-xl">
-                                                        <div className="text-[9px] font-black uppercase tracking-widest text-rose-500 mb-1.5">Ineligible</div>
+                                                        <div className="text-[11px] font-black uppercase tracking-widest text-rose-500 mb-1.5">Ineligible</div>
                                                         {elig.reasons.map((r, i) => (
-                                                            <div key={i} className="flex items-start gap-1.5 text-[10px] text-rose-400/80 mb-1">
+                                                            <div key={i} className="flex items-start gap-1.5 text-[11px] text-rose-400/80 mb-1">
                                                                 <XCircle className="h-3 w-3 shrink-0 mt-0.5" />
                                                                 <span>{r}</span>
                                                             </div>
@@ -431,10 +431,10 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                 <div className="mb-10 text-center">
                                     <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-indigo-600/10 border border-indigo-500/20">
                                         <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Quick Offer</span>
+                                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-400">Quick Offer</span>
                                     </div>
-                                    <h2 className="text-4xl font-black text-white tracking-tighter leading-none mb-4">Swap Offer</h2>
-                                    <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[400px] mx-auto">
+                                    <h2 className="text-[28px] font-black text-white tracking-tighter leading-none mb-4">Swap Offer</h2>
+                                    <p className="text-[13px] text-slate-500 font-medium leading-relaxed max-w-[400px] mx-auto">
                                         Select a shift to offer. {requesterName} will review your proposal, then manager gives final approval.
                                     </p>
                                 </div>
@@ -447,15 +447,15 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                             ? getGroupColor(selectedShift?.group_type || selectedShift?.roles?.groupType, selectedShift?.departments?.name)
                                             : 'bg-[#121418] border-white/5 opacity-50'
                                     )}>
-                                        <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Give</span>
+                                        <span className="text-[11px] font-black uppercase tracking-widest opacity-60">You Give</span>
                                         {selectedShift ? (
                                             <div className="text-center">
-                                                <div className="text-sm font-black text-white">{format(parse(selectedShift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d')}</div>
+                                                <div className="text-[13px] font-black text-white">{format(parse(selectedShift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d')}</div>
                                                 <div className="text-[11px] font-bold opacity-80">{fmtTime(selectedShift.start_time)} – {fmtTime(selectedShift.end_time)}</div>
                                             </div>
                                         ) : (
                                             <div className="h-10 flex items-center justify-center">
-                                                <div className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Select a shift →</div>
+                                                <div className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Select a shift →</div>
                                             </div>
                                         )}
                                     </div>
@@ -464,9 +464,9 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                     </div>
                                     <div className={cn('flex-1 p-5 rounded-3xl border flex flex-col items-center gap-3',
                                         getGroupColor(theirShift?.group_type || theirShift?.roles?.groupType, theirShift?.departments?.name))}>
-                                        <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Get</span>
+                                        <span className="text-[11px] font-black uppercase tracking-widest opacity-60">You Get</span>
                                         <div className="text-center">
-                                            <div className="text-sm font-black text-white">
+                                            <div className="text-[13px] font-black text-white">
                                                 {theirShift?.shift_date ? format(parse(theirShift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : 'N/A'}
                                             </div>
                                             <div className="text-[11px] font-bold opacity-80">
@@ -486,7 +486,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                                 <div>
                                                     <p className="text-[11px] font-black text-rose-400 mb-1">Cannot offer this shift</p>
                                                     {selectedEligibility.reasons.map((r, i) => (
-                                                        <p key={i} className="text-[10px] text-rose-400/70 leading-relaxed">• {r}</p>
+                                                        <p key={i} className="text-[11px] text-rose-400/70 leading-relaxed">• {r}</p>
                                                     ))}
                                                 </div>
                                             </div>
@@ -499,9 +499,9 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                                 <div>
                                                     <p className="text-[11px] font-black text-amber-400 mb-1">Availability notice</p>
                                                     {selectedEligibility.warnings.map((w, i) => (
-                                                        <p key={i} className="text-[10px] text-amber-400/70 leading-relaxed">• {w}</p>
+                                                        <p key={i} className="text-[11px] text-amber-400/70 leading-relaxed">• {w}</p>
                                                     ))}
-                                                    <p className="text-[9px] text-amber-500/50 mt-1 italic">Manager will review full compliance before approval.</p>
+                                                    <p className="text-[11px] text-amber-500/50 mt-1 italic">Manager will review full compliance before approval.</p>
                                                 </div>
                                             </div>
                                         )}
@@ -537,7 +537,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                     <Button
                                         onClick={handleConfirmOffer}
                                         disabled={!canSendOffer || isSubmitting}
-                                        className="h-14 rounded-2xl font-black text-sm uppercase tracking-[0.2em] bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_10px_30px_-10px_rgba(79,70,229,0.3)] border-b-4 border-indigo-800 active:scale-[0.98] active:border-b-0 transition-all disabled:opacity-50 disabled:grayscale"
+                                        className="h-14 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_10px_30px_-10px_rgba(79,70,229,0.3)] border-b-4 border-indigo-800 active:scale-[0.98] active:border-b-0 transition-all disabled:opacity-50 disabled:grayscale"
                                     >
                                         {isSubmitting ? (
                                             <div className="flex items-center gap-2">
@@ -563,14 +563,14 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                 <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
                                     <HistoryIcon className="h-4 w-4 text-amber-400" />
                                 </div>
-                                <h2 className="text-xs font-black text-white uppercase tracking-widest opacity-80">Trade Protocol</h2>
+                                <h2 className="text-[11px] font-black text-white uppercase tracking-widest opacity-80">Trade Protocol</h2>
                             </div>
                             <Separator className="bg-white/5" />
                         </div>
                         <div className="flex-1 overflow-y-auto px-8 pb-10 custom-scrollbar">
                             {timerText && (
                                 <div className="mb-10 text-center">
-                                    <div className={cn('inline-flex items-center gap-2 px-4 py-2 rounded-xl border font-black uppercase tracking-[0.1em] text-[10px]',
+                                    <div className={cn('inline-flex items-center gap-2 px-4 py-2 rounded-xl border font-black uppercase tracking-[0.1em] text-[11px]',
                                         isExpired ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' : 'bg-purple-500/10 border-purple-500/20 text-purple-400')}>
                                         <Clock className="h-3 w-3" />
                                         {timerText}
@@ -593,27 +593,27 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                         )}>
                                             <item.icon className={cn('h-2 w-2', item.active ? 'text-white' : item.id === 'eligible' && timeline.eligible === false ? 'text-white' : 'text-slate-600')} />
                                         </div>
-                                        <div className={cn('text-[10px] font-black uppercase tracking-widest mb-1', item.active ? 'text-slate-200' : item.id === 'eligible' && timeline.eligible === false ? 'text-rose-400' : 'text-slate-600')}>{item.label}</div>
-                                        <div className={cn('text-[9px]', item.active ? 'text-slate-400' : item.id === 'eligible' && timeline.eligible === false ? 'text-rose-400/60' : 'text-slate-700')}>{item.desc}</div>
+                                        <div className={cn('text-[11px] font-black uppercase tracking-widest mb-1', item.active ? 'text-slate-200' : item.id === 'eligible' && timeline.eligible === false ? 'text-rose-400' : 'text-slate-600')}>{item.label}</div>
+                                        <div className={cn('text-[11px]', item.active ? 'text-slate-400' : item.id === 'eligible' && timeline.eligible === false ? 'text-rose-400/60' : 'text-slate-700')}>{item.desc}</div>
                                     </div>
                                 ))}
                             </div>
                             <div className="mt-20">
                                 <div className="flex items-center gap-3 w-full p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                                     <Avatar className="h-8 w-8 border border-white/5">
-                                        <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white text-[10px] font-black">
+                                        <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white text-[11px] font-black">
                                             {getInitials(requesterName)}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div>
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Proposed By</p>
+                                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Proposed By</p>
                                         <p className="text-[11px] font-bold text-slate-200 leading-none mt-1">{requesterName}</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         <div className="p-8 border-t border-white/5 bg-black/5">
-                            <Button onClick={handleClose} className="w-full h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[10px] font-black uppercase tracking-widest border border-white/10">
+                            <Button onClick={handleClose} className="w-full h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[11px] font-black uppercase tracking-widest border border-white/10">
                                 Cancel & Return
                             </Button>
                         </div>
@@ -634,7 +634,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
         </Drawer>
     ) : (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogContent className="sm:max-w-[1040px] h-[720px] max-h-[90vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden" aria-describedby={undefined}>
+            <DialogContent hideClose className="h-[720px] max-h-[90vh] p-0 overflow-hidden flex flex-col" size="2xl" aria-describedby={undefined}>
                 {modalContent}
             </DialogContent>
         </Dialog>

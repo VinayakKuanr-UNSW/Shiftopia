@@ -1,8 +1,11 @@
+import { applyBrandColor } from '@/modules/core/lib/brandColor';
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { SettingsFunctionBar } from '../ui/components/SettingsFunctionBar';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
@@ -25,26 +28,6 @@ import { NotificationToggle } from '@/modules/settings/ui/components/Notificatio
 /* ============================================================
    HELPERS
    ============================================================ */
-function hexToHsl(hex: string): string {
-  hex = hex.replace(/^#/, '');
-  if (hex.length !== 6) return '239 84% 67%'; // Fallback
-  const r = parseInt(hex.substring(0, 2), 16) / 255;
-  const g = parseInt(hex.substring(2, 4), 16) / 255;
-  const b = parseInt(hex.substring(4, 6), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0, l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-      case g: h = (b - r) / d + 2; break;
-      case b: h = (r - g) / d + 4; break;
-    }
-    h /= 6;
-  }
-  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
-}
 
 const DEFAULT_BRAND_COLOR = '#A48AFB';
 
@@ -74,15 +57,7 @@ const AppearanceSettings: React.FC = () => {
 
   // Live Preview Effect
   const updateLivePreview = (color: string) => {
-    const hex = color.replace('#', '');
-    if (/^[0-9A-F]{6}$/i.test(hex)) {
-      const hsl = hexToHsl(hex);
-      document.documentElement.style.setProperty('--primary', hsl);
-      document.documentElement.style.setProperty('--ring', hsl);
-      setHexError(false);
-    } else {
-      setHexError(true);
-    }
+    setHexError(!applyBrandColor(color));
   };
 
   const handleBrandColorChange = (value: string) => {
@@ -112,9 +87,7 @@ const AppearanceSettings: React.FC = () => {
 
   if (isOrgLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <PageState state="loading" title="Loading settings" />
     );
   }
 
@@ -123,8 +96,8 @@ const AppearanceSettings: React.FC = () => {
       {/* Brand Color Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-foreground">{t('settings.brand_color')}</h3>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h3 className="text-[14px] font-semibold text-foreground">{t('settings.brand_color')}</h3>
+          <p className="text-[13px] text-muted-foreground mt-1">
             Global color for your organization.
           </p>
         </div>
@@ -136,7 +109,7 @@ const AppearanceSettings: React.FC = () => {
               aria-label="Current brand color preview"
             />
             <div className="relative flex-1 max-w-[200px]">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground font-mono text-sm">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground font-mono text-[13px]">
                 #
               </div>
               <Input
@@ -159,7 +132,7 @@ const AppearanceSettings: React.FC = () => {
               {t('common.cancel')}
             </Button>
           </div>
-          {hexError && <p className="text-xs text-destructive ml-1">Please enter a valid hex code (e.g. A48AFB)</p>}
+          {hexError && <p className="text-[11px] text-destructive ml-1">Please enter a valid hex code (e.g. A48AFB)</p>}
         </div>
       </div>
 
@@ -168,8 +141,8 @@ const AppearanceSettings: React.FC = () => {
       {/* Chart Style Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-foreground">{t('settings.chart_style')}</h3>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h3 className="text-[14px] font-semibold text-foreground">{t('settings.chart_style')}</h3>
+          <p className="text-[13px] text-muted-foreground mt-1">
             Visual style for analytics.
           </p>
         </div>
@@ -195,13 +168,13 @@ const AppearanceSettings: React.FC = () => {
               >
                 {/* Header */}
                 <div className={cn(
-                  "px-4 py-2.5 text-xs font-semibold border-b transition-colors flex items-center justify-between",
+                  "pl-4 pr-11 py-2.5 text-[11px] font-semibold border-b transition-colors flex items-center justify-between",
                   isSelected
                     ? "bg-primary/5 text-primary border-primary/20"
                     : "bg-muted/40 text-muted-foreground border-border/70 group-hover:text-foreground"
                 )}>
                   <span>{label}</span>
-                  {isSelected && <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Active</span>}
+                  {isSelected && <span className="text-[11px] font-bold uppercase tracking-wider text-primary">Active</span>}
                 </div>
 
                 {/* Preview Box */}
@@ -252,8 +225,8 @@ const AppearanceSettings: React.FC = () => {
       {/* Language Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-foreground">{t('settings.language')}</h3>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h3 className="text-[14px] font-semibold text-foreground">{t('settings.language')}</h3>
+          <p className="text-[13px] text-muted-foreground mt-1">
             {t('settings.language_description')}
           </p>
         </div>
@@ -274,13 +247,10 @@ const AppearanceSettings: React.FC = () => {
               }
             );
           }}>
-            <SelectTrigger className="w-full sm:w-[280px] h-11 bg-background border-input text-foreground hover:bg-accent/40 focus:ring-2 focus:ring-primary/20 focus:border-primary">
-              <div className="flex items-center gap-3">
-                <span className="text-lg" aria-hidden="true">
-                  {SUPPORTED_LOCALES.find(l => l.code === language)?.flag ?? '🌐'}
-                </span>
-                <SelectValue placeholder="Select language" />
-              </div>
+            {/* SelectValue renders the chosen item — flag included — so the
+                trigger adds nothing of its own (it used to show the flag twice). */}
+            <SelectTrigger className="w-full sm:w-[280px] text-foreground hover:bg-accent/40 focus:ring-2 focus:ring-primary/20 focus:border-primary">
+              <SelectValue placeholder="Select language" />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border text-popover-foreground shadow-lg">
               {SUPPORTED_LOCALES.map(({ code, label, flag }) => (
@@ -298,8 +268,8 @@ const AppearanceSettings: React.FC = () => {
       {/* Cookie Banner Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-foreground">{t('settings.cookie_banner')}</h3>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h3 className="text-[14px] font-semibold text-foreground">{t('settings.cookie_banner')}</h3>
+          <p className="text-[13px] text-muted-foreground mt-1">
             Display cookie banners to visitors.
           </p>
         </div>
@@ -325,20 +295,20 @@ const AppearanceSettings: React.FC = () => {
               >
                 {/* Header */}
                 <div className={cn(
-                  "px-4 py-2.5 text-xs font-semibold border-b transition-colors flex items-center justify-between",
+                  "pl-4 pr-11 py-2.5 text-[11px] font-semibold border-b transition-colors flex items-center justify-between",
                   isSelected
                     ? "bg-primary/5 text-primary border-primary/20"
                     : "bg-muted/40 text-muted-foreground border-border/70 group-hover:text-foreground"
                 )}>
                   <span>{label}</span>
-                  {isSelected && <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Active</span>}
+                  {isSelected && <span className="text-[11px] font-bold uppercase tracking-wider text-primary">Active</span>}
                 </div>
 
                 {/* Preview Box */}
                 <div className="p-4 h-32 flex flex-col justify-between bg-muted/15">
                   <div className="w-full h-20 rounded-lg p-2.5 flex items-end justify-center bg-muted/30 border border-border/40">
                     {option === 'none' ? (
-                      <span className="text-xs text-muted-foreground font-medium px-3 py-1 bg-card rounded-full border border-border/60 shadow-2xs mb-2">
+                      <span className="text-[11px] text-muted-foreground font-medium px-3 py-1 bg-card rounded-full border border-border/60 shadow-2xs mb-2">
                         No banner
                       </span>
                     ) : (
@@ -371,8 +341,8 @@ const AppearanceSettings: React.FC = () => {
       {/* Group Coloring Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-foreground">Advanced coloring</h3>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h3 className="text-[14px] font-semibold text-foreground">Advanced coloring</h3>
+          <p className="text-[13px] text-muted-foreground mt-1">
             Group-based card themes.
           </p>
         </div>
@@ -382,8 +352,8 @@ const AppearanceSettings: React.FC = () => {
               <Palette className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">Group-based Card Coloring</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Automatically color-code timecards by center (Convention, Exhibition, Theatre).</p>
+              <p className="text-[13px] font-semibold text-foreground">Group-based Card Coloring</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Automatically color-code timecards by center (Convention, Exhibition, Theatre).</p>
             </div>
           </div>
           <Switch 
@@ -442,7 +412,7 @@ const ProfileSettings: React.FC = () => {
     <div className="space-y-6 max-w-2xl">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label className="text-foreground text-sm font-semibold">First name</Label>
+          <Label className="text-foreground text-[13px] font-semibold">First name</Label>
           <Input 
             value={formData.firstName} 
             onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
@@ -450,7 +420,7 @@ const ProfileSettings: React.FC = () => {
           />
         </div>
         <div className="space-y-2">
-          <Label className="text-foreground text-sm font-semibold">Last name</Label>
+          <Label className="text-foreground text-[13px] font-semibold">Last name</Label>
           <Input 
             value={formData.lastName} 
             onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
@@ -459,16 +429,16 @@ const ProfileSettings: React.FC = () => {
         </div>
       </div>
       <div className="space-y-2">
-        <Label className="text-foreground text-sm font-semibold">Email address</Label>
+        <Label className="text-foreground text-[13px] font-semibold">Email address</Label>
         <Input 
           value={formData.email} 
           disabled
           className="bg-muted/50 border-input text-muted-foreground cursor-not-allowed" 
         />
-        <p className="text-xs text-muted-foreground">Email cannot be changed directly for security reasons.</p>
+        <p className="text-[11px] text-muted-foreground">Email cannot be changed directly for security reasons.</p>
       </div>
       <div className="space-y-2">
-        <Label className="text-foreground text-sm font-semibold">Phone number</Label>
+        <Label className="text-foreground text-[13px] font-semibold">Phone number</Label>
         <Input 
           value={formData.phone} 
           onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
@@ -519,7 +489,7 @@ const SecuritySettings: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h4 className="text-foreground font-semibold">Password</h4>
-            <p className="text-sm text-muted-foreground mt-1">Change your account password regularly for better security.</p>
+            <p className="text-[13px] text-muted-foreground mt-1">Change your account password regularly for better security.</p>
           </div>
           <Button 
             variant="outline" 
@@ -539,7 +509,7 @@ const SecuritySettings: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h4 className="text-foreground font-semibold">Two-factor Authentication</h4>
-            <p className="text-sm text-muted-foreground mt-1">Add an extra layer of security to your account.</p>
+            <p className="text-[13px] text-muted-foreground mt-1">Add an extra layer of security to your account.</p>
           </div>
           <Button variant="ghost" disabled className="text-muted-foreground sm:flex-shrink-0">Coming Soon</Button>
         </div>
@@ -555,8 +525,8 @@ const NotificationSettings: React.FC = () => (
         <Bell className="h-5 w-5 text-primary" />
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-foreground">Notifications</h3>
-        <p className="text-sm text-muted-foreground">Choose how Shiftopia reaches you on this device.</p>
+        <h3 className="text-[15px] font-semibold text-foreground">Notifications</h3>
+        <p className="text-[13px] text-muted-foreground">Choose how Shiftopia reaches you on this device.</p>
       </div>
     </div>
     <NotificationToggle />
@@ -570,7 +540,6 @@ const SettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const { section = 'appearance' } = useParams<{ section?: string }>();
 
-  const { isDark } = useTheme();
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
   // Pay Rates is a management/configuration surface (EBA wage schedule).
@@ -581,40 +550,28 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
+    <PageLayout>
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
-        <div className={cn(
-            "rounded-[32px] p-4 lg:p-6 transition-all border",
-            isDark 
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-card/80 backdrop-blur-md border-border/80 shadow-xl shadow-slate-200/40"
-        )}>
-          {/* Row 1 & 2: Identity & Scope Filter */}
-          <PersonalPageHeader
-            title={t('settings.title')}
-            Icon={Palette}
-            mode="managerial" // Settings is usually org-wide/managerial
-            className="mb-4 lg:mb-6"
-          />
-
-          {/* Row 3: Settings Function Bar */}
+      <GoldStandardHeader
+        title={t('settings.title')}
+        Icon={Palette}
+        mode="managerial" // Settings is usually org-wide/managerial
+        functionBar={
           <SettingsFunctionBar
             activeSection={section}
             onSectionChange={handleSectionChange}
             transparent
             showPayRates={canManageRates}
           />
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Main Content Area ─────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
-            "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10",
-            isDark 
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-card/80 backdrop-blur-md border-border/80 shadow-xl shadow-slate-200/40"
+            "h-full overflow-auto",
+            page.bodyInset,
+            surface.bodyCard
         )}>
           <Tabs value={section} className="w-full">
             <TabsContent value="appearance">
@@ -635,8 +592,8 @@ const SettingsPage: React.FC = () => {
                     <Shield className="h-8 w-8 text-muted-foreground" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">Not authorised</h3>
-                    <p className="text-muted-foreground max-w-sm mt-1 text-sm">Pay-rate administration is restricted to managers.</p>
+                    <h3 className="text-[15px] font-semibold text-foreground">Not authorised</h3>
+                    <p className="text-muted-foreground max-w-sm mt-1 text-[13px]">Pay-rate administration is restricted to managers.</p>
                   </div>
                 </div>
               )}
@@ -657,8 +614,8 @@ const SettingsPage: React.FC = () => {
                      <User className="h-8 w-8 text-muted-foreground" />}
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground capitalize">{tab} Settings</h3>
-                    <p className="text-muted-foreground max-w-sm mt-1 text-sm">This section is currently under development.</p>
+                    <h3 className="text-[15px] font-semibold text-foreground capitalize">{tab} Settings</h3>
+                    <p className="text-muted-foreground max-w-sm mt-1 text-[13px]">This section is currently under development.</p>
                   </div>
                 </div>
               </TabsContent>
@@ -666,7 +623,7 @@ const SettingsPage: React.FC = () => {
           </Tabs>
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

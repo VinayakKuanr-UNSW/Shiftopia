@@ -75,7 +75,7 @@ export function WeekStrip({
           <>
             <span
               className={cn(
-                'text-xs font-medium uppercase',
+                'text-[11px] font-medium uppercase',
                 holidayName ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
               )}
             >
@@ -83,14 +83,14 @@ export function WeekStrip({
             </span>
             <span
               className={cn(
-                'mt-0.5 text-lg font-bold',
+                'mt-0.5 text-[15px] font-bold',
                 isToday ? 'text-primary' : holidayName ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
               )}
             >
               {format(day, 'd')}
             </span>
             {isToday && (
-              <span className="mt-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[9px] text-primary-foreground">
+              <span className="mt-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[11px] text-primary-foreground">
                 Today
               </span>
             )}

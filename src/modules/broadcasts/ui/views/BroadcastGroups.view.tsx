@@ -76,10 +76,10 @@ export const BroadcastGroupsView: React.FC<BroadcastGroupsViewProps> = ({
                                     <Megaphone className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                                    <CardTitle className="flex items-center gap-2">
                                         {group.name}
                                     </CardTitle>
-                                    <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
+                                    <p className="text-[13px] text-muted-foreground line-clamp-1 mt-1">
                                         {group.description || 'No description'}
                                     </p>
                                 </div>
@@ -113,7 +113,7 @@ export const BroadcastGroupsView: React.FC<BroadcastGroupsViewProps> = ({
                         </div>
                     </CardHeader>
                     <CardContent className="pb-3">
-                        <div className="flex gap-4 text-sm text-muted-foreground">
+                        <div className="flex gap-4 text-[13px] text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                                 <Users className="h-4 w-4" />
                                 <span>{group.participantCount || 0} Members</span>
@@ -124,7 +124,7 @@ export const BroadcastGroupsView: React.FC<BroadcastGroupsViewProps> = ({
                             </div>
                         </div>
                     </CardContent>
-                    <CardFooter className="pt-3 border-t bg-muted/20 text-xs text-muted-foreground flex justify-between">
+                    <CardFooter className="pt-3 border-t bg-muted/20 text-[11px] text-muted-foreground flex justify-between">
                         <span>Updated {formatDistanceToNow(new Date(group.updatedAt || group.createdAt), { addSuffix: true })}</span>
                     </CardFooter>
                 </Card>

@@ -283,7 +283,7 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] bg-gray-900/95 backdrop-blur-xl border-gray-800">
+      <DialogContent className="bg-gray-900/95 border-gray-800" size="lg">
         <DialogHeader>
           <DialogTitle>Assign Shifts</DialogTitle>
           <DialogDescription>
@@ -296,17 +296,17 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
             <div key={groupIndex} className="mb-6 p-4 border border-white/10 rounded-md bg-black/20">
               <div className="mb-3">
                 <h4 className="font-medium">{group.role}</h4>
-                <div className="text-sm text-white/70">
+                <div className="text-[13px] text-white/70">
                   {formatTime(group.startTime)} - {formatTime(group.endTime)}
                 </div>
-                <div className="text-sm text-white/70">
+                <div className="text-[13px] text-white/70">
                   {group.department} • {group.location}
                 </div>
                 <div className="mt-2 flex items-center">
-                  <span className="text-xs bg-purple-500/80 text-white px-2 py-1 rounded">
+                  <span className="text-[11px] bg-purple-500/80 text-white px-2 py-1 rounded">
                     {group.count} shift{group.count > 1 ? 's' : ''}
                   </span>
-                  <span className="text-xs ml-2 bg-gray-700 text-white/80 px-2 py-1 rounded">
+                  <span className="text-[11px] ml-2 bg-gray-700 text-white/80 px-2 py-1 rounded">
                     {assignments[`group_${groupIndex}`]?.length || 0} assigned
                   </span>
                 </div>
@@ -331,7 +331,7 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
                       <AvatarImage src={employee.avatarUrl} />
                       <AvatarFallback>{employee.fullName.charAt(0)}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm">{employee.fullName}</span>
+                    <span className="text-[13px]">{employee.fullName}</span>
                   </div>
                 ))}
               </div>
@@ -340,7 +340,7 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
         </ScrollArea>
 
         {availabilityWarnings.length > 0 && (
-          <div className="mx-1 mb-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <div className="mx-1 mb-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-[13px] text-amber-200">
             <div className="flex items-center gap-2 font-medium mb-1">
               <AlertTriangle className="h-4 w-4" />
               Outside declared availability
@@ -348,7 +348,7 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
             <ul className="list-disc pl-5 space-y-0.5 text-amber-100/90">
               {availabilityWarnings.map((w, i) => <li key={i}>{w}</li>)}
             </ul>
-            <div className="mt-1 text-xs text-amber-200/70">
+            <div className="mt-1 text-[11px] text-amber-200/70">
               You can still proceed — click “Assign Anyway” to confirm.
             </div>
           </div>

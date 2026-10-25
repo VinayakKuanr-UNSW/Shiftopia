@@ -50,7 +50,7 @@ const SettingsLayout: React.FC<SettingsLayoutProps> = ({
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">{title}</h1>
+          <h1 className="text-[24px] font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">{title}</h1>
           {description && <p className="text-blue-200/60 mt-1 max-w-2xl">{description}</p>}
         </div>
 
@@ -71,7 +71,7 @@ const SettingsLayout: React.FC<SettingsLayoutProps> = ({
         {/* Sidebar Navigation */}
         <div className="space-y-6">
           <div className="bg-[#1a2744]/30 backdrop-blur-xl border border-white/5 rounded-2xl p-4 space-y-1">
-            <div className="text-xs font-semibold text-blue-200/40 uppercase tracking-wider px-3 mb-2 mt-1">
+            <div className="text-[11px] font-semibold text-blue-200/40 uppercase tracking-wider px-3 mb-2 mt-1">
               Account
             </div>
             <NavButton
@@ -95,7 +95,7 @@ const SettingsLayout: React.FC<SettingsLayoutProps> = ({
 
             <div className="h-px bg-white/5 my-4 mx-2"></div>
 
-            <div className="text-xs font-semibold text-blue-200/40 uppercase tracking-wider px-3 mb-2">
+            <div className="text-[11px] font-semibold text-blue-200/40 uppercase tracking-wider px-3 mb-2">
               Workspace
             </div>
             <NavButton
@@ -121,7 +121,7 @@ const SettingsLayout: React.FC<SettingsLayoutProps> = ({
           <div className="bg-gradient-to-br from-purple-900/20 to-indigo-900/20 border border-white/5 rounded-2xl p-6 relative overflow-hidden group hover:border-white/10 transition-colors">
             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
             <h3 className="text-white font-medium relative z-10">Need help?</h3>
-            <p className="text-sm text-blue-200/60 mt-1 mb-4 relative z-10">Check our documentation or contact support.</p>
+            <p className="text-[13px] text-blue-200/60 mt-1 mb-4 relative z-10">Check our documentation or contact support.</p>
             <Button size="sm" variant="secondary" className="w-full bg-white/10 hover:bg-white/20 text-white border-0">
               Contact Support
             </Button>
@@ -141,7 +141,7 @@ const SettingsLayout: React.FC<SettingsLayoutProps> = ({
 
           <div className="flex justify-end mt-6 space-x-3">
             <Button variant="ghost" className="text-white/60 hover:text-white hover:bg-white/5">Discard Changes</Button>
-            <Button className="bg-primary hover:bg-primary/90 text-white shadow-glow">Save Preferences</Button>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-glow">Save Preferences</Button>
           </div>
         </div>
       </div>
@@ -154,9 +154,9 @@ const NavButton = ({ active, onClick, icon, label }: { active: boolean; onClick:
   <button
     onClick={onClick}
     className={cn(
-      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-200",
       active
-        ? "bg-primary text-white shadow-glow/30"
+        ? "bg-primary text-primary-foreground shadow-glow/30"
         : "text-blue-200/60 hover:text-white hover:bg-white/5"
     )}
   >

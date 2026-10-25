@@ -28,7 +28,7 @@ const SubGroupSection: React.FC<SubGroupProps> = ({ id, name, shifts }) => {
         <div className="p-4 flex items-center justify-between">
           <div>
             <h4 className="font-medium text-white">{name}</h4>
-            <p className="text-white/70 text-sm mt-1">{shifts} Shifts</p>
+            <p className="text-white/70 text-[13px] mt-1">{shifts} Shifts</p>
           </div>
           
           <div className="flex items-center space-x-2">
@@ -69,7 +69,7 @@ const SubGroupSection: React.FC<SubGroupProps> = ({ id, name, shifts }) => {
               ))}
             </div>
             
-            <button className="flex items-center space-x-2 text-white/80 hover:text-white text-sm transition-all duration-300 px-3 py-1.5 rounded-lg glass-panel-hover w-full justify-center group">
+            <button className="flex items-center space-x-2 text-white/80 hover:text-white text-[13px] transition-all duration-300 px-3 py-1.5 rounded-lg glass-panel-hover w-full justify-center group">
               <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300" />
               <span>Add Shift</span>
             </button>

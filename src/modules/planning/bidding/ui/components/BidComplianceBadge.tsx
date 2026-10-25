@@ -65,7 +65,7 @@ export function BidComplianceBadge({
     return (
         <div
             className={cn(
-                'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] uppercase font-black tracking-widest transition-all',
+                'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] uppercase font-black tracking-widest transition-all',
                 bg,
                 border,
                 className

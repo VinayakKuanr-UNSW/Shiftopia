@@ -117,11 +117,11 @@ const AwardHealthPanel: React.FC<{ schedule: EbaRateSet[] }> = ({ schedule }) =>
       <div className="flex items-center justify-between mb-6 pb-3 border-b border-border/30">
         <div className="flex items-center gap-2.5">
           <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
-          <h3 className="text-base font-bold text-foreground">Award Health Checklist</h3>
+          <h3 className="text-[14px] font-bold text-foreground">Award Health Checklist</h3>
         </div>
         <span 
           className={cn(
-            'text-sm font-bold tabular-nums px-2.5 py-0.5 rounded-full border',
+            'text-[13px] font-bold tabular-nums px-2.5 py-0.5 rounded-full border',
             passCount === total 
               ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' 
               : 'text-amber-400 bg-amber-500/10 border-amber-500/20',
@@ -145,13 +145,13 @@ const AwardHealthPanel: React.FC<{ schedule: EbaRateSet[] }> = ({ schedule }) =>
             )}
             <div className="min-w-0">
               <p className={cn(
-                'text-sm font-semibold',
+                'text-[13px] font-semibold',
                 check.ok ? 'text-foreground' : 'text-amber-300',
               )}>
                 {check.label}
               </p>
               {check.detail && (
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{check.detail}</p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{check.detail}</p>
               )}
             </div>
           </div>

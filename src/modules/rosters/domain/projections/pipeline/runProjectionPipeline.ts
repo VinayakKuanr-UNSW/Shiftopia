@@ -41,6 +41,7 @@ import { projectPeople } from '../projectors/people.projector';
 import { projectGroup } from '../projectors/group.projector';
 import { projectEvents } from '../projectors/events.projector';
 import { projectRoles } from '../projectors/roles.projector';
+import { determineShiftState } from '../../shift-state.utils';
 
 // ── Filter Logic (mirrors utils/filters.ts but operates on DTOs) ─────────────
 
@@ -66,7 +67,14 @@ function applyFilters(shifts: WorkerShiftDTO[], filters: WorkerFilterDTO): Worke
   return shifts.filter(s => {
     if (roleId && s.roleId !== roleId) return false;
     if (skillIds.length > 0 && !skillIds.every(id => s.requiredSkills.includes(id))) return false;
-    if (lifecycleStatus !== 'all' && s.lifecycleStatus.toLowerCase() !== lifecycleStatus) return false;
+    if (lifecycleStatus !== 'all') {
+      const lc = (s.lifecycleStatus ?? '').toLowerCase();
+      if (lifecycleStatus === 'cancelled') {
+        if (!s.isCancelled && lc !== 'cancelled') return false;
+      } else {
+        if (s.isCancelled || lc !== lifecycleStatus) return false;
+      }
+    }
     if (assignmentStatus !== 'all') {
       const isAssigned = !!s.assignedEmployeeId;
       if (assignmentStatus === 'assigned' && !isAssigned) return false;
@@ -81,6 +89,16 @@ function applyFilters(shifts: WorkerShiftDTO[], filters: WorkerFilterDTO): Worke
       const isTrade = !!s.tradeRequestedAt;
       if (tradingStatus === 'requested' && !isTrade) return false;
       if (tradingStatus === 'none' && isTrade) return false;
+    }
+    if (stateId && stateId !== 'all') {
+      const shiftState = determineShiftState({
+        lifecycle_status: s.lifecycleStatus as any,
+        assignment_status: (s.assignmentStatus ?? 'unassigned') as any,
+        assignment_outcome: s.assignmentOutcome as any,
+        trading_status: s.tradingStatus as any,
+        is_cancelled: s.isCancelled,
+      });
+      if (shiftState !== stateId) return false;
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();

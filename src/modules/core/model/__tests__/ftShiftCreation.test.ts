@@ -21,6 +21,7 @@ import {
     TARGET_EMPLOYMENT_TYPES,
     initialTargetEmploymentType,
     targetEmploymentTypeOptions,
+    targetAfterGroupChange,
 } from '@/modules/core/model/employment.types';
 import { runHardValidation } from '@/modules/compliance';
 
@@ -38,11 +39,29 @@ describe('the target picker', () => {
         expect(targetEmploymentTypeOptions('Casual')).toEqual(['PT', 'Casual']);
     });
 
-    it('offers every type in the Office group', () => {
+    it('offers ONLY full-time in the Office group', () => {
         expect(FULL_TIME_GROUP_TYPE).toBe('office');
-        expect(targetEmploymentTypeOptions(undefined, { allowFullTime: true }))
-            .toEqual(TARGET_EMPLOYMENT_TYPES);
-        expect(targetEmploymentTypeOptions('PT', { allowFullTime: true })).toContain('FT');
+        expect(targetEmploymentTypeOptions(undefined, { groupType: 'office' })).toEqual(['FT']);
+        expect(targetEmploymentTypeOptions('FT', { groupType: 'office' })).toEqual(['FT']);
+    });
+
+    it('never offers full-time outside Office, or in a template', () => {
+        expect(targetEmploymentTypeOptions(undefined, { groupType: 'convention_centre' }))
+            .toEqual(['PT', 'Casual']);
+        // enforce_no_ft_template_shifts: templates cannot hold FT, even in Office.
+        expect(targetEmploymentTypeOptions(undefined, { groupType: 'office', isTemplate: true }))
+            .toEqual(['PT', 'Casual']);
+    });
+
+    it('keeps a legacy out-of-rule value renderable', () => {
+        expect(targetEmploymentTypeOptions('PT', { groupType: 'office' })).toEqual(['PT', 'FT']);
+    });
+
+    it('re-decides the target when the group changes', () => {
+        expect(targetAfterGroupChange('Casual', 'office')).toBe('FT');
+        expect(targetAfterGroupChange('FT', 'convention_centre')).toBeUndefined();
+        expect(targetAfterGroupChange('PT', 'convention_centre')).toBe('PT');
+        expect(targetAfterGroupChange('FT', 'office', true)).toBeUndefined();
     });
 
     it('keeps an existing full-time shift renderable anywhere', () => {
@@ -53,13 +72,13 @@ describe('the target picker', () => {
     });
 
     it.each([['mobile sheet', SHEET], ['desktop drawer', DRAWER]])(
-        'the %s picker allows full-time exactly when the group is Office',
+        'the %s picker derives its options from the group and template mode',
         (_label, path) => {
             // Both variants render the picker, so a change to one and not the
             // other leaves the two devices disagreeing.
             const src = stripComments(read(path));
             expect(src).toMatch(
-                /targetEmploymentTypeOptions\(field\.value,\s*\{\s*allowFullTime:\s*watchGroup === FULL_TIME_GROUP_TYPE,?\s*\}\)/);
+                /targetEmploymentTypeOptions\(field\.value,\s*\{\s*groupType:\s*watchGroup,\s*isTemplate:\s*isTemplateMode,?\s*\}\)/);
             expect(src).not.toMatch(/options=\{TARGET_EMPLOYMENT_TYPES\.map/);
         },
     );

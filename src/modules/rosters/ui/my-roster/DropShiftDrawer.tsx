@@ -78,11 +78,11 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
         aria-describedby="drop-drawer-desc"
       >
         <DrawerHeader className="px-5 pt-5 pb-2 text-left">
-          <DrawerTitle id="drop-drawer-title" className="flex items-center gap-2 text-lg font-bold text-foreground">
+          <DrawerTitle id="drop-drawer-title" className="flex items-center gap-2">
             <UserX className="h-5 w-5 text-rose-500" aria-hidden="true" />
             Drop Shift Assignment
           </DrawerTitle>
-          <DrawerDescription id="drop-drawer-desc" className="text-xs text-muted-foreground">
+          <DrawerDescription id="drop-drawer-desc">
             Release this shift back to the open roster marketplace.
           </DrawerDescription>
         </DrawerHeader>
@@ -102,18 +102,18 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
 
           {/* 2. Rules & Compliance Guidelines */}
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3.5 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
               <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span>Drop Rules & Guidelines</span>
             </div>
-            <ul className="text-xs space-y-1 text-amber-700/90 dark:text-amber-300/90 pl-1 list-disc list-inside">
+            <ul className="text-[11px] space-y-1 text-amber-700/90 dark:text-amber-300/90 pl-1 list-disc list-inside">
               <li>Dropped shifts return to the open marketplace pool for replacement.</li>
               <li>Dropping with 24 hours notice or less counts as a <strong>critical</strong> cancellation on your record.</li>
               <li>Dropping shifts within 4 hours of start time enters an emergent state and requires supervisor escalation.</li>
               <li>Repeated unworked drops may impact scheduling reliability scores.</li>
             </ul>
             {isWithinLockoutPeriod && (
-              <div className="mt-2 p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
+              <div className="mt-2 p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] font-semibold flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" aria-hidden="true" />
                 <span>Emergent Notice: This shift starts within 4 hours.</span>
               </div>
@@ -122,11 +122,11 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
 
           {/* 3. Reason for Drop — a pick, then an optional note */}
           <fieldset className="space-y-2" disabled={isDropping}>
-            <legend className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+            <legend className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
               Reason for Drop <span className="text-rose-500" aria-hidden="true">*</span>
             </legend>
             {loadingReasons ? (
-              <p className="text-xs text-muted-foreground">Loading reasons…</p>
+              <p className="text-[11px] text-muted-foreground">Loading reasons…</p>
             ) : (
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Reason for dropping this shift">
                 {reasons.map((r) => {
@@ -140,7 +140,7 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
                       onClick={() => setReasonCode(r.code)}
                       title={r.description ?? undefined}
                       className={cn(
-                        'min-h-11 rounded-2xl border px-3 py-2.5 text-left text-xs font-semibold transition-colors',
+                        'min-h-11 rounded-2xl border px-3 py-2.5 text-left text-[11px] font-semibold transition-colors',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500',
                         active
                           ? 'border-rose-500/60 bg-rose-500/10 text-rose-700 dark:text-rose-300'
@@ -157,7 +157,7 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
             <div className="space-y-1.5 pt-1">
               <Label
                 htmlFor="drop-shift-reason"
-                className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
               >
                 {noteRequired ? (
                   <>Tell us more <span className="text-rose-500" aria-hidden="true">*</span></>
@@ -175,7 +175,7 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
                 rows={3}
                 disabled={isDropping}
                 aria-required={noteRequired}
-                className="rounded-2xl resize-none bg-muted/30 text-sm focus-visible:ring-rose-500"
+                className="rounded-2xl resize-none bg-muted/30 text-[13px] focus-visible:ring-rose-500"
               />
             </div>
           </fieldset>
@@ -188,7 +188,7 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
             variant="outline"
             onClick={onClose}
             disabled={isDropping}
-            className="flex-1 h-12 rounded-2xl uppercase text-xs font-bold border-border/80 hover:bg-muted active:scale-[0.98] transition-all"
+            className="flex-1 h-12 rounded-2xl uppercase text-[11px] font-bold border-border/80 hover:bg-muted active:scale-[0.98] transition-all"
           >
             Keep Shift
           </Button>
@@ -197,7 +197,7 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
             variant="destructive"
             onClick={handleConfirm}
             disabled={isDropping || !canConfirm}
-            className="flex-1 h-12 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white uppercase text-xs font-bold shadow-lg shadow-rose-950/20 active:scale-[0.98] transition-all disabled:opacity-50"
+            className="flex-1 h-12 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white uppercase text-[11px] font-bold shadow-lg shadow-rose-950/20 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {isDropping ? (
               <span className="flex items-center gap-2">

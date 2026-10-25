@@ -4,7 +4,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
-import { Loader2 } from 'lucide-react';
+import { PageState } from '@/modules/core/ui/components/PageState';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -24,11 +24,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Show loading spinner while checking auth
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 text-primary animate-spin" />
-          <p className="text-muted-foreground text-sm">Loading...</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <PageState state="loading" scope="page" title="Loading" description="Checking your access." />
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 
 export interface RosterPaginationFooterProps {
   currentPage: number;
@@ -43,13 +44,14 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
       aria-label="Roster employee pagination"
       className={cn('w-full shrink-0', className)}
     >
-      <div className="p-1 sm:p-1.5 rounded-2xl bg-slate-100/85 dark:bg-[#1c2333]/85 border border-slate-200/50 dark:border-white/5 shadow-sm backdrop-blur-md flex flex-wrap items-center justify-between gap-2">
+      {/* Same bar as every footer, but it may wrap on a narrow window, so its height is a floor. */}
+      <div className={cn(surface.footerBar, 'h-auto min-h-14 flex-wrap py-1.5')}>
         {/* Left: Range and Count with ARIA live region */}
         <div
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="flex items-center gap-2 px-3 py-1 text-slate-700 dark:text-slate-300 font-mono text-xs select-none"
+          className="flex items-center gap-2 px-3 py-1 text-slate-700 dark:text-slate-300 font-mono text-[11px] select-none"
         >
           <span>
             Showing{' '}
@@ -75,7 +77,7 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
           aria-label="Rows per page"
           className="flex items-center gap-1 bg-white/50 dark:bg-black/30 p-1 rounded-xl border border-slate-200/40 dark:border-white/5"
         >
-          <span className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 px-2 select-none">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 px-2 select-none">
             Per page:
           </span>
           {[10, 15, 25, 50, 0].map((size) => {
@@ -92,7 +94,7 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
                 aria-pressed={isSelected}
                 aria-label={`Show ${size === 0 ? 'all' : size} ${itemLabel} per page${isSelected ? ', currently selected' : ''}`}
                 className={cn(
-                  'min-h-[38px] min-w-[38px] sm:min-h-[34px] sm:min-w-[34px] px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center touch-manipulation',
+                  'min-h-[38px] min-w-[38px] sm:min-h-[34px] sm:min-w-[34px] px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-all cursor-pointer flex items-center justify-center touch-manipulation',
                   'focus-visible:ring-2 focus-visible:ring-[#7b61ff] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1c2333] focus-visible:outline-none active:scale-[0.97]',
                   isSelected
                     ? 'bg-[#7b61ff] text-white shadow-xs'
@@ -118,7 +120,7 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
             aria-disabled={currentPage <= 1}
             aria-label="Go to first page"
             className={cn(
-              'min-h-[38px] min-w-[38px] sm:min-h-[34px] sm:min-w-[34px] p-2 rounded-lg text-xs transition-all flex items-center justify-center touch-manipulation',
+              'min-h-[38px] min-w-[38px] sm:min-h-[34px] sm:min-w-[34px] p-2 rounded-lg text-[11px] transition-all flex items-center justify-center touch-manipulation',
               'focus-visible:ring-2 focus-visible:ring-[#7b61ff] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1c2333] focus-visible:outline-none active:scale-[0.97]',
               currentPage <= 1
                 ? 'opacity-30 cursor-not-allowed text-slate-400 dark:text-slate-600'
@@ -135,7 +137,7 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
             aria-disabled={currentPage <= 1}
             aria-label={`Go to previous page, page ${currentPage - 1}`}
             className={cn(
-              'min-h-[38px] sm:min-h-[34px] px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1 touch-manipulation',
+              'min-h-[38px] sm:min-h-[34px] px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-all flex items-center gap-1 touch-manipulation',
               'focus-visible:ring-2 focus-visible:ring-[#7b61ff] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1c2333] focus-visible:outline-none active:scale-[0.97]',
               currentPage <= 1
                 ? 'opacity-30 cursor-not-allowed text-slate-400 dark:text-slate-600'
@@ -149,7 +151,7 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
           <div
             aria-current="page"
             aria-label={`Current page, page ${currentPage} of ${totalPages}`}
-            className="px-3 py-1.5 text-xs font-mono tabular-nums text-slate-700 dark:text-slate-200 select-none"
+            className="px-3 py-1.5 text-[11px] font-mono tabular-nums text-slate-700 dark:text-slate-200 select-none"
           >
             Page{' '}
             <strong className="font-bold text-slate-900 dark:text-white">
@@ -168,7 +170,7 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
             aria-disabled={currentPage >= totalPages}
             aria-label={`Go to next page, page ${currentPage + 1}`}
             className={cn(
-              'min-h-[38px] sm:min-h-[34px] px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1 touch-manipulation',
+              'min-h-[38px] sm:min-h-[34px] px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-all flex items-center gap-1 touch-manipulation',
               'focus-visible:ring-2 focus-visible:ring-[#7b61ff] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1c2333] focus-visible:outline-none active:scale-[0.97]',
               currentPage >= totalPages
                 ? 'opacity-30 cursor-not-allowed text-slate-400 dark:text-slate-600'
@@ -186,7 +188,7 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
             aria-disabled={currentPage >= totalPages}
             aria-label={`Go to last page, page ${totalPages}`}
             className={cn(
-              'min-h-[38px] min-w-[38px] sm:min-h-[34px] sm:min-w-[34px] p-2 rounded-lg text-xs transition-all flex items-center justify-center touch-manipulation',
+              'min-h-[38px] min-w-[38px] sm:min-h-[34px] sm:min-w-[34px] p-2 rounded-lg text-[11px] transition-all flex items-center justify-center touch-manipulation',
               'focus-visible:ring-2 focus-visible:ring-[#7b61ff] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#1c2333] focus-visible:outline-none active:scale-[0.97]',
               currentPage >= totalPages
                 ? 'opacity-30 cursor-not-allowed text-slate-400 dark:text-slate-600'

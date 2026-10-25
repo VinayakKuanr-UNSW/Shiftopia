@@ -47,7 +47,6 @@ interface TimesheetMobileCardProps {
     isManager?: boolean;
     employeeHeader?: React.ReactNode;
     employeeActions?: React.ReactNode;
-    hideGlow?: boolean;
     useGroupColoring?: boolean;
     className?: string;
 }
@@ -138,7 +137,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     isManager = true,
     employeeHeader,
     employeeActions,
-    hideGlow = false,
     useGroupColoring = false,
     className,
 }, ref) => {
@@ -443,7 +441,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         <>
             <SharedShiftCard
             variant="timecard"
-            hideGlow={hideGlow}
             identityGrid
             organization={entry.organization}
             department={entry.department}
@@ -527,44 +524,44 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                         <div className="space-y-3 w-full">
                             <div className="grid grid-cols-2 gap-2 w-full">
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Adj In</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Adj In</Label>
                                     <input 
                                         value={localAdjStart} 
                                         onChange={e => setLocalAdjStart(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Adj Out</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Adj Out</Label>
                                     <input 
                                         value={localAdjEnd} 
                                         onChange={e => setLocalAdjEnd(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2 w-full">
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Paid Break</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Paid Break</Label>
                                     <input 
                                         value={localPaidBreak} 
                                         onChange={e => setLocalPaidBreak(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Unpaid Break</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Unpaid Break</Label>
                                     <input 
                                         value={localUnpaidBreak} 
                                         onChange={e => setLocalUnpaidBreak(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                             </div>
                             <div className="flex items-center justify-center gap-2 w-full pt-1">
                                 <Button
                                     onClick={handleSaveAdjustment}
-                                    className="flex-1 h-11 rounded-xl font-bold bg-primary text-white shadow-lg active:scale-95 transition-all flex items-center justify-center"
+                                    className="flex-1 h-11 rounded-xl font-bold bg-primary text-primary-foreground shadow-lg active:scale-95 transition-all flex items-center justify-center"
                                 >
                                     <Check className="h-5 w-5 mr-2" /> Save
                                 </Button>
@@ -584,7 +581,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                     onClick={handleApprove}
                                     disabled={reviewLocked}
                                     title={reviewLocked ? 'Unlocks after clock-out, auto clock-out, or no-show' : undefined}
-                                    className="flex-1 h-9 rounded-xl font-black uppercase text-[9px] tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
+                                    className="flex-1 h-9 rounded-xl font-semibold uppercase text-[11px] tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
                                 >
                                     Approve
                                 </Button>
@@ -592,7 +589,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                     onClick={handleReject}
                                     disabled={reviewLocked}
                                     title={reviewLocked ? 'Unlocks after clock-out, auto clock-out, or no-show' : undefined}
-                                    className="flex-1 h-9 rounded-xl font-black uppercase text-[9px] tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
+                                    className="flex-1 h-9 rounded-xl font-semibold uppercase text-[11px] tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
                                 >
                                     Reject
                                 </Button>
@@ -601,7 +598,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                     onClick={handleStartEditing}
                                     disabled={reviewLocked}
                                     title={reviewLocked ? 'Unlocks after clock-out, auto clock-out, or no-show' : undefined}
-                                    className="flex-1 h-9 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 px-0 disabled:opacity-30 text-center"
+                                    className="flex-1 h-9 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[11px] font-semibold uppercase tracking-widest transition-all active:scale-95 px-0 disabled:opacity-30 text-center"
                                 >
                                     Edit
                                 </Button>
@@ -610,7 +607,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                         variant="outline"
                                         onClick={() => onMarkNoShow?.(String(entry.id))}
                                         disabled={!isShiftOver}
-                                        className="flex-1 h-9 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[8px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95 px-1 flex items-center justify-center"
+                                        className="flex-1 h-9 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[11px] font-semibold uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95 px-1 flex items-center justify-center"
                                     >
                                         <UserX className="h-3 w-3 mr-1" /> No-Show
                                     </Button>
@@ -618,14 +615,14 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                             </div>
                         ) : (
                             <div className="w-full flex items-center justify-center gap-2">
-                                <div className="flex-1 flex items-center justify-center h-9 bg-foreground/[0.04] border border-foreground/5 rounded-xl text-foreground/40 text-[9px] font-black uppercase tracking-widest text-center">
+                                <div className="flex-1 flex items-center justify-center h-9 bg-foreground/[0.04] border border-foreground/5 rounded-xl text-foreground/40 text-[11px] font-semibold uppercase tracking-widest text-center">
                                     Finalized Record
                                 </div>
                                 {!readOnly && (
                                     <Button
                                         variant="outline"
                                         onClick={handleStartEditing}
-                                        className="h-9 px-4 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                        className="h-9 px-4 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[11px] font-semibold uppercase tracking-widest transition-all active:scale-95"
                                     >
                                         Edit
                                     </Button>
@@ -660,16 +657,16 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 <div className="space-y-4 my-2">
                     {pendingSave?.needArrival && (
                         <div className="space-y-1.5">
-                            <Label htmlFor="m-arrival-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            <Label htmlFor="m-arrival-variance" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Arrival variance reason <span className="text-red-500">*</span>
                             </Label>
                             <Select value={arrivalReason} onValueChange={setArrivalReason}>
-                                <SelectTrigger id="m-arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                <SelectTrigger id="m-arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-[13px] font-semibold text-foreground">
                                     <SelectValue placeholder="Select a reason…" />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
                                     {ARRIVAL_VARIANCE_REASONS.map(r => (
-                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-[11px] font-semibold cursor-pointer">
                                             {r}
                                         </SelectItem>
                                     ))}
@@ -679,16 +676,16 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                     )}
                     {pendingSave?.needDeparture && (
                         <div className="space-y-1.5">
-                            <Label htmlFor="m-departure-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            <Label htmlFor="m-departure-variance" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Departure variance reason <span className="text-red-500">*</span>
                             </Label>
                             <Select value={departureReason} onValueChange={setDepartureReason}>
-                                <SelectTrigger id="m-departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                <SelectTrigger id="m-departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-[13px] font-semibold text-foreground">
                                     <SelectValue placeholder="Select a reason…" />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
                                     {DEPARTURE_VARIANCE_REASONS.map(r => (
-                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-[11px] font-semibold cursor-pointer">
                                             {r}
                                         </SelectItem>
                                     ))}

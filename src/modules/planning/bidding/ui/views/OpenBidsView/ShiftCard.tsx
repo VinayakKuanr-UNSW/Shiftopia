@@ -80,13 +80,13 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   const footerActions = (
     <div className="flex flex-col gap-2 mt-2 w-full">
       {isAssigned ? (
-        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-wider">
+        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold uppercase tracking-wider">
           <LucideUserCheck className="h-4 w-4 shrink-0" />
           Assigned to {assignedName || 'Employee'}
         </div>
       ) : bidsCount > 0 ? (
         <Button
-          className="w-full font-black text-xs uppercase tracking-wider h-10 rounded-xl transition-all shadow-md active:scale-[0.98] bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30"
+          className="w-full font-semibold text-[11px] uppercase tracking-wider h-10 rounded-xl transition-all shadow-md bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30"
           onClick={(e) => {
             e.stopPropagation();
             onClick();
@@ -95,7 +95,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
           <Users className="mr-2 h-4 w-4" /> Review Bids ({bidsCount})
         </Button>
       ) : (
-        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-muted/20 border border-border/30 text-muted-foreground/50 text-xs font-bold uppercase tracking-wider">
+        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-muted/20 border border-border/30 text-muted-foreground/50 text-[11px] font-bold uppercase tracking-wider">
           <Clock className="h-3.5 w-3.5 shrink-0" /> No Bids Placed
         </div>
       )}
@@ -137,7 +137,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
                         <span className="text-cyan-400/80">
                           {isBulkSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                         </span>
-                        <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">
+                        <span className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider">
                             {isBulkSelected ? 'Selected' : 'Select'}
                         </span>
                     </div>

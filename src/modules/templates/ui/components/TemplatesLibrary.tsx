@@ -138,7 +138,7 @@ const TemplateItem = ({
         {/* name + badge */}
         <div className="flex-1 mr-2">
           <div className="flex items-center">
-            <h3 className="font-medium text-base">{template.name}</h3>
+            <h3 className="font-medium text-[14px]">{template.name}</h3>
             <Badge
               variant={
                 template.status === 'published' ? 'default' : 'secondary'
@@ -148,7 +148,7 @@ const TemplateItem = ({
               {template.status}
             </Badge>
           </div>
-          <div className="flex items-center mt-1 text-sm text-muted-foreground">
+          <div className="flex items-center mt-1 text-[13px] text-muted-foreground">
             <Calendar className="h-3.5 w-3.5 mr-1" />
             <span>{format(new Date(template.createdAt), 'MMM d, yyyy')}</span>
           </div>
@@ -429,7 +429,7 @@ const TemplatesLibrary: React.FC<TemplatesLibraryProps> = ({
           {/* bulk bar */}
           {selectedIds.length > 0 && (
             <div className="flex items-center gap-3 mt-3 p-2 bg-muted/50 rounded-md">
-              <span className="text-sm">
+              <span className="text-[13px]">
                 {selectedIds.length} selected ({activeList})
               </span>
               <Button size="sm" variant="outline" onClick={bulkDelete}>
@@ -569,7 +569,7 @@ const Section = ({
     <div>
       <button
         onClick={toggle}
-        className="flex items-center gap-1 text-xl font-semibold select-none"
+        className="flex items-center gap-1 text-[17px] font-semibold select-none"
       >
         {open ? (
           <ChevronDown className="h-4 w-4" />

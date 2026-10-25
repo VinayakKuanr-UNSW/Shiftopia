@@ -197,7 +197,7 @@ export const RosterFilter: React.FC<RosterFilterProps> = ({ onFilterChange }) =>
         <Filter size={16} className="mr-2" />
         <span>Filter</span>
         {totalFilterCount > 0 && (
-          <span className="ml-1 bg-purple-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+          <span className="ml-1 bg-purple-500 text-white text-[11px] rounded-full w-5 h-5 flex items-center justify-center">
             {totalFilterCount}
           </span>
         )}
@@ -214,17 +214,17 @@ export const RosterFilter: React.FC<RosterFilterProps> = ({ onFilterChange }) =>
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CollapsibleContent className="absolute z-50 top-full mt-2 bg-black/95 border border-white/20 rounded-md shadow-lg w-[350px] p-4 backdrop-blur-xl">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-medium text-lg">Filters</h3>
+            <h3 className="font-medium text-[15px]">Filters</h3>
             <X size={16} className="cursor-pointer text-white/70 hover:text-white" onClick={() => setIsOpen(false)} />
           </div>
 
           <Accordion type="multiple" className="w-full">
             {(Object.keys(filterOptions) as FilterCategory[]).map((category) => (
               <AccordionItem key={category} value={category} className="border-white/10">
-                <AccordionTrigger className="py-2 text-sm">
+                <AccordionTrigger className="py-2 text-[13px]">
                   <span className="capitalize">{category.replace(/([A-Z])/g, ' $1').trim()}</span>
                   {activeFilters[category].length > 0 && (
-                    <span className="ml-2 bg-purple-500/80 text-white px-2 py-0.5 rounded-full text-xs">
+                    <span className="ml-2 bg-purple-500/80 text-white px-2 py-0.5 rounded-full text-[11px]">
                       {activeFilters[category].length}
                     </span>
                   )}
@@ -240,7 +240,7 @@ export const RosterFilter: React.FC<RosterFilterProps> = ({ onFilterChange }) =>
                         />
                         <label 
                           htmlFor={`filter-${option.id}`}
-                          className="text-sm text-white/90 cursor-pointer"
+                          className="text-[13px] text-white/90 cursor-pointer"
                         >
                           {option.label}
                         </label>

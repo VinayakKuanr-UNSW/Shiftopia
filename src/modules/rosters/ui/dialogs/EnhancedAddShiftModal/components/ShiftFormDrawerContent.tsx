@@ -77,7 +77,7 @@ import type { ShiftFormDrawerContentProps } from '../types';
 import { formatHours } from '../utils';
 import {
     targetEmploymentTypeOptions,
-    FULL_TIME_GROUP_TYPE,
+    targetAfterGroupChange,
     TARGET_EMPLOYMENT_TYPES,
     TARGET_EMPLOYMENT_TYPE_LABELS,
     contractMatchesTarget,
@@ -126,7 +126,7 @@ const FieldLabel: React.FC<{
     <label
         htmlFor={htmlFor}
         className={cn(
-            'block text-xs font-semibold tracking-wide text-foreground/80 mb-1.5',
+            'block text-[11px] font-semibold tracking-wide text-foreground/80 mb-1.5',
             className
         )}
     >
@@ -156,7 +156,7 @@ const StatChip: React.FC<{
             <p className="text-[11px] font-medium tracking-wide uppercase text-muted-foreground/80 mb-0.5">
                 {label}
             </p>
-            <p className="font-mono text-lg font-bold tracking-tight">
+            <p className="font-mono text-[15px] font-bold tracking-tight">
                 {value}
             </p>
         </div>
@@ -403,7 +403,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             onClick={() => goToStep(step.n)}
                             onKeyDown={(e) => handleTabKeyDown(e, i)}
                             className={cn(
-                                'group relative flex items-center gap-2 px-3 py-3 text-xs sm:text-sm font-medium transition-all whitespace-nowrap outline-none select-none rounded-t-lg',
+                                'group relative flex items-center gap-2 px-3 py-3 text-[11px] sm:text-[13px] font-medium transition-all whitespace-nowrap outline-none select-none rounded-t-lg',
                                 'focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
                                 isCurrent
                                     ? 'text-blue-600 dark:text-blue-400 font-semibold'
@@ -461,11 +461,11 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 <h3
                                     ref={stepHeadingRef}
                                     tabIndex={-1}
-                                    className="text-lg font-bold tracking-tight text-foreground outline-none"
+                                    className="text-[15px] font-bold tracking-tight text-foreground outline-none"
                                 >
                                     Role & Organizational Placement
                                 </h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     Specify the operational department, group, role, and target employment contract.
                                 </p>
                             </div>
@@ -478,10 +478,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     { label: 'Sub-Department', value: resolvedContext.subDepartmentName || 'All Sub-Departments' },
                                 ].map((item) => (
                                     <div key={item.label} className="min-w-0">
-                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-0.5">
+                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-0.5">
                                             {item.label}
                                         </p>
-                                        <p className="truncate text-xs font-semibold text-foreground/90" title={item.value}>
+                                        <p className="truncate text-[11px] font-semibold text-foreground/90" title={item.value}>
                                             {item.value}
                                         </p>
                                     </div>
@@ -493,7 +493,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 {isGroupLocked ? (
                                     <div>
                                         <FieldLabel>Group</FieldLabel>
-                                        <div className="flex h-11 items-center truncate rounded-xl border border-border/60 bg-muted/30 px-3 text-sm font-medium text-muted-foreground">
+                                        <div className="flex h-11 items-center truncate rounded-xl border border-border/60 bg-muted/30 px-3 text-[13px] font-medium text-muted-foreground">
                                             {GROUP_LABEL[watchGroup] || watchGroup || resolvedContext.groupName || 'General'}
                                         </div>
                                     </div>
@@ -515,11 +515,14 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     onChange={(val) => {
                                                         field.onChange(val);
                                                         form.setValue('sub_group_name', '', { shouldValidate: false });
+                                                        form.setValue('target_employment_type', targetAfterGroupChange(
+                                                            form.getValues('target_employment_type'), val, isTemplateMode,
+                                                        ) as never);
                                                     }}
                                                     placeholder="Select group…"
                                                     disabled={isReadOnly}
                                                 />
-                                                <FormMessage className="text-xs text-rose-500" />
+                                                <FormMessage className="text-[11px] text-rose-500" />
                                             </FormItem>
                                         )}
                                     />
@@ -529,7 +532,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 {isSubGroupLocked ? (
                                     <div>
                                         <FieldLabel>Subgroup</FieldLabel>
-                                        <div className="flex h-11 items-center truncate rounded-xl border border-border/60 bg-muted/30 px-3 text-sm font-medium text-muted-foreground">
+                                        <div className="flex h-11 items-center truncate rounded-xl border border-border/60 bg-muted/30 px-3 text-[13px] font-medium text-muted-foreground">
                                             {watchSubGroupName || resolvedContext.subGroupName || 'General'}
                                         </div>
                                     </div>
@@ -555,7 +558,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     placeholder={!watchGroup ? 'Select a group first' : 'Select subgroup…'}
                                                     disabled={isReadOnly || !watchGroup}
                                                 />
-                                                <FormMessage className="text-xs text-rose-500" />
+                                                <FormMessage className="text-[11px] text-rose-500" />
                                             </FormItem>
                                         )}
                                     />
@@ -580,7 +583,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 placeholder="Select role…"
                                                 disabled={isReadOnly || isRoleLocked}
                                             />
-                                            <FormMessage className="text-xs text-rose-500" />
+                                            <FormMessage className="text-[11px] text-rose-500" />
                                         </FormItem>
                                     )}
                                 />
@@ -596,7 +599,8 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 label="Target Employment Type"
                                                 required
                                                 options={targetEmploymentTypeOptions(field.value, {
-                                                    allowFullTime: watchGroup === FULL_TIME_GROUP_TYPE,
+                                                    groupType: watchGroup,
+                                                    isTemplate: isTemplateMode,
                                                 }).map((t) => ({
                                                     id: t,
                                                     name: TARGET_EMPLOYMENT_TYPE_LABELS[t],
@@ -621,7 +625,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 placeholder="Select target employment…"
                                                 disabled={isReadOnly || isTargetTypeLocked}
                                             />
-                                            <FormMessage className="text-xs font-semibold text-rose-600 dark:text-rose-400" />
+                                            <FormMessage className="text-[11px] font-semibold text-rose-600 dark:text-rose-400" />
                                         </FormItem>
                                     )}
                                 />
@@ -635,10 +639,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     render={({ field }) => (
                                         <FormItem className="flex items-center justify-between rounded-xl border border-border/60 bg-card p-4">
                                             <div className="space-y-0.5 pr-4">
-                                                <label htmlFor="flexible-switch" className="text-xs font-semibold text-foreground cursor-pointer">
+                                                <label htmlFor="flexible-switch" className="text-[11px] font-semibold text-foreground cursor-pointer">
                                                     Flexible Part-Time Contract Only
                                                 </label>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="text-[11px] text-muted-foreground">
                                                     Restricts assignment to staff on an approved Flexible Part-Time agreement.
                                                 </p>
                                             </div>
@@ -684,11 +688,11 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 <h3
                                     ref={stepHeadingRef}
                                     tabIndex={-1}
-                                    className="text-lg font-bold tracking-tight text-foreground outline-none"
+                                    className="text-[15px] font-bold tracking-tight text-foreground outline-none"
                                 >
                                     Requirements & Handover Notes
                                 </h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     Set mandatory skills, certifications, event links, and instructions for staff.
                                 </p>
                             </div>
@@ -760,7 +764,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                 {...field}
                                                 placeholder="Enter supervisor notes, briefing instructions, special gear required, or arrival handover details…"
                                                 disabled={isReadOnly}
-                                                className="min-h-[100px] resize-none rounded-xl border-border/60 bg-background p-3 text-sm placeholder:text-muted-foreground/40 focus:ring-blue-500/30"
+                                                className="min-h-[100px] resize-none rounded-xl border-border/60 bg-background p-3 text-[13px] placeholder:text-muted-foreground/40 focus:ring-blue-500/30"
                                             />
                                         </FormControl>
                                     </FormItem>
@@ -784,11 +788,11 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 <h3
                                     ref={stepHeadingRef}
                                     tabIndex={-1}
-                                    className="text-lg font-bold tracking-tight text-foreground outline-none"
+                                    className="text-[15px] font-bold tracking-tight text-foreground outline-none"
                                 >
                                     Schedule & Break Allocation
                                 </h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     Configure shift duration, meal breaks, and award minimum engagement floors.
                                 </p>
                             </div>
@@ -825,10 +829,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                             <Calendar className="h-4 w-4" />
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                                            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                                                 Rostered Date
                                             </p>
-                                            <p className="text-sm font-bold text-foreground">
+                                            <p className="text-[13px] font-bold text-foreground">
                                                 {dateDisplay}
                                             </p>
                                         </div>
@@ -841,7 +845,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     render={({ field }) => (
                                         <FormItem className="flex items-center justify-between rounded-xl border border-border/60 bg-card p-3.5">
                                             <div className="space-y-0.5 pr-3">
-                                                <label htmlFor="training-switch" className="text-xs font-bold text-foreground cursor-pointer flex items-center gap-1.5">
+                                                <label htmlFor="training-switch" className="text-[11px] font-bold text-foreground cursor-pointer flex items-center gap-1.5">
                                                     <GraduationCap className="h-3.5 w-3.5 text-purple-500" />
                                                     Training Shift
                                                 </label>
@@ -898,12 +902,12 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                                 }
                                                                 field.onBlur();
                                                             }}
-                                                            className="h-11 rounded-xl border-border/60 bg-background pl-10 font-mono text-sm font-semibold tracking-wider text-foreground focus:ring-blue-500/30"
+                                                            className="h-11 rounded-xl border-border/60 bg-background pl-10 font-mono text-[13px] font-semibold tracking-wider text-foreground focus:ring-blue-500/30"
                                                         />
                                                         <Clock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" aria-hidden="true" />
                                                     </div>
                                                 </FormControl>
-                                                <FormMessage className="text-xs text-rose-500" />
+                                                <FormMessage className="text-[11px] text-rose-500" />
                                             </FormItem>
                                         )}
                                     />
@@ -932,7 +936,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     }
                                                     disabled={isReadOnly}
                                                     placeholder="0"
-                                                    className="h-11 rounded-xl border-border/60 bg-background font-mono text-sm font-medium text-foreground focus:ring-blue-500/30"
+                                                    className="h-11 rounded-xl border-border/60 bg-background font-mono text-[13px] font-medium text-foreground focus:ring-blue-500/30"
                                                 />
                                             </FormControl>
                                         </FormItem>
@@ -958,7 +962,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     }
                                                     disabled={isReadOnly}
                                                     placeholder="0"
-                                                    className="h-11 rounded-xl border-border/60 bg-background font-mono text-sm font-medium text-foreground focus:ring-blue-500/30"
+                                                    className="h-11 rounded-xl border-border/60 bg-background font-mono text-[13px] font-medium text-foreground focus:ring-blue-500/30"
                                                 />
                                             </FormControl>
                                         </FormItem>
@@ -987,12 +991,12 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     aria-live="polite"
                                     className="space-y-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3.5"
                                 >
-                                    <div className="flex items-center gap-2 text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
+                                    <div className="flex items-center gap-2 text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
                                         <AlertTriangle className="h-4 w-4" />
                                         <span>EBA Compliance Notice</span>
                                     </div>
                                     {shapeBlockers.map((hit) => (
-                                        <div key={hit.rule_id} className="flex items-center justify-between gap-3 text-xs">
+                                        <div key={hit.rule_id} className="flex items-center justify-between gap-3 text-[11px]">
                                             <span className="text-rose-600 dark:text-rose-300 font-medium">
                                                 {hit.summary}
                                             </span>
@@ -1034,11 +1038,11 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 <h3
                                     ref={stepHeadingRef}
                                     tabIndex={-1}
-                                    className="text-lg font-bold tracking-tight text-foreground outline-none"
+                                    className="text-[15px] font-bold tracking-tight text-foreground outline-none"
                                 >
                                     Employee Assignment
                                 </h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     Assign an eligible contracted staff member or leave open for the bidding pool.
                                 </p>
                             </div>
@@ -1067,11 +1071,11 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                             {isAssigned ? (
                                                 <div className="flex items-center justify-between rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.04] p-4 sm:p-5">
                                                     <div className="flex items-center gap-3.5">
-                                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-bold text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/20">
+                                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-[13px] font-bold text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/20">
                                                             {initials}
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-bold text-foreground">
+                                                            <p className="text-[13px] font-bold text-foreground">
                                                                 {displayName}
                                                             </p>
                                                             <div className="mt-1 flex items-center gap-2">
@@ -1102,10 +1106,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                     <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted/40 text-muted-foreground/60">
                                                         <UserCircle className="h-6 w-6" />
                                                     </div>
-                                                    <p className="text-sm font-semibold text-foreground">
+                                                    <p className="text-[13px] font-semibold text-foreground">
                                                         Shift is Currently Unassigned
                                                     </p>
-                                                    <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                                                    <p className="text-[11px] text-muted-foreground mt-0.5 max-w-sm">
                                                         This shift will be published as an open bid for qualified {TARGET_EMPLOYMENT_TYPE_LABELS[watchTargetType || 'Casual']} staff.
                                                     </p>
                                                 </div>
@@ -1129,7 +1133,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                             {hardValidation && !hardValidation.passed && (hardValidation.errors?.length ?? 0) > 0 && (
                                                 <div className="space-y-1.5 rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
                                                     {hardValidation.errors.map((err: any, i: number) => (
-                                                        <div key={i} className="flex items-center gap-2 text-xs text-rose-600 dark:text-rose-400">
+                                                        <div key={i} className="flex items-center gap-2 text-[11px] text-rose-600 dark:text-rose-400">
                                                             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                                                             <p className="font-medium">{err.message}</p>
                                                         </div>
@@ -1158,31 +1162,31 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 <h3
                                     ref={stepHeadingRef}
                                     tabIndex={-1}
-                                    className="text-lg font-bold tracking-tight text-foreground outline-none"
+                                    className="text-[15px] font-bold tracking-tight text-foreground outline-none"
                                 >
                                     Compliance Audit & Summary
                                 </h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     Automated ICC Sydney EBA award validation and summary before saving.
                                 </p>
                             </div>
 
                             {/* Shift Summary Quick Card */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 rounded-xl border border-border/60 bg-muted/20 p-4 text-xs">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 rounded-xl border border-border/60 bg-muted/20 p-4 text-[11px]">
                                 <div>
-                                    <p className="text-[10px] font-semibold uppercase text-muted-foreground/70">Role</p>
+                                    <p className="text-[11px] font-semibold uppercase text-muted-foreground/70">Role</p>
                                     <p className="font-bold text-foreground truncate">{selectedRoleName}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-semibold uppercase text-muted-foreground/70">Date</p>
+                                    <p className="text-[11px] font-semibold uppercase text-muted-foreground/70">Date</p>
                                     <p className="font-bold text-foreground truncate">{dateDisplay}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-semibold uppercase text-muted-foreground/70">Time</p>
+                                    <p className="text-[11px] font-semibold uppercase text-muted-foreground/70">Time</p>
                                     <p className="font-bold text-foreground font-mono">{watchStart || '—'} – {watchEnd || '—'}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-semibold uppercase text-muted-foreground/70">Assignee</p>
+                                    <p className="text-[11px] font-semibold uppercase text-muted-foreground/70">Assignee</p>
                                     <p className="font-bold text-foreground truncate">
                                         {selectedEmployee ? displayNameOf(selectedEmployee) : 'Open (Unassigned)'}
                                     </p>
@@ -1192,7 +1196,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             {/* Compliance Panel Engine */}
                             <div className="rounded-2xl border border-border/60 bg-card p-4 sm:p-5">
                                 {isLoadingShifts ? (
-                                    <div className="flex items-center justify-center py-10 gap-2.5 text-xs font-semibold text-muted-foreground">
+                                    <div className="flex items-center justify-center py-10 gap-2.5 text-[11px] font-semibold text-muted-foreground">
                                         <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                                         <span>Auditing employee shift history…</span>
                                     </div>
@@ -1201,10 +1205,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                         <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
                                             <Shield className="h-5 w-5" />
                                         </div>
-                                        <p className="text-sm font-bold text-foreground">
+                                        <p className="text-[13px] font-bold text-foreground">
                                             Open Shift (Compliance Passed)
                                         </p>
-                                        <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                                        <p className="text-[11px] text-muted-foreground max-w-sm mx-auto mt-1">
                                             No employee is assigned. Compliance guardrails will evaluate candidates automatically when bids are submitted.
                                         </p>
                                     </div>
@@ -1213,10 +1217,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                         <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
                                             <CheckCircle2 className="h-5 w-5" />
                                         </div>
-                                        <p className="text-sm font-bold text-foreground">
+                                        <p className="text-[13px] font-bold text-foreground">
                                             Template Rules Satisfied
                                         </p>
-                                        <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                                        <p className="text-[11px] text-muted-foreground max-w-sm mx-auto mt-1">
                                             Template-level constraints verified. Full evaluation runs on generation.
                                         </p>
                                     </div>
@@ -1241,7 +1245,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             type="button"
                             variant="ghost"
                             onClick={onCancel}
-                            className="h-10 rounded-xl px-4 text-xs font-semibold text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            className="h-10 rounded-xl px-4 text-[11px] font-semibold text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                         >
                             Cancel
                         </Button>
@@ -1255,7 +1259,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                         variant="outline"
                         disabled={wizardStep === 1}
                         onClick={() => goToStep(Math.max(1, wizardStep - 1))}
-                        className="h-10 gap-1.5 rounded-xl border-border/60 px-4 text-xs font-semibold text-foreground hover:bg-muted/40 disabled:opacity-40"
+                        className="h-10 gap-1.5 rounded-xl border-border/60 px-4 text-[11px] font-semibold text-foreground hover:bg-muted/40 disabled:opacity-40"
                     >
                         <ChevronLeft className="h-4 w-4" />
                         <span>Back</span>
@@ -1268,7 +1272,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             disabled={!isCurrentStepValid}
                             onClick={() => goToStep(Math.min(TOTAL_STEPS, wizardStep + 1))}
                             className={cn(
-                                'h-10 gap-1.5 rounded-xl px-5 text-xs font-bold text-white shadow-sm transition-all',
+                                'h-10 gap-1.5 rounded-xl px-5 text-[11px] font-bold text-white shadow-sm transition-all',
                                 isCurrentStepValid
                                     ? 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-400'
                                     : 'cursor-not-allowed bg-muted text-muted-foreground opacity-50'
@@ -1284,7 +1288,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             disabled={!canSave || isLoading}
                             title={!canSave && saveBlockReason ? saveBlockReason : undefined}
                             className={cn(
-                                'h-10 gap-1.5 rounded-xl px-6 text-xs font-bold text-white shadow-md transition-all',
+                                'h-10 gap-1.5 rounded-xl px-6 text-[11px] font-bold text-white shadow-md transition-all',
                                 canSave
                                     ? 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 shadow-blue-500/20 focus-visible:ring-2 focus-visible:ring-blue-400'
                                     : 'cursor-not-allowed bg-muted text-muted-foreground opacity-50'

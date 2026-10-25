@@ -73,7 +73,7 @@ export function BatchAvailabilityForm({ onSubmit, onCancel }: BatchAvailabilityF
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Set Batch Availability</DialogTitle>
           <DialogDescription>
@@ -83,7 +83,7 @@ export function BatchAvailabilityForm({ onSubmit, onCancel }: BatchAvailabilityF
         
         <form onSubmit={handleSubmit} className="space-y-6 py-4">
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Date Range</h3>
+            <h3 className="text-[13px] font-medium">Date Range</h3>
             <div className="flex items-center justify-center pt-2">
               <Calendar
                 initialFocus
@@ -103,7 +103,7 @@ export function BatchAvailabilityForm({ onSubmit, onCancel }: BatchAvailabilityF
               />
             </div>
             
-            <div className="text-sm text-center text-muted-foreground">
+            <div className="text-[13px] text-center text-muted-foreground">
               {dateRange.from && dateRange.to ? (
                 <>
                   Selected range: <span className="font-medium">{format(dateRange.from, 'dd MMM')} - {format(dateRange.to, 'dd MMM yyyy')}</span>
@@ -115,7 +115,7 @@ export function BatchAvailabilityForm({ onSubmit, onCancel }: BatchAvailabilityF
           </div>
           
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Time Slots</h3>
+            <h3 className="text-[13px] font-medium">Time Slots</h3>
             
             {timeSlots.map((slot, index) => (
               <div key={index} className="flex flex-col gap-2">
@@ -188,7 +188,7 @@ export function BatchAvailabilityForm({ onSubmit, onCancel }: BatchAvailabilityF
           </div>
           
           <div className="space-y-2">
-            <label htmlFor="notes" className="text-sm font-medium">
+            <label htmlFor="notes" className="text-[13px] font-medium">
               Notes (optional)
             </label>
             <Textarea

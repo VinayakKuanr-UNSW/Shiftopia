@@ -92,7 +92,7 @@ export function OrgDeptSelector({
                 <select
                     value={selectedOrganizationId || ''}
                     onChange={(e) => onOrganizationChange(e.target.value || null)}
-                    className="appearance-none bg-background border border-input rounded-md pl-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring min-w-[200px]"
+                    className="appearance-none bg-background border border-input rounded-md pl-3 pr-10 py-2 text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring min-w-[200px]"
                 >
                     <option value="">Select Organization</option>
                     {organizations.map((org) => (
@@ -109,7 +109,7 @@ export function OrgDeptSelector({
                 <select
                     value={selectedDepartmentId || ''}
                     onChange={(e) => onDepartmentChange(e.target.value || null)}
-                    className="appearance-none bg-background border border-input rounded-md pl-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring min-w-[200px]"
+                    className="appearance-none bg-background border border-input rounded-md pl-3 pr-10 py-2 text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring min-w-[200px]"
                     disabled={!selectedOrganizationId}
                 >
                     <option value="">Select Department</option>
@@ -128,7 +128,7 @@ export function OrgDeptSelector({
                     <select
                         value={selectedSubDepartmentId || ''}
                         onChange={(e) => onSubDepartmentChange(e.target.value || null)}
-                        className="appearance-none bg-background border border-input rounded-md pl-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring min-w-[200px]"
+                        className="appearance-none bg-background border border-input rounded-md pl-3 pr-10 py-2 text-[13px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring min-w-[200px]"
                         disabled={!selectedDepartmentId}
                     >
                         <option value="">Select Sub-Department</option>

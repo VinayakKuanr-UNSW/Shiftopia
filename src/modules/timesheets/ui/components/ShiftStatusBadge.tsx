@@ -66,7 +66,7 @@ export const ShiftStatusBadge: React.FC<ShiftStatusBadgeProps> = ({ status }) =>
     }
 
     return (
-        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${bgColor} ${textColor} border ${borderColor}`}>
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${bgColor} ${textColor} border ${borderColor}`}>
             {pulse && (
                 <span className="relative flex h-1.5 w-1.5">
                     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${bgColor.replace('/10', '/60')}`} />

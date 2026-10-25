@@ -48,7 +48,7 @@ const defaults: Record<PageStateKind, { title: string; description: string; Icon
 };
 
 const scopeClasses: Record<PageStateScope, string> = {
-  page: 'min-h-[calc(100vh-8rem)] px-6 py-12',
+  page: 'min-h-[calc(100dvh-8rem)] px-6 py-12',
   section: 'min-h-[16rem] px-6 py-10',
   inline: 'min-h-[8rem] px-4 py-6',
 };
@@ -107,16 +107,16 @@ export function PageState({
         )}
         aria-hidden="true"
       >
-        <Icon className={cn('h-6 w-6', state === 'loading' && 'animate-spin')} />
+        <Icon className={cn('h-6 w-6', state === 'loading' && 'animate-spin motion-reduce:animate-none')} />
       </div>
-      <h2 className="text-base font-semibold text-foreground">{resolvedTitle}</h2>
+      <h2 className="text-[15px] font-semibold text-foreground">{resolvedTitle}</h2>
       {resolvedDescription && (
-        <p className="mt-1 max-w-md text-sm text-muted-foreground">{resolvedDescription}</p>
+        <p className="mt-1 max-w-md text-[13px] leading-relaxed text-muted-foreground">{resolvedDescription}</p>
       )}
       {(onRetry || action) && (
         <div className="mt-5 flex flex-wrap justify-center gap-2">
-          {onRetry && <Button type="button" variant="outline" onClick={onRetry}>{retryLabel}</Button>}
-          {action && <Button type="button" onClick={action.onClick}>{action.label}</Button>}
+          {onRetry && <Button type="button" variant="outline" className="h-[44px]" onClick={onRetry}>{retryLabel}</Button>}
+          {action && <Button type="button" className="h-[44px]" onClick={action.onClick}>{action.label}</Button>}
         </div>
       )}
     </section>

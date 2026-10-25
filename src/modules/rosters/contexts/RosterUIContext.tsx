@@ -71,6 +71,8 @@ interface RosterUIContextValue {
   setAdvancedFilters:          (filters: Partial<AdvancedFilters>) => void;
   resetAdvancedFilters:        () => void;
   hasActiveFilters:            boolean;
+  isFilterBarOpen:             boolean;
+  setIsFilterBarOpen:          (open: boolean) => void;
   bulkModeActive:              boolean;
   setBulkModeActive:           (active: boolean) => void;
   selectedV8ShiftIds:            Set<string>;
@@ -144,6 +146,7 @@ export const useRosterUI = (): RosterUIContextValue => {
   const selectedDepartmentIds  = useRosterStore(s => s.selectedDepartmentIds);
   const selectedSubDepartmentIds = useRosterStore(s => s.selectedSubDepartmentIds);
   const advancedFilters        = useRosterStore(s => s.advancedFilters);
+  const isFilterBarOpen        = useRosterStore(s => s.isFilterBarOpen);
   const bulkModeActive         = useRosterStore(s => s.bulkModeActive);
   const selectedV8ShiftIds       = useRosterStore(s => s.selectedV8ShiftIds);
 
@@ -168,6 +171,7 @@ export const useRosterUI = (): RosterUIContextValue => {
   const setSelectedSubDepartmentId  = useRosterStore(s => s.setSelectedSubDepartmentId);
   const setAdvancedFilters          = useRosterStore(s => s.setAdvancedFilters);
   const resetAdvancedFilters        = useRosterStore(s => s.resetAdvancedFilters);
+  const setIsFilterBarOpen          = useRosterStore(s => s.setIsFilterBarOpen);
   const setBulkModeActive           = useRosterStore(s => s.setBulkModeActive);
   const setSelectedV8ShiftIds         = useRosterStore(s => s.setSelectedV8ShiftIds);
   const toggleShiftSelection        = useRosterStore(s => s.toggleShiftSelection);
@@ -211,6 +215,8 @@ export const useRosterUI = (): RosterUIContextValue => {
     setAdvancedFilters,
     resetAdvancedFilters,
     hasActiveFilters,
+    isFilterBarOpen,
+    setIsFilterBarOpen,
     bulkModeActive,
     setBulkModeActive,
     selectedV8ShiftIds,
@@ -235,6 +241,7 @@ export const useRosterUI = (): RosterUIContextValue => {
     selectedSubDepartmentId, setSelectedSubDepartmentId,
     advancedFilters, setAdvancedFilters, resetAdvancedFilters,
     hasActiveFilters,
+    isFilterBarOpen, setIsFilterBarOpen,
     bulkModeActive, setBulkModeActive,
     selectedV8ShiftIds, setSelectedV8ShiftIds,
     toggleShiftSelection, selectMultiple, clearSelection,

@@ -99,7 +99,7 @@ function RuleCard({
                         <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="font-medium text-foreground">{ruleName}</h4>
                             <span className={cn(
-                                'text-xs px-2 py-0.5 rounded',
+                                'text-[11px] px-2 py-0.5 rounded',
                                 status === 'not-run' ? 'bg-muted text-muted-foreground' :
                                     status === 'pass' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300' :
                                         status === 'fail' ? 'bg-red-500/20 text-red-600 dark:text-red-300' :
@@ -108,12 +108,12 @@ function RuleCard({
                                 {config.label}
                             </span>
                             {blocking && (
-                                <span className="text-xs px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 dark:bg-slate-500/20 dark:text-slate-400 border border-slate-500/30">
+                                <span className="text-[11px] px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 dark:bg-slate-500/20 dark:text-slate-400 border border-slate-500/30">
                                     Blocking
                                 </span>
                             )}
                         </div>
-                        <p className="text-sm mt-1 text-muted-foreground">{description}</p>
+                        <p className="text-[13px] mt-1 text-muted-foreground">{description}</p>
                     </div>
                 </div>
 
@@ -122,7 +122,7 @@ function RuleCard({
                     onClick={() => onRun(ruleState.ruleId)}
                     disabled={isRunning}
                     className={cn(
-                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all',
                         'bg-blue-500/20 text-blue-300 border border-blue-500/30',
                         'hover:bg-blue-500/30 hover:text-blue-200',
                         'disabled:opacity-50 disabled:cursor-not-allowed'
@@ -142,20 +142,20 @@ function RuleCard({
                 <>
                     {/* Summary */}
                     <div className="mt-3 p-2 rounded bg-muted/40 border border-border/50">
-                        <p className="text-sm text-foreground">{result.summary}</p>
+                        <p className="text-[13px] text-foreground">{result.summary}</p>
                         {result.details && (
-                            <p className="text-xs text-muted-foreground mt-1">{result.details}</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">{result.details}</p>
                         )}
                     </div>
 
                     {/* Calculation breakdown */}
                     {result.calculation && (
                         <div className="mt-3 pt-3 border-t border-border">
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-2">
                                 <Info className="w-3.5 h-3.5" />
                                 <span className="font-medium">Calculation</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="grid grid-cols-2 gap-2 text-[13px]">
                                 {/* Day Count (Specific to Working Days Cap) */}
                                 {result.calculation.day_count !== undefined && (
                                     <div className="flex justify-between bg-muted/30 rounded px-2 py-1 col-span-2">
@@ -327,7 +327,7 @@ export function ComplianceModal({
                     headerColors[overallStatus]
                 )}>
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+                        <h3 className="text-[15px] font-semibold text-foreground">{title}</h3>
                         <button
                             onClick={onClose}
                             className="p-1.5 rounded-lg hover:bg-muted transition-colors"
@@ -369,7 +369,7 @@ export function ComplianceModal({
                         {input && (
                             <button
                                 onClick={handleRunAll}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                             >
                                 <Play className="w-3.5 h-3.5" />
                                 Run All
@@ -397,7 +397,7 @@ export function ComplianceModal({
 
                 {/* Footer */}
                 <div className="px-6 py-4 border-t border-border flex justify-between items-center bg-muted/30">
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground">
                         {runResults.length}/{ruleStates.length} rules evaluated
                     </span>
                     <button

@@ -76,19 +76,19 @@ export function TemplateShiftRow({
             <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" />
-                    <span className="text-xs font-mono">
+                    <span className="text-[11px] font-mono">
                         {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
                     </span>
                 </div>
 
                 <div className="flex items-center gap-2 truncate">
                     {shift.roleName && (
-                        <span className="text-sm text-foreground truncate">
+                        <span className="text-[13px] text-foreground truncate">
                             {shift.roleName}
                         </span>
                     )}
                     {shift.name && shift.name !== shift.roleName && (
-                        <span className="text-xs text-muted-foreground truncate">
+                        <span className="text-[11px] text-muted-foreground truncate">
                             ({shift.name})
                         </span>
                     )}
@@ -97,18 +97,18 @@ export function TemplateShiftRow({
 
             {/* Middle: Duration and Requirements */}
             <div className="flex items-center gap-2 px-3">
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-[11px]">
                     {duration}h
                 </Badge>
 
                 {hasRequirements && (
-                    <Badge variant="secondary" className="text-xs bg-purple-500/20 text-purple-300">
+                    <Badge variant="secondary" className="text-[11px] bg-purple-500/20 text-purple-300">
                         +{(shift.skills?.length || 0) + (shift.licenses?.length || 0)} req
                     </Badge>
                 )}
 
                 {shift.assignedEmployeeName && (
-                    <Badge variant="secondary" className="text-xs bg-emerald-500/20 text-emerald-300">
+                    <Badge variant="secondary" className="text-[11px] bg-emerald-500/20 text-emerald-300">
                         <User className="h-3 w-3 mr-1" />
                         {shift.assignedEmployeeName.split(' ')[0]}
                     </Badge>

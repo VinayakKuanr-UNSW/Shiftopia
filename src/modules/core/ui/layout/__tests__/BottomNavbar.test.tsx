@@ -82,7 +82,7 @@ describe('BottomNavbar', () => {
     renderNavbar();
     openMoreNavigation();
 
-    expect(screen.getByRole('link', { name: 'Radio' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Broadcasts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Rosters' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Manager Bids' })).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe('BottomNavbar', () => {
 
   it('puts the four employee tabs in the bar', () => {
     renderNavbar();
-    for (const label of ['Roster', 'Avail', 'Requests', 'Leave']) {
+    for (const label of ['Roster', 'Availability', 'Requests', 'Leave']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });
@@ -100,7 +100,7 @@ describe('BottomNavbar', () => {
   it('keeps the shared surfaces reachable in the employee persona', () => {
     renderNavbar();
     openMoreNavigation();
-    for (const label of ['Notif', 'Profile', 'Settings']) {
+    for (const label of ['Notifications', 'Profile', 'Settings']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });
@@ -181,7 +181,7 @@ describe('BottomNavbar — employer persona', () => {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
     // Employee-only surfaces are gone from the bar entirely.
-    expect(screen.queryByRole('link', { name: 'Avail' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Availability' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Leave' })).not.toBeInTheDocument();
   });
 
@@ -215,7 +215,7 @@ describe('BottomNavbar — employer persona', () => {
     renderNavbar();
     openMoreNavigation();
 
-    for (const label of ['Notif', 'Profile', 'Settings']) {
+    for (const label of ['Notifications', 'Profile', 'Settings']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
     }
   });
@@ -262,5 +262,36 @@ describe('every destination the phone nav offers clears the mobile guard', () =>
     const bar = renderedRoutes();
     openMoreNavigation();
     assertAllAllowlisted([...bar, ...renderedRoutes()]);
+  });
+});
+
+describe('BottomNavbar — stays out of the way of modals', () => {
+  // It sits at z-60, above a dialog's z-50 scrim. It used to hide only for
+  // bottom drawers, so a centred dialog opened on a phone had the nav floating
+  // over its scrim and footer.
+  const nav = () => document.querySelector('nav') as HTMLElement;
+
+  it('hides while a centred dialog is open', async () => {
+    renderNavbar();
+    const dlg = document.createElement('div');
+    dlg.setAttribute('role', 'dialog');
+    dlg.setAttribute('data-state', 'open');
+    document.body.appendChild(dlg);
+    await vi.waitFor(() => expect(nav().style.pointerEvents).toBe('none'));
+    dlg.remove();
+  });
+
+  it('does not hide for a popover (also role=dialog, but inside the popper wrapper)', async () => {
+    renderNavbar();
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-radix-popper-content-wrapper', '');
+    const pop = document.createElement('div');
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('data-state', 'open');
+    wrapper.appendChild(pop);
+    document.body.appendChild(wrapper);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(nav().style.pointerEvents).toBe('auto');
+    wrapper.remove();
   });
 });

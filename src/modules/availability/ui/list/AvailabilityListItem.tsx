@@ -36,7 +36,7 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
 
   return (
     <div>
-    <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-shadow">
+    <Card>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           {/* Left: Rule Details */}
@@ -56,7 +56,7 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
             </div>
 
             {/* Date */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <Calendar className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">
                 {format(startDate, 'MMM dd, yyyy')}
@@ -70,7 +70,7 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
             </div>
 
             {/* Time Range */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <Clock className="h-4 w-4 flex-shrink-0" />
               <span>
                 {rule.start_time.substring(0, 5)} - {rule.end_time.substring(0, 5)}
@@ -79,7 +79,7 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
 
             {/* Repeat Info */}
             {hasRepeat && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
                 <Repeat className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">
                   {rule.repeat_type === 'weekly' && rule.repeat_days 
@@ -91,7 +91,7 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
 
             {/* Reason */}
             {rule.reason && (
-              <div className="pt-1 text-xs italic text-muted-foreground line-clamp-2">
+              <div className="pt-1 text-[11px] italic text-muted-foreground line-clamp-2">
                 "{rule.reason}"
               </div>
             )}

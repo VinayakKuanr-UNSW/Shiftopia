@@ -23,6 +23,7 @@ import { AlertTriangle, Inbox, Loader2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { text, touch } from '@/modules/core/ui/typography';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
+import { cardTokens } from '@/modules/core/ui/primitives/card';
 import { LEAVE_TYPE_LABELS, type LeaveRequest } from '../../model/leave.types';
 import type { TeamMemberContext } from '../../api/leave.api';
 import { LEDGER_TYPES } from '../../domain/leave-ledger';
@@ -45,7 +46,7 @@ const STATUS: Record<LeaveDisplayStatus, { label: string; dot: string }> = {
 };
 
 const pill = cn(
-    'inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-semibold shadow-sm',
+    'inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold shadow-sm',
     'dark:bg-white/10',
     touch.targetY,
 );
@@ -80,7 +81,7 @@ const RequestCard: React.FC<{ request: LeaveRequest } & Mode> = (props) => {
     return (
         <article
             aria-label={`${props.mode === 'team' ? `${name}, ` : ''}${label}, ${formatRange(r.startDate, r.endDate)}`}
-            className={cn('flex min-h-[12.5rem] flex-col rounded-3xl border p-5',
+            className={cn('flex min-h-[12.5rem] flex-col rounded-2xl border p-4 shadow-sm',
                 def ? LEDGER_TONE[def.kind] : 'bg-muted border-border')}
         >
             <div className="flex items-center justify-between gap-2">
@@ -88,7 +89,7 @@ const RequestCard: React.FC<{ request: LeaveRequest } & Mode> = (props) => {
                     <div className="flex min-w-0 items-center gap-2">
                         <Avatar className="h-6 w-6">
                             <AvatarImage src={member?.avatarUrl ?? undefined} alt="" />
-                            <AvatarFallback className="bg-white text-[10px] text-foreground dark:bg-white/10">{initials(name)}</AvatarFallback>
+                            <AvatarFallback className="bg-white text-[11px] text-foreground dark:bg-white/10">{initials(name)}</AvatarFallback>
                         </Avatar>
                         <p className={cn(text.label, 'truncate text-foreground')}>{name}</p>
                     </div>
@@ -97,10 +98,10 @@ const RequestCard: React.FC<{ request: LeaveRequest } & Mode> = (props) => {
                 )}
                 {def && <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">{def.clause}</span>}
             </div>
-            <p className="mt-1 text-lg font-bold leading-snug tracking-tight text-foreground">{label}</p>
+            <p className={cn(cardTokens.title, "mt-1")}>{label}</p>
 
             <div className="mt-auto space-y-1 pt-4">
-                <p className="text-3xl font-bold tracking-tight tabular-nums text-foreground">{fmtH(r.requestedHours)}</p>
+                <p className="text-[24px] font-bold tracking-tight tabular-nums text-foreground">{fmtH(r.requestedHours)}</p>
                 <p className={cn(text.caption, 'tabular-nums')}>
                     {formatRange(r.startDate, r.endDate)}
                     {r.electionMode && ` · ${r.electionMode === 'annual' ? 'paid from annual leave' : 'unpaid'}`}
@@ -112,12 +113,12 @@ const RequestCard: React.FC<{ request: LeaveRequest } & Mode> = (props) => {
                     <p className={text.caption}>{props.mode === 'mine' ? 'Your' : 'Their'} note: &ldquo;{r.reason}&rdquo;</p>
                 )}
                 {why && (
-                    <p className="text-xs font-medium text-red-700 dark:text-red-300">
+                    <p className="text-[13px] font-medium text-red-700 dark:text-red-300">
                         {s === 'revoked' ? 'Revoked' : 'Rejected'}: &ldquo;{why}&rdquo;
                     </p>
                 )}
                 {negative && negative.after < 0 && (
-                    <p className="flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-300">
+                    <p className="flex items-center gap-1 text-[13px] font-semibold text-red-700 dark:text-red-300">
                         <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Balance goes to {fmtH(negative.after)}
                     </p>
                 )}
@@ -180,7 +181,7 @@ export const LeaveRequestCards: React.FC<{
 } & Mode> = ({ tab, requests, className, ...mode }) => {
     if (requests.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border py-12 text-center">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-12 text-center">
                 <Inbox className="mb-2 h-7 w-7 text-muted-foreground" aria-hidden="true" />
                 <p className={text.caption}>{EMPTY[tab][mode.mode]}</p>
             </div>

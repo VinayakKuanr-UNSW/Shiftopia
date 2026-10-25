@@ -133,7 +133,7 @@ export const BroadcastItem: React.FC<BroadcastItemProps> = ({
             )}
         >
             {broadcast.isPinned && (
-                <div className="px-5 py-2 border-b border-amber-500/20 flex items-center gap-2 text-amber-400 text-sm">
+                <div className="px-5 py-2 border-b border-amber-500/20 flex items-center gap-2 text-amber-400 text-[13px]">
                     <Pin className="h-4 w-4" />
                     <span className="font-semibold">Pinned</span>
                 </div>
@@ -157,7 +157,7 @@ export const BroadcastItem: React.FC<BroadcastItemProps> = ({
                                 </span>
                                 <span
                                     className={cn(
-                                        'text-xs',
+                                        'text-[11px]',
                                         ROLE_CONFIG[broadcast.authorRole]?.color
                                     )}
                                 >
@@ -165,7 +165,7 @@ export const BroadcastItem: React.FC<BroadcastItemProps> = ({
                                 </span>
                                 <Badge
                                     className={cn(
-                                        'text-xs',
+                                        'text-[11px]',
                                         priorityConfig.bg,
                                         priorityConfig.color
                                     )}
@@ -174,7 +174,7 @@ export const BroadcastItem: React.FC<BroadcastItemProps> = ({
                                     <span className="ml-1">{priorityConfig.label}</span>
                                 </Badge>
                             </div>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-[11px] text-muted-foreground">
                                 {format(
                                     new Date(broadcast.createdAt),
                                     "MMM d, yyyy 'at' h:mm a"
@@ -212,7 +212,7 @@ export const BroadcastItem: React.FC<BroadcastItemProps> = ({
                 )}
 
                 <div
-                    className="text-foreground/80 text-sm leading-relaxed mb-4 prose prose-sm prose-invert max-w-none"
+                    className="text-foreground/80 text-[13px] leading-relaxed mb-4 prose prose-sm prose-invert max-w-none"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(broadcast.content) }}
                 />
 
@@ -221,12 +221,12 @@ export const BroadcastItem: React.FC<BroadcastItemProps> = ({
                         {broadcast.attachments.map((att) => (
                             <div
                                 key={att.id}
-                                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm cursor-pointer hover:bg-muted transition-colors"
+                                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border text-[13px] cursor-pointer hover:bg-muted transition-colors"
                                 onClick={() => window.open(att.fileUrl, '_blank')}
                             >
                                 {FILE_ICONS[att.fileType] || FILE_ICONS.other}
                                 <span className="truncate max-w-[120px]">{att.fileName}</span>
-                                <span className="text-muted-foreground text-xs">
+                                <span className="text-muted-foreground text-[11px]">
                                     {formatFileSizeLocal(att.fileSize ?? 0)}
                                 </span>
                                 <Download className="h-3.5 w-3.5 text-muted-foreground" />

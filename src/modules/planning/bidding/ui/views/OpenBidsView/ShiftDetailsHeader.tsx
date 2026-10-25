@@ -30,11 +30,11 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
         {/* Top Row: Badges + Withdraw */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge className={cn('text-[9px] px-2.5 py-0.5 font-black uppercase tracking-widest border-none rounded-lg shadow-sm', colors.accent)}>
+            <Badge className={cn('text-[11px] px-2.5 py-0.5 font-black uppercase tracking-widest border-none rounded-lg shadow-sm', colors.accent)}>
               {shift.groupLabel}
             </Badge>
             {shift.subDepartment && (
-              <Badge className="text-[9px] px-2.5 py-0.5 font-black uppercase tracking-widest bg-muted/50 border-border/50 text-muted-foreground/60 rounded-lg">
+              <Badge className="text-[11px] px-2.5 py-0.5 font-black uppercase tracking-widest bg-muted/50 border-border/50 text-muted-foreground/60 rounded-lg">
                 {shift.subDepartment}
               </Badge>
             )}
@@ -47,7 +47,7 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
               variant="outline"
               size="sm"
               onClick={onWithdraw}
-              className="h-8 text-[10px] font-black uppercase tracking-widest border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all shadow-sm"
+              className="h-8 text-[11px] font-black uppercase tracking-widest border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all shadow-sm"
             >
               <Ban className="h-3.5 w-3.5 mr-2" />
               Withdraw Bid
@@ -56,7 +56,7 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
         </div>
 
         {/* Role Title */}
-        <h1 className="text-4xl font-black text-foreground tracking-tight leading-none mb-6">
+        <h1 className="text-[28px] font-black text-foreground tracking-tight leading-none mb-6">
           {shift.role}
         </h1>
 
@@ -89,7 +89,7 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
         {/* Countdown Strip */}
         <div className="mt-6 flex items-center gap-4">
           <div className={cn(
-            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border shadow-sm',
+            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] border shadow-sm',
             timeRemaining.isExpired
               ? 'bg-muted border-border text-muted-foreground/30 shadow-none'
               : timeRemaining.hours < 4
@@ -99,7 +99,7 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
             <Clock className="h-4 w-4" />
             {timeRemaining.isExpired ? 'EXPIRED' : `Closes in ${formatTimeRemaining(timeRemaining)}`}
           </div>
-          <span className="text-[10px] text-muted-foreground/20 font-black font-mono tracking-widest uppercase">{shift.stateId}</span>
+          <span className="text-[11px] text-muted-foreground/20 font-black font-mono tracking-widest uppercase">{shift.stateId}</span>
         </div>
       </div>
     </div>

@@ -84,7 +84,7 @@ export const SplitShiftBadge: React.FC<{ alsoOnThisDay: readonly Shift[] }> = ({
     <div className="flex items-center gap-1.5">
         <Tooltip>
             <TooltipTrigger asChild>
-                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-400 bg-red-500/10 border border-red-500/30">
+                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-red-400 bg-red-500/10 border border-red-500/30">
                     <AlertTriangle className="h-2.5 w-2.5" />
                     Split shift
                 </span>
@@ -137,7 +137,8 @@ export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, als
         <Dialog open onOpenChange={onOpenChange}>
             <DialogContent
                 hideClose
-                className="max-h-[92dvh] w-[calc(100%-2rem)] max-w-6xl overflow-y-auto rounded-3xl border-0 bg-background p-0 sm:rounded-3xl"
+                className="max-h-[92dvh] w-[calc(100%-2rem)] overflow-y-auto border-0 p-0"
+                size="2xl"
             >
                 <SharedShiftCard
                     variant="timecard"
@@ -172,16 +173,15 @@ export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, als
                     sectionLayout="columns"
                     hideBreadcrumbs
                     hideSegmentedBox
-                    hideGlow
                     className="w-full rounded-3xl text-left"
                     topContent={<>
                         <div className="mb-3 flex items-start justify-between gap-2">
                             {/* Radix requires the dialog be titled and described. */}
                             <div className="min-w-0">
-                                <DialogTitle className="text-xl font-bold tracking-tight tabular-nums">
+                                <DialogTitle className="tabular-nums">
                                     {dateLabel} · {start} – {end}
                                 </DialogTitle>
-                                <DialogDescription className="mt-0.5 text-sm font-medium opacity-80 tabular-nums">
+                                <DialogDescription className="mt-0.5 opacity-80 tabular-nums">
                                     {[who, row.roles?.name ?? 'Shift', `Net ${formatDuration(net)}`, `Unpaid break ${unpaid}m`]
                                         .filter(Boolean).join(' · ')}
                                 </DialogDescription>

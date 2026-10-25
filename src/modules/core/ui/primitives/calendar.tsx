@@ -126,7 +126,7 @@ function Calendar({
         months: s.months,
         month: s.month,
         caption: 'flex justify-center pt-1 relative items-center mb-2',
-        caption_label: 'text-sm font-semibold text-foreground',
+        caption_label: 'text-[13px] font-semibold text-foreground',
         nav: 'space-x-1 flex items-center',
         nav_button: cn(
           buttonVariants({ variant: 'outline' }),
@@ -142,7 +142,7 @@ function Calendar({
         head_cell: s.head_cell,
         row: s.row,
         cell: cn(
-          'relative p-0 text-center text-sm focus-within:relative focus-within:z-20 transition-all duration-200',
+          'relative p-0 text-center text-[13px] focus-within:relative focus-within:z-20 transition-all duration-200',
           s.cell,
           '[&:has([aria-selected].day-range-end)]:rounded-r-lg [&:has([aria-selected].day-range-start)]:rounded-l-lg',
           '[&:has([aria-selected].day-outside)]:bg-accent/30',

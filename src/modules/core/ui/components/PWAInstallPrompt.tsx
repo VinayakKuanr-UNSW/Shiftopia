@@ -88,15 +88,15 @@ export function PWAInstallPrompt() {
         <Download className="h-5 w-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900 dark:text-white">Install Shiftopia</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-[13px] font-semibold text-slate-900 dark:text-white">Install Shiftopia</p>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
           Add it to your home screen for quick, app-like access.
         </p>
       </div>
       <button
         type="button"
         onClick={handleInstall}
-        className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+        className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-indigo-700"
       >
         Install
       </button>

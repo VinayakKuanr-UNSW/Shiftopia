@@ -32,7 +32,7 @@ export function ComplianceBadge({
                 'bg-muted text-muted-foreground border border-border'
             )}>
                 <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
-                {showLabel && <span className="text-sm">Checking...</span>}
+                {showLabel && <span className="text-[13px]">Checking...</span>}
             </div>
         );
     }
@@ -42,9 +42,9 @@ export function ComplianceBadge({
     }
 
     const sizeClasses = {
-        sm: 'px-2 py-1 text-xs gap-1',
-        md: 'px-3 py-1.5 text-sm gap-1.5',
-        lg: 'px-4 py-2 text-base gap-2'
+        sm: 'px-2 py-1 text-[11px] gap-1',
+        md: 'px-3 py-1.5 text-[13px] gap-1.5',
+        lg: 'px-4 py-2 text-[14px] gap-2'
     };
 
     const iconSizes = {

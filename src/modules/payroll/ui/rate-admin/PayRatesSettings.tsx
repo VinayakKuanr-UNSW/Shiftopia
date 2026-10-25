@@ -13,6 +13,7 @@
  * Still READ-ONLY (Phase 2) — the CPI wizard emits SQL + TS but never writes.
  */
 
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useMemo, useState } from 'react';
 import {
   Loader2, Database, Info, Calendar,
@@ -53,7 +54,7 @@ type SubTab = (typeof SUB_TABS)[number]['id'];
 
 // ── main ─────────────────────────────────────────────────────────────────────
 export const PayRatesSettings: React.FC = () => {
-  const { schedule, isLoading, error } = useEbaRates();
+  const { schedule, isLoading, error, refetch } = useEbaRates();
   const { schedule: traineeSchedule } = useTraineeRates();
   const [activeTab, setActiveTab] = useState<SubTab>('overview');
   const [resolveDate, setResolveDate] = useState(today());
@@ -86,27 +87,30 @@ export const PayRatesSettings: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <PageState state="loading" title="Loading rate schedule" />
     );
   }
 
-  if (error || schedule.length === 0) {
+  // A failed read must not pose as an empty table — they need different fixes.
+  if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
-        <div className="p-4 rounded-full bg-muted border border-border">
-          <Database className="h-8 w-8 text-muted-foreground" />
-        </div>
-        <div>
-          <h3 className="text-lg font-medium text-foreground">No rate schedule found</h3>
-          <p className="text-sm text-muted-foreground max-w-md mt-1">
-            {error
-              ? 'The EBA rate tables could not be read.'
-              : 'The eba_rate / eba_allowance tables have no rows. Seed them via the Phase-2 migration.'}
-          </p>
-        </div>
-      </div>
+      <PageState
+        state="error"
+        title="Couldn’t read the rate schedule"
+        description="The EBA rate tables could not be read."
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
+  if (schedule.length === 0) {
+    return (
+      <PageState
+        state="empty"
+        icon={Database}
+        title="No rate schedule found"
+        description="The eba_rate / eba_allowance tables have no rows. Seed them via the Phase-2 migration."
+      />
     );
   }
 
@@ -123,7 +127,7 @@ export const PayRatesSettings: React.FC = () => {
               key={tab.id}
               value={tab.id}
               className={cn(
-                'rounded-lg px-4 py-2 text-sm font-semibold transition-all',
+                'rounded-lg px-4 py-2 text-[13px] font-semibold transition-all',
                 'data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-none',
               )}
             >
@@ -176,7 +180,7 @@ export const PayRatesSettings: React.FC = () => {
 
           {/* Detailed trainee matrices */}
           <div className="pt-8 border-t border-border/40">
-            <h3 className="text-lg font-bold text-foreground mb-6">
+            <h3 className="text-[15px] font-bold text-foreground mb-6">
               Detailed Trainee Matrices (Schedule 5)
             </h3>
             <ScheduleReferenceTables traineeSet={traineeInForce} />
@@ -206,7 +210,7 @@ export const PayRatesSettings: React.FC = () => {
             aria-label="Database architecture note"
           >
             <Info className="h-5 w-5 mt-0.5 flex-shrink-0 text-primary" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
               These are the durable, effective-dated ICC Sydney EA 2025 wage &amp; allowance rates
               (<span className="font-semibold text-foreground">eba_rate</span> / <span className="font-semibold text-foreground">eba_allowance</span>).
               The roster cost engine reads an embedded copy of them, so this screen is read-only — use the CPI
@@ -218,14 +222,14 @@ export const PayRatesSettings: React.FC = () => {
           <div className="rounded-xl border border-border/60 bg-card/40 backdrop-blur-sm p-6">
             <div className="flex flex-wrap items-end justify-between gap-6 mb-6">
               <div>
-                <h3 className="text-base font-bold text-foreground">Rate Date Resolver</h3>
-                <p className="text-sm text-muted-foreground mt-1">
+                <h3 className="text-[14px] font-bold text-foreground">Rate Date Resolver</h3>
+                <p className="text-[13px] text-muted-foreground mt-1">
                   {schedule.length} rate {schedule.length === 1 ? 'set' : 'sets'} on record.
                   Check which rates apply on a specific date.
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="resolve-date-input" className="text-sm font-semibold text-muted-foreground">Which rates apply on…</Label>
+                <Label htmlFor="resolve-date-input" className="text-[13px] font-semibold text-muted-foreground">Which rates apply on…</Label>
                 <Input
                   id="resolve-date-input"
                   type="date"
@@ -237,7 +241,7 @@ export const PayRatesSettings: React.FC = () => {
             </div>
             {applicable && (
               <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3">
-                <p className="text-sm text-foreground">
+                <p className="text-[13px] text-foreground">
                   On <span className="font-semibold">{resolveDate}</span>, the set effective{' '}
                   <span className="font-semibold text-primary">{applicable.effectiveFrom}</span> applies.
                 </p>

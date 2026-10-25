@@ -62,9 +62,9 @@ export const ColumnsPicker: React.FC<ColumnsPickerProps> = ({ columns = {}, onCo
         <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(''); }}>
             <PopoverTrigger asChild>
                 <Button variant="outline" className={triggerClassName}>
-                    <Columns3 className="h-3.5 w-3.5 mr-2 text-primary" aria-hidden="true" />
+                    <Columns3 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                     Columns
-                    <ChevronDown className={cn('h-3.5 w-3.5 ml-1.5 opacity-60 transition-transform', open && 'rotate-180')} aria-hidden="true" />
+                    <ChevronDown className={cn('h-3.5 w-3.5 opacity-60 transition-transform', open && 'rotate-180')} aria-hidden="true" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent

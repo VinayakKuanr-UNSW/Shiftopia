@@ -19,7 +19,7 @@ export const BroadcastGroupFormFields: React.FC<BroadcastGroupFormFieldsProps> =
     return (
         <>
             <div className="space-y-2">
-                <label htmlFor="group-name" className="text-sm font-medium">Group Name</label>
+                <label htmlFor="group-name" className="text-[13px] font-medium">Group Name</label>
                 <Input
                     id="group-name"
                     placeholder="Enter group name"
@@ -29,7 +29,7 @@ export const BroadcastGroupFormFields: React.FC<BroadcastGroupFormFieldsProps> =
                 />
             </div>
             <div className="space-y-2">
-                <label htmlFor="group-description" className="text-sm font-medium">Description (optional)</label>
+                <label htmlFor="group-description" className="text-[13px] font-medium">Description (optional)</label>
                 <Input
                     id="group-description"
                     placeholder="Enter description"

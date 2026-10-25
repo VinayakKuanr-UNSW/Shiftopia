@@ -80,6 +80,7 @@ interface RosterState {
   isDnDModeActive: boolean;
   showUnfilledPanel: boolean;
   showFatigueHeatmap: boolean;
+  isFilterBarOpen: boolean;
   lastShiftMove: {
     shiftId: string;
     prevData: {
@@ -103,6 +104,7 @@ interface RosterState {
   setSelectedSubDepartmentId: (id: string | null) => void;
   setAdvancedFilters: (partial: Partial<AdvancedFilters>) => void;
   resetAdvancedFilters: () => void;
+  setIsFilterBarOpen: (open: boolean) => void;
   setBulkModeActive: (active: boolean) => void;
   setSelectedV8ShiftIds: (ids: Set<string>) => void;
   toggleShiftSelection: (id: string) => void;
@@ -149,6 +151,7 @@ export const useRosterStore = create<RosterState>()(
       isDnDModeActive: false,
       showUnfilledPanel: false,
       showFatigueHeatmap: false,
+      isFilterBarOpen: false,
       lastShiftMove: null,
 
       // ── Actions ────────────────────────────────────────────────────────────
@@ -201,6 +204,7 @@ export const useRosterStore = create<RosterState>()(
         isDnDModeActive: show ? s.isDnDModeActive : false,
       })),
       setShowFatigueHeatmap: (show) => set({ showFatigueHeatmap: show }),
+      setIsFilterBarOpen: (open) => set({ isFilterBarOpen: open }),
       setLastShiftMove: (move) => set({ lastShiftMove: move }),
       clearLastShiftMove: () => set({ lastShiftMove: null }),
 

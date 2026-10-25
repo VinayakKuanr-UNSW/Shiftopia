@@ -130,7 +130,7 @@ export function DateRangePicker({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="justify-start whitespace-nowrap text-xs font-medium"
+                    className="justify-start whitespace-nowrap text-[11px] font-medium"
                     onClick={() => {
                       onChange(preset.getRange());
                       setOpen(false);

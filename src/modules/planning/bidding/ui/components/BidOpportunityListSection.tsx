@@ -28,10 +28,10 @@ export const BidOpportunityListSection: React.FC<Props> = ({
                 )}
             >
                 {accent && <span className={cn('h-2 w-2 rounded-full shrink-0', accent.dot)} />}
-                <span className="text-[10px] font-black uppercase tracking-[0.15em] text-foreground/70 truncate">
+                <span className="text-[11px] font-black uppercase tracking-[0.15em] text-foreground/70 truncate">
                     {label}
                 </span>
-                <span className="text-[10px] font-bold tabular-nums text-muted-foreground/60">
+                <span className="text-[11px] font-bold tabular-nums text-muted-foreground/60">
                     {count}
                 </span>
                 <ChevronDown

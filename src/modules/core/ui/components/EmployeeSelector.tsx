@@ -110,7 +110,7 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({
     return (
         <div className="space-y-4">
             <div>
-                <label htmlFor="search" className="text-sm font-medium">
+                <label htmlFor="search" className="text-[13px] font-medium">
                     Search Employees
                 </label>
                 <Input
@@ -123,7 +123,7 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({
             </div>
 
             <div>
-                <label className="text-sm font-medium">Select Employee</label>
+                <label className="text-[13px] font-medium">Select Employee</label>
                 {isLoading ? (
                     <div className="space-y-2 mt-2">
                         <Skeleton className="h-12 w-full" />
@@ -147,7 +147,7 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({
                                     >
                                         <div className="flex-1">
                                             <div className="font-medium">{employee.name}</div>
-                                            <div className="text-sm text-muted-foreground">
+                                            <div className="text-[13px] text-muted-foreground">
                                                 {employee.email} • {employee.role}
                                             </div>
                                         </div>
@@ -167,7 +167,7 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({
                 />
                 <label
                     htmlFor="admin"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    className="text-[13px] font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
                     Add as group admin
                 </label>

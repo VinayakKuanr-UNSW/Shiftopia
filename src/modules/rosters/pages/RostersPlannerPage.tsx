@@ -1,3 +1,4 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useMemo, useState, useRef, useCallback } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -9,6 +10,7 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { cn } from '@/modules/core/lib/utils';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
 
 // Components
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
@@ -20,6 +22,7 @@ import {
 import PeopleModeGrid, { EmployeeShift } from '@/modules/rosters/ui/modes/PeopleModeGrid';
 import { RosterPaginationFooter } from '@/modules/rosters/ui/components/RosterPaginationFooter';
 import { RosterMetricsFooter } from '@/modules/rosters/ui/components/RosterMetricsFooter';
+import { RosterHorizontalFilterBar } from '@/modules/rosters/ui/components/RosterHorizontalFilterBar';
 import type { PeopleModeEmployee, PeopleModeShift } from '@/modules/rosters/ui/modes/people-mode.types';
 import UnfilledShiftsPanel, {
   UnfilledShift,
@@ -95,7 +98,8 @@ import { computeRangeKeys } from '@/modules/rosters/domain/view-range';
 import { allowsShiftWriteAt } from '@/platform/auth/accessSuites';
 import type { PublishRosterResult } from '@/modules/rosters/ui/components/PublishRosterButton';
 import { shiftsQueries, INTERACTIVE_ROW_CAP } from '@/modules/rosters/api/shifts.queries';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { LayoutGrid, Search } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
 import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkActionsToolbar';
@@ -105,6 +109,8 @@ import { resolveGroupType } from '@/modules/rosters/utils/roster-utils';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import { describeShiftMutationError } from '@/modules/rosters/domain/shiftMutationError';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
+import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import {
   Tooltip,
   TooltipContent,
@@ -173,6 +179,8 @@ const NewRostersPage: React.FC = () => {
     setBulkModeActive,
     selectedV8ShiftIds,
     selectMultiple,
+    isFilterBarOpen,
+    setIsFilterBarOpen,
   } = useRosterUI();
 
   // ==================== GROUP BUCKET VIEW (scalability) ====================
@@ -1054,6 +1062,39 @@ const NewRostersPage: React.FC = () => {
   const remainingBudget = budget - estimatedCost;
   const showBudget = budget > 0;
 
+  // Breakdown of all FSM states for shifts in the current view
+  const advancedFilters = useRosterStore(s => s.advancedFilters);
+  const setAdvancedFilters = useRosterStore(s => s.setAdvancedFilters);
+
+  // Inspect state breakdown across all shifts matching current filters (excluding stateId)
+  // so the dropdown options show the complete distribution of states in view.
+  const shiftsForStateInspection = useMemo(() => {
+    const filtersWithoutState = { ...advancedFilters, stateId: null };
+    return applyAdvancedFilters(shifts as any, filtersWithoutState);
+  }, [shifts, advancedFilters]);
+
+  const viewShiftStateCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      S1: 0,
+      S2: 0,
+      S3: 0,
+      S4: 0,
+      S5: 0,
+      S9: 0,
+      S10: 0,
+      S11: 0,
+      S13: 0,
+      S15: 0,
+    };
+    for (const shift of shiftsForStateInspection) {
+      const stateId = determineShiftState(shift);
+      counts[stateId] = (counts[stateId] || 0) + 1;
+    }
+    return counts;
+  }, [shiftsForStateInspection]);
+
+  const viewTotalShifts = shifts.length > 0 ? shiftsForStateInspection.length : totalShifts;
+
   // ==================== SINGLE SHIFT HANDLERS (via mutation hooks) ====================
   const handleBidShift = async (shiftId: string) => {
     try {
@@ -1171,27 +1212,17 @@ const NewRostersPage: React.FC = () => {
   // ==================== RENDER ====================
   return (
     <ShiftEditingPresenceProvider>
-    <div
-      // pb clears the mobile bottom nav (var defined in index.css); without it
-      // the last roster row sits underneath the nav and cannot be reached.
-      className="h-full flex flex-col overflow-hidden p-2.5 pb-[calc(var(--mobile-bottom-nav-clearance,90px)+0.75rem)] md:p-4 md:pb-4 lg:p-6 space-y-2.5 md:space-y-4"
-    >
+    {/* The shell's gutter also clears the mobile bottom nav. */}
+    <PageLayout>
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30">
-        <div className="rounded-[24px] p-3 sm:rounded-[32px] sm:p-4 lg:p-6 transition-all border relative overflow-hidden bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
-          <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
-          {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
-          <PersonalPageHeader
-            title="Roster Planner"
-            Icon={LayoutGrid}
-            mode="managerial"
-            scope={scope}
-            setScope={setScope}
-            isGammaLocked={isGammaLocked}
-          />
-
-          {/* Row 3: Function Bar */}
-          <div className="mt-2 sm:mt-4 lg:mt-6">
+      <GoldStandardHeader
+        title="Roster Planner"
+        Icon={LayoutGrid}
+        mode="managerial"
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        functionBar={
             <RosterFunctionBar
               transparent
               compactOnMobile
@@ -1224,21 +1255,20 @@ const NewRostersPage: React.FC = () => {
               executePublishRoster={executePublishRoster}
               canPublish={canEdit && !!selectedOrganizationId}
             />
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Bulk Mode Banner — sticky amber bar shown while bulk selection is active */}
       {bulkModeActive && (
         <div className="flex-shrink-0 bg-amber-500/10 rounded-2xl border border-amber-500/30 px-4 sm:px-6 py-2 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 text-amber-700 dark:text-amber-300 text-sm font-medium">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 text-amber-700 dark:text-amber-300 text-[13px] font-medium">
             {/* "click" and Esc are both desktop-only affordances. */}
             <span className="truncate">
               <span className="sm:hidden">Tap shifts to select</span>
               <span className="hidden sm:inline">Bulk selection active — click shifts or buckets to select</span>
             </span>
             {selectedV8ShiftIds.size > 0 && (
-              <span className="shrink-0 bg-amber-500/20 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full text-xs font-bold">
+              <span className="shrink-0 bg-amber-500/20 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full text-[11px] font-bold">
                 {selectedV8ShiftIds.size} selected
               </span>
             )}
@@ -1248,7 +1278,7 @@ const NewRostersPage: React.FC = () => {
               leaving no visible way out of bulk mode. */}
           <button
             onClick={() => { setBulkModeActive(false); clearSelection(); }}
-            className="shrink-0 min-h-[36px] px-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-xs font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 active:scale-95 transition-all"
+            className="shrink-0 min-h-[36px] px-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 active:scale-95 transition-all"
           >
             <span className="sm:hidden">Done</span>
             <span className="hidden sm:inline">Press Esc to exit</span>
@@ -1258,262 +1288,269 @@ const NewRostersPage: React.FC = () => {
 
       {/* Capped or Over-budget Banner */}
       {shifts.length >= INTERACTIVE_ROW_CAP || (shifts as any).isTruncated ? (
-        <div className="flex-shrink-0 bg-amber-500/10 border-y border-amber-500/30 px-6 py-2 flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200 text-sm font-medium">
+        <div className="flex-shrink-0 bg-amber-500/10 border-y border-amber-500/30 px-6 py-2 flex items-center justify-between gap-3 text-amber-800 dark:text-amber-200 text-[13px] font-medium">
           <span>Results capped at {INTERACTIVE_ROW_CAP.toLocaleString('en-AU')} shifts. Additional shifts exist in this period — narrow your date range or department filter to view and edit all shifts.</span>
         </div>
       ) : shifts.length >= SHIFT_RENDER_BUDGET ? (
-        <div className="flex-shrink-0 bg-sky-500/10 border-y border-sky-500/30 px-6 py-2 flex items-center text-sky-700 dark:text-sky-300 text-sm">
+        <div className="flex-shrink-0 bg-sky-500/10 border-y border-sky-500/30 px-6 py-2 flex items-center text-sky-700 dark:text-sky-300 text-[13px]">
           Showing {shifts.length} shifts — performance may degrade. Narrow the date range or department filter for best results.
         </div>
       ) : null}
 
       {/* ── Main Content Area ─────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2.5">
-        <div className="flex-1 min-h-0 rounded-[24px] sm:rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/95 backdrop-blur-md border-slate-300 shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
-          {/* Mobile-only stats strip. The desktop footer is `hidden md:block`
-              below — it is a wide multi-column row that does not survive a phone
-              — so these numbers would otherwise be invisible on mobile.
-              Budget/Left follow the same `showBudget` rule as the footer: when
-              no department_budgets row overlaps the window, budget is 0 and we
-              show nothing rather than a fabricated figure. */}
-          <div
-            data-testid="mobile-roster-summary"
-            className={cn(
-              'grid flex-shrink-0 divide-x divide-slate-300 border-b border-slate-300 bg-slate-50/80 px-1.5 py-1.5 dark:divide-white/5 dark:border-white/5 dark:bg-black/10 md:hidden',
-              showBudget ? 'grid-cols-5' : 'grid-cols-3',
-            )}
-            aria-label="Roster summary"
-          >
-            {[
-              { label: 'Total', value: String(totalShifts), tone: 'text-slate-900 dark:text-foreground' },
-              { label: 'Assigned', value: String(totalAssignedShifts), tone: 'text-emerald-700 dark:text-emerald-400' },
-              { label: 'Open', value: String(totalUnfilledShifts), tone: 'text-amber-700 dark:text-amber-400' },
-              ...(showBudget
-                ? [
-                    { label: 'Cost', value: formatCost(estimatedCost), tone: 'text-slate-900 dark:text-foreground' },
-                    { label: 'Left', value: formatCost(remainingBudget), tone: remainingBudget < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400' },
-                  ]
-                : []),
-            ].map((metric) => (
-              <div key={metric.label} className="flex min-w-0 flex-col items-center justify-center px-1">
-                <span className="text-[8px] font-black uppercase tracking-[0.12em] text-slate-600 dark:text-muted-foreground">
-                  {metric.label}
-                </span>
-                <span className={cn('max-w-full truncate text-[11px] font-bold leading-tight tabular-nums', metric.tone)}>
-                  {metric.value}
-                </span>
-              </div>
-            ))}
-          </div>
-          <DndProvider backend={HTML5Backend}>
-            <div className="flex-1 min-h-0 overflow-hidden flex relative">
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="text-center">
-              <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-2" />
-              <p className="text-white/80 dark:text-white/80 font-medium">Loading shifts...</p>
+      <div className={cn('flex-1 min-h-0 overflow-hidden flex flex-col', surface.bodyCard)}>
+        {/* Mobile-only stats strip. The desktop footer is `hidden md:block`
+            below — it is a wide multi-column row that does not survive a phone
+            — so these numbers would otherwise be invisible on mobile.
+            Budget/Left follow the same `showBudget` rule as the footer: when
+            no department_budgets row overlaps the window, budget is 0 and we
+            show nothing rather than a fabricated figure. */}
+        <div
+          data-testid="mobile-roster-summary"
+          className={cn(
+            'grid flex-shrink-0 divide-x divide-slate-300 border-b border-slate-300 bg-slate-50/80 px-1.5 py-1.5 dark:divide-white/5 dark:border-white/5 dark:bg-black/10 md:hidden',
+            showBudget ? 'grid-cols-5' : 'grid-cols-3',
+          )}
+          aria-label="Roster summary"
+        >
+          {[
+            { label: 'Total', value: String(totalShifts), tone: 'text-slate-900 dark:text-foreground' },
+            { label: 'Assigned', value: String(totalAssignedShifts), tone: 'text-emerald-700 dark:text-emerald-400' },
+            { label: 'Open', value: String(totalUnfilledShifts), tone: 'text-amber-700 dark:text-amber-400' },
+            ...(showBudget
+              ? [
+                  { label: 'Cost', value: formatCost(estimatedCost), tone: 'text-slate-900 dark:text-foreground' },
+                  { label: 'Left', value: formatCost(remainingBudget), tone: remainingBudget < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400' },
+                ]
+              : []),
+          ].map((metric) => (
+            <div key={metric.label} className="flex min-w-0 flex-col items-center justify-center px-1">
+              <span className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-600 dark:text-muted-foreground">
+                {metric.label}
+              </span>
+              <span className={cn('max-w-full truncate text-[11px] font-bold leading-tight tabular-nums', metric.tone)}>
+                {metric.value}
+              </span>
             </div>
-          </div>
+          ))}
+        </div>
+        <DndProvider backend={HTML5Backend}>
+          <div className="flex-1 min-h-0 overflow-hidden flex relative">
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/70">
+          <PageState state="loading" title="Loading shifts" />
+        </div>
+      )}
+
+      {/* Grid Area - Using global background/layout */}
+      <div
+        className={cn(
+          'min-h-0 overflow-hidden transition-all duration-300 ease-in-out relative flex flex-col h-full',
+          showUnfilledPanel ? 'flex-1' : 'w-full'
         )}
-
-        {/* Grid Area - Using global background/layout */}
-        <div
-          className={cn(
-            'min-h-0 overflow-hidden transition-all duration-300 ease-in-out relative flex flex-col h-full',
-            showUnfilledPanel ? 'flex-1' : 'w-full'
-          )}
-        >
-          {activeMode === 'people' && (
-            <PeopleModeGrid
-              employees={paginatedEmployees}
-              searchTerm={employeeSearchInput}
-              onSearchChange={setEmployeeSearchInput}
-              onAssignShift={handleDndAssign}
-              onMoveShift={(shiftId, targetEmployeeId, targetDate) =>
-                handleDndMove(shiftId, { employeeId: targetEmployeeId, shiftDate: targetDate })
-              }
-              canEdit={canEdit}
-              dates={dates}
-              isBulkMode={bulkModeActive}
-              selectedShifts={selectedV8ShiftIdsArray}
-              onToggleShiftSelection={handleToggleShiftSelection}
-              onAddShift={(employee, date) => {
-                if (date && isSydneyPast(date)) return;
-                const context: ShiftContext = {
-                  mode: 'people',
-                  launchSource: 'grid', // Date will be locked
-                  date: format(date || selectedDate, 'yyyy-MM-dd'),
-                  organizationId: selectedOrganizationId || undefined,
-                  rosterId: selectedRosterId || undefined,
-                  departmentIds: selectedDepartmentIds,
-                  subDepartmentIds: selectedSubDepartmentIds,
-                  employeeId: employee?.id,
-                };
-                modalsRef.current?.openAddShift(context);
-              }}
-              onViewShift={(shift: EmployeeShift) => {
-                handleEditShift(shift);
-              }}
-              onBidShift={handleBidShift}
-              onSwapShift={handleSwapShift}
-              onCancelShift={handleCancelSingleShift}
-              onUnpublishShift={handleUnpublishShift}
-            />
-          )}
-
-          {activeMode === 'group' && (
-            <GroupModeView
-
-              selectedDate={selectedDate}
-              viewType={viewType}
-              canEdit={canEdit}
-              organizationId={selectedOrganizationId || undefined}
-              organizationName={undefined} // TODO: Get from context
-              rosterId={selectedRosterId || undefined}
-              departmentId={selectedDepartmentIds[0] || undefined}
-              departmentName={undefined} // TODO: Get from RosterFunctionBar
-              subDepartmentId={selectedSubDepartmentIds[0] || undefined}
-              subDepartmentName={undefined}
-              // Ghost Cell Navigation props
-              templateStartDate={templateStartDate}
-              templateEndDate={templateEndDate}
-              onNavigateToMonth={handleNavigateToMonth}
-              onAddShift={handleAddShiftWithGroup}
-              // Bulk Mode
-              isBulkMode={bulkModeActive}
-              onBulkModeToggle={handleBulkModeToggle}
-              selectedV8ShiftIds={selectedV8ShiftIdsArray}
-              onToggleShiftSelection={handleToggleShiftSelection}
-              onSelectShiftIds={selectMultiple}
-              onDeselectShiftIds={deselectMultiple}
-              // Day zoom
-              dayZoom={dayZoom}
-              // Data from unified hook
-              shifts={shifts}
-              isShiftsLoading={isLoading}
-              projection={projection.group ?? undefined}
-              footerStats={{
-                totalShifts,
-                assignedShifts: totalAssignedShifts,
-                unfilledShifts: totalUnfilledShifts,
-                estimatedCost,
-                budget,
-                remainingBudget,
-                scheduledCost: plannerStats.scheduledCost,
-                actualCost: plannerStats.actualCost,
-                scheduledNetMinutes: plannerStats.scheduledNetMinutes,
-                actualNetMinutes: plannerStats.actualNetMinutes,
-                costedShifts: plannerStats.costedShifts,
-                uncostedShifts: plannerStats.uncostedShifts,
-                actualShifts: plannerStats.actualShifts,
-              }}
-              showBudget={showBudget}
-              // Centralized DnD assignment (employee → shift card)
-              onAssignShift={handleDndAssignToShift}
-              // Bucket View summary + drill-down — default for Day / 3-Day / Week / Month
-              summaryData={cellSummaryMap}
-              onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
-            />
-          )}
-
-          {activeMode === 'events' && (
-            <EventsModeView
-
-              selectedDate={selectedDate}
-              viewType={viewType}
-              shifts={shifts}
-              isShiftsLoading={isLoading}
-              organizationId={selectedOrganizationId || undefined}
-              projection={projection.events ?? undefined}
-              onEditShift={handleEditShift}
-              canEdit={canEdit}
-            />
-          )}
-
-          {activeMode === 'roles' && (
-            <RolesModeView
-              selectedDate={selectedDate}
-              viewType={viewType}
-              canEdit={canEdit}
-              organizationId={selectedOrganizationId || undefined}
-              departmentIds={selectedDepartmentIds}
-              subDepartmentIds={selectedSubDepartmentIds}
-              rosterId={selectedRosterId || undefined}
-              shifts={shifts}
-              projection={projection.roles ?? undefined}
-              onEditShift={handleEditShift}
-              onMoveShift={handleDndMove}
-              onAssignShift={handleDndAssignToShift}
-              selectedV8ShiftIds={selectedV8ShiftIdsArray}
-              isBulkMode={bulkModeActive}
-              onToggleShiftSelection={handleToggleShiftSelection}
-              summaryData={viewType !== 'day' ? cellSummaryMap : undefined}
-              onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
-            />
-          )}
-        </div>
-
-        {/* Unfilled Shifts Panel */}
-        <div
-          className={cn(
-            'min-h-0 overflow-hidden border-l border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/10 backdrop-blur-md transition-all duration-300 ease-in-out',
-            // On a phone a fixed 320px side panel leaves the grid roughly a
-            // third of the viewport, so below md it floats over the grid as an
-            // overlay instead of competing with it for width.
-            'absolute inset-y-0 right-0 z-40 shadow-2xl md:static md:z-auto md:shadow-none',
-            showUnfilledPanel ? 'w-[85%] max-w-xs md:w-80 md:max-w-none' : 'w-0 border-l-0'
-          )}
-        >
-          <div
-            className={cn(
-              'w-full md:w-80 h-full overflow-auto transition-opacity duration-300',
-              showUnfilledPanel ? 'opacity-100' : 'opacity-0'
-            )}
-          >
-            <UnfilledShiftsPanel
-              unfilledShifts={unfilledShifts}
-              onPickShift={handlePickUnfilled}
-            />
-          </div>
-          </div>
-          </div>
-          </DndProvider>
-        </div>
-
-        {/* Disconnected Pagination Footer (similar to toggles in myswaps) */}
+      >
         {activeMode === 'people' && (
-          <RosterPaginationFooter
-            currentPage={currentSafePeoplePage}
-            totalPages={totalPeoplePages}
-            totalItems={totalPeopleCount}
-            pageSize={peoplePageSize}
-            onPageChange={setPeoplePage}
-            onPageSizeChange={setPeoplePageSize}
-            isTruncated={employeesTruncated}
-            itemLabel="employees"
+          <PeopleModeGrid
+            employees={paginatedEmployees}
+            searchTerm={employeeSearchInput}
+            onSearchChange={setEmployeeSearchInput}
+            onAssignShift={handleDndAssign}
+            onMoveShift={(shiftId, targetEmployeeId, targetDate) =>
+              handleDndMove(shiftId, { employeeId: targetEmployeeId, shiftDate: targetDate })
+            }
+            canEdit={canEdit}
+            dates={dates}
+            isBulkMode={bulkModeActive}
+            selectedShifts={selectedV8ShiftIdsArray}
+            onToggleShiftSelection={handleToggleShiftSelection}
+            onAddShift={(employee, date) => {
+              if (date && isSydneyPast(date)) return;
+              const context: ShiftContext = {
+                mode: 'people',
+                launchSource: 'grid', // Date will be locked
+                date: format(date || selectedDate, 'yyyy-MM-dd'),
+                organizationId: selectedOrganizationId || undefined,
+                rosterId: selectedRosterId || undefined,
+                departmentIds: selectedDepartmentIds,
+                subDepartmentIds: selectedSubDepartmentIds,
+                employeeId: employee?.id,
+              };
+              modalsRef.current?.openAddShift(context);
+            }}
+            onViewShift={(shift: EmployeeShift) => {
+              handleEditShift(shift);
+            }}
+            onBidShift={handleBidShift}
+            onSwapShift={handleSwapShift}
+            onCancelShift={handleCancelSingleShift}
+            onUnpublishShift={handleUnpublishShift}
           />
         )}
 
-        {/* Disconnected Metrics Footer (Scheduled vs Actual) */}
-        {activeMode !== 'people' && (
-          <RosterMetricsFooter
-            totalShifts={totalShifts}
-            assignedShifts={totalAssignedShifts}
-            unfilledShifts={totalUnfilledShifts}
-            scheduledCost={plannerStats.scheduledCost}
-            actualCost={plannerStats.actualCost}
-            scheduledNetMinutes={plannerStats.scheduledNetMinutes}
-            actualNetMinutes={plannerStats.actualNetMinutes}
-            costedShifts={plannerStats.costedShifts}
-            uncostedShifts={plannerStats.uncostedShifts}
-            actualShifts={plannerStats.actualShifts}
-            budget={budget}
-            remainingBudget={remainingBudget}
+        {activeMode === 'group' && (
+          <GroupModeView
+
+            selectedDate={selectedDate}
+            viewType={viewType}
+            canEdit={canEdit}
+            organizationId={selectedOrganizationId || undefined}
+            organizationName={undefined} // TODO: Get from context
+            rosterId={selectedRosterId || undefined}
+            departmentId={selectedDepartmentIds[0] || undefined}
+            departmentName={undefined} // TODO: Get from RosterFunctionBar
+            subDepartmentId={selectedSubDepartmentIds[0] || undefined}
+            subDepartmentName={undefined}
+            // Ghost Cell Navigation props
+            templateStartDate={templateStartDate}
+            templateEndDate={templateEndDate}
+            onNavigateToMonth={handleNavigateToMonth}
+            onAddShift={handleAddShiftWithGroup}
+            // Bulk Mode
+            isBulkMode={bulkModeActive}
+            onBulkModeToggle={handleBulkModeToggle}
+            selectedV8ShiftIds={selectedV8ShiftIdsArray}
+            onToggleShiftSelection={handleToggleShiftSelection}
+            onSelectShiftIds={selectMultiple}
+            onDeselectShiftIds={deselectMultiple}
+            // Day zoom
+            dayZoom={dayZoom}
+            // Data from unified hook
+            shifts={shifts}
+            isShiftsLoading={isLoading}
+            projection={projection.group ?? undefined}
+            footerStats={{
+              totalShifts,
+              assignedShifts: totalAssignedShifts,
+              unfilledShifts: totalUnfilledShifts,
+              estimatedCost,
+              budget,
+              remainingBudget,
+              scheduledCost: plannerStats.scheduledCost,
+              actualCost: plannerStats.actualCost,
+              scheduledNetMinutes: plannerStats.scheduledNetMinutes,
+              actualNetMinutes: plannerStats.actualNetMinutes,
+              costedShifts: plannerStats.costedShifts,
+              uncostedShifts: plannerStats.uncostedShifts,
+              actualShifts: plannerStats.actualShifts,
+            }}
             showBudget={showBudget}
+            // Centralized DnD assignment (employee → shift card)
+            onAssignShift={handleDndAssignToShift}
+            // Bucket View summary + drill-down — default for Day / 3-Day / Week / Month
+            summaryData={cellSummaryMap}
+            onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
+          />
+        )}
+
+        {activeMode === 'events' && (
+          <EventsModeView
+
+            selectedDate={selectedDate}
+            viewType={viewType}
+            shifts={shifts}
+            isShiftsLoading={isLoading}
+            organizationId={selectedOrganizationId || undefined}
+            projection={projection.events ?? undefined}
+            onEditShift={handleEditShift}
+            canEdit={canEdit}
+          />
+        )}
+
+        {activeMode === 'roles' && (
+          <RolesModeView
+            selectedDate={selectedDate}
+            viewType={viewType}
+            canEdit={canEdit}
+            organizationId={selectedOrganizationId || undefined}
+            departmentIds={selectedDepartmentIds}
+            subDepartmentIds={selectedSubDepartmentIds}
+            rosterId={selectedRosterId || undefined}
+            shifts={shifts}
+            projection={projection.roles ?? undefined}
+            onEditShift={handleEditShift}
+            onMoveShift={handleDndMove}
+            onAssignShift={handleDndAssignToShift}
+            selectedV8ShiftIds={selectedV8ShiftIdsArray}
+            isBulkMode={bulkModeActive}
+            onToggleShiftSelection={handleToggleShiftSelection}
+            summaryData={viewType !== 'day' ? cellSummaryMap : undefined}
+            onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
           />
         )}
       </div>
+
+      {/* Unfilled Shifts Panel */}
+      <div
+        className={cn(
+          'min-h-0 overflow-hidden border-l border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/10 backdrop-blur-md transition-all duration-300 ease-in-out',
+          // On a phone a fixed 320px side panel leaves the grid roughly a
+          // third of the viewport, so below md it floats over the grid as an
+          // overlay instead of competing with it for width.
+          'absolute inset-y-0 right-0 z-40 shadow-2xl md:static md:z-auto md:shadow-none',
+          showUnfilledPanel ? 'w-[85%] max-w-xs md:w-80 md:max-w-none' : 'w-0 border-l-0'
+        )}
+      >
+        <div
+          className={cn(
+            'w-full md:w-80 h-full overflow-auto transition-opacity duration-300',
+            showUnfilledPanel ? 'opacity-100' : 'opacity-0'
+          )}
+        >
+          <UnfilledShiftsPanel
+            unfilledShifts={unfilledShifts}
+            onPickShift={handlePickUnfilled}
+          />
+        </div>
+        </div>
+        </div>
+        </DndProvider>
+      </div>
+
+      {/* Disconnected Footer: Horizontal Filter Bar when Filters is open; otherwise Pagination/Metrics Footer */}
+      <PageLayout.Footer>
+        {isFilterBarOpen ? (
+          <RosterHorizontalFilterBar onClose={() => setIsFilterBarOpen(false)} />
+        ) : (
+          <>
+            {/* Disconnected Pagination Footer (similar to toggles in myswaps) */}
+            {activeMode === 'people' && (
+              <RosterPaginationFooter
+                currentPage={currentSafePeoplePage}
+                totalPages={totalPeoplePages}
+                totalItems={totalPeopleCount}
+                pageSize={peoplePageSize}
+                onPageChange={setPeoplePage}
+                onPageSizeChange={setPeoplePageSize}
+                isTruncated={employeesTruncated}
+                itemLabel="employees"
+              />
+            )}
+
+            {/* Disconnected Metrics Footer (Scheduled vs Actual) */}
+            {activeMode !== 'people' && (
+              <RosterMetricsFooter
+                totalShifts={viewTotalShifts}
+                stateCounts={viewShiftStateCounts}
+                selectedState={advancedFilters.stateId}
+                onSelectState={(stateId) => setAdvancedFilters({ stateId })}
+                assignedShifts={totalAssignedShifts}
+                unfilledShifts={totalUnfilledShifts}
+                scheduledCost={plannerStats.scheduledCost}
+                actualCost={plannerStats.actualCost}
+                scheduledNetMinutes={plannerStats.scheduledNetMinutes}
+                actualNetMinutes={plannerStats.actualNetMinutes}
+                costedShifts={plannerStats.costedShifts}
+                uncostedShifts={plannerStats.uncostedShifts}
+                actualShifts={plannerStats.actualShifts}
+                budget={budget}
+                remainingBudget={remainingBudget}
+                showBudget={showBudget}
+              />
+            )}
+          </>
+        )}
+      </PageLayout.Footer>
 
       {/* Bulk Toolbar — kept mounted while bulkModeActive regardless of selection size
           so the result panel can display after an action completes. The toolbar's own
@@ -1591,7 +1628,7 @@ const NewRostersPage: React.FC = () => {
         rosterId={selectedRosterId || undefined}
       />
 
-    </div>
+    </PageLayout>
     </ShiftEditingPresenceProvider>
   );
 };

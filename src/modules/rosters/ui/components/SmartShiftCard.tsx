@@ -26,7 +26,6 @@ import {
     Sparkles,
     Gavel,
     Briefcase,
-    ArrowLeftRight,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -50,6 +49,7 @@ import { EditingPresenceBadge } from './EditingPresenceBadge';
 import { useShiftPresence } from '../presence/ShiftEditingPresenceProvider';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 import { getShiftStateDisplay } from '../../domain/shift-fsm';
+import { ShiftStateCircleBadge } from './ShiftStateCircleBadge';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
@@ -186,11 +186,11 @@ const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
     return (
         <div className="space-y-2 p-1 min-w-[180px]">
             <div className="flex justify-between items-center pb-1 border-b border-white/10">
-                <span className="text-[10px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
-                <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
+                <span className="text-[11px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
+                <span className="text-[11px] font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
             </div>
             
-            <div className="space-y-1 text-[10px]">
+            <div className="space-y-1 text-[11px]">
                 <div className="flex justify-between">
                     <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
                     <span>${ordinaryCost.toFixed(2)}</span>
@@ -211,7 +211,7 @@ const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
                 )}
             </div>
             
-            <div className="pt-1 text-[9px] opacity-40 italic border-t border-white/5">
+            <div className="pt-1 text-[11px] opacity-40 italic border-t border-white/5">
                 {COST_ESTIMATE_DISCLAIMER}
             </div>
         </div>
@@ -331,32 +331,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         return resolved !== 'default' ? resolved : 'convention';
     }, [groupColor, shift]);
 
-    const badgeColor = useMemo(() => {
-        // Red if cancelled
-        if (shift.is_cancelled || ctx.state === 'S15' || shift.lifecycle_status === 'Cancelled') {
-            return 'bg-rose-500 shadow-sm shadow-rose-500/20';
-        }
-        // Grey if completed
-        if (ctx.state === 'S13' || shift.lifecycle_status === 'Completed') {
-            return 'bg-slate-400 shadow-sm shadow-slate-400/20';
-        }
-        // Green if in progress
-        if (ctx.state === 'S11' || shift.lifecycle_status === 'InProgress') {
-            return 'bg-emerald-400 shadow-sm shadow-emerald-400/20';
-        }
-        // Blue if published
-        if (shift.lifecycle_status === 'Published' || ['S3', 'S4', 'S5', 'S9', 'S10'].includes(ctx.state)) {
-            return 'bg-sky-400 shadow-sm shadow-sky-400/20';
-        }
-        // Yellow if draft (default)
-        return 'bg-amber-400 shadow-sm shadow-amber-400/20';
-    }, [shift.is_cancelled, shift.lifecycle_status, ctx.state]);
-
-    // Status indicators (minimalist, uncolored icons in 4th column before three dots)
-    // - S5 (Bidding): Gavel icon
-    // - S7 (Trade Requested - Pending Manager Approval, canonical S10): Swap icon
-    const isBiddingS5 = ctx.state === 'S5' || Boolean(shift.is_on_bidding);
-    const isSwapManagerS7 = ctx.state === 'S10' || stateDisplay.id === 'S7';
 
     const raw = (shift as any).rawShift || shift;
     const subDept = raw.sub_departments?.name || raw.sub_group_name || raw.subGroupName || raw.department_name;
@@ -393,12 +367,17 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
             )}
 
             {/* Shift Bucket Row: <Badge> <Role> | <Timings> | <Assignment> <Three dots> */}
-            <div className="flex items-center justify-between gap-2 px-2.5 py-2 min-h-[36px] w-full text-xs">
+            <div
+                className="grid items-center gap-x-2 px-2.5 py-2 min-h-[36px] w-full text-[11px]"
+                style={{
+                    gridTemplateColumns: 'minmax(0, 1.25fr) 1px 96px 1px minmax(0, 1fr) 24px',
+                }}
+            >
                 {/* 1. Badge + Role */}
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className={cn('w-1.5 h-5 rounded-full shrink-0', badgeColor)} />
+                <div className="flex items-center gap-2 min-w-0">
+                    <ShiftStateCircleBadge stateId={ctx.state} />
                     <span
-                        className="font-medium text-slate-100 dark:text-slate-100 truncate min-w-0 text-xs sm:text-[13px]"
+                        className="font-medium text-slate-100 dark:text-slate-100 truncate min-w-0 text-[11px] sm:text-[13px]"
                         title={roleDisplay}
                     >
                         {roleDisplay}
@@ -406,59 +385,46 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 </div>
 
                 {/* Divider */}
-                <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 shrink-0 mx-1 select-none" aria-hidden="true" />
+                <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 select-none justify-self-center" aria-hidden="true" />
 
                 {/* 2. Timings */}
                 <span
-                    className="font-medium text-slate-300 dark:text-slate-300 shrink-0 text-xs sm:text-[13px] tabular-nums"
+                    className="font-medium text-slate-300 dark:text-slate-300 text-[11px] sm:text-[13px] tabular-nums text-center truncate"
                     title={`${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}${costBreakdown.totalCost > 0 ? ` · Est. $${costBreakdown.totalCost.toFixed(0)}` : ''}`}
                 >
                     {formatTime(shift.start_time)} – {formatTime(shift.end_time)}
                 </span>
 
                 {/* Divider */}
-                <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 shrink-0 mx-1 select-none" aria-hidden="true" />
+                <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 select-none justify-self-center" aria-hidden="true" />
 
                 {/* 3. Assignment */}
-                <div className="flex items-center min-w-0 max-w-[140px] flex-1">
+                <div className="flex items-center min-w-0">
                     {employeeName ? (
-                        <span className="text-slate-200 dark:text-slate-200 truncate font-normal text-xs sm:text-[13px]" title={employeeName}>
+                        <span className="text-slate-200 dark:text-slate-200 truncate font-normal text-[11px] sm:text-[13px]" title={employeeName}>
                             {employeeName}
                         </span>
                     ) : (
-                        <span className="text-amber-400/90 text-xs sm:text-[13px] font-medium tracking-tight truncate">
+                        <span className="text-amber-400/90 text-[11px] sm:text-[13px] font-medium tracking-tight truncate">
                             Unassigned
                         </span>
                     )}
                 </div>
 
-                {/* 4. Action Area: Status Icons (Gavel for S5, Swap for S7) + Three Dots Menu */}
+                {/* 4. Action Area: Three Dots Menu */}
                 <div
                     onClick={(e) => e.stopPropagation()}
-                    className="relative z-30 shrink-0 flex items-center gap-1.5"
+                    className="relative z-30 shrink-0 w-6 flex items-center justify-end"
                 >
-                    {isBiddingS5 && (
-                        <span
-                            title="Open for bidding (S5)"
-                            aria-label="Open for bidding"
-                            className="text-slate-400 dark:text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center p-0.5"
+                    {headerAction || (!isFullyLocked ? (
+                        <button
+                            className="h-6 w-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors text-slate-400 hover:text-white"
+                            aria-label="Shift actions"
                         >
-                            <Gavel className="h-3.5 w-3.5 shrink-0" />
-                        </span>
-                    )}
-                    {isSwapManagerS7 && (
-                        <span
-                            title="Trade request awaiting manager approval (S7)"
-                            aria-label="Trade request awaiting manager approval"
-                            className="text-slate-400 dark:text-slate-400 hover:text-slate-200 transition-colors flex items-center justify-center p-0.5"
-                        >
-                            <ArrowLeftRight className="h-3.5 w-3.5 shrink-0" />
-                        </span>
-                    )}
-                    {headerAction || (!isFullyLocked && (
-                        <button className="h-6 w-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors text-slate-400 hover:text-white">
                             <MoreVertical className="h-3.5 w-3.5" />
                         </button>
+                    ) : (
+                        <div className="w-6 h-6" aria-hidden="true" />
                     ))}
                 </div>
             </div>
@@ -588,10 +554,10 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     <div className="flex justify-between items-center mb-3 z-[20]">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                             <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-40 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
-                            <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded text-white bg-white/20 dark:bg-white/10")}>
+                            <span className={cn("text-[11px] font-mono font-bold px-1 py-0.5 rounded text-white bg-white/20 dark:bg-white/10")}>
                                 {stateDisplay.id}
                             </span>
-                            {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
+                            {shift.is_from_template && <Badge variant="outline" className="text-[11px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
                         </div>
                         <div className="flex items-center gap-1.5">
                             {getLifecycleIcon(statusStr)}
@@ -622,13 +588,13 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">
                             <Avatar className="h-9 w-9 border border-border">
-                                <AvatarFallback className={cn('text-xs font-bold bg-primary/20 text-primary')}>
+                                <AvatarFallback className={cn('text-[11px] font-bold bg-primary/20 text-primary')}>
                                     <Briefcase className="h-4 w-4" />
                                 </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-foreground truncate">{roleName}</p>
-                                <p className="text-xs text-muted-foreground truncate">
+                                <p className="text-[13px] font-bold text-foreground truncate">{roleName}</p>
+                                <p className="text-[11px] text-muted-foreground truncate">
                                     {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
                                 </p>
                             </div>
@@ -637,15 +603,15 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         <div className="flex items-center justify-between pt-2 border-t border-dashed border-border/30">
                             <div className="bg-muted/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
                                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span className="text-xs font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                                <span className="text-[11px] font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                             </div>
                             <div className="flex flex-col items-end gap-1">
-                                {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
+                                {totalHours && <Badge variant="secondary" className="text-[11px]">{totalHours}h net</Badge>}
                                  {costBreakdown.totalCost > 0 && (
                                      <Tooltip>
                                          <TooltipTrigger asChild>
                                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
-                                                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                                 <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                                                      ${costBreakdown.totalCost.toFixed(2)}
                                                  </span>
                                              </div>
@@ -659,7 +625,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </div>
 
                         {hasComplianceIssue && (
-                            <div className={cn('rounded-lg p-2.5 text-xs border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
+                            <div className={cn('rounded-lg p-2.5 text-[11px] border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
                                 <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle className="h-3.5 w-3.5" />{compliance?.status === 'violation' ? 'Compliance Violation' : 'Compliance Warning'}</div>
                                 <ul className="space-y-0.5 pl-5 list-disc">
                                     {compliance?.violations.map((v, i) => <li key={`v-${i}`}>{v}</li>)}
@@ -674,7 +640,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                 <p className="text-[11px] leading-relaxed font-medium">{shift.notes}</p>
                             </div>
                         ) : shift.notes ? (
-                            <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
+                            <p className="text-[11px] text-muted-foreground italic truncate">{shift.notes}</p>
                         ) : null}
                     </div>
                 </div>
@@ -691,7 +657,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                     <Gavel className="h-4.5 w-4.5" />
                                 </div>
                             </TooltipTrigger>
-                            <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                            <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[11px] font-bold">
                                 {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
                                 {biddingUrgency === 'standard' && 'Bidding Active'}
                             </TooltipContent>
@@ -734,7 +700,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     headerBgAndText)}>
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-40 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
-                        <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded",
+                        <span className={cn("text-[11px] font-mono font-bold px-1 py-0.5 rounded",
                             isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
                             {stateDisplay.id}
                         </span>
@@ -743,7 +709,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                        {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
+                        {shift.is_from_template && <Badge variant="outline" className="text-[11px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
 
                         {getLifecycleIcon(statusStr)}
                         <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
@@ -774,13 +740,13 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 <div className={cn("p-4 space-y-3 relative z-[20]")}>
                     <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border border-border">
-                            <AvatarFallback className={cn('text-xs font-bold bg-primary/20 text-primary')}>
+                            <AvatarFallback className={cn('text-[11px] font-bold bg-primary/20 text-primary')}>
                                 {isPeopleMode ? <Briefcase className="h-4 w-4" /> : (employeeName ? getInitials(employeeName) : <User className="h-4 w-4" />)}
                             </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-foreground truncate">{isPeopleMode ? roleName : (employeeName || 'Unassigned')}</p>
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="text-[13px] font-bold text-foreground truncate">{isPeopleMode ? roleName : (employeeName || 'Unassigned')}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
                                 {isPeopleMode ? (shift.roster_subgroup?.name || shift.sub_group_name || 'Shift') : roleName}
                             </p>
                         </div>
@@ -789,16 +755,16 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     <div className="flex items-center justify-between">
                         <div className="bg-muted/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
                             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                            <span className="text-[11px] font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                            {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
+                            {totalHours && <Badge variant="secondary" className="text-[11px]">{totalHours}h net</Badge>}
                              {/* Cost Badge — shown for all shifts */}
                              {costBreakdown.totalCost > 0 && (
                                  <Tooltip>
                                      <TooltipTrigger asChild>
                                          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
-                                             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                             <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                                                  {employeeName ? '=' : '≈'} ${costBreakdown.totalCost.toFixed(2)}
                                              </span>
                                          </div>
@@ -812,7 +778,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </div>
 
                     {hasComplianceIssue && (
-                        <div className={cn('rounded-lg p-2.5 text-xs border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
+                        <div className={cn('rounded-lg p-2.5 text-[11px] border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
                             <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle className="h-3.5 w-3.5" />{compliance?.status === 'violation' ? 'Compliance Violation' : 'Compliance Warning'}</div>
                             <ul className="space-y-0.5 pl-5 list-disc">
                                 {compliance?.violations.map((v, i) => <li key={`v-${i}`}>{v}</li>)}
@@ -827,7 +793,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             <p className="text-[11px] leading-relaxed font-medium">{shift.notes}</p>
                         </div>
                     ) : shift.notes ? (
-                        <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
+                        <p className="text-[11px] text-muted-foreground italic truncate">{shift.notes}</p>
                     ) : null}
 
                     {/* Bidding Icon */}
@@ -843,7 +809,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                         <Gavel className="h-4.5 w-4.5" />
                                     </div>
                                 </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[11px] font-bold">
                                     {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
                                     {biddingUrgency === 'standard' && 'Bidding Active'}
                                 </TooltipContent>

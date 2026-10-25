@@ -82,7 +82,7 @@ export const ContractDateFields: React.FC<ContractDateFieldsProps> = ({ start_da
             </div>
             {startNote && <p className={text.caption}>{startNote}</p>}
             {outOfOrder && (
-                <p className="text-xs text-destructive" role="alert">The last day is before the start date.</p>
+                <p className="text-[11px] text-destructive" role="alert">The last day is before the start date.</p>
             )}
             {endsNow && (
                 <p className={text.caption}>

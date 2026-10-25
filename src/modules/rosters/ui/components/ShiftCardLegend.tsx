@@ -48,7 +48,7 @@ export const BADGE_CODES: BadgeCodeItem[] = [
     { type: 'Live', dot: '#22C55E', code: 'S8', icon: <Hourglass className="h-3 w-3" />, label: 'On Time In', description: 'Clocked in within 5m window' },
     { type: 'Live', dot: '#F59E0B', code: 'S8', icon: <Hourglass className="h-3 w-3" />, label: 'Late In', description: 'Clocked in > 5m after start' },
     { type: 'Live', dot: '#EAB308', code: 'S8', icon: <Clock className="h-3 w-3" />, label: 'Missing', description: 'Start time passed; no clock-in recorded' },
-    { type: 'Terminal', dot: '#7F1D1D', code: 'S9', icon: <XCircle className="h-3 w-3" />, label: 'No Show', description: 'Shift ended; never clocked in' },
+    { type: 'Terminal', dot: '#DC2626', code: 'S9', icon: <XCircle className="h-3 w-3" />, label: 'No Show', description: 'Shift ended; never clocked in' },
 
     // LIVE — DEPARTURE BADGE
     { type: 'Terminal', dot: '#14B8A6', code: 'S9', icon: <CheckCircle className="h-3 w-3" />, label: 'Early Out', description: 'Clocked out > 5m before scheduled end' },
@@ -100,7 +100,7 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
                     </div>
                     <div className="flex flex-col items-start leading-tight">
                         <span className="text-[11px] font-black uppercase tracking-widest text-foreground">Badge Legend</span>
-                        <span className="hidden text-[9px] font-medium text-slate-600 dark:text-slate-300 uppercase sm:block">Indicator & Status Reference</span>
+                        <span className="hidden text-[11px] font-medium text-slate-600 dark:text-slate-300 uppercase sm:block">Indicator & Status Reference</span>
                     </div>
                 </div>
                 {isCollapsed ? (
@@ -117,10 +117,10 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-muted/30">
-                                    <th className="px-3 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40">Status</th>
-                                    <th className="px-2 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40 text-center">Dot</th>
-                                    <th className="px-2 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40 text-center">Code</th>
-                                    <th className="px-3 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40">Trigger / Context</th>
+                                    <th className="px-3 py-2 text-[11px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40">Status</th>
+                                    <th className="px-2 py-2 text-[11px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40 text-center">Dot</th>
+                                    <th className="px-2 py-2 text-[11px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40 text-center">Code</th>
+                                    <th className="px-3 py-2 text-[11px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40">Trigger / Context</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/20">
@@ -131,7 +131,7 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
                                                 <div className="p-1 rounded bg-black/5 dark:bg-white/5 text-muted-foreground group-hover:text-foreground transition-colors">
                                                     {item.icon}
                                                 </div>
-                                                <span className="text-[10px] font-black uppercase tracking-tight text-foreground/80 break-keep">
+                                                <span className="text-[11px] font-black uppercase tracking-tight text-foreground/80 break-keep">
                                                     {item.label}
                                                 </span>
                                             </div>
@@ -143,19 +143,19 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
                                                     style={{ backgroundColor: item.dot }} 
                                                 />
                                             ) : (
-                                                <span className="text-[8px] text-muted-foreground/30">—</span>
+                                                <span className="text-[11px] text-muted-foreground/30">—</span>
                                             )}
                                         </td>
                                         <td className="px-2 py-2.5 text-center font-mono">
                                             <span className={cn(
-                                                "text-[9px] font-black px-1 py-0.5 rounded leading-none transition-all",
+                                                "text-[11px] font-black px-1 py-0.5 rounded leading-none transition-all",
                                                 item.code !== '-' ? "bg-black/10 dark:bg-white/10 text-foreground/60 group-hover:bg-primary/20 group-hover:text-primary" : "text-muted-foreground/20"
                                             )}>
                                                 {item.code}
                                             </span>
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            <p className="text-[9px] font-medium text-muted-foreground/70 leading-[1.3] group-hover:text-muted-foreground transition-colors">
+                                            <p className="text-[11px] font-medium text-muted-foreground/70 leading-[1.3] group-hover:text-muted-foreground transition-colors">
                                                 {item.description}
                                             </p>
                                         </td>

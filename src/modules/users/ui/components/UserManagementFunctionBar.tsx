@@ -1,7 +1,7 @@
 import React, { useId, useRef } from 'react';
 import { ChevronDown, Download, FileSpreadsheet, FileText, Search, X } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { InviteUserDialog } from './InviteUserDialog';
 import { ColumnsPicker } from './ColumnsPicker';
@@ -40,77 +40,67 @@ export const UserManagementFunctionBar: React.FC<UserManagementFunctionBarProps>
   onColumnsChange,
   transparent,
 }) => {
-  const { isDark } = useTheme();
   const searchId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
-
-  const pill = cn(
-    'min-h-11 px-4 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] transition-all border',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-    isDark ? 'bg-white/5 text-foreground hover:bg-white/10 border-white/10' : 'bg-white text-slate-800 hover:bg-slate-50 border-slate-200',
-  );
 
   const clearSearch = () => {
     onSearchChange('');
     searchRef.current?.focus();
   };
 
+  // No views or modes on this page: everything is a zone-3 action.
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-2 w-full transition-all text-foreground sm:flex-row sm:items-center',
-        !transparent && (isDark ? 'bg-[#111827]/40' : 'bg-white/40 shadow-sm border border-white/20'),
-        !transparent && 'rounded-2xl p-1.5 lg:p-2',
-      )}
-    >
-      <div role="search" aria-label="Users" className="relative w-full sm:max-w-md sm:flex-1 min-w-0">
-        <label htmlFor={searchId} className="sr-only">Search users</label>
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <input
-          ref={searchRef}
-          id={searchId}
-          type="search"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          onKeyDown={(e) => {
-            // Escape clears, as the platform's own search fields do.
-            if (e.key === 'Escape' && search) {
-              e.preventDefault();
-              onSearchChange('');
-            }
-          }}
-          placeholder="Search name, email, role or place"
-          autoComplete="off"
-          spellCheck={false}
-          className={cn(
-            'min-h-11 w-full rounded-xl border pl-10 pr-11 text-sm font-medium text-foreground placeholder:text-muted-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-            // One clear button: ours, which every browser shows the same way.
-            '[&::-webkit-search-cancel-button]:appearance-none',
-            isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200',
+    <ToolbarRow
+      className={cn('text-foreground', !transparent && toolbar.standalone)}
+      actions={<>
+        <div role="search" aria-label="Users" className="relative w-full md:w-72 min-w-0">
+          <label htmlFor={searchId} className="sr-only">Search users</label>
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <input
+            ref={searchRef}
+            id={searchId}
+            type="search"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            onKeyDown={(e) => {
+              // Escape clears, as the platform's own search fields do.
+              if (e.key === 'Escape' && search) {
+                e.preventDefault();
+                onSearchChange('');
+              }
+            }}
+            placeholder="Search name, email, role or place"
+            autoComplete="off"
+            spellCheck={false}
+            className={cn(
+              // The shared search field's look, as a bare input so the clear button can sit inside it.
+              'h-[44px] w-full rounded-xl border pl-10 pr-11 text-[16px] md:text-[11px] font-semibold text-foreground placeholder:text-muted-foreground',
+              'bg-slate-100 border-slate-200 dark:bg-black/20 dark:border-white/5',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              // One clear button: ours, which every browser shows the same way.
+              '[&::-webkit-search-cancel-button]:appearance-none',
+            )}
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              aria-label="Clear search"
+              className="absolute right-0 top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
           )}
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={clearSearch}
-            aria-label="Clear search"
-            className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
-      </div>
+        </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto">
-        <ColumnsPicker columns={columns} onColumnsChange={onColumnsChange} triggerClassName={pill} />
+        <ColumnsPicker columns={columns} onColumnsChange={onColumnsChange} triggerClassName={toolbar.secondaryAction} />
 
         <PageMenu modal={false}>
           <PageMenuTrigger asChild>
-            <Button variant="outline" aria-label="Export users" className={pill} disabled={exportDisabled}>
-              <Download className="h-3.5 w-3.5 mr-2 text-primary" aria-hidden="true" />
+            <Button variant="outline" aria-label="Export users" className={toolbar.secondaryAction} disabled={exportDisabled}>
+              <Download className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
               Export
-              <ChevronDown className="h-3.5 w-3.5 ml-1.5 opacity-60" aria-hidden="true" />
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
             </Button>
           </PageMenuTrigger>
           <PageMenuContent align="end" heading="Export">
@@ -119,10 +109,8 @@ export const UserManagementFunctionBar: React.FC<UserManagementFunctionBarProps>
           </PageMenuContent>
         </PageMenu>
 
-        {isAdmin && (
-          <InviteUserDialog className="min-h-11 px-6 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] transition-all bg-primary text-primary-foreground shadow-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2" />
-        )}
-      </div>
-    </div>
+        {isAdmin && <InviteUserDialog className={toolbar.primaryAction} />}
+      </>}
+    />
   );
 };

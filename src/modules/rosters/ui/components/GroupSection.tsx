@@ -40,8 +40,8 @@ const GroupSection: React.FC<GroupProps> = ({ id, name, subGroups, color }) => {
     <div className={`mb-6 rounded-lg overflow-hidden border border-border/50 shadow-sm ${getGroupCardClass()} transition-all duration-300`}>
       <div className="relative p-6 flex items-center justify-between">
         <div className="fade-slide-up">
-          <h3 className="text-xl font-medium">{name}</h3>
-          <p className="text-white/70 text-sm mt-1">{subGroups} Sub-Groups</p>
+          <h3 className="text-[17px] font-medium">{name}</h3>
+          <p className="text-white/70 text-[13px] mt-1">{subGroups} Sub-Groups</p>
         </div>
         
         <div className="flex items-center space-x-3">

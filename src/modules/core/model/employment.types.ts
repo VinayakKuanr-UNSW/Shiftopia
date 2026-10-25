@@ -47,10 +47,10 @@ export const TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] = [
 
 /**
  * What a person may CHOOSE when creating a shift by hand, outside the Office
- * group.
+ * group (inside it, only 'FT').
  *
  * Full-time shifts live in the roster's Office group (handover 2026-10-04,
- * D2), so 'FT' is offered there and nowhere else — see
+ * D2), so 'FT' is offered there, and ONLY 'FT' is offered there, — see
  * `targetEmploymentTypeOptions`. That keeps them in one place; it is not what
  * makes them lawful.
  *
@@ -83,18 +83,26 @@ export const CREATABLE_TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] 
  * accidental edit. Switching away is still possible; it just has to be
  * deliberate.
  *
- * `allowFullTime` — the shift is in the Office group, where full-time shifts
- * are created: every type is offered.
+ * The Office group and every other group are mutually exclusive:
+ *  - Office holds full-time shifts ONLY, so only 'FT' is offered there;
+ *  - every other group holds PT / Casual only (no 'FT');
+ *  - templates never hold FT (`enforce_no_ft_template_shifts`), so a template
+ *    offers PT / Casual even for an Office sub-group.
+ *
+ * The current value is kept in the list when it falls outside the rule, so a
+ * legacy row still renders (see above). The database backs the shift rule with
+ * `trg_shift_office_is_ft_only`.
  */
 export function targetEmploymentTypeOptions(
     current: TargetEmploymentType | null | undefined,
-    opts: { allowFullTime?: boolean } = {},
+    opts: { groupType?: string | null; isTemplate?: boolean } = {},
 ): readonly TargetEmploymentType[] {
-    if (opts.allowFullTime) return TARGET_EMPLOYMENT_TYPES;
-    if (!current || CREATABLE_TARGET_EMPLOYMENT_TYPES.includes(current)) {
-        return CREATABLE_TARGET_EMPLOYMENT_TYPES;
-    }
-    return [current, ...CREATABLE_TARGET_EMPLOYMENT_TYPES];
+    const allowed: readonly TargetEmploymentType[] =
+        !opts.isTemplate && opts.groupType === FULL_TIME_GROUP_TYPE
+            ? ['FT']
+            : CREATABLE_TARGET_EMPLOYMENT_TYPES;
+    if (!current || allowed.includes(current)) return allowed;
+    return [current, ...allowed];
 }
 
 /** The roster group where full-time shifts are created (D2). */
@@ -107,7 +115,7 @@ export const FULL_TIME_GROUP_TYPE = 'office';
  * in the Office group is that decision, because it is where full-time shifts
  * live. Everywhere else it is undefined and the planner must choose: seeding
  * e.g. 'Casual' would silently decide who may work the shift, and the match is
- * HARD. A starting value, not a lock — the picker still offers every type.
+ * HARD. A starting value; the picker offers only 'FT' in Office anyway.
  */
 export function initialTargetEmploymentType(
     explicit: TargetEmploymentType | null | undefined,
@@ -115,6 +123,24 @@ export function initialTargetEmploymentType(
 ): TargetEmploymentType | undefined {
     if (explicit) return explicit;
     return groupType === FULL_TIME_GROUP_TYPE ? 'FT' : undefined;
+}
+
+/**
+ * The target to hold after the planner changes the shift's group.
+ *
+ * Office is FT-only and every other group is PT / Casual-only, so a target
+ * chosen under the old group may now be unlawful. Keep it when it still fits;
+ * otherwise start over the way a new shift would (FT in Office, undecided
+ * elsewhere) — the planner must choose, because the match is HARD.
+ */
+export function targetAfterGroupChange(
+    current: TargetEmploymentType | null | undefined,
+    groupType: string | null | undefined,
+    isTemplate = false,
+): TargetEmploymentType | undefined {
+    const allowed = targetEmploymentTypeOptions(undefined, { groupType, isTemplate });
+    if (current && allowed.includes(current)) return current;
+    return isTemplate ? undefined : initialTargetEmploymentType(undefined, groupType);
 }
 
 export const TARGET_EMPLOYMENT_TYPE_LABELS: Record<TargetEmploymentType, string> = {

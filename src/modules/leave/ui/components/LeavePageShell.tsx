@@ -6,6 +6,9 @@
 import React from 'react';
 import { Palmtree } from 'lucide-react';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
+import { cn } from '@/modules/core/lib/utils';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import type { ScopeMode } from '@/platform/auth/useScopeFilter';
 
@@ -22,7 +25,7 @@ export const LeavePageShell: React.FC<{
     children: React.ReactNode;
 }> = ({ title, mode, scope, setScope, isGammaLocked, functionBar, children }) => (
     <TooltipProvider delayDuration={150}>
-        <div className="h-full flex flex-col overflow-hidden bg-background">
+        <PageLayout>
             <GoldStandardHeader
                 title={title}
                 Icon={Palmtree}
@@ -32,13 +35,13 @@ export const LeavePageShell: React.FC<{
                 isGammaLocked={isGammaLocked}
                 functionBar={functionBar}
             />
-            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col">
-                <div className="h-full rounded-[24px] sm:rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333]/40 dark:border-white/5 dark:shadow-2xl dark:shadow-black/20 dark:backdrop-blur-xl">
-                    <div className="flex-1 overflow-y-auto p-5 sm:p-7 lg:p-8 custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div className={cn('h-full overflow-hidden flex flex-col', surface.bodyCard)}>
+                    <div className={cn('flex-1 overflow-y-auto custom-scrollbar', page.bodyInset)}>
                         {children}
                     </div>
                 </div>
             </div>
-        </div>
+        </PageLayout>
     </TooltipProvider>
 );

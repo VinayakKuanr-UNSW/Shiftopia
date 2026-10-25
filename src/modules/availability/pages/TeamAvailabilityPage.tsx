@@ -17,28 +17,20 @@
 
 import React from 'react';
 import { format, parseISO } from 'date-fns';
-import { AlertTriangle, ArrowUpDown, BarChart3, BatteryLow, CalendarDays, Check, ChevronDown, Clock, Download, FileClock, Filter, Gauge, Grid3x3, Info, PhoneCall, RefreshCcw, Scale, Search, ShieldCheck, Thermometer, X } from 'lucide-react';
+import { AlertTriangle, BarChart3, FileClock, Filter, Grid3x3, Info, RefreshCcw } from 'lucide-react';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+// Aliased: `page` here is the pager's page number.
+import { page as pageTokens, surface } from '@/modules/core/ui/layout/pageTokens';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/modules/core/ui/primitives/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-    CommandShortcut,
-} from '@/modules/core/ui/primitives/command';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import {
-    UnifiedRosterNavigator,
     computeRange,
     type ViewType,
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
@@ -55,252 +47,14 @@ import TeamMobileCoverage from '../ui/team/TeamMobileCoverage';
 import TeamDayTimeline from '../ui/team/TeamDayTimeline';
 import CoverageHeatmap from '../ui/team/CoverageHeatmap';
 import NearMissPanel from '../ui/team/NearMissPanel';
-import TablePager, { paginate, type PageSize } from '../ui/team/TablePager';
+import { RosterPaginationFooter } from '@/modules/rosters/ui/components/RosterPaginationFooter';
+import GridFunctionBar, {
+    VIEWS,
+    CELL_MODES,
+    type ViewKey,
+    type SortOptionKey,
+} from '../ui/team/GridFunctionBar';
 
-type ViewKey = 'grid' | 'coverage' | 'nearmiss';
-type SortOptionKey = 'name' | 'fewest-days' | 'most-days';
-
-const VIEWS: Array<{ key: ViewKey; label: string; Icon: typeof Grid3x3 }> = [
-    { key: 'grid', label: 'Team', Icon: Grid3x3 },
-    { key: 'coverage', label: 'Coverage', Icon: Thermometer },
-    { key: 'nearmiss', label: 'Near misses', Icon: PhoneCall },
-];
-
-/**
- * What each cell prints. The rows, filters, sort and pagination are identical
- * across all three — only the cell contents change, which is what lets a
- * manager read somebody's declared availability against their rostered hours
- * without moving to another page. This is the Annual Shift Grid, absorbed.
- */
-const CELL_MODES: Array<{
-    key: CellMode;
-    label: string;
-    Icon: typeof Grid3x3;
-    /** What the CELLS carry, when the metric itself is not a daily quantity. */
-    note?: string;
-}> = [
-    { key: 'availability', label: 'Availability', Icon: CalendarDays },
-    { key: 'hours', label: 'Hours', Icon: Clock },
-    { key: 'compliance', label: 'Compliance', Icon: ShieldCheck },
-    { key: 'fatigue', label: 'Fatigue', Icon: BatteryLow },
-    {
-        key: 'utilization',
-        label: 'Utilization',
-        Icon: Gauge,
-        note: 'Utilization is measured against a WEEKLY contract, so the percentage is reported in the week columns. Cells show the daily hours that build it.',
-    },
-    {
-        key: 'fairness',
-        label: 'Fairness',
-        Icon: Scale,
-        note: 'Fairness is a 91-day comparison against the team, so the standing is reported per person in the right-hand column. Cells show what each day contributed — Saturday, Sunday, night or public holiday.',
-    },
-];
-
-interface CommandFilterOption {
-    id: string;
-    label: string;
-    Icon?: React.ComponentType<{ className?: string }>;
-}
-
-/**
- * The one dropdown shell every filter/sort control on this page uses —
- * search field, option list with a radio-style check, and the same
- * NAV / SELECT / CLOSE keyboard-hint footer. Options state only what they
- * are, never what they mean: a definition belongs in a tooltip or docs, not
- * competing with the label for the user's attention on every open.
- */
-const CommandFilterDropdown: React.FC<{
-    triggerLabel: string;
-    TriggerIcon: React.ComponentType<{ className?: string }>;
-    options: CommandFilterOption[];
-    selectedIds: string[];
-    onToggle: (id: string) => void;
-    multi?: boolean;
-    searchPlaceholder: string;
-    groupHeading: string;
-    highlightActive?: boolean;
-}> = ({
-    triggerLabel,
-    TriggerIcon,
-    options,
-    selectedIds,
-    onToggle,
-    multi = false,
-    searchPlaceholder,
-    groupHeading,
-    highlightActive = false,
-}) => {
-    const [isOpen, setIsOpen] = React.useState(false);
-
-    return (
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    className={cn(
-                        'flex items-center gap-2 px-3 min-h-[44px] md:min-h-0 md:py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shrink-0',
-                        highlightActive
-                            ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 ring-2 ring-primary/30'
-                            : 'bg-slate-100 dark:bg-muted/30 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-white/10 hover:bg-slate-200/60 dark:hover:bg-white/10',
-                    )}
-                >
-                    <TriggerIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>{triggerLabel}</span>
-                    <ChevronDown className={cn('w-3 h-3 opacity-60 transition-transform', isOpen && 'rotate-180')} />
-                </button>
-            </PopoverTrigger>
-
-            <PopoverContent
-                className="w-72 border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
-                sideOffset={8}
-                align="start"
-            >
-                <Command
-                    className="bg-transparent overflow-visible w-full outline-none"
-                    onKeyDown={(e) => {
-                        if (e.key === 'Escape') {
-                            setIsOpen(false);
-                            e.preventDefault();
-                        }
-                    }}
-                >
-                    <div className="flex flex-col gap-1.5 w-full">
-                        <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 dark:border-white/10 overflow-hidden [&_[cmdk-input-wrapper]]:border-b-0">
-                            <CommandInput
-                                placeholder={searchPlaceholder}
-                                className="h-12 text-sm border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none shadow-none w-full bg-transparent font-medium"
-                                autoFocus
-                            />
-                        </div>
-
-                        <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
-                            <CommandList className="max-h-[50vh] p-1.5 scrollbar-none overflow-x-hidden">
-                                <CommandEmpty className="py-6 text-center text-muted-foreground font-medium text-xs">
-                                    No options found.
-                                </CommandEmpty>
-
-                                <CommandGroup heading={groupHeading} className="px-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                                    {options.map((opt) => {
-                                        const isSelected = selectedIds.includes(opt.id);
-
-                                        return (
-                                            <CommandItem
-                                                key={opt.id}
-                                                onSelect={() => {
-                                                    onToggle(opt.id);
-                                                    if (!multi) setIsOpen(false);
-                                                }}
-                                                className="flex items-center justify-between px-3 py-2.5 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className={cn(
-                                                            'w-4 h-4 rounded-full border flex items-center justify-center transition-all shrink-0',
-                                                            isSelected
-                                                                ? 'bg-white border-white text-primary'
-                                                                : 'border-muted-foreground/40 group-aria-selected:border-white/40',
-                                                        )}
-                                                    >
-                                                        {isSelected && (
-                                                            <Check className="w-3 h-3" strokeWidth={3} />
-                                                        )}
-                                                    </div>
-                                                    {opt.Icon && (
-                                                        <opt.Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                                                    )}
-                                                    <span className="font-semibold text-xs text-foreground group-aria-selected:text-primary-foreground">
-                                                        {opt.label}
-                                                    </span>
-                                                </div>
-                                                <CommandShortcut className="group-aria-selected:text-white/60">
-                                                    ↵
-                                                </CommandShortcut>
-                                            </CommandItem>
-                                        );
-                                    })}
-                                </CommandGroup>
-                            </CommandList>
-
-                            <div className="p-2.5 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.18em] text-primary/60 dark:text-muted-foreground/60">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="flex items-center gap-1">
-                                        <span className="px-1 py-0.5 rounded bg-background/60 border border-border/40 text-[8px]">
-                                            ↑↓
-                                        </span>{' '}
-                                        NAV
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                        <span className="px-1 py-0.5 rounded bg-background/60 border border-border/40 text-[8px]">
-                                            ↵
-                                        </span>{' '}
-                                        SELECT
-                                    </span>
-                                </div>
-                                <span className="flex items-center gap-1">
-                                    <span className="px-1 py-0.5 rounded bg-background/60 border border-border/40 text-[8px]">
-                                        ESC
-                                    </span>{' '}
-                                    CLOSE
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </Command>
-            </PopoverContent>
-        </Popover>
-    );
-};
-
-const SortDropdown: React.FC<{
-    sortKey: SortOptionKey;
-    onSortChange: (key: SortOptionKey) => void;
-}> = ({ sortKey, onSortChange }) => {
-    const SORT_OPTIONS: CommandFilterOption[] = [
-        { id: 'name', label: 'Name (A–Z)' },
-        { id: 'fewest-days', label: 'Fewest Days' },
-        { id: 'most-days', label: 'Most Days' },
-    ];
-    const currentOption = SORT_OPTIONS.find((o) => o.id === sortKey) ?? SORT_OPTIONS[0];
-
-    return (
-        <CommandFilterDropdown
-            triggerLabel={`Sort: ${currentOption.label}`}
-            TriggerIcon={ArrowUpDown}
-            options={SORT_OPTIONS}
-            selectedIds={[sortKey]}
-            onToggle={(id) => onSortChange(id as SortOptionKey)}
-            searchPlaceholder="Search sort order..."
-            groupHeading="Sort By"
-        />
-    );
-};
-
-/**
- * What each grid cell reports. A dropdown rather than a 6-way segmented
- * control: the six modes are mutually exclusive and read rarely (most
- * sessions never leave Availability), so a row of six labelled buttons was
- * spending more header width than the view tabs and date navigator combined.
- */
-const CellModeDropdown: React.FC<{
-    cellMode: CellMode;
-    onCellModeChange: (mode: CellMode) => void;
-}> = ({ cellMode, onCellModeChange }) => {
-    const active = CELL_MODES.find((m) => m.key === cellMode) ?? CELL_MODES[0];
-    const options: CommandFilterOption[] = CELL_MODES.map((m) => ({ id: m.key, label: m.label, Icon: m.Icon }));
-
-    return (
-        <CommandFilterDropdown
-            triggerLabel={`Cells: ${active.label}`}
-            TriggerIcon={active.Icon}
-            options={options}
-            selectedIds={[cellMode]}
-            onToggle={(id) => onCellModeChange(id as CellMode)}
-            searchPlaceholder="Search cell mode..."
-            groupHeading="Cells Show"
-        />
-    );
-};
 
 /**
  * Which day the phone is showing, when the chosen range covers several.
@@ -363,7 +117,7 @@ const MobileDayStrip: React.FC<{
                                 : 'bg-muted/30 text-muted-foreground border-border/40 hover:bg-muted/60',
                         )}
                     >
-                        <span className="text-[10px] font-black uppercase tracking-wider leading-none">
+                        <span className="text-[11px] font-black uppercase tracking-wider leading-none">
                             {format(parsed, 'EEE')}
                         </span>
                         <span className="text-[13px] font-black tabular-nums leading-none mt-1">
@@ -397,39 +151,6 @@ const SkeletonRows: React.FC<{ rows?: number }> = ({ rows = 8 }) => (
     </div>
 );
 
-const EMPLOYMENT_OPTIONS: CommandFilterOption[] = [
-    { id: 'Casual', label: 'Casual' },
-    { id: 'Part-Time', label: 'Part-Time' },
-    { id: 'Full-Time', label: 'Full-Time' },
-];
-
-const EmploymentFilterPopover: React.FC<{
-    employmentStatuses: string[];
-    setEmploymentStatuses: React.Dispatch<React.SetStateAction<string[]>>;
-    isDark: boolean;
-}> = ({ employmentStatuses, setEmploymentStatuses }) => {
-    const activeCount = employmentStatuses.length;
-
-    const toggleStatus = (status: string) => {
-        setEmploymentStatuses((prev) =>
-            prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
-        );
-    };
-
-    return (
-        <CommandFilterDropdown
-            triggerLabel={activeCount === 0 ? 'Employment' : `Employment (${activeCount})`}
-            TriggerIcon={Filter}
-            options={EMPLOYMENT_OPTIONS}
-            selectedIds={employmentStatuses}
-            onToggle={toggleStatus}
-            multi
-            searchPlaceholder="Search employment..."
-            groupHeading="Employment"
-            highlightActive={activeCount > 0}
-        />
-    );
-};
 
 const TeamAvailabilityPage: React.FC = () => {
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
@@ -450,7 +171,7 @@ const TeamAvailabilityPage: React.FC = () => {
     const [isStatsOpen, setIsStatsOpen] = React.useState(false);
 
     const [page, setPage] = React.useState(1);
-    const [pageSize, setPageSize] = React.useState<PageSize>(25);
+    const [pageSize, setPageSize] = React.useState<number>(15);
 
     const filters = React.useMemo<TeamAvailabilityFilters>(
         () => ({ search, employmentStatuses }),
@@ -517,10 +238,18 @@ const TeamAvailabilityPage: React.FC = () => {
         });
     }, [data, sortKey, today]);
 
-    const pagedMembers = React.useMemo(
-        () => (data ? paginate(sortedMembers, page, pageSize) : []),
-        [data, sortedMembers, page, pageSize],
-    );
+    const totalPages = React.useMemo(() => {
+        if (!sortedMembers.length) return 1;
+        if (pageSize === 0) return 1;
+        return Math.max(1, Math.ceil(sortedMembers.length / pageSize));
+    }, [sortedMembers.length, pageSize]);
+
+    const pagedMembers = React.useMemo(() => {
+        if (!data) return [];
+        if (pageSize === 0) return sortedMembers;
+        const start = (page - 1) * pageSize;
+        return sortedMembers.slice(start, start + pageSize);
+    }, [data, sortedMembers, page, pageSize]);
 
     // A badge, not a filter — read only for the rows actually on screen.
     const pagedIds = React.useMemo(() => pagedMembers.map((m) => m.profileId), [pagedMembers]);
@@ -603,40 +332,7 @@ const TeamAvailabilityPage: React.FC = () => {
 
     const summary = data?.summary;
 
-    const navigator = (
-        <UnifiedRosterNavigator
-            date={anchorDate}
-            viewType={viewType}
-            onChange={(next) => setAnchorDate(next)}
-            onViewTypeChange={setViewType}
-            showToday={false}
-            showPicker
-            variant="full"
-        />
-    );
-
-    const employmentFilterDropdown = (
-        <EmploymentFilterPopover
-            employmentStatuses={employmentStatuses}
-            setEmploymentStatuses={setEmploymentStatuses}
-            isDark={isDark}
-        />
-    );
-
-    const sortDropdown = (
-        <SortDropdown sortKey={sortKey} onSortChange={setSortKey} />
-    );
-
-    const isDayView = (data?.dates.length ?? 0) === 1;
     const activeCellMode = CELL_MODES.find((m) => m.key === cellMode);
-
-    // Sits with the data-shaping controls, not with the view tabs above: it
-    // changes what a cell SAYS, not which panel you are in. Hidden in Day view,
-    // which renders the timeline — that already shows real shift times, so
-    // forcing hours into it buys nothing.
-    const cellModeToggle = (
-        <CellModeDropdown cellMode={cellMode} onCellModeChange={setCellMode} />
-    );
 
     // Every assigned shift in production is a draft, so an hours figure that
     // does not say so states a workload nobody has committed to as fact.
@@ -648,188 +344,102 @@ const TeamAvailabilityPage: React.FC = () => {
         return total;
     }, [sortedMembers, hours]);
 
-    const draftChip = draftHours > 0 && cellMode !== 'availability' && (
-        <span
-            className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 text-[10px] font-black uppercase tracking-wider shrink-0"
-            title="Draft shifts are included in every hours and compliance figure on this page"
-        >
-            <FileClock className="h-3.5 w-3.5" aria-hidden="true" />
-            Drafts included
-        </span>
-    );
-
-    const viewTabs = (
-        <div
-            className={cn(
-                'flex items-center gap-1 p-1 rounded-2xl border transition-all shrink-0',
-                isDark ? 'bg-[#111827]/80 border-white/5' : 'bg-slate-100/90 border-slate-200/80',
-            )}
-            role="tablist"
-            aria-label="Team availability view"
-        >
-            {VIEWS.map(({ key, label, Icon }) => (
-                <button
-                    key={key}
-                    role="tab"
-                    aria-selected={view === key}
-                    onClick={() => setView(key)}
-                    className={cn(
-                        'flex items-center gap-1.5 h-11 md:h-8 px-3 md:px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                        view === key
-                            ? isDark
-                                ? 'bg-[#1c2333] text-white shadow-md shadow-black/20 ring-1 ring-white/10'
-                                : 'bg-white text-slate-900 shadow-md shadow-slate-200/50 ring-1 ring-slate-200'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/40',
-                    )}
-                >
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span className="hidden md:inline">{label}</span>
-                </button>
-            ))}
-        </div>
-    );
-
     const isPagedView = view === 'grid';
 
     return (
-        <div className="h-full flex flex-col overflow-hidden bg-background">
+        <PageLayout>
             <GoldStandardHeader
-                title="Availability Manager"
-                Icon={CalendarDays}
+                title="Grid"
+                Icon={Grid3x3}
                 mode="managerial"
                 scope={scope}
                 setScope={setScope}
                 isGammaLocked={isGammaLocked}
                 isLoading={isLoading}
-                viewMode="table"
-                onViewModeChange={() => undefined}
-                hideViewModeToggle
-                functionBarChildren={
-                    <div
-                        role="toolbar"
-                        aria-label="Availability manager view and filter controls"
-                        className="flex flex-col gap-2.5 w-full text-foreground"
-                    >
-                        {/* Navigation group: which panel, which dates */}
-                        <div className="flex flex-wrap items-center justify-between gap-2.5 w-full">
-                            <div className="flex flex-wrap items-center gap-2.5" role="group" aria-label="View and date range">
-                                {viewTabs}
-                                <div className="h-6 w-px bg-border/30 shrink-0 hidden sm:block" aria-hidden="true" />
-                                {navigator}
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0" role="group" aria-label="Page actions">
-                                <Button
-                                    size="icon"
-                                    variant="outline"
-                                    onClick={() => setIsStatsOpen(true)}
-                                    title="Analytics Stats"
-                                    aria-label="Analytics Stats"
-                                    className="h-11 w-11 md:h-9 md:w-9 rounded-xl shadow-xs hover:bg-primary/10 hover:text-primary transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary"
-                                >
-                                    <BarChart3 className="h-4 w-4 text-primary" aria-hidden="true" />
-                                </Button>
-                                <Button
-                                    size="icon"
-                                    variant="outline"
-                                    onClick={handleExport}
-                                    disabled={!data}
-                                    title="Export CSV"
-                                    aria-label="Export CSV"
-                                    className="h-11 w-11 md:h-9 md:w-9 rounded-xl shadow-xs hover:bg-primary/10 hover:text-primary transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary"
-                                >
-                                    <Download className="h-4 w-4 text-foreground" aria-hidden="true" />
-                                </Button>
-                                <Button
-                                    size="icon"
-                                    variant="outline"
-                                    onClick={refetch}
-                                    disabled={isLoading}
-                                    title="Refresh data"
-                                    aria-label="Refresh data"
-                                    className="h-11 w-11 md:h-9 md:w-9 rounded-xl shadow-xs hover:bg-primary/10 hover:text-primary transition-all duration-200 focus-visible:ring-2 focus-visible:ring-primary"
-                                >
-                                    <RefreshCcw className={cn("h-4 w-4 text-foreground", isLoading && "animate-spin")} aria-hidden="true" />
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* Filter group: who's shown, how it's sorted, what a cell says — visually separated from navigation above */}
-                        <div className="flex flex-wrap items-center justify-between gap-2.5 w-full pt-2.5 border-t border-border/15">
-                            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Search and filters">
-                                <div role="search" className="w-[168px] xl:w-[200px] shrink-0">
-                                    <label htmlFor="team-member-search" className="sr-only">
-                                        Search team members
-                                    </label>
-                                    <div className={cn(
-                                        "flex items-center gap-2 h-11 md:h-9 px-3 rounded-xl border transition-all focus-within:ring-2 focus-within:ring-primary focus-within:border-primary/50",
-                                        isDark ? "bg-[#111827]/80 border-white/10" : "bg-slate-100/90 border-slate-200"
-                                    )}>
-                                        <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
-                                        <input
-                                            id="team-member-search"
-                                            type="search"
-                                            value={search}
-                                            onChange={(e) => setSearch(e.target.value)}
-                                            placeholder="Search team member..."
-                                            aria-label="Search team member by name or role"
-                                            className="bg-transparent border-none text-xs font-semibold placeholder:text-muted-foreground/70 outline-none w-full text-foreground"
-                                        />
-                                        {search && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setSearch('')}
-                                                aria-label="Clear search"
-                                                className="flex items-center justify-center h-11 w-11 md:h-6 md:w-6 -mr-2 md:mr-0 shrink-0 text-muted-foreground hover:text-foreground rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-                                            >
-                                                <X className="h-3.5 w-3.5" aria-hidden="true" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="h-6 w-px bg-border/30 shrink-0 hidden sm:block" aria-hidden="true" />
-
-                                {employmentFilterDropdown}
-                                {sortDropdown}
-                                {view === 'grid' && (isMobile || !isDayView) && cellModeToggle}
-                                {draftChip}
-                            </div>
-
-                            {/* Active Members Results Counter Badge */}
-                            {data && (
-                                <div
-                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-muted/30 border border-border/20 text-[11px] font-bold text-muted-foreground shrink-0 select-none"
-                                    aria-live="polite"
-                                    aria-atomic="true"
-                                >
-                                    <span className="text-foreground font-black tabular-nums">{sortedMembers.length}</span>
-                                    <span>of</span>
-                                    <span className="tabular-nums">{data.members.length}</span>
-                                    <span>members</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                functionBar={
+                    <GridFunctionBar
+                        view={view}
+                        onViewChange={setView}
+                        selectedDate={anchorDate}
+                        viewType={viewType}
+                        onDateChange={(date) => setAnchorDate(date)}
+                        onViewTypeChange={setViewType}
+                        cellMode={cellMode}
+                        onCellModeChange={setCellMode}
+                        sortKey={sortKey}
+                        onSortChange={setSortKey}
+                        search={search}
+                        onSearchChange={setSearch}
+                        employmentStatuses={employmentStatuses}
+                        onEmploymentStatusesChange={setEmploymentStatuses}
+                        onOpenStats={() => setIsStatsOpen(true)}
+                        onExport={handleExport}
+                        canExport={!!data && sortedMembers.length > 0}
+                        onRefresh={refetch}
+                        isLoading={isLoading}
+                        compactOnMobile
+                    />
                 }
             />
 
-            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-2.5">
                 <div
                     className={cn(
-                        'h-full flex-1 min-h-0 flex flex-col justify-between overflow-hidden transition-all',
-                        isDark
-                            ? 'bg-transparent'
-                            : 'bg-white/50 backdrop-blur-xs',
+                        'flex-1 min-h-0 flex flex-col justify-between overflow-hidden',
+                        pageTokens.bodyInset,
+                        surface.bodyCard,
                     )}
                 >
+                    {/* Active Filters Tag */}
+                    {(search.trim().length > 0 || employmentStatuses.length > 0) && data && (
+                        <div className="flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-2xl bg-primary/10 border border-primary/20 text-primary text-[11px] font-semibold mb-3">
+                            <span className="flex items-center gap-2">
+                                <Filter className="h-3.5 w-3.5 shrink-0" />
+                                Filtered: showing {sortedMembers.length} of {data.members.length} members
+                                {search.trim() && (
+                                    <span className="text-[11px] font-bold text-foreground bg-primary/10 px-2 py-0.5 rounded-lg">
+                                        "{search.trim()}"
+                                    </span>
+                                )}
+                                {employmentStatuses.length > 0 && (
+                                    <span className="text-[11px] font-bold text-foreground bg-primary/10 px-2 py-0.5 rounded-lg">
+                                        {employmentStatuses.join(', ')}
+                                    </span>
+                                )}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSearch('');
+                                    setEmploymentStatuses([]);
+                                }}
+                                className="text-[11px] uppercase font-black tracking-wider underline hover:text-foreground shrink-0"
+                            >
+                                Clear Filters
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Draft Shifts Banner */}
+                    {draftHours > 0 && cellMode !== 'availability' && (
+                        <div className="flex items-center justify-between gap-2.5 px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-[11px] font-semibold mb-3">
+                            <span className="flex items-center gap-2">
+                                <FileClock className="h-3.5 w-3.5 shrink-0" />
+                                Draft shifts are included in hours and compliance figures
+                            </span>
+                            <span className="text-[11px] uppercase font-black tracking-wider shrink-0 bg-amber-500/15 px-2 py-0.5 rounded-lg">
+                                {draftHours.toFixed(1)} hrs draft
+                            </span>
+                        </div>
+                    )}
+
                     {isError && (
                         <div
                             role="alert"
                             className="flex items-start justify-between gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 mb-3"
                         >
                             <div className="min-w-0">
-                                <p className="text-xs font-black uppercase tracking-wider text-red-500">
+                                <p className="text-[11px] font-black uppercase tracking-wider text-red-500">
                                     Could not load team availability
                                 </p>
                                 <p className="text-[11px] text-muted-foreground mt-1">
@@ -843,7 +453,7 @@ const TeamAvailabilityPage: React.FC = () => {
                                 variant="outline"
                                 onClick={refetch}
                                 disabled={isLoading}
-                                className="h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider gap-1.5 shrink-0"
+                                className="h-8 px-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider gap-1.5 shrink-0"
                             >
                                 <RefreshCcw
                                     className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')}
@@ -950,20 +560,7 @@ const TeamAvailabilityPage: React.FC = () => {
                                 {view === 'nearmiss' && <NearMissPanel nearMisses={nearMisses} />}
                             </div>
 
-                            {isPagedView && sortedMembers.length > 0 && (
-                                <div className="shrink-0 pt-2 border-t border-border/20">
-                                    <TablePager
-                                        page={page}
-                                        pageSize={pageSize}
-                                        totalItems={sortedMembers.length}
-                                        onPageChange={setPage}
-                                        onPageSizeChange={(size) => {
-                                            setPageSize(size);
-                                            setPage(1);
-                                        }}
-                                    />
-                                </div>
-                            )}
+
                         </div>
                     )}
 
@@ -999,41 +596,42 @@ const TeamAvailabilityPage: React.FC = () => {
                                 )}
                                 {view === 'nearmiss' && <NearMissPanel nearMisses={nearMisses} />}
                             </div>
-
-                            {isPagedView && sortedMembers.length > 0 && (
-                                <div className="shrink-0 pt-2 border-t border-border/20 bg-background/90 backdrop-blur-md z-30">
-                                    <TablePager
-                                        page={page}
-                                        pageSize={pageSize}
-                                        totalItems={sortedMembers.length}
-                                        onPageChange={setPage}
-                                        onPageSizeChange={(size) => {
-                                            setPageSize(size);
-                                            setPage(1);
-                                        }}
-                                    />
-                                </div>
-                            )}
                         </div>
                     )}
 
                     {!isLoading && !data && !isError && (
-                        <p className="py-12 text-center text-xs font-semibold text-muted-foreground">
+                        <p className="py-12 text-center text-[11px] font-semibold text-muted-foreground">
                             Select an organisation to view team availability.
                         </p>
                     )}
                 </div>
+
+                {/* Disconnected Pagination Footer matching People mode exactly */}
+                {isPagedView && sortedMembers.length > 0 && (
+                    <RosterPaginationFooter
+                        currentPage={page}
+                        totalPages={totalPages}
+                        totalItems={sortedMembers.length}
+                        pageSize={pageSize}
+                        onPageChange={setPage}
+                        onPageSizeChange={(newSize) => {
+                            setPageSize(newSize);
+                            setPage(1);
+                        }}
+                        itemLabel="employees"
+                    />
+                )}
             </div>
 
             <Dialog open={isStatsOpen} onOpenChange={setIsStatsOpen}>
-                <DialogContent className="max-w-4xl rounded-3xl p-6 bg-background/95 backdrop-blur-xl border border-border/40 shadow-2xl">
+                <DialogContent className="bg-background/95" size="xl">
                     <DialogHeader className="flex flex-row items-center justify-between border-b border-border/30 pb-4 pr-6">
                         <div>
-                            <DialogTitle className="text-xl font-black tracking-tight text-foreground flex items-center gap-2">
+                            <DialogTitle className="flex items-center gap-2">
                                 <BarChart3 className="h-5 w-5 text-primary" />
                                 Team Availability Statistics
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-muted-foreground mt-0.5 font-medium">
+                            <DialogDescription className="mt-0.5">
                                 KPI breakdown of required, available, assigned, gap, and undeclared availability hours across selected scope.
                             </DialogDescription>
                         </div>
@@ -1042,7 +640,7 @@ const TeamAvailabilityPage: React.FC = () => {
                             size="sm"
                             onClick={refetch}
                             disabled={isLoading}
-                            className="h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider gap-1.5 border-border/40 hover:bg-primary/10 hover:text-primary transition-all shrink-0"
+                            className="h-8 px-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider gap-1.5 border-border/40 hover:bg-primary/10 hover:text-primary transition-all shrink-0"
                         >
                             <RefreshCcw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
                             Refresh Data
@@ -1053,14 +651,14 @@ const TeamAvailabilityPage: React.FC = () => {
                         {summary ? (
                             <TeamCoverageSummary summary={summary} />
                         ) : (
-                            <div className="py-8 text-center text-xs text-muted-foreground font-semibold">
+                            <div className="py-8 text-center text-[11px] text-muted-foreground font-semibold">
                                 No stats available for current selection.
                             </div>
                         )}
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+        </PageLayout>
     );
 };
 

@@ -157,7 +157,7 @@ export function StatusBadge({ status, label }: { status: string; label: string }
                 status === 'warning' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' :
                                       'bg-muted/50 text-muted-foreground/40 border-border';
     return (
-        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-wider', cls)}>
+        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-black uppercase tracking-wider', cls)}>
             {label}
         </span>
     );
@@ -166,8 +166,8 @@ export function StatusBadge({ status, label }: { status: string; label: string }
 export function NumberPill({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
     return (
         <div className={cn('px-2 py-1 rounded-md border text-center flex-1', highlight ? 'bg-rose-500/5 border-rose-500/20' : 'bg-muted/50 border-border')}>
-            <div className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/50">{label}</div>
-            <div className={cn('text-xs font-black', highlight ? 'text-rose-500' : 'text-foreground')}>{value}</div>
+            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">{label}</div>
+            <div className={cn('text-[11px] font-black', highlight ? 'text-rose-500' : 'text-foreground')}>{value}</div>
         </div>
     );
 }
@@ -178,7 +178,7 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
 
     if (violation.status === 'pass') {
         return (
-            <div className="flex items-center gap-2 p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300">
+            <div className="flex items-center gap-2 p-3 bg-emerald-500/5 rounded-lg border border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 {violation.details || 'All checks passed.'}
             </div>
@@ -197,7 +197,7 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
         }];
         return (
             <div className="space-y-3">
-                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">
+                <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">
                     Rolling window check · max {weeklyLimit}h/wk avg
                 </div>
                 {cycles.map(c => {
@@ -205,12 +205,12 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
                     return (
                         <div key={c.weeks} className={cn('p-3 rounded-lg border', isFail ? 'bg-rose-500/5 border-rose-500/20' : 'bg-muted/30 border-border')}>
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{c.weeks}-Week window</span>
-                                {isFail && <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/20 uppercase tracking-widest">EXCEEDS LIMIT</span>}
+                                <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60">{c.weeks}-Week window</span>
+                                {isFail && <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/20 uppercase tracking-widest">EXCEEDS LIMIT</span>}
                             </div>
                             <div className="flex items-baseline gap-3">
-                                <span className={cn('text-2xl font-black', isFail ? 'text-rose-500' : 'text-foreground')}>{c.total_hours.toFixed(1)}h</span>
-                                <span className="text-xs text-muted-foreground/50">avg {c.average_weekly_hours.toFixed(1)}h/wk · limit {c.limit}h ({weeklyLimit}h/wk × {c.weeks}wk)</span>
+                                <span className={cn('text-[20px] font-black', isFail ? 'text-rose-500' : 'text-foreground')}>{c.total_hours.toFixed(1)}h</span>
+                                <span className="text-[11px] text-muted-foreground/50">avg {c.average_weekly_hours.toFixed(1)}h/wk · limit {c.limit}h ({weeklyLimit}h/wk × {c.weeks}wk)</span>
                             </div>
                             <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                                 <div className={cn('h-full rounded-full', isFail ? 'bg-rose-500' : 'bg-emerald-500')}
@@ -236,7 +236,7 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
 
         return (
             <div className="space-y-3">
-                <div className={cn('flex items-center gap-2 p-3 rounded-lg border text-xs',
+                <div className={cn('flex items-center gap-2 p-3 rounded-lg border text-[11px]',
                     isEnforced ? 'bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-300' : 'bg-amber-500/5 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
                     <Zap className="h-4 w-4 shrink-0" />
                     <span>
@@ -249,19 +249,19 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
 
                 {worstWindow && (
                     <div className={cn('p-3 rounded-lg border', violation.status === 'fail' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/30')}>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1">Peak fortnight</div>
+                        <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1">Peak fortnight</div>
                         <div className="flex items-baseline gap-2">
-                            <span className={cn('text-2xl font-black', violation.status === 'fail' ? 'text-rose-500' : 'text-amber-500')}>
+                            <span className={cn('text-[20px] font-black', violation.status === 'fail' ? 'text-rose-500' : 'text-amber-500')}>
                                 {worstWindow.hours.toFixed(1)}h
                             </span>
-                            <span className="text-xs text-muted-foreground/60">of {limit}h limit</span>
+                            <span className="text-[11px] text-muted-foreground/60">of {limit}h limit</span>
                             {worstWindow.hours > limit && (
-                                <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/20 uppercase tracking-widest ml-2">
+                                <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/20 uppercase tracking-widest ml-2">
                                     +{(worstWindow.hours - limit).toFixed(1)}h over
                                 </span>
                             )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground/50 mt-0.5">
+                        <div className="text-[11px] text-muted-foreground/50 mt-0.5">
                             {worstWindow.weeks.join(' + ')}
                         </div>
                     </div>
@@ -269,23 +269,23 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
 
                 {weekKeys.length > 0 && (
                     <div className="space-y-1.5">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 px-1">Weekly breakdown</div>
+                        <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40 px-1">Weekly breakdown</div>
                         {weekKeys.map(wk => {
                             const w = weeksData[wk];
                             const isViolating = violatingWeeks.has(wk);
                             return (
                                 <div key={wk} className="flex items-center gap-3">
                                     <div className="w-20 shrink-0">
-                                        <div className={cn('text-[10px] font-black', isViolating ? 'text-rose-500' : 'text-muted-foreground')}>
+                                        <div className={cn('text-[11px] font-black', isViolating ? 'text-rose-500' : 'text-muted-foreground')}>
                                             {wk.split('-W').pop() ? `W${wk.split('-W').pop()}` : wk}
                                         </div>
-                                        <div className="text-[9px] text-muted-foreground/40">{w.dates}</div>
+                                        <div className="text-[11px] text-muted-foreground/40">{w.dates}</div>
                                     </div>
                                     <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                                         <div className={cn('h-full rounded-full', isViolating ? 'bg-rose-500' : 'bg-muted-foreground/30')}
                                             style={{ width: `${Math.min((w.hours / Math.max(limit, w.hours)) * 100, 100)}%` }} />
                                     </div>
-                                    <span className={cn('w-10 text-right text-xs font-black', isViolating ? 'text-rose-500' : 'text-foreground')}>{w.hours}h</span>
+                                    <span className={cn('w-10 text-right text-[11px] font-black', isViolating ? 'text-rose-500' : 'text-foreground')}>{w.hours}h</span>
                                 </div>
                             );
                         })}
@@ -303,21 +303,21 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
         return (
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Daily projection (limit: {limit}h)</span>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Daily projection (limit: {limit}h)</span>
                 </div>
                 <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70">
                         <span className="w-24">Existing shifts</span>
                         <span className="font-black text-foreground">{existing.toFixed(1)}h</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70">
                         <span className="w-24">Received shift</span>
                         <span className="font-black text-foreground">+{candidate.toFixed(1)}h</span>
                     </div>
-                    <div className={cn('flex items-center gap-2 text-xs font-black', total > limit ? 'text-rose-500' : 'text-emerald-500')}>
+                    <div className={cn('flex items-center gap-2 text-[11px] font-black', total > limit ? 'text-rose-500' : 'text-emerald-500')}>
                         <span className="w-24">Total projected</span>
-                        <span className="text-lg">{total.toFixed(1)}h</span>
-                        {total > limit && <span className="text-[9px] ml-1">(+{(total - limit).toFixed(1)}h over)</span>}
+                        <span className="text-[15px]">{total.toFixed(1)}h</span>
+                        {total > limit && <span className="text-[11px] ml-1">(+{(total - limit).toFixed(1)}h over)</span>}
                     </div>
                 </div>
                 <div className="h-3 bg-muted rounded-full overflow-hidden">
@@ -334,16 +334,16 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
         const limit = calc.limit ?? 10;
         return (
             <div className="space-y-2">
-                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Min rest gap: {limit}h required</div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Min rest gap: {limit}h required</div>
                 <div className="grid grid-cols-2 gap-2">
                     {[{ label: 'Before shift', val: prev }, { label: 'After shift', val: next }].map(({ label, val }) => {
                         const fail = val != null && val < limit;
                         return (
                             <div key={label} className={cn('p-3 rounded-lg border text-center', fail ? 'bg-rose-500/5 border-rose-500/20' : val != null ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-muted/30 border-border')}>
-                                <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1">{label}</div>
+                                <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1">{label}</div>
                                 {val != null
-                                    ? <div className={cn('text-xl font-black', fail ? 'text-rose-500' : 'text-emerald-500')}>{val.toFixed(1)}h</div>
-                                    : <div className="text-muted-foreground/30 text-sm">–</div>}
+                                    ? <div className={cn('text-[17px] font-black', fail ? 'text-rose-500' : 'text-emerald-500')}>{val.toFixed(1)}h</div>
+                                    : <div className="text-muted-foreground/30 text-[13px]">–</div>}
                             </div>
                         );
                     })}
@@ -359,10 +359,10 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
         return (
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Working days in last {period} days</span>
+                    <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Working days in last {period} days</span>
                 </div>
-                <div className={cn('text-3xl font-black', violation.status === 'fail' ? 'text-rose-500' : 'text-foreground')}>
-                    {days}<span className="text-sm font-bold text-muted-foreground/40 ml-1">/ {limit} max</span>
+                <div className={cn('text-[24px] font-black', violation.status === 'fail' ? 'text-rose-500' : 'text-foreground')}>
+                    {days}<span className="text-[13px] font-bold text-muted-foreground/40 ml-1">/ {limit} max</span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div className={cn('h-full rounded-full', violation.status === 'fail' ? 'bg-rose-500' : 'bg-emerald-500')}
@@ -374,7 +374,7 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
 
     if (id === 'NO_OVERLAP') {
         return (
-            <div className="p-3 bg-rose-500/5 border border-rose-500/20 rounded-lg flex items-start gap-2 text-xs text-rose-700 dark:text-rose-300">
+            <div className="p-3 bg-rose-500/5 border border-rose-500/20 rounded-lg flex items-start gap-2 text-[11px] text-rose-700 dark:text-rose-300">
                 <Layers className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{violation.details || 'Schedule conflict detected. These shifts overlap in time.'}</span>
             </div>
@@ -387,13 +387,13 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
             <div className="space-y-2">
                 {qViolations.length > 0
                     ? qViolations.map((v: any, i: number) => (
-                        <div key={i} className={cn('flex items-start gap-2 p-3 rounded-lg border text-xs',
+                        <div key={i} className={cn('flex items-start gap-2 p-3 rounded-lg border text-[11px]',
                             v.type?.includes('EXPIRED') ? 'bg-amber-500/5 border-amber-500/20 text-amber-700 dark:text-amber-300' : 'bg-rose-500/5 border-rose-500/20 text-rose-700 dark:text-rose-300')}>
                             <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                             <span>{v.message}</span>
                         </div>
                     ))
-                    : <div className="text-xs text-muted-foreground italic">{violation.details}</div>
+                    : <div className="text-[11px] text-muted-foreground italic">{violation.details}</div>
                 }
             </div>
         );
@@ -402,10 +402,10 @@ export function ConstraintDetailPanel({ violation }: { violation: ConstraintViol
     return (
         <div className="space-y-2">
             {violation.summary && (
-                <p className="text-xs text-muted-foreground leading-relaxed">{violation.summary}</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">{violation.summary}</p>
             )}
             {violation.details && violation.details !== violation.summary && (
-                <p className="text-xs text-muted-foreground/70 italic leading-relaxed">{violation.details}</p>
+                <p className="text-[11px] text-muted-foreground/70 italic leading-relaxed">{violation.details}</p>
             )}
             <div className="flex flex-wrap gap-2 mt-2">
                 {typeof calc.existing_hours === 'number' && <NumberPill label="Current" value={`${calc.existing_hours.toFixed(1)}h`} />}
@@ -449,13 +449,13 @@ export function ConstraintRow({ constraint, requesterName, offererName }: {
                 <span className="flex-1 text-[12px] font-bold text-foreground text-left">{constraint.name}</span>
                 <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-mono text-muted-foreground/40 uppercase">{requesterName.split(' ')[0]}</span>
+                        <span className="text-[11px] font-mono text-muted-foreground/40 uppercase">{requesterName.split(' ')[0]}</span>
                         <StatusBadge status={constraint.requesterResult?.status ?? 'pending'}
                             label={constraint.requesterResult ? constraint.requesterResult.status : '—'} />
                     </div>
-                    <span className="text-muted-foreground/20 text-[10px]">·</span>
+                    <span className="text-muted-foreground/20 text-[11px]">·</span>
                     <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-mono text-muted-foreground/40 uppercase">{offererName.split(' ')[0]}</span>
+                        <span className="text-[11px] font-mono text-muted-foreground/40 uppercase">{offererName.split(' ')[0]}</span>
                         <StatusBadge status={constraint.offererResult?.status ?? 'pending'}
                             label={constraint.offererResult ? constraint.offererResult.status : '—'} />
                     </div>
@@ -473,7 +473,7 @@ export function ConstraintRow({ constraint, requesterName, offererName }: {
                                 { label: offererName,   result: constraint.offererResult },
                             ].map(({ label, result }) => result && result.status !== 'pass' && (
                                 <div key={label}>
-                                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mb-1.5">[{label}]</div>
+                                    <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40 mb-1.5">[{label}]</div>
                                     <ConstraintDetailPanel violation={result} />
                                 </div>
                             ))}
@@ -500,7 +500,7 @@ export function BucketSection({ bucket, constraints, requesterName, offererName 
         <div className="space-y-2">
             <div className="flex items-center gap-2 px-1">
                 <div className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
-                <span className={cn('text-[9px] font-black uppercase tracking-[0.2em]', meta.color)}>
+                <span className={cn('text-[11px] font-black uppercase tracking-[0.2em]', meta.color)}>
                     Bucket {bucket} — {meta.label}
                 </span>
                 <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />

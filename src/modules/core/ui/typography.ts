@@ -3,7 +3,7 @@
  *
  * One place that decides how text looks, so a card, a drawer and a nav item
  * stop each inventing their own size. Before this existed the personal-roster
- * surface alone carried 45 hand-written `text-[9px]` / `text-[10px]` /
+ * surface alone carried 45 hand-written `text-[11px]` / `text-[11px]` /
  * `text-[11px]` literals, most of them `font-black uppercase` and several
  * further faded with `/30`–`/40` opacity — unreadable on a phone and below the
  * WCAG 1.4.3 contrast floor once diluted.
@@ -35,22 +35,22 @@
 
 export const text = {
   /** Page or hero card heading. The only 900 weight in the system. */
-  display: 'text-2xl font-black tracking-tight',
+  display: 'text-[20px] font-black tracking-tight',
 
   /** Dialog, drawer and section titles. */
-  title: 'text-lg font-bold tracking-tight',
+  title: 'text-[15px] font-bold tracking-tight',
 
   /** Sub-section heading inside a card or panel. */
-  heading: 'text-base font-semibold tracking-tight',
+  heading: 'text-[14px] font-semibold tracking-tight',
 
   /** Default reading size for content. */
-  body: 'text-sm font-medium',
+  body: 'text-[13px] font-medium',
 
   /** Content that is present but secondary — never opacity-faded. */
-  bodyMuted: 'text-sm font-medium text-muted-foreground',
+  bodyMuted: 'text-[13px] font-medium text-muted-foreground',
 
   /** Field labels, chips, and the text inside buttons. */
-  label: 'text-xs font-semibold tracking-wide',
+  label: 'text-[11px] font-semibold tracking-wide',
 
   /**
    * Uppercase overline / eyebrow. The floor of the scale at 11px — legible
@@ -62,16 +62,16 @@ export const text = {
   overlineBare: 'text-[11px] font-bold uppercase tracking-[0.12em]',
 
   /** Supporting sentence under a heading. */
-  caption: 'text-xs font-medium text-muted-foreground',
+  caption: 'text-[11px] font-medium text-muted-foreground',
 
   /** The one legitimate recessive style — for genuinely tertiary text. */
-  subtle: 'text-xs font-medium text-muted-foreground/70',
+  subtle: 'text-[11px] font-medium text-muted-foreground/70',
 
   /** Clock times, counts, durations. Tabular so ticking digits do not jump. */
-  metric: 'text-sm font-semibold tabular-nums',
+  metric: 'text-[13px] font-semibold tabular-nums',
 
   /** Monospaced numeric, for countdowns and time ranges. */
-  metricMono: 'text-sm font-semibold font-mono tabular-nums',
+  metricMono: 'text-[13px] font-semibold font-mono tabular-nums',
 } as const;
 
 /**
@@ -81,12 +81,16 @@ export const text = {
  * the floor. Touch surfaces here target 44 — the bottom nav, the offers FAB and
  * the roster navigator all sat between 32 and 40 before, which is a miss on a
  * phone regardless of which level you hold it to.
+ *
+ * Written in px, not the Tailwind scale: the root font size is 75% (index.css),
+ * so `min-h-11` is 33px. These were `min-h-11` until 2026-10 — 33px boxes
+ * labelled 44 — while 51 other controls wrote `min-h-[44px]` and really were.
  */
 export const touch = {
   /** Minimum tappable box. Apply to any control a thumb has to hit. */
-  target: 'min-h-11 min-w-11',
+  target: 'min-h-[44px] min-w-[44px]',
   /** For controls in a horizontal bar where only height is constrained. */
-  targetY: 'min-h-11',
+  targetY: 'min-h-[44px]',
 } as const;
 
 export type TextStyle = keyof typeof text;

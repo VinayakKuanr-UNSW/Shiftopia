@@ -86,7 +86,7 @@ export const SwapSelectionToolbar: React.FC<Props> = ({
                             className={cn(
                                 "rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shrink-0",
                                 "h-10 px-3.5 text-[11px]", // Mobile
-                                "md:h-8 md:px-2.5 md:text-[10px]", // Desktop
+                                "md:h-8 md:px-2.5 md:text-[11px]", // Desktop
                                 allSelected
                                     ? "bg-[#7b61ff] text-white shadow-sm"
                                     : isDark 
@@ -101,8 +101,8 @@ export const SwapSelectionToolbar: React.FC<Props> = ({
                         {/* 2. Count Badge */}
                         <div className={cn(
                             "flex items-center justify-center gap-1 rounded-xl font-black tracking-wider uppercase shrink-0",
-                            "h-10 px-2.5 text-[10px]", // Mobile
-                            "md:h-8 md:px-2 md:text-[9px]", // Desktop
+                            "h-10 px-2.5 text-[11px]", // Mobile
+                            "md:h-8 md:px-2 md:text-[11px]", // Desktop
                             selectedCount > 0
                                 ? "bg-[#7b61ff]/10 text-[#7b61ff] dark:text-indigo-400"
                                 : isDark ? "bg-white/5 text-white/40" : "bg-white text-slate-400 border border-slate-200/50"
@@ -121,7 +121,7 @@ export const SwapSelectionToolbar: React.FC<Props> = ({
                                     className={cn(
                                         "rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 flex-1 min-w-0 disabled:opacity-20 disabled:pointer-events-none active:scale-[0.98] shadow-sm border-none text-white",
                                         "h-10 text-[11px]", // Mobile
-                                        "md:h-8 md:text-[10px]", // Desktop
+                                        "md:h-8 md:text-[11px]", // Desktop
                                         "bg-rose-500 hover:bg-rose-600"
                                     )}
                                 >
@@ -142,7 +142,7 @@ export const SwapSelectionToolbar: React.FC<Props> = ({
                                     className={cn(
                                         "rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 flex-1 min-w-0 disabled:opacity-20 disabled:pointer-events-none active:scale-[0.98] shadow-sm border-none text-white",
                                         "h-10 text-[11px]", // Mobile
-                                        "md:h-8 md:text-[10px]", // Desktop
+                                        "md:h-8 md:text-[11px]", // Desktop
                                         "bg-rose-500 hover:bg-rose-600"
                                     )}
                                 >
@@ -157,7 +157,7 @@ export const SwapSelectionToolbar: React.FC<Props> = ({
 
                             {actionType === 'none' && (
                                 <div className={cn(
-                                    "flex-1 flex items-center justify-center rounded-xl font-bold border border-dashed text-[10px] uppercase tracking-widest shrink-0 px-2 text-center",
+                                    "flex-1 flex items-center justify-center rounded-xl font-bold border border-dashed text-[11px] uppercase tracking-widest shrink-0 px-2 text-center",
                                     isDark ? "border-white/10 text-white/40" : "border-slate-300 text-slate-400"
                                 )}>
                                     Select cards to view details

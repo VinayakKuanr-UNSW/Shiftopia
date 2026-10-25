@@ -68,7 +68,7 @@ const PageLoader: React.FC = () => (
     <div className="flex items-center justify-center h-screen">
         <div className="flex flex-col items-center gap-4">
             <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted-foreground text-sm">Loading...</p>
+            <p className="text-muted-foreground text-[13px]">Loading...</p>
         </div>
     </div>
 );
@@ -90,7 +90,7 @@ const AuthLayout: React.FC = () => {
             <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-4">
                     <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                    <p className="text-muted-foreground text-sm">Loading...</p>
+                    <p className="text-muted-foreground text-[13px]">Loading...</p>
                 </div>
             </div>
         );

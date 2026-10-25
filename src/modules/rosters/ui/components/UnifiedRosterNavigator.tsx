@@ -28,6 +28,7 @@ import React, { startTransition, useMemo } from 'react';
 import { startOfMonth, isWithinInterval, startOfDay } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { toolbar } from '@/modules/core/ui/components/Toolbar';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 import { DatePicker } from '@/modules/core/ui/calendar';
@@ -172,7 +173,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         type="button"
         variant="ghost"
         aria-label={`Change date. Currently showing ${label}`}
-        className="h-8 gap-2 whitespace-nowrap px-2.5 text-xs font-bold text-slate-800 dark:text-foreground hover:text-slate-950 dark:hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted/50 rounded-lg transition-all"
+        className={toolbar.stepperLabel}
       >
         <CalendarIcon className="h-3.5 w-3.5 text-slate-700 dark:text-muted-foreground opacity-90" aria-hidden="true" />
         {label}
@@ -218,11 +219,13 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
   // ── Full variant (desktop manager bar) ─────────────────────────────────────
   if (variant === 'full') {
     return (
-      <div className={cn('flex items-center gap-3', className)}>
+      // Wraps on a phone: the mode pill, TODAY and the stepper are ~470px
+      // side by side, wider than a 390px screen.
+      <div className={cn('flex flex-wrap items-center justify-center gap-2 md:flex-nowrap md:gap-3', className)}>
         {/* View type — ToggleGroup. The whole pill box goes, not just the
             control inside it, or a single-view page carries an empty one. */}
         {showSwitcher && (
-        <div className="flex-shrink-0 flex items-center bg-slate-100 dark:bg-black/20 border border-slate-300 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm">
+        <div className={toolbar.control}>
           <ToggleGroup
             type="single"
             value={viewType}
@@ -233,7 +236,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
               <ToggleGroupItem
                 key={v.value}
                 value={v.value}
-                className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all h-8 min-w-[36px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground text-slate-700 dark:text-muted-foreground hover:text-slate-900 dark:hover:text-foreground border-none shadow-none"
+                className={cn(toolbar.controlItem, toolbar.modeOff, toolbar.modeOnByState)}
               >
                 {v.label}
               </ToggleGroupItem>
@@ -245,16 +248,15 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         {/* Date navigation cluster: Today + Stepper/Picker */}
         <div className="flex-shrink-0 flex items-center gap-2">
           {showToday && (
-            <div className="flex-shrink-0 flex items-center bg-slate-100 dark:bg-black/20 border border-slate-300 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm">
+            <div className={toolbar.control}>
               <button
                 type="button"
                 onClick={handleToday}
                 aria-label="Snap to today"
                 className={cn(
-                  "px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all h-8 min-w-[36px] border-none shadow-none active:scale-95 cursor-pointer",
-                  isTodayActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-slate-700 dark:text-muted-foreground hover:text-slate-900 dark:hover:text-foreground hover:bg-slate-200/60 dark:hover:bg-muted/30"
+                  toolbar.controlItem,
+                  'active:scale-95 cursor-pointer',
+                  isTodayActive ? toolbar.modeOn : toolbar.modeOff,
                 )}
               >
                 Today
@@ -262,12 +264,12 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
             </div>
           )}
 
-          <div className="flex-shrink-0 flex items-center gap-1 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
+          <div className={toolbar.stepper}>
             <button
               onClick={handlePrev}
               disabled={prevDisabled}
               aria-label="Previous date period"
-              className="h-8 w-8 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg transition-all text-slate-700 dark:text-muted-foreground hover:text-slate-950 dark:hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-40 disabled:cursor-not-allowed"
+              className={toolbar.stepperButton}
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -278,7 +280,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
               onClick={handleNext}
               disabled={nextDisabled}
               aria-label="Next date period"
-              className="h-8 w-8 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg transition-all text-slate-700 dark:text-muted-foreground hover:text-slate-950 dark:hover:text-foreground hover:bg-slate-100 dark:hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-40 disabled:cursor-not-allowed"
+              className={toolbar.stepperButton}
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -299,7 +301,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
             key={opt.value}
             onClick={() => onViewTypeChange(opt.value)}
             className={cn(
-              'px-3 py-1 rounded-md text-xs font-black transition-all',
+              'px-3 py-1 rounded-md text-[11px] font-black transition-all',
               viewType === opt.value
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -327,7 +329,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         {showPicker ? (
           picker
         ) : (
-          <span className="text-xs font-bold text-foreground whitespace-nowrap min-w-[130px] text-center">
+          <span className="text-[11px] font-bold text-foreground whitespace-nowrap min-w-[130px] text-center">
             {label}
           </span>
         )}
@@ -349,7 +351,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
           onClick={handleToday}
           aria-label="Snap to today"
           className={cn(
-            'px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider transition-all h-7 flex-shrink-0 cursor-pointer',
+            'px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all h-7 flex-shrink-0 cursor-pointer',
             isTodayActive
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/30',

@@ -296,7 +296,6 @@ const OfferItem: React.FC<{
                 isExpired={isExpired || isLocked}
                 urgency={urgency}
                 shiftData={{ ...offer.shift, sub_group_name: subGroupName } as any}
-                hideGlow
                 groupVariant={
                     offer.shift.group_type === 'convention_centre' ? 'convention' :
                     offer.shift.group_type === 'exhibition_centre' ? 'exhibition' :
@@ -437,7 +436,8 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                     // would be a second control for the same action sitting
                     // over the first.
                     hideClose
-                    className="max-w-md w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] p-0 overflow-hidden bg-card/95 backdrop-blur-2xl border border-border shadow-2xl rounded-[28px] flex flex-col z-[150]"
+                    className="w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] p-0 overflow-hidden bg-card/95 flex flex-col z-[150]"
+                    size="md"
                 >
                     <DialogHeader className="sr-only">
                         <DialogTitle>My Shift Offers</DialogTitle>
@@ -573,7 +573,7 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                 open={!!showDeclineConfirm}
                 onOpenChange={() => setShowDeclineConfirm(null)}
             >
-                <AlertDialogContent className="bg-background border border-border rounded-2xl p-6 max-w-sm z-[200] shadow-2xl" aria-describedby={undefined}>
+                <AlertDialogContent className="z-[200]" aria-describedby={undefined}>
                     <AlertDialogHeader>
                         <AlertDialogTitle className={cn(text.title, 'text-foreground')}>
                             Decline Shift?

@@ -72,8 +72,8 @@ const AllowancesSection: React.FC<AllowancesSectionProps> = ({ allowances, effec
     <TooltipProvider>
       <div className="space-y-6">
         <div>
-          <h3 className="text-xl font-bold text-foreground">Allowances</h3>
-          <p className="text-base text-muted-foreground mt-1">
+          <h3 className="text-[17px] font-bold text-foreground">Allowances</h3>
+          <p className="text-[14px] text-muted-foreground mt-1">
             Per-shift and per-hour allowances under the ICC Sydney EA 2025
           </p>
         </div>
@@ -104,7 +104,7 @@ const AllowancesSection: React.FC<AllowancesSectionProps> = ({ allowances, effec
                       <div className="rounded-lg bg-primary/10 p-2">
                         <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
                       </div>
-                      <span className="text-base font-bold text-foreground">{label}</span>
+                      <span className="text-[14px] font-bold text-foreground">{label}</span>
                     </div>
                     {config?.description && (
                       <Tooltip>
@@ -116,9 +116,9 @@ const AllowancesSection: React.FC<AllowancesSectionProps> = ({ allowances, effec
                             <HelpCircle className="h-4 w-4" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs text-sm p-3">
+                        <TooltipContent side="top" className="max-w-xs text-[13px] p-3">
                           <p className="font-bold mb-1">{label} ({clause})</p>
-                          <p className="text-muted-foreground text-xs leading-relaxed">{config.description}</p>
+                          <p className="text-muted-foreground text-[11px] leading-relaxed">{config.description}</p>
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -126,15 +126,15 @@ const AllowancesSection: React.FC<AllowancesSectionProps> = ({ allowances, effec
 
                   {/* Amount */}
                   <div className="pt-2">
-                    <span className="text-3xl font-extrabold text-foreground tabular-nums">
+                    <span className="text-[24px] font-extrabold text-foreground tabular-nums">
                       {money(a.amount)}
                     </span>
-                    <span className="text-sm font-semibold text-muted-foreground ml-1.5">{unitLabel}</span>
+                    <span className="text-[13px] font-semibold text-muted-foreground ml-1.5">{unitLabel}</span>
                   </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground pt-3 border-t border-border/40 mt-2">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground pt-3 border-t border-border/40 mt-2">
                   <span>{clause}</span>
                   <span>Effective {effectiveLabel}</span>
                 </div>
@@ -144,7 +144,7 @@ const AllowancesSection: React.FC<AllowancesSectionProps> = ({ allowances, effec
         </div>
 
         {sorted.length === 0 && (
-          <p className="text-base text-muted-foreground italic py-8 text-center" role="status">
+          <p className="text-[14px] text-muted-foreground italic py-8 text-center" role="status">
             No allowances found for the current rate set.
           </p>
         )}

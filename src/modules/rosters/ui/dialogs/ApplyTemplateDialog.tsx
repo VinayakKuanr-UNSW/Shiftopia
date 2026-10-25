@@ -1,3 +1,4 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo } from 'react';
 import {
     Dialog,
@@ -83,7 +84,7 @@ const HistoryItem: React.FC<{ batch: any }> = ({ batch }) => {
                     </div>
                     <div className="flex flex-col">
                         <span className="text-[11px] font-black text-foreground leading-none">{batch.appliedByName || 'System'}</span>
-                        <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter mt-1">
+                        <span className="text-[11px] text-muted-foreground font-medium uppercase tracking-tighter mt-1">
                             {formatInTimezone(new Date(batch.appliedAt), SYDNEY_TZ, 'MMM d, HH:mm')}
                         </span>
                     </div>
@@ -91,7 +92,7 @@ const HistoryItem: React.FC<{ batch: any }> = ({ batch }) => {
             </div>
 
             <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono bg-muted/50 px-2 py-1 rounded-md border border-border">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono bg-muted/50 px-2 py-1 rounded-md border border-border">
                     <CalendarIcon className="h-3 w-3 opacity-50" />
                     <span>{format(new Date(batch.startDate), 'MM/dd')}</span>
                     <ArrowRight className="h-2.5 w-2.5 opacity-30 px-0.5" />
@@ -104,7 +105,7 @@ const HistoryItem: React.FC<{ batch: any }> = ({ batch }) => {
                     onClick={handleUndo}
                     disabled={undo.isPending}
                     className={cn(
-                        "h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                        "h-8 px-3 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all",
                         isConfirming
                             ? "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border border-amber-500/30"
                             : "text-muted-foreground hover:text-red-500 hover:bg-red-500/10 border border-transparent"
@@ -216,7 +217,8 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                 // Same status-bar overlap as SnapFromRosterDialog: padding for the
                 // content, a separate offset for the absolutely-positioned close
                 // button. env() is 0 off-device, so desktop is unchanged.
-                className="z-[150] flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background p-0 pt-[env(safe-area-inset-top,0px)] shadow-2xl sm:h-[720px] sm:max-h-[85vh] sm:max-w-[1040px] sm:rounded-[2.5rem] sm:pt-0 [&>button]:z-50 [&>button]:flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full [&>button]:bg-background/90 [&>button]:top-[calc(env(safe-area-inset-top,0px)+1rem)] sm:[&>button]:top-4"
+                className="z-[150] flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] flex-col overflow-hidden p-0 pt-[env(safe-area-inset-top,0px)] sm:h-[720px] sm:max-h-[85vh] sm:pt-0 [&>button]:z-50 [&>button]:flex [&>button]:h-10 [&>button]:w-10 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full [&>button]:bg-background/90 [&>button]:top-[calc(env(safe-area-inset-top,0px)+1rem)] sm:[&>button]:top-4"
+                size="2xl"
             >
                 <VisuallyHidden>
                     <DialogTitle>Apply Template to Roster</DialogTitle>
@@ -235,8 +237,8 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                     <Layers className="h-5 w-5 text-primary" />
                                 </div>
                                 <div className="flex flex-col">
-                                    <h2 className="text-lg font-black text-foreground tracking-tight leading-none">Templates</h2>
-                                    <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.15em] mt-1.5">
+                                    <h2 className="text-[15px] font-black text-foreground tracking-tight leading-none">Templates</h2>
+                                    <p className="text-[11px] text-muted-foreground uppercase font-black tracking-[0.15em] mt-1.5">
                                         Ready to apply
                                     </p>
                                 </div>
@@ -248,7 +250,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                     placeholder="Search templates..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="bg-background border-border pl-10 text-xs h-10 focus:ring-1 focus:ring-primary/40 rounded-xl placeholder:text-muted-foreground/40 font-medium"
+                                    className="bg-background border-border pl-10 text-[11px] h-10 focus:ring-1 focus:ring-primary/40 rounded-xl placeholder:text-muted-foreground/40 font-medium"
                                 />
                             </div>
                         </div>
@@ -257,7 +259,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                             {isLoadingTemplates ? (
                                 <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-50">
                                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Indexing...</span>
+                                    <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Indexing...</span>
                                 </div>
                             ) : filteredTemplates.length === 0 ? (
                                 <div className="text-center py-24">
@@ -292,7 +294,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                     "text-[14px] font-black tracking-tight transition-colors",
                                                     selectedId === t.id ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
                                                 )}>{t.name}</div>
-                                                <div className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest mt-0.5">
+                                                <div className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mt-0.5">
                                                     {t.applied_count ?? 0} Uses
                                                 </div>
                                             </div>
@@ -329,14 +331,14 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                         <div className="mb-12 text-center">
                                             <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 shadow-inner">
                                                 <Sparkles className="h-3 w-3 text-primary" />
-                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">
+                                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">
                                                     Apply Template
                                                 </span>
                                             </div>
-                                            <h2 className="text-3xl font-black text-foreground tracking-tighter leading-none mb-4">
+                                            <h2 className="text-[24px] font-black text-foreground tracking-tighter leading-none mb-4">
                                                 {selectedTemplate.name}
                                             </h2>
-                                            <p className="text-sm text-muted-foreground font-medium leading-relaxed max-w-[400px] mx-auto opacity-70">
+                                            <p className="text-[13px] text-muted-foreground font-medium leading-relaxed max-w-[400px] mx-auto opacity-70">
                                                 {selectedTemplate.description || 'Professional workforce distribution pattern calibrated for this department.'}
                                             </p>
                                         </div>
@@ -349,26 +351,26 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
 
                                                 <div className="flex items-center gap-2.5 opacity-60">
                                                     <Clock className="h-4 w-4 text-blue-400" />
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-200">Execution Range</span>
+                                                    <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-200">Execution Range</span>
                                                 </div>
 
                                                 <div className="relative z-10 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8">
                                                     <div className="space-y-3">
-                                                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Start Point</Label>
+                                                        <Label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Start Point</Label>
                                                         <Input
                                                             type="date"
                                                             value={startDate}
                                                             onChange={(e) => setStartDate(e.target.value)}
-                                                            className="bg-black/60 border-white/5 text-white focus:ring-blue-500/40 rounded-2xl font-mono text-sm h-12 shadow-inner px-4"
+                                                            className="bg-black/60 border-white/5 text-white focus:ring-blue-500/40 rounded-2xl font-mono text-[13px] h-12 shadow-inner px-4"
                                                         />
                                                     </div>
                                                     <div className="space-y-3">
-                                                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">End Point</Label>
+                                                        <Label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">End Point</Label>
                                                         <Input
                                                             type="date"
                                                             value={endDate}
                                                             onChange={(e) => setEndDate(e.target.value)}
-                                                            className="bg-black/60 border-white/5 text-white focus:ring-blue-500/40 rounded-2xl font-mono text-sm h-12 shadow-inner px-4"
+                                                            className="bg-black/60 border-white/5 text-white focus:ring-blue-500/40 rounded-2xl font-mono text-[13px] h-12 shadow-inner px-4"
                                                         />
                                                     </div>
                                                 </div>
@@ -404,7 +406,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                             >
                                                                 <div className="h-2 w-2 rounded-full bg-primary" />
                                                                 <span className="text-[11px] font-bold text-muted-foreground">
-                                                                    Applying to <span className="text-foreground text-xs px-1.5 py-0.5 bg-muted rounded-md border border-border mx-0.5">{daysCount}</span> {daysCount === 1 ? 'day' : 'days'}
+                                                                    Applying to <span className="text-foreground text-[11px] px-1.5 py-0.5 bg-muted rounded-md border border-border mx-0.5">{daysCount}</span> {daysCount === 1 ? 'day' : 'days'}
                                                                 </span>
                                                             </motion.div>
                                                         </>
@@ -417,7 +419,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                 <Button
                                                     variant="ghost"
                                                     onClick={() => onOpenChange(false)}
-                                                    className="h-16 px-8 rounded-[1.5rem] font-black text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                                                    className="h-16 px-8 rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
                                                 >
                                                     Cancel
                                                 </Button>
@@ -451,7 +453,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
 
                                             <div className="flex items-center gap-4 px-2 opacity-50 hover:opacity-100 transition-opacity">
                                                 <Info className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                                <p className="text-[10px] font-bold text-muted-foreground leading-relaxed uppercase tracking-widest">
+                                                <p className="text-[11px] font-bold text-muted-foreground leading-relaxed uppercase tracking-widest">
                                                     Applying adds shifts to whatever is already in the selected range.
                                                 </p>
                                             </div>
@@ -467,8 +469,8 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                     <div className="h-32 w-32 rounded-[2.5rem] bg-muted border border-border flex items-center justify-center mb-10 shadow-sm">
                                         <Layers className="h-12 w-12 text-muted-foreground/30 animate-pulse" />
                                     </div>
-                                    <h3 className="text-2xl font-black text-foreground mb-3 tracking-tighter">System Idle</h3>
-                                    <p className="text-sm text-muted-foreground max-w-[280px] font-medium leading-relaxed opacity-70">
+                                    <h3 className="text-[20px] font-black text-foreground mb-3 tracking-tighter">System Idle</h3>
+                                    <p className="text-[13px] text-muted-foreground max-w-[280px] font-medium leading-relaxed opacity-70">
                                         Pick a template on the left to choose its date range.
                                     </p>
                                 </motion.div>
@@ -484,9 +486,9 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                     <div className="h-10 w-10 rounded-2xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
                                         <History className="h-5 w-5 text-amber-600" />
                                     </div>
-                                    <h2 className="text-md font-black text-foreground tracking-tight leading-none uppercase tracking-widest text-xs opacity-80">History</h2>
+                                    <h2 className="text-md font-black text-foreground tracking-tight leading-none uppercase tracking-widest text-[11px] opacity-80">History</h2>
                                 </div>
-                                <Badge variant="outline" className="text-[9px] font-black border-border bg-background text-muted-foreground px-2 py-0.5 rounded-full">
+                                <Badge variant="outline" className="text-[11px] font-black border-border bg-background text-muted-foreground px-2 py-0.5 rounded-full">
                                     {history.length} LOGS
                                 </Badge>
                             </div>
@@ -498,18 +500,12 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                             {!selectedId ? (
                                 <div className="h-full flex flex-col items-center justify-center opacity-10 py-20">
                                     <Clock className="h-10 w-10 mb-4" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest">Select Item</span>
+                                    <span className="text-[11px] font-black uppercase tracking-widest">Select Item</span>
                                 </div>
                             ) : isLoadingHistory ? (
-                                <div className="py-24 text-center opacity-30">
-                                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-4" />
-                                    <span className="text-[10px] uppercase font-black tracking-widest">Reading logs...</span>
-                                </div>
+                                <PageState state="loading" title="Reading usage history" />
                             ) : history.length === 0 ? (
-                                <div className="py-24 text-center border-2 border-dashed border-muted rounded-[2rem] flex flex-col items-center justify-center overflow-hidden relative">
-                                    <div className="absolute inset-0 bg-muted/5" />
-                                    <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/40 relative z-10 italic">No usage records</p>
-                                </div>
+                                <PageState state="empty" title="No usage records" description="This template hasn't been applied to a roster yet." />
                             ) : (
                                 history.map(batch => (
                                     <HistoryItem key={batch.id} batch={batch} />
@@ -522,7 +518,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                             <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">
                                 <div className="flex gap-3">
                                     <Info className="h-3.5 w-3.5 text-amber-600/60 flex-shrink-0 mt-0.5" />
-                                    <p className="text-[10px] font-bold text-muted-foreground/60 leading-tight uppercase tracking-tight">
+                                    <p className="text-[11px] font-bold text-muted-foreground/60 leading-tight uppercase tracking-tight">
                                         Undo operations will selectively remove shifts created in the specific batch.
                                     </p>
                                 </div>

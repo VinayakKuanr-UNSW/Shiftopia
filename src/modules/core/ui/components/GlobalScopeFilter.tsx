@@ -570,13 +570,13 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
                         
                         <div className="flex-1 overflow-y-auto px-6 pb-24">
                             <SheetHeader className="mb-8 text-left">
-                                <SheetTitle className="text-2xl font-black flex items-center gap-3">
+                                <SheetTitle className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
                                         <Filter className="w-5 h-5" />
                                     </div>
                                     Filter Scope
                                 </SheetTitle>
-                                <SheetDescription className="text-sm font-medium text-muted-foreground/80 mt-1">
+                                <SheetDescription className="mt-1">
                                     Select the organizations and departments to refine your view.
                                 </SheetDescription>
                             </SheetHeader>

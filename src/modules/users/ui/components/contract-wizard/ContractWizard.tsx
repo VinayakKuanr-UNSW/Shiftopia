@@ -200,10 +200,10 @@ export const ContractWizard: React.FC<ContractWizardProps> = ({
                     <div>
                         <div className="flex items-start justify-between gap-4">
                             <div className="text-left min-w-0">
-                                <TitleTag className="text-lg font-semibold tracking-tight text-foreground">
+                                <TitleTag className="text-[15px] font-semibold tracking-tight text-foreground">
                                     {isEditing ? 'Edit contract' : 'Add contract'}
                                 </TitleTag>
-                                <DescriptionTag className="text-muted-foreground text-sm mt-0.5 truncate">
+                                <DescriptionTag className="text-muted-foreground text-[13px] mt-0.5 truncate">
                                     {employeeName} · step {step} of 4
                                 </DescriptionTag>
                             </div>
@@ -218,7 +218,7 @@ export const ContractWizard: React.FC<ContractWizardProps> = ({
                                     <span className="text-[11px] font-medium">
                                         {hoursRule!.label} · {hoursRule!.clause}
                                     </span>
-                                    <span className="text-xs font-semibold tabular-nums text-foreground">
+                                    <span className="text-[11px] font-semibold tabular-nums text-foreground">
                                         {fmtHours(hoursRule!.value)}h{hoursRule!.cadence} · {hoursRule!.limitText}
                                     </span>
                                 </div>

@@ -2,11 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { Users } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { cn } from '@/modules/core/lib/utils';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { UserManagementFunctionBar, type UsersExportFormat } from '../ui/components/UserManagementFunctionBar';
 import { UsersTable } from '../ui/components/UsersTable';
 import { useUsersTable } from '../hooks/useUsersTable';
@@ -32,7 +31,6 @@ function scopeLabelOf(scope: ScopeSelection, groups: readonly PersonGroup[]): st
  */
 const UsersPage: React.FC = () => {
     const { hasPermission } = useAuth();
-    const { isDark } = useTheme();
     const { toast } = useToast();
     const { scope, setScope, isGammaLocked, scopeTree } = useScopeFilter('managerial');
     // Admin suite: zeta only, matching the database's grant rules.
@@ -68,28 +66,17 @@ const UsersPage: React.FC = () => {
     };
 
     return (
-        <div className="h-full w-full min-w-0 max-w-full flex flex-col overflow-hidden space-y-4 text-foreground">
-            {/* ── Header Landmark ────────────────────────────────────────────── */}
-            <header role="banner" className="sticky top-0 z-30 pt-2 pb-2 lg:pb-4 shrink-0 w-full min-w-0">
-                <div className={cn(
-                    "rounded-[28px] p-4 lg:p-6 transition-all border w-full min-w-0 shadow-none",
-                    isDark
-                        ? "bg-[#1c2333] border-white/10"
-                        : "bg-white border-slate-200"
-                )}>
-                    {/* Identity & Scope Filter */}
-                    <PersonalPageHeader
-                        title="User Management"
-                        Icon={Users}
-                        scope={scope}
-                        setScope={setScope}
-                        isGammaLocked={isGammaLocked}
-                        mode="managerial"
-                        // A list to narrow, not one place to work in: choose any number of each.
-                        multiSelect
-                        className="mb-4 lg:mb-6"
-                    />
-
+        <PageLayout className="text-foreground">
+            <GoldStandardHeader
+                title="User Management"
+                Icon={Users}
+                scope={scope}
+                setScope={setScope}
+                isGammaLocked={isGammaLocked}
+                mode="managerial"
+                // A list to narrow, not one place to work in: choose any number of each.
+                multiSelect
+                functionBar={
                     <UserManagementFunctionBar
                         isAdmin={isAuthorizedAdmin}
                         onExport={onExport}
@@ -100,11 +87,12 @@ const UsersPage: React.FC = () => {
                         onColumnsChange={setColumns}
                         transparent
                     />
-                </div>
-            </header>
+                }
+            />
 
-            {/* ── Main Content Landmark: the table is the body ─────────────────── */}
-            <main role="main" aria-label="Users" className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
+            {/* The table is the body. A region, not <main>: AppLayout already
+                renders the page's one main landmark around every route. */}
+            <section aria-label="Users" className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
                 <UsersTable
                     groups={shown}
                     totals={totals}
@@ -118,8 +106,8 @@ const UsersPage: React.FC = () => {
                     refresh={table.refresh}
                     canManage={isAuthorizedAdmin}
                 />
-            </main>
-        </div>
+            </section>
+        </PageLayout>
     );
 };
 

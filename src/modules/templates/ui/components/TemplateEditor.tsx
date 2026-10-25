@@ -39,6 +39,7 @@ import { EnhancedAddShiftModal } from '@/modules/rosters';
 import { TemplateGroupCard } from './editor/TemplateGroupCard';
 import { TemplateSubgroupCard } from './editor/TemplateSubgroupCard';
 import { TemplateHeader } from './TemplateHeader';
+import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
 
 interface TemplateEditorProps {
   template: Template;
@@ -390,7 +391,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                       }
                       renderShifts={(sg) =>
                         sg.shifts && sg.shifts.length > 0 ? (
-                          <div className="flex flex-col gap-1.5 w-full">
+                          <div className="flex flex-col gap-1.5 w-full group/cell">
                             <div className="rounded-xl border border-white/10 dark:border-white/10 bg-slate-900/60 dark:bg-slate-900/60 overflow-hidden divide-y divide-white/[0.06] dark:divide-white/[0.06] shadow-sm w-full">
                               {[...sg.shifts]
                                 .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
@@ -428,15 +429,13 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                                 ))}
                             </div>
                             {!isReadOnly && (
-                              <button
-                                type="button"
-                                onClick={() => openAddShiftModal(grp, subGroup)}
-                                title="Add shift"
-                                aria-label="Add shift"
-                                className="w-full h-7 rounded-lg border border-dashed border-white/10 hover:border-primary/40 bg-slate-900/40 hover:bg-primary/10 flex items-center justify-center text-slate-400 hover:text-primary transition-all cursor-pointer select-none group/add-strip"
-                              >
-                                <Plus className="h-4 w-4 transition-transform duration-200 group-hover/add-strip:scale-110" />
-                              </button>
+                              <div className="flex items-center justify-end w-full pt-1">
+                                <RosterCellAddButton
+                                  onClick={() => openAddShiftModal(grp, subGroup)}
+                                  hasShifts={true}
+                                  title="Add shift"
+                                />
+                              </div>
                             )}
                           </div>
                         ) : null

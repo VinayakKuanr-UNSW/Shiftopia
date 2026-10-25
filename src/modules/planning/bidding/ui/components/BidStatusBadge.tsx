@@ -24,11 +24,11 @@ export const BidStatusBadge = React.memo(({ status, iteration }: BidStatusBadgeP
 
     return (
         <div className="flex items-center gap-1.5">
-            <Badge className={`${config.cls} text-[10px] font-bold uppercase tracking-tight`}>
+            <Badge className={`${config.cls} text-[11px] font-bold uppercase tracking-tight`}>
                 {config.label}
             </Badge>
             {iteration && iteration > 1 && (
-                <span className="text-[9px] font-mono font-bold text-muted-foreground/30 bg-muted/20 px-1 rounded uppercase">
+                <span className="text-[11px] font-mono font-bold text-muted-foreground/30 bg-muted/20 px-1 rounded uppercase">
                     ITR {iteration}
                 </span>
             )}

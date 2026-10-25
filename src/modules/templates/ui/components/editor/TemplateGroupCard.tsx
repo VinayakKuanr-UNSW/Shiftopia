@@ -78,12 +78,12 @@ export function TemplateGroupCard({
                                 {config.icon}
                             </div>
                             <div className="min-w-0">
-                                <h3 className="font-bold text-base text-foreground tracking-tight truncate">{group.name}</h3>
-                                <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                <h3 className="font-bold text-[14px] text-foreground tracking-tight truncate">{group.name}</h3>
+                                <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
                                     {group.subGroups.length} subgroups • {shiftCount} shifts
                                 </p>
                                 {note && (
-                                    <p className="text-xs text-slate-600 dark:text-slate-300">{note}</p>
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-300">{note}</p>
                                 )}
                             </div>
                         </button>
@@ -107,7 +107,7 @@ export function TemplateGroupCard({
                     <div className="px-4 pb-4 space-y-3">
                         {group.subGroups.length === 0 ? (
                             <div className="text-center py-8 text-slate-600 dark:text-slate-300">
-                                <p className="text-sm font-medium">No subgroups yet</p>
+                                <p className="text-[13px] font-medium">No subgroups yet</p>
                                 {onAddSubgroup && (
                                     <Button
                                         variant="outline"

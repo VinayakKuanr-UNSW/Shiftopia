@@ -71,9 +71,9 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
   };
 
   return (
-    <ResponsiveDialog open={isOpen} onOpenChange={onOpenChange} dialogClassName="bg-card border-border sm:max-w-[500px]" drawerClassName="h-[85dvh]">
+    <ResponsiveDialog open={isOpen} onOpenChange={onOpenChange} dialogClassName="bg-card" size="md" drawerClassName="h-[85dvh]">
       <ResponsiveDialog.Header>
-        <ResponsiveDialog.Title className="text-foreground text-xl">
+        <ResponsiveDialog.Title className="text-foreground text-[17px]">
           Add New Group
         </ResponsiveDialog.Title>
         <ResponsiveDialog.Description className="text-muted-foreground">
@@ -87,7 +87,7 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
           <div className="space-y-2">
             <label
               htmlFor="groupName"
-              className="text-sm font-medium text-muted-foreground"
+              className="text-[13px] font-medium text-muted-foreground"
             >
               Group Name <span className="text-destructive">*</span>
             </label>
@@ -106,7 +106,7 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
           <div className="space-y-2">
             <label
               htmlFor="groupDescription"
-              className="text-sm font-medium text-muted-foreground"
+              className="text-[13px] font-medium text-muted-foreground"
             >
               Description
             </label>
@@ -123,7 +123,7 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
 
           {/* Icon Selection */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">Icon</label>
+            <label className="text-[13px] font-medium text-muted-foreground">Icon</label>
             <div className="flex gap-2">
               {ICONS.map(({ value, label, icon: Icon }) => (
                 <button
@@ -146,7 +146,7 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
 
           {/* Color Selection */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">Color</label>
+            <label className="text-[13px] font-medium text-muted-foreground">Color</label>
             <div className="flex gap-2">
               {COLORS.map(({ value, label, class: colorClass }) => (
                 <button
@@ -168,7 +168,7 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
 
           {/* Preview */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">Preview</label>
+            <label className="text-[13px] font-medium text-muted-foreground">Preview</label>
             <div
               className={cn(
                 'rounded-lg p-4 border-l-4 flex items-center gap-3',
@@ -198,7 +198,7 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
                 <h4 className="font-medium text-foreground">
                   {newGroup.name || 'Group Name'}
                 </h4>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-[13px] text-muted-foreground">
                   {newGroup.description || 'Group description'}
                 </p>
               </div>

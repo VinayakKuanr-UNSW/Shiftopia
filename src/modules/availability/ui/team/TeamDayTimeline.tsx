@@ -54,7 +54,7 @@ const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) =>
                     }}
                     onMouseEnter={() => setOpen(true)}
                     onMouseLeave={() => setOpen(false)}
-                    className="text-[9px] font-black uppercase tracking-wider px-1 py-0.2 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ml-1"
+                    className="text-[11px] font-black uppercase tracking-wider px-1 py-0.2 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ml-1"
                     aria-label={`View ${extraCount} additional contracts held by ${member.fullName}`}
                 >
                     +{extraCount} more
@@ -69,10 +69,10 @@ const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) =>
             >
                 <div className="space-y-2">
                     <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                             All Contracts ({contracts.length})
                         </span>
-                        <span className="text-xs font-bold text-foreground truncate max-w-[120px]">
+                        <span className="text-[11px] font-bold text-foreground truncate max-w-[120px]">
                             {member.fullName}
                         </span>
                     </div>
@@ -80,13 +80,13 @@ const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) =>
                         {contracts.map((c, i) => (
                             <div
                                 key={i}
-                                className="flex items-center justify-between gap-2 p-1.5 rounded-xl bg-muted/30 border border-border/20 text-xs"
+                                className="flex items-center justify-between gap-2 p-1.5 rounded-xl bg-muted/30 border border-border/20 text-[11px]"
                             >
                                 <span className="font-bold text-foreground truncate">
                                     {c.roleName ?? 'No role'}
                                 </span>
                                 {c.employmentStatus && (
-                                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-background text-muted-foreground border border-border/30 shrink-0">
+                                    <span className="text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-background text-muted-foreground border border-border/30 shrink-0">
                                         {c.employmentStatus}
                                     </span>
                                 )}
@@ -118,7 +118,7 @@ export const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelec
 
     if (members.length === 0) {
         return (
-            <p className="text-xs font-semibold text-muted-foreground py-8 text-center">
+            <p className="text-[11px] font-semibold text-muted-foreground py-8 text-center">
                 No team members match the current scope and filters.
             </p>
         );
@@ -127,10 +127,10 @@ export const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelec
     return (
         <div className="px-1">
             <div className="flex items-baseline gap-2 mb-3 px-0.5">
-                <h3 className="text-xs font-black uppercase tracking-[0.18em] text-foreground">
+                <h3 className="text-[11px] font-black uppercase tracking-[0.18em] text-foreground">
                     {format(parseISO(date), 'EEEE d MMMM')}
                 </h3>
-                <p className="text-[10px] font-semibold text-muted-foreground">
+                <p className="text-[11px] font-semibold text-muted-foreground">
                     Declared windows and assigned shifts on one track
                 </p>
             </div>
@@ -141,7 +141,7 @@ export const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelec
                     {hourTicks.map((h) => (
                         <span
                             key={h}
-                            className="absolute text-[8px] font-black uppercase tracking-wider text-muted-foreground -translate-x-1/2"
+                            className="absolute text-[11px] font-black uppercase tracking-wider text-muted-foreground -translate-x-1/2"
                             style={{ left: `${pct(h * 60)}%` }}
                         >
                             {String(h % 24).padStart(2, '0')}
@@ -170,12 +170,12 @@ export const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelec
                                     <span className="block text-[11px] font-bold text-foreground truncate">
                                         {member.fullName}
                                     </span>
-                                     <span className="flex items-center gap-1 text-[9px] font-semibold text-muted-foreground truncate">
+                                     <span className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground truncate">
                                          <span className="truncate max-w-[80px]" title={member.roleName ?? 'No role'}>
                                              {member.roleName ?? 'No role'}
                                          </span>
                                          {member.employmentStatus && (
-                                             <span className="text-[8px] font-black uppercase tracking-wider px-1 py-0.2 rounded bg-muted/80 text-muted-foreground shrink-0 border border-border/30">
+                                             <span className="text-[11px] font-black uppercase tracking-wider px-1 py-0.2 rounded bg-muted/80 text-muted-foreground shrink-0 border border-border/30">
                                                  {member.employmentStatus}
                                              </span>
                                          )}
@@ -232,7 +232,7 @@ export const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelec
                                             }}
                                             title={`Shift ${s.start}–${s.end}${s.roleName ? ` · ${s.roleName}` : ''}`}
                                         >
-                                            <span className="text-[8px] font-black uppercase tracking-wider text-white truncate">
+                                            <span className="text-[11px] font-black uppercase tracking-wider text-white truncate">
                                                 {s.roleName ?? 'Shift'}
                                             </span>
                                         </span>
@@ -243,7 +243,7 @@ export const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelec
                                 {cell && cell.windows.length === 0 && cell.shifts.length === 0 && (
                                     <span
                                         className={cn(
-                                            'absolute inset-y-1.5 left-0 right-0 flex items-center justify-center gap-1.5 rounded-[4px] border text-[9px] font-black uppercase tracking-wider text-foreground',
+                                            'absolute inset-y-1.5 left-0 right-0 flex items-center justify-center gap-1.5 rounded-[4px] border text-[11px] font-black uppercase tracking-wider text-foreground',
                                             soft?.dashed && 'border-dashed',
                                         )}
                                         style={{

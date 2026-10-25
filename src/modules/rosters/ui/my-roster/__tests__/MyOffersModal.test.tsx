@@ -45,7 +45,6 @@ vi.mock('@/modules/planning/ui/components/SharedShiftCard', () => ({
       data-group={props.group ?? ''}
       data-sub-group={props.subGroup ?? ''}
       data-sub-dept={props.subDepartment ?? ''}
-      data-hide-glow={String(!!props.hideGlow)}
     >
       {props.footerActions}
     </div>

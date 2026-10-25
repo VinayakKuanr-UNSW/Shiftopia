@@ -50,7 +50,7 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
   const renderTimeSlots = (availability: any) => {
     if (!availability.timeSlots || availability.timeSlots.length === 0) {
       return (
-        <div className="py-3 px-4 text-muted-foreground text-sm">
+        <div className="py-3 px-4 text-muted-foreground text-[13px]">
           No time slots defined for this day.
         </div>
       );
@@ -68,8 +68,8 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
               )}
             />
             <Clock className="h-3 w-3 text-muted-foreground mr-2" />
-            <span className="text-sm">{slot.startTime} - {slot.endTime}</span>
-            <span className="text-xs ml-auto">{slot.status}</span>
+            <span className="text-[13px]">{slot.startTime} - {slot.endTime}</span>
+            <span className="text-[11px] ml-auto">{slot.status}</span>
           </div>
         ))}
       </div>
@@ -79,8 +79,8 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
   const renderEmptyState = () => (
     <div className="py-6 flex flex-col items-center justify-center text-center">
       <Clock className="h-8 w-8 text-muted-foreground mb-2 opacity-50" />
-      <h3 className="text-lg font-medium mb-1">No Availability Set</h3>
-      <p className="text-sm text-muted-foreground mb-4">
+      <h3 className="text-[15px] font-medium mb-1">No Availability Set</h3>
+      <p className="text-[13px] text-muted-foreground mb-4">
         You haven't set your availability for this date yet.
       </p>
       <div className="flex gap-2">
@@ -96,10 +96,10 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
 
   return (
     <motion.div variants={itemVariants} initial="hidden" animate="show">
-    <Card className="border border-border bg-card rounded-2xl">
+    <Card>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
-          <CardTitle className="text-xl font-black tracking-tight text-foreground">
+          <CardTitle>
             {format(date, 'EEEE, MMMM d, yyyy')}
           </CardTitle>
           <Button 
@@ -111,7 +111,7 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
           </Button>
         </div>
         {availability && (
-          <div className="flex items-center text-sm mt-1">
+          <div className="flex items-center text-[13px] mt-1">
             <div 
               className={cn(
                 "w-3 h-3 rounded-full mr-2",
@@ -131,7 +131,7 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
           <div className="mt-4 pt-3 border-t border-border">
             <div className="flex items-start">
               <Info className="h-4 w-4 text-muted-foreground mr-2 mt-0.5" />
-              <div className="text-sm">
+              <div className="text-[13px]">
                 <div className="font-medium mb-1">Notes:</div>
                 <p className="text-muted-foreground">{availability.notes}</p>
               </div>

@@ -2,6 +2,7 @@ import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from '@/modules/core/lib/utils'
+import { overlayTokens } from './overlay-tokens'
 
 const Drawer = ({
   shouldScaleBackground = true,
@@ -26,7 +27,7 @@ const DrawerOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm", className)}
+    className={cn(overlayTokens.scrim, "fixed inset-0 z-[100]", className)}
     {...props}
   />
 ))
@@ -41,12 +42,13 @@ const DrawerContent = React.forwardRef<
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-x-0 bottom-0 z-[100] mt-24 flex h-auto flex-col rounded-t-[20px] border border-white/5 bg-background pb-10",
+        overlayTokens.surface, overlayTokens.drawerRadius,
+        "fixed inset-x-0 bottom-0 z-[100] mt-24 flex h-auto max-h-[92dvh] flex-col border-b-0 pb-[max(env(safe-area-inset-bottom),1.5rem)]",
         className
       )}
       {...props}
     >
-      <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+      <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-muted-foreground/30" aria-hidden="true" />
       {children}
     </DrawerPrimitive.Content>
   </DrawerPortal>
@@ -58,7 +60,7 @@ const DrawerHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("grid gap-1.5 p-4 text-center sm:text-left", className)}
+    className={cn(overlayTokens.header, "p-4", className)}
     {...props}
   />
 )
@@ -82,7 +84,7 @@ const DrawerTitle = React.forwardRef<
   <DrawerPrimitive.Title
     ref={ref}
     className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
+      overlayTokens.title,
       className
     )}
     {...props}
@@ -96,7 +98,7 @@ const DrawerDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn(overlayTokens.description, className)}
     {...props}
   />
 ))

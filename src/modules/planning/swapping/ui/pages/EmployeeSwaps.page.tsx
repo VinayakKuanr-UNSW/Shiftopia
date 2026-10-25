@@ -48,6 +48,7 @@ import {
     Check
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useSwaps } from '../../state/useSwaps';
@@ -61,6 +62,8 @@ import { SwapSelectionToolbar } from '../components/SwapSelectionToolbar';
 import { Drawer, DrawerContent, DrawerTitle, DrawerDescription, DrawerClose } from '@/modules/core/ui/primitives/drawer';
 import { useQuery } from '@tanstack/react-query';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarIconButton, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { soleOrgId, deptIds, subDeptIds } from '@/platform/auth/scope-narrowing';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
@@ -70,6 +73,8 @@ import { calculateTimeRemaining, formatTimeRemaining } from '../../../../plannin
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
+import { PageState } from '@/modules/core/ui/components/PageState';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableStateRow } from '@/modules/core/ui/primitives/table';
 
 type TabType = 'available-swaps' | 'my-offers' | 'my-swaps';
 type SortOption = 'date-soonest' | 'date-latest';
@@ -657,7 +662,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                     groupVariant={offerGroupVariant}
 
                     footerActions={
-                        <div className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md border text-sm font-medium ${status.color}`}>
+                        <div className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md border text-[13px] font-medium ${status.color}`}>
                             {status.label === 'Accepted' ? <CheckCircle className="h-4 w-4" /> :
                              status.label === 'Expired' || status.label === 'Withdrawn' ? <Ban className="h-4 w-4" /> :
                              status.label.includes('Rejected') ? <XCircle className="h-4 w-4" /> :
@@ -674,7 +679,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                     onChange={() => handleSelectSwap(swap.id, `Offer: ${shift?.roles?.name || 'Shift'}`)}
                                     className="h-4 w-4 rounded border-border/50 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
                                 />
-                                <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
+                                <span className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
                             </div>
                         ) : undefined
                     }
@@ -731,24 +736,24 @@ export const EmployeeSwapsPage: React.FC = () => {
                         <div className="flex flex-col gap-1.5">
                             {/* ── EXPIRY GLOBAL OVERRIDE ── */}
                             {isExpired ? (
-                                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm font-medium">
+                                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-[13px] font-medium">
                                 <Ban className="h-4 w-4" /> Expired
                             </div>
                         ) : swap.status === 'APPROVED' ? (
-                            <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
+                            <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-[13px] font-medium">
                                 <CheckCircle className="h-4 w-4" /> Accepted
                             </div>
                         ) : swap.status === 'REJECTED' ? (
-                            <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
+                            <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-[13px] font-medium">
                                 <XCircle className="h-4 w-4" /> Rejected
                             </div>
                         ) : swap.status === 'CANCELLED' ? (
-                            <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm font-medium">
+                            <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-[13px] font-medium">
                                 <Ban className="h-4 w-4" /> Cancelled
                             </div>
                         ) : swap.status === 'MANAGER_PENDING' ? (
                             <>
-                                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
+                                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-[13px] font-medium">
                                     <Clock className="h-4 w-4" /> Awaiting Manager Review
                                 </div>
                                 <Button
@@ -787,7 +792,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                     onChange={() => handleSelectSwap(swap.id, `Swap: ${shift?.roles?.name || 'Shift'}`)}
                                     className="h-4 w-4 rounded border-border/50 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
                                 />
-                                <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
+                                <span className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
                             </div>
                         ) : undefined
                     }
@@ -838,7 +843,7 @@ export const EmployeeSwapsPage: React.FC = () => {
 
                 footerActions={
                     isExpired ? (
-                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm font-medium">
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-[13px] font-medium">
                             <Ban className="h-4 w-4" /> Expired
                         </div>
                     ) : (
@@ -862,7 +867,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 className="h-4 w-4 rounded border-border/50 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
                                 disabled={hasOffered}
                             />
-                            <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
+                            <span className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
                         </div>
                     ) : undefined
                 }
@@ -970,7 +975,7 @@ export const EmployeeSwapsPage: React.FC = () => {
     };
 
     return (
-        <div className="h-full flex flex-col overflow-hidden bg-background">
+        <PageLayout>
             {/* ── GOLD STANDARD HEADER (Rows 1 · 2 · 3) ── */}
             <GoldStandardHeader
                 title="My Swaps"
@@ -1014,9 +1019,8 @@ export const EmployeeSwapsPage: React.FC = () => {
                     />
                 ) : undefined}
                 functionBarChildren={
-                    <Button
-                        variant="ghost"
-                        size="sm"
+                    <button
+                        type="button"
                         onClick={() => {
                             setIsBulkModeActive(prev => {
                                 const next = !prev;
@@ -1024,23 +1028,18 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 return next;
                             });
                         }}
-                        className={cn(
-                            "flex items-center justify-center md:gap-2 transition-all font-black text-[10px] uppercase tracking-wider flex-shrink-0 active:scale-95",
-                            "h-11 w-full rounded-xl p-0", // Mobile: uniform 44px, full width
-                            "md:h-9 md:w-auto md:px-3.5 md:rounded-xl", // Desktop
-                            isBulkModeActive 
-                                ? "bg-[#7b61ff]/20 text-[#7b61ff] border border-[#7b61ff]/30 hover:bg-[#7b61ff]/30" 
-                                : isDark ? "bg-[#111827]/60 hover:bg-[#111827]/80 text-muted-foreground" : "bg-slate-100 hover:bg-slate-200 text-muted-foreground"
-                        )}
+                        aria-pressed={isBulkModeActive}
+                        aria-label="Bulk Mode"
+                        className={cn(toolbar.secondaryAction, isBulkModeActive && toolbar.secondaryActionOn)}
                     >
-                        <ListChecks className="h-5 w-5 md:h-4 md:w-4" />
+                        <ListChecks className="h-4 w-4" aria-hidden="true" />
                         <span className="hidden md:inline">Bulk Mode</span>
-                    </Button>
+                    </button>
                 }
             />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 {/* Tabs Switcher */}
                 <div className="mb-3 p-1 rounded-2xl bg-slate-100/85 dark:bg-[#1c2333]/85 border border-slate-200/50 dark:border-white/5 flex items-center justify-between gap-1 shadow-sm shrink-0">
                     {([
@@ -1055,7 +1054,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={cn(
-                                    'flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-[0.98]',
+                                    'flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all active:scale-[0.98]',
                                     isActive
                                         ? 'bg-[#7b61ff] text-white shadow-sm'
                                         : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
@@ -1065,7 +1064,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 <span className="hidden sm:inline">{tab.label}</span>
                                 <span className="sm:hidden">{tab.mobileLabel}</span>
                                 <span className={cn(
-                                    "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black tabular-nums",
+                                    "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[11px] font-black tabular-nums",
                                     isActive
                                         ? "bg-white/20 text-white"
                                         : (isDark ? "bg-white/5 text-white/40" : "bg-slate-900/5 text-slate-900/40")
@@ -1078,20 +1077,16 @@ export const EmployeeSwapsPage: React.FC = () => {
                 </div>
 
                 <div className={cn(
-                    "flex-1 min-h-0 rounded-[32px] overflow-hidden transition-all border flex flex-col",
-                    isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                    "flex-1 min-h-0 overflow-hidden flex flex-col",
+                    surface.bodyCard
                 )}>
             {isLoading ? (
-                <div className="flex items-center justify-center py-16">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-                    <span className="ml-2 text-muted-foreground">Loading swaps...</span>
-                </div>
+                <PageState state="loading" title="Loading swaps" description="Fetching open and offered swaps." />
             ) : activeTab === 'available-swaps' ? (
                 viewMode === 'card' ? (
                     <div className={cn(
-                        "flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none",
+                        "flex-1 overflow-y-auto scrollbar-none",
+                        page.bodyInset,
                         filteredAvailableSwaps.length === 0 && "flex flex-col items-center justify-center py-4"
                     )}>
                         <AnimatePresence mode="wait">
@@ -1108,17 +1103,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                             >
                                 {filteredAvailableSwaps.length === 0 ? (
                                     <motion.div variants={itemVariants} className="col-span-full w-full flex items-center justify-center">
-                                        <div className="flex flex-col items-center justify-center text-center gap-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-semibold text-foreground/60">No available swaps</p>
-                                                <p className="text-xs text-muted-foreground/40 mt-1">
-                                                    {priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Check back later for opportunities.'}
-                                                </p>
-                                            </div>
-                                        </div>
+                                        <PageState state="empty" icon={ArrowLeftRight} title="No available swaps" description={priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Check back later for opportunities.'} />
                                     </motion.div>
                                 ) : (
                                     filteredAvailableSwaps.map(renderAvailableSwapCard)
@@ -1146,12 +1131,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                     exit={{ opacity: 0, transition: { duration: 0.12 } }}
                                 >
                                     {filteredAvailableSwaps.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center text-center gap-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
-                                            </div>
-                                            <p className="text-sm font-semibold text-foreground/60">No available swaps</p>
-                                        </div>
+                                        <PageState state="empty" icon={ArrowLeftRight} title="No available swaps" description={priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Check back later for opportunities.'} />
                                     ) : (
                                         filteredAvailableSwaps.map(swap => renderSwapListItem(swap, 'available-swaps'))
                                     )}
@@ -1161,11 +1141,11 @@ export const EmployeeSwapsPage: React.FC = () => {
 
                         {/* Desktop: traditional sortable table */}
                         <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
-                            <table className="w-full text-sm text-foreground">
-                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider font-black">
-                                    <tr>
+                            <Table className="text-foreground">
+                                <TableHeader>
+                                    <TableRow>
                                         {isBulkModeActive && (
-                                            <th className="p-3 text-left w-[40px]">
+                                            <TableHead className="w-[40px]">
                                                 <input
                                                     type="checkbox"
                                                     checked={
@@ -1181,7 +1161,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                     }}
                                                     className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                 />
-                                            </th>
+                                            </TableHead>
                                         )}
                                         <SortableTableHeader sortKey="requested_by.full_name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Requester</SortableTableHeader>
                                         <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Dept</SortableTableHeader>
@@ -1190,10 +1170,10 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         <SortableTableHeader sortKey="requester_shift.shift_date" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Date</SortableTableHeader>
                                         <SortableTableHeader sortKey="requester_shift.start_time" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Time</SortableTableHeader>
                                         <SortableTableHeader sortKey="requester_shift.net_length_minutes" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Net</SortableTableHeader>
-                                        <th className="p-3 text-left w-[180px]">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                                        <TableHead className="w-[180px]">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {filteredAvailableSwaps.map(swap => {
                                         const shift = swap.requester_shift;
                                         const requesterName = swap.requested_by?.full_name || swap.requested_by?.email || 'Someone';
@@ -1203,10 +1183,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         const isExpired = getSwapClose(shift, now).isClosed;
 
                                         return (
-                                            <tr
+                                            <TableRow
                                                 key={swap.id}
                                                 className={cn(
-                                                    "border-t border-border/50 transition-colors",
                                                     isBulkModeActive && !hasOffered && "cursor-pointer hover:bg-muted/20",
                                                     getRowClass(shift?.group_type || shift?.roles?.group_type, shift?.departments?.name || '')
                                                 )}
@@ -1217,7 +1196,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                 }}
                                             >
                                                 {isBulkModeActive && (
-                                                    <td className="p-3" onClick={e => e.stopPropagation()}>
+                                                    <TableCell onClick={e => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedSwapIds.includes(swap.id)}
@@ -1225,34 +1204,34 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                             disabled={hasOffered}
                                                             className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                         />
-                                                    </td>
+                                                    </TableCell>
                                                 )}
-                                                <td className="p-3 font-semibold">{requesterName}</td>
-                                                <td className="p-3 font-medium">{shift?.departments?.name || '—'}</td>
-                                                <td className="p-3">
+                                                <TableCell className="font-semibold">{requesterName}</TableCell>
+                                                <TableCell className="font-medium">{shift?.departments?.name || '—'}</TableCell>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                                         {shift?.sub_departments?.name || '—'}
                                                     </div>
-                                                </td>
-                                                <td className="p-3 font-bold text-[#7b61ff]">{shift?.roles?.name || 'Shift'}</td>
-                                                <td className="p-3">{shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—'}</td>
-                                                <td className="p-3 font-mono">{shift?.start_time ? shift.start_time.slice(0, 5) : '00:00'}–{shift?.end_time ? shift.end_time.slice(0, 5) : '00:00'}</td>
-                                                <td className="p-3 font-mono text-muted-foreground">
+                                                </TableCell>
+                                                <TableCell className="font-bold text-[#7b61ff]">{shift?.roles?.name || 'Shift'}</TableCell>
+                                                <TableCell>{shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—'}</TableCell>
+                                                <TableCell className="font-mono">{shift?.start_time ? shift.start_time.slice(0, 5) : '00:00'}–{shift?.end_time ? shift.end_time.slice(0, 5) : '00:00'}</TableCell>
+                                                <TableCell className="font-mono text-muted-foreground">
                                                     {(() => {
                                                         const net = shift?.net_length_minutes || 0;
                                                         const h = Math.floor(net / 60);
                                                         const m = Math.round(net % 60);
                                                         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
                                                     })()}
-                                                </td>
-                                                <td className="p-3">
+                                                </TableCell>
+                                                <TableCell>
                                                     {isExpired ? (
-                                                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium italic"><Ban size={12} /> Expired</span>
+                                                        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium italic"><Ban size={12} /> Expired</span>
                                                     ) : (
                                                         <Button
                                                             size="sm"
-                                                            className="h-8 text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                                                            className="h-8 text-[11px] font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
                                                             onClick={() => setOfferSwapTarget(swap)}
                                                             disabled={isMakingOffer}
                                                         >
@@ -1260,26 +1239,25 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                             Offer
                                                         </Button>
                                                     )}
-                                                </td>
-                                            </tr>
+                                                </TableCell>
+                                            </TableRow>
                                         );
                                     })}
                                     {filteredAvailableSwaps.length === 0 && (
-                                        <tr>
-                                            <td colSpan={9} className="p-12 text-center text-muted-foreground/60 italic text-sm">
-                                                No matching shifts found.
-                                            </td>
-                                        </tr>
+                                        <TableStateRow colSpan={9}>
+                                            <PageState state="empty" scope="inline" title="No matching shifts found." description="Try a different filter or date range." />
+                                        </TableStateRow>
                                     )}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     </div>
                 )
             ) : activeTab === 'my-offers' ? (
                 viewMode === 'card' ? (
                     <div className={cn(
-                        "flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none",
+                        "flex-1 overflow-y-auto scrollbar-none",
+                        page.bodyInset,
                         filteredMyOffers.length === 0 && "flex flex-col items-center justify-center py-4"
                     )}>
                         <AnimatePresence mode="wait">
@@ -1296,15 +1274,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                             >
                                 {filteredMyOffers.length === 0 ? (
                                     <motion.div variants={itemVariants} className="col-span-full w-full flex items-center justify-center">
-                                        <div className="flex flex-col items-center justify-center text-center gap-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-semibold text-foreground/60">No swap offers yet</p>
-                                                <p className="text-xs text-muted-foreground/40 mt-1">Go to Available Swaps and offer on a colleague's request.</p>
-                                            </div>
-                                        </div>
+                                        <PageState state="empty" icon={ArrowLeftRight} title="No swap offers yet" description="Go to Available Swaps and offer on a colleague's request." />
                                     </motion.div>
                                 ) : (
                                     filteredMyOffers.map(renderMyOfferCard)
@@ -1332,12 +1302,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                     exit={{ opacity: 0, transition: { duration: 0.12 } }}
                                 >
                                     {filteredMyOffers.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center text-center gap-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
-                                            </div>
-                                            <p className="text-sm font-semibold text-foreground/60">No swap offers yet</p>
-                                        </div>
+                                        <PageState state="empty" icon={ArrowLeftRight} title="No swap offers yet" description="Go to Available Swaps and offer on a colleague's request." />
                                     ) : (
                                         filteredMyOffers.map(swap => renderSwapListItem(swap, 'my-offers'))
                                     )}
@@ -1347,11 +1312,11 @@ export const EmployeeSwapsPage: React.FC = () => {
 
                         {/* Desktop: traditional sortable table */}
                         <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
-                            <table className="w-full text-sm text-foreground">
-                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider font-black">
-                                    <tr>
+                            <Table className="text-foreground">
+                                <TableHeader>
+                                    <TableRow>
                                         {isBulkModeActive && (
-                                            <th className="p-3 text-left w-[40px]">
+                                            <TableHead className="w-[40px]">
                                                 <input
                                                     type="checkbox"
                                                     checked={
@@ -1367,7 +1332,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                     }}
                                                     className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                 />
-                                            </th>
+                                            </TableHead>
                                         )}
                                         <SortableTableHeader sortKey="requested_by.full_name" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Owner</SortableTableHeader>
                                         <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Dept</SortableTableHeader>
@@ -1377,9 +1342,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         <SortableTableHeader sortKey="requester_shift.start_time" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Time</SortableTableHeader>
                                         <SortableTableHeader sortKey="requester_shift.net_length_minutes" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Net</SortableTableHeader>
                                         <SortableTableHeader sortKey="status" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Status / Action</SortableTableHeader>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {filteredMyOffers.map(swap => {
                                         const shift = swap.requester_shift;
                                         const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
@@ -1402,10 +1367,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         const status = deriveOfferStatus();
 
                                         return (
-                                            <tr
+                                            <TableRow
                                                 key={swap.id}
                                                 className={cn(
-                                                    "border-t border-border/50 transition-colors",
                                                     isBulkModeActive && "cursor-pointer hover:bg-muted/20",
                                                     getRowClass(shift?.group_type || shift?.roles?.group_type, shift?.departments?.name || '')
                                                 )}
@@ -1416,44 +1380,44 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                 }}
                                             >
                                                 {isBulkModeActive && (
-                                                    <td className="p-3" onClick={e => e.stopPropagation()}>
+                                                    <TableCell onClick={e => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedSwapIds.includes(swap.id)}
                                                             onChange={() => handleSelectSwap(swap.id, `Offer: ${shift?.roles?.name || 'Shift'}`)}
                                                             className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                         />
-                                                    </td>
+                                                    </TableCell>
                                                 )}
-                                                <td className="p-3 font-semibold">{ownerName}</td>
-                                                <td className="p-3 font-medium">{shift?.departments?.name || '—'}</td>
-                                                <td className="p-3">
+                                                <TableCell className="font-semibold">{ownerName}</TableCell>
+                                                <TableCell className="font-medium">{shift?.departments?.name || '—'}</TableCell>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                                         {shift?.sub_departments?.name || '—'}
                                                     </div>
-                                                </td>
-                                                <td className="p-3 font-bold text-[#7b61ff]">{shift?.roles?.name || 'Shift'}</td>
-                                                <td className="p-3">{shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—'}</td>
-                                                <td className="p-3 font-mono">{shift?.start_time ? shift.start_time.slice(0, 5) : '00:00'}–{shift?.end_time ? shift.end_time.slice(0, 5) : '00:00'}</td>
-                                                <td className="p-3 font-mono text-muted-foreground">
+                                                </TableCell>
+                                                <TableCell className="font-bold text-[#7b61ff]">{shift?.roles?.name || 'Shift'}</TableCell>
+                                                <TableCell>{shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—'}</TableCell>
+                                                <TableCell className="font-mono">{shift?.start_time ? shift.start_time.slice(0, 5) : '00:00'}–{shift?.end_time ? shift.end_time.slice(0, 5) : '00:00'}</TableCell>
+                                                <TableCell className="font-mono text-muted-foreground">
                                                     {(() => {
                                                         const net = shift?.net_length_minutes || 0;
                                                         const h = Math.floor(net / 60);
                                                         const m = Math.round(net % 60);
                                                         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
                                                     })()}
-                                                </td>
-                                                <td className="p-3">
+                                                </TableCell>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2">
-                                                        <span className={cn("px-2 py-1 rounded text-xs font-semibold border", status.color)}>
+                                                        <span className={cn("px-2 py-1 rounded text-[11px] font-semibold border", status.color)}>
                                                             {status.label}
                                                         </span>
                                                         {myOffer && myOffer.status === 'SUBMITTED' && swap.status === 'OPEN' && !isExpired && (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
-                                                                className="h-7 text-[10px] font-black uppercase tracking-widest border-border/40 hover:bg-red-500/10 hover:text-red-400"
+                                                                className="h-7 text-[11px] font-black uppercase tracking-widest border-border/40 hover:bg-red-500/10 hover:text-red-400"
                                                                 onClick={() => declineOffer(myOffer.id)}
                                                                 disabled={isDeclining}
                                                             >
@@ -1461,26 +1425,25 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                             </Button>
                                                         )}
                                                     </div>
-                                                </td>
-                                            </tr>
+                                                </TableCell>
+                                            </TableRow>
                                         );
                                     })}
                                     {filteredMyOffers.length === 0 && (
-                                        <tr>
-                                            <td colSpan={9} className="p-12 text-center text-muted-foreground/60 italic text-sm">
-                                                No matching offers found.
-                                            </td>
-                                        </tr>
+                                        <TableStateRow colSpan={9}>
+                                            <PageState state="empty" scope="inline" title="No matching offers found." description="Try a different filter or date range." />
+                                        </TableStateRow>
                                     )}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     </div>
                 )
             ) : (
                 viewMode === 'card' ? (
                     <div className={cn(
-                        "flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none",
+                        "flex-1 overflow-y-auto scrollbar-none",
+                        page.bodyInset,
                         filteredMySwaps.length === 0 && "flex flex-col items-center justify-center py-4"
                     )}>
                         <AnimatePresence mode="wait">
@@ -1497,17 +1460,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                             >
                                 {filteredMySwaps.length === 0 ? (
                                     <motion.div variants={itemVariants} className="col-span-full w-full flex items-center justify-center">
-                                        <div className="flex flex-col items-center justify-center text-center gap-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-semibold text-foreground/60">No swap requests</p>
-                                                <p className="text-xs text-muted-foreground/40 mt-1">
-                                                    {priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Create a swap request from your roster to get started.'}
-                                                </p>
-                                            </div>
-                                        </div>
+                                        <PageState state="empty" icon={ArrowLeftRight} title="No swap requests" description={priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Create a swap request from your roster to get started.'} />
                                     </motion.div>
                                 ) : (
                                     filteredMySwaps.map(renderMySwapCard)
@@ -1535,12 +1488,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                     exit={{ opacity: 0, transition: { duration: 0.12 } }}
                                 >
                                     {filteredMySwaps.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center text-center gap-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
-                                            </div>
-                                            <p className="text-sm font-semibold text-foreground/60">No swap requests</p>
-                                        </div>
+                                        <PageState state="empty" icon={ArrowLeftRight} title="No swap requests" description={priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Create a swap request from your roster to get started.'} />
                                     ) : (
                                         filteredMySwaps.map(swap => renderSwapListItem(swap, 'my-swaps'))
                                     )}
@@ -1550,11 +1498,11 @@ export const EmployeeSwapsPage: React.FC = () => {
 
                         {/* Desktop: traditional sortable table */}
                         <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
-                            <table className="w-full text-sm text-foreground">
-                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider font-black">
-                                    <tr>
+                            <Table className="text-foreground">
+                                <TableHeader>
+                                    <TableRow>
                                         {isBulkModeActive && (
-                                            <th className="p-3 text-left w-[40px]">
+                                            <TableHead className="w-[40px]">
                                                 <input
                                                     type="checkbox"
                                                     checked={
@@ -1570,7 +1518,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                     }}
                                                     className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                 />
-                                            </th>
+                                            </TableHead>
                                         )}
                                         <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Dept</SortableTableHeader>
                                         <SortableTableHeader sortKey="requester_shift.sub_departments.name" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Sub</SortableTableHeader>
@@ -1579,9 +1527,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         <SortableTableHeader sortKey="requester_shift.start_time" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Time</SortableTableHeader>
                                         <SortableTableHeader sortKey="requester_shift.net_length_minutes" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Net</SortableTableHeader>
                                         <SortableTableHeader sortKey="status" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Status / Action</SortableTableHeader>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
                                     {filteredMySwaps.map(swap => {
                                         const shift = swap.requester_shift;
 
@@ -1589,10 +1537,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         const isExpired = getSwapClose(shift, now).isClosed;
 
                                         return (
-                                            <tr
+                                            <TableRow
                                                 key={swap.id}
                                                 className={cn(
-                                                    "border-t border-border/50 transition-colors",
                                                     isBulkModeActive && "cursor-pointer hover:bg-muted/20",
                                                     getRowClass(shift?.group_type || shift?.roles?.group_type, shift?.departments?.name || '')
                                                 )}
@@ -1603,46 +1550,46 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                 }}
                                             >
                                                 {isBulkModeActive && (
-                                                    <td className="p-3" onClick={e => e.stopPropagation()}>
+                                                    <TableCell onClick={e => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedSwapIds.includes(swap.id)}
                                                             onChange={() => handleSelectSwap(swap.id, `Swap: ${shift?.roles?.name || 'Shift'}`)}
                                                             className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                         />
-                                                    </td>
+                                                    </TableCell>
                                                 )}
-                                                <td className="p-3 font-medium">{shift?.departments?.name || '—'}</td>
-                                                <td className="p-3">
+                                                <TableCell className="font-medium">{shift?.departments?.name || '—'}</TableCell>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                                         {shift?.sub_departments?.name || '—'}
                                                     </div>
-                                                </td>
-                                                <td className="p-3 font-bold text-[#7b61ff]">{shift?.roles?.name || 'Shift'}</td>
-                                                <td className="p-3">{shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—'}</td>
-                                                <td className="p-3 font-mono">{shift?.start_time ? shift.start_time.slice(0, 5) : '00:00'}–{shift?.end_time ? shift.end_time.slice(0, 5) : '00:00'}</td>
-                                                <td className="p-3 font-mono text-muted-foreground">
+                                                </TableCell>
+                                                <TableCell className="font-bold text-[#7b61ff]">{shift?.roles?.name || 'Shift'}</TableCell>
+                                                <TableCell>{shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—'}</TableCell>
+                                                <TableCell className="font-mono">{shift?.start_time ? shift.start_time.slice(0, 5) : '00:00'}–{shift?.end_time ? shift.end_time.slice(0, 5) : '00:00'}</TableCell>
+                                                <TableCell className="font-mono text-muted-foreground">
                                                     {(() => {
                                                         const net = shift?.net_length_minutes || 0;
                                                         const h = Math.floor(net / 60);
                                                         const m = Math.round(net % 60);
                                                         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
                                                     })()}
-                                                </td>
-                                                <td className="p-3">
+                                                </TableCell>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         {isExpired ? (
-                                                            <span className="text-xs text-slate-400 flex items-center gap-1 font-medium italic"><Ban size={12} /> Expired</span>
+                                                            <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium italic"><Ban size={12} /> Expired</span>
                                                         ) : swap.status === 'APPROVED' ? (
-                                                            <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold"><CheckCircle size={12} /> Accepted</span>
+                                                            <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-bold"><CheckCircle size={12} /> Accepted</span>
                                                         ) : swap.status === 'REJECTED' ? (
-                                                            <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Rejected</span>
+                                                            <span className="text-[11px] text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Rejected</span>
                                                         ) : swap.status === 'CANCELLED' ? (
-                                                            <span className="text-xs text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Cancelled</span>
+                                                            <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Cancelled</span>
                                                         ) : swap.status === 'MANAGER_PENDING' ? (
                                                             <>
-                                                                <span className="text-xs text-amber-500 flex items-center gap-1 font-bold"><Clock size={12} /> Pending Manager</span>
+                                                                <span className="text-[11px] text-amber-500 flex items-center gap-1 font-bold"><Clock size={12} /> Pending Manager</span>
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
@@ -1671,19 +1618,17 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                             </>
                                                         )}
                                                     </div>
-                                                </td>
-                                            </tr>
+                                                </TableCell>
+                                            </TableRow>
                                         );
                                     })}
                                     {filteredMySwaps.length === 0 && (
-                                        <tr>
-                                            <td colSpan={9} className="p-12 text-center text-muted-foreground/60 italic text-sm">
-                                                No matching swaps found.
-                                            </td>
-                                        </tr>
+                                        <TableStateRow colSpan={9}>
+                                            <PageState state="empty" scope="inline" title="No matching swaps found." description="Try a different filter or date range." />
+                                        </TableStateRow>
                                     )}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     </div>
                 ))
@@ -1723,7 +1668,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                 open={confirmDialog.isOpen}
                 onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}
             >
-                <DialogContent className="max-w-sm" aria-describedby={undefined}>
+                <DialogContent size="sm" aria-describedby={undefined}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
@@ -1777,16 +1722,16 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 <div className="flex flex-col gap-2 mt-4">
                                     {tab === 'available-swaps' && (
                                         hasOffered ? (
-                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-black uppercase tracking-wider">
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-[13px] font-black uppercase tracking-wider">
                                                 <CheckCircle2 className="h-5 w-5 shrink-0" /> Offer Already Submitted
                                             </div>
                                         ) : isExpired ? (
-                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-sm font-black uppercase tracking-wider">
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-[13px] font-black uppercase tracking-wider">
                                                 <Ban className="h-5 w-5 shrink-0" /> Expired
                                             </div>
                                         ) : (
                                             <Button
-                                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
+                                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[14px] uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
                                                 onClick={() => { setOfferSwapTarget(swap); setDrawerSwap(null); }}
                                             >
                                                 <ThumbsUp className="mr-3 h-5 w-5" /> Offer Swap
@@ -1797,7 +1742,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         myOffer.status === 'SUBMITTED' && !isExpired ? (
                                             <Button
                                                 variant="outline"
-                                                className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl"
+                                                className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl"
                                                 onClick={() => { declineOffer(myOffer.id); setDrawerSwap(null); }}
                                                 disabled={isDeclining}
                                             >
@@ -1805,7 +1750,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                 Withdraw Offer
                                             </Button>
                                         ) : (
-                                            <div className={cn('w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl border text-sm font-black uppercase tracking-wider', STATUS_CONFIG[swap.status]?.badgeCls ?? 'bg-muted/30 border-border/30 text-muted-foreground')}>
+                                            <div className={cn('w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl border text-[13px] font-black uppercase tracking-wider', STATUS_CONFIG[swap.status]?.badgeCls ?? 'bg-muted/30 border-border/30 text-muted-foreground')}>
                                                 <StatusIcon className="h-5 w-5 shrink-0" />{statusCfg.label}
                                             </div>
                                         )
@@ -1814,14 +1759,14 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         swap.status === 'OPEN' && !isExpired ? (
                                             <>
                                                 <Button
-                                                    className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
+                                                    className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[14px] uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
                                                     onClick={() => { setViewOffersSwapId(swap.id); setDrawerSwap(null); }}
                                                 >
                                                     <Eye className="mr-3 h-5 w-5" /> View Offers
                                                 </Button>
                                                 <Button
                                                     variant="outline"
-                                                    className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl"
+                                                    className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl"
                                                     onClick={() => { setConfirmDialog({ isOpen: true, swap }); setDrawerSwap(null); }}
                                                     disabled={isCancelling}
                                                 >
@@ -1829,7 +1774,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                                 </Button>
                                             </>
                                         ) : (
-                                            <div className={cn('w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl border text-sm font-black uppercase tracking-wider', STATUS_CONFIG[swap.status]?.badgeCls ?? 'bg-muted/30 border-border/30 text-muted-foreground')}>
+                                            <div className={cn('w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl border text-[13px] font-black uppercase tracking-wider', STATUS_CONFIG[swap.status]?.badgeCls ?? 'bg-muted/30 border-border/30 text-muted-foreground')}>
                                                 <StatusIcon className="h-5 w-5 shrink-0" />{statusCfg.label}
                                             </div>
                                         )
@@ -1869,7 +1814,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                     <div className="px-2 pb-4">
                                         <Button 
                                             variant="ghost" 
-                                            className="w-full h-12 rounded-2xl text-muted-foreground/50 font-black uppercase tracking-widest text-[10px] hover:bg-muted/50 transition-all"
+                                            className="w-full h-12 rounded-2xl text-muted-foreground/50 font-black uppercase tracking-widest text-[11px] hover:bg-muted/50 transition-all"
                                             onClick={() => setDrawerSwap(null)}
                                         >
                                             Dismiss Detail
@@ -1882,7 +1827,7 @@ export const EmployeeSwapsPage: React.FC = () => {
 
                 </DrawerContent>
             </Drawer>
-        </div>
+        </PageLayout>
     );
 };
 
@@ -1899,7 +1844,7 @@ const SwapTableOfferButton: React.FC<{ swapId: string; onClick: () => void }> = 
         <Button
             size="sm"
             className={cn(
-                "h-8 text-xs font-black uppercase tracking-wider shadow-sm",
+                "h-8 text-[11px] font-black uppercase tracking-wider shadow-sm",
                 pendingCount > 0
                     ? "bg-[#7b61ff] hover:bg-[#684ff0] text-white"
                     : "bg-muted/60 hover:bg-muted/80 text-foreground/60"
@@ -1959,8 +1904,8 @@ const EmptyState: React.FC<{
 }> = ({ icon: Icon, title, description }) => (
     <div className="text-center py-16 bg-slate-100/60 dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-slate-700">
         <Icon className="h-12 w-12 text-muted-foreground mx-auto mb-4" aria-hidden="true" />
-        <h3 className="text-lg font-medium text-foreground mb-2">{title}</h3>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">{description}</p>
+        <h3 className="text-[15px] font-medium text-foreground mb-2">{title}</h3>
+        <p className="text-[13px] text-muted-foreground max-w-md mx-auto">{description}</p>
     </div>
 );
 

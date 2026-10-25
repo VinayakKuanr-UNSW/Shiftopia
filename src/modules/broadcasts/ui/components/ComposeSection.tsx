@@ -135,7 +135,7 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
                         <Switch id="pin" checked={isPinned} onCheckedChange={setIsPinned} />
                         <Label
                             htmlFor="pin"
-                            className="text-sm text-muted-foreground flex items-center gap-1"
+                            className="text-[13px] text-muted-foreground flex items-center gap-1"
                         >
                             <Pin className="h-3.5 w-3.5" /> Pin
                         </Label>
@@ -158,7 +158,7 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
                 </div>
 
                 <div className="flex items-center gap-4 mb-4">
-                    <span className="text-sm text-muted-foreground">Priority:</span>
+                    <span className="text-[13px] text-muted-foreground">Priority:</span>
                     <div className="flex gap-2">
                         {(['low', 'normal', 'high', 'urgent'] as BroadcastPriority[]).map((p) => (
                             <Button
@@ -190,18 +190,18 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
 
                 {attachmentFiles.length > 0 && (
                     <div className="mb-4">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-2">
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold mb-2">
                             Attachments ({attachmentFiles.length})
                         </p>
                         <div className="flex flex-wrap gap-2">
                             {attachmentFiles.map((file, idx) => (
                                 <div
                                     key={idx}
-                                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border text-sm"
+                                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border text-[13px]"
                                 >
                                     <FileText className="h-4 w-4" />
                                     <span className="truncate max-w-[120px]">{file.name}</span>
-                                    <span className="text-muted-foreground text-xs">
+                                    <span className="text-muted-foreground text-[11px]">
                                         {formatFileSizeLocal(file.size)}
                                     </span>
                                     <button
@@ -240,7 +240,7 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between pt-4 border-t border-border">
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-[13px] text-muted-foreground">
                         Visible to{' '}
                         <span className="text-foreground font-medium">
                             {totalRecipients}
@@ -268,19 +268,19 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
                     </AlertDialogHeader>
 
                     <div className="space-y-3 py-4">
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-[13px]">
                             <span className="text-muted-foreground">Group:</span>
                             <span className="font-medium">{groupName}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-[13px]">
                             <span className="text-muted-foreground">Channel:</span>
                             <span className="font-medium">{channelName}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-[13px]">
                             <span className="text-muted-foreground">Priority:</span>
                             <Badge
                                 className={cn(
-                                    'text-xs',
+                                    'text-[11px]',
                                     PRIORITY_CONFIG[priority].bg,
                                     PRIORITY_CONFIG[priority].color
                                 )}
@@ -290,14 +290,14 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
                             </Badge>
                         </div>
                         {/* Acknowledgement confirmation row removed */}
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-[13px]">
                             <span className="text-muted-foreground">Recipients:</span>
                             <span className="font-medium">
                                 {totalRecipients} participants
                             </span>
                         </div>
                         {attachmentFiles.length > 0 && (
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-[13px]">
                                 <span className="text-muted-foreground">Attachments:</span>
                                 <span className="font-medium">
                                     {attachmentFiles.length} file(s)

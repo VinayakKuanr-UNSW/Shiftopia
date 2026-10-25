@@ -80,10 +80,10 @@ function DesktopOnlyScreen() {
       </div>
 
       {/* Heading */}
-      <h1 className="text-3xl font-black tracking-tight text-foreground mb-3">
+      <h1 className="text-[24px] font-black tracking-tight text-foreground mb-3">
         Desktop Required
       </h1>
-      <p className="text-sm text-muted-foreground max-w-[300px] leading-relaxed mb-10">
+      <p className="text-[13px] text-muted-foreground max-w-[300px] leading-relaxed mb-10">
         This section is optimised for larger screens. Please open it on a desktop or laptop for the best experience.
       </p>
 
@@ -99,7 +99,7 @@ function DesktopOnlyScreen() {
             </div>
             <div className="min-w-0">
               <p className="text-[12px] font-black text-foreground tracking-tight leading-none mb-1">{label}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">{desc}</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">{desc}</p>
             </div>
             <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/30 flex-shrink-0 ml-auto" />
           </div>
@@ -107,7 +107,7 @@ function DesktopOnlyScreen() {
       </div>
 
       {/* Footer hint */}
-      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/40">
         Your workspace is available below
       </p>
     </div>

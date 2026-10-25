@@ -41,7 +41,7 @@ export const ImpactSummaryView: React.FC<ImpactSummaryViewProps> = ({
   acknowledgementLabel = 'I understand staff already rely on some of these shifts.',
   idPrefix,
 }) => (
-  <div className="space-y-3 text-sm">
+  <div className="space-y-3 text-[13px]">
     {summary.lines.length > 0 && (
       <ul className="space-y-1.5 text-foreground leading-relaxed list-disc pl-5" aria-label="What this changes">
         {summary.lines.map(line => <li key={line}>{line}</li>)}
@@ -158,7 +158,7 @@ export const ImpactConfirmDialog: React.FC<ImpactConfirmDialogProps> = ({
 
   return (
     <AlertDialog open={open} onOpenChange={next => { if (!confirming) onOpenChange(next); }}>
-      <AlertDialogContent className="w-[calc(100vw-2rem)] sm:max-w-[500px] p-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border bg-background text-foreground shadow-2xl max-h-[calc(100dvh-3rem)] flex flex-col">
+      <AlertDialogContent className="w-[calc(100vw-2rem)] p-0 overflow-hidden text-foreground max-h-[calc(100dvh-3rem)] flex flex-col">
         <div className={cn('p-6 sm:p-7 pb-5 border-b border-border', destructive ? 'bg-destructive/5' : 'bg-muted/30')}>
           <AlertDialogHeader className="space-y-3 text-left">
             <div className="flex items-center gap-3">
@@ -173,11 +173,11 @@ export const ImpactConfirmDialog: React.FC<ImpactConfirmDialogProps> = ({
                 {destructive ? <AlertTriangle className="h-5 w-5" aria-hidden="true" /> : <Info className="h-5 w-5" aria-hidden="true" />}
               </div>
               <div className="min-w-0">
-                <AlertDialogTitle className={cn('text-lg sm:text-xl font-bold tracking-tight', destructive && 'text-destructive')}>
+                <AlertDialogTitle className={cn('text-[15px] sm:text-[17px] font-bold tracking-tight', destructive && 'text-destructive')}>
                   {title}
                 </AlertDialogTitle>
                 {description && (
-                  <AlertDialogDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                  <AlertDialogDescription className="mt-0.5">
                     {description}
                   </AlertDialogDescription>
                 )}
@@ -188,14 +188,14 @@ export const ImpactConfirmDialog: React.FC<ImpactConfirmDialogProps> = ({
 
         <div className="p-6 sm:p-7 overflow-y-auto flex-1" aria-live="polite" aria-busy={state.status === 'loading'}>
           {state.status === 'loading' && (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Checking what this changes…
             </p>
           )}
           {state.status === 'error' && (
             <div role="alert" className="space-y-3">
-              <p className="text-sm text-destructive leading-relaxed">{state.message}</p>
+              <p className="text-[13px] text-destructive leading-relaxed">{state.message}</p>
               <Button variant="outline" size="sm" onClick={() => setAttempt(a => a + 1)} className="min-h-[44px] rounded-xl">
                 <RotateCcw className="h-4 w-4 mr-2" aria-hidden="true" />
                 Try again
@@ -216,7 +216,7 @@ export const ImpactConfirmDialog: React.FC<ImpactConfirmDialogProps> = ({
         <AlertDialogFooter className="p-6 sm:p-7 pt-4 bg-muted/20 dark:bg-muted/5 border-t border-border flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5">
           <AlertDialogCancel
             disabled={confirming}
-            className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-sm"
+            className="w-full sm:w-auto border border-border text-foreground hover:bg-muted font-semibold text-[13px]"
           >
             {summary?.blocked ? 'Close' : 'Cancel'}
           </AlertDialogCancel>
@@ -226,7 +226,7 @@ export const ImpactConfirmDialog: React.FC<ImpactConfirmDialogProps> = ({
               disabled={!canConfirm}
               aria-busy={confirming}
               className={cn(
-                'w-full sm:w-auto h-11 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2',
+                'w-full sm:w-auto h-11 px-6 rounded-xl font-bold text-[13px] flex items-center justify-center gap-2',
                 destructive
                   ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground'
                   : 'bg-primary hover:bg-primary/90 text-primary-foreground',

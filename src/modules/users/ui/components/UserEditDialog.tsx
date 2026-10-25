@@ -57,10 +57,10 @@ export const UserEditDialog: React.FC<UserEditDialogProps> = ({
     if (!person) return null;
     return (
         <Dialog open={open} onOpenChange={close}>
-            <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="w-[96vw] max-w-4xl max-h-[90dvh] flex flex-col gap-0 p-0 overflow-hidden rounded-2xl border border-border bg-background text-foreground">
+            <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="w-[96vw] max-h-[90dvh] flex flex-col gap-0 p-0 overflow-hidden text-foreground" size="xl">
                 <div className="shrink-0 border-b border-border px-6 pt-5">
-                    <DialogTitle className="text-lg font-semibold tracking-tight">{person.name}</DialogTitle>
-                    <DialogDescription className="text-sm text-muted-foreground">{person.email ?? 'No email'}</DialogDescription>
+                    <DialogTitle>{person.name}</DialogTitle>
+                    <DialogDescription>{person.email ?? 'No email'}</DialogDescription>
                     <Tabs value={tab} onValueChange={(v) => setTab(v as UserEditTab)} className="mt-3">
                         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none bg-transparent p-0">
                             {TABS.map((t) => (
@@ -69,7 +69,7 @@ export const UserEditDialog: React.FC<UserEditDialogProps> = ({
                                     value={t.id}
                                     className={cn(
                                         touch.targetY,
-                                        'rounded-none border-b-2 border-transparent px-3 text-sm',
+                                        'rounded-none border-b-2 border-transparent px-3 text-[13px]',
                                         'data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none',
                                     )}
                                 >

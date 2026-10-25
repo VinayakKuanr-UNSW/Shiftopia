@@ -132,15 +132,15 @@ export function CompliancePanel({
                 <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                     <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                     <div className="flex-1">
-                        <p className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Inputs Changed</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Re-run compliance to validate current inputs.</p>
+                        <p className="text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Inputs Changed</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Re-run compliance to validate current inputs.</p>
                     </div>
                     <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => run()}
                         disabled={disabled}
-                        className="h-7 px-2 text-[10px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-500/20"
+                        className="h-7 px-2 text-[11px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-500/20"
                     >
                         <RefreshCw className="h-3 w-3 mr-1" />
                         Re-run
@@ -166,9 +166,9 @@ export function CompliancePanel({
                     {/* Column Headers for Swap */}
                     {isSwap && (
                         <div className="grid grid-cols-[1fr,80px,80px] gap-4 px-4 pb-2 border-b border-border/30">
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Rule Check</span>
-                            <span className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500/60 truncate">{partyAName}</span>
-                            <span className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500/60 truncate">{partyBName}</span>
+                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Rule Check</span>
+                            <span className="text-center text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500/60 truncate">{partyAName}</span>
+                            <span className="text-center text-[11px] font-black uppercase tracking-[0.2em] text-emerald-500/60 truncate">{partyBName}</span>
                         </div>
                     )}
                     
@@ -250,7 +250,7 @@ function HeaderBanner({
                     </div>
                     <div className="min-w-0">
                         <h3 className={cn(
-                            'text-sm font-black uppercase tracking-tight sm:text-base',
+                            'text-[13px] font-black uppercase tracking-tight sm:text-[14px]',
                             hasResults && canProceed && !isStale ? 'text-emerald-700 dark:text-emerald-400'
                                 : hasResults && hasBlockers       ? 'text-red-700 dark:text-rose-400'
                                 : hasResults && warnings > 0      ? 'text-amber-700 dark:text-amber-400'
@@ -265,7 +265,7 @@ function HeaderBanner({
                              : warnings > 0 ? 'Warnings Detected'
                              : 'All Checks Passed'}
                         </h3>
-                        <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                        <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">
                             {isIdle    ? 'Run compliance before proceeding'
                              : isRunning? 'Checking workforce rules...'
                              : isError  ? 'An error occurred during evaluation'
@@ -287,7 +287,7 @@ function HeaderBanner({
                         onClick={onRun}
                         disabled={disabled}
                         className={cn(
-                            'h-10 w-full shrink-0 px-4 text-[10px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 sm:h-9 sm:w-auto sm:px-5',
+                            'h-10 w-full shrink-0 px-4 text-[11px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 sm:h-9 sm:w-auto sm:px-5',
                             isIdle
                                 ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
                                 : canProceed && !isStale
@@ -327,7 +327,7 @@ function StatPill({ color, label }: { color: 'red' | 'amber' | 'emerald'; label:
         emerald: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-300',
     }[color];
     return (
-        <div className={cn('px-2.5 py-1 rounded-lg border flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest', cls)}>
+        <div className={cn('px-2.5 py-1 rounded-lg border flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest', cls)}>
             <div className={cn('h-1.5 w-1.5 rounded-full', `bg-${color}-500`)} />
             {label}
         </div>
@@ -342,13 +342,13 @@ function IdleRuleList() {
     const rules = Object.values(RULE_METADATA).filter(r => r.id && !UI_VALIDATED_RULES.has(r.id));
     return (
         <div className="space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 px-1">
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 px-1">
                 Rules that will be checked
             </p>
             <div className="space-y-1.5">
                 {rules.map(rule => (
                     <div key={rule.id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors">
-                        <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded bg-muted/80 border border-border/80 text-muted-foreground/60 shrink-0 min-w-[2.2rem] text-center shadow-sm">
+                        <span className="text-[11px] font-black font-mono px-1.5 py-0.5 rounded bg-muted/80 border border-border/80 text-muted-foreground/60 shrink-0 min-w-[2.2rem] text-center shadow-sm">
                             {getRuleCode(rule.id)}
                         </span>
                         <span className="text-[11px] text-muted-foreground/50 font-medium truncate">{rule.description}</span>
@@ -367,7 +367,7 @@ function RunningState() {
     return (
         <div className="flex items-center justify-center gap-3 py-8">
             <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-            <span className="text-sm font-bold text-muted-foreground/60 uppercase tracking-wider">Checking compliance rules…</span>
+            <span className="text-[13px] font-bold text-muted-foreground/60 uppercase tracking-wider">Checking compliance rules…</span>
         </div>
     );
 }
@@ -381,10 +381,10 @@ function ErrorState({ error, onRetry, disabled }: { error: string | null; onRetr
         <div className="flex items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-xl">
             <AlertOctagon className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
             <div className="flex-1">
-                <p className="text-sm font-bold text-red-700 dark:text-red-400">Compliance Check Failed</p>
-                <p className="text-xs text-muted-foreground mt-1">{error ?? 'An unexpected error occurred.'}</p>
+                <p className="text-[13px] font-bold text-red-700 dark:text-red-400">Compliance Check Failed</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{error ?? 'An unexpected error occurred.'}</p>
             </div>
-            <Button size="sm" variant="ghost" onClick={onRetry} disabled={disabled} className="text-red-600 hover:bg-red-500/10 text-[10px] font-black uppercase tracking-widest h-7 px-2">
+            <Button size="sm" variant="ghost" onClick={onRetry} disabled={disabled} className="text-red-600 hover:bg-red-500/10 text-[11px] font-black uppercase tracking-widest h-7 px-2">
                 Retry
             </Button>
         </div>
@@ -446,8 +446,8 @@ function ResultBuckets({
                                 className="h-4 w-4 rounded border-border accent-amber-500 cursor-pointer disabled:cursor-not-allowed"
                             />
                             <div>
-                                <p className="text-xs font-black uppercase tracking-widest text-foreground">Acknowledge Warnings</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                <p className="text-[11px] font-black uppercase tracking-widest text-foreground">Acknowledge Warnings</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     I understand the warnings and wish to proceed
                                 </p>
                             </div>
@@ -464,8 +464,8 @@ function ResultBuckets({
                         onClick={() => setPassedExpanded(v => !v)}
                         className="w-full flex items-center gap-2 px-1 py-1 group"
                     >
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors flex items-center gap-1.5">
-                            <span className="font-mono px-1 py-px rounded bg-emerald-500/10 text-emerald-600/60 dark:text-emerald-400/60 text-[8px]">C</span>
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors flex items-center gap-1.5">
+                            <span className="font-mono px-1 py-px rounded bg-emerald-500/10 text-emerald-600/60 dark:text-emerald-400/60 text-[11px]">C</span>
                             {hitsC.length} Passed
                         </span>
                         <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
@@ -483,18 +483,18 @@ function ResultBuckets({
                                 )}>
                                     <div className="flex items-center gap-3 min-w-0">
                                         <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                                        <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shrink-0 min-w-[2.2rem] text-center">
+                                        <span className="text-[11px] font-black font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shrink-0 min-w-[2.2rem] text-center">
                                             {getRuleCode(rule.rule_id)}
                                         </span>
                                         <p className="text-[11px] text-foreground/70 dark:text-muted-foreground font-medium truncate">{rule.description}</p>
                                     </div>
                                     {isSwap ? (
                                         <>
-                                            <span className="text-center text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">PASS</span>
-                                            <span className="text-center text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">PASS</span>
+                                            <span className="text-center text-[11px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">PASS</span>
+                                            <span className="text-center text-[11px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">PASS</span>
                                         </>
                                     ) : (
-                                        <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 shrink-0">PASS</span>
+                                        <span className="ml-auto text-[11px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 shrink-0">PASS</span>
                                     )}
                                 </div>
                             ))}
@@ -524,11 +524,11 @@ function BucketSection({
         <div className={cn('rounded-2xl border overflow-hidden', cfg.borderCls)}>
             {/* Bucket header */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.05]">
-                <span className={cn('text-[8px] font-black px-1.5 py-0.5 rounded', cfg.badgeCls)}>{bucket}</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex-1">
+                <span className={cn('text-[11px] font-black px-1.5 py-0.5 rounded', cfg.badgeCls)}>{bucket}</span>
+                <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 flex-1">
                     {cfg.label}
                 </span>
-                <span className="text-[10px] font-bold text-muted-foreground/40">{hits.length}</span>
+                <span className="text-[11px] font-bold text-muted-foreground/40">{hits.length}</span>
                 {cfg.icon()}
             </div>
 
@@ -590,14 +590,14 @@ function HitRow({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                             <span className={cn(
-                                'text-[9px] font-black font-mono px-1 py-0.5 rounded shrink-0',
+                                'text-[11px] font-black font-mono px-1 py-0.5 rounded shrink-0',
                                 cfg.badgeCls,
                             )}>{code}</span>
                             <p className={cn('text-[11px] font-bold leading-tight truncate', cfg.textCls)}>
                                 {description}
                             </p>
                         </div>
-                        <p className="text-[10px] text-muted-foreground/60 leading-snug mt-0.5 max-w-[90%]">
+                        <p className="text-[11px] text-muted-foreground/60 leading-snug mt-0.5 max-w-[90%]">
                             {hit.summary}
                         </p>
                     </div>
@@ -625,7 +625,7 @@ function HitRow({
                     isSwap ? "mr-[176px]" : "ml-5" // match the button width if swap
                 )}>
                     <Info className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
-                    <p className="text-[10px] text-muted-foreground/70 leading-relaxed">{hit.details}</p>
+                    <p className="text-[11px] text-muted-foreground/70 leading-relaxed">{hit.details}</p>
                 </div>
             )}
         </div>
@@ -640,7 +640,7 @@ function StatusBadge({ status }: { status: 'PASS' | 'FAIL' | 'WARN' }) {
     }[status];
 
     return (
-        <span className={cn('px-1.5 py-0.5 rounded text-[8px] font-black tracking-tighter border uppercase', cls)}>
+        <span className={cn('px-1.5 py-0.5 rounded text-[11px] font-black tracking-tighter border uppercase', cls)}>
             {status}
         </span>
     );

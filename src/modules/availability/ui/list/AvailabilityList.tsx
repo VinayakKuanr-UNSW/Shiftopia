@@ -45,8 +45,8 @@ export const AvailabilityList: React.FC<AvailabilityListProps> = ({
             />
           </svg>
         </div>
-        <h3 className="text-lg font-medium">No availability rules</h3>
-        <p className="text-sm text-muted-foreground mt-1">
+        <h3 className="text-[15px] font-medium">No availability rules</h3>
+        <p className="text-[13px] text-muted-foreground mt-1">
           Get started by creating your first availability rule.
         </p>
       </div>
@@ -55,7 +55,7 @@ export const AvailabilityList: React.FC<AvailabilityListProps> = ({
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-semibold mb-4">Availability Rules</h2>
+      <h2 className="text-[15px] font-semibold mb-4">Availability Rules</h2>
       {rules.map((rule) => (
         <AvailabilityListItem
           key={rule.id}

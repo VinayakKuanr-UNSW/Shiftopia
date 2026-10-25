@@ -70,7 +70,7 @@ export function StepIndicator({
                                 disabled={!canClick}
                                 className={cn(
                                     "h-8 w-8 rounded-full flex items-center justify-center transition-all duration-200",
-                                    "border-2 text-sm font-medium",
+                                    "border-2 text-[13px] font-medium",
                                     isCurrent && "bg-emerald-500 border-emerald-500 text-white scale-110 shadow-lg shadow-emerald-500/30",
                                     isCompleted && !isCurrent && "bg-emerald-500/20 border-emerald-500 text-emerald-400",
                                     !isCurrent && !isCompleted && "bg-slate-800 border-white/20 text-white/40",
@@ -87,7 +87,7 @@ export function StepIndicator({
 
                             {/* Step name */}
                             <span className={cn(
-                                "mt-2 text-[10px] font-medium tracking-wide uppercase",
+                                "mt-2 text-[11px] font-medium tracking-wide uppercase",
                                 isCurrent && "text-emerald-400",
                                 isCompleted && !isCurrent && "text-emerald-400/70",
                                 !isCurrent && !isCompleted && "text-white/40"

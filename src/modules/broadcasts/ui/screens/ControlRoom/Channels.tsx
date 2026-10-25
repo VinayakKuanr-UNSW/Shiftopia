@@ -108,7 +108,7 @@ export const ControlRoomChannels: React.FC<ControlRoomChannelsProps> = ({
                         <h2 className="font-bold text-foreground truncate">
                             {group.name}
                         </h2>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                             {group.participantCount} members
                         </p>
                     </div>
@@ -117,7 +117,7 @@ export const ControlRoomChannels: React.FC<ControlRoomChannelsProps> = ({
 
             <div className="p-4 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+                    <span className="text-[11px] text-muted-foreground uppercase tracking-wide font-semibold">
                         Channels
                     </span>
                 </div>
@@ -125,7 +125,7 @@ export const ControlRoomChannels: React.FC<ControlRoomChannelsProps> = ({
                     {group.channels?.length === 0 ? (
                         <div className="text-center py-8">
                             <Hash className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                            <p className="text-sm text-muted-foreground">No channels yet</p>
+                            <p className="text-[13px] text-muted-foreground">No channels yet</p>
                         </div>
                     ) : (
                         <div className="space-y-1">
@@ -144,7 +144,7 @@ export const ControlRoomChannels: React.FC<ControlRoomChannelsProps> = ({
                                     <div className="flex-1 min-w-0">
                                         <p className="font-semibold truncate">{channel.name}</p>
                                         {channel.description && (
-                                            <p className="text-xs opacity-60 truncate">
+                                            <p className="text-[11px] opacity-60 truncate">
                                                 {channel.description}
                                             </p>
                                         )}
@@ -192,7 +192,7 @@ export const ControlRoomChannels: React.FC<ControlRoomChannelsProps> = ({
 
             {/* Dialogs */}
             <Dialog open={showComposeDialog} onOpenChange={setShowComposeDialog}>
-                <DialogContent className="max-w-2xl p-0 overflow-hidden border-none bg-transparent shadow-none">
+                <DialogContent className="p-0 overflow-hidden border-none bg-transparent" size="lg">
                     {selectedChannelId && (
                         <ComposeSection
                             channelId={selectedChannelId}

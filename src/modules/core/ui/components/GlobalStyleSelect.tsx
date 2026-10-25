@@ -86,7 +86,7 @@ export const GlobalStyleSelect: React.FC<GlobalStyleSelectProps> = ({
             <PopoverTrigger asChild>
                 <button
                     className={cn(
-                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
+                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-300",
                         "border-0 min-w-[140px] sm:min-w-[180px] justify-between w-full",
                         compact ? "h-11 py-2" : "h-14",
                         "hover:scale-[1.02] active:scale-[0.98] relative z-50",
@@ -108,10 +108,10 @@ export const GlobalStyleSelect: React.FC<GlobalStyleSelectProps> = ({
                             </div>
                         )}
                         <div className="flex flex-col items-start gap-0.5 min-w-0 text-left">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
+                            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
                                 {label}
                             </span>
-                            <span className="truncate max-w-[180px] sm:max-w-[240px] text-xs sm:text-sm font-semibold">
+                            <span className="truncate max-w-[180px] sm:max-w-[240px] text-[11px] sm:text-[13px] font-semibold">
                                 {displayText}
                             </span>
                         </div>
@@ -150,7 +150,7 @@ export const GlobalStyleSelect: React.FC<GlobalStyleSelectProps> = ({
                             <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 dark:border-white/10 overflow-hidden [&_[cmdk-input-wrapper]]:border-b-0">
                                 <CommandInput
                                     placeholder={searchPlaceholder || `Search ${label.toLowerCase()}...`}
-                                    className="h-14 text-base border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
+                                    className="h-14 text-[14px] border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
                                     autoFocus
                                 />
                             </div>
@@ -159,7 +159,7 @@ export const GlobalStyleSelect: React.FC<GlobalStyleSelectProps> = ({
                         {/* Results Container */}
                         <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
                             <CommandList className="max-h-[50vh] p-1.5 scrollbar-none overflow-x-hidden">
-                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-sm">
+                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-[13px]">
                                     No {label.toLowerCase()} found.
                                 </CommandEmpty>
 
@@ -189,7 +189,7 @@ export const GlobalStyleSelect: React.FC<GlobalStyleSelectProps> = ({
                                                     {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                                                 </div>
                                                 <div className="flex flex-col min-w-0 flex-1">
-                                                    <span className="font-semibold text-sm sm:text-base leading-snug">
+                                                    <span className="font-semibold text-[13px] sm:text-[14px] leading-snug">
                                                         {opt.name}
                                                     </span>
                                                     {opt.description && (
@@ -208,7 +208,7 @@ export const GlobalStyleSelect: React.FC<GlobalStyleSelectProps> = ({
                             </CommandList>
 
                             {/* Keyboard navigation helper footer */}
-                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50">
+                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50">
                                 <div className="flex items-center gap-4">
                                     <span className="flex items-center gap-1">
                                         <kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">↑↓</kbd> Nav

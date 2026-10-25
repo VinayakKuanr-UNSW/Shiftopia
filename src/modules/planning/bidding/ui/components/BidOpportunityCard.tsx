@@ -58,13 +58,13 @@ export const BidOpportunityCard: React.FC<Props> = ({
 
             {/* ── STATUS INDICATORS ── */}
             {participationStatus === 'dropped' && (
-                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
+                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-[13px] font-medium">
                     <XCircle className="h-4 w-4 shrink-0" /> You dropped this shift
                 </div>
             )}
 
             {participationStatus === 'rejected_offer' && (
-                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
+                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-[13px] font-medium">
                     <XCircle className="h-4 w-4 shrink-0" /> You rejected this offer
                 </div>
             )}
@@ -72,7 +72,7 @@ export const BidOpportunityCard: React.FC<Props> = ({
             {participationStatus === 'not_participated' && (
                 opp.isEligible ? (
                     <Button
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20 font-bold h-10 transition-all active:scale-[0.98]"
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20 font-bold h-10 transition-all"
                         onClick={() => onQuickBid(opp)}
                         disabled={isPlacingBid}
                     >
@@ -96,7 +96,7 @@ export const BidOpportunityCard: React.FC<Props> = ({
                                     </Button>
                                 </span>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-[220px] text-xs">
+                            <TooltipContent side="top" className="max-w-[220px] text-[11px]">
                                 {opp.ineligibilityReason ?? 'You are not eligible for this shift'}
                             </TooltipContent>
                         </Tooltip>
@@ -106,7 +106,7 @@ export const BidOpportunityCard: React.FC<Props> = ({
 
             {participationStatus === 'pending' && (
                 <>
-                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
+                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-[13px] font-medium">
                         <Clock className="h-4 w-4 shrink-0" /> Awaiting Manager Review
                     </div>
                     {!tr.isExpired && currentBid && (
@@ -123,25 +123,25 @@ export const BidOpportunityCard: React.FC<Props> = ({
             )}
 
             {participationStatus === 'selected' && (
-                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
+                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-[13px] font-medium">
                     <CheckCircle className="h-4 w-4 shrink-0" /> Bid Selected — Assigned to You
                 </div>
             )}
 
             {participationStatus === 'rejected' && (
-                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 text-sm">
+                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 text-[13px]">
                     <Ban className="h-4 w-4 shrink-0" /> Not Selected
                 </div>
             )}
 
             {participationStatus === 'expired' && (
-                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm">
+                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-[13px]">
                     <Ban className="h-4 w-4 shrink-0" /> Bidding Closed
                 </div>
             )}
 
             {participationStatus === 'auto_rejected' && (
-                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium animate-pulse">
+                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-[13px] font-medium animate-pulse">
                     <Ban className="h-4 w-4 shrink-0" strokeWidth={3} /> Auto-Rejected — Bidding window elapsed
                 </div>
             )}
@@ -157,7 +157,7 @@ export const BidOpportunityCard: React.FC<Props> = ({
                 disabled={!canSelect}
                 className="h-4 w-4 rounded border-border/50 text-primary focus:ring-primary/30 accent-primary"
             />
-            <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
+            <span className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
         </div>
     ) : undefined;
 

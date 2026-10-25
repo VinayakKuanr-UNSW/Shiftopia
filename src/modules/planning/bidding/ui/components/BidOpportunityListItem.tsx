@@ -51,7 +51,7 @@ export const BidOpportunityListItem: React.FC<Props> = ({
                     type="button"
                     onClick={e => { e.stopPropagation(); onQuickBid(opp); }}
                     disabled={isPlacingBid}
-                    className="shrink-0 h-9 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-[10px] font-black uppercase tracking-widest shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="shrink-0 h-9 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-widest shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                     {placingThis ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Bid'}
                 </button>
@@ -63,7 +63,7 @@ export const BidOpportunityListItem: React.FC<Props> = ({
                     type="button"
                     onClick={e => { e.stopPropagation(); onWithdraw(currentBid.id); }}
                     disabled={isWithdrawing}
-                    className="shrink-0 h-9 px-3 rounded-lg border border-border/60 hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-500 text-foreground/80 text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-60"
+                    className="shrink-0 h-9 px-3 rounded-lg border border-border/60 hover:bg-rose-500/10 hover:border-rose-500/40 hover:text-rose-500 text-foreground/80 text-[11px] font-black uppercase tracking-widest transition-colors disabled:opacity-60"
                 >
                     Withdraw
                 </button>

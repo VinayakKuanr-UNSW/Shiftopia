@@ -176,8 +176,8 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">{stats.total}</span>
-            <span className="text-sm font-semibold text-muted-foreground">Rules</span>
+            <span className="text-[24px] sm:text-[28px] font-extrabold tracking-tight text-foreground">{stats.total}</span>
+            <span className="text-[13px] font-semibold text-muted-foreground">Rules</span>
           </div>
           <p className="mt-1.5 text-[13px] text-muted-foreground leading-normal">
             100% evaluated by the V8 Compliance Engine
@@ -193,8 +193,8 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-rose-700 dark:text-rose-300">{stats.blocking}</span>
-            <span className="text-sm font-semibold text-rose-600/80 dark:text-rose-400/80">Enforced</span>
+            <span className="text-[24px] sm:text-[28px] font-extrabold tracking-tight text-rose-700 dark:text-rose-300">{stats.blocking}</span>
+            <span className="text-[13px] font-semibold text-rose-600/80 dark:text-rose-400/80">Enforced</span>
           </div>
           <p className="mt-1.5 text-[13px] text-muted-foreground leading-normal">
             Non-negotiable legal caps & hard stops
@@ -210,8 +210,8 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-amber-700 dark:text-amber-300">{stats.warnings}</span>
-            <span className="text-sm font-semibold text-amber-600/80 dark:text-amber-400/80">Warnings</span>
+            <span className="text-[24px] sm:text-[28px] font-extrabold tracking-tight text-amber-700 dark:text-amber-300">{stats.warnings}</span>
+            <span className="text-[13px] font-semibold text-amber-600/80 dark:text-amber-400/80">Warnings</span>
           </div>
           <p className="mt-1.5 text-[13px] text-muted-foreground leading-normal">
             Operational preferences & contractual agreements
@@ -227,8 +227,8 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl sm:text-4xl font-extrabold tracking-tight text-sky-700 dark:text-sky-300">{stats.solverSynced}</span>
-            <span className="text-sm font-semibold text-sky-600/80 dark:text-sky-400/80">Constraints</span>
+            <span className="text-[24px] sm:text-[28px] font-extrabold tracking-tight text-sky-700 dark:text-sky-300">{stats.solverSynced}</span>
+            <span className="text-[13px] font-semibold text-sky-600/80 dark:text-sky-400/80">Constraints</span>
           </div>
           <p className="mt-1.5 text-[13px] text-muted-foreground leading-normal">
             Mathematical parity with Python solver engine
@@ -289,7 +289,7 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
                 >
                   <Icon className="h-3.5 w-3.5" />
                   <span>{config.label}</span>
-                  <span className="text-xs opacity-75">({count})</span>
+                  <span className="text-[11px] opacity-75">({count})</span>
                 </button>
               );
             })}
@@ -340,8 +340,8 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
       {filteredRules.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/70 dark:border-white/10 bg-card dark:bg-[#161d2d]/60 p-12 text-center">
           <SlidersHorizontal className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
-          <h3 className="text-base font-bold text-foreground">No V8 compliance rules match your filter</h3>
-          <p className="mt-1.5 text-sm text-muted-foreground">Try clearing your search query or switching to "All Categories".</p>
+          <h3 className="text-[14px] font-bold text-foreground">No V8 compliance rules match your filter</h3>
+          <p className="mt-1.5 text-[13px] text-muted-foreground">Try clearing your search query or switching to "All Categories".</p>
           <Button
             variant="outline"
             size="sm"
@@ -350,7 +350,7 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
               setSelectedCategory('ALL');
               setSelectedTier('ALL');
             }}
-            className="mt-5 text-sm font-medium"
+            className="mt-5 text-[13px] font-medium"
           >
             Reset Filters
           </Button>
@@ -416,7 +416,7 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
                   </div>
 
                   {/* ── 2. Rule Name (Large & Dominant) ── */}
-                  <h4 className="text-lg sm:text-[18px] font-bold text-foreground tracking-tight leading-snug group-hover:text-primary transition-colors">
+                  <h4 className="text-[15px] sm:text-[18px] font-bold text-foreground tracking-tight leading-snug group-hover:text-primary transition-colors">
                     {rule.name}
                   </h4>
 
@@ -475,7 +475,7 @@ export const V8RulesBentoGrid: React.FC<V8RulesBentoGridProps> = ({
                       )}
                     </div>
 
-                    <span className="text-xs text-muted-foreground font-mono">
+                    <span className="text-[11px] text-muted-foreground font-mono">
                       Engine Layer: LABOUR
                     </span>
                   </div>

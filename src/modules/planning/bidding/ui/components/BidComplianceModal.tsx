@@ -5,6 +5,7 @@
  * Reuses the visual ComplianceTabContent for consistent UI/UX with EnhancedAddShiftModal.
  */
 
+import { PageState } from '@/modules/core/ui/components/PageState';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -297,7 +298,8 @@ export function BidComplianceModal({
         <ResponsiveDialog
             open={isOpen}
             onOpenChange={(open) => !open && onClose()}
-            dialogClassName="w-[calc(100vw-2rem)] max-w-2xl bg-background border-border shadow-2xl"
+            dialogClassName="w-[calc(100vw-2rem)]"
+            size="lg"
         >
             <ResponsiveDialog.Header>
                 <ResponsiveDialog.Title className="flex items-center gap-2 text-foreground">
@@ -312,14 +314,14 @@ export function BidComplianceModal({
             <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
                 {/* Shift Summary */}
                 <div className="bg-muted/50 rounded-xl p-5 border border-border mb-6">
-                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">Checking eligibility for:</div>
-                    <div className="text-lg font-black text-foreground mb-1">{shift.role}</div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">Checking eligibility for:</div>
+                    <div className="text-[15px] font-black text-foreground mb-1">{shift.role}</div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
                         <span className="font-semibold text-foreground/80">{shift.date}</span>
                         <span className="opacity-30">•</span>
                         <span>{shift.startTime} - {shift.endTime}</span>
                         <span className="opacity-30">•</span>
-                        <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded text-xs font-bold">
+                        <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded text-[11px] font-bold">
                             {(() => {
                                 const h = Math.floor(shift.netLength / 60);
                                 const m = Math.round(shift.netLength % 60);
@@ -327,7 +329,7 @@ export function BidComplianceModal({
                             })()}
                         </span>
                     </div>
-                    <div className="text-xs text-muted-foreground/70 mt-3 flex items-center gap-1.5 font-medium">
+                    <div className="text-[11px] text-muted-foreground/70 mt-3 flex items-center gap-1.5 font-medium">
                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                         {shift.organization} <span className="opacity-40">/</span> {shift.department}
                     </div>
@@ -335,15 +337,7 @@ export function BidComplianceModal({
 
                 {/* Loading State */}
                 {(isLoadingShifts || isRunningChecks) && (
-                    <div className="flex flex-col items-center justify-center py-16 animate-in fade-in zoom-in duration-300">
-                        <div className="relative">
-                            <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full animate-pulse" />
-                            <Loader2 className="h-10 w-10 animate-spin text-indigo-600 dark:text-indigo-400 relative z-10" />
-                        </div>
-                        <p className="text-muted-foreground mt-4 font-medium">
-                            {isLoadingShifts ? "Preparing compliance data..." : "Analyzing compliance rules..."}
-                        </p>
-                    </div>
+                    <PageState state="loading" title={isLoadingShifts ? 'Preparing compliance data' : 'Analysing compliance rules'} />
                 )}
 
                 {/* Dropped Shift Block Alert */}
@@ -351,8 +345,8 @@ export function BidComplianceModal({
                     <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                         <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                         <div className="space-y-1">
-                            <h4 className="text-sm font-black text-rose-700 dark:text-rose-400 uppercase tracking-wider">Bidding Restricted</h4>
-                            <p className="text-sm text-rose-600/80 dark:text-rose-400/70 font-medium">
+                            <h4 className="text-[13px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-wider">Bidding Restricted</h4>
+                            <p className="text-[13px] text-rose-600/80 dark:text-rose-400/70 font-medium">
                                 You previously dropped this shift. Employees are not permitted to bid on shifts they have recently dropped.
                             </p>
                         </div>

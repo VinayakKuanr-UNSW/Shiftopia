@@ -1,3 +1,4 @@
+import { Dialog, DialogContent, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -107,7 +108,7 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
                 <History className="h-8 w-8 text-muted-foreground/30" />
                 <p className="text-[12px] text-muted-foreground/50 font-medium">No stored snapshot available.</p>
-                <p className="text-[10px] text-muted-foreground/30">This swap may have been accepted before snapshot storage was enabled.</p>
+                <p className="text-[11px] text-muted-foreground/30">This swap may have been accepted before snapshot storage was enabled.</p>
             </div>
         );
     }
@@ -144,12 +145,12 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
                 <div className="flex items-center gap-2">
                     <StatusIcon status={row.status} blocking={row.blocking} />
                     <span className="text-[11px] font-black text-foreground flex-1 text-left">{row.constraint_name}</span>
-                    <span className="text-[9px] font-mono text-muted-foreground/50">{row.employee_name}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground/50">{row.employee_name}</span>
                     {row.details ? (isOpen ? <ChevronUp className="h-3 w-3 text-muted-foreground/40" /> : <ChevronDown className="h-3 w-3 text-muted-foreground/40" />) : null}
                 </div>
-                <p className="text-[10px] text-muted-foreground/70 pl-5 text-left">{row.summary}</p>
+                <p className="text-[11px] text-muted-foreground/70 pl-5 text-left">{row.summary}</p>
                 {isOpen && row.details && (
-                    <p className="text-[10px] text-muted-foreground/50 pl-5 mt-1 text-left leading-relaxed">{row.details}</p>
+                    <p className="text-[11px] text-muted-foreground/50 pl-5 mt-1 text-left leading-relaxed">{row.details}</p>
                 )}
             </button>
         );
@@ -160,14 +161,14 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
             {/* Meta bar */}
             <div className="flex items-center justify-between px-1">
                 <div className={cn(
-                    "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg",
+                    "flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg",
                     feasible ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
                 )}>
                     {feasible ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                     {feasible ? 'Passed at Acceptance' : 'Blocked at Acceptance'}
                 </div>
                 {ts && (
-                    <span className="text-[9px] font-mono text-muted-foreground/40">
+                    <span className="text-[11px] font-mono text-muted-foreground/40">
                         {format(parseISO(ts), 'dd MMM yyyy HH:mm')}
                     </span>
                 )}
@@ -178,7 +179,7 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
                 <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 px-1">
                         <XCircle className="h-3 w-3 text-rose-500" />
-                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-rose-500">Blockers ({blockers.length})</span>
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-500">Blockers ({blockers.length})</span>
                     </div>
                     {blockers.map(r => <ConstraintCard key={`${r.constraint_id}-${r.employee_name}`} row={r} />)}
                 </div>
@@ -188,7 +189,7 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
                 <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 px-1">
                         <AlertTriangle className="h-3 w-3 text-amber-500" />
-                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-500">Warnings ({warnings.length})</span>
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-500">Warnings ({warnings.length})</span>
                     </div>
                     {warnings.map(r => <ConstraintCard key={`${r.constraint_id}-${r.employee_name}`} row={r} />)}
                 </div>
@@ -198,7 +199,7 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
                 <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 px-1">
                         <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500">Passed ({passed.length})</span>
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-500">Passed ({passed.length})</span>
                     </div>
                     {passed.map(r => <ConstraintCard key={`${r.constraint_id}-${r.employee_name}`} row={r} />)}
                 </div>
@@ -461,13 +462,15 @@ export function ManagerComplianceApprovalModal({
                     <div>
                         <div className="flex items-center gap-2 mb-1.5">
                             <Shield className="h-4 w-4 text-primary" />
-                            <h2 className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-[0.3em] font-black">
+                            <h2 className="text-[11px] font-mono text-muted-foreground/60 uppercase tracking-[0.3em] font-black">
                                 Compliance Gate
                             </h2>
                         </div>
-                        <h1 className="text-2xl font-black text-foreground tracking-tighter">
+                        <DialogTitle asChild>
+                        <h1 className="text-[20px] font-black text-foreground tracking-tighter">
                             Swap Approval Review
                         </h1>
+                        </DialogTitle>
                     </div>
                     <button
                         onClick={onClose}
@@ -491,7 +494,7 @@ export function ManagerComplianceApprovalModal({
                         </Avatar>
                         <div className="text-center">
                             <div className="text-[11px] font-black text-foreground tracking-tight">{requesterName}</div>
-                            <div className="text-[9px] text-muted-foreground/60 uppercase tracking-[0.2em] font-black mt-0.5">Requester</div>
+                            <div className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.2em] font-black mt-0.5">Requester</div>
                         </div>
                     </div>
 
@@ -509,7 +512,7 @@ export function ManagerComplianceApprovalModal({
                         </Avatar>
                         <div className="text-center">
                             <div className="text-[11px] font-black text-foreground tracking-tight">{offererName}</div>
-                            <div className="text-[9px] text-muted-foreground/60 uppercase tracking-[0.2em] font-black mt-0.5">Offerer</div>
+                            <div className="text-[11px] text-muted-foreground/60 uppercase tracking-[0.2em] font-black mt-0.5">Offerer</div>
                         </div>
                     </div>
                 </div>
@@ -522,7 +525,7 @@ export function ManagerComplianceApprovalModal({
                         <button
                             onClick={() => setActiveTab('live')}
                             className={cn(
-                                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all",
                                 activeTab === 'live'
                                     ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 shadow-sm"
                                     : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
@@ -534,7 +537,7 @@ export function ManagerComplianceApprovalModal({
                         <button
                             onClick={() => setActiveTab('snapshot')}
                             className={cn(
-                                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all",
                                 activeTab === 'snapshot'
                                     ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-sm"
                                     : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
@@ -543,7 +546,7 @@ export function ManagerComplianceApprovalModal({
                             <History className="h-3 w-3" />
                             Acceptance Snapshot
                             {!storedSnapshot && (
-                                <span className="text-[8px] opacity-50 normal-case tracking-normal font-medium">none</span>
+                                <span className="text-[11px] opacity-50 normal-case tracking-normal font-medium">none</span>
                             )}
                         </button>
                     </div>
@@ -571,7 +574,7 @@ export function ManagerComplianceApprovalModal({
                                 Please provide a reason for rejecting this swap. This will be visible to the employees.
                             </p>
                             <textarea
-                                className="lovable-input w-full min-h-[120px] text-sm resize-none"
+                                className="lovable-input w-full min-h-[120px] text-[13px] resize-none"
                                 value={rejectReason}
                                 onChange={(e) => setRejectReason(e.target.value)}
                                 placeholder="E.g. Not enough coverage during this shift..."
@@ -637,7 +640,7 @@ export function ManagerComplianceApprovalModal({
                                 <Button
                                     onClick={handleConfirmReject}
                                     disabled={!rejectReason.trim() || isApproving}
-                                    className="w-full min-h-[56px] rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-[0.1em] text-xs shadow-xl shadow-rose-500/20 disabled:opacity-50"
+                                    className="w-full min-h-[56px] rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-[0.1em] text-[11px] shadow-xl shadow-rose-500/20 disabled:opacity-50"
                                 >
                                     Confirm Rejection
                                 </Button>
@@ -661,7 +664,7 @@ export function ManagerComplianceApprovalModal({
                                     <Button
                                         onClick={() => setIsRejectingState(true)}
                                         disabled={isApproving}
-                                        className="w-full sm:w-auto min-h-[48px] rounded-xl bg-transparent hover:bg-rose-500/10 text-rose-500 border border-border/50 text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-2"
+                                        className="w-full sm:w-auto min-h-[48px] rounded-xl bg-transparent hover:bg-rose-500/10 text-rose-500 border border-border/50 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2"
                                     >
                                         <X className="h-3.5 w-3.5" />
                                         Reject Instead
@@ -673,7 +676,7 @@ export function ManagerComplianceApprovalModal({
                                         <Button
                                             onClick={() => panel.run()}
                                             disabled={panel.status === 'running'}
-                                            className="w-full min-h-[56px] rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.1em] text-xs shadow-xl shadow-indigo-500/20 w-full"
+                                            className="w-full min-h-[56px] rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.1em] text-[11px] shadow-xl shadow-indigo-500/20 w-full"
                                         >
                                             {panel.status === 'running' ? (
                                                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Verifying Rules...</>
@@ -686,7 +689,7 @@ export function ManagerComplianceApprovalModal({
                                             onClick={handleApprove}
                                             disabled={!canApprove || isApproving || (availWarnings.length > 0 && !availAck)}
                                             className={cn(
-                                                "w-full min-h-[56px] rounded-2xl font-black uppercase tracking-[0.1em] text-xs shadow-xl flex items-center justify-center gap-2 transition-all",
+                                                "w-full min-h-[56px] rounded-2xl font-black uppercase tracking-[0.1em] text-[11px] shadow-xl flex items-center justify-center gap-2 transition-all",
                                                 canApprove
                                                     ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20'
                                                     : 'bg-muted text-muted-foreground/40 cursor-not-allowed shadow-none',
@@ -728,23 +731,11 @@ export function ManagerComplianceApprovalModal({
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
-            onClick={(e) => e.target === e.currentTarget && onClose()}
-        >
-            <motion.div
-                initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                className="relative w-full max-w-2xl h-[85vh] flex flex-col rounded-[2.5rem] border border-border shadow-2xl overflow-hidden bg-background"
-            >
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+          <DialogContent hideClose size="lg" className="h-[85vh] flex flex-col gap-0 overflow-hidden p-0">
                 {innerContent}
-            </motion.div>
-        </motion.div>
+            </DialogContent>
+        </Dialog>
     );
 }
 

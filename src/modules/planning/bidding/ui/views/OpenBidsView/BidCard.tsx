@@ -46,13 +46,13 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
   const sssHint = bid.sssFlag === 'INSUFFICIENT_DATA' ? 'NEW' : bid.sssFlag === 'LIMITED' ? '~' : null;
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-5 hover:bg-muted/30 hover:shadow-xl transition-all duration-300 group shadow-sm">
+    <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4 hover:bg-muted/30 hover:shadow-md transition-all duration-300 group shadow-sm">
       {/* Avatar */}
       <Avatar className="h-12 w-12 ring-1 ring-border shadow-sm shrink-0">
         <AvatarImage
           src={`https://api.dicebear.com/7.x/personas/svg?seed=${bid.employeeName}`}
         />
-        <AvatarFallback className="bg-primary text-primary-foreground text-xs font-black">
+        <AvatarFallback className="bg-primary text-primary-foreground text-[11px] font-semibold">
           {bid.employeeName.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
@@ -60,14 +60,14 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
       {/* Employee Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <h4 className="text-foreground font-black text-sm truncate tracking-tight">{bid.employeeName}</h4>
+          <h4 className="text-foreground font-semibold text-[13px] truncate tracking-tight">{bid.employeeName}</h4>
           {bid.isBestMatch && (
-            <Badge className="bg-primary/10 text-primary text-[8px] px-1.5 h-4 border-primary/20 font-black uppercase tracking-widest">
+            <Badge className="bg-primary/10 text-primary text-[11px] px-1.5 h-4 border-primary/20 font-semibold uppercase tracking-widest">
               BEST MATCH
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 font-mono font-black uppercase tracking-widest">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60 font-mono font-semibold uppercase tracking-widest">
           <span>{bid.employmentType}</span>
           <span className="text-primary/20">•</span>
           <span>Submitted {new Date(bid.submittedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</span>
@@ -78,7 +78,7 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
       {eligibility && (
         <div
           className={cn(
-            'px-2.5 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shrink-0 shadow-sm',
+            'px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold uppercase tracking-widest flex items-center gap-1.5 shrink-0 shadow-sm',
             eligibility.cls,
           )}
           title="Whether the bidder holds this shift's required skills & licenses"
@@ -90,17 +90,17 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
 
       {/* SSS Score */}
       <div
-        className="px-2.5 py-1.5 rounded-xl border border-primary/20 bg-primary/10 text-primary text-[10px] font-mono font-bold shrink-0 flex items-center gap-1 shadow-sm"
+        className="px-2.5 py-1.5 rounded-xl border border-primary/20 bg-primary/10 text-primary text-[11px] font-mono font-bold shrink-0 flex items-center gap-1 shadow-sm"
         title={sssHint === 'NEW' ? 'New bidder — ranked on skill match only' : sssHint === '~' ? 'Limited history — score may be provisional' : 'Shift Suitability Score'}
       >
-        <span className="text-[8px] uppercase tracking-wider text-muted-foreground font-black">SSS</span>
-        <span className="font-black text-xs">{bid.sss}</span>
-        {sssHint && <span className="text-[8px] font-black text-amber-500">{sssHint}</span>}
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">SSS</span>
+        <span className="font-semibold text-[11px]">{bid.sss}</span>
+        {sssHint && <span className="text-[11px] font-semibold text-amber-500">{sssHint}</span>}
       </div>
 
       {/* Fatigue Risk */}
       <div className={cn(
-        'px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shrink-0 shadow-sm transition-transform group-hover:scale-105',
+        'px-3 py-1.5 rounded-xl border text-[11px] font-semibold uppercase tracking-widest flex items-center gap-2 shrink-0 shadow-sm',
         risk.bgClass, risk.colorClass
       )}>
         {risk.icon}
@@ -111,7 +111,7 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
       <Button
         size="sm"
         onClick={() => onAssign(bid)}
-        className="h-9 px-5 text-[10px] font-black uppercase tracking-[0.2em] bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl transition-all duration-300 shrink-0 border-none"
+        className="h-9 px-5 text-[11px] font-semibold uppercase tracking-[0.2em] bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl transition-all duration-300 shrink-0 border-none"
       >
         Assign
       </Button>

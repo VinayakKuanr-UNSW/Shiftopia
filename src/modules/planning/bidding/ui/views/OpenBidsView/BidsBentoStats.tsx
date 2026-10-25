@@ -64,7 +64,7 @@ export const BidsBentoStats: React.FC<BidsBentoStatsProps> = ({
         <Icon className={cn("h-12 w-12", colorClass)} />
       </div>
       <div className="flex items-start justify-between mb-2">
-        <span className={cn("text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5", colorClass)}>
+        <span className={cn("text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5", colorClass)}>
           <Icon className="h-3.5 w-3.5" />
           {title}
           {tooltipText && (
@@ -72,24 +72,24 @@ export const BidsBentoStats: React.FC<BidsBentoStatsProps> = ({
               <TooltipTrigger asChild>
                 <Info className="h-3 w-3 text-muted-foreground/60 cursor-help ml-0.5" />
               </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-[200px] text-xs">
+              <TooltipContent side="top" className="max-w-[200px] text-[11px]">
                 {tooltipText}
               </TooltipContent>
             </Tooltip>
           )}
         </span>
         {badgeText && (
-          <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full border", badgeColorClass)}>
+          <span className={cn("text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full border", badgeColorClass)}>
             {badgeText}
           </span>
         )}
       </div>
       <div className="flex items-baseline gap-1.5 z-10 relative">
-        <span className={cn("text-xl font-black font-mono tracking-tight", colorClass)}>
+        <span className={cn("text-[17px] font-black font-mono tracking-tight", colorClass)}>
           {value}
         </span>
       </div>
-      <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground/80 font-medium z-10 relative">
+      <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground/80 font-medium z-10 relative">
         <span>{subtitle}</span>
       </div>
     </div>
@@ -103,17 +103,17 @@ export const BidsBentoStats: React.FC<BidsBentoStatsProps> = ({
           <div className="h-6 w-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500">
             <ActivitySquare className="h-3.5 w-3.5" />
           </div>
-          <h2 className="text-xs font-black uppercase tracking-wider text-foreground/90">
+          <h2 className="text-[11px] font-black uppercase tracking-wider text-foreground/90">
             Marketplace Analytics
           </h2>
-          <span className="text-[10px] font-mono font-bold text-muted-foreground/50 bg-muted/40 px-2 py-0.5 rounded-full border border-border/40">
+          <span className="text-[11px] font-mono font-bold text-muted-foreground/50 bg-muted/40 px-2 py-0.5 rounded-full border border-border/40">
             Live Overview
           </span>
         </div>
 
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="text-[10px] font-mono font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 bg-muted/30 hover:bg-muted/60 px-2.5 py-1 rounded-lg border border-border/40 transition-all"
+          className="text-[11px] font-mono font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 bg-muted/30 hover:bg-muted/60 px-2.5 py-1 rounded-lg border border-border/40 transition-all"
           title={isCollapsed ? "Expand Statistics" : "Collapse Statistics"}
         >
           {isCollapsed ? (

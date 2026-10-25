@@ -25,6 +25,7 @@ import {
   toTargetEmploymentType,
 } from '@/modules/core/model/employment.types';
 import { useSkills, useLicenses } from '@/modules/rosters/state/useRosterShifts';
+import { ShiftStateCircleBadge } from '@/modules/rosters/ui/components/ShiftStateCircleBadge';
 
 interface ShiftCardProps {
   shift: TemplateShift;
@@ -68,9 +69,6 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
         : TARGET_EMPLOYMENT_TYPE_LABELS[targetType] || targetType)
     : null;
 
-  // Template shifts are draft blueprints — yellow pill consistent with draft lifecycle status
-  const badgeColor = 'bg-amber-400 shadow-sm shadow-amber-400/20';
-
   const baseRole = shift.roleName || shift.name || 'Unnamed Shift';
   const roleDisplay = React.useMemo(() => {
     if (baseRole.includes('·')) return baseRole;
@@ -83,15 +81,15 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
   return (
     <div
       className={cn(
-        'group relative flex items-center justify-between gap-2.5 px-3 py-2.5 min-h-[40px] w-full text-xs transition-colors duration-150 select-none hover:bg-white/[0.04] cursor-pointer'
+        'group relative flex items-center justify-between gap-2.5 px-3 py-2.5 min-h-[40px] w-full text-[11px] transition-colors duration-150 select-none hover:bg-white/[0.04] cursor-pointer'
       )}
       onClick={onEdit}
     >
       {/* 1. Badge + Role */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <span className={cn('w-1.5 h-5 rounded-full shrink-0', badgeColor)} />
+        <ShiftStateCircleBadge stateId={shift.assignedEmployeeId ? 'S2' : 'S1'} />
         <span
-          className="font-medium text-slate-100 dark:text-slate-100 truncate text-xs sm:text-[13px]"
+          className="font-medium text-slate-100 dark:text-slate-100 truncate text-[11px] sm:text-[13px]"
           title={`${roleDisplay}${remunerationLabel ? ` (${remunerationLabel})` : ''}`}
         >
           {roleDisplay}
@@ -108,7 +106,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
 
       {/* 2. Timings */}
       <div
-        className="flex items-center gap-1.5 shrink-0 font-medium text-slate-300 dark:text-slate-300 text-xs sm:text-[13px] tabular-nums"
+        className="flex items-center gap-1.5 shrink-0 font-medium text-slate-300 dark:text-slate-300 text-[11px] sm:text-[13px] tabular-nums"
         title={`${formatTimeDisplay(shift.startTime)} – ${formatTimeDisplay(shift.endTime)} (${netHours}h net)`}
       >
         <span>
@@ -135,17 +133,17 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
       <div className="flex items-center min-w-0 max-w-[180px] flex-1">
         {shift.assignedEmployeeName ? (
           <span
-            className="text-slate-200 dark:text-slate-200 truncate font-normal text-xs sm:text-[13px]"
+            className="text-slate-200 dark:text-slate-200 truncate font-normal text-[11px] sm:text-[13px]"
             title={shift.assignedEmployeeName}
           >
             {shift.assignedEmployeeName}
           </span>
         ) : employmentTypeLabel ? (
-          <span className="text-slate-300 dark:text-slate-300 truncate font-medium text-xs sm:text-[13px]">
+          <span className="text-slate-300 dark:text-slate-300 truncate font-medium text-[11px] sm:text-[13px]">
             {employmentTypeLabel}
           </span>
         ) : (
-          <span className="text-amber-400 font-medium text-xs sm:text-[13px] truncate">
+          <span className="text-amber-400 font-medium text-[11px] sm:text-[13px] truncate">
             Employment type not set
           </span>
         )}

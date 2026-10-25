@@ -50,7 +50,7 @@ export const MobileViewRangeToggle: React.FC<MobileViewRangeToggleProps> = ({
           aria-label={`${opt.label} view`}
           onClick={() => onChange(opt.id)}
           className={cn(
-            'min-h-10 min-w-10 px-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors active:scale-95 touch-manipulation',
+            'min-h-10 min-w-10 px-2 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors active:scale-95 touch-manipulation',
             isActive
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',

@@ -38,7 +38,7 @@ export const EarningsLinesTable: React.FC<EarningsLinesTableProps> = ({ period, 
   return (
     <table
       className={
-        'w-full text-sm border-collapse ' + (className ?? '')
+        'w-full text-[13px] border-collapse ' + (className ?? '')
       }
       aria-label="Gross earnings breakdown"
     >

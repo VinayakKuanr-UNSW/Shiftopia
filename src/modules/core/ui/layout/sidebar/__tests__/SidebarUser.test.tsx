@@ -96,40 +96,40 @@ describe('SidebarUser', () => {
     expect(screen.getByText('Employee')).toBeInTheDocument();
   });
 
-  it('renders all 5 icon buttons in row 2 with accessible names and toolbars', () => {
+  // Radix opens a dropdown on keyboard activation in jsdom (pointer events are
+  // not modelled), which is also the path a keyboard user takes.
+  const openAccountMenu = () => {
+    const trigger = screen.getByRole('button', { name: /account menu: jane doe/i });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  };
+
+  it('puts profile, theme, settings and log out in the account menu — log out last, after a divider', () => {
     personaMocks.canSwitch = true;
     renderSidebarUser();
 
-    const toolbar = screen.getByRole('toolbar', { name: /user quick actions/i });
-    expect(toolbar).toBeInTheDocument();
+    // The mode switch is NOT in the menu: it stays a one-tap button on the card.
+    expect(screen.getByRole('button', { name: /current mode: employee/i })).toBeInTheDocument();
 
-    // 1. Profile link
-    const profileLink = screen.getByRole('link', { name: /profile/i });
-    expect(profileLink).toHaveAttribute('href', '/profile');
-
-    // 2. Theme button
-    const themeBtn = screen.getByRole('button', { name: /switch to light mode/i });
-    expect(themeBtn).toBeInTheDocument();
-
-    // 3. Mode changer button
-    const modeBtn = screen.getByRole('button', { name: /current mode: employee/i });
-    expect(modeBtn).toBeInTheDocument();
-
-    // 4. Settings link
-    const settingsLink = screen.getByRole('link', { name: /settings/i });
-    expect(settingsLink).toHaveAttribute('href', '/settings');
-
-    // 5. Logout button
-    const logoutBtn = screen.getByRole('button', { name: /log out/i });
-    expect(logoutBtn).toBeInTheDocument();
+    openAccountMenu();
+    const items = screen.getAllByRole('menuitem');
+    expect(items.map((i) => i.textContent?.trim())).toEqual([
+      'Profile',
+      'Switch to light mode',
+      'Settings',
+      'Log out',
+    ]);
+    expect(screen.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute('href', '/profile');
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toHaveAttribute('href', '/settings');
+    // A separator sits between Settings and Log out.
+    const sep = screen.getAllByRole('separator').at(-1)!;
+    expect(sep.compareDocumentPosition(items[3]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('toggles theme when clicking the theme button', () => {
+  it('toggles theme from the account menu', () => {
     renderSidebarUser();
-
-    const themeBtn = screen.getByRole('button', { name: /switch to light mode/i });
-    fireEvent.click(themeBtn);
-
+    openAccountMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /switch to light mode/i }));
     expect(themeMocks.toggleTheme).toHaveBeenCalledOnce();
   });
 
@@ -194,10 +194,22 @@ describe('SidebarUser', () => {
     expect(modeBtn).toBeDisabled();
   });
 
-  it('calls logout when the logout button is clicked', () => {
+  it('calls logout from the account menu', () => {
     renderSidebarUser();
+    openAccountMenu();
 
-    fireEvent.click(screen.getByRole('button', { name: /log out/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /log out/i }));
     expect(authMocks.logout).toHaveBeenCalledOnce();
+  });
+
+  it('collapsed: keeps the one-tap mode button and an account-menu avatar', () => {
+    render(
+      <MemoryRouter initialEntries={['/my-roster']}>
+        <SidebarUser isCollapsed={true} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('button', { name: /account menu: Jane Doe/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /current mode: employee/i })).toBeInTheDocument();
   });
 });

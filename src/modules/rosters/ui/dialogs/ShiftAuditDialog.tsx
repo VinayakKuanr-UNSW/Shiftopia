@@ -254,7 +254,8 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
         hideClose
-        className="max-h-[92dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl border border-border bg-background p-0 shadow-2xl"
+        className="max-h-[92dvh] w-[calc(100%-2rem)] overflow-y-auto p-0"
+        size="xl"
       >
         {/* Header */}
         <div className="relative border-b border-border bg-slate-50 dark:bg-slate-900/60 p-6">
@@ -262,13 +263,13 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+                <DialogTitle>
                   Shift Compliance Audit
                 </DialogTitle>
                 <Badge
                   variant="outline"
                   className={cn(
-                    'font-mono text-xs px-2 py-0.5 font-semibold',
+                    'font-mono text-[11px] px-2 py-0.5 font-semibold',
                     hasBreach
                       ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400'
                       : hasWarning
@@ -283,7 +284,7 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
                     : '100% EBA Compliant'}
                 </Badge>
               </div>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription>
                 Audited against ICC Sydney Enterprise Agreement 2026 regulations and statutory fatigue limits.
               </DialogDescription>
             </div>
@@ -301,7 +302,7 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
                 <Briefcase className="h-3.5 w-3.5" />
                 <span>Role</span>
               </div>
-              <div className="mt-1 font-semibold text-xs text-foreground truncate" title={roleName}>
+              <div className="mt-1 font-semibold text-[11px] text-foreground truncate" title={roleName}>
                 {roleName}
               </div>
             </div>
@@ -311,7 +312,7 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
                 <User className="h-3.5 w-3.5" />
                 <span>Assignee</span>
               </div>
-              <div className="mt-1 font-semibold text-xs text-foreground truncate" title={employeeName || 'Unassigned'}>
+              <div className="mt-1 font-semibold text-[11px] text-foreground truncate" title={employeeName || 'Unassigned'}>
                 {employeeName || (
                   <span className="text-amber-600 dark:text-amber-400 font-semibold">Unassigned</span>
                 )}
@@ -323,7 +324,7 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
                 <Calendar className="h-3.5 w-3.5" />
                 <span>Date</span>
               </div>
-              <div className="mt-1 font-semibold text-xs text-foreground truncate">
+              <div className="mt-1 font-semibold text-[11px] text-foreground truncate">
                 {shiftDateFormatted}
               </div>
             </div>
@@ -333,7 +334,7 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
                 <Clock className="h-3.5 w-3.5" />
                 <span>Time & Span</span>
               </div>
-              <div className="mt-1 font-mono font-semibold text-xs text-foreground truncate">
+              <div className="mt-1 font-mono font-semibold text-[11px] text-foreground truncate">
                 {startTimeStr} – {endTimeStr} ({durationHours.toFixed(1)}h)
               </div>
             </div>
@@ -343,11 +344,11 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
         {/* Audit Body */}
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-border">
-            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <h4 className="text-[13px] font-semibold text-foreground flex items-center gap-2">
               <FileCheck2 className="h-4 w-4 text-primary" />
               Audited Rules & EBA Clauses
             </h4>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">
               {auditResults.filter(r => r.status === 'passed').length} of {auditResults.length} checks passed
             </span>
           </div>
@@ -369,14 +370,14 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
                       <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-muted text-foreground">
                         {rule.clause}
                       </span>
-                      <span className="text-xs font-semibold text-foreground">
+                      <span className="text-[11px] font-semibold text-foreground">
                         {rule.name}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
                       {rule.description}
                     </p>
-                    <p className="text-xs font-medium text-foreground/90 pt-1">
+                    <p className="text-[11px] font-medium text-foreground/90 pt-1">
                       {rule.detail}
                     </p>
                   </div>
@@ -414,7 +415,7 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
           </div>
           <button
             onClick={() => onOpenChange(false)}
-            className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+            className="rounded-lg bg-primary px-4 py-2 text-[11px] font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
           >
             Close Audit
           </button>

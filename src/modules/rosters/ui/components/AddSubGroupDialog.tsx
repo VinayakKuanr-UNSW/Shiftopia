@@ -94,7 +94,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>
             {isEditMode ? 'Edit Sub-Group' : 'Add Sub-Group'}
@@ -107,7 +107,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
         </DialogHeader>
 
         {/* Context */}
-        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm">
+        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-[13px]">
           <Building2 className="h-4 w-4 text-primary" />
           <span className="font-medium">{groupName}</span>
         </div>
@@ -126,7 +126,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
               }}
               className={error ? 'border-destructive' : ''}
             />
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {error && <p className="text-[11px] text-destructive">{error}</p>}
           </div>
 
           <div className="space-y-2">

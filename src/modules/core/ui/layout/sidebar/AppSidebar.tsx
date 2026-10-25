@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import React, { memo, useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, NavLink } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { biddingApi, swapsApi } from '@/modules/planning';
@@ -13,9 +13,9 @@ import {
   BellRing,
   BadgeCheck,
   RefreshCw,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
-  HelpCircle,
   TrendingUp,
   UserCircle2,
   Shield,
@@ -24,233 +24,417 @@ import {
   Sparkles,
   Radio,
   LucideIcon,
-  ClipboardList,
-  FileText,
   Activity,
-  BarChart3,
-  Fingerprint,
   Palmtree,
   Wallet,
+  Grid3x3,
+  Search,
+  Fingerprint,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { useNotifications } from '@/modules/core/hooks/useNotifications';
-import { ACCESS_LEVEL_CONFIG } from '@/platform/auth/constants';
 import { usePersona } from '@/platform/auth/PersonaProvider';
+import { useSidebar } from '@/modules/core/ui/primitives/sidebar';
 import { SidebarUser } from './SidebarUser';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/modules/core/ui/primitives/collapsible';
+import { QuickSearchDialog } from './QuickSearchDialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from '@/modules/core/ui/primitives/hover-card';
 import { useTranslation } from 'react-i18next';
 
 /* ============================================================
-   ICON COLOR MAP
+   SWISS CROSS LOGO COMPONENT (Matches Reference Design)
    ============================================================ */
-type IconColorKey =
-  | 'workspace'
-  | 'myRoster'
-  | 'availabilities'
-  | 'myBids'
-  | 'mySwaps'
-  | 'myBroadcasts'
-  | 'attendance'
-  | 'templates'
-  | 'rosters'
-  | 'timesheet'
-  | 'openBids'
-  | 'swapRequests'
-  | 'broadcast'
-  | 'insights'
-  | 'notifications'
+const AppCrossLogo: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={cn("w-6 h-6 text-foreground", className)}
+    aria-hidden="true"
+  >
+    <rect x="8.5" y="2" width="7" height="20" rx="3.5" />
+    <rect x="2" y="8.5" width="20" height="7" rx="3.5" />
+  </svg>
+);
 
-  | 'management'
-  | 'sectionMyWorkspace'
-  | 'sectionRostering'
-  | 'sectionManagement'
-  | 'sectionFeatures'
-  | 'logo'
-  | 'help'
-  | 'contracts'
-  | 'laborDemand'
-  | 'myLeave'
-  | 'leaveApprovals'
-  | 'grossPay'
-  | 'complianceRejections';
+/* ============================================================
+   TYPES FOR NAVIGATION TREE
+   ============================================================ */
+export interface NavLeafItem {
+  to: string;
+  label: string;
+  description?: string;
+  badge?: string;
+  permission?: string;
+  onMouseEnter?: () => void;
+}
 
-const iconColorMap: Record<IconColorKey, string> = {
-  workspace: 'text-purple-400',
-  myRoster: 'text-cyan-400',
-  availabilities: 'text-teal-400',
-  myBids: 'text-pink-400',
-  mySwaps: 'text-orange-400',
-  myBroadcasts: 'text-rose-400',
-  attendance: 'text-emerald-400',
-  templates: 'text-sky-400',
-  rosters: 'text-indigo-400',
-  timesheet: 'text-amber-400',
-  openBids: 'text-green-400',
-  swapRequests: 'text-rose-400',
-  broadcast: 'text-red-400',
-  insights: 'text-yellow-400',
-  notifications: 'text-orange-400',
+export interface NavGroupSection {
+  id: string;
+  title: string;
+  icon: LucideIcon;
+  items: NavLeafItem[];
+  defaultOpen?: boolean;
+}
 
-  management: 'text-lime-400',
-  sectionMyWorkspace: 'text-purple-400',
-  sectionRostering: 'text-blue-400',
-  sectionManagement: 'text-green-400',
-  sectionFeatures: 'text-amber-400',
-  logo: 'text-white',
-  help: 'text-blue-400',
-  contracts: 'text-violet-400',
-  laborDemand: 'text-fuchsia-400',
-  myLeave: 'text-teal-400',
-  leaveApprovals: 'text-emerald-400',
-  grossPay: 'text-lime-400',
-  complianceRejections: 'text-red-400',
+/* ============================================================
+   EXPANDED TREE GROUP COMPONENT
+   ============================================================ */
+interface ExpandedNavGroupProps {
+  section: NavGroupSection;
+  isRouteActive: (path: string) => boolean;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+const ExpandedNavGroup: React.FC<ExpandedNavGroupProps> = ({
+  section,
+  isRouteActive,
+  isOpen,
+  onToggle,
+}) => {
+  const Icon = section.icon;
+  const isAnyChildActive = section.items.some(item => isRouteActive(item.to));
+
+  return (
+    <div className="space-y-1">
+      {/* Group Header Button */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={`nav-section-${section.id}`}
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2 rounded-2xl text-[13px] font-medium transition-all group",
+          isAnyChildActive
+            ? "bg-muted/70 text-foreground"
+            : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "h-8 w-8 rounded-xl flex items-center justify-center transition-colors",
+            isAnyChildActive
+              ? "bg-foreground/10 text-foreground"
+              : "text-muted-foreground group-hover:text-foreground"
+          )}>
+            <Icon className="h-[18px] w-[18px]" />
+          </div>
+          <span className="font-semibold text-[13px]">{section.title}</span>
+        </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+            isOpen ? "rotate-0" : "-rotate-90"
+          )}
+        />
+      </button>
+
+      {/* Tree Connector & Indented Leaves */}
+      {isOpen && (
+        <div id={`nav-section-${section.id}`} className="relative pl-7 pt-0.5 pb-1 space-y-0.5">
+          {section.items.map((item, index) => {
+            const active = isRouteActive(item.to);
+            const isLast = index === section.items.length - 1;
+
+            return (
+              <div key={item.to} className="relative flex items-center min-h-[34px]">
+                {/* Curved Elbow Tree Line */}
+                <div className="absolute -left-3.5 top-0 bottom-0 w-3 pointer-events-none" aria-hidden="true">
+                  {/* Stem */}
+                  <div
+                    className={cn(
+                      "absolute left-0 top-0 w-px bg-border/70",
+                      isLast ? "h-[17px]" : "h-full"
+                    )}
+                  />
+                  {/* Elbow Branch */}
+                  <div className="absolute left-0 top-[17px] w-2.5 h-2 border-b border-l border-border/70 rounded-bl-sm" />
+                </div>
+
+                {/* Leaf Item Link */}
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <NavLink
+                      to={item.to}
+                      onMouseEnter={() => {
+                        prefetchRouteChunk(item.to);
+                        item.onMouseEnter?.();
+                      }}
+                      onFocus={() => {
+                        prefetchRouteChunk(item.to);
+                        item.onMouseEnter?.();
+                      }}
+                      className={cn(
+                        "flex-1 flex items-center justify-between px-3 py-1.5 rounded-xl text-[13px] font-medium transition-all",
+                        active
+                          ? "bg-muted text-foreground font-semibold shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                      )}
+                    >
+                      <span className="truncate">{item.label}</span>
+                      {item.badge && (
+                        <Badge variant="secondary" className="ml-2 text-[11px] px-1.5 py-0 h-4 font-bold">
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </NavLink>
+                  </TooltipTrigger>
+                  {item.description && (
+                    <TooltipContent side="right" sideOffset={8} className="text-[12px]">
+                      {item.description}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 /* ============================================================
-   NAVIGATION ITEM COMPONENT
+   COLLAPSED RAIL GROUP WITH HOVER FLYOUT (Radix Portal)
    ============================================================ */
-interface NavigationItemProps {
+interface CollapsedNavRailGroupProps {
+  section: NavGroupSection;
+  isRouteActive: (path: string) => boolean;
+}
+
+const CollapsedNavRailGroup: React.FC<CollapsedNavRailGroupProps> = ({
+  section,
+  isRouteActive,
+}) => {
+  const Icon = section.icon;
+  const isAnyChildActive = section.items.some(item => isRouteActive(item.to));
+
+  return (
+    <HoverCard openDelay={80} closeDelay={150}>
+      <div className="relative flex justify-center py-0.5">
+        <HoverCardTrigger asChild>
+          <button
+            type="button"
+            aria-label={section.title}
+            className={cn(
+              "h-10 w-10 rounded-2xl flex items-center justify-center transition-all outline-none cursor-pointer",
+              "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background",
+              isAnyChildActive
+                ? "bg-muted/80 text-foreground shadow-sm border border-border/40"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+            )}
+          >
+            <Icon className="h-5 w-5" />
+          </button>
+        </HoverCardTrigger>
+
+        {/* Flyout Popover Menu via Radix Portal */}
+        <HoverCardContent
+          side="right"
+          align="start"
+          sideOffset={14}
+          className={cn(
+            "z-50 min-w-[180px] w-auto p-3 rounded-2xl",
+            "bg-popover/98 backdrop-blur-xl border border-border shadow-2xl",
+            "animate-in fade-in-0 zoom-in-95 duration-150 motion-reduce:transition-none"
+          )}
+        >
+          <div className="px-2 py-1 mb-1 border-b border-border/40 pb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              {section.title}
+            </span>
+          </div>
+
+          <div className="relative pl-5 pt-1 space-y-0.5">
+            {section.items.map((item, index) => {
+              const active = isRouteActive(item.to);
+              const isLast = index === section.items.length - 1;
+
+              return (
+                <div key={item.to} className="relative flex items-center min-h-[32px]">
+                  {/* Curved Elbow Tree Line */}
+                  <div className="absolute -left-3.5 top-0 bottom-0 w-3 pointer-events-none" aria-hidden="true">
+                    <div
+                      className={cn(
+                        "absolute left-0 top-0 w-px bg-border/80",
+                        isLast ? "h-[16px]" : "h-full"
+                      )}
+                    />
+                    <div className="absolute left-0 top-[16px] w-2.5 h-2 border-b border-l border-border/80 rounded-bl-sm" />
+                  </div>
+
+                  {/* Leaf NavLink */}
+                  <NavLink
+                    to={item.to}
+                    onMouseEnter={() => {
+                      prefetchRouteChunk(item.to);
+                      item.onMouseEnter?.();
+                    }}
+                    className={cn(
+                      "flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-xl text-[13px] font-medium transition-all",
+                      active
+                        ? "bg-muted text-foreground font-semibold shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                    )}
+                  >
+                    <span className="truncate">{item.label}</span>
+                    {item.badge && (
+                      <Badge variant="secondary" className="ml-2 text-[11px] px-1.5 py-0 h-4 font-bold">
+                        {item.badge}
+                      </Badge>
+                    )}
+                  </NavLink>
+                </div>
+              );
+            })}
+          </div>
+        </HoverCardContent>
+      </div>
+    </HoverCard>
+  );
+};
+
+/* ============================================================
+   SINGLE STANDALONE NAV ITEM (e.g. Notifications)
+   ============================================================ */
+interface StandaloneNavItemProps {
   to: string;
   icon: LucideIcon;
-  iconColor: string;
   label: string;
   isActive: boolean;
+  isCollapsed: boolean;
   badge?: string;
   description?: string;
   onMouseEnter?: () => void;
 }
 
-const NavigationItem = memo<NavigationItemProps>(
-  ({ to, icon: Icon, iconColor, label, isActive, badge, description, onMouseEnter }) => (
+const StandaloneNavItem: React.FC<StandaloneNavItemProps> = ({
+  to,
+  icon: Icon,
+  label,
+  isActive,
+  isCollapsed,
+  badge,
+  description,
+  onMouseEnter,
+}) => {
+  const content = (
     <NavLink
       to={to}
       onMouseEnter={() => {
-        // Warm the route's lazy JS chunk so the click resolves instantly
-        // instead of hitting the network for the Suspense fallback.
         prefetchRouteChunk(to);
-        // Optional per-route data prefetch (bids/swaps) still runs.
         onMouseEnter?.();
       }}
       onFocus={() => {
-        // Same warm-up for keyboard / tab navigation (no hover event).
         prefetchRouteChunk(to);
         onMouseEnter?.();
       }}
       className={cn(
-        'group flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 relative overflow-hidden',
+        "transition-all duration-200 flex items-center outline-none",
+        isCollapsed
+          ? "h-10 w-10 mx-auto rounded-2xl justify-center relative"
+          : "h-11 px-3.5 rounded-2xl gap-3 text-[13px] font-medium w-full",
         isActive
-          ? 'bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/20 shadow-sm'
-          : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          ? "bg-muted/80 text-foreground font-semibold shadow-sm border border-border/40"
+          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
       )}
     >
-      {/* Active indicator */}
-      {isActive && (
-        <div className="absolute left-0 top-0 h-full w-1 bg-primary rounded-r-full" />
+      <Icon className="h-5 w-5 shrink-0" />
+      {!isCollapsed && (
+        <span className="flex-1 truncate text-[13px]">{label}</span>
       )}
-
-      {/* Icon */}
-      <Icon
-        className={cn(
-          'h-6 w-6 transition-transform duration-200 group-hover:scale-110',
-          iconColor,
-          isActive ? 'drop-shadow' : ''
-        )}
-      />
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <span className="font-semibold text-center text-base">{label}</span>
-          {badge && (
-            <Badge variant="secondary" className="ml-2 text-xs">
-              {badge}
-            </Badge>
+      {badge && (
+        <Badge
+          variant="secondary"
+          className={cn(
+            isCollapsed
+              ? "absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full text-[11px] font-bold flex items-center justify-center p-0"
+              : "ml-auto text-[11px] font-bold px-1.5 py-0 h-4"
           )}
-        </div>
-        {description && (
-          <p className="text-muted-foreground mt-0.5 truncate text-sm">
-            {description}
-          </p>
-        )}
-      </div>
-
-      {isActive && <ChevronRight className="h-4 w-4 text-primary" />}
+        >
+          {badge}
+        </Badge>
+      )}
     </NavLink>
-  )
-);
+  );
 
-NavigationItem.displayName = 'NavigationItem';
-
-/* ============================================================
-   COLLAPSIBLE SECTION COMPONENT
-   ============================================================ */
-interface CollapsibleSectionProps {
-  icon: LucideIcon;
-  title: string;
-  color?: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-}
-
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
-  icon: Icon,
-  title,
-  color = 'text-primary',
-  children,
-  defaultOpen = true,
-}) => {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  if (isCollapsed) {
+    return (
+      <Tooltip delayDuration={150}>
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={12} className="text-[12px] font-medium">
+          {label} {badge ? `(${badge})` : ''}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="space-y-1">
-      <CollapsibleTrigger className="flex items-center w-full group py-1 px-2 rounded-lg hover:bg-muted/30 transition-colors">
-        <div className="flex items-center gap-3 flex-1 px-[25px]">
-          <Icon className={cn('h-5 w-5', color)} />
-          <span className="uppercase tracking-wider text-muted-foreground font-semibold text-sm">
-            {title}
-          </span>
-        </div>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
-            isOpen ? "rotate-0" : "-rotate-90"
-          )}
-        />
-      </CollapsibleTrigger>
-
-      <CollapsibleContent className="space-y-1 data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden">
-        <div className="pt-1 pb-2">
-          {children}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+    <Tooltip delayDuration={350}>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      {description && (
+        <TooltipContent side="right" sideOffset={12} className="text-[12px]">
+          {description}
+        </TooltipContent>
+      )}
+    </Tooltip>
   );
 };
 
-
 /* ============================================================
-   APP SIDEBAR COMPONENT
+   MAIN APP SIDEBAR COMPONENT
    ============================================================ */
 const AppSidebar: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
-  const { user, hasPermission, logout } = useAuth();
-  // The persona splits this list in two. `hasPermission` still gates every
-  // employer entry underneath — the persona decides which HALF is on screen,
-  // never whether the user is allowed there.
+  const { user, hasPermission } = useAuth();
   const { persona } = usePersona();
   const isEmployee = persona === 'employee';
   const isEmployer = persona === 'employer';
   const isAdmin = persona === 'admin';
   const { unreadCount } = useNotifications();
   const queryClient = useQueryClient();
+  const { state, toggleSidebar, isMobile } = useSidebar();
+  const isCollapsed = !isMobile && state === 'collapsed';
+
+  // State for search dialog
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Expanded sections open/close state
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    work: true,
+    requests: true,
+    communication: true,
+    rostering: true,
+    management: true,
+    features: true,
+    admin: true,
+  });
+
+  const toggleSection = (sectionId: string) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId],
+    }));
+  };
 
   // Helper function to check if a route is active
   const isRouteActive = (path: string): boolean => {
     if (path === location.pathname) return true;
-    if (path !== '/' && location.pathname.startsWith(path))
+    if (path !== '/' && location.pathname.startsWith(path)) {
       return true;
+    }
     return false;
   };
 
@@ -284,364 +468,365 @@ const AppSidebar: React.FC = () => {
     }
   };
 
+  // Build nav sections based on persona and permissions
+  const navSections: NavGroupSection[] = useMemo(() => {
+    const sections: NavGroupSection[] = [];
+
+    if (isEmployee) {
+      sections.push({
+        id: 'work',
+        title: t('nav.work', 'Work'),
+        icon: UserCircle2,
+        items: [
+          {
+            to: '/my-roster',
+            label: t('nav.my_roster', 'My Roster'),
+            description: 'Your assigned shifts',
+          },
+          {
+            to: '/my-attendance',
+            label: t('nav.my_attendance', 'Clock In / Out'),
+            description: 'Digital time clock',
+          },
+          {
+            to: '/my-availabilities',
+            label: t('nav.my_availabilities', 'Availabilities'),
+            description: 'Manage schedule availability',
+          },
+        ],
+      });
+
+      sections.push({
+        id: 'requests',
+        title: t('nav.requests', 'Requests'),
+        icon: BadgeCheck,
+        items: [
+          {
+            to: '/my-bids',
+            label: t('nav.my_bids', 'My Bids'),
+            description: 'Shift bid requests',
+            onMouseEnter: () => handlePrefetch('/my-bids'),
+          },
+          {
+            to: '/my-swaps',
+            label: t('nav.my_swaps', 'My Swaps'),
+            description: 'Manage shift trades',
+            onMouseEnter: () => handlePrefetch('/my-swaps'),
+          },
+          {
+            to: '/my-leave',
+            label: t('nav.my_leave', 'My Leave'),
+            description: 'Balances & time off',
+            onMouseEnter: () => handlePrefetch('/my-leave'),
+          },
+        ],
+      });
+
+      sections.push({
+        id: 'communication',
+        title: t('nav.communication', 'Communication'),
+        icon: Radio,
+        items: [
+          {
+            to: '/my-broadcasts',
+            label: t('nav.my_broadcasts', 'Broadcasts'),
+            description: 'View announcements',
+          },
+          {
+            to: '/performance',
+            label: t('nav.performance', 'Performance'),
+            description: 'Attendance & metrics',
+          },
+        ],
+      });
+    }
+
+    if (isEmployer) {
+      const rosteringItems: NavLeafItem[] = [];
+      if (hasPermission('rosters')) {
+        rosteringItems.push({
+          to: '/rosters',
+          label: t('nav.rosters', 'Rosters'),
+          description: 'Manage schedule grid',
+        });
+      }
+      if (hasPermission('templates')) {
+        rosteringItems.push({
+          to: '/templates',
+          label: t('nav.templates', 'Templates'),
+          description: 'Shift templates',
+        });
+      }
+      if (hasPermission('timesheet-view')) {
+        rosteringItems.push({
+          to: '/timesheet',
+          label: t('nav.timesheet', 'Timesheet'),
+          description: 'Time tracking',
+        });
+      }
+      if (rosteringItems.length > 0) {
+        sections.push({
+          id: 'rostering',
+          title: t('nav.rostering', 'Rostering'),
+          icon: FolderKanban,
+          items: rosteringItems,
+        });
+      }
+
+      if (hasPermission('management')) {
+        sections.push({
+          id: 'management',
+          title: t('nav.management', 'Management'),
+          icon: Shield,
+          items: [
+            {
+              to: '/management/bids',
+              label: t('nav.open_bids', 'Open Bids'),
+              description: 'Review bid requests',
+              onMouseEnter: () => handlePrefetch('/management/bids'),
+            },
+            {
+              to: '/management/swaps',
+              label: t('nav.swap_requests', 'Swap Requests'),
+              description: 'Approve shift swaps',
+            },
+            {
+              to: '/team-availability',
+              label: t('nav.grid', 'Grid'),
+              description: 'Hours, compliance & grid',
+            },
+            {
+              to: '/management/leave',
+              label: t('nav.leave_approvals', 'Leave Approvals'),
+              description: 'Approve staff leave',
+            },
+            {
+              to: '/management/payroll',
+              label: t('nav.gross_pay', 'Gross Pay'),
+              description: 'Earnings report',
+            },
+          ],
+        });
+      }
+
+      const featureItems: NavLeafItem[] = [];
+      if (hasPermission('broadcast')) {
+        featureItems.push({
+          to: '/broadcast',
+          label: t('nav.broadcast', 'Broadcast'),
+          description: 'Send notifications',
+        });
+      }
+      if (hasPermission('insights')) {
+        featureItems.push({
+          to: '/insights',
+          label: t('nav.insights', 'Insights'),
+          description: 'Attendance & analytics',
+        });
+      }
+      if (featureItems.length > 0) {
+        sections.push({
+          id: 'features',
+          title: t('nav.features', 'Features'),
+          icon: Sparkles,
+          items: featureItems,
+        });
+      }
+    }
+
+    if (isAdmin) {
+      const adminItems: NavLeafItem[] = [];
+      if (hasPermission('labor-demand')) {
+        adminItems.push({
+          to: '/labor-demand',
+          label: t('nav.labor_demand', 'Labor Demand'),
+          description: 'Demand forecasting',
+        });
+      }
+      if (hasPermission('users')) {
+        adminItems.push({
+          to: '/users',
+          label: t('nav.users', 'Users'),
+          description: 'Manage users',
+        });
+      }
+      if (hasPermission('compliance')) {
+        adminItems.push({
+          to: '/compliance/rejections',
+          label: t('nav.compliance_rejections', 'Compliance Rejections'),
+          description: 'Audit blocked operations',
+          onMouseEnter: () => handlePrefetch('/compliance/rejections'),
+        });
+      }
+      if (adminItems.length > 0) {
+        sections.push({
+          id: 'admin',
+          title: t('common.admin', 'Admin'),
+          icon: Shield,
+          items: adminItems,
+        });
+      }
+    }
+
+    return sections;
+  }, [isEmployee, isEmployer, isAdmin, hasPermission, t]);
+
   return (
-    <div className="h-screen w-[280px] flex flex-col bg-card/95 backdrop-blur-sm border-r border-border/50 shadow-lg">
-      {/* ==================== HEADER ==================== */}
-      <div className="p-6 border-b border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md">
-            <Sparkles className={cn('h-6 w-6', iconColorMap.logo)} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-              ShiftoPia <span className="text-[8px] text-primary/40 tracking-tight ml-2 font-light">v9.0</span>
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Workforce Management
-            </p>
+    <TooltipProvider delayDuration={200}>
+      <aside
+        aria-label="Sidebar navigation"
+        className={cn(
+          "h-full w-full flex flex-col relative transition-all duration-300 ease-in-out select-none motion-reduce:transition-none",
+          isMobile
+            ? "bg-card border-r border-border"
+            : "rounded-[26px] bg-card/95 dark:bg-[#161f32]/95 backdrop-blur-md border border-border/50 shadow-lg"
+        )}
+      >
+        {/* ==================== COLLAPSE TOGGLE ARROW BUTTON ==================== */}
+        {!isMobile && (
+          <button
+            type="button"
+            onClick={() => toggleSidebar()}
+            aria-label={isCollapsed ? "Expand navigation sidebar" : "Collapse navigation sidebar"}
+            aria-expanded={!isCollapsed}
+            className={cn(
+              "absolute -right-3 top-5 z-40 h-6 w-6 rounded-full bg-card border border-border shadow-md",
+              "flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "before:absolute before:inset-[-10px] before:content-['']"
+            )}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronLeft className="h-3.5 w-3.5" />
+            )}
+          </button>
+        )}
+
+        {/* ==================== HEADER (LOGO) ==================== */}
+        <div className={cn("pt-4 pb-2.5 px-3.5", isCollapsed ? "flex justify-center" : "")}>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-2xl flex items-center justify-center shrink-0">
+              <AppCrossLogo className="h-6 w-6" />
+            </div>
+            {!isCollapsed && (
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-[17px] text-foreground tracking-tight">
+                    ShiftoPia
+                  </span>
+                  <span className="text-[11px] text-muted-foreground font-mono tracking-tighter">
+                    v9.0
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* ==================== NAVIGATION ==================== */}
-      <div className="flex-1 overflow-y-auto space-y-4 py-4 px-[15px]">
-
-        {/* ---------- Employee persona: Work, Requests and Personal ---------- */}
-        {isEmployee && (<>
-        <CollapsibleSection
-          icon={UserCircle2}
-          title={t('nav.work', 'Work')}
-          color={iconColorMap.sectionMyWorkspace}
-          defaultOpen={true}
-        >
-          <NavigationItem
-            to="/my-roster"
-            icon={Calendar}
-            iconColor={iconColorMap.myRoster}
-            label={t('nav.my_roster')}
-            isActive={isRouteActive('/my-roster')}
-            description="Your assigned shifts"
-          />
-
-          <NavigationItem
-            to="/my-attendance"
-            icon={Fingerprint}
-            iconColor={iconColorMap.attendance}
-            label={t('nav.my_attendance')}
-            isActive={isRouteActive('/my-attendance')}
-            description="Clock in & out"
-          />
-
-          <NavigationItem
-            to="/my-availabilities"
-            icon={CalendarDays}
-            iconColor={iconColorMap.availabilities}
-            label={t('nav.my_availabilities')}
-            isActive={isRouteActive('/my-availabilities')}
-            description="Manage your schedule"
-          />
-        </CollapsibleSection>
-
-        {/* ---------- Requests Section ---------- */}
-        <CollapsibleSection
-          icon={BadgeCheck}
-          title={t('nav.requests', 'Requests')}
-          color={iconColorMap.myBids}
-          defaultOpen={true}
-        >
-          <NavigationItem
-            to="/my-bids"
-            icon={BadgeCheck}
-            iconColor={iconColorMap.myBids}
-            label={t('nav.my_bids')}
-            isActive={isRouteActive('/my-bids')}
-            description="Shift bid requests"
-            onMouseEnter={() => handlePrefetch('/my-bids')}
-          />
-
-          <NavigationItem
-            to="/my-swaps"
-            icon={RefreshCw}
-            iconColor={iconColorMap.mySwaps}
-            label={t('nav.my_swaps')}
-            isActive={isRouteActive('/my-swaps')}
-            description="Manage shift swaps"
-            onMouseEnter={() => handlePrefetch('/my-swaps')}
-          />
-
-          <NavigationItem
-            to="/my-leave"
-            icon={Palmtree}
-            iconColor={iconColorMap.myLeave}
-            label={t('nav.my_leave', 'My Leave')}
-            isActive={isRouteActive('/my-leave')}
-            description="Balances & requests"
-            onMouseEnter={() => handlePrefetch('/my-leave')}
-          />
-        </CollapsibleSection>
-
-        {/* ---------- Communication Section ---------- */}
-        <CollapsibleSection
-          icon={BellRing}
-          title={t('nav.communication', 'Communication')}
-          color={iconColorMap.myBroadcasts}
-          defaultOpen={true}
-        >
-          <NavigationItem
-            to="/my-broadcasts"
-            icon={Radio}
-            iconColor={iconColorMap.myBroadcasts}
-            label={t('nav.my_broadcasts')}
-            isActive={isRouteActive('/my-broadcasts')}
-            description="View announcements"
-          />
-
-          {/* Employee-facing half of the KPI split. No permission gate — every
-              access level sees their own numbers, and the RPC behind it already
-              enforces `p_employee_id = auth.uid() OR is_manager_or_above()`. */}
-          <NavigationItem
-            to="/performance"
-            icon={TrendingUp}
-            iconColor={iconColorMap.insights}
-            label={t('nav.performance', 'Performance')}
-            isActive={isRouteActive('/performance')}
-            description="Your attendance, bids, swaps & cancellations"
-          />
-        </CollapsibleSection>
-        </>)}
-
-        {/* ---------- Shared: belongs to neither persona ----------
-            Notifications is workspace-wide, not employer or employee work. It
-            was inside the employee block, which meant switching to the employer
-            persona hid the unread badge — the one entry a manager most needs to
-            keep seeing. Settings lives in the footer below and is already
-            persona-independent; Profile and Search are reached from the header,
-            so neither needs a nav entry here. */}
-        <CollapsibleSection
-          icon={BellRing}
-          title={t('nav.shared', 'Workspace')}
-          color={iconColorMap.notifications}
-          defaultOpen={true}
-        >
-          <NavigationItem
-            to="/my-notifications"
-            icon={BellRing}
-            iconColor={iconColorMap.notifications}
-            label={t('nav.my_notifications')}
-            isActive={isRouteActive('/my-notifications')}
-            badge={unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : undefined}
-            description="View workspace updates"
-          />
-        </CollapsibleSection>
-
-        {/* ---------- Rostering Section (employer persona) ---------- */}
-        {isEmployer && (hasPermission('templates') ||
-          hasPermission('rosters') ||
-          hasPermission('timesheet-view')) && (
-            <CollapsibleSection
-              icon={FolderKanban}
-              title={t('nav.rostering')}
-              color={iconColorMap.sectionRostering}
-              defaultOpen={true}
+        {/* ==================== SEARCH BAR ==================== */}
+        <div className={cn("px-3 pb-3", isCollapsed ? "flex justify-center" : "")}>
+          {isCollapsed ? (
+            <Tooltip delayDuration={150}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  aria-label="Search navigation (⌘S / ⌘K)"
+                  aria-keyshortcuts="Control+S Meta+S"
+                  className={cn(
+                    "h-10 w-10 rounded-2xl border border-border/70 bg-muted/50",
+                    "hover:bg-muted/70 hover:text-foreground flex items-center justify-center text-muted-foreground transition-all outline-none",
+                    "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+                  )}
+                >
+                  <Search className="h-[18px] w-[18px]" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={12} className="text-[12px] font-medium">
+                Search (⌘S)
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search navigation (⌘S / ⌘K)"
+              aria-keyshortcuts="Control+S Meta+S"
+              className={cn(
+                "w-full flex items-center justify-between px-3 py-2 rounded-2xl border border-border/70",
+                "bg-muted/50 hover:bg-muted/70 hover:border-border transition-all text-[13px] text-muted-foreground group outline-none",
+                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+              )}
             >
-              {hasPermission('templates') && (
-                <NavigationItem
-                  to="/templates"
-                  icon={Workflow}
-                  iconColor={iconColorMap.templates}
-                  label={t('nav.templates')}
-                  isActive={isRouteActive('/templates')}
-                  description="Shift templates"
-                />
-              )}
-
-              {hasPermission('rosters') && (
-                <NavigationItem
-                  to="/rosters"
-                  icon={FileSpreadsheet}
-                  iconColor={iconColorMap.rosters}
-                  label={t('nav.rosters')}
-                  isActive={isRouteActive('/rosters')}
-                  description="Manage schedules"
-                />
-              )}
-
-              {hasPermission('timesheet-view') && (
-                <NavigationItem
-                  to="/timesheet"
-                  icon={Clock}
-                  iconColor={iconColorMap.timesheet}
-                  label={t('nav.timesheet')}
-                  isActive={isRouteActive('/timesheet')}
-                  description="Time tracking"
-                />
-              )}
-            </CollapsibleSection>
+              <div className="flex items-center gap-2.5">
+                <Search className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                <span className="text-[13px] font-normal">Search</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <kbd className="h-5 min-w-[20px] px-1 rounded-md border border-border/80 bg-background/70 text-[11px] font-mono text-muted-foreground flex items-center justify-center shadow-sm">
+                  ⌘
+                </kbd>
+                <kbd className="h-5 min-w-[20px] px-1 rounded-md border border-border/80 bg-background/70 text-[11px] font-mono text-muted-foreground flex items-center justify-center shadow-sm">
+                  S
+                </kbd>
+              </div>
+            </button>
           )}
+        </div>
 
-        {/* ---------- Management Section ---------- */}
-        {isEmployer && hasPermission('management') && (
-          <CollapsibleSection
-            icon={Shield}
-            title={t('nav.management')}
-            color={iconColorMap.sectionManagement}
-            defaultOpen={true}
-          >
-            <NavigationItem
-              to="/management/bids"
-              icon={BadgeCheck}
-              iconColor={iconColorMap.openBids}
-              label={t('nav.open_bids')}
-              isActive={isRouteActive('/management/bids')}
-              description="Review bid requests"
-              onMouseEnter={() => handlePrefetch('/management/bids')}
-            />
+        {/* ==================== NAVIGATION AREA ==================== */}
+        <nav
+          aria-label="Main Navigation"
+          className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-2 space-y-2 py-1"
+        >
+          {/* Navigation Groups (Tree when expanded, Icon + Flyout when collapsed) */}
+          <div className="space-y-1">
+            {navSections.map(section => {
+              if (isCollapsed) {
+                return (
+                  <CollapsedNavRailGroup
+                    key={section.id}
+                    section={section}
+                    isRouteActive={isRouteActive}
+                  />
+                );
+              }
 
-            <NavigationItem
-              to="/management/swaps"
-              icon={RefreshCw}
-              iconColor={iconColorMap.swapRequests}
-              label={t('nav.swap_requests')}
-              isActive={isRouteActive('/management/swaps')}
-              description="Approve shift swaps"
-            />
-
-            <NavigationItem
-              to="/team-availability"
-              icon={CalendarDays}
-              iconColor={iconColorMap.availabilities}
-              label={t('nav.team_availability', 'Team Availability')}
-              isActive={isRouteActive('/team-availability') || isRouteActive('/availability-manager') || isRouteActive('/availibility-manger')}
-              description="Team availability schedule"
-            />
-
-            <NavigationItem
-              to="/management/leave"
-              icon={Palmtree}
-              iconColor={iconColorMap.leaveApprovals}
-              label={t('nav.leave_approvals', 'Leave Approvals')}
-              isActive={isRouteActive('/management/leave')}
-              description="Approve leave requests"
-            />
-
-            <NavigationItem
-              to="/management/payroll"
-              icon={Wallet}
-              iconColor={iconColorMap.grossPay}
-              label={t('nav.gross_pay', 'Gross Pay')}
-              isActive={isRouteActive('/management/payroll')}
-              description="Itemised employee earnings"
-            />
-          </CollapsibleSection>
-        )}
-
-        {/* ---------- Features Section ---------- */}
-        {isEmployer && (hasPermission('broadcast') ||
-          hasPermission('insights') ||
-          hasPermission('management')) && (
-            <CollapsibleSection
-              icon={Sparkles}
-              title={t('nav.features')}
-              color={iconColorMap.sectionFeatures}
-              defaultOpen={true}
-            >
-              {hasPermission('broadcast') && (
-                <NavigationItem
-                  to="/broadcast"
-                  icon={BellRing}
-                  iconColor={iconColorMap.broadcast}
-                  label={t('nav.broadcast')}
-                  isActive={isRouteActive('/broadcast')}
-                  description="Send notifications"
+              return (
+                <ExpandedNavGroup
+                  key={section.id}
+                  section={section}
+                  isRouteActive={isRouteActive}
+                  isOpen={openSections[section.id] ?? true}
+                  onToggle={() => toggleSection(section.id)}
                 />
-              )}
+              );
+            })}
 
-              {hasPermission('insights') && (
-                <NavigationItem
-                  to="/insights"
-                  icon={TrendingUp}
-                  iconColor={iconColorMap.insights}
-                  label={t('nav.insights')}
-                  isActive={isRouteActive('/insights')}
-                  description="Attendance, bids, swaps & cancellations"
-                />
-              )}
-
-
-            </CollapsibleSection>
-          )}
-
-        {/* ---------- Availability for Analysts (insights without management) ---------- */}
-        {isEmployer && hasPermission('insights') && !hasPermission('management') && (
-          <CollapsibleSection
-            icon={Shield}
-            title={t('common.admin')}
-            color={iconColorMap.sectionManagement}
-            defaultOpen={true}
-          >
-            <NavigationItem
-              to="/team-availability"
-              icon={CalendarDays}
-              iconColor={iconColorMap.insights}
-              label={t('nav.team_availability', 'Team Availability')}
-              isActive={isRouteActive('/team-availability') || isRouteActive('/grid')}
-              description="Hours, compliance & availability"
+            {/* Standalone Item: Notifications */}
+            <StandaloneNavItem
+              to="/my-notifications"
+              icon={BellRing}
+              label={t('nav.my_notifications', 'Notification')}
+              isActive={isRouteActive('/my-notifications')}
+              isCollapsed={isCollapsed}
+              badge={unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : undefined}
+              description="View workspace updates"
             />
-          </CollapsibleSection>
-        )}
+          </div>
+        </nav>
 
-        {/* ---------- Admin Mode ---------- */}
-        {isAdmin && (
-          <CollapsibleSection
-            icon={Shield}
-            title={t('common.admin', 'Admin')}
-            color={iconColorMap.sectionManagement}
-            defaultOpen={true}
-          >
-            {hasPermission('labor-demand') && (
-              <NavigationItem
-                to="/labor-demand"
-                icon={Activity}
-                iconColor={iconColorMap.laborDemand}
-                label={t('nav.labor_demand')}
-                isActive={isRouteActive('/labor-demand')}
-                description="Demand forecasting"
-              />
-            )}
+        {/* ==================== FOOTER / USER CARD ==================== */}
+        <div className="p-2">
+          <SidebarUser isCollapsed={isCollapsed} />
+        </div>
 
-            {hasPermission('users') && (
-              <NavigationItem
-                to="/users"
-                icon={Users}
-                iconColor={iconColorMap.contracts}
-                label={t('nav.users')}
-                isActive={isRouteActive('/users')}
-                description="Manage users"
-              />
-            )}
-
-            {hasPermission('compliance') && (
-              <NavigationItem
-                to="/compliance/rejections"
-                icon={ShieldX}
-                iconColor={iconColorMap.complianceRejections}
-                label={t('nav.compliance_rejections', 'Compliance Rejections')}
-                isActive={isRouteActive('/compliance/rejections')}
-                description="Why actions were blocked"
-                onMouseEnter={() => handlePrefetch('/compliance/rejections')}
-              />
-            )}
-          </CollapsibleSection>
-        )}
-
-
-      </div>
-
-      {/* ==================== FOOTER ==================== */}
-      <div className="p-2 border-t border-border/50">
-        <SidebarUser />
-      </div>
-    </div>
+        {/* Quick Search Dialog (⌘S / ⌘K) */}
+        <QuickSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      </aside>
+    </TooltipProvider>
   );
 };
 

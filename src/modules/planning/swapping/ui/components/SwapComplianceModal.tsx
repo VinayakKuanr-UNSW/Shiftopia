@@ -16,6 +16,7 @@
  *     4. Adapter          — converts to ComplianceResult map for the UI
  */
 
+import { PageState } from '@/modules/core/ui/components/PageState';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -353,7 +354,7 @@ export function SwapComplianceModal({
     // -------------------------------------------------------------------------
 
     return (
-        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()} dialogClassName="w-[calc(100vw-2rem)] max-w-2xl max-h-[85vh] overflow-y-auto bg-slate-900 border-white/10" drawerClassName="h-[85dvh]">
+        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()} dialogClassName="w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto bg-slate-900" size="lg" drawerClassName="h-[85dvh]">
                 <ResponsiveDialog.Header>
                     <ResponsiveDialog.Title className="flex items-center gap-2 text-white">
                         <Shield className="h-5 w-5 text-purple-400" />
@@ -369,9 +370,9 @@ export function SwapComplianceModal({
                 <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <div className="text-xs text-white/50 mb-1">They're swapping out:</div>
-                            <div className="text-sm font-medium text-white/70">{requesterShift?.shift_date}</div>
-                            <div className="text-sm text-white/50">
+                            <div className="text-[11px] text-white/50 mb-1">They're swapping out:</div>
+                            <div className="text-[13px] font-medium text-white/70">{requesterShift?.shift_date}</div>
+                            <div className="text-[13px] text-white/50">
                                 {requesterShift?.start_time?.slice(0, 5)} - {requesterShift?.end_time?.slice(0, 5)}
                             </div>
                         </div>
@@ -383,13 +384,13 @@ export function SwapComplianceModal({
                     <div className="border-t border-white/10 my-3" />
 
                     <div>
-                        <div className="text-xs text-white/50 mb-1">You're offering:</div>
+                        <div className="text-[11px] text-white/50 mb-1">You're offering:</div>
                         <div className="font-semibold text-white">{offeredShift.role_name || 'Shift'}</div>
-                        <div className="text-sm text-white/70">
+                        <div className="text-[13px] text-white/70">
                             {offeredShift.shift_date} • {offeredShift.start_time?.slice(0, 5)} - {offeredShift.end_time?.slice(0, 5)}
                         </div>
                         {offeredShift.department_name && (
-                            <div className="text-xs text-white/50 mt-1">{offeredShift.department_name}</div>
+                            <div className="text-[11px] text-white/50 mt-1">{offeredShift.department_name}</div>
                         )}
                     </div>
                 </div>
@@ -423,18 +424,13 @@ export function SwapComplianceModal({
                 )}
 
                 {isRunningChecks && (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="text-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-purple-400 mx-auto mb-3" />
-                            <p className="text-white/70">Running compliance checks...</p>
-                        </div>
-                    </div>
+                    <PageState state="loading" title="Running compliance checks" />
                 )}
 
                 {/* Failure analysis banner */}
                 {failureAnalysis && (
                     <div className={cn(
-                        "mx-4 mt-4 p-3 rounded-lg border text-sm flex items-start gap-3",
+                        "mx-4 mt-4 p-3 rounded-lg border text-[13px] flex items-start gap-3",
                         failureAnalysis === 'BOTH_FAILED' ? "bg-red-950/30 border-red-800 text-red-200" :
                         failureAnalysis === 'YOU_FAILED'  ? "bg-amber-950/30 border-amber-800 text-amber-200" :
                                                             "bg-orange-950/30 border-orange-800 text-orange-200"

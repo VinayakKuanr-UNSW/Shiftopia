@@ -22,7 +22,7 @@ export function AvailabilityPageHeader({
 }: AvailabilityPageHeaderProps) {
   return (
     <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <h1 className="text-2xl font-black tracking-tight text-foreground">
+      <h1 className="text-[20px] font-black tracking-tight text-foreground">
         Availability Management
       </h1>
 

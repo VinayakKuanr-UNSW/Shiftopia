@@ -6,7 +6,7 @@
  * context-aware and automatically switch between their Dialog / Drawer counterparts.
  *
  * Usage:
- *   <ResponsiveDialog open={open} onOpenChange={setOpen} dialogClassName="max-w-md">
+ *   <ResponsiveDialog open={open} onOpenChange={setOpen} size="md">
  *     <ResponsiveDialog.Header>
  *       <ResponsiveDialog.Title>My Title</ResponsiveDialog.Title>
  *       <ResponsiveDialog.Description>Optional description</ResponsiveDialog.Description>
@@ -35,6 +35,7 @@ import {
   DrawerFooter,
 } from '@/modules/core/ui/primitives/drawer';
 import { cn } from '@/modules/core/lib/utils';
+import type { DialogSize } from '@/modules/core/ui/primitives/overlay-tokens';
 
 // ── Context ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,8 @@ interface ResponsiveDialogProps {
   dialogClassName?: string;
   /** Extra class names applied to DrawerContent (mobile only) */
   drawerClassName?: string;
+  /** Desktop width step (default `md`). Never pass `max-w-*` in dialogClassName. */
+  size?: DialogSize;
 }
 
 function ResponsiveDialogRoot({
@@ -68,6 +71,7 @@ function ResponsiveDialogRoot({
   children,
   dialogClassName,
   drawerClassName,
+  size,
 }: ResponsiveDialogProps) {
   const isMobile = useIsMobile();
 
@@ -75,13 +79,13 @@ function ResponsiveDialogRoot({
     <ResponsiveDialogContext.Provider value={{ isMobile }}>
       {isMobile ? (
         <Drawer open={open} onOpenChange={onOpenChange}>
-          <DrawerContent className={cn('bg-background border-border', drawerClassName)}>
+          <DrawerContent className={drawerClassName}>
             {children}
           </DrawerContent>
         </Drawer>
       ) : (
         <Dialog open={open} onOpenChange={onOpenChange}>
-          <DialogContent className={dialogClassName}>
+          <DialogContent size={size} className={dialogClassName}>
             {children}
           </DialogContent>
         </Dialog>

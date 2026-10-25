@@ -77,7 +77,7 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                 <button
                     id={id}
                     className={cn(
-                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
+                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-300",
                         "border justify-between w-full h-14 border-border",
                         "hover:scale-[1.01] active:scale-[0.99] relative z-20",
                         isOpen ? "ring-2 ring-indigo-500 bg-indigo-500/5 shadow-indigo-500/20 border-indigo-400/80" : "",
@@ -92,11 +92,11 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                     aria-expanded={isOpen}
                 >
                     <div className="flex flex-col items-start gap-0.5 min-w-0">
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
                             {label}
                         </span>
                         <span className={cn(
-                            "truncate text-xs sm:text-sm font-semibold",
+                            "truncate text-[11px] sm:text-[13px] font-semibold",
                             selectedEmployee
                                 ? "text-slate-900 dark:text-slate-100"
                                 : "text-slate-500 dark:text-slate-400 font-medium"
@@ -136,7 +136,7 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                         <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 dark:border-white/10 overflow-hidden [&_[cmdk-input-wrapper]]:border-b-0">
                             <CommandInput 
                                 placeholder="Search eligible staff by name..." 
-                                className="h-14 text-base border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
+                                className="h-14 text-[14px] border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
                                 autoFocus
                             />
                         </div>
@@ -144,13 +144,13 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                         {/* Results Container */}
                         <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
                             {targetEmploymentType && excludedCount > 0 && (
-                                <div className="border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] px-4 py-2 text-xs font-semibold text-slate-500 dark:text-white/50">
+                                <div className="border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] px-4 py-2 text-[11px] font-semibold text-slate-500 dark:text-white/50">
                                     Showing {TARGET_EMPLOYMENT_TYPE_LABELS[targetEmploymentType] || targetEmploymentType} only ({excludedCount} excluded)
                                 </div>
                             )}
 
                             <CommandList className="max-h-[300px] p-1.5 scrollbar-none overflow-x-hidden">
-                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-sm">
+                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-[13px]">
                                     {targetEmploymentType && excludedCount > 0
                                         ? `No ${TARGET_EMPLOYMENT_TYPE_LABELS[targetEmploymentType] || targetEmploymentType} staff match your search.`
                                         : 'No employees found.'}
@@ -171,7 +171,7 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                                     >
                                         <div className="flex items-center gap-3 min-w-0">
                                             <div className={cn(
-                                                "w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold transition-all shrink-0",
+                                                "w-7 h-7 rounded-full border flex items-center justify-center text-[11px] font-bold transition-all shrink-0",
                                                 !value 
                                                     ? "bg-white border-white text-indigo-600 dark:text-indigo-600" 
                                                     : "bg-slate-100 dark:bg-white/10 border-transparent text-slate-500 dark:text-white/60 group-aria-selected:border-white/40"
@@ -179,10 +179,10 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                                                 —
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="font-semibold text-sm sm:text-base truncate">
+                                                <p className="font-semibold text-[13px] sm:text-[14px] truncate">
                                                     Leave Unassigned
                                                 </p>
-                                                <p className="text-xs text-slate-500 dark:text-white/50 group-aria-selected:text-white/80 truncate">
+                                                <p className="text-[11px] text-slate-500 dark:text-white/50 group-aria-selected:text-white/80 truncate">
                                                     Open shift for bidding
                                                 </p>
                                             </div>
@@ -213,7 +213,7 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     {/* Initials circle */}
                                                     <div className={cn(
-                                                        "w-7 h-7 rounded-full border flex items-center justify-center text-xs font-bold transition-all shrink-0",
+                                                        "w-7 h-7 rounded-full border flex items-center justify-center text-[11px] font-bold transition-all shrink-0",
                                                         isSelected 
                                                             ? "bg-white border-white text-indigo-600 dark:text-indigo-600" 
                                                             : "bg-slate-100 dark:bg-white/10 border-transparent text-slate-700 dark:text-white/80 group-aria-selected:border-white/40"
@@ -221,10 +221,10 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                                                         {isSelected ? <Check className="w-4 h-4" strokeWidth={3} /> : initials}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="font-semibold text-sm sm:text-base truncate">
+                                                        <p className="font-semibold text-[13px] sm:text-[14px] truncate">
                                                             {name}
                                                         </p>
-                                                        <p className="text-xs text-slate-500 dark:text-white/50 group-aria-selected:text-white/80 truncate font-mono">
+                                                        <p className="text-[11px] text-slate-500 dark:text-white/50 group-aria-selected:text-white/80 truncate font-mono">
                                                             {contract}
                                                         </p>
                                                     </div>
@@ -237,7 +237,7 @@ export const EmployeeSelect: React.FC<EmployeeSelectProps> = ({
                             </CommandList>
                             
                             {/* Navigation Guides Footer */}
-                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-indigo-500/5 dark:border-white/5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-indigo-500/50 dark:text-muted-foreground/50">
+                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-indigo-500/5 dark:border-white/5 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500/50 dark:text-muted-foreground/50">
                                 <div className="flex items-center gap-4">
                                     <span className="flex items-center gap-1">
                                         <kbd className="px-1 py-0.5 rounded border border-indigo-500/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-indigo-500/70 dark:text-inherit font-sans">↑↓</kbd> NAV

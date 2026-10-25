@@ -89,10 +89,10 @@ function sortedNotifications(list: AppNotification[]): AppNotification[] {
 function GroupHeader({ label, count }: { label: string; count: number }) {
   return (
     <div className="sticky top-0 z-10 flex items-center gap-2 px-4 py-1.5 bg-muted/80 backdrop-blur-sm border-y border-border/30">
-      <span className="text-[10px] uppercase tracking-widest font-semibold text-muted-foreground">
+      <span className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">
         {label}
       </span>
-      <span className="text-[10px] text-muted-foreground/50 font-medium">({count})</span>
+      <span className="text-[11px] text-muted-foreground/50 font-medium">({count})</span>
     </div>
   );
 }
@@ -141,7 +141,7 @@ function NotificationRow({
         <div className="flex items-start justify-between gap-2">
           <p
             className={cn(
-              'text-sm leading-snug',
+              'text-[13px] leading-snug',
               isFresh  && 'font-semibold text-foreground',
               isUnread && !isFresh && 'font-medium text-foreground/80',
               !isUnread && 'font-normal text-foreground/60',
@@ -159,21 +159,21 @@ function NotificationRow({
         </div>
 
         {n.message && (
-          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-2">{n.message}</p>
         )}
 
         <div className="mt-1 flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60 font-medium">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground/60 font-medium">
             {meta.label}
           </span>
           {priority === 'high' && isUnread && (
             <>
-              <span className="text-[10px] text-muted-foreground/40">·</span>
-              <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wide">Urgent</span>
+              <span className="text-[11px] text-muted-foreground/40">·</span>
+              <span className="text-[11px] font-semibold text-red-500 uppercase tracking-wide">Urgent</span>
             </>
           )}
-          <span className="text-[10px] text-muted-foreground/40">·</span>
-          <span className="text-[10px] text-muted-foreground/60">
+          <span className="text-[11px] text-muted-foreground/40">·</span>
+          <span className="text-[11px] text-muted-foreground/60">
             {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
           </span>
         </div>
@@ -301,7 +301,7 @@ export function BroadcastNotifications({ isCollapsed: _isCollapsed }: BroadcastN
           )}
 
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-background">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[11px] font-bold text-white ring-2 ring-background">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -318,9 +318,9 @@ export function BroadcastNotifications({ isCollapsed: _isCollapsed }: BroadcastN
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
           <div className="flex items-center gap-2">
             <Bell className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-sm">Notifications</span>
+            <span className="font-semibold text-[13px]">Notifications</span>
             {unreadCount > 0 && (
-              <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
+              <span className="text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">
                 {unreadCount} new
               </span>
             )}
@@ -330,7 +330,7 @@ export function BroadcastNotifications({ isCollapsed: _isCollapsed }: BroadcastN
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1"
+              className="h-7 text-[11px] text-muted-foreground hover:text-foreground gap-1"
               onClick={markAllRead}
             >
               <CheckCheck className="h-3.5 w-3.5" />
@@ -357,8 +357,8 @@ export function BroadcastNotifications({ isCollapsed: _isCollapsed }: BroadcastN
           ) : notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 py-12 text-muted-foreground">
               <Inbox className="h-10 w-10 opacity-30" />
-              <p className="text-sm font-medium">No new notifications</p>
-              <p className="text-xs opacity-60">You're up to date</p>
+              <p className="text-[13px] font-medium">No new notifications</p>
+              <p className="text-[11px] opacity-60">You're up to date</p>
             </div>
           ) : useGrouped ? (
             <GroupedList
@@ -382,7 +382,7 @@ export function BroadcastNotifications({ isCollapsed: _isCollapsed }: BroadcastN
           <>
             <Separator className="bg-border/30" />
             <div className="px-4 py-2.5 text-center">
-              <span className="text-xs text-muted-foreground/50">
+              <span className="text-[11px] text-muted-foreground/50">
                 {notifications.length} notification{notifications.length !== 1 ? 's' : ''} · read items auto-expire after 7 days
               </span>
             </div>

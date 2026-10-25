@@ -49,7 +49,7 @@ const Tile: React.FC<TileProps> = ({ label, value, caption, Icon, status }) => {
             )}
         >
             <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 truncate">
+                <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/80 truncate">
                     {label}
                 </span>
                 <div
@@ -65,12 +65,12 @@ const Tile: React.FC<TileProps> = ({ label, value, caption, Icon, status }) => {
             </div>
             <div>
                 <p
-                    className="text-2xl lg:text-3xl font-black leading-none tracking-tight tabular-nums text-foreground"
+                    className="text-[20px] lg:text-[24px] font-black leading-none tracking-tight tabular-nums text-foreground"
                     style={tint ? { color: tint } : undefined}
                 >
                     {value}
                 </p>
-                <p className="mt-2 text-[10px] font-semibold leading-tight text-muted-foreground line-clamp-2">
+                <p className="mt-2 text-[11px] font-semibold leading-tight text-muted-foreground line-clamp-2">
                     {caption}
                 </p>
             </div>
@@ -111,12 +111,12 @@ export const TeamCoverageSummary: React.FC<Props> = ({ summary, className }) => 
             {/* Source Badge Ribbon */}
             <div className="flex items-center justify-between gap-2 mb-2 px-1">
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                         Required from
                     </span>
                     <span
                         className={cn(
-                            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider border shadow-2xs',
+                            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-black uppercase tracking-wider border shadow-2xs',
                             isDark ? 'bg-[#111827] border-white/10' : 'bg-slate-100 border-slate-200',
                         )}
                         style={requiredSource === 'shifts' ? { color: STATUS.warning } : undefined}
@@ -125,7 +125,7 @@ export const TeamCoverageSummary: React.FC<Props> = ({ summary, className }) => 
                         {REQUIRED_SOURCE_LABELS[requiredSource]}
                     </span>
                     {requiredSource === 'shifts' && (
-                        <span className="text-[10px] font-medium text-muted-foreground hidden sm:inline">
+                        <span className="text-[11px] font-medium text-muted-foreground hidden sm:inline">
                             · Forecast demand not yet available
                         </span>
                     )}

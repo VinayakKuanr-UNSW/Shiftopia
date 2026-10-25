@@ -231,8 +231,8 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                         <Building className="h-4.5 w-4.5 text-indigo-400" />
                                     </div>
                                     <div className="flex flex-col">
-                                        <h2 className="text-lg font-black text-white tracking-tight leading-none">Your Shifts</h2>
-                                        <p className="text-[9px] text-slate-500 uppercase font-black tracking-[0.15em] mt-1.5 opacity-60">
+                                        <h2 className="text-[15px] font-black text-white tracking-tight leading-none">Your Shifts</h2>
+                                        <p className="text-[11px] text-slate-500 uppercase font-black tracking-[0.15em] mt-1.5 opacity-60">
                                             Eligible for trade
                                         </p>
                                     </div>
@@ -249,7 +249,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                 ) : !myShifts || myShifts.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-center opacity-30">
                                         <Calendar className="h-8 w-8 mb-4 stroke-[1]" />
-                                        <p className="text-[10px] font-black uppercase tracking-widest leading-none">No Shifts Found</p>
+                                        <p className="text-[11px] font-black uppercase tracking-widest leading-none">No Shifts Found</p>
                                     </div>
                                 ) : (
                                     myShifts.map((shift) => {
@@ -287,7 +287,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                     </span>
                                                     {isUnavailable && (
                                                         <Badge className={cn(
-                                                            "text-[7px] h-3.5 px-1 font-black uppercase tracking-widest border-none",
+                                                            "text-[11px] h-3.5 px-1 font-black uppercase tracking-widest border-none",
                                                             isLocked ? "bg-rose-500/10 text-rose-500" : "bg-slate-500/10 text-slate-500"
                                                         )}>
                                                             {isLocked ? (
@@ -299,13 +299,13 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500 tracking-tight">
+                                                <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 tracking-tight">
                                                     <div className="flex items-center gap-1">
                                                         <span className="text-white font-medium group-hover:text-amber-300 transition-colors">
                                                             {format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d')}
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center gap-2 text-xs text-white/40">
+                                                    <div className="flex items-center gap-2 text-[11px] text-white/40">
                                                         <Clock className="w-3 h-3" />
                                                         <span>{formatTime((shift as any).start_time)} - {formatTime((shift as any).end_time)}</span>
                                                     </div>
@@ -331,14 +331,14 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                     <div className="mb-10 text-center">
                                         <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-indigo-600/10 border border-indigo-500/20 shadow-inner shadow-indigo-500/5">
                                             <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">
+                                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-400">
                                                 Trade Construction
                                             </span>
                                         </div>
-                                        <h2 className="text-4xl font-black text-white tracking-tighter leading-none mb-4">
+                                        <h2 className="text-[28px] font-black text-white tracking-tighter leading-none mb-4">
                                             Swap Protocol
                                         </h2>
-                                        <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[400px] mx-auto">
+                                        <p className="text-[13px] text-slate-500 font-medium leading-relaxed max-w-[400px] mx-auto">
                                             Review the shift exchange terms. Your teammate {requesterName} will need to accept this offer before manager review.
                                         </p>
                                     </div>
@@ -351,10 +351,10 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                 ? getGroupColor((selectedShift as any).group_type || (selectedShift as any).roles?.groupType, (selectedShift as any).departments?.name)
                                                 : "bg-[#121418] border-white/5 opacity-50"
                                         )}>
-                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Give</span>
+                                            <span className="text-[11px] font-black uppercase tracking-widest opacity-60">You Give</span>
                                             {selectedShift ? (
                                                 <div className="text-center">
-                                                    <div className="text-sm font-black text-white">
+                                                    <div className="text-[13px] font-black text-white">
                                                         {format(parse((selectedShift as any).shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d')}
                                                     </div>
                                                     <div className="text-[11px] font-bold opacity-80">
@@ -363,7 +363,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                 </div>
                                             ) : (
                                                 <div className="h-10 flex items-center justify-center">
-                                                    <div className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Pending</div>
+                                                    <div className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Pending</div>
                                                 </div>
                                             )}
                                         </div>
@@ -376,9 +376,9 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                             "flex-1 p-5 rounded-3xl border flex flex-col items-center gap-3",
                                             getGroupColor((theirShift as any)?.group_type || (theirShift as any)?.roles?.groupType, (theirShift as any)?.departments?.name)
                                         )}>
-                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Get</span>
+                                            <span className="text-[11px] font-black uppercase tracking-widest opacity-60">You Get</span>
                                             <div className="text-center">
-                                                <div className="text-sm font-black text-white">
+                                                <div className="text-[13px] font-black text-white">
                                                     {theirShift ? format(parse((theirShift as any).shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : 'N/A'}
                                                 </div>
                                                 <div className="text-[11px] font-bold opacity-80">
@@ -397,7 +397,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                         <Building className="h-3.5 w-3.5 text-indigo-400" />
                                                     </div>
                                                     <div>
-                                                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-500">Operation Center</div>
+                                                        <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Operation Center</div>
                                                         <div className="text-[11px] font-bold text-slate-200">
                                                             {(theirShift as any)?.departments?.name || 'Department'} • {(theirShift as any)?.roles?.name || 'Role'}
                                                         </div>
@@ -413,7 +413,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                         <ShieldCheck className="h-4 w-4 text-emerald-400" />
                                                     </div>
                                                     <div>
-                                                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-500">Proposed Terms</div>
+                                                        <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Proposed Terms</div>
                                                         <div className="text-[11px] font-bold text-slate-200">
                                                             Awaiting Offerer Selection
                                                         </div>
@@ -435,7 +435,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                         <Button
                                             onClick={handleOpenComplianceCheck}
                                             disabled={isSubmitting || !selectedV8ShiftId || isExpired || selectedShiftIsLocked}
-                                            className="h-14 rounded-2xl font-black text-sm uppercase tracking-[0.2em] bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_10px_30px_-10px_rgba(79,70,229,0.3)] border-b-4 border-indigo-800 active:scale-[0.98] active:border-b-0 transition-all disabled:opacity-50 disabled:grayscale"
+                                            className="h-14 rounded-2xl font-black text-[13px] uppercase tracking-[0.2em] bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_10px_30px_-10px_rgba(79,70,229,0.3)] border-b-4 border-indigo-800 active:scale-[0.98] active:border-b-0 transition-all disabled:opacity-50 disabled:grayscale"
                                         >
                                             {isSubmitting ? (
                                                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -458,7 +458,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                     <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
                                         <HistoryIcon className="h-4.5 w-4.5" />
                                     </div>
-                                    <h2 className="text-xs font-black text-white uppercase tracking-widest opacity-80">Trade Protocol</h2>
+                                    <h2 className="text-[11px] font-black text-white uppercase tracking-widest opacity-80">Trade Protocol</h2>
                                 </div>
                                 <Separator className="bg-white/5" />
                             </div>
@@ -468,7 +468,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                 {timerText && (
                                     <div className="mb-10 text-center">
                                         <div className={cn(
-                                            "inline-flex items-center gap-2 px-4 py-2 rounded-xl border font-black uppercase tracking-[0.1em] text-[10px]",
+                                            "inline-flex items-center gap-2 px-4 py-2 rounded-xl border font-black uppercase tracking-[0.1em] text-[11px]",
                                             isExpired ? "bg-rose-500/10 border-rose-500/20 text-rose-500" : "bg-purple-500/10 border-purple-500/20 text-purple-400"
                                         )}>
                                             <Clock className="h-3 w-3" />
@@ -492,13 +492,13 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                 <step.icon className={cn("h-2 w-2", step.active ? "text-white" : "text-slate-600")} />
                                             </div>
                                             <div className={cn(
-                                                "text-[10px] font-black uppercase tracking-widest mb-1 transition-colors",
+                                                "text-[11px] font-black uppercase tracking-widest mb-1 transition-colors",
                                                 step.active ? "text-slate-200" : "text-slate-600"
                                             )}>
                                                 {step.label}
                                             </div>
                                             <div className={cn(
-                                                "text-[9px] font-medium leading-tight",
+                                                "text-[11px] font-medium leading-tight",
                                                 step.active ? "text-slate-400" : "text-slate-700"
                                             )}>
                                                 {step.desc}
@@ -510,12 +510,12 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                 <div className="mt-20 flex flex-col items-center gap-4">
                                     <div className="flex items-center gap-3 w-full p-4 rounded-2xl bg-white/[0.02] border border-white/5">
                                         <Avatar className="h-8 w-8 bg-slate-800 border border-white/5">
-                                            <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white text-[10px] font-black">
+                                            <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white text-[11px] font-black">
                                                 {getInitials(requesterName)}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Proposed By</p>
+                                            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Proposed By</p>
                                             <p className="text-[11px] font-bold text-slate-200 leading-none mt-1">{requesterName}</p>
                                         </div>
                                     </div>
@@ -525,7 +525,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                             <div className="p-8 border-t border-white/5 bg-black/5">
                                 <Button
                                     onClick={handleClose}
-                                    className="w-full h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[10px] font-black uppercase tracking-widest border border-white/10 transition-all font-inter"
+                                    className="w-full h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[11px] font-black uppercase tracking-widest border border-white/10 transition-all font-inter"
                                 >
                                     Cancel & Return
                                 </Button>
@@ -550,7 +550,9 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
             ) : (
                 <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
                     <DialogContent
-                        className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden"
+                        hideClose
+                        className="h-[720px] max-h-[85vh] p-0 overflow-hidden flex flex-col"
+                        size="2xl"
                     >
                         {modalContent}
                     </DialogContent>

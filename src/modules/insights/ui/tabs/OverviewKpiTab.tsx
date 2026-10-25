@@ -293,7 +293,7 @@ export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) 
                     ) : depts.isLoading ? (
                         <Skeleton className="h-[260px] w-full rounded-2xl" />
                     ) : deptRows.length === 0 ? (
-                        <p className={cn(text.bodyMuted, 'rounded-2xl border border-border bg-muted/30 p-5 text-center text-xs')}>
+                        <p className={cn(text.bodyMuted, 'rounded-2xl border border-border bg-muted/30 p-5 text-center text-[11px]')}>
                             No department data for {period.label}.
                         </p>
                     ) : (

@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import MobileRosterAgendaView from '../MobileRosterAgendaView';
 
 vi.mock('../ShiftDetailsDialog', () => ({ default: () => null }));
 vi.mock('../MobileShiftCard', () => ({
   MobileShiftCard: ({ shiftData }: any) => <div>{shiftData.shift.id}</div>,
 }));
+
+const render = (ui: React.ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 const WEEK = Array.from({ length: 7 }, (_, i) => new Date(2026, 7, 17 + i));
 
@@ -29,9 +32,14 @@ describe('MobileRosterAgendaView — the grid survives an empty range', () => {
       ).toBeInTheDocument();
     }
 
-    // Each day states its own emptiness rather than the range stating it once.
+    // Each day's row says "No shifts" in place of its count — no "0 shifts",
+    // and no dashed placeholder box per day.
     expect(screen.getAllByText('No shifts')).toHaveLength(WEEK.length);
-    expect(screen.getAllByText(/0 shifts/)).toHaveLength(WEEK.length);
+    expect(screen.queryAllByText(/0 shifts/)).toHaveLength(0);
+
+    // The range states its emptiness once, with the next step.
+    expect(screen.getByRole('heading', { name: 'No shifts in this range' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Find open shifts' })).toBeInTheDocument();
   });
 
   it('announces the empty range once for screen readers', () => {
@@ -58,6 +66,7 @@ describe('MobileRosterAgendaView — the grid survives an empty range', () => {
     );
 
     expect(screen.getByText('shift-1')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'No shifts in this range' })).not.toBeInTheDocument();
     expect(screen.getAllByText('No shifts')).toHaveLength(WEEK.length - 1);
     expect(screen.getByRole('status')).toHaveTextContent('1 shift across 7 days.');
   });

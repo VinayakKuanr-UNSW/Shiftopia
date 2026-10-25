@@ -68,7 +68,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
                   className="border-b border-border/50 flex items-start justify-end pr-2 pt-1"
                   style={{ height: HOUR_HEIGHT }}
                 >
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[11px] text-muted-foreground">
                     {formatHour(hour)}
                   </span>
                 </div>
@@ -127,7 +127,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
                 className="flex-shrink-0 flex items-center justify-end pr-1"
                 style={{ width: TIME_LABEL_WIDTH }}
               >
-                <span className="text-[9px] font-bold text-red-500 bg-card px-1 rounded">
+                <span className="text-[11px] font-bold text-red-500 bg-card px-1 rounded">
                   {format(now, 'h:mm')}
                 </span>
               </div>

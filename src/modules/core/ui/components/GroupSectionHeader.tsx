@@ -24,13 +24,13 @@ export const GroupSectionHeader: React.FC<GroupSectionHeaderProps> = ({
 }) => (
     <div className={cn('flex items-center gap-3 mb-3', className)}>
         <div className={cn(
-            'text-xs font-black uppercase tracking-widest font-mono',
+            'text-[11px] font-black uppercase tracking-widest font-mono',
             emphasized ? 'text-emerald-500' : 'text-muted-foreground',
         )}>
             {label}
         </div>
         <div className="flex-1 h-px bg-border" />
-        <div className="text-[10px] text-muted-foreground/60 font-mono">
+        <div className="text-[11px] text-muted-foreground/60 font-mono">
             {count} {itemNoun}{count === 1 ? '' : 's'}
         </div>
     </div>

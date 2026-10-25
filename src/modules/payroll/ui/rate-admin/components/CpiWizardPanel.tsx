@@ -11,6 +11,7 @@
  * cpiRateIncrease.ts unchanged.
  */
 
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import React, { useMemo, useState } from 'react';
 import {
   TrendingUp, ArrowRight, ArrowLeft, Check, Copy, Info,
@@ -47,7 +48,7 @@ const StepIndicator: React.FC<{ current: number }> = ({ current }) => (
       <React.Fragment key={i}>
         <div className="flex items-center gap-3">
           <div className={cn(
-            'h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold transition-all',
+            'h-8 w-8 rounded-full flex items-center justify-center text-[13px] font-bold transition-all',
             i < current
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
               : i === current
@@ -59,7 +60,7 @@ const StepIndicator: React.FC<{ current: number }> = ({ current }) => (
             {i < current ? <Check className="h-4 w-4" aria-hidden="true" /> : i + 1}
           </div>
           <span className={cn(
-            'text-sm font-semibold hidden md:inline',
+            'text-[13px] font-semibold hidden md:inline',
             i === current ? 'text-foreground font-bold' : 'text-muted-foreground',
           )}>
             {label}
@@ -99,23 +100,23 @@ const CodeBlock: React.FC<{ title: string; code: string; Icon: React.ElementType
   return (
     <div className="rounded-xl border border-border bg-muted/40 overflow-hidden shadow-sm">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/60">
-        <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+        <div className="flex items-center gap-2 text-[13px] font-bold text-muted-foreground">
           <Icon className="h-4 w-4" aria-hidden="true" /> {title}
         </div>
         <div className="flex items-center gap-2">
           {isLong && (
-            <Button size="xs" variant="ghost" onClick={() => setExpanded(!expanded)} className="gap-1 text-xs h-7">
+            <Button size="xs" variant="ghost" onClick={() => setExpanded(!expanded)} className="gap-1 text-[11px] h-7">
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               {expanded ? 'Collapse' : 'Expand'}
             </Button>
           )}
-          <Button size="xs" variant="ghost" onClick={copy} className="gap-1.5 text-xs h-7">
+          <Button size="xs" variant="ghost" onClick={copy} className="gap-1.5 text-[11px] h-7">
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy'}
           </Button>
         </div>
       </div>
-      <pre className="p-4 text-xs leading-relaxed overflow-x-auto text-foreground/80 font-mono whitespace-pre">
+      <pre className="p-4 text-[11px] leading-relaxed overflow-x-auto text-foreground/80 font-mono whitespace-pre">
         {displayCode}
       </pre>
     </div>
@@ -189,8 +190,8 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
     <div className="rounded-xl border border-border/60 bg-card/40 backdrop-blur-sm p-6 space-y-6 shadow-sm">
       <div className="flex items-center gap-2.5">
         <TrendingUp className="h-6 w-6 text-primary" aria-hidden="true" />
-        <h3 className="text-xl font-bold text-foreground">CPI Increase Preview</h3>
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-3 bg-muted px-2.5 py-0.5 rounded-full border border-border/40">cl 25.1 — CPI + 0.5%</span>
+        <h3 className="text-[17px] font-bold text-foreground">CPI Increase Preview</h3>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground ml-3 bg-muted px-2.5 py-0.5 rounded-full border border-border/40">cl 25.1 — CPI + 0.5%</span>
       </div>
 
       <StepIndicator current={step} />
@@ -198,30 +199,30 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
       {/* Step 0: Current Rates */}
       {step === 0 && (
         <div className="space-y-4" role="tabpanel" aria-label="Step 1 of 4: Review Current Rates">
-          <p className="text-base text-muted-foreground font-medium">
+          <p className="text-[14px] text-muted-foreground font-medium">
             Review the current rate set (effective <span className="font-bold text-foreground">{latest.effectiveFrom}</span>) before applying a CPI increase.
           </p>
           <div className="rounded-lg border border-border/40 overflow-hidden bg-muted/10">
-            <table className="w-full text-sm" aria-label="Current base rates breakdown">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border bg-muted/30">
-                  <th scope="col" className="text-left font-bold py-3 px-4 text-xs uppercase tracking-wider">Classification</th>
-                  <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">Ordinary</th>
-                  <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">FT/PT</th>
-                  <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">Casual</th>
-                </tr>
-              </thead>
-              <tbody className="text-foreground font-semibold">
+            <Table aria-label="Current base rates breakdown">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Classification</TableHead>
+                  <TableHead scope="col" className="text-right">Ordinary</TableHead>
+                  <TableHead scope="col" className="text-right">FT/PT</TableHead>
+                  <TableHead scope="col" className="text-right">Casual</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="text-foreground">
                 {baseSummary.map(([cls, v]) => (
-                  <tr key={cls} className="border-b border-border/30 last:border-0 hover:bg-muted/15 transition-colors">
-                    <td className="py-3 px-4 font-bold text-foreground">{classLabel(cls)}</td>
-                    <td className="text-right py-3 px-4 tabular-nums text-muted-foreground font-medium">{money(v.ordinary)}</td>
-                    <td className="text-right py-3 px-4 tabular-nums">{v.permanent != null ? money(v.permanent) : '—'}</td>
-                    <td className="text-right py-3 px-4 tabular-nums">{v.casual != null ? money(v.casual) : '—'}</td>
-                  </tr>
+                  <TableRow key={cls} className="last:border-0">
+                    <TableCell className="font-bold text-foreground">{classLabel(cls)}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground font-medium">{money(v.ordinary)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{v.permanent != null ? money(v.permanent) : '—'}</TableCell>
+                    <TableCell className="text-right tabular-nums">{v.casual != null ? money(v.casual) : '—'}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}
@@ -229,30 +230,30 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
       {/* Step 1: Enter CPI */}
       {step === 1 && (
         <div className="space-y-6" role="tabpanel" aria-label="Step 2 of 4: Enter CPI details">
-          <p className="text-base text-muted-foreground font-medium">
+          <p className="text-[14px] text-muted-foreground font-medium">
             Enter the ABS All-Groups CPI (Sydney, March-quarter YoY %) and the effective date for the new rate set.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl">
             <div className="space-y-2.5">
-              <Label htmlFor="cpi-percentage-input" className="text-sm font-bold text-muted-foreground">ABS All-Groups CPI (March-qtr YoY %)</Label>
+              <Label htmlFor="cpi-percentage-input" className="text-[13px] font-bold text-muted-foreground">ABS All-Groups CPI (March-qtr YoY %)</Label>
               <Input
                 id="cpi-percentage-input"
                 type="number" step="0.1" min="0" inputMode="decimal"
                 placeholder="e.g. 3.6"
                 value={cpi} onChange={(e) => setCpi(e.target.value)}
-                className="text-xl font-bold h-11"
+                className="text-[17px] font-bold h-11"
                 aria-required="true"
               />
             </div>
             <div className="space-y-2.5">
-              <Label htmlFor="effective-date-input" className="text-sm font-bold text-muted-foreground">Effective from (first pay period on/after)</Label>
+              <Label htmlFor="effective-date-input" className="text-[13px] font-bold text-muted-foreground">Effective from (first pay period on/after)</Label>
               <Input 
                 id="effective-date-input"
                 type="date" 
                 value={effectiveFrom} 
                 onChange={(e) => setEffectiveFrom(e.target.value)} 
-                className="h-11 text-sm font-medium"
+                className="h-11 text-[13px] font-medium"
                 aria-required="true"
               />
             </div>
@@ -260,7 +261,7 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
 
           {cpi.trim() !== '' && valid && (
             <div className="rounded-lg bg-primary/5 border border-primary/20 px-5 py-4 max-w-2xl shadow-sm">
-              <p className="text-base text-foreground font-medium">
+              <p className="text-[14px] text-foreground font-medium">
                 Multiplier: <span className="font-extrabold tabular-nums text-primary">×{cpiFactor(cpiNum).toFixed(4)}</span>
                 <span className="text-muted-foreground ml-3">({cpiNum}% + 0.5% EBA uplift)</span>
               </p>
@@ -272,22 +273,22 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
       {/* Step 2: Preview */}
       {step === 2 && projection && (
         <div className="space-y-6" role="tabpanel" aria-label="Step 3 of 4: Preview Changes">
-          <p className="text-base text-muted-foreground font-medium">
+          <p className="text-[14px] text-muted-foreground font-medium">
             Compare current rates against the projected increase. All values rounded to cents independently.
           </p>
 
           <div className="rounded-lg border border-border/40 overflow-hidden bg-muted/10">
-            <table className="w-full text-sm" aria-label="Comparison table of current rates versus new projected rates">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border bg-muted/30">
-                  <th scope="col" className="text-left font-bold py-3 px-4 text-xs uppercase tracking-wider">Classification</th>
-                  <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">Current Rate</th>
-                  <th scope="col" className="text-center font-bold py-3 px-4 text-xs uppercase tracking-wider" aria-label="Transition arrow"></th>
-                  <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">New Rate</th>
-                  <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">Projected Change</th>
-                </tr>
-              </thead>
-              <tbody className="text-foreground font-semibold">
+            <Table aria-label="Comparison table of current rates versus new projected rates">
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">Classification</TableHead>
+                  <TableHead scope="col" className="text-right">Current Rate</TableHead>
+                  <TableHead scope="col" className="text-center" aria-label="Transition arrow"></TableHead>
+                  <TableHead scope="col" className="text-right">New Rate</TableHead>
+                  <TableHead scope="col" className="text-right">Projected Change</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="text-foreground">
                 {baseSummary.map(([cls, current]) => {
                   // Security classifications have no 'permanent' basis — they are
                   // salaried on the annualised (Schedule 3) rate, which also gets
@@ -301,32 +302,32 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
                     ? ((newRate.paidHourlyRate / compareRate - 1) * 100).toFixed(1)
                     : null;
                   return (
-                    <tr key={cls} className="border-b border-border/30 last:border-0 hover:bg-muted/15 transition-colors">
-                      <td className="py-3 px-4 font-bold text-foreground">{classLabel(cls)}</td>
-                      <td className="text-right py-3 px-4 tabular-nums text-muted-foreground font-medium">
+                    <TableRow key={cls} className="last:border-0">
+                      <TableCell className="font-bold text-foreground">{classLabel(cls)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground font-medium">
                         {compareRate != null ? money(compareRate) : money(current.ordinary)}
-                      </td>
-                      <td className="text-center py-3 px-4 text-muted-foreground" aria-hidden="true">→</td>
-                      <td className="text-right py-3 px-4 tabular-nums font-extrabold text-foreground text-sm">
+                      </TableCell>
+                      <TableCell className="text-center text-muted-foreground" aria-hidden="true">→</TableCell>
+                      <TableCell className="text-right tabular-nums font-extrabold text-foreground">
                         {newRate ? money(newRate.paidHourlyRate) : '—'}
-                      </td>
-                      <td className="text-right py-3 px-4">
+                      </TableCell>
+                      <TableCell className="text-right">
                         {delta && (
-                          <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 text-xs font-bold text-emerald-400">
+                          <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-0.5 text-[11px] font-bold text-emerald-400">
                             +{delta}%
                           </span>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-start gap-3.5 max-w-4xl">
             <Info className="h-5 w-5 text-amber-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
-            <p className="text-sm text-amber-400/90 leading-relaxed font-semibold">
+            <p className="text-[13px] text-amber-400/90 leading-relaxed font-semibold">
               cl 25.3: confirm the new rates stay ≥ 2% above the Amusement, Events &amp; Recreation Award before applying.
             </p>
           </div>
@@ -336,13 +337,13 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
       {/* Step 3: Export */}
       {step === 3 && projection && (
         <div className="space-y-6" role="tabpanel" aria-label="Step 4 of 4: Export Migration SQL and Snippets">
-          <p className="text-base text-muted-foreground font-medium">
+          <p className="text-[14px] text-muted-foreground font-medium">
             Copy the migration SQL and TS snippet below. Apply both to keep the DB and cost engine in sync.
           </p>
 
           <div className="space-y-4">
             <div>
-              <p className="text-sm font-bold text-foreground/80 mb-2">Schedule 2 — base classifications &amp; allowances</p>
+              <p className="text-[13px] font-bold text-foreground/80 mb-2">Schedule 2 — base classifications &amp; allowances</p>
               <div className="space-y-4">
                 <CodeBlock title="Migration SQL (eba_rate + eba_allowance)" code={toMigrationSql(projection)} Icon={Database} />
                 <CodeBlock title="RATE_SCHEDULE snippet (embedded cost engine)" code={toRateScheduleSnippet(projection, schedule.length - 1)} Icon={Code2} />
@@ -351,7 +352,7 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
 
             {traineeProjection && (
               <div className="pt-2">
-                <p className="text-sm font-bold text-foreground/80 mb-2">Schedule 5 — trainees (same increase applied)</p>
+                <p className="text-[13px] font-bold text-foreground/80 mb-2">Schedule 5 — trainees (same increase applied)</p>
                 <div className="space-y-4">
                   <CodeBlock title="Migration SQL (eba_trainee_schedule)" code={toTraineeMigrationSql(traineeProjection)} Icon={Database} />
                   <CodeBlock title="TRAINEE_RATE_SCHEDULE snippet (embedded cost engine)" code={toTraineeSnippet(traineeProjection, cpiNum, traineeSchedule.length - 1)} Icon={Code2} />
@@ -359,7 +360,7 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground leading-relaxed font-semibold">
+            <p className="text-[11px] text-muted-foreground leading-relaxed font-semibold">
               Apprentice (Schedule 4) and Supported-Wage (Schedule 6) rates are percentages of a
               base that already gets this increase, so they need no separate change.
             </p>
@@ -373,8 +374,8 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
           >
             <Lock className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div>
-              <p className="text-sm font-bold text-foreground">Direct publish coming in Phase 3</p>
-              <p className="text-xs text-muted-foreground mt-1 leading-relaxed font-medium">
+              <p className="text-[13px] font-bold text-foreground">Direct publish coming in Phase 3</p>
+              <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed font-medium">
                 For now, copy the SQL migration and TS snippet above. An engineer applies both to keep the DB and cost engine in sync.
               </p>
             </div>
@@ -389,7 +390,7 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
           variant="ghost"
           onClick={() => setStep((s) => Math.max(0, s - 1))}
           disabled={step === 0}
-          className="gap-2 text-sm h-10 font-bold"
+          className="gap-2 text-[13px] h-10 font-bold"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Back
@@ -400,7 +401,7 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
             size="sm"
             onClick={() => setStep((s) => s + 1)}
             disabled={!canNext}
-            className="gap-2 text-sm h-10 font-bold px-4"
+            className="gap-2 text-[13px] h-10 font-bold px-4"
           >
             Next
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -410,7 +411,7 @@ const CpiWizardPanel: React.FC<CpiWizardPanelProps> = ({ schedule, traineeSchedu
             size="sm" 
             variant="ghost" 
             onClick={() => { setStep(0); setCpi(''); setEffectiveFrom(''); }} 
-            className="gap-2 text-sm h-10 font-bold"
+            className="gap-2 text-[13px] h-10 font-bold"
           >
             Start Over
           </Button>

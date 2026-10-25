@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, Calendar, ArrowUpDown, Filter, Layers } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { touch } from '@/modules/core/ui/typography';
+import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { DatePicker } from '@/modules/core/ui/calendar';
 import {
   ResponsiveMenu,
@@ -125,26 +125,25 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
   const menuGridCls =
     menuCount === 3 ? 'grid-cols-3' : menuCount === 2 ? 'grid-cols-2' : 'grid-cols-1';
 
-  const navButtonCls =
-    'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border ' +
-    'bg-background/60 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground ' +
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95';
-
   return (
     // One row on desktop, two on a phone. Desktop has the width to hold the
     // range controls and the three menus on a single line; a 390px viewport
     // does not, and wrapping them into one flow puts a menu wherever the
-    // previous control happened to end. `gap-1.5` between the two mobile rows
-    // is enough to read them apart without looking like two separate bars.
-    <div className={cn('mt-2 flex flex-col gap-1.5 md:flex-row md:flex-wrap md:items-center md:gap-2', className)}>
-      {/* ── Line 1: view range + range picker ─────────────────────────────── */}
-      {(showRange || showPicker) && (
-        <div className="flex items-center gap-1.5 md:shrink-0">
+    // previous control happened to end. On desktop they take the shared zones
+    // (no views toggle here, so zone 1 is empty); on a phone the compact row
+    // stacks them `gap-1.5` apart — enough to read them apart without looking
+    // like two separate bars.
+    <ToolbarRow
+      compactOnMobile
+      className={className}
+      // ── Line 1: view range + range picker ───────────────────────────────
+      modes={(showRange || showPicker) ? (
+        <div className="flex w-full items-center gap-1.5 md:w-auto md:shrink-0">
           {showRange && (
             <div
               role="radiogroup"
               aria-label="View range"
-              className="flex h-11 shrink-0 items-center gap-0.5 rounded-xl border border-border bg-background/60 p-0.5"
+              className={cn(toolbar.control, 'gap-0.5')}
             >
               {RANGE_OPTIONS.map((opt) => {
                 const isActive = view === opt.id;
@@ -159,11 +158,9 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                     aria-label={`${opt.label} view`}
                     onClick={() => onViewChange!(opt.id)}
                     className={cn(
-                      'h-10 min-w-10 rounded-[10px] px-2.5 text-xs font-semibold uppercase tracking-wide transition-colors active:scale-95',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                      toolbar.controlItem,
+                      'active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      isActive ? toolbar.modeOn : toolbar.modeOff,
                     )}
                   >
                     <span aria-hidden="true" className="sm:hidden">{opt.short}</span>
@@ -175,13 +172,14 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
           )}
 
           {showPicker && (
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-none" role="group" aria-label="Date range">
+            // The same ‹ date › stepper as the manager bars; it fills the row on a phone.
+            <div className={cn(toolbar.stepper, 'min-w-0 flex-1 md:flex-none')} role="group" aria-label="Date range">
               {onPrevious && (
                 <button
                   type="button"
                   onClick={onPrevious}
                   aria-label={`Previous ${view ?? 'period'}`}
-                  className={navButtonCls}
+                  className={toolbar.stepperButton}
                 >
                   <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -192,11 +190,7 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                   <button
                     type="button"
                     aria-label={`Change date — showing ${rangeLabel}`}
-                    className={cn(
-                      touch.targetY,
-                      'flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background/60 px-3 text-xs font-semibold tabular-nums text-foreground transition-colors hover:bg-muted/50 md:w-auto md:min-w-[9rem]',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    )}
+                    className={cn(toolbar.stepperLabel, 'min-w-0 flex-1 justify-center md:flex-none md:min-w-[9rem]')}
                   >
                     <Calendar className="h-4 w-4 shrink-0 opacity-60" aria-hidden="true" />
                     <span className="truncate">{rangeLabel}</span>
@@ -204,7 +198,7 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                 </DatePicker>
               ) : (
                 <span
-                  className="flex-1 truncate px-1 text-center text-xs font-semibold tabular-nums text-foreground"
+                  className="flex-1 truncate px-1 text-center text-[11px] font-semibold tabular-nums text-foreground"
                   aria-label={`Showing ${rangeLabel}`}
                 >
                   {rangeLabel}
@@ -216,7 +210,7 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                   type="button"
                   onClick={onNext}
                   aria-label={`Next ${view ?? 'period'}`}
-                  className={navButtonCls}
+                  className={toolbar.stepperButton}
                 >
                   <ChevronRight className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -224,11 +218,10 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
             </div>
           )}
         </div>
-      )}
-
-      {/* ── Line 2: Sort · Filter · Group By ──────────────────────────────── */}
-      {(showSort || showFilter || showGroupBy || trailing) && (
-        <div className="flex w-full items-center gap-1.5 md:w-auto md:flex-1 md:gap-2">
+      ) : undefined}
+      // ── Line 2: Sort · Filter · Group By ────────────────────────────────
+      actions={(showSort || showFilter || showGroupBy || trailing) ? (
+        <div className="flex w-full items-center gap-1.5 md:w-auto md:gap-2">
           {menuCount > 0 && (
             // Equal thirds on a phone so the row spans the card; natural widths
             // on desktop, where they share the line with the range controls.
@@ -313,8 +306,8 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
 
           {trailing}
         </div>
-      )}
-    </div>
+      ) : undefined}
+    />
   );
 };
 

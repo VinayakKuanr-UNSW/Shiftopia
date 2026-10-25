@@ -233,7 +233,7 @@ export const RosterShiftModal: React.FC<RosterShiftModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>
             {isEditMode ? 'Edit Shift' : 'Add New Shift'}
@@ -247,11 +247,11 @@ export const RosterShiftModal: React.FC<RosterShiftModalProps> = ({
 
         {/* Context Info - Read Only */}
         <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-[13px]">
             <Calendar className="h-4 w-4 text-primary" />
             <span className="font-medium">{displayDate}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-[13px]">
             <Building2 className="h-4 w-4 text-muted-foreground" />
             <span>{groupName}</span>
             <span className="text-muted-foreground">→</span>
@@ -337,7 +337,7 @@ export const RosterShiftModal: React.FC<RosterShiftModalProps> = ({
                 />
               </div>
               {errors.startTime && (
-                <p className="text-xs text-destructive">{errors.startTime}</p>
+                <p className="text-[11px] text-destructive">{errors.startTime}</p>
               )}
             </div>
             <div className="space-y-2">
@@ -358,7 +358,7 @@ export const RosterShiftModal: React.FC<RosterShiftModalProps> = ({
                 />
               </div>
               {errors.endTime && (
-                <p className="text-xs text-destructive">{errors.endTime}</p>
+                <p className="text-[11px] text-destructive">{errors.endTime}</p>
               )}
             </div>
           </div>
@@ -401,8 +401,8 @@ export const RosterShiftModal: React.FC<RosterShiftModalProps> = ({
 
           {/* Net Hours Display */}
           <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
-            <span className="text-sm font-medium">Net Hours</span>
-            <span className="text-lg font-bold text-primary">
+            <span className="text-[13px] font-medium">Net Hours</span>
+            <span className="text-[15px] font-bold text-primary">
               {calculateNetHours()} hrs
             </span>
           </div>

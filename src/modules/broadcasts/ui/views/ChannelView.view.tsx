@@ -72,11 +72,11 @@ export const ChannelView: React.FC<ChannelViewProps> = ({
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 md:gap-3">
-                <h2 className="font-black text-xl md:text-2xl text-slate-900 dark:text-white tracking-tighter truncate">
+                <h2 className="font-black text-[17px] md:text-[20px] text-slate-900 dark:text-white tracking-tighter truncate">
                   {channelName}
                 </h2>
               </div>
-              <p className="text-xs md:text-[13px] font-medium text-slate-500 dark:text-blue-200/40 truncate mt-0.5">
+              <p className="text-[11px] md:text-[13px] font-medium text-slate-500 dark:text-blue-200/40 truncate mt-0.5">
                 {channelDescription || 'Company broadcast channel'}
               </p>
             </div>
@@ -89,7 +89,7 @@ export const ChannelView: React.FC<ChannelViewProps> = ({
               placeholder="Search conversation..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
-              className="pl-11 md:pl-12 bg-slate-100/50 dark:bg-black/20 border-slate-200/50 dark:border-white/5 text-slate-900 dark:text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/20 h-10 md:h-12 rounded-2xl md:rounded-3xl text-sm font-medium transition-all"
+              className="pl-11 md:pl-12 bg-slate-100/50 dark:bg-black/20 border-slate-200/50 dark:border-white/5 text-slate-900 dark:text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/20 h-10 md:h-12 rounded-2xl md:rounded-3xl text-[13px] font-medium transition-all"
             />
             {searchQuery && (
               <button
@@ -109,7 +109,7 @@ export const ChannelView: React.FC<ChannelViewProps> = ({
           {sortedBroadcasts.length === 0 ? (
             searchQuery ? (
               <div className="text-center py-16 md:py-20">
-                <p className="text-slate-500 dark:text-blue-200/60 text-base md:text-lg">No messages match your search.</p>
+                <p className="text-slate-500 dark:text-blue-200/60 text-[14px] md:text-[15px]">No messages match your search.</p>
               </div>
             ) : (
               <EmptyMessages />
@@ -149,7 +149,7 @@ export const ChannelView: React.FC<ChannelViewProps> = ({
 
           {/* Read-only notice */}
           <div className="mt-8 md:mt-12 mb-4 md:mb-6 flex justify-center">
-            <div className="px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-[10px] md:text-xs font-medium text-slate-400 dark:text-white/40 flex items-center gap-2">
+            <div className="px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-[11px] md:text-[11px] font-medium text-slate-400 dark:text-white/40 flex items-center gap-2">
               <Shield className="h-3 w-3" />
               <span>Broadcast Channel - Read Only Access</span>
             </div>

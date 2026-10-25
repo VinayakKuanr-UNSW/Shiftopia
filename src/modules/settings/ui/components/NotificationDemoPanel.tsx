@@ -90,11 +90,11 @@ export function NotificationDemoPanel() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h4 className="font-medium text-white">Client demo controls</h4>
-          <p className="mt-1 text-sm text-blue-200/60">
+          <p className="mt-1 text-[13px] text-blue-200/60">
             Temporary local triggers. Every demo appears in the bell and notification page without writing to Supabase.
           </p>
         </div>
-        <span className="w-fit rounded-full bg-amber-300/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-200">
+        <span className="w-fit rounded-full bg-amber-300/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-200">
           Remove later
         </span>
       </div>
@@ -111,8 +111,8 @@ export function NotificationDemoPanel() {
             >
               <Icon className="mr-3 h-4 w-4 shrink-0 text-amber-200" />
               <span>
-                <span className="block text-sm font-medium">{preset.label}</span>
-                <span className="block text-[10px] uppercase tracking-wide text-white/40">
+                <span className="block text-[13px] font-medium">{preset.label}</span>
+                <span className="block text-[11px] uppercase tracking-wide text-white/40">
                   {policy.priority} · {formatDelivery(policy.delivery, policy.cooldownMinutes)}
                 </span>
               </span>

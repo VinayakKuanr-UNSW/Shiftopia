@@ -119,7 +119,8 @@ export function PeopleDayShiftsDialog({
       <DialogContent
         data-hide-bottom-nav="true"
         overlayClassName="bg-slate-950/55 backdrop-blur-xl"
-        className="z-[160] w-[calc(100vw-1rem)] max-w-sm gap-0 border-0 bg-transparent p-0 shadow-none duration-300 data-[state=closed]:slide-out-to-bottom-12 data-[state=closed]:zoom-out-90 [&>button]:right-4 [&>button]:top-4 [&>button]:z-30 [&>button]:flex [&>button]:h-9 [&>button]:w-9 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-xl [&>button]:bg-black/10 [&>button]:backdrop-blur-md"
+        className="z-[160] w-[calc(100vw-1rem)] gap-0 border-0 bg-transparent p-0 duration-300 data-[state=closed]:slide-out-to-bottom-12 data-[state=closed]:zoom-out-90 [&>button]:right-4 [&>button]:top-4 [&>button]:z-30 [&>button]:flex [&>button]:h-9 [&>button]:w-9 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-xl [&>button]:bg-black/10 [&>button]:backdrop-blur-md"
+        size="sm"
       >
         <motion.div
           initial={{ opacity: 0, y: 80, scale: 0.78, rotateX: 8 }}
@@ -136,8 +137,8 @@ export function PeopleDayShiftsDialog({
           <div className="pointer-events-none absolute -bottom-28 -right-20 h-52 w-52 rounded-full bg-cyan-400/10 blur-3xl" />
 
           <DialogHeader className="relative z-10 border-b border-white/10 bg-gradient-to-br from-primary/15 via-transparent to-cyan-400/5 px-5 py-5 pr-14 text-left">
-            <DialogTitle className="text-xl font-black tracking-tight">{selection.employee.name}</DialogTitle>
-            <DialogDescription className="mt-1 flex items-center gap-2 text-xs">
+            <DialogTitle>{selection.employee.name}</DialogTitle>
+            <DialogDescription className="mt-1 flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-primary" />
               {format(selection.date, 'EEE, d MMM yyyy')} · {selection.shifts.length} shifts
             </DialogDescription>
@@ -159,13 +160,13 @@ export function PeopleDayShiftsDialog({
             >
               <PriorityMarker priority={priority} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold text-foreground">{shift.subGroup || shift.role}</div>
-                <div className="mt-1 flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                <div className="truncate text-[13px] font-bold text-foreground">{shift.subGroup || shift.role}</div>
+                <div className="mt-1 flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
                   {shift.startTime} – {shift.endTime}
                 </div>
               </div>
-              <Badge variant="outline" className="shrink-0 text-[9px] uppercase">
+              <Badge variant="outline" className="shrink-0 text-[11px] uppercase">
                 {shift.status}
               </Badge>
             </motion.button>

@@ -57,7 +57,11 @@ export function applyAdvancedFilters(
     // ── Lifecycle ──────────────────────────────────────────────────────
     if (lifecycleStatus !== 'all') {
       const lc = (shift.lifecycle_status ?? '').toLowerCase();
-      if (lc !== lifecycleStatus) return false;
+      if (lifecycleStatus === 'cancelled') {
+        if (!shift.is_cancelled && lc !== 'cancelled') return false;
+      } else {
+        if (shift.is_cancelled || lc !== lifecycleStatus) return false;
+      }
     }
 
     // ── Assignment status ──────────────────────────────────────────────

@@ -81,7 +81,7 @@ export const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
     <div className={cn('flex items-center gap-1 flex-wrap', className)}>
       <span
         className={cn(
-          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+          'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
           primaryCls,
         )}
       >
@@ -90,7 +90,7 @@ export const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
       {secondaryLabel && (
         <span
           className={cn(
-            'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
             secondaryCls,
           )}
         >

@@ -1,5 +1,6 @@
 // src/modules/planning/bidding/ui/views/OpenBidsView/BidsList.tsx
 
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React from 'react';
 import { Users, Loader2, ArrowUpDown } from 'lucide-react';
 import { BidCard } from './BidCard';
@@ -81,12 +82,12 @@ const BidsListHeader: React.FC<BidsListHeaderProps> = ({
     <div className="flex items-center gap-4 text-[12px] font-medium">
       <button className="h-11 border-b-2 border-cyan-500 text-cyan-400 px-1 flex items-center gap-1.5 transition-colors">
         All Bids
-        <span className="bg-cyan-500/15 text-cyan-400 text-[10px] px-1.5 rounded-md font-bold">
+        <span className="bg-cyan-500/15 text-cyan-400 text-[11px] px-1.5 rounded-md font-bold">
           {bidCount}
         </span>
       </button>
     </div>
-    <div className="flex items-center gap-2 text-[10px] font-medium">
+    <div className="flex items-center gap-2 text-[11px] font-medium">
       <span className="text-white/25 flex items-center gap-1"><ArrowUpDown className="h-3 w-3" /> Sort:</span>
       <button
         onClick={() => onSortToggle('sss')}
@@ -109,19 +110,9 @@ const BidsListHeader: React.FC<BidsListHeaderProps> = ({
 );
 
 const LoadingState: React.FC = () => (
-  <div className="flex justify-center p-12">
-    <Loader2 className="h-7 w-7 text-cyan-500/50 animate-spin" />
-  </div>
+  <PageState state="loading" title="Loading bids" />
 );
 
 const EmptyState: React.FC = () => (
-  <div className="border border-dashed border-white/[0.06] rounded-xl p-12 text-center flex flex-col items-center justify-center h-64">
-    <div className="w-14 h-14 bg-white/[0.03] rounded-2xl flex items-center justify-center mb-4 border border-white/[0.04]">
-      <Users className="h-7 w-7 text-white/15" />
-    </div>
-    <h3 className="text-white/60 font-semibold text-[13px] mb-1">No bids received yet</h3>
-    <p className="text-[11px] text-white/25 max-w-[240px]">
-      Employees haven't started bidding on this shift. Check back later.
-    </p>
-  </div>
+  <PageState state="empty" icon={Users} title="No bids received yet" description="Employees haven't started bidding on this shift. Check back later." />
 );

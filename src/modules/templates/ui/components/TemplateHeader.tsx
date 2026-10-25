@@ -120,17 +120,17 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
                     className="text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-semibold gap-1.5 h-11 min-h-[44px] px-3 shrink-0"
                 >
                     <ArrowLeft className="h-4 w-4" />
-                    <span className="text-sm">Back</span>
+                    <span className="text-[13px]">Back</span>
                 </Button>
 
                 <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 shrink-0" />
 
                 <div className="flex items-baseline gap-2 min-w-0">
-                    <span className="text-slate-900 dark:text-white text-sm font-bold tracking-tight truncate">
+                    <span className="text-slate-900 dark:text-white text-[13px] font-bold tracking-tight truncate">
                         {template.name}
                     </span>
                     {template.description && (
-                        <span className="text-slate-500 dark:text-slate-400 text-xs font-medium truncate hidden sm:inline">
+                        <span className="text-slate-500 dark:text-slate-400 text-[11px] font-medium truncate hidden sm:inline">
                             {template.description}
                         </span>
                     )}
@@ -140,7 +140,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
             {/* 2. METADATA CARD — Status | Version | Saved | Employment Type | Groups | Subgroups | Shifts  +  Save | Delete | Publish */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 {/* Left Side: Metadata row */}
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider min-w-0 flex-1">
                     <span className={cn(
                         "px-2 py-0.5 rounded-md font-extrabold text-[11px]",
                         isPublished && "text-emerald-700 bg-emerald-500/15 dark:text-emerald-300 dark:bg-emerald-500/20",
@@ -158,7 +158,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
 
                     <div className="inline-flex items-center gap-1.5 lowercase normal-case whitespace-nowrap">
                         <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0" />
-                        <span className="capitalize text-slate-700 dark:text-slate-300 font-semibold text-xs">Saved {lastSavedAgo.replace(/ ago$/i, '')} ago</span>
+                        <span className="capitalize text-slate-700 dark:text-slate-300 font-semibold text-[11px]">Saved {lastSavedAgo.replace(/ ago$/i, '')} ago</span>
                     </div>
 
                     <span className="opacity-40" aria-hidden="true">•</span>
@@ -181,7 +181,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
                         <div
                             role="status"
                             aria-live="polite"
-                            className="inline-flex items-center gap-1.5 text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30 ml-1"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/30 ml-1"
                         >
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                             Unsaved

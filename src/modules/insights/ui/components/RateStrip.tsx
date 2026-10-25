@@ -48,7 +48,7 @@ export const RateStrip: React.FC<{ items: RateStripItem[]; className?: string }>
                     // Status is in the label as a word, not just in the colour.
                     aria-label={`${label ?? labelFor(metricId)} ${formatMetric(metricId, value)} ${STATUS_WORD[status]}`.trim()}
                 >
-                    <dd className={cn('text-lg font-bold tabular-nums leading-none', STATUS_TEXT[status])}>
+                    <dd className={cn('text-[15px] font-bold tabular-nums leading-none', STATUS_TEXT[status])}>
                         {formatMetric(metricId, value)}
                     </dd>
                     <dt className={cn(text.overline, 'mt-1.5 block truncate')}>

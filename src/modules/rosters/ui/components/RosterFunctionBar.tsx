@@ -1,10 +1,5 @@
 import React, { useState, Suspense, lazy } from 'react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
+import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import {
   RefreshCw,
   CalendarPlus,
@@ -16,16 +11,20 @@ import {
   Wand2,
   Hand,
   FolderPlus,
+  Filter,
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, addMonths } from 'date-fns';
-import { cn } from '@/modules/core/lib/utils';
 import { UnifiedRosterNavigator, type ViewType, computeRange, formatRangeLabel } from './UnifiedRosterNavigator';
 export type { ViewType } from './UnifiedRosterNavigator';
-import { RosterFilterPopover } from './RosterFilterPopover';
 import { BadgeLegendPopover } from './BadgeLegendPopover';
 import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
-import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
-import { Separator } from '@/modules/core/ui/primitives/separator';
+import {
+  ToolbarRow,
+  ToolbarSegmented,
+  ToolbarIconButton,
+  toolbar,
+  type ToolbarSegmentedOption,
+} from '@/modules/core/ui/components/Toolbar';
 // Lazy: each of these dialogs ships its own queries (templates, history,
 // rostersByDateRange) plus framer-motion. When eagerly imported they were
 // firing those queries on every roster page load even with isOpen=false.
@@ -56,6 +55,13 @@ import type { PublishRosterPlan } from '@/modules/rosters/domain/bulk-action-eng
 
 /** Shown on every write control a view-only manager (delta, epsilon) sees disabled. */
 const VIEW_ONLY_TIP = 'View-only access — you can see this roster but not change it';
+
+const ROSTER_MODES: ReadonlyArray<ToolbarSegmentedOption<RosterMode>> = [
+  { id: 'group', icon: <Box className="h-3.5 w-3.5" />, label: 'Group' },
+  { id: 'people', icon: <Users className="h-3.5 w-3.5" />, label: 'People' },
+  { id: 'events', icon: <CalendarDays className="h-3.5 w-3.5" />, label: 'Events' },
+  { id: 'roles', icon: <Briefcase className="h-3.5 w-3.5" />, label: 'Roles' },
+];
 
 export interface RosterFunctionBarProps {
   selectedOrganizationId: string | null;
@@ -103,73 +109,6 @@ export interface RosterFunctionBarProps {
 }
 
 /* ============================================================
-   ICON BUTTON COMPONENT
-   ============================================================ */
-const IconButton: React.FC<{
-  icon: React.ReactNode;
-  tooltip: string;
-  onClick: () => void;
-  isActive?: boolean;
-  isLoading?: boolean;
-  disabled?: boolean;
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'ghost';
-  className?: string;
-}> = ({ icon, tooltip, onClick, isActive, isLoading, disabled, variant = 'default', className }) => {
-  const variantClasses = {
-    default: isActive
-      ? 'bg-slate-200 dark:bg-white/20 text-slate-900 dark:text-white font-bold shadow-sm'
-      : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10',
-    success: isActive
-      ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/30'
-      : 'text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/15',
-    warning: isActive
-      ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/30'
-      : 'text-slate-700 dark:text-slate-200 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/10 dark:hover:bg-amber-500/15',
-    danger: isActive
-      ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold border border-rose-500/30'
-      : 'text-slate-700 dark:text-slate-200 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-500/10 dark:hover:bg-rose-500/15',
-    ghost: 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10',
-  };
-
-  // aria-disabled, not `disabled`: a natively disabled button leaves the tab
-  // order and (in most browsers) gets no pointer events, so its tooltip — the
-  // only place that says WHY it is off ("select a department first", view-only)
-  // — could never be reached by keyboard. The click is swallowed instead.
-  const inert = disabled || isLoading;
-  return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={inert ? undefined : onClick}
-            aria-disabled={inert || undefined}
-            aria-label={tooltip}
-            aria-pressed={isActive}
-            className={cn(
-              'h-9 w-9 min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] sm:h-9 sm:w-9 flex items-center justify-center rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              variantClasses[variant],
-              disabled && 'opacity-40 cursor-not-allowed',
-              className
-            )}
-          >
-            {isLoading ? (
-              <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { 'aria-hidden': 'true' }) : icon
-            )}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent
-          side="bottom"
-          className="text-[10px] uppercase font-extrabold tracking-wider bg-slate-900 border border-slate-700 text-white shadow-xl px-2.5 py-1 rounded-md"
-        >
-          {tooltip}
-        </TooltipContent>
-      </Tooltip>
-  );
-};
-
-/* ============================================================
    MAIN COMPONENT
    ============================================================ */
 export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
@@ -197,6 +136,9 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     activeMode,
     setActiveMode,
     selectedDepartmentIds,
+    isFilterBarOpen,
+    setIsFilterBarOpen,
+    advancedFilters,
   } = useRosterUI();
 
   const {
@@ -246,66 +188,36 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     }
   }, [activeRangeBounds, onTemplateDatesChange]);
 
+  const committedActiveFilterCount = React.useMemo(() => [
+    advancedFilters.stateId,
+    advancedFilters.lifecycleStatus !== 'all',
+    advancedFilters.assignmentStatus !== 'all',
+    advancedFilters.assignmentOutcome !== 'all',
+    advancedFilters.biddingStatus !== 'all',
+    advancedFilters.tradingStatus !== 'all',
+    advancedFilters.roleId,
+    advancedFilters.skillIds.length > 0,
+    advancedFilters.complianceStatus !== 'all',
+    advancedFilters.searchQuery.trim() !== '',
+  ].filter(Boolean).length, [advancedFilters]);
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div className={cn(
-      "w-full min-h-16 md:h-16 flex-shrink-0 z-50 px-4 py-2 md:py-0 flex items-center relative transition-all",
-      compactOnMobile && 'min-h-0 px-0 py-0 md:h-16 md:px-4',
-      !transparent
-        ? "bg-white/90 dark:bg-slate-950/40 backdrop-blur-2xl border-b border-slate-200 dark:border-white/10 shadow-sm dark:shadow-2xl"
-        : "bg-transparent border-none shadow-none"
-    )}>
-      {/* Subtle top highlight for premium feel */}
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
-      {/* Wraps below md: the three sections cannot sit side by side on a phone. */}
-      <div className={cn(
-        'w-full flex flex-wrap md:flex-nowrap items-center justify-center md:justify-between gap-2',
-        compactOnMobile && 'gap-1.5 md:gap-2',
-      )}>
-
-        {/* Left Section: Context & Modes */}
-        <div className="w-full md:w-auto flex-shrink-0 flex items-center justify-start">
-          <div className={cn(
-            'w-full md:w-auto flex items-center bg-slate-100 dark:bg-black/20 border border-slate-300 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm',
-            compactOnMobile && 'h-[34px] rounded-lg p-0.5 md:h-10 md:rounded-xl md:p-1',
-          )}>
-            <ToggleGroup
-              type="single"
-              value={activeMode}
-              onValueChange={(v) => v && setActiveMode(v as RosterMode)}
-              className="flex items-center gap-0.5 w-full md:w-auto"
-            >
-              {[
-                { id: 'group', icon: <Box className="h-3.5 w-3.5" />, label: 'Group' },
-                { id: 'people', icon: <Users className="h-3.5 w-3.5" />, label: 'People' },
-                { id: 'events', icon: <CalendarDays className="h-3.5 w-3.5" />, label: 'Events' },
-                { id: 'roles', icon: <Briefcase className="h-3.5 w-3.5" />, label: 'Roles' },
-              ].map((m) => (
-                <ToggleGroupItem
-                  key={m.id}
-                  value={m.id}
-                  // The label is hidden below 2xl, so without this the control
-                  // announces as an unnamed toggle on every phone.
-                  aria-label={`${m.label} roster mode`}
-                  className={cn(
-                    'flex-1 md:flex-none h-8 px-2.5 text-[11px] font-bold uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-foreground data-[state=on]:shadow-sm text-slate-700 dark:text-muted-foreground hover:text-slate-900 dark:hover:text-foreground transition-all border-none shadow-none',
-                    compactOnMobile && 'h-[30px] px-2 md:h-8 md:px-2.5',
-                  )}
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    {m.icon}
-                    <span className="hidden 2xl:inline">{m.label}</span>
-                  </div>
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </div>
-        </div>
-
-        {/* Center Section: Navigation & View */}
-        <div className="w-full md:w-auto flex-shrink-0 flex items-center justify-center">
+      <ToolbarRow
+        compactOnMobile={compactOnMobile}
+        className={!transparent ? toolbar.standalone : undefined}
+        views={
+          <ToolbarSegmented
+            value={activeMode}
+            onValueChange={setActiveMode}
+            options={ROSTER_MODES}
+            // The label is hidden below 2xl, so without this the control
+            // announces as an unnamed toggle on every phone.
+            itemAriaLabel={(label) => `${label} roster mode`}
+            labelFrom="2xl"
+          />
+        }
+        modes={
           <UnifiedRosterNavigator
             variant="full"
             date={selectedDate}
@@ -316,96 +228,64 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             maxDate={activeRangeBounds.monthEnd}
             showToday
           />
-        </div>
-
-        {/* Right Section: Actions */}
-        <div className="w-full md:w-auto flex-shrink-0 flex items-center justify-end gap-2">
-
-          {/* ── One-click Publish (offers + bidding + dead-shift cleanup) ── */}
-          {loadPublishPlan && executePublishRoster && (() => {
-            const range = computeRange(selectedDate, viewType);
-            const rangeLabel = formatRangeLabel(range, viewType);
-            const viewTypeLabel = {
-              day: 'Day',
-              '3day': '3-Day',
-              week: 'Week',
-              month: 'Month',
-            }[viewType] || 'Week';
-
-            return (
-              <PublishRosterButton
-                disabled={!canPublish}
-                disabledReason={!canEdit
-                  ? VIEW_ONLY_TIP
-                  : !selectedOrganizationId ? 'Publish — select one organisation first' : undefined}
-                loadPlan={loadPublishPlan}
-                execute={executePublishRoster}
-                selectedViewType={viewTypeLabel}
-                selectedViewRange={rangeLabel}
-              />
-            );
-          })()}
-
-          {/* Scrolls horizontally below md. Nine tools plus two separators do
-              not fit a phone, and without this the last two — DnD mode and Bulk
-              Selection — were simply unreachable: no scroll, and `flex` does not
-              wrap by default, so they were pushed outside the row entirely.
-              Children get shrink-0 so they keep their tap target rather than
-              being squeezed to nothing. */}
-          <div className={cn(
-            'w-full md:w-auto flex items-center justify-between md:justify-start gap-1 bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none',
-            'overflow-x-auto scrollbar-none [&>*]:shrink-0 md:overflow-x-visible',
-            compactOnMobile && 'h-[34px] rounded-lg px-1 gap-0.5 md:h-10 md:rounded-xl md:px-1.5 md:gap-1',
-          )}>
+        }
+        actions={<>
 
             {/* ── Data group: Refresh + Legend + Filter ───────────────────────── */}
-            <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Reload data" onClick={onRefresh} isLoading={isRefreshing} />
+            <ToolbarIconButton icon={<RefreshCw className="h-5 w-5" />} tooltip="Reload data" onClick={onRefresh} isLoading={isRefreshing} variant="blue" />
             <BadgeLegendPopover />
-            <RosterFilterPopover />
-
-            <Separator orientation="vertical" className="h-5 bg-slate-300 dark:bg-white/10 mx-0.5" />
+            <ToolbarIconButton
+              icon={<Filter className="h-5 w-5" />}
+              tooltip={
+                isFilterBarOpen
+                  ? 'Close filters'
+                  : (committedActiveFilterCount > 0
+                      ? `Roster filters (${committedActiveFilterCount} active)`
+                      : 'Roster filters')
+              }
+              onClick={() => setIsFilterBarOpen(!isFilterBarOpen)}
+              variant="amber"
+              isActive={isFilterBarOpen || committedActiveFilterCount > 0}
+              badge={committedActiveFilterCount}
+              badgeClassName="bg-orange-500 text-white"
+            />
 
             {/* ── Planning group ─────────────────────────────────────── */}
             {activeMode === 'group' && (
-              <IconButton
-                icon={<FolderPlus className="h-4 w-4" />}
+              <ToolbarIconButton
+                icon={<FolderPlus className="h-5 w-5" />}
                 tooltip={!canEdit
                   ? VIEW_ONLY_TIP
                   : selectedSubDepartmentId ? "Add Subgroup" : "Add Subgroup — select one sub-department first"}
                 onClick={() => setIsAddSubGroupOpen(true)}
-                variant="success"
+                variant="emerald"
                 disabled={!selectedSubDepartmentId || !canEdit}
               />
             )}
-            <IconButton
-              icon={<Wand2 className="h-4 w-4" />}
+            <ToolbarIconButton
+              icon={<Wand2 className="h-5 w-5" />}
               tooltip={!canEdit
                 ? VIEW_ONLY_TIP
                 : hasDepartmentInScope ? "Auto-Schedule" : "Auto-Schedule — select a department first"}
               onClick={() => onAutoScheduleClick?.()}
-              variant="success"
+              variant="purple"
               disabled={!hasDepartmentInScope || !canEdit}
             />
-            <div className="relative">
-              <IconButton
-                icon={<CalendarPlus className="h-4 w-4" />}
-                tooltip={!canEdit
-                  ? VIEW_ONLY_TIP
-                  : selectedDepartmentId
-                    ? "Templates — apply one to a date range, or capture this roster as a new one"
-                    : "Templates — select one department first"}
-                onClick={() => setIsTemplatesDialogOpen(true)}
-                variant="success"
-                disabled={!selectedDepartmentId || !canEdit}
-              />
-              {appliedCount > 0 && (
-                <div className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 rounded-full border border-slate-100 dark:border-slate-900 flex items-center justify-center pointer-events-none shadow-sm">
-                  <span className="text-[9px] font-black text-white leading-none">{appliedCount}</span>
-                </div>
-              )}
-            </div>
-            <IconButton
-              icon={<Hand className="h-4 w-4" />}
+            <ToolbarIconButton
+              icon={<CalendarPlus className="h-5 w-5" />}
+              tooltip={!canEdit
+                ? VIEW_ONLY_TIP
+                : selectedDepartmentId
+                  ? "Templates — apply one to a date range, or capture this roster as a new one"
+                  : "Templates — select one department first"}
+              onClick={() => setIsTemplatesDialogOpen(true)}
+              variant="indigo"
+              disabled={!selectedDepartmentId || !canEdit}
+              badge={appliedCount}
+              badgeClassName="bg-blue-500 text-white"
+            />
+            <ToolbarIconButton
+              icon={<Hand className="h-5 w-5" />}
               tooltip={
                 !canEdit
                   ? VIEW_ONLY_TIP
@@ -427,15 +307,13 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
                 }
               }}
               isActive={isDnDModeActive}
-              variant={isDnDModeActive ? 'warning' : 'default'}
+              variant="amber"
               disabled={activeMode === 'events' || isBulkMode || !canEdit}
             />
 
-            <Separator orientation="vertical" className="h-5 bg-slate-300 dark:bg-white/10 mx-0.5" />
-
             {/* ── View group ─────────────────────────────────────────── */}
-            <IconButton
-              icon={<Layers className="h-4 w-4" />}
+            <ToolbarIconButton
+              icon={<Layers className="h-5 w-5" />}
               tooltip={
                 !canEdit
                   ? VIEW_ONLY_TIP
@@ -447,12 +325,36 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               }
               onClick={onBulkModeToggle || (() => { })}
               isActive={isBulkMode}
+              variant="indigo"
               disabled={isDnDModeActive || !canEdit}
             />
-          </div>
 
-        </div>
-      </div>
+            {/* ── Publish group ───────────────────────────────────────── */}
+            {loadPublishPlan && executePublishRoster && (() => {
+              const range = computeRange(selectedDate, viewType);
+              const rangeLabel = formatRangeLabel(range, viewType);
+              const viewTypeLabel = {
+                day: 'Day',
+                '3day': '3-Day',
+                week: 'Week',
+                month: 'Month',
+              }[viewType] || 'Week';
+
+              return (
+                <PublishRosterButton
+                  disabled={!canPublish}
+                  disabledReason={!canEdit
+                    ? VIEW_ONLY_TIP
+                    : !selectedOrganizationId ? 'Publish — select one organisation first' : undefined}
+                  loadPlan={loadPublishPlan}
+                  execute={executePublishRoster}
+                  selectedViewType={viewTypeLabel}
+                  selectedViewRange={rangeLabel}
+                />
+              );
+            })()}
+        </>}
+      />
 
       {/* Templates (apply ⇄ capture) — code-split + open-gated so its template and
           roster queries only fire on first user open. */}
@@ -482,8 +384,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           />
         </Suspense>
       )}
-
-    </div>
     </TooltipProvider>
   );
 };

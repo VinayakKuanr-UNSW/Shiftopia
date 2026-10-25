@@ -55,8 +55,8 @@ export function BiometricToggle() {
           (active ? 'bg-primary/10 border-primary ring-1 ring-primary/20' : 'bg-card border-border/80 hover:bg-muted/40')
         }
       >
-        <div className={'text-sm font-semibold ' + (active ? 'text-primary' : 'text-foreground')}>{title}</div>
-        <div className="text-xs text-muted-foreground mt-1">{sub}</div>
+        <div className={'text-[13px] font-semibold ' + (active ? 'text-primary' : 'text-foreground')}>{title}</div>
+        <div className="text-[11px] text-muted-foreground mt-1">{sub}</div>
       </button>
     );
   };
@@ -65,18 +65,18 @@ export function BiometricToggle() {
     <div className="p-6 rounded-2xl bg-card border border-border/80 shadow-xs">
       <div>
         <h4 className="text-foreground font-semibold">Biometric verification</h4>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-[13px] text-muted-foreground mt-1">
           Sensitive data (e.g. timesheets) always requires your fingerprint or
           face. Choose whether opening the app also requires it.
         </p>
       </div>
 
       {!isNative ? (
-        <p className="text-sm text-muted-foreground mt-4">Available in the mobile app.</p>
+        <p className="text-[13px] text-muted-foreground mt-4">Available in the mobile app.</p>
       ) : checking ? (
-        <p className="text-sm text-muted-foreground mt-4">Checking device…</p>
+        <p className="text-[13px] text-muted-foreground mt-4">Checking device…</p>
       ) : !available ? (
-        <p className="text-sm text-muted-foreground mt-4">
+        <p className="text-[13px] text-muted-foreground mt-4">
           No biometrics enrolled on this device — set up a fingerprint or face in
           your device settings to use this.
         </p>

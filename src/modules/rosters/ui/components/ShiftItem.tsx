@@ -36,9 +36,9 @@ const ShiftItem: React.FC<ShiftProps> = ({
           <div className="flex items-center space-x-2">
             <User size={14} className="text-muted-foreground group-hover:text-foreground transition-colors duration-300" />
             <span className="font-medium group-hover:text-foreground transition-colors duration-300">{role}</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200 border border-blue-500/20 group-hover:bg-blue-500/20 dark:group-hover:bg-blue-500/30 transition-colors duration-300">Level {remunerationLevel}</span>
+            <span className="text-[11px] px-2 py-0.5 rounded bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200 border border-blue-500/20 group-hover:bg-blue-500/20 dark:group-hover:bg-blue-500/30 transition-colors duration-300">Level {remunerationLevel}</span>
             {status && (
-              <span className={`text-xs px-2 py-0.5 rounded ${status === 'Assigned' ? 'bg-green-500/10 dark:bg-green-500/20 text-green-700 dark:text-green-200' :
+              <span className={`text-[11px] px-2 py-0.5 rounded ${status === 'Assigned' ? 'bg-green-500/10 dark:bg-green-500/20 text-green-700 dark:text-green-200' :
                   status === 'Completed' ? 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200' :
                     status === 'Cancelled' ? 'bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-200' :
                       status === 'Swapped' ? 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-700 dark:text-purple-200' :
@@ -49,7 +49,7 @@ const ShiftItem: React.FC<ShiftProps> = ({
               </span>
             )}
           </div>
-          <div className="mt-1 text-muted-foreground group-hover:text-foreground text-sm flex items-center space-x-4 transition-colors duration-300">
+          <div className="mt-1 text-muted-foreground group-hover:text-foreground text-[13px] flex items-center space-x-4 transition-colors duration-300">
             <div className="flex items-center space-x-1">
               <Clock size={12} />
               <span>{startTime} - {endTime}</span>
@@ -61,7 +61,7 @@ const ShiftItem: React.FC<ShiftProps> = ({
             </span>
           </div>
           {employee && (
-            <div className="mt-1 text-muted-foreground group-hover:text-foreground text-sm">
+            <div className="mt-1 text-muted-foreground group-hover:text-foreground text-[13px]">
               <span>Assigned to: {(employee as any).fullName ?? (employee as any).name ?? ''}</span>
             </div>
           )}

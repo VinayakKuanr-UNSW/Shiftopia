@@ -19,7 +19,7 @@ import type {
   BroadcastParticipantRole,
 } from '../model/broadcast.types';
 
-// ── Manager/large-icon variant (h-6 w-6) — used in manager GroupCard and GroupsList ──
+// ── Manager/large-icon variant (h-6 w-6) — used in GroupsList ──
 export const GROUP_ICONS: Record<string, React.ReactNode> = {
   megaphone: <Megaphone className="h-6 w-6" />,
   settings: <Settings className="h-6 w-6" />,
@@ -35,12 +35,12 @@ export const GROUP_ICONS_SM: Record<string, React.ReactNode> = {
   theater: <Theater className="h-5 w-5" />,
 };
 
-// ── Employee group card gradient colors (light + dark) ──
-export const GROUP_COLORS: Record<string, string> = {
-  blue: 'from-blue-50 via-blue-50/60 to-slate-50 border-blue-200 hover:border-blue-300 dark:from-blue-600/20 dark:via-transparent dark:to-blue-900/40 dark:border-blue-500/20 dark:hover:border-blue-500/40',
-  green: 'from-emerald-50 via-emerald-50/60 to-slate-50 border-emerald-200 hover:border-emerald-300 dark:from-emerald-600/20 dark:via-transparent dark:to-emerald-900/40 dark:border-emerald-500/20 dark:hover:border-emerald-500/40',
-  purple: 'from-purple-50 via-purple-50/60 to-slate-50 border-purple-200 hover:border-purple-300 dark:from-purple-600/20 dark:via-transparent dark:to-purple-900/40 dark:border-purple-500/20 dark:hover:border-purple-500/40',
-  red: 'from-red-50 via-red-50/60 to-slate-50 border-red-200 hover:border-red-300 dark:from-red-600/20 dark:via-transparent dark:to-red-900/40 dark:border-red-500/20 dark:hover:border-red-500/40',
+// ── Group accent: the card's 4px left edge + icon tile (cardTokens.accent) ──
+export const GROUP_ACCENT: Record<string, { edge: string; tile: string }> = {
+  blue: { edge: 'border-l-blue-500', tile: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
+  green: { edge: 'border-l-emerald-500', tile: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
+  purple: { edge: 'border-l-purple-500', tile: 'bg-purple-500/10 text-purple-600 dark:text-purple-400' },
+  red: { edge: 'border-l-red-500', tile: 'bg-red-500/10 text-red-600 dark:text-red-400' },
 };
 
 // ── Employee group icon background gradients ──

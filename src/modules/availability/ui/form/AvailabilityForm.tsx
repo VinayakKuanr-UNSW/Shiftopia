@@ -154,7 +154,7 @@ export function AvailabilityForm({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onCancel()}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto" size="lg">
         <DialogHeader>
           <DialogTitle>
             {mode === 'create' ? 'Create Availability' : 'Edit Availability'}
@@ -171,7 +171,7 @@ export function AvailabilityForm({
           {errors.length > 0 && (
             <div className="bg-destructive/10 border border-destructive rounded-md p-3 space-y-1">
               {errors.map((error, idx) => (
-                <div key={idx} className="flex items-start gap-2 text-sm text-destructive">
+                <div key={idx} className="flex items-start gap-2 text-[13px] text-destructive">
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -255,7 +255,7 @@ export function AvailabilityForm({
                     />
                     <Label
                       htmlFor={`day-${day.value}`}
-                      className="text-xs cursor-pointer"
+                      className="text-[11px] cursor-pointer"
                     >
                       {day.label}
                     </Label>
@@ -276,7 +276,7 @@ export function AvailabilityForm({
               rows={3}
               maxLength={200}
             />
-            <div className="text-xs text-muted-foreground text-right">
+            <div className="text-[11px] text-muted-foreground text-right">
               {reason.length}/200
             </div>
           </div>

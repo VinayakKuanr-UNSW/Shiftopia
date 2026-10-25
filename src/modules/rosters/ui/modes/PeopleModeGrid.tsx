@@ -476,7 +476,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     <TooltipProvider delayDuration={200}>
       {showFatigueHeatmap && (
         <div className="absolute top-4 right-4 z-[60] flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
-          <Badge className="px-3.5 py-1.5 bg-amber-600 text-white border border-amber-500/40 shadow-sm flex items-center gap-2 text-xs font-bold rounded-full">
+          <Badge className="px-3.5 py-1.5 bg-amber-600 text-white border border-amber-500/40 shadow-sm flex items-center gap-2 text-[11px] font-bold rounded-full">
             <Flame className="h-3.5 w-3.5" />
             HEALTH MODE
           </Badge>
@@ -489,7 +489,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
             ].map((l) => (
               <div key={l.label} className="flex items-center gap-1.5">
                 <div className={cn("h-1.5 w-1.5 rounded-full", l.color)} />
-                <span className="text-[8px] font-black uppercase tracking-wider text-white/60">{l.label}</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-white/60">{l.label}</span>
               </div>
             ))}
           </div>
@@ -498,7 +498,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
       {/* DnD Mode Indicator */}
       {isDnDModeActive && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-500 pointer-events-none">
-          <Badge className="px-4 py-1.5 bg-emerald-600 text-white border border-emerald-500/40 shadow-sm flex items-center gap-2 text-xs font-semibold rounded-full">
+          <Badge className="px-4 py-1.5 bg-emerald-600 text-white border border-emerald-500/40 shadow-sm flex items-center gap-2 text-[11px] font-semibold rounded-full">
             <Zap className="h-3.5 w-3.5" />
             DnD Mode Active
           </Badge>
@@ -529,7 +529,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                             }
                           }}
                           placeholder="Search staff…"
-                          className="w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground/60 outline-none font-sans"
+                          className="w-full bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground/60 outline-none font-sans"
                         />
                         {searchTerm ? (
                           <button
@@ -558,7 +558,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Employee</span>
                           {searchTerm && (
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                               Filtered
                             </span>
                           )}
@@ -599,11 +599,11 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                       >
                         <div className={cn("text-[11px] font-bold uppercase tracking-[0.12em] font-mono leading-tight", holidayName ? "text-amber-400 font-extrabold" : dateIsToday ? "text-primary font-bold" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
                         <div className="flex items-center justify-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className={cn("text-sm font-mono tabular-nums leading-none", holidayName ? "text-amber-300 font-bold" : dateIsToday ? "text-primary font-bold" : "text-muted-foreground/60 font-medium")}>
+                          <span className={cn("text-[13px] font-mono tabular-nums leading-none", holidayName ? "text-amber-300 font-bold" : dateIsToday ? "text-primary font-bold" : "text-muted-foreground/60 font-medium")}>
                             {format(date, 'MMM d')}
                           </span>
                           {holidayName && (
-                            <span className="text-xs italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
+                            <span className="text-[11px] italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
                               {holidayName}
                             </span>
                           )}
@@ -783,22 +783,22 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
             employee.overHoursWarning ? 'ring-amber-400/70' : 'ring-transparent'
           )}>
             <AvatarImage src={employee.avatar} alt={employee.name} />
-            <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+            <AvatarFallback className="bg-primary/10 text-primary text-[13px] font-medium">
               {employee.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
             </AvatarFallback>
           </Avatar>
 
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex items-center justify-between gap-1.5">
-              <span className="text-sm font-semibold text-foreground truncate">{employee.name}</span>
+              <span className="text-[13px] font-semibold text-foreground truncate">{employee.name}</span>
               <div className="flex items-center gap-1.5 shrink-0">
                 {isOffRoster && (
-                  <span className="text-[8px] font-medium tracking-wider text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded uppercase whitespace-nowrap">
+                  <span className="text-[11px] font-medium tracking-wider text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded uppercase whitespace-nowrap">
                     Off-roster
                   </span>
                 )}
                 {employee.overHoursWarning && (
-                  <span className="text-[9px] font-bold tracking-wider text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase">OT</span>
+                  <span className="text-[11px] font-bold tracking-wider text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase">OT</span>
                 )}
               </div>
             </div>
@@ -824,33 +824,33 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
                 </TooltipTrigger>
                 <TooltipContent className="w-52 p-3 bg-zinc-900 border-white/10 shadow-xl" side="right" sideOffset={15}>
                   <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{employee.name.split(' ')[0]}'s Estimate</p>
+                    <p className="text-[11px] font-bold text-white/40 uppercase tracking-widest">{employee.name.split(' ')[0]}'s Estimate</p>
                     <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs">
+                      <div className="flex justify-between text-[11px]">
                         <span className="text-white/60">Base Pay</span>
                         <span className="text-white font-medium">{formatCost(employee.payBreakdown.base)}</span>
                       </div>
-                      <div className="flex justify-between text-xs">
+                      <div className="flex justify-between text-[11px]">
                         <span className="text-white/60">Penalties</span>
                         <span className="text-emerald-400 font-medium">+{formatCost(employee.payBreakdown.penalty)}</span>
                       </div>
-                      <div className="flex justify-between text-xs">
+                      <div className="flex justify-between text-[11px]">
                         <span className="text-white/60">Overtime</span>
                         <span className="text-amber-400 font-medium">+{formatCost(employee.payBreakdown.overtime)}</span>
                       </div>
                       {employee.payBreakdown.allowance > 0 && (
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-[11px]">
                           <span className="text-white/60">Allowances</span>
                           <span className="text-blue-400 font-medium">+{formatCost(employee.payBreakdown.allowance)}</span>
                         </div>
                       )}
                       {employee.payBreakdown.leave > 0 && (
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-[11px]">
                           <span className="text-white/60">Leave Loading</span>
                           <span className="text-purple-400 font-medium">+{formatCost(employee.payBreakdown.leave)}</span>
                         </div>
                       )}
-                      <div className="pt-1 border-t border-white/10 flex justify-between text-xs font-bold">
+                      <div className="pt-1 border-t border-white/10 flex justify-between text-[11px] font-bold">
                         <span className="text-white">Total</span>
                         <span className="text-white">{formatCost(employee.estimatedPay)}</span>
                       </div>

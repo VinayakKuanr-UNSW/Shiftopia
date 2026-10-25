@@ -55,7 +55,7 @@ export const StudentVisaViz: React.FC<StudentVisaVizProps> = ({ data, limit = 48
 
                     return (
                         <div key={idx} className="space-y-1">
-                            <div className="flex justify-between text-xs">
+                            <div className="flex justify-between text-[11px]">
                                 <span className="text-white/60">
                                     {week.displayDate ? `Week: ${week.displayDate}` : week.weekKey}
                                 </span>
@@ -77,7 +77,7 @@ export const StudentVisaViz: React.FC<StudentVisaVizProps> = ({ data, limit = 48
                     );
                 })}
             </div>
-            <div className="text-xs text-white/40 italic">
+            <div className="text-[11px] text-white/40 italic">
                 * Chart shows weekly breakdown. 48h limit applies to any 2 consecutive weeks.
             </div>
         </div>
@@ -151,7 +151,7 @@ export const DailyHoursViz: React.FC<DailyHoursVizProps> = ({ data, dailyData })
 
                 return (
                     <div key={day.date} className="space-y-1">
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-[11px]">
                             <span className="text-white/60">
                                 {formattedDate}
                             </span>
@@ -193,7 +193,7 @@ export const DailyHoursViz: React.FC<DailyHoursVizProps> = ({ data, dailyData })
             })}
 
             {/* Legend - only show once at the bottom */}
-            <div className="flex gap-4 text-[10px] text-white/50 pt-1">
+            <div className="flex gap-4 text-[11px] text-white/50 pt-1">
                 <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-slate-600" />
                     Existing
@@ -257,7 +257,7 @@ export const ShiftLengthViz: React.FC<ShiftLengthVizProps> = ({ data, aggregated
 
                 return (
                     <div key={`${shift.date}-${idx}`} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs">
+                        <div className="flex justify-between items-center text-[11px]">
                             <span className="text-white/70">
                                 {formattedDate}: <span className="text-white/50">{shift.time}</span>
                             </span>
@@ -286,7 +286,7 @@ export const ShiftLengthViz: React.FC<ShiftLengthVizProps> = ({ data, aggregated
                 );
             })}
 
-            <div className="flex gap-4 text-[10px] text-white/40 pt-1">
+            <div className="flex gap-4 text-[11px] text-white/40 pt-1">
                 <div className="flex items-center gap-1.5">
                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
                     Within Limit
@@ -364,11 +364,11 @@ export const RestPeriodViz: React.FC<RestPeriodVizProps> = ({ data, restImpacts 
 
                 return (
                     <div key={`${impact.date}-${idx}`} className="bg-slate-900/50 rounded-lg p-3 border border-white/10">
-                        <div className="text-xs font-medium text-white/80 mb-2">
+                        <div className="text-[11px] font-medium text-white/80 mb-2">
                             {formattedDate} {impact.shift_time && <span className="text-white/50">({impact.shift_time})</span>}
                         </div>
 
-                        <div className="space-y-1.5 text-xs">
+                        <div className="space-y-1.5 text-[11px]">
                             {/* Rest Before */}
                             <div className="flex items-center gap-2">
                                 <span className="text-white/40 w-20">← Before:</span>
@@ -381,12 +381,12 @@ export const RestPeriodViz: React.FC<RestPeriodVizProps> = ({ data, restImpacts 
                                             {impact.rest_before_hours.toFixed(1)}h
                                         </span>
                                         {beforeViolation ? (
-                                            <span className="text-red-400 text-[10px]">⚠️ &lt; {limit}h</span>
+                                            <span className="text-red-400 text-[11px]">⚠️ &lt; {limit}h</span>
                                         ) : (
-                                            <span className="text-emerald-400 text-[10px]">✓</span>
+                                            <span className="text-emerald-400 text-[11px]">✓</span>
                                         )}
                                         {impact.rest_before_from && (
-                                            <span className="text-white/30 text-[10px]">from {impact.rest_before_from}</span>
+                                            <span className="text-white/30 text-[11px]">from {impact.rest_before_from}</span>
                                         )}
                                     </>
                                 ) : (
@@ -406,12 +406,12 @@ export const RestPeriodViz: React.FC<RestPeriodVizProps> = ({ data, restImpacts 
                                             {impact.rest_after_hours.toFixed(1)}h
                                         </span>
                                         {afterViolation ? (
-                                            <span className="text-red-400 text-[10px]">⚠️ &lt; {limit}h</span>
+                                            <span className="text-red-400 text-[11px]">⚠️ &lt; {limit}h</span>
                                         ) : (
-                                            <span className="text-emerald-400 text-[10px]">✓</span>
+                                            <span className="text-emerald-400 text-[11px]">✓</span>
                                         )}
                                         {impact.rest_after_to && (
-                                            <span className="text-white/30 text-[10px]">to {impact.rest_after_to}</span>
+                                            <span className="text-white/30 text-[11px]">to {impact.rest_after_to}</span>
                                         )}
                                     </>
                                 ) : (
@@ -423,7 +423,7 @@ export const RestPeriodViz: React.FC<RestPeriodVizProps> = ({ data, restImpacts 
                 );
             })}
 
-            <div className="text-[10px] text-white/40 italic">
+            <div className="text-[11px] text-white/40 italic">
                 * Minimum required rest between consecutive days is {limit} hours
             </div>
         </div>
@@ -482,12 +482,12 @@ export const StreakViz: React.FC<StreakVizProps> = ({ data }) => {
             <div className="bg-slate-900/50 rounded-lg p-3 border border-white/10">
                 <div className="flex items-center gap-3 mb-3">
                     <div className={cn(
-                        "px-2 py-1 rounded text-xs font-bold",
+                        "px-2 py-1 rounded text-[11px] font-bold",
                         isOver ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400"
                     )}>
                         {count} Consecutive Days
                     </div>
-                    <span className="text-xs text-white/60">
+                    <span className="text-[11px] text-white/60">
                         ({format(start, 'MMM d')} — {format(end, 'MMM d')})
                     </span>
                 </div>
@@ -498,14 +498,14 @@ export const StreakViz: React.FC<StreakVizProps> = ({ data }) => {
                         return (
                             <div key={dateStr} className="flex flex-col items-center gap-1 min-w-[24px]">
                                 <div className={cn(
-                                    "w-6 h-6 rounded flex items-center justify-center text-[10px] font-medium border",
+                                    "w-6 h-6 rounded flex items-center justify-center text-[11px] font-medium border",
                                     isViolationDay
                                         ? "bg-red-500/20 border-red-500/50 text-red-200"
                                         : "bg-slate-700 border-slate-600 text-white"
                                 )}>
                                     {format(parseISO(dateStr), 'd')}
                                 </div>
-                                <span className="text-[9px] text-white/30 uppercase">
+                                <span className="text-[11px] text-white/30 uppercase">
                                     {format(parseISO(dateStr), 'EEEEE')}
                                 </span>
                             </div>
@@ -513,7 +513,7 @@ export const StreakViz: React.FC<StreakVizProps> = ({ data }) => {
                     })}
                 </div>
                 {isOver && (
-                    <div className="text-[10px] text-red-400 flex items-center gap-1 mt-1">
+                    <div className="text-[11px] text-red-400 flex items-center gap-1 mt-1">
                         <AlertTriangle className="h-3 w-3" />
                         Maximum is {limit} consecutive days
                     </div>

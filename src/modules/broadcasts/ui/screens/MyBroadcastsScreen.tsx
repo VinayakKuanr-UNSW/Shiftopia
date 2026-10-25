@@ -227,17 +227,17 @@ export function MyBroadcastsScreen({
           >
             <div className="text-foreground">{GROUP_ICONS_SM[selectedGroup?.icon || 'megaphone']}</div>
           </div>
-          <h2 className="font-bold text-lg text-foreground truncate">{selectedGroup?.name}</h2>
+          <h2 className="font-bold text-[15px] text-foreground truncate">{selectedGroup?.name}</h2>
         </div>
       </div>
 
       <ScrollArea className="flex-1 px-3 md:px-4 py-4">
         <div className="space-y-1">
-          <p className="px-3 md:px-4 text-[10px] md:text-xs font-bold text-muted-foreground/60 uppercase tracking-widest mb-2 md:mb-3">
+          <p className="px-3 md:px-4 text-[11px] md:text-[11px] font-bold text-muted-foreground/60 uppercase tracking-widest mb-2 md:mb-3">
             Channels
           </p>
           {selectedGroup?.channels?.length === 0 ? (
-            <div className="px-4 py-6 md:py-8 text-center text-xs md:text-sm text-muted-foreground/50 italic">
+            <div className="px-4 py-6 md:py-8 text-center text-[11px] md:text-[13px] text-muted-foreground/50 italic">
               No channels
             </div>
           ) : (
@@ -263,13 +263,13 @@ export function MyBroadcastsScreen({
         <div className="p-3 md:p-4 border-t border-border bg-muted/40">
           <div className="flex items-center gap-2 md:gap-3">
             <Avatar className="h-8 w-8 md:h-9 md:w-9 border border-border">
-              <AvatarFallback className="bg-primary text-primary-foreground text-[10px] md:text-xs">
+              <AvatarFallback className="bg-primary text-primary-foreground text-[11px] md:text-[11px]">
                 {user?.name?.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="text-xs md:text-sm font-bold text-foreground truncate">{user?.name}</p>
-              <p className="text-[10px] md:text-xs text-muted-foreground truncate">{user?.role}</p>
+              <p className="text-[11px] md:text-[13px] font-bold text-foreground truncate">{user?.name}</p>
+              <p className="text-[11px] md:text-[11px] text-muted-foreground truncate">{user?.role}</p>
             </div>
           </div>
         </div>
@@ -400,7 +400,7 @@ export function MyBroadcastsScreen({
                   })}
                 </div>
               </div>
-              <h2 className="font-bold text-base text-foreground truncate max-w-[150px]">{selectedGroup?.name}</h2>
+              <h2 className="font-bold text-[14px] text-foreground truncate max-w-[150px]">{selectedGroup?.name}</h2>
             </div>
           </div>
 
@@ -414,7 +414,7 @@ export function MyBroadcastsScreen({
             </SheetTrigger>
             <SheetContent side="bottom" className="bg-card border-border h-[60vh]">
               <SheetHeader>
-                <SheetTitle className="text-foreground">Select Channel</SheetTitle>
+                <SheetTitle>Select Channel</SheetTitle>
                 <SheetDescription>Choose a broadcast channel to view messages</SheetDescription>
               </SheetHeader>
               <ScrollArea className="h-full py-4">

@@ -205,7 +205,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
             {/* Backdrop overlay (z-40 so nested z-50 select dropdowns portal above) */}
             <div
                 className={cn(
-                    "fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200 transition-[left] duration-300 ease-in-out",
+                    "fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/50 backdrop-blur-sm animate-in fade-in-0 duration-200 transition-[left] duration-300 ease-in-out",
                     isSidebarCollapsed ? "left-0" : "md:left-[280px]"
                 )}
                 role="dialog"
@@ -231,10 +231,10 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                 {editMode ? <CalendarCheck className="h-4 w-4" /> : <CalendarPlus className="h-4 w-4" />}
                             </div>
                             <div>
-                                <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
+                                <h2 className="text-[14px] sm:text-[15px] font-bold tracking-tight text-foreground">
                                     {editMode ? 'Edit Shift' : 'Create Shift'}
                                 </h2>
-                                <p className="text-xs text-muted-foreground font-mono">
+                                <p className="text-[11px] text-muted-foreground font-mono">
                                     {subtitleText}
                                 </p>
                             </div>
@@ -246,7 +246,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                     type="button"
                                     variant="ghost"
                                     onClick={handleUnpublish}
-                                    className="h-8 gap-1.5 rounded-lg border border-purple-500/20 px-3 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                                    className="h-8 gap-1.5 rounded-lg border border-purple-500/20 px-3 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
                                 >
                                     <Undo2 className="h-3.5 w-3.5" />
                                     <span className="hidden sm:inline">Unpublish</span>

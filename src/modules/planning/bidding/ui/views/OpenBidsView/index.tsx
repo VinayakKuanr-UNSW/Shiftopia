@@ -1,5 +1,6 @@
 // src/modules/planning/bidding/ui/views/OpenBidsView/index.tsx
 
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,13 +18,14 @@ import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from '@/modules
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/modules/core/ui/primitives/dialog';
 import {
   Search, Flame, Clock, CheckCircle, CircleSlash, Loader2, Inbox,
-  Users, Zap, ShieldCheck, ShieldAlert, Shield,
+  Users, Zap, ShieldCheck, ShieldAlert, Shield, Gavel,
   CircleCheck, CircleX, XCircle, TriangleAlert, ChevronDown, ChevronRight, ChevronLeft,
   Sparkles, UserCheck as LucideUserCheck, History, ArrowUpDown, ArrowUp, ArrowDown, BarChart2,
   Layers,
 } from 'lucide-react';
 import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
 import { groupOpenBids } from './open-bids-grouping';
+import { FacetedLoadingSpinner } from '@/modules/core/ui/components/FacetedLoadingSpinner';
 import {
   Tooltip,
   TooltipContent,
@@ -55,7 +57,6 @@ import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
 
 import { ShiftCard } from './ShiftCard';
-import { BidsBentoStats } from './BidsBentoStats';
 import { useTimeTicker } from './useTimeTicker';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
@@ -522,7 +523,7 @@ const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner,
       {/* Avatar */}
       <Avatar className="h-7 w-7 shrink-0 border border-white/[0.08]">
         <AvatarFallback className={cn(
-          'text-[9px] font-black tracking-tight',
+          'text-[11px] font-black tracking-tight',
           isWinner
             ? 'bg-emerald-500/20 text-emerald-400'
             : isSelected
@@ -542,15 +543,15 @@ const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner,
           {bid.employeeName}
         </span>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-[9px] font-mono text-white/30 uppercase tracking-wider">{bid.employmentType}</span>
+          <span className="text-[11px] font-mono text-white/30 uppercase tracking-wider">{bid.employmentType}</span>
           {formattedTime && (
             <>
-              <span className="text-white/10 text-[8px]">•</span>
-              <span className="text-[8px] font-mono text-white/30">{formattedTime}</span>
+              <span className="text-white/10 text-[11px]">•</span>
+              <span className="text-[11px] font-mono text-white/30">{formattedTime}</span>
             </>
           )}
           {bid.fatigueRisk === 'high' && (
-            <span className="text-[8px] font-black text-rose-500/70 bg-rose-500/10 px-1 rounded leading-none py-0.5">FATIGUE</span>
+            <span className="text-[11px] font-black text-rose-500/70 bg-rose-500/10 px-1 rounded leading-none py-0.5">FATIGUE</span>
           )}
         </div>
       </div>
@@ -559,20 +560,20 @@ const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner,
       <Tooltip>
         <TooltipTrigger asChild>
           <div className={cn(
-            'px-1.5 py-0.5 rounded-md border text-[9px] font-mono font-bold shrink-0 flex items-center gap-1 transition-all hover:scale-105',
+            'px-1.5 py-0.5 rounded-md border text-[11px] font-mono font-bold shrink-0 flex items-center gap-1 transition-all hover:scale-105',
             sssColorCls
           )}>
-            <span className="opacity-70 text-[8px]">SSS</span>
+            <span className="opacity-70 text-[11px]">SSS</span>
             <span className="font-extrabold">{bid.sss}</span>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="right" className="bg-slate-900 border-slate-700 p-2.5 max-w-[200px] text-xs text-slate-200 shadow-xl">
-          <div className="font-semibold border-b border-slate-700/60 pb-1 mb-1.5 flex justify-between items-center text-[10px] text-slate-300 uppercase tracking-wider">
+        <TooltipContent side="right" className="bg-slate-900 border-slate-700 p-2.5 max-w-[200px] text-[11px] text-slate-200 shadow-xl">
+          <div className="font-semibold border-b border-slate-700/60 pb-1 mb-1.5 flex justify-between items-center text-[11px] text-slate-300 uppercase tracking-wider">
             <span>Shift Suitability</span>
             <span className="font-mono text-cyan-400 font-bold">{bid.sss}/100</span>
           </div>
           {bid.sssBreakdown ? (
-            <div className="space-y-1 text-[9px]">
+            <div className="space-y-1 text-[11px]">
               <div className="flex justify-between text-slate-300">
                 <span>Reliability:</span>
                 <span className="font-mono font-bold">{bid.sssBreakdown.reliability}%</span>
@@ -596,14 +597,14 @@ const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner,
                 </div>
               )}
               {bid.sssFlag === 'INSUFFICIENT_DATA' && (
-                <div className="pt-1 mt-1 border-t border-slate-700/60 text-amber-400/90 text-[8px]">New bidder — ranked on skill match only.</div>
+                <div className="pt-1 mt-1 border-t border-slate-700/60 text-amber-400/90 text-[11px]">New bidder — ranked on skill match only.</div>
               )}
               {bid.sssFlag === 'LIMITED' && (
-                <div className="pt-1 mt-1 border-t border-slate-700/60 text-amber-400/80 text-[8px]">Limited history — score may be provisional.</div>
+                <div className="pt-1 mt-1 border-t border-slate-700/60 text-amber-400/80 text-[11px]">Limited history — score may be provisional.</div>
               )}
             </div>
           ) : (
-            <div className="text-[9px] text-slate-400">Suitability score derived from performance metrics & skill match.</div>
+            <div className="text-[11px] text-slate-400">Suitability score derived from performance metrics & skill match.</div>
           )}
         </TooltipContent>
       </Tooltip>
@@ -683,7 +684,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
       <div className="flex items-center gap-3 min-w-0">
         {/* Date */}
         <div className="flex flex-col shrink-0 min-w-[32px]">
-          <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground/60 leading-none">
+          <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground/60 leading-none">
             {shift.dayLabel.slice(0, 3)}
           </span>
           <span className="text-[11px] font-mono font-bold text-foreground leading-none mt-1">
@@ -698,7 +699,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
           <span className="text-[11px] font-mono font-bold text-foreground leading-none">
             {shift.startTime}–{shift.endTime}
           </span>
-          <span className="text-[9px] font-medium text-muted-foreground/50 mt-1 leading-none">
+          <span className="text-[11px] font-medium text-muted-foreground/50 mt-1 leading-none">
             Net: {netStr}
           </span>
         </div>
@@ -710,7 +711,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
           <span className="text-[12px] font-bold text-primary truncate leading-none">
             {shift.role}
           </span>
-          <span className="text-[9px] text-muted-foreground/60 truncate leading-none mt-1">
+          <span className="text-[11px] text-muted-foreground/60 truncate leading-none mt-1">
             {shift.department}
           </span>
         </div>
@@ -719,7 +720,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
       {/* Right side: Bids & Status */}
       <div className="flex items-center gap-2 shrink-0">
         <div className={cn(
-          "flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums transition-all",
+          "flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-black tabular-nums transition-all",
           isSelected
             ? "bg-primary text-primary-foreground border-primary"
             : "bg-muted/50 text-muted-foreground/60 border-transparent group-hover:border-border/50"
@@ -754,7 +755,7 @@ const PaneHeader: React.FC<{ title: string; subtitle?: string; icon?: React.Reac
       )}
       <div>
         <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/40 block leading-none">{title}</span>
-        {subtitle && <span className="text-[9px] text-white/20 mt-1.5 block leading-none font-mono truncate max-w-[160px]">{subtitle}</span>}
+        {subtitle && <span className="text-[11px] text-white/20 mt-1.5 block leading-none font-mono truncate max-w-[160px]">{subtitle}</span>}
       </div>
     </div>
     {count !== undefined && (
@@ -770,13 +771,13 @@ const BiddersSortBar: React.FC<{
   sortDirection: 'asc' | 'desc';
   onSortChange: (field: 'timestamp' | 'sss') => void;
 }> = ({ sortField, sortDirection, onSortChange }) => (
-  <div className="px-3 py-2 bg-muted/15 border-b border-border/40 flex items-center justify-between text-[10px] shrink-0 backdrop-blur-sm">
-    <span className="text-muted-foreground/50 font-bold uppercase tracking-wider text-[9px]">Sort Bidders:</span>
+  <div className="px-3 py-2 bg-muted/15 border-b border-border/40 flex items-center justify-between text-[11px] shrink-0 backdrop-blur-sm">
+    <span className="text-muted-foreground/50 font-bold uppercase tracking-wider text-[11px]">Sort Bidders:</span>
     <div className="flex items-center gap-1">
       <button
         onClick={() => onSortChange('sss')}
         className={cn(
-          'px-2 py-1 rounded-md font-bold text-[9px] flex items-center gap-1 transition-all',
+          'px-2 py-1 rounded-md font-bold text-[11px] flex items-center gap-1 transition-all',
           sortField === 'sss'
             ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
             : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/30 border border-transparent'
@@ -790,7 +791,7 @@ const BiddersSortBar: React.FC<{
       <button
         onClick={() => onSortChange('timestamp')}
         className={cn(
-          'px-2 py-1 rounded-md font-bold text-[9px] flex items-center gap-1 transition-all',
+          'px-2 py-1 rounded-md font-bold text-[11px] flex items-center gap-1 transition-all',
           sortField === 'timestamp'
             ? 'bg-primary/20 text-primary border border-primary/30 shadow-sm'
             : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/30 border border-transparent'
@@ -830,7 +831,7 @@ const ToggleChip: React.FC<ToggleChipProps> = ({ active, onClick, icon, label, c
     {icon}
     {label}
     <span className={cn(
-      'text-[10px] font-bold tabular-nums min-w-[18px] text-center',
+      'text-[11px] font-bold tabular-nums min-w-[18px] text-center',
       active ? 'opacity-80' : 'text-white/20',
     )}>
       {count}
@@ -858,6 +859,8 @@ interface OpenBidsViewProps {
   onToggleChange?: (toggle: BidToggle) => void;
   /** Reports filtered counts up so parent can render badges. */
   onCountsChange?: (counts: ToggleCounts) => void;
+  /** Reports loaded shifts up so parent can render the footer stats. */
+  onShiftsChange?: (shifts: ManagerBidShift[]) => void;
   /** Hands a ready-to-call auto-assign function back to the parent. */
   onAutoAssignReady?: (fn: { run: () => void; isRunning: boolean }) => void;
   startDate?: Date;
@@ -876,6 +879,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   activeToggle: controlledToggle,
   onToggleChange,
   onCountsChange,
+  onShiftsChange,
   onAutoAssignReady,
   startDate,
   endDate,
@@ -932,6 +936,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
     endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
   });
+
+  useEffect(() => {
+    onShiftsChange?.(shifts);
+  }, [shifts, onShiftsChange]);
 
   const { bids, isLoading: isLoadingBids } = useShiftBids(expandedV8ShiftId);
 
@@ -1416,7 +1424,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex flex-col h-[calc(100vh-64px)] bg-background select-none text-foreground overflow-hidden">
+      <div className="flex flex-col h-full bg-transparent select-none text-foreground overflow-hidden">
 
       {/* Internal toolbar removed — parent (GoldStandardHeader) owns title,
           scope filter, search, view toggle, status chips, and auto-assign.
@@ -1485,15 +1493,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
         )
       )}
 
-      {/* ── BENTO STATISTICS CARDS BAR ── */}
-      <BidsBentoStats
-        shifts={shifts}
-        activeToggle={activeToggle}
-        onToggleChange={setActiveToggle}
-        onRunBatch={handleAutoAssign}
-        isBatchRunning={isAutoAssigning}
-      />
-
       {/* ─── MOBILE LAYOUT ────────────────────────────────────────────── */}
       {isMobile ? (
         <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -1514,26 +1513,20 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   <div className="p-4 space-y-2">
                     <AnimatePresence mode="wait">
                       {isLoading ? (
-                        <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/30">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span className="text-[10px] uppercase tracking-widest font-semibold">Loading…</span>
+                        <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3">
+                          <FacetedLoadingSpinner size="sm" label="Loading…" />
                         </motion.div>
-                      ) : filteredShifts.length === 0 ? (
-                        <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
-                          <Inbox className="h-6 w-6" />
-                          <p className="text-[10px] uppercase tracking-widest font-semibold">No roles</p>
-                        </motion.div>
-                      ) : (
+                      ) : filteredShifts.length === 0 ? null : (
                         <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
                           {groupedShifts.map((group) => (
                             <div key={group.key} className="space-y-2">
                               {groupBy !== 'none' && group.label && (
-                                <div className="sticky top-0 z-10 px-2.5 py-1.5 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-muted-foreground/80 rounded-xl shadow-sm">
+                                <div className="sticky top-0 z-10 px-2.5 py-1.5 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-muted-foreground/80 rounded-xl shadow-sm">
                                   <div className="flex items-center gap-1.5 truncate">
                                     <Layers className="h-3 w-3 text-primary/70 shrink-0" />
                                     <span className="truncate">{group.label}</span>
                                   </div>
-                                  <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[9px] font-extrabold">
+                                  <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[11px] font-extrabold">
                                     {group.items.length}
                                   </span>
                                 </div>
@@ -1575,7 +1568,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     setExpandedV8ShiftId(null);
                     setSelectedBid(null);
                   }}
-                  className="shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-black border-b border-border/40 bg-card/20 text-foreground/70 hover:text-foreground transition-colors min-h-[44px]"
+                  className="shrink-0 flex items-center gap-2 px-4 py-3 text-[13px] font-black border-b border-border/40 bg-card/20 text-foreground/70 hover:text-foreground transition-colors min-h-[44px]"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   {expandedShift?.role ?? 'Roles'}
@@ -1593,13 +1586,12 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   <div className="p-4 space-y-1">
                     <AnimatePresence mode="wait">
                       {isLoadingBids ? (
-                        <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex justify-center text-muted-foreground/20">
-                          <Loader2 className="h-5 w-5 animate-spin" />
+                        <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                          <PageState state="loading" scope="inline" title="Loading bids" />
                         </motion.div>
                       ) : sortedBids.length === 0 ? (
-                        <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
-                          <Users className="h-5 w-5" />
-                          <p className="text-[10px] uppercase tracking-widest font-semibold">No bids yet</p>
+                        <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                          <PageState state="empty" scope="inline" icon={Users} title="No bids yet" description="Bids appear here as employees place them." />
                         </motion.div>
                       ) : (
                         <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
@@ -1647,12 +1639,12 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Bid Review</p>
-                      <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
+                      <p className="text-[13px] font-semibold text-foreground mt-0.5 truncate">
                         {selectedBid?.employeeName ?? '—'}
                       </p>
                     </div>
                     {selectedBid && (
-                      <div className="text-right text-[9px] font-mono text-muted-foreground/40">
+                      <div className="text-right text-[11px] font-mono text-muted-foreground/40">
                         <div>{expandedShift?.role}</div>
                         <div>{expandedShift ? `${expandedShift.startTime} – ${expandedShift.endTime}` : ''}</div>
                       </div>
@@ -1668,7 +1660,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         {/* Intelligence cards inline */}
                         {(bidsPanel.status === 'results' || bidsPanel.status === 'stale') && (
                           <div className="mb-4 space-y-2">
-                            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/40">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/40">
                               {(blockingIssues.length + warningIssues.length) > 0
                                 ? `${blockingIssues.length} blocker${blockingIssues.length !== 1 ? 's' : ''} · ${warningIssues.length} warning${warningIssues.length !== 1 ? 's' : ''}`
                                 : 'All checks passed'}
@@ -1677,11 +1669,11 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                               <div key={`b-${i}`} className="rounded-2xl border overflow-hidden border-rose-500/20 bg-rose-500/[0.04]">
                                 <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
                                   <CircleX className="h-3 w-3 text-rose-400 shrink-0" />
-                                  <span className="text-[10px] font-semibold text-rose-400">{hit.rule_id.replace(/_/g, ' ')}</span>
+                                  <span className="text-[11px] font-semibold text-rose-400">{hit.rule_id.replace(/_/g, ' ')}</span>
                                 </div>
                                 <div className="px-3.5 py-2.5">
-                                  <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.summary}</p>
-                                  {hit.details && <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">{hit.details}</p>}
+                                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">{hit.summary}</p>
+                                  {hit.details && <p className="text-[11px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">{hit.details}</p>}
                                 </div>
                               </div>
                             ))}
@@ -1689,11 +1681,11 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                               <div key={`w-${i}`} className="rounded-2xl border overflow-hidden border-amber-500/20 bg-amber-500/[0.04]">
                                 <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
                                   <TriangleAlert className="h-3 w-3 text-amber-400 shrink-0" />
-                                  <span className="text-[10px] font-semibold text-amber-400">{hit.rule_id.replace(/_/g, ' ')}</span>
+                                  <span className="text-[11px] font-semibold text-amber-400">{hit.rule_id.replace(/_/g, ' ')}</span>
                                 </div>
                                 <div className="px-3.5 py-2.5">
-                                  <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.summary}</p>
-                                  {hit.details && <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">{hit.details}</p>}
+                                  <p className="text-[11px] text-muted-foreground/50 leading-relaxed">{hit.summary}</p>
+                                  {hit.details && <p className="text-[11px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">{hit.details}</p>}
                                 </div>
                               </div>
                             ))}
@@ -1702,7 +1694,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                                 <ShieldCheck className="h-6 w-6 text-emerald-400/50" />
                                 <div className="text-center">
                                   <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/70">All Clear</p>
-                                  <p className="text-[9px] text-muted-foreground/30 mt-1 font-mono">{bidsPanel.result?.summary.passed ?? 0} checks passed</p>
+                                  <p className="text-[11px] text-muted-foreground/30 mt-1 font-mono">{bidsPanel.result?.summary.passed ?? 0} checks passed</p>
                                 </div>
                               </div>
                             )}
@@ -1764,60 +1756,55 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
           </Drawer>
 
         </div>
+      ) : (isLoading || filteredShifts.length === 0) ? (
+        <div className={cn(
+          "flex-1 overflow-y-auto custom-scrollbar bg-transparent px-4 lg:px-6 py-6 flex flex-col items-center justify-center"
+        )}>
+          {isLoading ? (
+            <FacetedLoadingSpinner size="md" label="Loading shifts" />
+          ) : null}
+        </div>
       ) : viewMode === 'card' ? (
 
       /* ─── MY BIDS CARD-BASED STRATEGY GRID (desktop default) ──────────── */
-      <div className="flex-1 flex flex-col overflow-hidden bg-background">
+      <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
         <ScrollArea className="flex-1">
           <div className="p-4 lg:p-6 space-y-6">
             <AnimatePresence mode="wait">
-              {isLoading ? (
-                <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground/30">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                  <span className="text-xs font-black uppercase tracking-widest">Loading shifts…</span>
-                </motion.div>
-              ) : filteredShifts.length === 0 ? (
-                <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground/30">
-                  <Inbox className="h-8 w-8" />
-                  <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
-                  <p className="text-xs text-muted-foreground/40 font-mono">Try adjusting your date range or filters.</p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key={`card-grid-${groupBy}-${activeToggle}`}
-                  className="space-y-6"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  {groupedShifts.map((group) => (
-                    <div key={group.key} className="space-y-3">
-                      {groupBy !== 'none' && group.label && (
-                        <div className="sticky top-0 z-10 px-3 py-2 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-xs font-black uppercase tracking-wider text-muted-foreground/80 rounded-2xl shadow-sm">
-                          <div className="flex items-center gap-2">
-                            <Layers className="h-4 w-4 text-primary/70 shrink-0" />
-                            <span>{group.label}</span>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-xs font-extrabold">
-                            {group.items.length} {group.items.length === 1 ? 'shift' : 'shifts'}
-                          </span>
+              <motion.div
+                key={`card-grid-${groupBy}-${activeToggle}`}
+                className="space-y-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                {groupedShifts.map((group) => (
+                  <div key={group.key} className="space-y-3">
+                    {groupBy !== 'none' && group.label && (
+                      <div className="sticky top-0 z-10 px-3 py-2 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-muted-foreground/80 rounded-2xl shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-primary/70 shrink-0" />
+                          <span>{group.label}</span>
                         </div>
-                      )}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-                        {group.items.map((s) => (
-                          <ShiftCard
-                            key={s.id}
-                            shift={s}
-                            isSelected={expandedV8ShiftId === s.id}
-                            onClick={() => handleExpand(s.id)}
-                            timeRemaining={calculateTimeRemaining(s.biddingDeadline)}
-                          />
-                        ))}
+                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[11px] font-extrabold">
+                          {group.items.length} {group.items.length === 1 ? 'shift' : 'shifts'}
+                        </span>
                       </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                      {group.items.map((s) => (
+                        <ShiftCard
+                          key={s.id}
+                          shift={s}
+                          isSelected={expandedV8ShiftId === s.id}
+                          onClick={() => handleExpand(s.id)}
+                          timeRemaining={calculateTimeRemaining(s.biddingDeadline)}
+                        />
+                      ))}
                     </div>
-                  ))}
-                </motion.div>
-              )}
+                  </div>
+                ))}
+              </motion.div>
             </AnimatePresence>
           </div>
         </ScrollArea>
@@ -1832,7 +1819,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
             }
           }}
         >
-          <DialogContent aria-describedby={undefined} className="sm:max-w-5xl w-[92vw] h-[85vh] max-h-[800px] p-0 gap-0 border border-border/60 bg-card/95 backdrop-blur-2xl rounded-[32px] overflow-hidden shadow-2xl flex flex-col">
+          <DialogContent aria-describedby={undefined} className="w-[92vw] h-[85vh] max-h-[800px] p-0 gap-0 bg-card/95 overflow-hidden flex flex-col" size="2xl">
             <DialogHeader className="sr-only">
               <DialogTitle>Shift Bid Review</DialogTitle>
               <DialogDescription>Review candidate bidders and compliance intelligence for this open shift.</DialogDescription>
@@ -1842,17 +1829,17 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               {/* Header */}
               <div className="shrink-0 px-6 py-4 border-b border-border/40 bg-card/40 backdrop-blur-md flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Shift Bid Review</p>
-                  <p className="text-base font-black text-foreground mt-0.5">
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Shift Bid Review</p>
+                  <p className="text-[14px] font-black text-foreground mt-0.5">
                     {expandedShift?.role ?? 'Role Bid Review'}
                   </p>
-                  <p className="text-xs text-muted-foreground/60 font-mono mt-0.5">
+                  <p className="text-[11px] text-muted-foreground/60 font-mono mt-0.5">
                     {expandedShift ? `${expandedShift.department} · ${expandedShift.dayLabel} (${expandedShift.startTime}–${expandedShift.endTime})` : ''}
                   </p>
                 </div>
                 {expandedShift && (
                   <div className="flex items-center gap-3 mr-6">
-                    <Badge variant="outline" className="font-mono text-xs font-bold px-3 py-1 bg-primary/10 text-primary border-primary/20">
+                    <Badge variant="outline" className="font-mono text-[11px] font-bold px-3 py-1 bg-primary/10 text-primary border-primary/20">
                       {bids.length} {bids.length === 1 ? 'Bid' : 'Bids'}
                     </Badge>
                   </div>
@@ -1884,7 +1871,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     ) : sortedBids.length === 0 ? (
                       <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
                         <Users className="h-5 w-5" />
-                        <p className="text-[10px] uppercase tracking-widest font-semibold">No bids placed</p>
+                        <p className="text-[11px] uppercase tracking-widest font-semibold">No bids placed</p>
                       </div>
                     ) : (
                       <div className="space-y-1.5">
@@ -1916,13 +1903,13 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     {!selectedBid ? (
                       <div className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground/20">
                         <Zap className="h-6 w-6" />
-                        <p className="text-xs uppercase tracking-widest font-bold text-center">Select a candidate bidder<br/>to run compliance analysis</p>
+                        <p className="text-[11px] uppercase tracking-widest font-bold text-center">Select a candidate bidder<br/>to run compliance analysis</p>
                       </div>
                     ) : bidsPanel.status === 'idle' || bidsPanel.status === 'running' ? (
                       <div className="space-y-4 pt-2">
                         <div className="rounded-2xl border border-border/50 bg-muted/10 overflow-hidden">
                           <div className="px-4 py-3 border-b border-border/40">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Selected Candidate</p>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Selected Candidate</p>
                           </div>
                           <div className="p-4 space-y-3">
                             {[
@@ -1933,8 +1920,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                               ['Shift Suitability (SSS)', `${selectedBid.sss} pts`],
                             ].map(([k, v]) => (
                               <div key={k} className="flex justify-between items-baseline gap-2">
-                                <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider shrink-0">{k}</span>
-                                <span className="text-xs font-black text-foreground truncate text-right">{v}</span>
+                                <span className="text-[11px] font-bold text-muted-foreground/50 uppercase tracking-wider shrink-0">{k}</span>
+                                <span className="text-[11px] font-black text-foreground truncate text-right">{v}</span>
                               </div>
                             ))}
                           </div>
@@ -1943,12 +1930,12 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     ) : bidsPanel.status === 'error' ? (
                       <div className="py-20 flex flex-col items-center gap-3 text-rose-500/50">
                         <CircleX className="h-6 w-6" />
-                        <p className="text-xs uppercase tracking-widest font-bold text-center">Compliance Engine Error</p>
-                        <p className="text-xs font-mono text-center max-w-[240px] break-words">{bidsPanel.error}</p>
+                        <p className="text-[11px] uppercase tracking-widest font-bold text-center">Compliance Engine Error</p>
+                        <p className="text-[11px] font-mono text-center max-w-[240px] break-words">{bidsPanel.error}</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/50 px-0.5">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground/50 px-0.5">
                           {(blockingIssues.length + warningIssues.length) > 0
                             ? `${blockingIssues.length} blocker${blockingIssues.length !== 1 ? 's' : ''} · ${warningIssues.length} warning${warningIssues.length !== 1 ? 's' : ''}`
                             : 'All compliance checks passed'}
@@ -1958,12 +1945,12 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           <div key={`b-${i}`} className="rounded-2xl border overflow-hidden border-rose-500/20 bg-rose-500/[0.04]">
                             <div className="px-4 py-2.5 border-b border-white/[0.04] flex items-center gap-2">
                               <CircleX className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                              <span className="text-xs font-bold text-rose-400">{hit.rule_name || hit.rule_id.replace(/_/g, ' ')}</span>
+                              <span className="text-[11px] font-bold text-rose-400">{hit.rule_name || hit.rule_id.replace(/_/g, ' ')}</span>
                             </div>
                             <div className="px-4 py-3">
-                              <p className="text-xs text-muted-foreground/60 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                              <p className="text-[11px] text-muted-foreground/60 leading-relaxed">{hit.summary || (hit as any).message}</p>
                               {(hit.details || (hit as any).resolution_hint) && (
-                                <p className="text-xs text-foreground/60 leading-relaxed mt-2 border-t border-white/[0.04] pt-2">
+                                <p className="text-[11px] text-foreground/60 leading-relaxed mt-2 border-t border-white/[0.04] pt-2">
                                   {hit.details || (hit as any).resolution_hint}
                                 </p>
                               )}
@@ -1975,12 +1962,12 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           <div key={`w-${i}`} className="rounded-2xl border overflow-hidden border-amber-500/20 bg-amber-500/[0.04]">
                             <div className="px-4 py-2.5 border-b border-white/[0.04] flex items-center gap-2">
                               <TriangleAlert className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                              <span className="text-xs font-bold text-amber-400">{hit.rule_name || hit.rule_id.replace(/_/g, ' ')}</span>
+                              <span className="text-[11px] font-bold text-amber-400">{hit.rule_name || hit.rule_id.replace(/_/g, ' ')}</span>
                             </div>
                             <div className="px-4 py-3">
-                              <p className="text-xs text-muted-foreground/60 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                              <p className="text-[11px] text-muted-foreground/60 leading-relaxed">{hit.summary || (hit as any).message}</p>
                               {(hit.details || (hit as any).resolution_hint) && (
-                                <p className="text-xs text-foreground/60 leading-relaxed mt-2 border-t border-white/[0.04] pt-2">
+                                <p className="text-[11px] text-foreground/60 leading-relaxed mt-2 border-t border-white/[0.04] pt-2">
                                   {hit.details || (hit as any).resolution_hint}
                                 </p>
                               )}
@@ -1992,8 +1979,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           <div className="py-10 flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04]">
                             <ShieldCheck className="h-8 w-8 text-emerald-400/60" />
                             <div className="text-center">
-                              <p className="text-xs font-black uppercase tracking-wider text-emerald-400/80">All Clear</p>
-                              <p className="text-[10px] text-muted-foreground/40 mt-1 font-mono">
+                              <p className="text-[11px] font-black uppercase tracking-wider text-emerald-400/80">All Clear</p>
+                              <p className="text-[11px] text-muted-foreground/40 mt-1 font-mono">
                                 {bidsPanel.result?.summary.passed ?? 0} compliance checks passed
                               </p>
                             </div>
@@ -2007,18 +1994,18 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   <div className="shrink-0 p-5 border-t border-border/40 bg-card/40 backdrop-blur-md">
                     {!selectedBid ? (
                       <div className="h-11 flex items-center justify-center rounded-xl border border-dashed border-border/40 bg-muted/10">
-                        <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/30">Select a candidate bidder</span>
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/30">Select a candidate bidder</span>
                       </div>
                     ) : bidsPanel.status === 'idle' || bidsPanel.status === 'error' ? (
                       <Button
                         onClick={bidsPanel.run}
-                        className="w-full h-11 text-xs font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/10"
+                        className="w-full h-11 text-[11px] font-bold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/10"
                       >
                         <ShieldCheck className="h-4 w-4 mr-2" />
                         Run Compliance Check
                       </Button>
                     ) : bidsPanel.status === 'running' ? (
-                      <Button disabled className="w-full h-11 rounded-xl text-xs font-bold uppercase tracking-wider bg-muted/40">
+                      <Button disabled className="w-full h-11 rounded-xl text-[11px] font-bold uppercase tracking-wider bg-muted/40">
                         <Loader2 className="h-4 w-4 animate-spin mr-2" /> Running compliance engine…
                       </Button>
                     ) : (
@@ -2027,7 +2014,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         disabled={readOnly || isAssigning || hardBlocked}
                         title={readOnly ? 'View-only access — you cannot assign this shift' : undefined}
                         className={cn(
-                          'w-full h-11 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg transition-all duration-300',
+                          'w-full h-11 rounded-xl text-[11px] font-bold uppercase tracking-wider shadow-lg transition-all duration-300',
                           hardBlocked
                             ? 'bg-muted/50 text-muted-foreground/40 cursor-not-allowed shadow-none border border-border/40'
                             : warningIssues.length > 0
@@ -2073,24 +2060,24 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                 {isLoading ? (
                   <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/30">
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="text-[10px] uppercase tracking-widest font-semibold">Loading…</span>
+                    <span className="text-[11px] uppercase tracking-widest font-semibold">Loading…</span>
                   </motion.div>
                 ) : filteredShifts.length === 0 ? (
                   <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
                     <Inbox className="h-6 w-6" />
-                    <p className="text-[10px] uppercase tracking-widest font-semibold">No roles</p>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold">No roles</p>
                   </motion.div>
                 ) : (
                   <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
                     {groupedShifts.map((group) => (
                       <div key={group.key} className="space-y-2">
                         {groupBy !== 'none' && group.label && (
-                          <div className="sticky top-0 z-10 px-2.5 py-1.5 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-muted-foreground/80 rounded-xl shadow-sm">
+                          <div className="sticky top-0 z-10 px-2.5 py-1.5 bg-card/95 backdrop-blur-md border border-border/40 flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-muted-foreground/80 rounded-xl shadow-sm">
                             <div className="flex items-center gap-1.5 truncate">
                               <Layers className="h-3 w-3 text-primary/70 shrink-0" />
                               <span className="truncate">{group.label}</span>
                             </div>
-                            <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[9px] font-extrabold">
+                            <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[11px] font-extrabold">
                               {group.items.length}
                             </span>
                           </div>
@@ -2135,7 +2122,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                 {!expandedShift ? (
                   <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
                     <ChevronRight className="h-5 w-5" />
-                    <p className="text-[10px] uppercase tracking-widest font-semibold text-center">Select a role</p>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold text-center">Select a role</p>
                   </motion.div>
                 ) : isLoadingBids ? (
                   <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex justify-center text-muted-foreground/20">
@@ -2144,7 +2131,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                 ) : sortedBids.length === 0 ? (
                   <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
                     <Users className="h-5 w-5" />
-                    <p className="text-[10px] uppercase tracking-widest font-semibold">No bids yet</p>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold">No bids yet</p>
                   </motion.div>
                 ) : (
                   <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
@@ -2186,14 +2173,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   {!selectedBid ? (
                     <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
                       <Zap className="h-5 w-5" />
-                      <p className="text-[10px] uppercase tracking-widest font-semibold text-center">No candidate<br/>selected</p>
+                      <p className="text-[11px] uppercase tracking-widest font-semibold text-center">No candidate<br/>selected</p>
                     </motion.div>
                   ) : bidsPanel.status === 'idle' || bidsPanel.status === 'running' ? (
                     <motion.div key="prerun" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4 pt-2">
                       {/* Context card */}
                       <div className="rounded-2xl border border-border/50 bg-muted/10 overflow-hidden">
                         <div className="px-3.5 py-2.5 border-b border-border/40">
-                          <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/40">Candidate</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/40">Candidate</p>
                         </div>
                         <div className="p-3.5 space-y-2.5">
                           {[
@@ -2203,8 +2190,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                             ['Date', expandedShift?.dayLabel ?? '—'],
                           ].map(([k, v]) => (
                             <div key={k} className="flex justify-between items-baseline gap-2">
-                              <span className="text-[9px] font-medium text-muted-foreground/40 uppercase tracking-wider shrink-0">{k}</span>
-                              <span className="text-[10px] font-semibold text-foreground/60 truncate text-right">{v}</span>
+                              <span className="text-[11px] font-medium text-muted-foreground/40 uppercase tracking-wider shrink-0">{k}</span>
+                              <span className="text-[11px] font-semibold text-foreground/60 truncate text-right">{v}</span>
                             </div>
                           ))}
                         </div>
@@ -2213,15 +2200,15 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   ) : bidsPanel.status === 'error' ? (
                     <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-rose-500/50">
                       <CircleX className="h-5 w-5" />
-                      <p className="text-[10px] uppercase tracking-widest font-semibold text-center">Engine Error</p>
-                      <p className="text-[9px] font-mono text-center max-w-[200px] break-words">
+                      <p className="text-[11px] uppercase tracking-widest font-semibold text-center">Engine Error</p>
+                      <p className="text-[11px] font-mono text-center max-w-[200px] break-words">
                         {bidsPanel.error}
                       </p>
                     </motion.div>
                   ) : (
                     <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
                       {/* Summary label */}
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/40 px-0.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/40 px-0.5">
                         {(blockingIssues.length + warningIssues.length) > 0
                           ? `${blockingIssues.length} blocker${blockingIssues.length !== 1 ? 's' : ''} · ${warningIssues.length} warning${warningIssues.length !== 1 ? 's' : ''}`
                           : 'All checks passed'}
@@ -2238,14 +2225,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         >
                           <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
                             <CircleX className="h-3 w-3 text-rose-400 shrink-0" />
-                            <span className="text-[10px] font-semibold text-rose-400">
+                            <span className="text-[11px] font-semibold text-rose-400">
                               {hit.rule_name || hit.rule_id.replace(/_/g, ' ')}
                             </span>
                           </div>
                           <div className="px-3.5 py-2.5">
-                            <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                            <p className="text-[11px] text-muted-foreground/50 leading-relaxed">{hit.summary || (hit as any).message}</p>
                             {(hit.details || (hit as any).resolution_hint) && (
-                              <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">
+                              <p className="text-[11px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">
                                 {hit.details || (hit as any).resolution_hint}
                               </p>
                             )}
@@ -2264,14 +2251,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         >
                           <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
                             <TriangleAlert className="h-3 w-3 text-amber-400 shrink-0" />
-                            <span className="text-[10px] font-semibold text-amber-400">
+                            <span className="text-[11px] font-semibold text-amber-400">
                               {hit.rule_name || hit.rule_id.replace(/_/g, ' ')}
                             </span>
                           </div>
                           <div className="px-3.5 py-2.5">
-                            <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                            <p className="text-[11px] text-muted-foreground/50 leading-relaxed">{hit.summary || (hit as any).message}</p>
                             {(hit.details || (hit as any).resolution_hint) && (
-                              <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">
+                              <p className="text-[11px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">
                                 {hit.details || (hit as any).resolution_hint}
                               </p>
                             )}
@@ -2289,7 +2276,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           <ShieldCheck className="h-7 w-7 text-emerald-400/50" />
                           <div className="text-center">
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/70">All Clear</p>
-                            <p className="text-[9px] text-muted-foreground/30 mt-1 font-mono">
+                            <p className="text-[11px] text-muted-foreground/30 mt-1 font-mono">
                               {bidsPanel.result?.summary.passed ?? 0} checks passed
                             </p>
                           </div>
@@ -2306,7 +2293,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               <AnimatePresence mode="wait">
                 {!selectedBid ? (
                   <div className="h-[44px] flex items-center justify-center rounded-xl border border-dashed border-white/[0.05] bg-white/[0.01]">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/10">Select a candidate</span>
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-white/10">Select a candidate</span>
                   </div>
                 ) : bidsPanel.status === 'idle' || bidsPanel.status === 'error' ? (
                   <Button
@@ -2369,8 +2356,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   <Zap className="h-6 w-6 animate-pulse text-amber-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight text-foreground">Running Batch Assignment</h3>
-                  <p className="text-xs font-medium text-muted-foreground">
+                  <h3 className="text-[15px] font-black tracking-tight text-foreground">Running Batch Assignment</h3>
+                  <p className="text-[11px] font-medium text-muted-foreground">
                     {autoAssignProgress?.isCancelling ? 'Stopping batch operations safely…' : 'Processing candidate bids sequentially…'}
                   </p>
                 </div>
@@ -2379,7 +2366,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
             {/* Current Shift Info & Progress Bar */}
             <div className="space-y-2.5 bg-muted/30 p-4 rounded-2xl border border-border/40">
-              <div className="flex justify-between items-center text-xs font-mono">
+              <div className="flex justify-between items-center text-[11px] font-mono">
                 <span className="font-semibold text-foreground/80 truncate max-w-[240px]">
                   {autoAssignProgress?.currentRoleName || 'Evaluating shifts…'}
                 </span>
@@ -2398,16 +2385,16 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
             {/* Counters Grid */}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 text-center shadow-sm">
-                <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">{autoAssignProgress?.assigned ?? 0}</div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">Assigned</div>
+                <div className="text-[20px] font-black text-emerald-600 dark:text-emerald-400 font-mono">{autoAssignProgress?.assigned ?? 0}</div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">Assigned</div>
               </div>
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 text-center shadow-sm">
-                <div className="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono">{autoAssignProgress?.skipped ?? 0}</div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-amber-600/80 dark:text-amber-400/80 mt-0.5">Skipped</div>
+                <div className="text-[20px] font-black text-amber-600 dark:text-amber-400 font-mono">{autoAssignProgress?.skipped ?? 0}</div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-amber-600/80 dark:text-amber-400/80 mt-0.5">Skipped</div>
               </div>
               <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-3.5 text-center shadow-sm">
-                <div className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">{autoAssignProgress?.failed ?? 0}</div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-rose-600/80 dark:text-rose-400/80 mt-0.5">Failed</div>
+                <div className="text-[20px] font-black text-rose-600 dark:text-rose-400 font-mono">{autoAssignProgress?.failed ?? 0}</div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-rose-600/80 dark:text-rose-400/80 mt-0.5">Failed</div>
               </div>
             </div>
 
@@ -2418,7 +2405,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                 size="lg"
                 onClick={handleCancelAutoAssign}
                 disabled={autoAssignProgress?.isCancelling}
-                className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-[0.18em] shadow-xl shadow-rose-500/20 flex items-center justify-center gap-2 hover:bg-rose-600 active:scale-[0.98] transition-all"
+                className="w-full h-12 rounded-2xl font-black text-[11px] uppercase tracking-[0.18em] shadow-xl shadow-rose-500/20 flex items-center justify-center gap-2 hover:bg-rose-600 active:scale-[0.98] transition-all"
               >
                 {autoAssignProgress?.isCancelling ? (
                   <>
@@ -2430,7 +2417,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   </>
                 )}
               </Button>
-              <p className="text-[10px] text-center text-muted-foreground/60 font-mono">
+              <p className="text-[11px] text-center text-muted-foreground/60 font-mono">
                 Cancelling will safely halt execution after the current shift finishes.
               </p>
             </div>

@@ -21,7 +21,7 @@ export const WizardStepHeader: React.FC<WizardStepHeaderProps> = ({ currentStep,
                     <React.Fragment key={label}>
                         <span
                             className={cn(
-                                "text-[10px] font-black tracking-[0.25em] uppercase px-3.5 py-1 rounded-full border transition-all duration-300",
+                                "text-[11px] font-black tracking-[0.25em] uppercase px-3.5 py-1 rounded-full border transition-all duration-300",
                                 isActive
                                     ? "text-primary bg-primary/10 border-primary/20"
                                     : isDone

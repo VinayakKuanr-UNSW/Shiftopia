@@ -30,14 +30,14 @@ export function WhyThisPerson({ rationale }: { rationale?: AssignmentRationale |
             <HoverCardTrigger asChild>
                 <button
                     type="button"
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                     aria-label="Why this employee was chosen"
                 >
                     <HelpCircle className="h-3.5 w-3.5" />
                     Why?
                 </button>
             </HoverCardTrigger>
-            <HoverCardContent className="w-72 text-xs" align="start">
+            <HoverCardContent className="w-72 text-[11px]" align="start">
                 <p className="font-semibold text-foreground mb-2">Why this employee</p>
                 <ul className="space-y-1.5 text-muted-foreground">
                     <Row icon={<DollarSign className="h-3.5 w-3.5" />}>

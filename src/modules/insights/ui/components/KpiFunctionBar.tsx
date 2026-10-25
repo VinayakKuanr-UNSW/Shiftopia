@@ -10,13 +10,13 @@
 
 import React from 'react';
 import { RefreshCw, GitCompareArrows, Calendar, Sparkles } from 'lucide-react';
-import { Button } from '@/modules/core/ui/primitives/button';
+import { ToolbarRow, ToolbarIconButton, toolbar } from '@/modules/core/ui/components/Toolbar';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
 import { TabsList, TabsTrigger } from '@/modules/core/ui/primitives/tabs';
 import { cn } from '@/modules/core/lib/utils';
-import { text, touch } from '@/modules/core/ui/typography';
+import { text } from '@/modules/core/ui/typography';
 import type { CompareMode, QuarterRef } from '../../hooks/useKpiFilters';
 
 export interface KpiTabDef {
@@ -53,42 +53,38 @@ export const KpiFunctionBar: React.FC<KpiFunctionBarProps> = ({
             : 'previous quarter';
 
     return (
-        <div className={cn('flex w-full flex-wrap items-center justify-between gap-3', className)}>
-            <div className="flex min-w-0 flex-wrap items-center gap-3">
-                {/* Modern Pill Tabs */}
-                <TabsList className="h-10 max-w-full justify-start overflow-x-auto rounded-xl border border-border/70 bg-muted/40 p-1">
+        <ToolbarRow
+            className={className}
+            views={
+                // Real tabs (each owns a TabsContent panel), styled as the shared views toggle.
+                <TabsList className={cn(toolbar.segmented, 'max-w-full justify-start overflow-x-auto gap-0.5 text-inherit')}>
                     {tabs.map(({ value, label, Icon }) => (
                         <TabsTrigger
                             key={value}
                             value={value}
+                            aria-label={label}
                             className={cn(
-                                'gap-2 rounded-lg px-3.5 h-8 shrink-0 text-xs font-semibold transition-all',
-                                'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm',
-                                'text-muted-foreground hover:text-foreground',
+                                toolbar.segment,
+                                'inline-flex items-center gap-2 shrink-0',
+                                'data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-slate-900 dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm',
                             )}
                         >
                             <Icon className="h-3.5 w-3.5" />
-                            <span>{label}</span>
+                            <span className="hidden sm:inline">{label}</span>
                         </TabsTrigger>
                     ))}
                 </TabsList>
-
-                {/* Period Selector */}
+            }
+            modes={
                 <div className="flex items-center gap-2">
                     <Select value={period.label} onValueChange={onPeriodChange}>
-                        <SelectTrigger
-                            id="kpi-period"
-                            className={cn(
-                                'h-10 w-[140px] rounded-xl text-xs font-semibold border-border/70 bg-card hover:bg-muted/30 transition-colors',
-                                touch.targetY,
-                            )}
-                        >
-                            <Calendar className="h-3.5 w-3.5 text-muted-foreground mr-1" />
+                        <SelectTrigger id="kpi-period" aria-label="Quarter" className={cn(toolbar.field, 'w-[140px] justify-between')}>
+                            <Calendar className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             {quarters.map((q) => (
-                                <SelectItem key={q.label} value={q.label} className="text-xs font-medium">
+                                <SelectItem key={q.label} value={q.label} className="text-[11px] font-medium">
                                     {q.label}
                                 </SelectItem>
                             ))}
@@ -99,21 +95,20 @@ export const KpiFunctionBar: React.FC<KpiFunctionBarProps> = ({
                         {period.startDate} → {period.endDate}
                     </span>
                 </div>
-            </div>
-
-            {/* Right Controls: Compare Toggle + Refresh Button */}
-            <div className="flex items-center gap-3">
-                {/* Compare Toggle Pill matching reference image */}
-                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+            }
+            actions={<>
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     <span className="hidden sm:inline">Compare</span>
                     <button
                         type="button"
                         role="switch"
                         aria-checked={isComparing}
+                        aria-label="Compare with the previous quarter"
                         onClick={() => onCompareChange(isComparing ? 'none' : 'previous')}
                         title={comparisonLabel ? `Compare with ${comparisonLabel}` : 'Compare periods'}
                         className={cn(
-                            'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                            // The switch keeps its 24px track; the 44px target is the row around it.
+                            'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             isComparing ? 'bg-primary' : 'bg-muted/80 dark:bg-muted/40',
                         )}
                     >
@@ -126,18 +121,9 @@ export const KpiFunctionBar: React.FC<KpiFunctionBarProps> = ({
                     </button>
                 </div>
 
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onRefresh}
-                    className={cn('h-10 px-3 gap-1.5 rounded-xl border-border/70 text-xs font-semibold bg-card hover:bg-muted/30', touch.targetY)}
-                    title="Refresh data"
-                >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Refresh</span>
-                </Button>
-            </div>
-        </div>
+                <ToolbarIconButton icon={<RefreshCw />} tooltip="Refresh data" onClick={onRefresh} variant="blue" />
+            </>}
+        />
     );
 };
 

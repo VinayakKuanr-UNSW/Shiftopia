@@ -72,10 +72,15 @@ export function useShiftFormOrchestrator({
     const { toast } = useToast();
 
     /** See `initialTargetEmploymentType`: the Office group starts as FT. */
-    const defaultTargetFor = (ctx: typeof context) => initialTargetEmploymentType(
-        ctx?.targetEmploymentType,
-        ctx?.group_type || ctx?.groupName?.toLowerCase().replace(/\s+/g, '_'),
-    );
+    const defaultTargetFor = (ctx: typeof context) => {
+        const target = initialTargetEmploymentType(
+            ctx?.targetEmploymentType,
+            ctx?.group_type || ctx?.groupName?.toLowerCase().replace(/\s+/g, '_'),
+        );
+        // Templates cannot hold FT (enforce_no_ft_template_shifts), so the
+        // Office default does not apply: the planner picks PT / Casual.
+        return isTemplateMode && target === 'FT' ? undefined : target;
+    };
     const { scopeTree } = useScopeFilter('managerial');
     const queryClient = useQueryClient();
 

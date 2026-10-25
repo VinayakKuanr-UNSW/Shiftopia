@@ -66,11 +66,11 @@ function PillarCard({
                         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${c.chip}`}>{icon}</span>
                         <span className="truncate">{label}</span>
                     </span>
-                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-black tabular-nums ${c.chip}`}>
+                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-black tabular-nums ${c.chip}`}>
                         {unit ?? `${score}/100`}
                     </span>
                 </div>
-                <div className="mt-3 text-2xl font-black tracking-tight tabular-nums text-foreground">{value}</div>
+                <div className="mt-3 text-[20px] font-black tracking-tight tabular-nums text-foreground">{value}</div>
                 <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted/70">
                     <motion.div
                         className={`h-full rounded-full ${c.bar}`}
@@ -162,7 +162,7 @@ export function AutoSchedulerInsights({
     return (
         <div className="space-y-4">
             {/* Single-mode header */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
                 <ShieldCheck className="h-4 w-4 text-emerald-500" />
                 <span>
                     <span className="font-medium text-foreground">Optimal roster.</span>{' '}
@@ -228,7 +228,7 @@ export function AutoSchedulerInsights({
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>{binding.length} shift{binding.length !== 1 ? 's' : ''} could not be filled</AlertTitle>
                     <AlertDescription>
-                        <ul className="mt-1 space-y-0.5 text-xs">
+                        <ul className="mt-1 space-y-0.5 text-[11px]">
                             {binding.slice(0, 4).map(b => (
                                 <li key={b.shift_id}>• {b.reason}</li>
                             ))}
@@ -240,9 +240,9 @@ export function AutoSchedulerInsights({
 
             {/* U3 — Pareto trade-off, as prose on mobile */}
             {compact && cheapest && (
-                <Card className="border-border bg-card p-4">
-                    <h4 className="mb-1.5 text-sm font-semibold text-foreground">What else was possible?</h4>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
+                <Card className="p-4">
+                    <h4 className="mb-1.5 text-[13px] font-semibold text-foreground">What else was possible?</h4>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
                         The <span className="font-medium text-amber-600 dark:text-amber-400">cheapest</span> roster
                         would
                         {costDelta > 0
@@ -258,10 +258,10 @@ export function AutoSchedulerInsights({
 
             {/* U3 — Pareto trade-off explorer */}
             {!compact && radarData && alternatives.length > 0 && (
-                <Card className="p-4 bg-card border-border">
+                <Card className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-foreground">What else was possible?</h4>
-                        <span className="text-xs text-muted-foreground">chosen vs. alternatives</span>
+                        <h4 className="text-[13px] font-semibold text-foreground">What else was possible?</h4>
+                        <span className="text-[11px] text-muted-foreground">chosen vs. alternatives</span>
                     </div>
                     <div className="grid md:grid-cols-[1fr_auto] gap-4 items-center">
                         <div className="h-56">
@@ -285,7 +285,7 @@ export function AutoSchedulerInsights({
                                 </RadarChart>
                             </ResponsiveContainer>
                         </div>
-                        <div className="text-xs text-muted-foreground max-w-[16rem] space-y-2">
+                        <div className="text-[11px] text-muted-foreground max-w-[16rem] space-y-2">
                             {cheapest && (
                                 <p>
                                     The <span className="font-medium text-amber-600 dark:text-amber-400">cheapest</span> roster would

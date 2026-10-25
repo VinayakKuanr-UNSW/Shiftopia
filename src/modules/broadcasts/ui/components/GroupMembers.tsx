@@ -45,7 +45,7 @@ export const GroupMembers: React.FC<GroupMembersProps> = ({
                     <div className="text-center py-8">
                         <UserPlus className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                         <p className="text-muted-foreground">No members in this group.</p>
-                        <p className="text-sm text-muted-foreground">Add members to get started.</p>
+                        <p className="text-[13px] text-muted-foreground">Add members to get started.</p>
                     </div>
                 ) : (
                     <Table>
@@ -62,7 +62,7 @@ export const GroupMembers: React.FC<GroupMembersProps> = ({
                                     <TableCell>
                                         <div>
                                             <div className="font-medium">{member.employee?.name}</div>
-                                            <div className="text-sm text-muted-foreground">{member.employee?.email}</div>
+                                            <div className="text-[13px] text-muted-foreground">{member.employee?.email}</div>
                                         </div>
                                     </TableCell>
                                     <TableCell>

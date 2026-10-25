@@ -235,7 +235,7 @@ export function CalendarPane({
           {/* Date number */}
           <div
             className={cn(
-              'mb-1 text-xs font-medium',
+              'mb-1 text-[11px] font-medium',
               ctx.modifiers.today
                 ? 'text-blue-700 dark:text-blue-300'
                 : isLocked
@@ -251,20 +251,20 @@ export function CalendarPane({
           {isLocked ? (
             /* LOCKED — assigned shift pills */
             <div className="flex-1 space-y-0.5 overflow-hidden">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-purple-800 dark:text-purple-300">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-purple-800 dark:text-purple-300">
                 Assigned
               </div>
               {dayAssigned.slice(0, 2).map((s) => (
                 <div
                   key={s.id}
-                  className="truncate rounded bg-purple-200/70 px-1 py-0.5 text-[10px] text-purple-900 dark:bg-purple-800/50 dark:text-purple-100"
+                  className="truncate rounded bg-purple-200/70 px-1 py-0.5 text-[11px] text-purple-900 dark:bg-purple-800/50 dark:text-purple-100"
                 >
                   {formatTimeForDisplay(s.start_time)}–{formatTimeForDisplay(s.end_time)}
                   {s.role_name && <span className="ml-1 opacity-80">{s.role_name}</span>}
                 </div>
               ))}
               {dayAssigned.length > 2 && (
-                <div className="px-1 text-[10px] text-purple-700 dark:text-purple-300">
+                <div className="px-1 text-[11px] text-purple-700 dark:text-purple-300">
                   +{dayAssigned.length - 2} more
                 </div>
               )}
@@ -275,13 +275,13 @@ export function CalendarPane({
               {daySlots.slice(0, 3).map((slot, index) => (
                 <div
                   key={slot.id || index}
-                  className="truncate rounded bg-background/70 px-1 py-0.5 text-[10px] text-foreground dark:bg-muted/30"
+                  className="truncate rounded bg-background/70 px-1 py-0.5 text-[11px] text-foreground dark:bg-muted/30"
                 >
                   {formatTimeForDisplay(slot.start_time)}-{formatTimeForDisplay(slot.end_time)}
                 </div>
               ))}
               {daySlots.length > 3 && (
-                <div className="px-1 text-[10px] text-muted-foreground">+{daySlots.length - 3} more</div>
+                <div className="px-1 text-[11px] text-muted-foreground">+{daySlots.length - 3} more</div>
               )}
             </div>
           )}
@@ -336,7 +336,7 @@ export function CalendarPane({
       {/* Legend */}
       <motion.div
         variants={itemVariants}
-        className="mt-4 flex flex-wrap items-center justify-center gap-4 text-xs text-foreground"
+        className="mt-4 flex flex-wrap items-center justify-center gap-4 text-[11px] text-foreground"
       >
         <div className="flex items-center gap-1.5">
           <div className="h-3 w-3 rounded bg-emerald-400 border border-emerald-500" aria-hidden="true" />

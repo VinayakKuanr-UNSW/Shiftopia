@@ -27,10 +27,10 @@ export const NearMissPanel: React.FC<Props> = ({ nearMisses, limit = 40 }) => {
         return (
             <div className="py-12 text-center rounded-2xl border border-dashed border-border/40 bg-muted/10 p-6">
                 <AlertTriangle className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" aria-hidden="true" />
-                <p className="text-sm font-bold text-foreground">
+                <p className="text-[13px] font-bold text-foreground">
                     No near misses in this range
                 </p>
-                <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
+                <p className="text-[11px] text-muted-foreground max-w-md mx-auto mt-1">
                     Every unfilled shift is either fully coverable or has nobody available within an hour of fitting.
                 </p>
             </div>
@@ -40,7 +40,7 @@ export const NearMissPanel: React.FC<Props> = ({ nearMisses, limit = 40 }) => {
     return (
         <section aria-labelledby="near-misses-heading" className="space-y-3">
             <div className="flex items-center justify-between gap-3 pb-1 border-b border-border/20">
-                <h3 id="near-misses-heading" className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <h3 id="near-misses-heading" className="text-[11px] font-black uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
                     <span>
                         {nearMisses.length} Near {nearMisses.length === 1 ? 'Miss' : 'Misses'}
@@ -68,17 +68,17 @@ export const NearMissPanel: React.FC<Props> = ({ nearMisses, limit = 40 }) => {
                         >
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-border/20">
                                 <div className="flex items-center gap-2">
-                                    <span className="flex items-center gap-1.5 text-xs font-black text-foreground">
+                                    <span className="flex items-center gap-1.5 text-[11px] font-black text-foreground">
                                         <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                                         {formattedDate}
                                     </span>
                                     <span className="text-border/40">•</span>
-                                    <span className="flex items-center gap-1 text-xs font-bold text-foreground tabular-nums">
+                                    <span className="flex items-center gap-1 text-[11px] font-bold text-foreground tabular-nums">
                                         <Clock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                                         {shift.shiftStart}–{shift.shiftEnd}
                                     </span>
                                 </div>
-                                <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-black uppercase tracking-wider border border-primary/20">
+                                <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-[11px] font-black uppercase tracking-wider border border-primary/20">
                                     {shift.roleName ?? 'Unfilled Shift'}
                                 </span>
                             </div>
@@ -102,17 +102,17 @@ export const NearMissPanel: React.FC<Props> = ({ nearMisses, limit = 40 }) => {
                                                 <PhoneCall className="h-3.5 w-3.5" aria-hidden="true" />
                                             </button>
                                             <div className="min-w-0">
-                                                <span className="block text-xs font-bold text-foreground truncate">
+                                                <span className="block text-[11px] font-bold text-foreground truncate">
                                                     {nm.memberName}
                                                 </span>
-                                                <span className="block text-[10px] font-medium text-muted-foreground tabular-nums">
+                                                <span className="block text-[11px] font-medium text-muted-foreground tabular-nums">
                                                     Declared: {nm.windows.map((w) => `${w.start}–${w.end}`).join(', ')}
                                                 </span>
                                             </div>
                                         </div>
 
                                         <div className="flex items-center gap-2 shrink-0">
-                                            <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider tabular-nums">
+                                            <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px] font-black uppercase tracking-wider tabular-nums">
                                                 {nm.shortfallMinutes} min short
                                             </span>
                                         </div>

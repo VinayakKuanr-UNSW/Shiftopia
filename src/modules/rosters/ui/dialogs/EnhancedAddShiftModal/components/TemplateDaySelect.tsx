@@ -87,7 +87,7 @@ export const TemplateDaySelect: React.FC<TemplateDaySelectProps> = ({
                     <SelectItem value={EVERY_DAY}>
                         <span className="flex items-baseline gap-2">
                             <span>Every day</span>
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-[11px] text-muted-foreground">
                                 repeats on every date in the range
                             </span>
                         </span>
@@ -95,7 +95,7 @@ export const TemplateDaySelect: React.FC<TemplateDaySelectProps> = ({
                 </SelectContent>
             </Select>
 
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
                 {value === null
                     ? 'This shift will be created on every date the template is applied to, including public holidays.'
                     : 'The day of the week this shift repeats on when the template is applied.'}

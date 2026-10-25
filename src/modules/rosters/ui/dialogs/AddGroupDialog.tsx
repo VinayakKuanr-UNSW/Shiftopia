@@ -121,8 +121,9 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
           {trigger}
         </DialogTrigger>
       )}
-      <DialogContent 
-        className="w-[calc(100vw-2rem)] sm:max-w-[460px] p-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border bg-background text-foreground shadow-2xl backdrop-blur-xl ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+      <DialogContent
+        className="w-[calc(100vw-2rem)] p-0 overflow-hidden text-foreground ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+        size="md"
         aria-describedby="add-group-description"
       >
         {/* Header */}
@@ -133,10 +134,10 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
                 <Building2 className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                <DialogTitle>
                   Add New Department
                 </DialogTitle>
-                <DialogDescription id="add-group-description" className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                <DialogDescription id="add-group-description" className="mt-0.5">
                   Create a new department for the roster.
                 </DialogDescription>
               </div>
@@ -158,7 +159,7 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
                   <FormItem className="space-y-2">
                     <FormLabel 
                       htmlFor="department-name-select"
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                      className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
                     >
                       Department Name <span className="text-destructive">*</span>
                     </FormLabel>
@@ -184,7 +185,7 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage role="alert" className="text-xs font-medium text-destructive" />
+                    <FormMessage role="alert" className="text-[11px] font-medium text-destructive" />
                   </FormItem>
                 )}
               />
@@ -196,7 +197,7 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
                   <FormItem className="space-y-2">
                     <FormLabel 
                       htmlFor="department-color-select"
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+                      className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
                     >
                       Accent Color Theme <span className="text-destructive">*</span>
                     </FormLabel>
@@ -222,13 +223,13 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
                                 className={cn("h-3.5 w-3.5 rounded-full ring-1 ring-border shrink-0", opt.colorClass)} 
                                 aria-hidden="true" 
                               />
-                              <span className="font-medium text-sm">{opt.label}</span>
+                              <span className="font-medium text-[13px]">{opt.label}</span>
                             </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage role="alert" className="text-xs font-medium text-destructive" />
+                    <FormMessage role="alert" className="text-[11px] font-medium text-destructive" />
                   </FormItem>
                 )}
               />
@@ -240,7 +241,7 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
                 variant="outline" 
                 onClick={() => setOpen?.(false)} 
                 disabled={isSubmitting}
-                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-sm transition-all active:scale-[0.98]"
+                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-[13px] transition-all active:scale-[0.98]"
                 aria-label="Cancel and close dialog"
               >
                 Cancel
@@ -248,7 +249,7 @@ export const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
               <Button 
                 type="submit" 
                 disabled={isSubmitting}
-                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-[13px] shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 aria-label={isSubmitting ? "Adding department..." : "Add Department"}
                 aria-busy={isSubmitting}
               >

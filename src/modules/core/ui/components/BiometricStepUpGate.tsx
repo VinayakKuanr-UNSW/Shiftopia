@@ -43,8 +43,8 @@ export function BiometricStepUpGate({
         <ShieldCheck className="h-8 w-8 text-indigo-500" />
       </div>
       <div>
-        <h3 className="text-lg font-semibold text-foreground">{label} is protected</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h3 className="text-[15px] font-semibold text-foreground">{label} is protected</h3>
+        <p className="mt-1 text-[13px] text-muted-foreground">
           Verify your identity to view this content.
         </p>
       </div>
@@ -52,7 +52,7 @@ export function BiometricStepUpGate({
         type="button"
         onClick={verify}
         disabled={checking}
-        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
       >
         <Fingerprint className="h-4 w-4" />
         {checking ? 'Verifying…' : 'Verify to continue'}

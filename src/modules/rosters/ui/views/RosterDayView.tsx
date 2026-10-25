@@ -82,8 +82,8 @@ export const RosterDayView: React.FC<RosterDayViewProps> = ({
                 ) : (
                   <ChevronRight className="w-5 h-5 text-white/70" />
                 )}
-                <h3 className="text-lg font-semibold text-white">{group.name}</h3>
-                <span className="text-sm text-white/60">
+                <h3 className="text-[15px] font-semibold text-white">{group.name}</h3>
+                <span className="text-[13px] text-white/60">
                   {group.subGroups.reduce((sum, sg) => sum + sg.shifts.length, 0)} shifts
                 </span>
               </div>
@@ -107,8 +107,8 @@ export const RosterDayView: React.FC<RosterDayViewProps> = ({
                           ) : (
                             <ChevronRight className="w-4 h-4 text-white/60" />
                           )}
-                          <h4 className="text-base font-medium text-white/90">{subGroup.name}</h4>
-                          <span className="text-xs text-white/50">
+                          <h4 className="text-[14px] font-medium text-white/90">{subGroup.name}</h4>
+                          <span className="text-[11px] text-white/50">
                             {subGroup.shifts.length} shifts
                           </span>
                         </div>

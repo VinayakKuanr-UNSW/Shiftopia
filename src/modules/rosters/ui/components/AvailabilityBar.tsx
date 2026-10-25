@@ -176,7 +176,7 @@ const TimeBarSegment: React.FC<TimeBarSegmentProps> = ({
         </TooltipTrigger>
         <TooltipContent
           side="bottom"
-          className="bg-gray-900 border-gray-700 text-white text-xs"
+          className="bg-gray-900 border-gray-700 text-white text-[11px]"
         >
           {tooltipText}
         </TooltipContent>
@@ -208,7 +208,7 @@ export const AvailabilityBar: React.FC<AvailabilityBarProps> = ({
             </TooltipTrigger>
             <TooltipContent
               side="bottom"
-              className="bg-gray-900 border-gray-700 text-white text-xs"
+              className="bg-gray-900 border-gray-700 text-white text-[11px]"
             >
               No availability set
             </TooltipContent>

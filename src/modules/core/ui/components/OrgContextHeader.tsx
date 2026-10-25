@@ -122,10 +122,10 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                 <Icon className={cn("h-3.5 w-3.5", color)} />
 
                 <div className="flex flex-col">
-                    <span className="text-[9px] uppercase tracking-widest text-white/30 font-medium">
+                    <span className="text-[11px] uppercase tracking-widest text-white/30 font-medium">
                         {label}
                     </span>
-                    <span className={cn("text-sm font-semibold tracking-tight", color)}>
+                    <span className={cn("text-[13px] font-semibold tracking-tight", color)}>
                         {value}
                     </span>
                 </div>
@@ -167,12 +167,12 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                 <Icon className="h-3.5 w-3.5 text-violet-400" />
 
                 <div className="flex flex-col min-w-[120px]">
-                    <span className="text-[9px] uppercase tracking-widest text-white/30 font-medium">
+                    <span className="text-[11px] uppercase tracking-widest text-white/30 font-medium">
                         {label}
                     </span>
                     <div className="relative">
                         {isLoading ? (
-                            <div className="flex items-center gap-1.5 text-sm text-violet-300">
+                            <div className="flex items-center gap-1.5 text-[13px] text-violet-300">
                                 <Loader2 className="h-3 w-3 animate-spin" />
                                 Loading...
                             </div>
@@ -181,7 +181,7 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                                 value={value || ''}
                                 onChange={(e) => onChange(e.target.value || null)}
                                 className={cn(
-                                    "appearance-none bg-transparent text-sm font-semibold tracking-tight cursor-pointer",
+                                    "appearance-none bg-transparent text-[13px] font-semibold tracking-tight cursor-pointer",
                                     "focus:outline-none w-full pr-5",
                                     value ? color : "text-violet-300/60"
                                 )}
@@ -216,7 +216,7 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                 animate="visible"
                 variants={containerVariants}
                 className={cn(
-                    "flex items-center gap-2 text-xs flex-wrap",
+                    "flex items-center gap-2 text-[11px] flex-wrap",
                     className
                 )}
             >
@@ -300,11 +300,11 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                     <div className="flex items-center justify-between mb-4">
                         {title && (
                             <motion.div variants={itemVariants}>
-                                <h2 className="text-lg font-bold text-white tracking-tight">
+                                <h2 className="text-[15px] font-bold text-white tracking-tight">
                                     {title}
                                 </h2>
                                 {subtitle && (
-                                    <p className="text-xs text-white/40 mt-0.5">{subtitle}</p>
+                                    <p className="text-[11px] text-white/40 mt-0.5">{subtitle}</p>
                                 )}
                             </motion.div>
                         )}
@@ -320,7 +320,7 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                                 )}
                             >
                                 <Shield className={cn("h-3.5 w-3.5", levelColors.text)} />
-                                <span className={cn("text-xs font-bold uppercase tracking-wider", levelColors.text)}>
+                                <span className={cn("text-[11px] font-bold uppercase tracking-wider", levelColors.text)}>
                                     {ACCESS_LEVEL_LABELS[accessLevel]}
                                 </span>
                             </motion.div>
@@ -391,7 +391,7 @@ export const OrgContextHeader: React.FC<OrgContextHeaderProps> = ({
                     variants={itemVariants}
                     className="mt-3 pt-3 border-t border-white/[0.04]"
                 >
-                    <p className="text-[10px] text-white/30 font-mono tracking-wide">
+                    <p className="text-[11px] text-white/30 font-mono tracking-wide">
                         <span className={cn("font-bold", levelColors.text)}>ACCESS CERTIFICATE</span>
                         <span className="mx-2 text-white/20">|</span>
                         {accessLevel === 'epsilon' || accessLevel === 'zeta' ? (

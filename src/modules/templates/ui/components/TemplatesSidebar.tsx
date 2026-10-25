@@ -214,7 +214,7 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
 
       {/* Rename Dialog */}
       <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Rename Template</DialogTitle>
             <DialogDescription>
@@ -232,8 +232,8 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
                 onChange={(e) => setRenameName(e.target.value)}
                 placeholder="Enter template name..."
                 autoFocus
-                // text-base under sm keeps iOS from zooming the page on focus.
-                className="h-11 min-h-[44px] text-base sm:text-sm"
+                // text-[14px] under sm keeps iOS from zooming the page on focus.
+                className="h-11 min-h-[44px] text-[14px] sm:text-[13px]"
               />
             </div>
           </div>
@@ -326,19 +326,19 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
         )}
       >
         {scopePath && (
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold truncate mb-1">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold truncate mb-1">
             {scopePath}
           </div>
         )}
 
         <div className="flex items-center gap-2 mb-2 min-w-0">
-          <h3 className="font-semibold text-sm leading-tight line-clamp-1 min-w-0">
+          <h3 className="font-semibold text-[13px] leading-tight line-clamp-1 min-w-0">
             {template.name}
           </h3>
           <Badge
             variant="outline"
             className={cn(
-              'text-[10px] px-1.5 py-0 h-4 border-none flex items-center gap-1 shrink-0',
+              'text-[11px] px-1.5 py-0 h-4 border-none flex items-center gap-1 shrink-0',
               isPublished && 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10',
               isDraft && 'text-amber-700 dark:text-amber-400 bg-amber-500/10',
               isArchived && 'text-purple-700 dark:text-purple-400 bg-purple-500/10'
@@ -355,19 +355,19 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
         </div>
 
         {template.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+          <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2">
             {template.description}
           </p>
         )}
 
         {/* One sentence instead of four fragments and a pile of pipes, which a
             screen reader reads out character by character. */}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           Version {template.version} · {template.groupCount} groups,{' '}
           {template.subgroupCount} subgroups, {template.shiftCount} shifts
         </p>
 
-        <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
+        <p className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border/50">
           {updatedDate
             ? `Updated ${formatDistanceToNow(updatedDate, { addSuffix: true })}`
             : 'No update date'}
@@ -444,7 +444,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
     return (
       <div className="p-8 text-center" role="status">
         <Search className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" aria-hidden="true" />
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           No templates match your search
         </p>
       </div>
@@ -457,8 +457,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         <div className="h-10 w-10 mx-auto mb-3 rounded-full bg-emerald-500/10 flex items-center justify-center">
           <Lock className="h-5 w-5 text-emerald-500/50" aria-hidden="true" />
         </div>
-        <p className="text-sm font-medium mb-1">No ready templates</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] font-medium mb-1">No ready templates</p>
+        <p className="text-[11px] text-muted-foreground">
           Templates marked as 'Ready' will appear here
         </p>
         {onSwitchToDraft && (
@@ -476,8 +476,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         <div className="h-10 w-10 mx-auto mb-3 rounded-full bg-purple-500/10 flex items-center justify-center">
           <Trash2 className="h-5 w-5 text-purple-500/50" aria-hidden="true" />
         </div>
-        <p className="text-sm font-medium mb-1">Archive is empty</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] font-medium mb-1">Archive is empty</p>
+        <p className="text-[11px] text-muted-foreground">
           Archived templates are stored here
         </p>
       </div>
@@ -487,8 +487,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <div className="p-8 text-center" role="status">
       <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" aria-hidden="true" />
-      <p className="text-sm font-medium mb-1">No draft templates yet</p>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] font-medium mb-1">No draft templates yet</p>
+      <p className="text-[11px] text-muted-foreground">
         Create your first template to get started
       </p>
       <Button onClick={onCreateTemplate} className={EMPTY_ACTION_CLS}>

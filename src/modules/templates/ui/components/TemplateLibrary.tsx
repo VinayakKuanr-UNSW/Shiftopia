@@ -48,7 +48,7 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
   return (
     <aside className="w-64 bg-card/80 border-r border-border flex-shrink-0 flex flex-col">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Templates</h2>
+        <h2 className="text-[15px] font-semibold">Templates</h2>
         <Button
           size="icon"
           variant="ghost"
@@ -75,7 +75,7 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
             {/* Published Templates Section */}
             <div className="mb-4">
               <button 
-                className="flex items-center justify-between w-full text-left mb-2 text-sm font-medium"
+                className="flex items-center justify-between w-full text-left mb-2 text-[13px] font-medium"
                 onClick={() => setPublishedExpanded(!publishedExpanded)}
                 aria-expanded={publishedExpanded}
               >
@@ -97,15 +97,15 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
                       >
                         <span className="font-medium truncate">{tpl.name}</span>
                         <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-[11px] text-muted-foreground">
                             {format(new Date(tpl.updatedAt), 'MMM d, yyyy')}
                           </span>
-                          <Badge variant="outline" className="text-xs">Published</Badge>
+                          <Badge variant="outline" className="text-[11px]">Published</Badge>
                         </div>
                       </button>
                     ))
                   ) : (
-                    <p className="text-xs text-muted-foreground px-3 py-2">No published templates</p>
+                    <p className="text-[11px] text-muted-foreground px-3 py-2">No published templates</p>
                   )}
                 </div>
               )}
@@ -114,7 +114,7 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
             {/* Draft Templates Section */}
             <div>
               <button 
-                className="flex items-center justify-between w-full text-left mb-2 text-sm font-medium"
+                className="flex items-center justify-between w-full text-left mb-2 text-[13px] font-medium"
                 onClick={() => setDraftExpanded(!draftExpanded)}
                 aria-expanded={draftExpanded}
               >
@@ -136,15 +136,15 @@ const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
                       >
                         <span className="font-medium truncate">{tpl.name}</span>
                         <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-[11px] text-muted-foreground">
                             {format(new Date(tpl.updatedAt), 'MMM d, yyyy')}
                           </span>
-                          <Badge variant="secondary" className="text-xs">Draft</Badge>
+                          <Badge variant="secondary" className="text-[11px]">Draft</Badge>
                         </div>
                       </button>
                     ))
                   ) : (
-                    <p className="text-xs text-muted-foreground px-3 py-2">No draft templates</p>
+                    <p className="text-[11px] text-muted-foreground px-3 py-2">No draft templates</p>
                   )}
                 </div>
               )}

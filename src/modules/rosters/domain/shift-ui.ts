@@ -570,7 +570,7 @@ const LR = {
     scheduled: '#3B82F6', // blue     — upcoming, clock-in window not yet open
     awaiting:  '#0EA5E9', // sky      — clock-in window open, not checked in
     missing:   '#EAB308', // yellow   — started, no clock-in, not yet ended / missing clock-out at 12.5h
-    noShow:    '#7F1D1D', // dark red — ended, never clocked in
+    noShow:    '#DC2626', // red — ended, never clocked in (#7F1D1D was unreadable on dark)
     earlyIn:   '#6366F1', // indigo
     onTimeIn:  '#22C55E', // green
     lateIn:    '#F59E0B', // amber

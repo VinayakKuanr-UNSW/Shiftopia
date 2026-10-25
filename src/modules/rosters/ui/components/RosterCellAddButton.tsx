@@ -44,7 +44,7 @@ export const RosterCellAddButton: React.FC<RosterCellAddButtonProps> = ({
           ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 active:scale-95 shadow-sm'
           : 'bg-primary/10 text-primary border border-primary/40 dark:border-primary/20 hover:bg-primary/20 active:scale-95 shadow-sm',
         hasShifts
-          ? 'w-7 h-7 opacity-0 scale-75 group-hover/cell:opacity-100 group-hover/cell:scale-100'
+          ? 'w-7 h-7 opacity-40 dark:opacity-30 scale-90 group-hover/cell:opacity-100 group-hover/cell:scale-100 hover:opacity-100 hover:scale-100'
           : 'w-9 h-9 opacity-80 dark:opacity-40 scale-90 group-hover/cell:opacity-100 hover:scale-100 hover:opacity-100',
         disabled && 'opacity-20 cursor-not-allowed pointer-events-none',
         'focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none',

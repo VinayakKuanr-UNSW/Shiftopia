@@ -97,12 +97,12 @@ export const BroadcastNotificationsList: React.FC = () => {
                                             {notification.priority.replace('_', ' ')}
                                         </Badge>
                                         {!notification.isRead && (
-                                            <Badge variant="destructive" className="text-xs">
+                                            <Badge variant="destructive" className="text-[11px]">
                                                 New
                                             </Badge>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
                                         <Clock className="h-3 w-3" />
                                         {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                                     </div>
@@ -112,7 +112,7 @@ export const BroadcastNotificationsList: React.FC = () => {
                                     <div className="font-medium mb-1">
                                         {notification.subject}
                                     </div>
-                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                    <p className="text-[13px] text-muted-foreground whitespace-pre-wrap">
                                         {notification.authorName}
                                     </p>
                                 </div>

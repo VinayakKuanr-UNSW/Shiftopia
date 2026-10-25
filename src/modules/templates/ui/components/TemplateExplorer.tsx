@@ -1,6 +1,7 @@
 // src/modules/templates/ui/components/TemplateExplorer.tsx
 // File-explorer style template list and grid view with double-click open support
 
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo } from 'react';
 import {
   FileText,
@@ -15,9 +16,6 @@ import {
   Clock,
   Layers,
   Users2,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   ExternalLink,
   CheckCircle2,
 } from 'lucide-react';
@@ -59,6 +57,8 @@ import {
 import { Label } from '@/modules/core/ui/primitives/label';
 import { cn } from '@/modules/core/lib/utils';
 import { formatDistanceToNow, format, isValid } from 'date-fns';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
+import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 
 /* ============================================================
    TYPES
@@ -169,6 +169,9 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
     }
   };
 
+  const currentSort = { key: sortField, direction: sortDir };
+  const onSort = (key: string) => handleHeaderSort(key as SortField);
+
   // Filter and Sort
   const processedTemplates = useMemo(() => {
     let result = templates.filter((t) => t.status === statusFilter);
@@ -275,143 +278,61 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
           ))}
         </div>
       ) : processedTemplates.length === 0 ? (
-        /* Empty State */
-        <div className="flex flex-col items-center justify-center flex-1 min-h-[380px] p-8 text-center">
-          {searchQuery ? (
-            <>
-              <div className="h-14 w-14 rounded-2xl bg-muted/40 flex items-center justify-center text-muted-foreground mb-4">
-                <Search className="h-7 w-7 opacity-60" />
-              </div>
-              <h3 className="text-base font-bold text-foreground">No matching templates found</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                We couldn't find any templates matching &ldquo;{searchQuery}&rdquo;. Try adjusting your search query or scope filter.
-              </p>
-            </>
-          ) : statusFilter === 'published' ? (
-            <>
-              <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 mb-4">
-                <CheckCircle2 className="h-7 w-7" />
-              </div>
-              <h3 className="text-base font-bold text-foreground">No Ready Templates</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                Templates marked as &ldquo;Ready&rdquo; are published and locked for operational roster generation.
-              </p>
-              {onSwitchToDraft && (
-                <Button
-                  variant="outline"
-                  onClick={onSwitchToDraft}
-                  className="mt-4 h-10 px-4 rounded-xl text-xs font-bold"
-                >
-                  View Draft Templates
-                </Button>
-              )}
-            </>
-          ) : statusFilter === 'archived' ? (
-            <>
-              <div className="h-14 w-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 mb-4">
-                <Trash2 className="h-7 w-7" />
-              </div>
-              <h3 className="text-base font-bold text-foreground">Archive is Empty</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                Archived templates are stored here safely and can be restored back to Draft at any time.
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 shadow-inner">
-                <FileText className="h-7 w-7" />
-              </div>
-              <h3 className="text-base font-bold text-foreground">No Draft Templates Yet</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                Create your first shift template to start organizing subgroups, shift patterns, and roles.
-              </p>
-              {!readOnly && (
-              <Button
-                onClick={onCreateTemplate}
-                className="mt-5 h-11 px-5 rounded-xl font-bold gap-2 text-xs uppercase tracking-wider bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
-              >
-                <Plus className="h-4 w-4" />
-                Create Template
-              </Button>
-              )}
-            </>
-          )}
-        </div>
+        /* Empty State — one PageState per filter, each with its next step. */
+        searchQuery ? (
+          <PageState
+            state="empty"
+            className="flex-1"
+            icon={Search}
+            title="No matching templates"
+            description={<>Nothing matches &ldquo;{searchQuery}&rdquo;. Try a different search or scope.</>}
+          />
+        ) : statusFilter === 'published' ? (
+          <PageState
+            state="empty"
+            className="flex-1"
+            icon={CheckCircle2}
+            title="No ready templates"
+            description="Templates marked “Ready” are published and locked for roster generation."
+            action={onSwitchToDraft ? { label: 'View draft templates', onClick: onSwitchToDraft } : undefined}
+          />
+        ) : statusFilter === 'archived' ? (
+          <PageState
+            state="empty"
+            className="flex-1"
+            icon={Trash2}
+            title="Archive is empty"
+            description="Archived templates are kept here and can be restored to Draft at any time."
+          />
+        ) : (
+          <PageState
+            state="empty"
+            className="flex-1"
+            icon={FileText}
+            title="No draft templates yet"
+            description="Create your first shift template to start organising subgroups, shift patterns and roles."
+            action={!readOnly && onCreateTemplate ? { label: 'Create template', onClick: onCreateTemplate } : undefined}
+          />
+        )
       ) : viewMode === 'list' ? (
         /* ── Table / List View (Table as the direct container) ──────── */
         <div className="flex-1 min-h-0 overflow-auto">
-          <table className="w-full text-left border-collapse" role="grid" aria-label="Templates List">
-            <thead className="sticky top-0 z-10 bg-[#f8f9fc] dark:bg-[#111827] border-b border-border/60 text-[11px] font-bold text-muted-foreground uppercase tracking-wider shadow-sm">
-              <tr>
-                <th
-                  scope="col"
-                  onClick={() => handleHeaderSort('name')}
-                  className="py-3.5 px-6 cursor-pointer hover:text-foreground transition-colors"
-                  aria-sort={sortField === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Name</span>
-                    {sortField === 'name' ? (
-                      sortDir === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-40" />
-                    )}
-                  </div>
-                </th>
-                <th
-                  scope="col"
-                  onClick={() => handleHeaderSort('version')}
-                  className="py-3.5 px-4 cursor-pointer hover:text-foreground transition-colors text-center hidden md:table-cell"
-                  aria-sort={sortField === 'version' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  <div className="flex items-center justify-center gap-1.5">
-                    <span>Version</span>
-                    {sortField === 'version' ? (
-                      sortDir === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-40" />
-                    )}
-                  </div>
-                </th>
-                <th
-                  scope="col"
-                  onClick={() => handleHeaderSort('shifts')}
-                  className="py-3.5 px-4 cursor-pointer hover:text-foreground transition-colors hidden sm:table-cell"
-                  aria-sort={sortField === 'shifts' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Structure</span>
-                    {sortField === 'shifts' ? (
-                      sortDir === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-40" />
-                    )}
-                  </div>
-                </th>
-                <th scope="col" className="py-3.5 px-4 text-center">
+          <Table containerClassName="overflow-visible" role="grid" aria-label="Templates List">
+            <TableHeader sticky>
+              <TableRow>
+                <SortableTableHeader sortKey="name" currentSort={currentSort} onSort={onSort}>Name</SortableTableHeader>
+                <SortableTableHeader sortKey="version" currentSort={currentSort} onSort={onSort} className="text-center hidden md:table-cell">Version</SortableTableHeader>
+                <SortableTableHeader sortKey="shifts" currentSort={currentSort} onSort={onSort} className="hidden sm:table-cell">Structure</SortableTableHeader>
+                <TableHead scope="col" className="text-center">
                   Status
-                </th>
-                <th
-                  scope="col"
-                  onClick={() => handleHeaderSort('updated')}
-                  className="py-3.5 px-6 cursor-pointer hover:text-foreground transition-colors"
-                  aria-sort={sortField === 'updated' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>Modified</span>
-                    {sortField === 'updated' ? (
-                      sortDir === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-40" />
-                    )}
-                  </div>
-                </th>
-                <th scope="col" className="py-3.5 px-6 text-right">
+                </TableHead>
+                <SortableTableHeader sortKey="updated" currentSort={currentSort} onSort={onSort}>Modified</SortableTableHeader>
+                <TableHead scope="col" className="text-right">
                   <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/40 text-sm">
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {processedTemplates.map((template) => {
                 const isSelected = selectedTemplateId === template.id;
                 const isPublished = template.status === 'published';
@@ -420,7 +341,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                 const updatedDate = safeDate(template.updatedAt);
 
                 return (
-                  <tr
+                  <TableRow
                     key={template.id}
                     tabIndex={0}
                     role="row"
@@ -434,14 +355,12 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                       }
                     }}
                     className={cn(
-                      'group cursor-pointer transition-colors duration-150 outline-none',
-                      isSelected
-                        ? 'bg-primary/10 text-foreground'
-                        : 'hover:bg-muted/30 dark:hover:bg-white/5'
+                      'group cursor-pointer outline-none focus-visible:bg-muted/40',
+                      isSelected && 'bg-primary/10 hover:bg-primary/10'
                     )}
                   >
                     {/* Name & Description */}
-                    <td className="py-4 px-6">
+                    <TableCell>
                       <div className="flex items-center gap-3.5">
                         <div
                           className={cn(
@@ -455,29 +374,29 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-foreground text-sm truncate max-w-[280px] sm:max-w-md group-hover:text-primary transition-colors">
+                            <span className="font-bold text-foreground text-[13px] truncate max-w-[280px] sm:max-w-md group-hover:text-primary transition-colors">
                               {template.name}
                             </span>
                           </div>
                           {template.description ? (
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
                               {template.description}
                             </p>
                           ) : null}
                         </div>
                       </div>
-                    </td>
+                    </TableCell>
 
                     {/* Version */}
-                    <td className="py-4 px-4 text-center hidden md:table-cell">
-                      <Badge variant="outline" className="font-mono text-xs px-2 py-0.5">
+                    <TableCell className="text-center hidden md:table-cell">
+                      <Badge variant="outline" className="font-mono text-[11px] px-2 py-0.5">
                         v{template.version}
                       </Badge>
-                    </td>
+                    </TableCell>
 
                     {/* Structure */}
-                    <td className="py-4 px-4 hidden sm:table-cell">
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground font-medium">
+                    <TableCell className="hidden sm:table-cell">
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-medium">
                         <span className="inline-flex items-center gap-1">
                           <Layers className="h-3.5 w-3.5 opacity-60" />
                           {template.groupCount}g
@@ -493,14 +412,14 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                           {template.shiftCount} shifts
                         </span>
                       </div>
-                    </td>
+                    </TableCell>
 
                     {/* Status */}
-                    <td className="py-4 px-4 text-center">
+                    <TableCell className="text-center">
                       <Badge
                         variant="outline"
                         className={cn(
-                          'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 border-none',
+                          'text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 border-none',
                           isPublished && 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
                           isDraft && 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
                           isArchived && 'bg-purple-500/15 text-purple-600 dark:text-purple-400'
@@ -516,10 +435,10 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                         />
                         {isPublished ? 'Ready' : isDraft ? 'Draft' : 'Archived'}
                       </Badge>
-                    </td>
+                    </TableCell>
 
                     {/* Modified */}
-                    <td className="py-4 px-6 text-xs text-muted-foreground whitespace-nowrap">
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
                       {updatedDate ? (
                         <TooltipProvider>
                           <Tooltip>
@@ -536,17 +455,17 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                       ) : (
                         '—'
                       )}
-                    </td>
+                    </TableCell>
 
                     {/* Actions */}
-                    <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => onOpenTemplate(template.id)}
                           aria-label={`Open template ${template.name}`}
-                          className="h-8 px-2.5 rounded-lg text-xs font-bold text-primary hover:text-primary hover:bg-primary/10 transition-all opacity-80 group-hover:opacity-100"
+                          className="h-8 px-2.5 rounded-lg text-[11px] font-bold text-primary hover:text-primary hover:bg-primary/10 transition-all opacity-80 group-hover:opacity-100"
                         >
                           <ExternalLink className="h-3.5 w-3.5 mr-1" />
                           Open
@@ -611,12 +530,12 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       ) : (
         /* ── Grid / Tile View ───────────────────────────────────────── */
@@ -668,7 +587,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                         <Badge
                           variant="outline"
                           className={cn(
-                            'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 border-none',
+                            'text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 border-none',
                             isPublished && 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
                             isDraft && 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
                             isArchived && 'bg-purple-500/15 text-purple-600 dark:text-purple-400'
@@ -739,12 +658,12 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                     </div>
 
                     {/* Template Name */}
-                    <h3 className="font-bold text-foreground text-base line-clamp-1 group-hover:text-primary transition-colors">
+                    <h3 className="font-bold text-foreground text-[14px] line-clamp-1 group-hover:text-primary transition-colors">
                       {template.name}
                     </h3>
 
                     {template.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1 leading-relaxed">
                         {template.description}
                       </p>
                     )}
@@ -752,7 +671,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
 
                   {/* Bottom Stats & Action */}
                   <div className="mt-4 pt-3 border-t border-border/40 space-y-3">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground font-medium">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
                       <div className="flex items-center gap-2">
                         <span>v{template.version}</span>
                         <span>·</span>
@@ -776,7 +695,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
                           e.stopPropagation();
                           onOpenTemplate(template.id);
                         }}
-                        className="h-8 px-3 rounded-lg text-xs font-bold text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all shadow-sm"
+                        className="h-8 px-3 rounded-lg text-[11px] font-bold text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all shadow-sm"
                       >
                         <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                         Open
@@ -792,7 +711,7 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
 
       {/* ── Rename Dialog ───────────────────────────────────────────── */}
       <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>Rename Template</DialogTitle>
             <DialogDescription>

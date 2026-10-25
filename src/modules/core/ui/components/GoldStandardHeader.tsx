@@ -5,7 +5,7 @@ import type { ScopeMode } from '@/platform/auth/scope-selection';
 import { PersonalPageHeader } from './PersonalPageHeader';
 import type { ScopeLevel } from './GlobalScopeFilter';
 import { UnifiedModuleFunctionBar } from './UnifiedModuleFunctionBar';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { cn } from '@/modules/core/lib/utils';
 
 /**
@@ -26,16 +26,19 @@ import { cn } from '@/modules/core/lib/utils';
  *   2. Pass the structured props (viewMode, startDate, filters, etc.) to use
  *      the built-in UnifiedModuleFunctionBar — convenient for planning pages.
  *
+ * There is deliberately no slot beside the clock: every control goes in one of
+ * the function bar's three zones (views · modes/date · actions), so a page
+ * cannot park a picker or a link in a place no other page has one.
+ *
  * Pages must NEVER render their own title / scope filter / function bar
- * outside this component. Body content sits below this header as its own
- * disconnected glass card with matching margins.
+ * outside this component. Render it as the first child of `PageLayout`, which
+ * owns the gutter and the gap to the body card below it.
  */
 
 // ─── Row 1 props ────────────────────────────────────────────────────────────
 interface TitleRowProps {
     title: string;
     Icon: LucideIcon;
-    rightActions?: React.ReactNode;
 }
 
 // ─── Row 2 props ────────────────────────────────────────────────────────────
@@ -91,7 +94,6 @@ export const GoldStandardHeader: React.FC<GoldStandardHeaderProps> = ({
     // Row 1
     title,
     Icon,
-    rightActions,
     // Row 2
     scope,
     setScope,
@@ -118,21 +120,13 @@ export const GoldStandardHeader: React.FC<GoldStandardHeaderProps> = ({
     functionBarChildren,
     className,
 }) => {
-    const { isDark } = useTheme();
     const usingBuiltIn = functionBar === undefined && viewMode !== undefined && onViewModeChange !== undefined;
     const showFunctionBar = functionBar !== undefined || usingBuiltIn;
 
     return (
-        // Outer wrapper provides equal padding on all four sides — disconnects
-        // the header card from the sidebar, top, right edge, and the body below.
-        // We use pb-2 to ensure the gap between header and body is consistent with the top/sides.
-        <div className={cn("flex-shrink-0 p-4 lg:p-6", className)}>
-            <div className={cn(
-                "rounded-[32px] p-4 lg:p-6 transition-all border relative overflow-hidden",
-                isDark
-                    ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20 backdrop-blur-xl"
-                    : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-            )}>
+        // No outer padding: PageLayout owns the gutter and the gap to the body.
+        <div className={cn("flex-shrink-0", className)}>
+            <div className={surface.headerCard}>
                 {/* Subtle highlight effect for glassmorphism */}
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
 
@@ -146,7 +140,6 @@ export const GoldStandardHeader: React.FC<GoldStandardHeaderProps> = ({
                     mode={mode}
                     multiSelect={multiSelect}
                     singleSelectLevels={singleSelectLevels}
-                    rightActions={rightActions}
                 />
 
                 {/* ── Row 3: Function Bar ── */}

@@ -98,11 +98,11 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
         aria-describedby="swap-drawer-desc"
       >
         <DrawerHeader className="px-5 pt-5 pb-2 text-left">
-          <DrawerTitle id="swap-drawer-title" className="flex items-center gap-2 text-lg font-bold text-foreground">
+          <DrawerTitle id="swap-drawer-title" className="flex items-center gap-2">
             <ArrowLeftRight className="h-5 w-5 text-indigo-500" aria-hidden="true" />
             Request Shift Swap
           </DrawerTitle>
-          <DrawerDescription id="swap-drawer-desc" className="text-xs text-muted-foreground">
+          <DrawerDescription id="swap-drawer-desc">
             Post your shift for eligible team members to swap with.
           </DrawerDescription>
         </DrawerHeader>
@@ -122,11 +122,11 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
           {/* 2. Rules & Compliance Guidelines */}
           <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-3.5 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
               <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span>Swap Rules & Guidelines</span>
             </div>
-            <ul className="text-xs space-y-1 text-indigo-700/90 dark:text-indigo-300/90 pl-1 list-disc list-inside">
+            <ul className="text-[11px] space-y-1 text-indigo-700/90 dark:text-indigo-300/90 pl-1 list-disc list-inside">
               <li>Must be requested at least 4 hours before the shift start.</li>
               <li>Both employees must hold matching role qualifications and active licences.</li>
               <li>Swap requests are subject to manager final approval.</li>
@@ -137,7 +137,7 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
           <div className="space-y-1.5">
             <Label
               htmlFor="swap-shift-reason"
-              className="text-xs font-bold uppercase tracking-wider text-muted-foreground"
+              className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground"
             >
               Reason for Swap <span className="text-rose-500" aria-hidden="true">*</span>
             </Label>
@@ -149,7 +149,7 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
               rows={3}
               disabled={isSubmitting}
               aria-required="true"
-              className="rounded-2xl resize-none bg-muted/30 text-sm focus-visible:ring-indigo-500"
+              className="rounded-2xl resize-none bg-muted/30 text-[13px] focus-visible:ring-indigo-500"
             />
           </div>
         </div>
@@ -161,7 +161,7 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
             variant="outline"
             onClick={onClose}
             disabled={isSubmitting}
-            className="flex-1 h-12 rounded-2xl uppercase text-xs font-bold border-border/80 hover:bg-muted active:scale-[0.98] transition-all"
+            className="flex-1 h-12 rounded-2xl uppercase text-[11px] font-bold border-border/80 hover:bg-muted active:scale-[0.98] transition-all"
           >
             Keep Shift
           </Button>
@@ -169,7 +169,7 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting || !reason.trim()}
-            className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white uppercase text-xs font-bold shadow-lg shadow-indigo-950/20 active:scale-[0.98] transition-all disabled:opacity-50"
+            className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white uppercase text-[11px] font-bold shadow-lg shadow-indigo-950/20 active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {isSubmitting ? (
               <span className="flex items-center gap-2">

@@ -37,12 +37,12 @@ const EnhancedManagementHeader: React.FC<EnhancedManagementHeaderProps> = ({
     <header className="management-header space-y-6" role="banner">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
+          <h1 className="text-[24px] font-bold tracking-tight text-foreground">{title}</h1>
           {subtitle && (
-            <p className="text-lg text-muted-foreground">{subtitle}</p>
+            <p className="text-[15px] text-muted-foreground">{subtitle}</p>
           )}
           {totalItems !== undefined && filteredItems !== undefined && (
-            <p className="text-base text-muted-foreground" aria-live="polite">
+            <p className="text-[14px] text-muted-foreground" aria-live="polite">
               Showing {filteredItems} of {totalItems} total items
             </p>
           )}
@@ -60,7 +60,7 @@ const EnhancedManagementHeader: React.FC<EnhancedManagementHeaderProps> = ({
                 placeholder="Search..."
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 w-72 h-11 text-base lovable-input focus:ring-2 focus:ring-primary/30"
+                className="pl-10 w-72 h-11 text-[14px] lovable-input focus:ring-2 focus:ring-primary/30"
                 aria-label="Search items"
               />
             </div>
@@ -73,7 +73,7 @@ const EnhancedManagementHeader: React.FC<EnhancedManagementHeaderProps> = ({
               variant={viewMode === 'list' ? "default" : "ghost"}
               size="default"
               className={cn(
-                "rounded-none border-none h-11 px-4 text-base font-medium",
+                "rounded-none border-none h-11 px-4 text-[14px] font-medium",
                 viewMode === 'list' ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-accent"
               )}
               onClick={() => onViewModeChange('list')}
@@ -87,7 +87,7 @@ const EnhancedManagementHeader: React.FC<EnhancedManagementHeaderProps> = ({
               variant={viewMode === 'calendar' ? "default" : "ghost"}
               size="default"
               className={cn(
-                "rounded-none border-none h-11 px-4 text-base font-medium",
+                "rounded-none border-none h-11 px-4 text-[14px] font-medium",
                 viewMode === 'calendar' ? "bg-primary text-primary-foreground shadow-sm" : "hover:bg-accent"
               )}
               onClick={() => onViewModeChange('calendar')}
@@ -105,7 +105,7 @@ const EnhancedManagementHeader: React.FC<EnhancedManagementHeaderProps> = ({
               variant="outline"
               size="default"
               onClick={onSortClick}
-              className="lovable-btn-secondary h-11 px-4 text-base font-medium"
+              className="lovable-btn-secondary h-11 px-4 text-[14px] font-medium"
               aria-label="Sort options"
             >
               <SortAsc className="h-5 w-5 mr-2" aria-hidden="true" />
@@ -120,7 +120,7 @@ const EnhancedManagementHeader: React.FC<EnhancedManagementHeaderProps> = ({
               size="default"
               onClick={onFilterClick}
               className={cn(
-                "lovable-btn-secondary relative h-11 px-4 text-base font-medium",
+                "lovable-btn-secondary relative h-11 px-4 text-[14px] font-medium",
                 activeFilterCount > 0 && "border-primary bg-primary/5"
               )}
               aria-label={`Filter options${activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ''}`}
@@ -131,7 +131,7 @@ const EnhancedManagementHeader: React.FC<EnhancedManagementHeaderProps> = ({
               {activeFilterCount > 0 && (
                 <Badge 
                   variant="destructive" 
-                  className="absolute -top-2 -right-2 h-6 w-6 text-xs p-0 flex items-center justify-center font-semibold"
+                  className="absolute -top-2 -right-2 h-6 w-6 text-[11px] p-0 flex items-center justify-center font-semibold"
                   id="filter-count"
                   aria-label={`${activeFilterCount} active filters`}
                 >

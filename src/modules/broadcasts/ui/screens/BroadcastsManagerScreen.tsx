@@ -211,8 +211,8 @@ export function BroadcastsManagerScreen({
   const renderGroupsSection = () => (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl md:text-2xl font-bold text-foreground">My Groups</h2>
-        <Badge variant="secondary" className="text-xs md:text-sm">
+        <h2 className="text-[17px] md:text-[20px] font-bold text-foreground">My Groups</h2>
+        <Badge variant="secondary" className="text-[11px] md:text-[13px]">
           {filteredGroups.length} active groups
         </Badge>
       </div>
@@ -233,7 +233,7 @@ export function BroadcastsManagerScreen({
 
   const renderAnalyticsSection = () => (
     <div className="space-y-4 md:space-y-6">
-      <h2 className="text-xl md:text-2xl font-bold text-foreground">Analytics</h2>
+      <h2 className="text-[17px] md:text-[20px] font-bold text-foreground">Analytics</h2>
       <BroadcastAnalytics />
     </div>
   );
@@ -244,7 +244,7 @@ export function BroadcastsManagerScreen({
 
   const renderActivitySection = () => (
     <div className="space-y-4 md:space-y-6">
-      <h2 className="text-xl md:text-2xl font-bold text-foreground">Recent Activity</h2>
+      <h2 className="text-[17px] md:text-[20px] font-bold text-foreground">Recent Activity</h2>
       <BroadcastNotificationsList />
     </div>
   );
@@ -326,7 +326,7 @@ export function BroadcastsManagerScreen({
                   <BarChart3 className="h-5 w-5 text-muted-foreground" />
                   <span className="font-semibold">Analytics Overview</span>
                 </div>
-                <span className="text-muted-foreground text-sm">
+                <span className="text-muted-foreground text-[13px]">
                   {showAnalytics ? 'Hide' : 'Show'}
                 </span>
               </button>
@@ -376,7 +376,7 @@ export function BroadcastsManagerScreen({
           <button
             onClick={() => setMobileTab('groups')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex-1 py-3 flex flex-col items-center gap-1 text-[11px] transition-colors',
               mobileTab === 'groups' ? 'text-primary' : 'text-muted-foreground'
             )}
           >
@@ -386,7 +386,7 @@ export function BroadcastsManagerScreen({
           <button
             onClick={() => setMobileTab('analytics')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex-1 py-3 flex flex-col items-center gap-1 text-[11px] transition-colors',
               mobileTab === 'analytics' ? 'text-primary' : 'text-muted-foreground'
             )}
           >
@@ -396,7 +396,7 @@ export function BroadcastsManagerScreen({
           <button
             onClick={() => setMobileTab('activity')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex-1 py-3 flex flex-col items-center gap-1 text-[11px] transition-colors',
               mobileTab === 'activity' ? 'text-primary' : 'text-muted-foreground'
             )}
           >

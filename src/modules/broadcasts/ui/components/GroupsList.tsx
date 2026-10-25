@@ -48,7 +48,7 @@ export const GroupsList: React.FC<GroupsListProps> = ({
                     <div className="text-center py-8">
                         <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                         <p className="text-muted-foreground">No broadcast groups found.</p>
-                        <p className="text-sm text-muted-foreground">Create one to get started.</p>
+                        <p className="text-[13px] text-muted-foreground">Create one to get started.</p>
                     </div>
                 ) : (
                     <AnimatePresence>

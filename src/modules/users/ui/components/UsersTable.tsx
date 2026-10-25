@@ -36,6 +36,7 @@ import {
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import { cn } from '@/modules/core/lib/utils';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { DatePicker } from '@/modules/core/ui/calendar/DatePicker';
 import { text, touch } from '@/modules/core/ui/typography';
@@ -64,6 +65,7 @@ import {
 } from '../../domain/usersTable';
 import { USERS_COLUMNS, isColumnShown, type ColumnVisibility } from '../usersTableColumns';
 import { UserEditDialog, type UserEditTab } from './UserEditDialog';
+import { tableTokens } from '@/modules/core/ui/primitives/table';
 import {
     DESIGN_CARD,
     PageMenu,
@@ -120,7 +122,7 @@ const STATUS_LOOK: Record<ContractStatus, { label: string; textClass: string }> 
 const statusText = (c: ContractRow) => {
     const look = STATUS_LOOK[contractStatus(c)];
     return (
-        <span className={cn('text-sm font-medium whitespace-nowrap', look.textClass)}>
+        <span className={cn('text-[13px] font-medium whitespace-nowrap', look.textClass)}>
             {look.label}
         </span>
     );
@@ -129,17 +131,17 @@ const statusText = (c: ContractRow) => {
 /** The access a row gives, on one line; struck through (and said) once the contract has ended. */
 const accessCell = (c: ContractRow) => {
     const level = accessOf(c);
-    if (!level) return <span className="text-sm text-muted-foreground whitespace-nowrap">Not set</span>;
+    if (!level) return <span className="text-[13px] text-muted-foreground whitespace-nowrap">Not set</span>;
     if (contractStatus(c) === 'expired') {
         return (
-            <span className="text-sm text-muted-foreground line-through decoration-muted-foreground/60 whitespace-nowrap">
+            <span className="text-[13px] text-muted-foreground line-through decoration-muted-foreground/60 whitespace-nowrap">
                 {accessLevelLabel(level)}
                 <span className="sr-only"> (ended)</span>
             </span>
         );
     }
     return (
-        <span className="text-sm font-medium text-foreground whitespace-nowrap" title={ACCESS_LEVEL_CONFIG[level].description}>
+        <span className="text-[13px] font-medium text-foreground whitespace-nowrap" title={ACCESS_LEVEL_CONFIG[level].description}>
             {accessLevelLabel(level)}
         </span>
     );
@@ -149,7 +151,7 @@ const roleCell = (c: ContractRow) => (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         {c.roles?.name ?? 'Unknown role'}
         {c.engagement_kind === 'multi_hire' && (
-            <span className="text-xs text-muted-foreground font-normal" title={c.multi_hire_request_ref ? `Request to Multi-Hire: ${c.multi_hire_request_ref}` : undefined}>
+            <span className="text-[11px] text-muted-foreground font-normal" title={c.multi_hire_request_ref ? `Request to Multi-Hire: ${c.multi_hire_request_ref}` : undefined}>
                 (Multi-hire · cl 13)
             </span>
         )}
@@ -210,11 +212,11 @@ const WarningPopover: React.FC<{
                 onCloseAutoFocus={(e) => { if (acting.current) { e.preventDefault(); acting.current = false; } }}
             >
                 <div className="p-4 space-y-1.5">
-                    <p id={titleId} className="flex items-center gap-2 text-sm font-semibold">
+                    <p id={titleId} className="flex items-center gap-2 text-[13px] font-semibold">
                         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
                         {topic} · {person}
                     </p>
-                    <p className="text-sm text-muted-foreground">{message}</p>
+                    <p className="text-[13px] text-muted-foreground">{message}</p>
                     {action && (
                         <Button
                             variant="outline"
@@ -226,7 +228,7 @@ const WarningPopover: React.FC<{
                         </Button>
                     )}
                 </div>
-                <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 text-[9px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50" aria-hidden="true">
+                <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 text-[11px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50" aria-hidden="true">
                     <span className="flex items-center gap-1">
                         <kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">esc</kbd> Close
                     </span>
@@ -237,9 +239,9 @@ const WarningPopover: React.FC<{
 };
 
 /** The Name column stays in view while the table scrolls sideways… */
-const STICKY_NAME = 'sticky left-0 bg-card shadow-[1px_0_0_hsl(var(--border))]';
+const STICKY_NAME = 'sticky left-0 shadow-[1px_0_0_hsl(var(--border))]';
 /** …and so do the actions. */
-const STICKY_ACTIONS = 'sticky right-0 bg-card shadow-[-1px_0_0_hsl(var(--border))]';
+const STICKY_ACTIONS = 'sticky right-0 shadow-[-1px_0_0_hsl(var(--border))]';
 
 const SORT_WORDS: Record<UsersSort['direction'], string> = { ascending: 'ascending', descending: 'descending' };
 
@@ -601,24 +603,24 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                     tabIndex={0}
                     className="hidden md:block flex-1 min-h-0 min-w-0 overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                 >
-                    <table className="w-full text-sm">
+                    <table className={tableTokens.table}>
                         <caption className="sr-only">
                             Users and their contracts, one row per contract. Column headers are buttons that sort the table.
                         </caption>
-                        <thead className="sticky top-0 z-20 bg-card">
-                            <tr className="border-b border-border text-left">
+                        <thead className={cn(tableTokens.header, tableTokens.stickyHeader)}>
+                            <tr>
                                 {shownColumns.map((col) => (
                                     <th
                                         key={col.id}
                                         scope="col"
                                         aria-sort={effectiveSort.column === col.id ? effectiveSort.direction : undefined}
-                                        className={cn('px-1.5 py-1.5 font-normal whitespace-nowrap', col.id === 'name' && cn(STICKY_NAME, 'z-30 pl-3'))}
+                                        className={cn(tableTokens.head, 'px-2', col.id === 'name' && cn(STICKY_NAME, tableTokens.stickyHeadCell, 'z-30 pl-3'))}
                                     >
                                         <button
                                             type="button"
                                             onClick={() => toggleSort(col.id)}
                                             className={cn(
-                                                'inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-xs font-semibold whitespace-nowrap',
+                                                'inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 uppercase tracking-wider whitespace-nowrap',
                                                 effectiveSort.column === col.id ? 'text-foreground' : 'text-muted-foreground',
                                                 'hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                                             )}
@@ -629,7 +631,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                                     </th>
                                 ))}
                                 {canManage && (
-                                    <th scope="col" className={cn('px-3 py-1.5 w-0', STICKY_ACTIONS, 'z-30')}>
+                                    <th scope="col" className={cn(tableTokens.head, 'w-0', STICKY_ACTIONS, tableTokens.stickyHeadCell, 'z-30')}>
                                         <span className="sr-only">Actions</span>
                                     </th>
                                 )}
@@ -639,23 +641,24 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                             {paginatedRows.map((row) => {
                                 const expired = !!row.contract && contractStatus(row.contract) === 'expired';
                                 return (
-                                    <tr key={row.key} className={cn('border-b border-border hover:bg-muted/30', expired && 'text-muted-foreground')}>
+                                    <tr key={row.key} className={cn(tableTokens.row, expired && 'text-muted-foreground')}>
                                         {shownColumns.map((col) => (col.id === 'name' ? (
-                                            <th key={col.id} scope="row" className={cn('py-1.5 pl-5 pr-3 text-left font-medium text-foreground whitespace-nowrap', STICKY_NAME, 'z-10')}>
+                                            <th key={col.id} scope="row" className={cn(tableTokens.cell, 'pl-5 text-left font-medium text-foreground whitespace-nowrap', STICKY_NAME, tableTokens.stickyCell, 'z-10')}>
                                                 {row.group.person.name}
                                             </th>
                                         ) : (
                                             <td
                                                 key={col.id}
                                                 className={cn(
+                                                    tableTokens.cell,
                                                     'whitespace-nowrap',
-                                                    canManage && (col.id === 'startDate' || col.id === 'endDate') ? 'px-1 py-1' : 'px-3.5 py-1.5',
+                                                    canManage && (col.id === 'startDate' || col.id === 'endDate') && 'px-1',
                                                 )}
                                             >
                                                 {cell(row, col.id)}
                                             </td>
                                         )))}
-                                        {canManage && <td className={cn('px-3 py-1 text-right', STICKY_ACTIONS, 'z-10')}>{actionsMenu(row, 'table')}</td>}
+                                        {canManage && <td className={cn(tableTokens.cell, 'text-right', STICKY_ACTIONS, tableTokens.stickyCell, 'z-10')}>{actionsMenu(row, 'table')}</td>}
                                     </tr>
                                 );
                             })}
@@ -719,7 +722,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                                         </p>
                                         <p className={text.body}>{employmentText(c)} · {remunerationText(c)}</p>
                                         <div>{accessCell(c)}</div>
-                                        <div className="flex flex-wrap items-center gap-x-2 text-sm">
+                                        <div className="flex flex-wrap items-center gap-x-2 text-[13px]">
                                             <span className="text-muted-foreground">From</span>{dateCell(g.person, c, 'start_date')}
                                             <span className="text-muted-foreground">to</span>{dateCell(g.person, c, 'end_date')}
                                         </div>
@@ -734,7 +737,10 @@ export const UsersTable: React.FC<UsersTableProps> = ({
     }
 
     return (
-        <div className="h-full w-full min-w-0 flex flex-col rounded-2xl border border-border bg-card overflow-hidden">
+        // The shared body card's shape, but an opaque fill: the sticky name and
+        // actions columns paint `bg-card`, and on glass they would show as
+        // solid strips against translucent rows.
+        <div className={cn('h-full w-full min-w-0 flex flex-col overflow-hidden', surface.bodyCard, 'bg-card dark:bg-card')}>
             <div className="shrink-0 flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
                 <h2 id={titleId} className={text.title}>Users</h2>
                 {/* Polite: the counts change as the viewer types a search. */}
@@ -750,12 +756,12 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                     aria-label="Pagination"
                     className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-2.5 sm:px-5 bg-card/60 backdrop-blur-sm"
                 >
-                    <p className="text-xs text-muted-foreground font-medium" role="status" aria-live="polite">
+                    <p className="text-[11px] text-muted-foreground font-medium" role="status" aria-live="polite">
                         Showing {(safePage - 1) * pageSize + 1}–{Math.min(totalRows, safePage * pageSize)} of {totalRows} {totalRows === 1 ? 'contract' : 'contracts'}
                     </p>
 
                     <div className="flex items-center gap-3 sm:gap-4 ml-auto">
-                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                             <span className="font-medium text-[11px] uppercase tracking-wider hidden sm:inline">Rows</span>
                             <select
                                 aria-label="Rows per page"
@@ -765,7 +771,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                                     setPage(1);
                                 }}
                                 className={cn(
-                                    'h-8 rounded-lg px-2 text-xs font-semibold tabular-nums border border-border bg-background text-foreground transition-colors',
+                                    'h-8 rounded-lg px-2 text-[11px] font-semibold tabular-nums border border-border bg-background text-foreground transition-colors',
                                     'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                                 )}
                             >
@@ -799,7 +805,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({
                                 <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                             </Button>
 
-                            <span className="px-1.5 text-xs font-semibold tabular-nums text-foreground min-w-[64px] text-center" aria-current="page">
+                            <span className="px-1.5 text-[11px] font-semibold tabular-nums text-foreground min-w-[64px] text-center" aria-current="page">
                                 {safePage} / {totalPages}
                             </span>
 

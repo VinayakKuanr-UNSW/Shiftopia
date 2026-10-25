@@ -126,7 +126,7 @@ export function TemplateEmptyState({
             </div>
 
             {/* Text */}
-            <h3 className="text-xl font-semibold text-foreground mb-2 tracking-tight">
+            <h3 className="text-[17px] font-semibold text-foreground mb-2 tracking-tight">
                 {config.title}
             </h3>
             <p className="text-muted-foreground max-w-sm mb-6 leading-relaxed">

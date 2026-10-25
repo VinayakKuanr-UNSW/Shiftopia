@@ -125,7 +125,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
             </div>
           ) : (
             <div className="w-4 h-4 rounded border border-muted/50 bg-muted/20 flex items-center justify-center" title="No selectable shifts in this bucket">
-              <span className="text-[9px] text-muted-foreground">🚫</span>
+              <span className="text-[11px] text-muted-foreground">🚫</span>
             </div>
           )
         ) : (
@@ -138,12 +138,12 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       {/* Row 1: Badges */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200/80 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-200/80 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200">
             {total_shifts} shift{total_shifts !== 1 ? 's' : ''}
           </span>
           
           {open_shifts > 0 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
               <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-600 dark:text-red-400" />
               {open_shifts} open
             </span>
@@ -154,11 +154,11 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       {/* Row 2: Coverage & Bar */}
       <div className="space-y-1.5 w-full">
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
             COVERAGE
           </span>
           <span className={cn(
-            "text-2xl sm:text-3xl font-black tracking-tight",
+            "text-[20px] sm:text-[24px] font-black tracking-tight",
             coveragePct === 0
               ? "text-red-600 dark:text-red-400"
               : coveragePct < 50
@@ -188,7 +188,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       </div>
 
       {/* Row 3: Meta */}
-      <div className="flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-300 pt-0.5">
+      <div className="flex items-center justify-between text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-0.5">
         <span>Published {published_shifts}/{total_shifts}</span>
         <span className="font-semibold text-slate-700 dark:text-slate-200">Total {(total_net_minutes / 60).toFixed(1)}h</span>
       </div>

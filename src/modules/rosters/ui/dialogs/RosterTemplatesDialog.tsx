@@ -185,7 +185,7 @@ const RangePreview: React.FC<{
                     captionVariant={months.length > 1 ? 'default' : 'hidden'}
                     showOutsideDays={false}
                     minCellHeight="2.25rem"
-                    dayClassName="rounded-lg text-xs font-semibold"
+                    dayClassName="rounded-lg text-[11px] font-semibold"
                     dayModifiers={modifiers}
                     modifiersClassNames={{
                         outOfRange: 'border-transparent text-muted-foreground/30 opacity-30',
@@ -240,7 +240,7 @@ const HistoryItem: React.FC<{ batch: TemplateBatch }> = ({ batch }) => {
                     <User className="h-3 w-3 text-blue-400" aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold truncate text-foreground">{batch.appliedByName || 'System'}</p>
+                    <p className="text-[11px] font-bold truncate text-foreground">{batch.appliedByName || 'System'}</p>
                     <p className="text-[11px] text-muted-foreground">
                         {formatInTimezone(new Date(batch.appliedAt), SYDNEY_TZ, 'd MMM, HH:mm')}
                     </p>
@@ -255,7 +255,7 @@ const HistoryItem: React.FC<{ batch: TemplateBatch }> = ({ batch }) => {
                     size="sm"
                     onClick={() => setIsConfirmOpen(true)}
                     disabled={undo.isPending}
-                    className="h-7 px-2.5 rounded-lg text-xs font-semibold transition-all text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                    className="h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-all text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
                 >
                     {undo.isPending
                         ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
@@ -607,7 +607,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
     // ── Shared range control, rendered in both tabs ──────────────────────────
     const rangeControl = (
         <section aria-labelledby="rtd-range" className="space-y-3">
-            <h3 id="rtd-range" className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+            <h3 id="rtd-range" className="text-[11px] font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                 <CalendarRange className="h-4 w-4 text-primary" aria-hidden="true" />
                 Date range
             </h3>
@@ -623,7 +623,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                         onKeyDown={(e) => handlePresetKeyDown(e, index)}
                         onClick={() => setPreset(key)}
                         className={cn(
-                            'px-3.5 py-2 min-h-[40px] rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150 shrink-0',
+                            'px-3.5 py-2 min-h-[40px] rounded-xl text-[11px] font-bold whitespace-nowrap transition-all duration-150 shrink-0',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                             preset === key
                                 ? 'bg-primary text-primary-foreground shadow-sm'
@@ -638,25 +638,25 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
             {preset === 'custom' && (
                 <div className="flex flex-wrap items-end gap-3 pt-1">
                     <div className="space-y-1">
-                        <Label htmlFor="rtd-start" className="text-xs font-semibold text-foreground">Start</Label>
+                        <Label htmlFor="rtd-start" className="text-[11px] font-semibold text-foreground">Start</Label>
                         <Input id="rtd-start" type="date" value={customStart}
-                               onChange={(e) => setCustomStart(e.target.value)} className="w-[140px] h-9 text-xs rounded-lg border-border/60 bg-background text-foreground" />
+                               onChange={(e) => setCustomStart(e.target.value)} className="w-[140px] h-9 text-[11px] rounded-lg border-border/60 bg-background text-foreground" />
                     </div>
                     <div className="space-y-1">
-                        <Label htmlFor="rtd-end" className="text-xs font-semibold text-foreground">End</Label>
+                        <Label htmlFor="rtd-end" className="text-[11px] font-semibold text-foreground">End</Label>
                         <Input id="rtd-end" type="date" value={customEnd}
-                               onChange={(e) => setCustomEnd(e.target.value)} className="w-[140px] h-9 text-xs rounded-lg border-border/60 bg-background text-foreground" />
+                               onChange={(e) => setCustomEnd(e.target.value)} className="w-[140px] h-9 text-[11px] rounded-lg border-border/60 bg-background text-foreground" />
                     </div>
                 </div>
             )}
 
             <div className="flex items-baseline justify-between pt-1">
-                <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-foreground">
+                <div className="flex items-center gap-2 text-[13px] sm:text-[14px] font-bold text-foreground">
                     <span>{isRangeValid ? format(range.start, 'd MMM yyyy') : '—'}</span>
                     <span className="text-muted-foreground font-normal">→</span>
                     <span>{isRangeValid ? format(range.end, 'd MMM yyyy') : '—'}</span>
                 </div>
-                <span className="text-xs font-semibold text-muted-foreground">{dayCount} days</span>
+                <span className="text-[11px] font-semibold text-muted-foreground">{dayCount} days</span>
             </div>
         </section>
     );
@@ -667,12 +667,13 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                 overlayClassName="z-[100] bg-black/70 backdrop-blur-md"
                 aria-labelledby="rtd-dialog-title"
                 aria-describedby="rtd-dialog-desc"
-                className="w-[calc(100vw-1.5rem)] sm:w-full sm:max-w-[850px] h-auto max-h-[90vh] p-0 overflow-hidden flex flex-col rounded-2xl sm:rounded-3xl border border-border/60 shadow-2xl bg-background text-foreground z-[100]"
+                className="w-[calc(100vw-1.5rem)] sm:w-full h-auto max-h-[90vh] p-0 overflow-hidden flex flex-col text-foreground z-[100]"
+                size="xl"
             >
                 {/* Header */}
                 <div className="p-4 sm:p-6 pb-3 border-b border-border/40 flex flex-col gap-1 shrink-0 bg-background">
-                    <DialogTitle id="rtd-dialog-title" className="text-lg sm:text-xl font-bold tracking-tight text-foreground">Templates</DialogTitle>
-                    <DialogDescription id="rtd-dialog-desc" className="text-xs text-muted-foreground">
+                    <DialogTitle id="rtd-dialog-title">Templates</DialogTitle>
+                    <DialogDescription id="rtd-dialog-desc">
                         Apply a template to a date range, or capture this roster as a new one.
                     </DialogDescription>
                 </div>
@@ -681,11 +682,11 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                       className="flex-1 min-h-0 flex flex-col">
                     <div className="px-4 sm:px-6 pt-3 pb-3 border-b border-border/40 bg-muted/20 shrink-0">
                         <TabsList className="bg-muted/50 p-1 rounded-xl border border-border/40 flex w-full sm:w-auto inline-flex">
-                            <TabsTrigger value="apply" className="flex-1 sm:flex-initial gap-2 rounded-lg font-semibold text-xs sm:text-sm px-4 py-2.5 min-h-[40px] transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+                            <TabsTrigger value="apply" className="flex-1 sm:flex-initial gap-2 rounded-lg font-semibold text-[11px] sm:text-[13px] px-4 py-2.5 min-h-[40px] transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
                                 <FileStack className="h-4 w-4" aria-hidden="true" />
                                 Apply to roster
                             </TabsTrigger>
-                            <TabsTrigger value="capture" className="flex-1 sm:flex-initial gap-2 rounded-lg font-semibold text-xs sm:text-sm px-4 py-2.5 min-h-[40px] transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+                            <TabsTrigger value="capture" className="flex-1 sm:flex-initial gap-2 rounded-lg font-semibold text-[11px] sm:text-[13px] px-4 py-2.5 min-h-[40px] transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
                                 <Camera className="h-4 w-4" aria-hidden="true" />
                                 Capture from roster
                             </TabsTrigger>
@@ -697,7 +698,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6">
                             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
                                 <section aria-labelledby="rtd-source" className="space-y-3">
-                                    <h3 id="rtd-source" className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                                    <h3 id="rtd-source" className="text-[11px] font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                                         <FileStack className="h-4 w-4 text-primary" aria-hidden="true" />
                                         What to apply
                                     </h3>
@@ -710,7 +711,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             placeholder="Search templates"
                                             aria-label="Search templates"
-                                            className="pl-9 h-10 text-xs sm:text-sm rounded-xl border-border/60 bg-background text-foreground focus:bg-background transition-colors"
+                                            className="pl-9 h-10 text-[11px] sm:text-[13px] rounded-xl border-border/60 bg-background text-foreground focus:bg-background transition-colors"
                                         />
                                     </div>
 
@@ -739,10 +740,10 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                                     {!isTemplateMode && <Check className="h-3.5 w-3.5 stroke-[3]" aria-hidden="true" />}
                                                 </div>
                                                 <div className="min-w-0 flex-1">
-                                                    <span className="font-bold text-sm block text-foreground">
+                                                    <span className="font-bold text-[13px] block text-foreground">
                                                         No template — prepare empty days
                                                     </span>
-                                                    <span className="block text-xs text-muted-foreground mt-0.5">
+                                                    <span className="block text-[11px] text-muted-foreground mt-0.5">
                                                         Creates the days so you can add shifts by hand.
                                                     </span>
                                                 </div>
@@ -750,12 +751,12 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                         </button>
 
                                         {isLoadingTemplates ? (
-                                            <div className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
+                                            <div className="flex items-center gap-2 p-4 text-[11px] text-muted-foreground">
                                                 <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
                                                 Loading templates…
                                             </div>
                                         ) : filteredTemplates.length === 0 ? (
-                                            <p className="p-4 text-xs text-muted-foreground text-center rounded-xl border border-dashed border-border/50 bg-muted/10">
+                                            <p className="p-4 text-[11px] text-muted-foreground text-center rounded-xl border border-dashed border-border/50 bg-muted/10">
                                                 {searchQuery
                                                     ? 'No templates match that search.'
                                                     : 'No templates for this scope yet — capture one from the other tab.'}
@@ -788,9 +789,9 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                                                     {selectedId === t.id && <Check className="h-3.5 w-3.5 stroke-[3]" aria-hidden="true" />}
                                                                 </div>
                                                                 <div className="min-w-0 flex-1">
-                                                                    <span className="font-bold text-sm block truncate text-foreground">{t.name}</span>
+                                                                    <span className="font-bold text-[13px] block truncate text-foreground">{t.name}</span>
                                                                     {t.description && (
-                                                                        <span className="block text-xs text-muted-foreground mt-0.5 truncate">{t.description}</span>
+                                                                        <span className="block text-[11px] text-muted-foreground mt-0.5 truncate">{t.description}</span>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -804,7 +805,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                     {isTemplateMode && history.length > 0 && (
                                         <>
                                             <Separator className="my-2 border-border/40" />
-                                            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                                            <h3 className="text-[11px] font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                                                 <History className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                                                 Recent applications
                                             </h3>
@@ -821,8 +822,8 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                     {isRangeValid && allDates.length <= 42 && (
                                         <div className="space-y-3 pt-1">
                                             <div className="flex items-center justify-between flex-wrap gap-2">
-                                                <span className="text-xs font-bold uppercase tracking-wider text-foreground">Preview Calendar</span>
-                                                <div className="flex items-center gap-3 text-xs font-semibold">
+                                                <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">Preview Calendar</span>
+                                                <div className="flex items-center gap-3 text-[11px] font-semibold">
                                                     <span className="flex items-center gap-1.5 text-amber-400">
                                                         <span className="h-2.5 w-2.5 rounded-full bg-amber-400" aria-hidden="true" /> Has roster
                                                     </span>
@@ -839,7 +840,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                     )}
 
                                     {pastDayCount > 0 && !applyBlocker && (
-                                        <div className="flex items-start gap-2.5 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                                        <div className="flex items-start gap-2.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
                                             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-400" aria-hidden="true" />
                                             <span>
                                                 {pastDayCount} day{pastDayCount !== 1 ? 's' : ''} in this range {pastDayCount !== 1 ? 'have' : 'has'} already
@@ -853,7 +854,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
 
                         {/* Sticky Bottom CTA Bar */}
                         <div className="sticky bottom-0 border-t border-border/40 bg-background/95 backdrop-blur-md p-4 px-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 z-20 pb-safe">
-                            <p role="status" aria-live="polite" aria-atomic="true" className="text-xs font-semibold text-foreground min-h-[1.25rem] flex items-center gap-2">
+                            <p role="status" aria-live="polite" aria-atomic="true" className="text-[11px] font-semibold text-foreground min-h-[1.25rem] flex items-center gap-2">
                                 {applyBlocker ? (
                                     <span className="text-amber-400 flex items-center gap-1.5">
                                         <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -867,8 +868,8 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                 )}
                             </p>
                             <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl text-xs font-semibold flex-1 sm:flex-initial min-h-[40px]">Cancel</Button>
-                                <Button onClick={handleApply} disabled={!canApply} size="sm" className="flex-1 sm:flex-initial min-w-[160px] min-h-[44px] rounded-xl font-bold text-xs sm:text-sm bg-primary text-primary-foreground shadow-md hover:opacity-95 transition-all">
+                                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl text-[11px] font-semibold flex-1 sm:flex-initial min-h-[40px]">Cancel</Button>
+                                <Button onClick={handleApply} disabled={!canApply} size="sm" className="flex-1 sm:flex-initial min-w-[160px] min-h-[44px] rounded-xl font-bold text-[11px] sm:text-[13px] bg-primary text-primary-foreground shadow-md hover:opacity-95 transition-all">
                                     {isApplyBusy || isCheckingStack
                                         ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />{isCheckingStack ? 'Checking…' : 'Working…'}</>
                                         : <><Check className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -883,37 +884,37 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
                             {captureResult ? (
                                 <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-6 space-y-3 animate-in fade-in-50 duration-200">
-                                    <p className="text-sm font-bold text-emerald-300 flex items-center gap-2">
+                                    <p className="text-[13px] font-bold text-emerald-300 flex items-center gap-2">
                                         <Check className="h-4 w-4 text-emerald-400" aria-hidden="true" />
                                         Captured {captureResult.shiftsCaptured} shift{captureResult.shiftsCaptured !== 1 ? 's' : ''} into “{trimmedName}”.
                                     </p>
                                     {captureResult.shiftsSkippedFullTime > 0 && (
-                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
                                             {captureResult.shiftsSkippedFullTime} full-time shift{captureResult.shiftsSkippedFullTime !== 1 ? 's were' : ' was'} left
                                             out: templates cannot hold full-time shifts.
                                         </p>
                                     )}
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
                                         Saved as a draft. Open it to review and publish before it can be applied.
                                     </p>
                                     <div className="flex flex-wrap gap-2 pt-2">
-                                        <Button size="sm" onClick={() => { navigate('/templates'); onOpenChange(false); }} className="rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm min-h-[40px]">
+                                        <Button size="sm" onClick={() => { navigate('/templates'); onOpenChange(false); }} className="rounded-xl text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm min-h-[40px]">
                                             <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
                                             Open in Templates
                                         </Button>
                                         <Button size="sm" variant="ghost"
-                                                onClick={() => { setCaptureResult(null); setNameDirty(false); }} className="rounded-xl text-xs min-h-[40px]">
+                                                onClick={() => { setCaptureResult(null); setNameDirty(false); }} className="rounded-xl text-[11px] min-h-[40px]">
                                             Capture another
                                         </Button>
                                     </div>
                                 </div>
                             ) : !subDepartmentId ? (
                                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 space-y-2">
-                                    <p className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                                    <p className="text-[13px] font-bold text-amber-300 flex items-center gap-2">
                                         <AlertTriangle className="h-4 w-4 text-amber-400" aria-hidden="true" />
                                         Select a sub-department first
                                     </p>
-                                    <p className="text-xs text-muted-foreground leading-relaxed max-w-[62ch]">
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed max-w-[62ch]">
                                         A template belongs to a single sub-department, so capturing needs one chosen in the
                                         scope filter above the roster. Applying a template does not — which is why this tab
                                         asks for something the other one does not.
@@ -925,12 +926,12 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                         {rangeControl}
 
                                         <section aria-labelledby="rtd-name" className="space-y-3">
-                                            <h3 id="rtd-name" className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+                                            <h3 id="rtd-name" className="text-[11px] font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
                                                 <Camera className="h-4 w-4 text-primary" aria-hidden="true" />
                                                 New template
                                             </h3>
                                             <div className="space-y-2 bg-muted/20 border border-border/40 rounded-xl p-4">
-                                                <Label htmlFor="rtd-template-name" className="text-xs font-semibold text-foreground">Name</Label>
+                                                <Label htmlFor="rtd-template-name" className="text-[11px] font-semibold text-foreground">Name</Label>
                                                 <Input
                                                     id="rtd-template-name"
                                                     value={templateName}
@@ -938,14 +939,14 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                                     placeholder="e.g. Security Pattern 1 Aug–31 Aug"
                                                     aria-invalid={!!nameError}
                                                     aria-describedby={nameError ? 'rtd-name-error' : 'rtd-name-hint'}
-                                                    className="h-10 text-xs rounded-lg border-border/60 bg-background text-foreground"
+                                                    className="h-10 text-[11px] rounded-lg border-border/60 bg-background text-foreground"
                                                 />
                                                 {nameError ? (
-                                                    <p id="rtd-name-error" role="alert" className="text-xs text-red-400 font-medium">
+                                                    <p id="rtd-name-error" role="alert" className="text-[11px] text-red-400 font-medium">
                                                         {nameError}
                                                     </p>
                                                 ) : (
-                                                    <p id="rtd-name-hint" className="text-xs text-muted-foreground">
+                                                    <p id="rtd-name-hint" className="text-[11px] text-muted-foreground">
                                                         Suggested from scope and range — editing stops auto-suggestions.
                                                     </p>
                                                 )}
@@ -954,7 +955,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                     </div>
 
                                     <div className="rounded-xl border border-border/40 bg-muted/20 p-4">
-                                        <p role="status" aria-live="polite" aria-atomic="true" className="text-xs font-medium">
+                                        <p role="status" aria-live="polite" aria-atomic="true" className="text-[11px] font-medium">
                                             {isCounting ? (
                                                 <span className="flex items-center gap-2 text-muted-foreground">
                                                     <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
@@ -969,7 +970,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                                 </span>
                                             ) : (
                                                 <span className="text-foreground">
-                                                    <strong className="text-primary text-sm font-black">{captureCount}</strong> shift{captureCount !== 1 ? 's' : ''} in{' '}
+                                                    <strong className="text-primary text-[13px] font-black">{captureCount}</strong> shift{captureCount !== 1 ? 's' : ''} in{' '}
                                                     {format(range.start, 'd MMM')} – {format(range.end, 'd MMM')} will be captured into a
                                                     new draft template.
                                                 </span>
@@ -978,7 +979,7 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                                     </div>
 
                                     {captureError && (
-                                        <div role="alert" className="flex items-start gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-3 font-medium">
+                                        <div role="alert" className="flex items-start gap-2 text-[11px] text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-3 font-medium">
                                             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
                                             <span>{captureError}</span>
                                         </div>
@@ -988,13 +989,13 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
                         </div>
 
                         <div className="sticky bottom-0 border-t border-border/40 bg-background/95 backdrop-blur-md p-4 px-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 z-20 pb-safe">
-                            <p role="status" aria-live="polite" aria-atomic="true" className="text-xs font-semibold text-foreground min-h-[1.25rem]">
+                            <p role="status" aria-live="polite" aria-atomic="true" className="text-[11px] font-semibold text-foreground min-h-[1.25rem]">
                                 {captureResult ? 'Saved as a draft template.' : captureBlocker ?? 'Ready to capture.'}
                             </p>
                             <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl text-xs font-semibold flex-1 sm:flex-initial min-h-[40px]">Close</Button>
+                                <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl text-[11px] font-semibold flex-1 sm:flex-initial min-h-[40px]">Close</Button>
                                 {!captureResult && (
-                                    <Button onClick={handleCapture} disabled={!canCapture} size="sm" className="flex-1 sm:flex-initial min-w-[160px] min-h-[44px] rounded-xl font-bold text-xs sm:text-sm bg-primary text-primary-foreground shadow-md hover:opacity-95 transition-all">
+                                    <Button onClick={handleCapture} disabled={!canCapture} size="sm" className="flex-1 sm:flex-initial min-w-[160px] min-h-[44px] rounded-xl font-bold text-[11px] sm:text-[13px] bg-primary text-primary-foreground shadow-md hover:opacity-95 transition-all">
                                         {snapTemplate.isPending
                                             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />Capturing…</>
                                             : <><Camera className="mr-2 h-4 w-4" aria-hidden="true" />Capture Template</>}

@@ -21,39 +21,39 @@ export const BidConfirmComplianceDialog: React.FC<Props> = ({
 }) => {
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent className="bg-background border-border text-foreground rounded-[24px]" aria-describedby={undefined}>
+            <AlertDialogContent className="text-foreground" aria-describedby={undefined}>
                 <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-tight">
+                    <AlertDialogTitle className="flex items-center gap-2 uppercase">
                         <ShieldAlert className="h-6 w-6 text-amber-500" />
                         {result?.status === 'violated' ? 'Compliance Issue' : 'Advisory Notice'}
                     </AlertDialogTitle>
-                    <AlertDialogDescription className="text-base font-medium">
+                    <AlertDialogDescription>
                         {result?.status === 'violated'
                             ? 'This shift has a blocking compliance issue. You cannot bid on this shift.'
                             : 'Please review the notice below. You may still proceed with your bid.'}
                     </AlertDialogDescription>
                     <div className="space-y-1 mt-2">
                         {result?.violations.map((v, i) => (
-                            <div key={i} className="flex items-center gap-2 text-sm text-red-500 font-bold bg-red-500/5 p-2 rounded-lg border border-red-500/10">
+                            <div key={i} className="flex items-center gap-2 text-[13px] text-red-500 font-bold bg-red-500/5 p-2 rounded-lg border border-red-500/10">
                                 <XCircle className="h-4 w-4 shrink-0" /> {v}
                             </div>
                         ))}
                         {result?.warnings.map((w, i) => (
-                            <div key={i} className="flex items-center gap-2 text-sm text-amber-500 font-bold bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
+                            <div key={i} className="flex items-center gap-2 text-[13px] text-amber-500 font-bold bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
                                 <AlertTriangle className="h-4 w-4 shrink-0" /> {w}
                             </div>
                         ))}
                         {availabilityWarning && (
-                            <div className="flex items-center gap-2 text-sm text-amber-500 font-bold bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
+                            <div className="flex items-center gap-2 text-[13px] text-amber-500 font-bold bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
                                 <AlertTriangle className="h-4 w-4 shrink-0" /> {availabilityWarning}
                             </div>
                         )}
                     </div>
                 </AlertDialogHeader>
                 <AlertDialogFooter className="mt-4 gap-2">
-                    <AlertDialogCancel onClick={onCancel} className="rounded-xl border-border/50 font-black uppercase tracking-widest text-[10px]">Cancel</AlertDialogCancel>
+                    <AlertDialogCancel onClick={onCancel} className="border-border/50">Cancel</AlertDialogCancel>
                     {result?.status !== 'violated' && (
-                        <AlertDialogAction onClick={onConfirm} className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black uppercase tracking-widest text-[10px]">
+                        <AlertDialogAction onClick={onConfirm} className="bg-amber-500 hover:bg-amber-600 text-white">
                             Proceed Anyway
                         </AlertDialogAction>
                     )}

@@ -1,11 +1,7 @@
 import React from 'react';
+import { motion, type MotionProps } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
-
-interface PageHeaderProps {
-  children: React.ReactNode;
-  className?: string;
-}
+import { page, surface } from './pageTokens';
 
 interface PageBodyProps {
   children: React.ReactNode;
@@ -16,51 +12,52 @@ interface PageBodyProps {
   bare?: boolean;
 }
 
-interface PageLayoutProps {
+interface PageFooterProps {
   children: React.ReactNode;
   className?: string;
 }
 
 /**
+ * The motion props let a page keep its staggered entrance (Profile, My
+ * Attendance, the employee bid/swap pages put `pageVariants` on their root).
+ * Without them the root is inert and children render statically, as before.
+ */
+type PageLayoutProps = {
+  children: React.ReactNode;
+  className?: string;
+  /**
+   * Drop the gutter for a full-screen mode that hides the header (Broadcast
+   * Center's control room). A prop, not `className="p-0"`: tailwind-merge only
+   * resolves conflicts within one breakpoint, so `md:pb-4` / `lg:p-6` would
+   * survive a plain `p-0`.
+   */
+  bleed?: boolean;
+} & Pick<MotionProps, 'variants' | 'initial' | 'animate'>;
+
+/**
  * Gold-Standard page shell:
- *   root  → h-full flex-col overflow-hidden p-4 lg:p-6 space-y-4
- *   header → flex-shrink-0 (sticky-within-flex)
+ *   root   → fills <main>; owns the gutter and the 16px gap between regions
+ *   header → GoldStandardHeader, the only header (glass card, title, scope, toolbar)
  *   body   → flex-1 min-h-0, glassmorphic card with p-4 lg:p-6
+ *   footer → flex-shrink-0, optional (summary / metrics bars)
  *
  * Usage:
  *   <PageLayout>
- *     <PageLayout.Header> ... </PageLayout.Header>
+ *     <GoldStandardHeader ... />
  *     <PageLayout.Body>   ... </PageLayout.Body>
+ *     <PageLayout.Footer> ... </PageLayout.Footer>
  *   </PageLayout>
  */
 const PageLayout: React.FC<PageLayoutProps> & {
-  Header: React.FC<PageHeaderProps>;
   Body: React.FC<PageBodyProps>;
-} = ({ children, className }) => (
-  <div className={cn('h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4', className)}>
+  Footer: React.FC<PageFooterProps>;
+} = ({ children, className, bleed = false, ...motionProps }) => (
+  // gap, not space-y: margins land on whatever the first rendered child is,
+  // so a conditional banner or footer shifted the spacing around it.
+  <motion.div {...motionProps} className={cn(page.root, !bleed && page.gutter, page.gap, className)}>
     {children}
-  </div>
+  </motion.div>
 );
-
-const PageHeader: React.FC<PageHeaderProps> = ({ children, className }) => {
-  const { isDark } = useTheme();
-  return (
-    <div className="flex-shrink-0">
-      <div
-        className={cn(
-          'rounded-[32px] p-4 lg:p-6 transition-all border relative overflow-hidden',
-          isDark
-            ? 'bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20 backdrop-blur-xl'
-            : 'bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50',
-          className,
-        )}
-      >
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
-        {children}
-      </div>
-    </div>
-  );
-};
 
 const PageBody: React.FC<PageBodyProps> = ({
   children,
@@ -68,8 +65,6 @@ const PageBody: React.FC<PageBodyProps> = ({
   scrollable = true,
   bare = false,
 }) => {
-  const { isDark } = useTheme();
-
   if (bare) {
     return (
       <div className={cn('flex-1 min-h-0', scrollable && 'overflow-y-auto', className)}>
@@ -81,11 +76,10 @@ const PageBody: React.FC<PageBodyProps> = ({
   return (
     <div
       className={cn(
-        'flex-1 min-h-0 rounded-[32px] transition-all border p-4 lg:p-6 scrollbar-none',
+        'flex-1 min-h-0 scrollbar-none',
+        page.bodyInset,
         scrollable ? 'overflow-auto' : 'overflow-hidden',
-        isDark
-          ? 'bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20'
-          : 'bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50',
+        surface.bodyCard,
         className,
       )}
     >
@@ -94,7 +88,11 @@ const PageBody: React.FC<PageBodyProps> = ({
   );
 };
 
-PageLayout.Header = PageHeader;
+const PageFooter: React.FC<PageFooterProps> = ({ children, className }) => (
+  <div className={cn('flex-shrink-0', className)}>{children}</div>
+);
+
 PageLayout.Body = PageBody;
+PageLayout.Footer = PageFooter;
 
 export { PageLayout };

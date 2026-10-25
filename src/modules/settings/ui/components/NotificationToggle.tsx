@@ -59,21 +59,21 @@ export function NotificationToggle() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h4 className="text-foreground font-semibold">Device Notifications</h4>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-[13px] text-muted-foreground mt-1">
             Get policy-based shift, bid, and swap alerts in your device's notification tray.
           </p>
           {isNative && !remotePushEnabled && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
               Local alerts are available now. Closed-app delivery is pending Firebase access.
             </p>
           )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           {!isNative ? (
-            <span className="text-sm text-muted-foreground">Available in the mobile app</span>
+            <span className="text-[13px] text-muted-foreground">Available in the mobile app</span>
           ) : (
             <>
-              <span className="text-sm text-foreground font-medium">{enabled ? 'Enabled' : 'Disabled'}</span>
+              <span className="text-[13px] text-foreground font-medium">{enabled ? 'Enabled' : 'Disabled'}</span>
               <Switch checked={enabled} onCheckedChange={onToggle} aria-label="Toggle device notifications" />
             </>
           )}
@@ -82,7 +82,7 @@ export function NotificationToggle() {
 
       {isNative && (
         <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-          <span className="text-sm text-muted-foreground">Send a sample notification to this device.</span>
+          <span className="text-[13px] text-muted-foreground">Send a sample notification to this device.</span>
           <Button
             variant="outline"
             onClick={onSendTest}

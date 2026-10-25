@@ -50,7 +50,7 @@ export const RosterThreeDayView: React.FC<RosterThreeDayViewProps> = ({
         <TabsContent value="day1">
           <div className="p-4 bg-black/20 rounded-lg border border-white/10">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">{format(selectedDate, 'EEEE, MMMM d, yyyy')}</h3>
+              <h3 className="text-[15px] font-medium">{format(selectedDate, 'EEEE, MMMM d, yyyy')}</h3>
               <Badge className="bg-blue-500/30 hover:bg-blue-500/40">
                 <Clock size={12} className="mr-1" />
                 {renderShiftCount(roster)} shifts
@@ -61,7 +61,7 @@ export const RosterThreeDayView: React.FC<RosterThreeDayViewProps> = ({
               {((roster as any)?.groups as any[] || []).map((group: any) => (
                 <div key={group.id} className="p-3 rounded-lg bg-black/20 border border-white/10">
                   <h4 className="font-medium">{group.name}</h4>
-                  <div className="text-sm text-white/70 mt-1">
+                  <div className="text-[13px] text-white/70 mt-1">
                     {(group.subGroups || group.subgroups || []).reduce((total: number, subGroup: any) => total + (subGroup.shifts || []).length, 0)} shifts
                   </div>
                 </div>

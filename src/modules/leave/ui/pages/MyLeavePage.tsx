@@ -38,7 +38,8 @@ import { useLeaveInvalidation, useMyLeave } from '../../hooks/useLeave';
 import { LeavePageShell } from '../components/LeavePageShell';
 import { LedgerCards } from '../components/LedgerCards';
 import { LeaveRequestCards } from '../components/LeaveRequestCards';
-import { REQUEST_TABS, Segmented } from '../components/Segmented';
+import { REQUEST_TABS } from '../components/Segmented';
+import { ToolbarRow, ToolbarSegmented } from '@/modules/core/ui/components/Toolbar';
 import { RequestLeaveDialog } from '../components/RequestLeaveDialog';
 
 type View = 'ledger' | 'requests';
@@ -103,25 +104,26 @@ const MyLeavePage: React.FC = () => {
             setScope={setScope}
             isGammaLocked={isGammaLocked}
             functionBar={
-                <div className="flex flex-wrap items-center gap-2">
-                    <Segmented<View>
-                        label="My Leave view"
-                        value={view}
-                        onChange={setView}
-                        options={VIEWS.map(({ key, label, Icon }) => ({
-                            key, label, icon: <Icon className="h-4 w-4" aria-hidden="true" />,
-                            count: key === 'requests' ? tabs.pending.length : undefined,
-                        }))}
-                    />
-                    {view === 'requests' && (
-                        <Segmented<RequestTab>
-                            label="Request status"
-                            value={tab}
-                            onChange={setTab}
-                            options={REQUEST_TABS.map(({ key, label }) => ({ key, label, count: tabs[key].length }))}
+                <ToolbarRow
+                    views={
+                        <ToolbarSegmented<View>
+                            value={view}
+                            onValueChange={setView}
+                            options={VIEWS.map(({ key, label, Icon }) => ({
+                                id: key, label, icon: <Icon className="h-3.5 w-3.5" aria-hidden="true" />,
+                                count: key === 'requests' ? tabs.pending.length : undefined,
+                            }))}
                         />
-                    )}
-                </div>
+                    }
+                    modes={view === 'requests' ? (
+                        <ToolbarSegmented<RequestTab>
+                            value={tab}
+                            onValueChange={setTab}
+                            options={REQUEST_TABS.map(({ key, label }) => ({ id: key, label, count: tabs[key].length }))}
+                            itemAriaLabel={(l) => `${l} requests`}
+                        />
+                    ) : undefined}
+                />
             }
         >
             {mine.isError ? (

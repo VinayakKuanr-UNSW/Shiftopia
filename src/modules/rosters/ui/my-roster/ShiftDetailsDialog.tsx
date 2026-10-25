@@ -66,7 +66,7 @@ export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }
       <div className="space-y-2 p-1 min-w-[180px]">
           <div className="flex justify-between items-center pb-1 border-b border-white/10">
               <span className="text-[11px] font-bold uppercase tracking-[0.12em] opacity-90">{COST_ESTIMATE_TITLE}</span>
-              <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
+              <span className="text-[11px] font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
           </div>
           <div className="space-y-1 text-[11px] tabular-nums">
               <div className="flex justify-between">
@@ -378,7 +378,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden bg-card/95 backdrop-blur-2xl border border-border shadow-2xl rounded-[28px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden bg-card/95 max-h-[90vh] overflow-y-auto" size="md">
           <DialogHeader className="sr-only">
             <DialogTitle>{shift.roles?.name || 'Shift'} Details</DialogTitle>
             <DialogDescription>
@@ -391,7 +391,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             <SharedShiftCard
               variant="timecard"
               isFlat={true}
-              hideGlow={true}
               customColor={groupColor}
               organization={shift.organizations?.name || ''}
               department={shift.departments?.name || ''}

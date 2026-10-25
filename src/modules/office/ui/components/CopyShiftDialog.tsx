@@ -110,7 +110,7 @@ export const CopyShiftDialog: React.FC<CopyShiftDialogProps> = ({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
+            <DialogContent size="lg">
                 <DialogHeader>
                     <DialogTitle>Copy Shift</DialogTitle>
                     <DialogDescription>
@@ -167,7 +167,7 @@ export const CopyShiftDialog: React.FC<CopyShiftDialogProps> = ({
                                                 <Label
                                                     id={`${switchId}-title`}
                                                     htmlFor={switchId}
-                                                    className="text-sm font-semibold cursor-pointer"
+                                                    className="text-[13px] font-semibold cursor-pointer"
                                                 >
                                                     {section.title}
                                                 </Label>

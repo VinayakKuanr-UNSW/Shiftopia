@@ -124,7 +124,8 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={next => { if (!committing) onOpenChange(next); }}>
       <DialogContent
-        className="w-[calc(100vw-2rem)] sm:max-w-[480px] p-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border bg-background text-foreground shadow-2xl backdrop-blur-xl ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+        className="w-[calc(100vw-2rem)] p-0 overflow-hidden text-foreground ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+        size="md"
       >
         <div className="relative p-6 sm:p-7 pb-5 border-b border-border bg-muted/30 dark:bg-muted/10">
           <DialogHeader className="space-y-3 text-left">
@@ -133,10 +134,10 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                 {icon}
               </div>
               <div>
-                <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                <DialogTitle>
                   {review ? `Check before you ${title.toLowerCase()}` : title}
                 </DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                <DialogDescription className="mt-0.5">
                   {description}
                 </DialogDescription>
               </div>
@@ -160,7 +161,7 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                 variant="outline"
                 onClick={() => setReview(null)}
                 disabled={committing}
-                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-sm"
+                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-[13px]"
               >
                 <ArrowLeft className="h-4 w-4 mr-1.5" aria-hidden="true" />
                 Back
@@ -171,7 +172,7 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                   onClick={handleCommit}
                   disabled={committing || !canConfirmSummary(review.summary, acknowledged)}
                   aria-busy={committing}
-                  className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-[13px] flex items-center justify-center gap-2"
                 >
                   {committing
                     ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /><span>{busyLabel}</span></>
@@ -191,7 +192,7 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                     <FormItem className="space-y-2">
                       <FormLabel
                         htmlFor={inputId}
-                        className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between"
+                        className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between"
                       >
                         <span>
                           {inputLabel} <span className="text-destructive" aria-hidden="true">*</span>
@@ -203,7 +204,7 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                       <FormControl>
                         <Input
                           id={inputId}
-                          className="h-12 px-4 rounded-xl border border-input bg-background dark:bg-muted/20 text-foreground placeholder:text-muted-foreground/60 text-base sm:text-sm shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50"
+                          className="h-12 px-4 rounded-xl border border-input bg-background dark:bg-muted/20 text-foreground placeholder:text-muted-foreground/60 text-[14px] sm:text-[13px] shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50"
                           placeholder={placeholder}
                           maxLength={50}
                           {...field}
@@ -212,7 +213,7 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                           aria-required="true"
                         />
                       </FormControl>
-                      <FormMessage role="alert" className="text-xs font-medium text-destructive" />
+                      <FormMessage role="alert" className="text-[11px] font-medium text-destructive" />
                     </FormItem>
                   )}
                 />
@@ -224,7 +225,7 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                   variant="outline"
                   onClick={() => onOpenChange(false)}
                   disabled={isSubmitting}
-                  className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-sm transition-all active:scale-[0.98]"
+                  className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-[13px] transition-all active:scale-[0.98]"
                 >
                   Cancel
                 </Button>
@@ -232,7 +233,7 @@ const NameThenReviewDialog: React.FC<NameThenReviewDialogProps> = ({
                   type="submit"
                   disabled={isSubmitting || !nameValue.trim()}
                   aria-busy={isSubmitting}
-                  className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-[13px] shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 >
                   {isSubmitting
                     ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /><span>Checking…</span></>

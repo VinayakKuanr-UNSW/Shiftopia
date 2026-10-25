@@ -435,7 +435,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
   if (isShiftsLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+      <div className="flex items-center justify-center h-full text-muted-foreground text-[13px]">
         Loading events…
       </div>
     );
@@ -449,7 +449,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     <div className="flex flex-col h-full bg-background">
       {/* Header strip */}
       <div className="px-4 md:px-5 py-2.5 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="text-xs font-mono tracking-wider text-muted-foreground">
+        <div className="text-[11px] font-mono tracking-wider text-muted-foreground">
           <span className="text-foreground font-semibold tabular-nums">{eventGroups.length}</span> event{eventGroups.length !== 1 ? 's' : ''}
           <span className="mx-2 text-border">·</span>
           <span className="text-foreground font-semibold tabular-nums">{totalShifts}</span> shifts
@@ -467,33 +467,33 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                     </TooltipTrigger>
                     <TooltipContent className="w-56 p-3 bg-popover text-popover-foreground border-border shadow-xl" side="bottom">
                         <div className="space-y-2">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest font-mono">Event Mode Estimate</p>
+                            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest font-mono">Event Mode Estimate</p>
                             <div className="space-y-1.5">
-                                <div className="flex justify-between text-xs">
+                                <div className="flex justify-between text-[11px]">
                                     <span className="text-muted-foreground">Base Pay</span>
                                     <span className="text-foreground font-medium tabular-nums">{formatCost(projection.stats.costBreakdown.base)}</span>
                                 </div>
-                                <div className="flex justify-between text-xs">
+                                <div className="flex justify-between text-[11px]">
                                     <span className="text-muted-foreground">Penalties</span>
                                     <span className="text-emerald-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.penalty)}</span>
                                 </div>
-                                <div className="flex justify-between text-xs">
+                                <div className="flex justify-between text-[11px]">
                                     <span className="text-muted-foreground">Overtime</span>
                                     <span className="text-amber-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.overtime)}</span>
                                 </div>
                                 {projection.stats.costBreakdown.allowance > 0 && (
-                                    <div className="flex justify-between text-xs">
+                                    <div className="flex justify-between text-[11px]">
                                         <span className="text-muted-foreground">Allowances</span>
                                         <span className="text-blue-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.allowance)}</span>
                                     </div>
                                 )}
                                 {projection.stats.costBreakdown.leave > 0 && (
-                                    <div className="flex justify-between text-xs">
+                                    <div className="flex justify-between text-[11px]">
                                         <span className="text-muted-foreground">Leave Loading</span>
                                         <span className="text-purple-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.leave)}</span>
                                     </div>
                                 )}
-                                <div className="pt-2 border-t border-border flex justify-between text-sm font-bold">
+                                <div className="pt-2 border-t border-border flex justify-between text-[13px] font-bold">
                                     <span className="text-foreground">Total</span>
                                     <span className="text-foreground tabular-nums">{formatCost(projection.stats.estimatedCost)}</span>
                                 </div>
@@ -541,18 +541,18 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                         : <ChevronDown className="h-4 w-4" />}
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-foreground tracking-tight">
+                      <h3 className="text-[13px] font-bold text-foreground tracking-tight">
                         {group.eventName}
                       </h3>
                       {/* Coverage LED bar + label */}
                       <div className="flex items-center gap-3 mt-1.5">
                         <EventCoverageBar pct={coveragePct} variant={badgeVariant} />
-                        <span className="text-xs font-mono font-medium tracking-wide text-muted-foreground">
+                        <span className="text-[11px] font-mono font-medium tracking-wide text-muted-foreground">
                           {group.assignedCount}/{group.shifts.length} filled
                         </span>
                       </div>
                       {group.eventDate && (
-                        <div className="flex items-center gap-2 mt-1.5 text-xs font-mono text-muted-foreground tracking-wide">
+                        <div className="flex items-center gap-2 mt-1.5 text-[11px] font-mono text-muted-foreground tracking-wide">
                           <Calendar className="h-3 w-3" />
                           {format(group.eventDate, 'MMM d, yyyy')}
                           {group.startTime && (
@@ -565,7 +565,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <div className="text-right text-xs font-mono text-muted-foreground tabular-nums">
+                    <div className="text-right text-[11px] font-mono text-muted-foreground tabular-nums">
                       <div className="flex items-center gap-1.5 justify-end font-medium">
                         <Users className="h-3 w-3" />
                         <span>{group.assignedCount}/{group.shifts.length}</span>
@@ -587,7 +587,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                     {group.unassignedCount > 0 && (
                       <div className="mb-3 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-md flex items-center gap-2">
                         <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-                        <span className="text-[10px] font-mono tracking-[0.12em] uppercase text-red-400">
+                        <span className="text-[11px] font-mono tracking-[0.12em] uppercase text-red-400">
                           {group.unassignedCount} unfilled shift{group.unassignedCount !== 1 ? 's' : ''}
                         </span>
                       </div>
@@ -649,10 +649,10 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
       </ScrollArea>
 
       <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <AlertDialogContent className="bg-popover border-border">
+        <AlertDialogContent className="bg-popover">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Unpublish Shift</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
+            <AlertDialogTitle>Unpublish Shift</AlertDialogTitle>
+            <AlertDialogDescription>
               This shift will be reverted to Draft and removed from all employee-facing surfaces immediately.
             </AlertDialogDescription>
           </AlertDialogHeader>

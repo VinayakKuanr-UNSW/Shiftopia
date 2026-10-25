@@ -1,3 +1,4 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, addDays, subDays } from 'date-fns';
 import { formatCalendarDate } from '@/modules/core/lib/date.utils';
@@ -171,7 +172,7 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 bg-card border-border overflow-hidden shadow-3xl rounded-[2rem]">
+            <DialogContent className="h-[85vh] flex flex-col p-0 bg-card overflow-hidden" size="xl">
                 <DialogHeader className="px-8 py-6 border-b border-border bg-muted/30">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -179,9 +180,9 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
                                 <ShieldCheck className="h-7 w-7" />
                             </div>
                             <div>
-                                <DialogTitle className="text-2xl font-black text-foreground tracking-tight">Compliance Diagnostic</DialogTitle>
+                                <DialogTitle>Compliance Diagnostic</DialogTitle>
                                 <div className="flex items-center gap-2 mt-1.5">
-                                    <Badge variant="outline" className="bg-primary text-primary-foreground border-none px-2 py-0.5 text-[9px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">
+                                    <Badge variant="outline" className="bg-primary text-primary-foreground border-none px-2 py-0.5 text-[11px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">
                                         Full Engine v2.0
                                     </Badge>
                                     <span className="text-muted-foreground/60 text-[11px] font-mono font-black uppercase tracking-wider italic">Verifying {bid.employeeName}</span>
@@ -217,13 +218,7 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
                     <ScrollArea className="flex-1">
                         <div className="p-6">
                             {isLoadingShifts ? (
-                                <div className="flex flex-col items-center justify-center py-24 gap-6">
-                                    <div className="relative">
-                                        <Loader2 className="h-12 w-12 animate-spin text-primary/40" />
-                                        <ShieldCheck className="h-6 w-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                                    </div>
-                                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/40 animate-pulse">Running diagnostic engine…</p>
-                                </div>
+                                <PageState state="loading" title="Running the compliance diagnostic" />
                             ) : (
                                 <ComplianceTabContent
                                     hardValidation={hardValidation}
@@ -242,11 +237,11 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
                     <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
                             <div className={cn("h-2.5 w-2.5 rounded-full", stats.blockingFails > 0 ? "bg-rose-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]" : "bg-muted")} />
-                            <span className="text-[10px] uppercase font-black text-muted-foreground/60 tracking-[0.1em] font-mono">Blockers: {stats.blockingFails}</span>
+                            <span className="text-[11px] uppercase font-black text-muted-foreground/60 tracking-[0.1em] font-mono">Blockers: {stats.blockingFails}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className={cn("h-2.5 w-2.5 rounded-full", stats.warnings > 0 ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]" : "bg-muted")} />
-                            <span className="text-[10px] uppercase font-black text-muted-foreground/60 tracking-[0.1em] font-mono">Warnings: {stats.warnings}</span>
+                            <span className="text-[11px] uppercase font-black text-muted-foreground/60 tracking-[0.1em] font-mono">Warnings: {stats.warnings}</span>
                         </div>
                     </div>
 

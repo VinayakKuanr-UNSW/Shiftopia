@@ -229,7 +229,7 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
                         </p>
                         <CardDialogClose />
                     </div>
-                    <DialogTitle className="mt-0.5 text-xl font-bold leading-snug tracking-tight">
+                    <DialogTitle className="mt-0.5">
                         {def?.label ?? LEAVE_TYPE_LABELS[type]}
                     </DialogTitle>
                     {entry && entry.applicable && (
@@ -274,7 +274,7 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
                 <div className={cn(section, 'grid gap-5', drawType && line && 'sm:grid-cols-2')}>
                     <div>
                         <p className={text.caption}>Hours</p>
-                        <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums" aria-live="polite">
+                        <p className="mt-1 text-[24px] font-bold tracking-tight tabular-nums" aria-live="polite">
                             {rangeValid ? `${hours}h` : '—'}
                         </p>
                         <p className={cn(text.caption, 'mt-1')}>{derived.explanation}</p>
@@ -286,7 +286,7 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
                             <p className={text.caption}>
                                 {drawType === type ? 'Left after this' : `${LEAVE_TYPE_LABELS[drawType]} after this`}
                             </p>
-                            <p className={cn('mt-1 text-3xl font-bold tracking-tight tabular-nums',
+                            <p className={cn('mt-1 text-[24px] font-bold tracking-tight tabular-nums',
                                 after < 0 && 'text-red-600 dark:text-red-400')}>
                                 {after}h
                             </p>
@@ -302,7 +302,7 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
                 {headsUp && (
                     <div role="alert" className={cn(section, 'flex items-start gap-2.5')}>
                         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-                        <div className="min-w-0 space-y-2 text-xs font-medium">
+                        <div className="min-w-0 space-y-2 text-[11px] font-medium">
                             {shifts.length > 0 && (
                                 <div>
                                     <p>If approved, {shifts.length === 1 ? 'this shift comes' : 'these shifts come'} off your roster:</p>
@@ -340,7 +340,7 @@ export const RequestLeaveDialog: React.FC<RequestLeaveDialogProps> = ({
                 </div>
 
                 {error && (
-                    <p role="alert" className={cn(section, 'text-xs font-medium text-red-700 dark:text-red-400')}>
+                    <p role="alert" className={cn(section, 'text-[11px] font-medium text-red-700 dark:text-red-400')}>
                         {error}
                     </p>
                 )}

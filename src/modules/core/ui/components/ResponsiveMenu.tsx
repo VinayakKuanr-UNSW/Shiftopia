@@ -135,7 +135,7 @@ export const ResponsiveMenu: React.FC<ResponsiveMenuProps> = ({
         <DrawerContent className="flex max-h-[85dvh] flex-col rounded-t-[2.5rem] border-t-0 bg-background/95 p-0 backdrop-blur-2xl">
           <div className="mx-auto my-4 h-1.5 w-12 shrink-0 rounded-full bg-muted/60" aria-hidden="true" />
           <DrawerHeader className="shrink-0 px-6 pb-4 pt-0 text-left">
-            <DrawerTitle className="flex items-center gap-3 text-2xl font-black">
+            <DrawerTitle className="flex items-center gap-3">
               {icon && (
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary" aria-hidden="true">
                   {icon}
@@ -143,7 +143,7 @@ export const ResponsiveMenu: React.FC<ResponsiveMenuProps> = ({
               )}
               {title}
             </DrawerTitle>
-            <DrawerDescription className="mt-1 text-sm font-medium text-muted-foreground">
+            <DrawerDescription className="mt-1">
               {description ?? `Choose a ${title.toLowerCase()} option.`}
             </DrawerDescription>
           </DrawerHeader>

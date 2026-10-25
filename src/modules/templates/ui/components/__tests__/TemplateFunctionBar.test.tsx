@@ -84,9 +84,10 @@ describe('TemplateFunctionBar status filter', () => {
     it('gives every filter a 44px tap target at phone widths', () => {
         renderBar();
 
+        // A real 44px below md (the root font is 75%, so h-11 would be 33px).
         for (const option of screen.getAllByRole('radio')) {
-            expect(option.className).toContain('min-h-[44px]');
-            expect(option.className).not.toContain('h-9');
+            expect(option.className.split(/\s+/)).toContain('h-[44px]');
+            expect(option.className).not.toMatch(/(^|\s)h-9(\s|$)/);
         }
     });
 
@@ -95,7 +96,9 @@ describe('TemplateFunctionBar status filter', () => {
         renderBar();
 
         const search = screen.getByRole('searchbox', { name: /Search templates/ });
-        expect(search.className).toContain('text-base');
-        expect(search.className).toContain('min-h-[44px]');
+        // 16px in real pixels: text-base is only 12px under the 75% root.
+        expect(search.className.split(/\s+/)).toContain('text-[16px]');
+        // The tap target is the whole field (the label the input fills), a real 44px.
+        expect(search.closest('label')!.className.split(/\s+/)).toContain('h-[44px]');
     });
 });

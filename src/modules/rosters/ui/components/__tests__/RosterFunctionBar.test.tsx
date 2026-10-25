@@ -108,4 +108,19 @@ describe('RosterFunctionBar — one roster at a time', () => {
 
         expect(props.onAutoScheduleClick).toHaveBeenCalledTimes(1);
     });
+
+    it('toggles isFilterBarOpen in useRosterStore when Filter button is clicked', () => {
+        renderBar();
+
+        expect(useRosterStore.getState().isFilterBarOpen).toBe(false);
+
+        const filterBtn = screen.getByRole('button', { name: /^roster filters$/i });
+        fireEvent.click(filterBtn);
+
+        expect(useRosterStore.getState().isFilterBarOpen).toBe(true);
+
+        fireEvent.click(filterBtn);
+        expect(useRosterStore.getState().isFilterBarOpen).toBe(false);
+    });
 });
+

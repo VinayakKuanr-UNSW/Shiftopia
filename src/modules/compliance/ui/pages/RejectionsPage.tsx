@@ -12,10 +12,13 @@ import { supabase } from '@/platform/supabase/client';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { cn } from '@/modules/core/lib/utils';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarRow, ToolbarSegmented, ToolbarIconButton, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { Button } from '@/modules/core/ui/primitives/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import {
   Select,
@@ -26,11 +29,6 @@ import {
 } from '@/modules/core/ui/primitives/select';
 import { format, parseISO } from 'date-fns';
 import { V8RulesTable } from '../components/V8RulesTable';
-
-// Glass card treatment shared by the header and body panels
-const glassCard =
-  'transition-all border bg-white/80 dark:bg-[#161d2d]/85 backdrop-blur-xl border-border/70 dark:border-white/10 shadow-lg shadow-slate-200/40 ' +
-  'dark:shadow-2xl dark:shadow-black/30';
 
 type Window = '24h' | '7d' | '30d';
 type ViewMode = 'rules' | 'audit';
@@ -65,10 +63,10 @@ function RejectionCard({ r }: { r: Rejection }) {
   return (
     <div className="border-t border-border/50 dark:border-white/10 p-5 first:border-t-0 space-y-2.5">
       <div className="flex items-center justify-between gap-3">
-        <Badge variant="outline" className="font-mono text-xs font-semibold px-2 py-0.5">
+        <Badge variant="outline" className="font-mono text-[11px] font-semibold px-2 py-0.5">
           {r.rule_id}
         </Badge>
-        <span className="font-mono text-xs text-muted-foreground whitespace-nowrap">
+        <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
           {format(parseISO(r.created_at), 'dd MMM yyyy, HH:mm')}
         </span>
       </div>
@@ -84,7 +82,7 @@ function RejectionCard({ r }: { r: Rejection }) {
           </>
         )}
         {r.bypassed && (
-          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-xs">
+          <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[11px]">
             bypassed
           </Badge>
         )}
@@ -129,105 +127,71 @@ export default function RejectionsPage() {
   }, [data]);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 sm:p-6 lg:p-8 space-y-6">
-      {/* ── Glass header card: title + view mode toggle + filters ── */}
-      <div className="flex-shrink-0">
-        <div className={cn('rounded-[28px] p-6 lg:p-7', glassCard)}>
-          <PersonalPageHeader
-            title="Compliance Engine & Rejections"
-            Icon={ShieldX}
-            scope={scope}
-            setScope={setScope}
-            isGammaLocked={isGammaLocked}
-            mode="managerial"
-            className="mb-6"
+    <PageLayout>
+      {/* ── Header: title + view mode toggle + filters ── */}
+      <GoldStandardHeader
+        title="Compliance Engine & Rejections"
+        Icon={ShieldX}
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        mode="managerial"
+        functionBar={
+          <ToolbarRow
+            views={
+              <ToolbarSegmented<ViewMode>
+                value={viewMode}
+                onValueChange={setViewMode}
+                options={[
+                  { id: 'rules', label: 'V8 Active Rules', count: 22, icon: <Cpu className="h-3.5 w-3.5" aria-hidden="true" /> },
+                  { id: 'audit', label: 'Rejections Audit Feed', icon: <ListFilter className="h-3.5 w-3.5" aria-hidden="true" /> },
+                ]}
+              />
+            }
+            // The audit feed's controls exist only in audit mode.
+            modes={viewMode === 'audit' ? (
+              <Select value={window} onValueChange={(v) => setWindow(v as Window)}>
+                <SelectTrigger aria-label="Time window" className={cn(toolbar.field, 'w-[150px] justify-between')}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="24h">Last 24 hours</SelectItem>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : undefined}
+            actions={viewMode === 'audit' ? (<>
+              <Select value={opTypeFilter} onValueChange={setOpTypeFilter}>
+                <SelectTrigger aria-label="Operation" className={cn(toolbar.secondaryAction, 'w-[170px] justify-between')}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All operations</SelectItem>
+                  <SelectItem value="ASSIGN">Assign</SelectItem>
+                  <SelectItem value="BID">Bid</SelectItem>
+                  <SelectItem value="SWAP">Swap</SelectItem>
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                onClick={() => setBypassedOnly(b => !b)}
+                aria-pressed={bypassedOnly}
+                className={cn(toolbar.secondaryAction, bypassedOnly && toolbar.secondaryActionOn)}
+              >
+                {bypassedOnly ? 'Showing bypassed only' : 'Show bypassed only'}
+              </button>
+              <ToolbarIconButton icon={<RefreshCw />} tooltip="Refresh rejections" onClick={() => refetch()} variant="blue" />
+            </>) : undefined}
           />
-
-          {/* Navigation & Controls Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-            {/* View Mode Switcher */}
-            <div className="flex items-center rounded-2xl bg-muted/60 dark:bg-slate-800/80 p-1.5 border border-border/50 max-w-fit shadow-xs">
-              <button
-                onClick={() => setViewMode('rules')}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all',
-                  viewMode === 'rules'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <Cpu className="h-4 w-4" />
-                <span>V8 Active Rules (22)</span>
-              </button>
-              <button
-                onClick={() => setViewMode('audit')}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all',
-                  viewMode === 'audit'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <ListFilter className="h-4 w-4" />
-                <span>Rejections Audit Feed</span>
-              </button>
-            </div>
-
-            {/* Audit Filter Controls (Shown only in audit log mode) */}
-            {viewMode === 'audit' && (
-              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-                <Select value={window} onValueChange={(v) => setWindow(v as Window)}>
-                  <SelectTrigger className="w-full sm:w-[150px] h-10 text-sm font-medium"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="24h">Last 24 hours</SelectItem>
-                    <SelectItem value="7d">Last 7 days</SelectItem>
-                    <SelectItem value="30d">Last 30 days</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={opTypeFilter} onValueChange={setOpTypeFilter}>
-                  <SelectTrigger className="w-full sm:w-[170px] h-10 text-sm font-medium"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All operations</SelectItem>
-                    <SelectItem value="ASSIGN">Assign</SelectItem>
-                    <SelectItem value="BID">Bid</SelectItem>
-                    <SelectItem value="SWAP">Swap</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Button
-                  variant={bypassedOnly ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setBypassedOnly(b => !b)}
-                  className="h-10 text-xs sm:text-sm font-medium"
-                >
-                  {bypassedOnly ? 'Showing bypassed only' : 'Show bypassed only'}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refetch()}
-                  className="sm:ml-auto gap-2 h-10 text-xs sm:text-sm font-medium"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Refresh
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Glass body card: V8 Technical Table or Audit Table ── */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className={cn('h-full rounded-[28px] overflow-auto p-6 sm:p-7 space-y-6', glassCard)}>
+        <div className={cn('h-full overflow-auto space-y-6', page.bodyInset, surface.bodyCard)}>
           {viewMode === 'rules' ? (
             <V8RulesTable />
           ) : (
             <div className="space-y-6">
               <div>
-                <h3 className="text-base font-bold text-foreground">Compliance Block Audit Log</h3>
+                <h3 className="text-[14px] font-bold text-foreground">Compliance Block Audit Log</h3>
                 <p className="text-[14px] text-muted-foreground mt-0.5">
                   Every BLOCKING validation event recorded by the V8 compliance engine in the selected time window.
                 </p>
@@ -236,7 +200,7 @@ export default function RejectionsPage() {
               {/* Top rules chips */}
               {ruleCounts.length > 0 && (
                 <div className="rounded-2xl border border-border/60 dark:border-white/10 bg-muted/20 p-5">
-                  <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">
                     Most Frequent Violations in Window
                   </div>
                   <div className="flex flex-wrap gap-2.5">
@@ -286,57 +250,57 @@ export default function RejectionsPage() {
                     ))}
                   </div>
                 ) : (
-                  <table className="w-full text-[14px]">
-                    <thead className="bg-muted/40 dark:bg-slate-800/60 text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border/60 dark:border-white/10">
-                      <tr>
-                        <th className="px-5 py-3.5 text-left">Timestamp</th>
-                        <th className="px-5 py-3.5 text-left">Employee</th>
-                        <th className="px-5 py-3.5 text-left">Rule ID</th>
-                        <th className="px-5 py-3.5 text-left">Operation</th>
-                        <th className="px-5 py-3.5 text-left">Stage</th>
-                        <th className="px-5 py-3.5 text-left">Audit Summary</th>
-                        <th className="px-5 py-3.5 text-left">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50 dark:divide-white/10">
+                  <Table>
+                    <TableHeader sticky>
+                      <TableRow>
+                        <TableHead>Timestamp</TableHead>
+                        <TableHead>Employee</TableHead>
+                        <TableHead>Rule ID</TableHead>
+                        <TableHead>Operation</TableHead>
+                        <TableHead>Stage</TableHead>
+                        <TableHead>Audit Summary</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {(data ?? []).map(r => (
-                        <tr key={r.id} className="hover:bg-muted/20 transition-colors">
-                          <td className="px-5 py-3.5 font-mono text-xs whitespace-nowrap text-muted-foreground">
+                        <TableRow key={r.id}>
+                          <TableCell className="font-mono whitespace-nowrap text-muted-foreground">
                             {format(parseISO(r.created_at), 'dd MMM, HH:mm')}
-                          </td>
-                          <td className="px-5 py-3.5 font-mono text-xs font-medium text-foreground">
+                          </TableCell>
+                          <TableCell className="font-mono font-medium">
                             {r.employee_id.slice(0, 8)}
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <Badge variant="outline" className="font-mono text-xs font-semibold px-2 py-0.5">
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="font-mono text-[11px] font-semibold px-2 py-0.5">
                               {r.rule_id}
                             </Badge>
-                          </td>
-                          <td className="px-5 py-3.5 text-[13.5px] font-medium text-foreground">{r.operation_type}</td>
-                          <td className="px-5 py-3.5 text-[13.5px] text-muted-foreground">{r.stage ?? '—'}</td>
-                          <td className="px-5 py-3.5 max-w-[440px] truncate text-[13.5px] text-foreground/90 font-normal" title={r.summary}>
+                          </TableCell>
+                          <TableCell className="font-medium">{r.operation_type}</TableCell>
+                          <TableCell className="text-muted-foreground">{r.stage ?? '—'}</TableCell>
+                          <TableCell className="max-w-[440px] truncate text-foreground/90" title={r.summary}>
                             {r.summary}
-                          </td>
-                          <td className="px-5 py-3.5">
+                          </TableCell>
+                          <TableCell>
                             {r.bypassed ? (
-                              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-xs">
+                              <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[11px]">
                                 bypassed
                               </Badge>
                             ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
+                              <span className="text-muted-foreground">—</span>
                             )}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 )}
               </div>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }
 

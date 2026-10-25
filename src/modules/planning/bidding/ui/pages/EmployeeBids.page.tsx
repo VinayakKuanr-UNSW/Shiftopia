@@ -1,3 +1,4 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
 
@@ -14,12 +15,13 @@ import {
     Info, User,
     Calendar, Clock, ThumbsUp, Ban,
     Megaphone, UserPlus, UserCheck as LucideUserCheck, Circle, Minus, Gavel, Coffee, Shield, Loader2, CheckCircle, XCircle,
-    X, Filter, History, ChevronDown, ListChecks, Settings2, Layers
+    X, Filter, History, ListChecks, Settings2
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { BidStatusBadge } from '../components/BidStatusBadge';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
@@ -36,20 +38,15 @@ import { BidOpportunityListItem } from '../components/BidOpportunityListItem';
 import { BidOpportunityListSection } from '../components/BidOpportunityListSection';
 import { BidSelectionToolbar } from '../components/BidSelectionToolbar';
 import { groupOpportunities, type BidGroupBy } from '../utils/bid-grouping';
+import { GroupBySelector, type GroupBySelectorOption } from '@/modules/core/ui/components/GroupBySelector';
+
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarIconButton, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { soleOrgId, deptIds, subDeptIds } from '@/platform/auth/scope-narrowing';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primitives/popover';
-import {
-    Command,
-    CommandInput,
-    CommandList,
-    CommandEmpty,
-    CommandGroup,
-    CommandItem,
-    CommandShortcut,
-} from '@/modules/core/ui/primitives/command';
 import { Check } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { getBidPriority } from '../utils/bid-priority';
@@ -57,6 +54,16 @@ import { getDeptColor, getRowClass } from '../utils/bid-dept-styles';
 import { getParticipationStatus } from '../utils/bid-participation';
 import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 import type { ShiftData, BidData, ShiftOpportunity } from '../types';
+import { Table, tableTokens, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
+
+const BID_GROUP_BY_OPTIONS: GroupBySelectorOption<BidGroupBy>[] = [
+    { value: 'subDepartment', label: 'Sub-Department' },
+    { value: 'group', label: 'Group' },
+    { value: 'subGroupName', label: 'Sub-Group' },
+    { value: 'role', label: 'Role' },
+    { value: 'date', label: 'Date' },
+    { value: 'none', label: 'None' },
+];
 
 // ============================================================================
 // MOTION VARIANTS
@@ -87,7 +94,6 @@ export const EmployeeBidsPage: React.FC = () => {
 
     const [drawerOpp, setDrawerOpp] = useState<ShiftOpportunity | null>(null);
     const [groupBy, setGroupBy] = useState<BidGroupBy>('date');
-    const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
     const [showIneligible, setShowIneligible] = useState(false);
     const [showExpired, setShowExpired] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -630,7 +636,7 @@ export const EmployeeBidsPage: React.FC = () => {
     };
 
     return (
-        <div className="h-full flex flex-col overflow-hidden bg-background">
+        <PageLayout>
             {/* ── GOLD STANDARD HEADER (Rows 1 · 2 · 3) ── */}
             <GoldStandardHeader
                 title="My Bids"
@@ -667,9 +673,8 @@ export const EmployeeBidsPage: React.FC = () => {
                 ) : undefined}
                 functionBarChildren={
                     <>
-                        <Button
-                            variant="ghost"
-                            size="sm"
+                        <button
+                            type="button"
                             onClick={() => {
                                 setIsBulkModeActive(prev => {
                                     const next = !prev;
@@ -677,35 +682,22 @@ export const EmployeeBidsPage: React.FC = () => {
                                     return next;
                                 });
                             }}
-                            className={cn(
-                                "flex items-center justify-center md:gap-2 transition-all font-black text-[10px] uppercase tracking-wider flex-shrink-0 active:scale-95",
-                                "h-11 w-full rounded-xl p-0", // Mobile: uniform 44px, full width
-                                "md:h-9 md:w-auto md:px-3.5 md:rounded-xl", // Desktop
-                                isBulkModeActive 
-                                    ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600/30" 
-                                    : isDark ? "bg-[#111827]/60 hover:bg-[#111827]/80 text-muted-foreground" : "bg-slate-100 hover:bg-slate-200 text-muted-foreground"
-                            )}
+                            aria-pressed={isBulkModeActive}
+                            aria-label="Bulk Mode"
+                            className={cn(toolbar.secondaryAction, isBulkModeActive && toolbar.secondaryActionOn)}
                         >
-                            <ListChecks className="h-5 w-5 md:h-4 md:w-4" />
+                            <ListChecks className="h-4 w-4" aria-hidden="true" />
                             <span className="hidden md:inline">Bulk Mode</span>
-                        </Button>
+                        </button>
 
                         <Popover open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                             <PopoverTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className={cn(
-                                        "flex items-center justify-center transition-all p-0 flex-shrink-0 active:scale-95",
-                                        "h-11 w-full rounded-xl", // Mobile: uniform 44px, full width
-                                        "md:h-9 md:w-9 md:rounded-xl", // Desktop
-                                        isSettingsOpen
-                                            ? "bg-primary/20 text-primary border border-primary/30"
-                                            : isDark ? "bg-[#111827]/60 hover:bg-[#111827]/80 text-muted-foreground" : "bg-slate-100 hover:bg-slate-200 text-muted-foreground"
-                                    )}
-                                >
-                                    <Settings2 className="h-5 w-5 md:h-4 md:w-4" />
-                                </Button>
+                                <ToolbarIconButton
+                                    icon={<Settings2 />}
+                                    tooltip="Bidding settings"
+                                    aria-pressed={undefined}
+                                    isActive={isSettingsOpen}
+                                />
                             </PopoverTrigger>
                             <PopoverContent 
                                 className={cn(
@@ -715,7 +707,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                 sideOffset={10}
                                 align="end"
                             >
-                                <h4 className="font-black uppercase tracking-widest text-[10px] text-muted-foreground/80 mb-3 select-none">Bidding Settings</h4>
+                                <h4 className="font-black uppercase tracking-widest text-[11px] text-muted-foreground/80 mb-3 select-none">Bidding Settings</h4>
                                 <div className="space-y-3">
                                     <label className="flex items-start gap-3 cursor-pointer group select-none p-2 rounded-xl hover:bg-primary/5 transition-colors">
                                         <div className={cn(
@@ -734,7 +726,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                         />
                                         <div className="flex flex-col">
                                             <span className="text-[11px] font-black uppercase tracking-wider group-hover:text-primary transition-colors">Show Ineligible</span>
-                                            <span className="text-[9px] text-muted-foreground/60 leading-tight">Display shifts for which qualification is missing</span>
+                                            <span className="text-[11px] text-muted-foreground/60 leading-tight">Display shifts for which qualification is missing</span>
                                         </div>
                                     </label>
                                     <label className="flex items-start gap-3 cursor-pointer group select-none p-2 rounded-xl hover:bg-primary/5 transition-colors">
@@ -754,7 +746,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                         />
                                         <div className="flex flex-col">
                                             <span className="text-[11px] font-black uppercase tracking-wider group-hover:text-primary transition-colors">Show Expired</span>
-                                            <span className="text-[9px] text-muted-foreground/60 leading-tight">Display closed or expired shift opportunities</span>
+                                            <span className="text-[11px] text-muted-foreground/60 leading-tight">Display closed or expired shift opportunities</span>
                                         </div>
                                     </label>
                                 </div>
@@ -765,156 +757,34 @@ export const EmployeeBidsPage: React.FC = () => {
                 leftContent={
                     <div className="flex items-center gap-1.5 lg:gap-2">
                         <Calendar className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
-                        <span className="text-[10px] lg:text-sm font-black text-foreground tracking-tight whitespace-nowrap uppercase">
+                        <span className="text-[11px] lg:text-[13px] font-black text-foreground tracking-tight whitespace-nowrap uppercase">
                             <span className="hidden sm:inline">Open Shifts</span>
                             <span className="sm:hidden">Shifts</span>
                         </span>
-                        <span className="inline-flex items-center justify-center h-4 lg:h-5 min-w-[16px] lg:min-w-[20px] px-1 lg:px-1.5 rounded-full bg-primary/10 text-primary text-[9px] lg:text-[10px] font-black tabular-nums">
+                        <span className="inline-flex items-center justify-center h-4 lg:h-5 min-w-[16px] lg:min-w-[20px] px-1 lg:px-1.5 rounded-full bg-primary/10 text-primary text-[11px] lg:text-[11px] font-black tabular-nums">
                             {filteredBidOpportunities.length}
                         </span>
                     </div>
                 }
                 filters={viewMode === 'table' || isMobile ? (
-                    <Popover open={isGroupDropdownOpen} onOpenChange={setIsGroupDropdownOpen}>
-                        <PopoverTrigger asChild>
-                            <button
-                                className={cn(
-                                    "flex items-center justify-center md:justify-between transition-all duration-300 relative z-50 rounded-xl border border-border p-0 active:scale-95",
-                                    "h-11 w-full", // Mobile: uniform 44px, full width
-                                    "md:h-14 md:w-auto md:min-w-[180px] md:px-4 md:py-2.5", // Desktop
-                                    isGroupDropdownOpen
-                                        ? isMobile
-                                            ? "bg-primary/15 text-primary ring-1 ring-primary/30"
-                                            : "ring-2 ring-primary bg-primary/5 shadow-primary/20"
-                                        : isDark 
-                                            ? "bg-[#1c2333] text-white hover:bg-[#252d40] border-white/5" 
-                                            : "bg-white text-slate-700 hover:bg-indigo-50/50 shadow-lg shadow-black/5 border-slate-200",
-                                    groupBy !== 'none' && !isGroupDropdownOpen && (
-                                        isMobile 
-                                            ? isDark ? "bg-primary/15 text-primary border-primary/30" : "bg-primary/10 text-primary border-primary/20"
-                                            : ""
-                                    )
-                                )}
-                                type="button"
-                            >
-                                <div className="hidden md:flex flex-col items-start gap-0.5">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/30 leading-none">Group By</span>
-                                    <span className="truncate max-w-[120px] sm:max-w-[180px] text-xs sm:text-sm font-semibold">
-                                        {(() => {
-                                            const map: Record<string, string> = {
-                                                'subDepartment': 'SubDepartment',
-                                                'group': 'Group',
-                                                'subGroupName': 'Sub-Group',
-                                                'role': 'Role',
-                                                'date': 'Date',
-                                                'none': 'None'
-                                            };
-                                            return map[groupBy] || groupBy;
-                                        })()}
-                                    </span>
-                                </div>
-                                <ChevronDown className="hidden md:block w-3.5 h-3.5 text-slate-400 dark:text-white/40 flex-shrink-0 transition-transform" />
-                                
-                                {/* Mobile Icon */}
-                                <Layers className="md:hidden h-5 w-5" />
-                            </button>
-                        </PopoverTrigger>
-
-                            <PopoverContent 
-                                className="w-[200px] md:w-[var(--radix-popover-trigger-width)] border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
-                                sideOffset={10}
-                                align="center"
-                            >
-                                <Command 
-                                    className="bg-transparent overflow-visible w-full outline-none"
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Escape') {
-                                            setIsGroupDropdownOpen(false);
-                                            e.preventDefault();
-                                        }
-                                    }}
-                                >
-                                    <div className="flex flex-col gap-1.5 w-full">
-                                        {/* Search Bar Container */}
-                                        <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 dark:border-white/10 overflow-hidden [&_[cmdk-input-wrapper]]:border-b-0">
-                                            <CommandInput 
-                                                placeholder="Search grouping..." 
-                                                className="h-14 text-base border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
-                                                autoFocus
-                                            />
-                                        </div>
-
-                                        {/* Results Container */}
-                                        <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
-                                            <CommandList className="max-h-[50vh] p-1.5 scrollbar-none overflow-x-hidden">
-                                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-sm">No grouping found.</CommandEmpty>
-                                                
-                                                <CommandGroup heading="Group By" className="px-1">
-                                                    {([
-                                                        { k: 'subDepartment', label: 'SubDepartment' },
-                                                        { k: 'group',         label: 'Group' },
-                                                        { k: 'subGroupName',  label: 'Sub-Group' },
-                                                        { k: 'role',          label: 'Role' },
-                                                        { k: 'date',          label: 'Date' },
-                                                        { k: 'none',          label: 'None' },
-                                                    ] as const).map(opt => {
-                                                        const isSelected = groupBy === opt.k;
-                                                        return (
-                                                            <CommandItem
-                                                                key={opt.k}
-                                                                onSelect={() => {
-                                                                    setGroupBy(opt.k);
-                                                                    setIsGroupDropdownOpen(false);
-                                                                }}
-                                                                className={cn(
-                                                                    "flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all",
-                                                                    "aria-selected:bg-primary aria-selected:text-primary-foreground group"
-                                                                )}
-                                                            >
-                                                                <div className={cn(
-                                                                    "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
-                                                                    isSelected 
-                                                                        ? "bg-white border-white text-primary" 
-                                                                        : "border-muted-foreground/30 group-aria-selected:border-white/40"
-                                                                )}>
-                                                                    {isSelected && <Check className="w-3.5 h-3.5 text-primary" strokeWidth={3} />}
-                                                                </div>
-                                                                <span className="font-semibold text-sm sm:text-base">{opt.label}</span>
-                                                                <CommandShortcut className="group-aria-selected:text-white/60">↵</CommandShortcut>
-                                                            </CommandItem>
-                                                        );
-                                                    })}
-                                                </CommandGroup>
-                                            </CommandList>
-                                            
-                                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50">
-                                                <div className="flex items-center gap-4">
-                                                    <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">↑↓</kbd> Nav</span>
-                                                    <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">↵</kbd> Select</span>
-                                                </div>
-                                                <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">esc</kbd> Close</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                    // The shared Group By control, with this page's own grouping keys.
+                    <GroupBySelector<BidGroupBy>
+                        value={groupBy}
+                        onChange={setGroupBy}
+                        options={BID_GROUP_BY_OPTIONS}
+                        triggerVariant="icon"
+                    />
                 ) : undefined}
             />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">
+            <div className="flex-1 min-h-0 overflow-hidden">
                 <div className={cn(
-                    "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
-                    isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                    "h-full overflow-hidden flex flex-col",
+                    surface.bodyCard
                 )}>
                 {isScopeLoading || (eligibilityPending && rawAvailableShifts.length > 0) ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                        <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                        <p className="text-xs text-muted-foreground/60 uppercase tracking-widest font-black animate-pulse">Scanning Compliance...</p>
-                    </div>
+                    <PageState state="loading" className="flex-1" title="Checking eligibility" description="Matching open shifts against your compliance rules." />
                 ) : viewMode === 'card' ? (
                 <div className={cn(
                     "flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none",
@@ -932,15 +802,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         {filteredBidOpportunities.map(opp => renderOpportunityCard(opp))}
                         {filteredBidOpportunities.length === 0 && (
                             <motion.div variants={itemVariants} className="col-span-full w-full h-full flex items-center justify-center">
-                                <div className="flex flex-col items-center justify-center text-center gap-3">
-                                    <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                        <Calendar className="h-6 w-6 text-muted-foreground/40" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
-                                        <p className="text-xs text-muted-foreground/40 mt-1">Try expanding your date range or clearing priority filters.</p>
-                                    </div>
-                                </div>
+                                <PageState state="empty" icon={Calendar} title="No shifts match your filters" description="Try expanding your date range or clearing priority filters." />
                             </motion.div>
                         )}
                         </motion.div>
@@ -966,12 +828,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                     exit={{ opacity: 0, transition: { duration: 0.12 } }}
                                 >
                                     {filteredBidOpportunities.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center text-center gap-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                                <Calendar className="h-6 w-6 text-muted-foreground/40" />
-                                            </div>
-                                            <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
-                                        </div>
+                                        <PageState state="empty" icon={Calendar} title="No shifts match your filters" />
                                     ) : groupBy === 'none' ? (
                                         filteredBidOpportunities.map(renderBidListItem)
                                     ) : (
@@ -992,11 +849,11 @@ export const EmployeeBidsPage: React.FC = () => {
 
                         {/* Desktop: traditional sortable table */}
                         <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
-                            <table className="w-full text-sm text-foreground">
-                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider font-black">
-                                    <tr>
+                            <Table className="text-foreground">
+                                <TableHeader>
+                                    <TableRow>
                                         {isBulkModeActive && (
-                                            <th className="p-3 text-left w-[40px]">
+                                            <TableHead className="w-[40px]">
                                                 <input
                                                     type="checkbox"
                                                     checked={
@@ -1006,7 +863,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                     onChange={(e) => handleSelectAll(e.target.checked)}
                                                     className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                 />
-                                            </th>
+                                            </TableHead>
                                         )}
                                         <SortableTableHeader sortKey="department" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Department</SortableTableHeader>
                                         <SortableTableHeader sortKey="subDepartment" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>SubDepartment</SortableTableHeader>
@@ -1016,22 +873,22 @@ export const EmployeeBidsPage: React.FC = () => {
                                         <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
                                         <SortableTableHeader sortKey="startAt" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Time</SortableTableHeader>
                                         <SortableTableHeader sortKey="netLength" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Net</SortableTableHeader>
-                                        <th className="p-3 text-left w-[120px]">Expires in</th>
-                                        <th className="p-3 text-left w-[200px]">Action</th>
-                                    </tr>
-                                </thead>
+                                        <TableHead className="w-[120px]">Expires in</TableHead>
+                                        <TableHead className="w-[200px]">Action</TableHead>
+                                    </TableRow>
+                                </TableHeader>
                                 {(groupBy === 'none'
                                     ? [{ key: '__all__', label: '', items: filteredBidOpportunities, accent: undefined } as const]
                                     : groupOpportunities(filteredBidOpportunities, groupBy)
                                 ).map(g => (
-                                  <tbody key={g.key}>
+                                  <TableBody key={g.key}>
                                     {groupBy !== 'none' && (
-                                        <tr className="bg-muted/40">
-                                            <td colSpan={isBulkModeActive ? 11 : 10} className="px-3 py-1.5">
+                                        <tr>
+                                            <td colSpan={isBulkModeActive ? 11 : 10} className={tableTokens.band}>
                                                 <div className="flex items-center gap-2">
                                                     {g.accent && <span className={cn('h-2 w-2 rounded-full', g.accent.dot)} />}
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.15em] text-foreground/70">{g.label}</span>
-                                                    <span className="text-[10px] font-bold tabular-nums text-muted-foreground/60">{g.items.length}</span>
+                                                    <span className="text-foreground/80">{g.label}</span>
+                                                    <span className="tabular-nums">{g.items.length}</span>
                                                 </div>
                                             </td>
                                         </tr>
@@ -1047,10 +904,10 @@ export const EmployeeBidsPage: React.FC = () => {
                                                           (participationStatus === 'pending' && !!currentBid);
 
                                         return (
-                                            <tr 
+                                            <TableRow 
                                                 key={opp.id} 
                                                 className={cn(
-                                                    "border-t border-border/50 transition-colors cursor-pointer",
+                                                    "cursor-pointer",
                                                     getRowClass(opp.groupType, opp.group || opp.department)
                                                 )}
                                                 onClick={() => {
@@ -1062,7 +919,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 }}
                                             >
                                                 {isBulkModeActive && (
-                                                    <td className="p-3" onClick={e => e.stopPropagation()}>
+                                                    <TableCell onClick={e => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedV8ShiftIds.includes(opp.id)}
@@ -1070,28 +927,28 @@ export const EmployeeBidsPage: React.FC = () => {
                                                             disabled={!canSelect}
                                                             className="h-4 w-4 rounded border-border/50 accent-primary cursor-pointer"
                                                         />
-                                                    </td>
+                                                    </TableCell>
                                                 )}
-                                                <td className="p-3 font-medium">{opp.department}</td>
-                                                <td className="p-3 text-muted-foreground/80">{opp.subDepartment}</td>
-                                                <td className="p-3 font-medium text-foreground/80">{opp.group}</td>
-                                                <td className="p-3">
+                                                <TableCell className="font-medium">{opp.department}</TableCell>
+                                                <TableCell className="text-muted-foreground/80">{opp.subDepartment}</TableCell>
+                                                <TableCell className="font-medium text-foreground/80">{opp.group}</TableCell>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         <div className={cn("w-1.5 h-1.5 rounded-full", opp.subGroupColor || 'bg-slate-400')} />
                                                         {opp.subGroupName}
                                                     </div>
-                                                </td>
-                                                <td className="p-3 font-bold text-primary">{opp.role}</td>
-                                                <td className="p-3">{format(parseISO(opp.date), 'EEE d MMM')}</td>
-                                                <td className="p-3 tabular-nums font-mono">{opp.startTime}–{opp.endTime}</td>
-                                                <td className="p-3 font-mono text-muted-foreground">
+                                                </TableCell>
+                                                <TableCell className="font-bold text-primary">{opp.role}</TableCell>
+                                                <TableCell>{format(parseISO(opp.date), 'EEE d MMM')}</TableCell>
+                                                <TableCell className="tabular-nums font-mono">{opp.startTime}–{opp.endTime}</TableCell>
+                                                <TableCell className="font-mono text-muted-foreground">
                                                     {(() => {
                                                         const h = Math.floor(opp.netLength / 60);
                                                         const m = Math.round(opp.netLength % 60);
                                                         return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`;
                                                     })()}
-                                                </td>
-                                                <td className="p-3 font-mono text-[11px] tabular-nums">
+                                                </TableCell>
+                                                <TableCell className="font-mono tabular-nums">
                                                     {(() => {
                                                         const tr = calculateTimeRemaining(biddingCloses.toISOString());
                                                         if (tr.isExpired) return <span className="text-muted-foreground/50 italic">Closed</span>;
@@ -1103,19 +960,19 @@ export const EmployeeBidsPage: React.FC = () => {
                                                             </span>
                                                         );
                                                     })()}
-                                                </td>
-                                                <td className="p-3">
+                                                </TableCell>
+                                                <TableCell>
                                                     {participationStatus === 'dropped' && (
-                                                        <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Dropped</span>
+                                                        <span className="text-[11px] text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Dropped</span>
                                                     )}
                                                     {participationStatus === 'rejected_offer' && (
-                                                        <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Rejected</span>
+                                                        <span className="text-[11px] text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Rejected</span>
                                                     )}
                                                     {participationStatus === 'not_participated' && !isExpired && (
                                                         opp.isEligible ? (
                                                             <Button
                                                                 size="sm"
-                                                                className="h-8 text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                                                                className="h-8 text-[11px] font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
                                                                 disabled={placeBidMutation.isPending}
                                                                 onClick={() => handleQuickBid(opp)}
                                                             >
@@ -1129,9 +986,9 @@ export const EmployeeBidsPage: React.FC = () => {
                                                             <TooltipProvider>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <span className="text-xs text-rose-500 flex items-center gap-1 font-medium opacity-60 cursor-help"><Ban size={12} /> Ineligible</span>
+                                                                        <span className="text-[11px] text-rose-500 flex items-center gap-1 font-medium opacity-60 cursor-help"><Ban size={12} /> Ineligible</span>
                                                                     </TooltipTrigger>
-                                                                    <TooltipContent side="top" className="max-w-[220px] text-[10px] font-black uppercase tracking-wider p-2.5 rounded-xl border border-border/45 shadow-xl bg-background text-foreground z-50">
+                                                                    <TooltipContent side="top" className="max-w-[220px] text-[11px] font-black uppercase tracking-wider p-2.5 rounded-xl border border-border/45 shadow-xl bg-background text-foreground z-50">
                                                                         {opp.ineligibilityReason ?? 'You are not eligible for this shift'}
                                                                     </TooltipContent>
                                                                 </Tooltip>
@@ -1139,16 +996,16 @@ export const EmployeeBidsPage: React.FC = () => {
                                                         )
                                                     )}
                                                     {participationStatus === 'not_participated' && isExpired && (
-                                                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium italic"><Ban size={12} /> Closed</span>
+                                                        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium italic"><Ban size={12} /> Closed</span>
                                                     )}
                                                     {participationStatus === 'pending' && (
                                                         <div className="flex gap-2 items-center">
-                                                            <span className="text-xs text-amber-500 flex items-center gap-1 font-bold"><Clock size={12} /> Pending</span>
+                                                            <span className="text-[11px] text-amber-500 flex items-center gap-1 font-bold"><Clock size={12} /> Pending</span>
                                                             {!isExpired && currentBid && (
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="h-7 text-[10px] font-black uppercase tracking-widest border-border/40 hover:bg-red-500/10 hover:text-red-400"
+                                                                    className="h-7 text-[11px] font-black uppercase tracking-widest border-border/40 hover:bg-red-500/10 hover:text-red-400"
                                                                     onClick={() => handleWithdrawBid(currentBid.id)}
                                                                     disabled={withdrawBidMutation.isPending}
                                                                 >
@@ -1158,33 +1015,33 @@ export const EmployeeBidsPage: React.FC = () => {
                                                         </div>
                                                     )}
                                                     {participationStatus === 'selected' && (
-                                                        <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold"><CheckCircle size={12} /> Selected</span>
+                                                        <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-bold"><CheckCircle size={12} /> Selected</span>
                                                     )}
                                                     {participationStatus === 'rejected' && (
-                                                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Not Selected</span>
+                                                        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Not Selected</span>
                                                     )}
                                                     {participationStatus === 'expired' && (
-                                                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Expired</span>
+                                                        <span className="text-[11px] text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Expired</span>
                                                     )}
                                                     {participationStatus === 'auto_rejected' && (
-                                                        <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><Ban size={12} /> Auto-Rejected</span>
+                                                        <span className="text-[11px] text-rose-500 flex items-center gap-1 font-bold"><Ban size={12} /> Auto-Rejected</span>
                                                     )}
-                                                </td>
-                                            </tr>
+                                                </TableCell>
+                                            </TableRow>
                                         );
                                     })}
-                                  </tbody>
+                                  </TableBody>
                                 ))}
                                 {filteredBidOpportunities.length === 0 && (
-                                    <tbody>
-                                        <tr>
-                                            <td colSpan={isBulkModeActive ? 11 : 10} className="p-12 text-center text-muted-foreground/60 italic text-sm">
+                                    <TableBody>
+                                        <TableRow>
+                                            <TableCell colSpan={isBulkModeActive ? 11 : 10} className="text-center text-muted-foreground/60 italic">
                                                 No matching shifts found.
-                                            </td>
-                                        </tr>
-                                    </tbody>
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
                                 )}
-                            </table>
+                            </Table>
                         </div>
                     </div>
                 )}
@@ -1229,7 +1086,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 placingBidId={placeBidMutation.variables}
                 isWithdrawing={withdrawBidMutation.isPending}
             />
-        </div>
+        </PageLayout>
     );
 };
 

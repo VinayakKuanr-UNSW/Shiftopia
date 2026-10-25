@@ -73,7 +73,7 @@ const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) =>
                     }}
                     onMouseEnter={() => setOpen(true)}
                     onMouseLeave={() => setOpen(false)}
-                    className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ml-1"
+                    className="text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ml-1"
                     aria-label={`View ${extraCount} additional contracts held by ${member.fullName}`}
                 >
                     +{extraCount} more
@@ -88,10 +88,10 @@ const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) =>
             >
                 <div className="space-y-2">
                     <div className="flex items-center justify-between border-b border-border/40 pb-1.5">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                        <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                             All Contracts ({contracts.length})
                         </span>
-                        <span className="text-xs font-bold text-foreground truncate max-w-[120px]">
+                        <span className="text-[11px] font-bold text-foreground truncate max-w-[120px]">
                             {member.fullName}
                         </span>
                     </div>
@@ -99,13 +99,13 @@ const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) =>
                         {contracts.map((c, i) => (
                             <div
                                 key={i}
-                                className="flex items-center justify-between gap-2 p-1.5 rounded-xl bg-muted/30 border border-border/20 text-xs"
+                                className="flex items-center justify-between gap-2 p-1.5 rounded-xl bg-muted/30 border border-border/20 text-[11px]"
                             >
                                 <span className="font-bold text-foreground truncate">
                                     {c.roleName ?? 'No role'}
                                 </span>
                                 {c.employmentStatus && (
-                                    <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-background text-muted-foreground border border-border/30 shrink-0">
+                                    <span className="text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-background text-muted-foreground border border-border/30 shrink-0">
                                         {c.employmentStatus}
                                     </span>
                                 )}
@@ -186,76 +186,6 @@ const getInitials = (name: string) => {
     return name.slice(0, 2).toUpperCase();
 };
 
-const StateLegend: React.FC<{ isDark: boolean }> = ({ isDark }) => (
-    // Reads from the same tokens the cells do, so the key can never drift from
-    // what it is a key for.
-    <div className="flex flex-wrap items-center gap-1.5 py-0.5">
-        {TEAM_DAY_STATE_ORDER.map((state) => {
-            const soft = stateSoft(state, isDark);
-            return (
-                <span
-                    key={state}
-                    className={cn(
-                        'flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs text-foreground',
-                        soft.dashed && 'border-dashed',
-                    )}
-                    style={{
-                        backgroundColor: soft.bg,
-                        borderColor: soft.border ?? '#89878152',
-                    }}
-                >
-                    {/* Same glyph the cells carry — the dot alone would make the
-                        legend a colour key for an encoding that is not colour. */}
-                    {TEAM_DAY_STATE_LABELS[state]}
-                </span>
-            );
-        })}
-    </div>
-);
-
-const CollapsibleBadgeLegend: React.FC<{ isDark: boolean }> = ({ isDark }) => {
-    const [isCollapsed, setIsCollapsed] = React.useState(true);
-
-    return (
-        <div
-            className={cn(
-                'rounded-2xl border border-slate-200/80 dark:border-white/5 bg-slate-50/50 dark:bg-[#141c2e]/60 backdrop-blur-md overflow-hidden transition-all duration-300 shrink-0',
-            )}
-        >
-            <button
-                type="button"
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-full flex items-center justify-between px-3.5 py-2 hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-                <div className="flex items-center gap-2.5">
-                    <div className="p-1 rounded-lg bg-primary/10 text-primary">
-                        <HelpCircle className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="text-left">
-                        <p className="text-[10px] font-black tracking-wider uppercase text-foreground leading-none">
-                            BADGE LEGEND
-                        </p>
-                        <p className="text-[9px] text-muted-foreground font-medium mt-0.5 leading-none">
-                            INDICATOR & STATUS REFERENCE
-                        </p>
-                    </div>
-                </div>
-                <ChevronDown
-                    className={cn(
-                        'h-4 w-4 text-muted-foreground transition-transform duration-200',
-                        !isCollapsed && 'rotate-180',
-                    )}
-                />
-            </button>
-
-            {!isCollapsed && (
-                <div className="px-3.5 pb-3 pt-1 border-t border-slate-200/60 dark:border-white/5">
-                    <StateLegend isDark={isDark} />
-                </div>
-            )}
-        </div>
-    );
-};
 
 /**
  * The worst fatigue reached inside one week column.
@@ -383,7 +313,7 @@ const WeekTotalCell: React.FC<{
                             return (
                                 <span
                                     key={w.weeks}
-                                    className="text-[7px] font-black px-1 py-px rounded leading-none border"
+                                    className="text-[11px] font-black px-1 py-px rounded leading-none border"
                                     style={{ color: ws.mark, borderColor: ws.border, backgroundColor: ws.bg }}
                                 >
                                     {w.weeks}W
@@ -460,12 +390,12 @@ const RowSummary: React.FC<{
             <Icon className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: style.mark }} aria-hidden="true" />
             <div className="flex flex-col min-w-0">
                 <span
-                    className="text-[10px] font-black uppercase tracking-tight leading-none mb-0.5"
+                    className="text-[11px] font-black uppercase tracking-tight leading-none mb-0.5"
                     style={{ color: style.mark }}
                 >
                     {title}
                 </span>
-                <span className="text-[9px] text-muted-foreground leading-tight truncate" title={detail}>
+                <span className="text-[11px] text-muted-foreground leading-tight truncate" title={detail}>
                     {detail}
                 </span>
             </div>
@@ -555,7 +485,7 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
             'w-full h-full flex items-center justify-center gap-1 rounded-xl border transition-all duration-150 cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary text-foreground',
             density === 'comfortable'
                 ? 'px-2.5 py-1 text-[11px] font-extrabold tabular-nums'
-                : 'text-[10px] font-black',
+                : 'text-[11px] font-black',
         );
 
         if (cellMode === 'hours') {
@@ -793,10 +723,10 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
     if (members.length === 0) {
         return (
             <div className="py-12 text-center border rounded-2xl bg-muted/10">
-                <p className="text-xs font-semibold text-muted-foreground">
+                <p className="text-[11px] font-semibold text-muted-foreground">
                     No team members match the current scope and filters.
                 </p>
-                <p className="text-[10px] text-muted-foreground/70 mt-1">
+                <p className="text-[11px] text-muted-foreground/70 mt-1">
                     Widen the scope, or clear the role and employment filters.
                 </p>
             </div>
@@ -804,9 +734,7 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
     }
 
     return (
-        <div className="flex flex-col h-full space-y-2.5">
-            <CollapsibleBadgeLegend isDark={isDark} />
-
+        <div className="flex flex-col h-full">
             <div className="flex-1 min-h-0 overflow-auto scrollbar-none max-h-[calc(100vh-240px)] relative rounded-2xl border border-slate-200/80 dark:border-white/5 bg-background/50 shadow-inner">
                 <table className="w-full border-separate border-spacing-0">
                     <caption className="sr-only">
@@ -818,7 +746,7 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
                             <th
                                 scope="col"
                                 className={cn(
-                                    'sticky left-0 top-0 z-30 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground py-3 px-3.5 border-b border-r border-slate-200/60 dark:border-white/5 shadow-xs',
+                                    'sticky left-0 top-0 z-30 text-left text-[11px] font-black uppercase tracking-widest text-muted-foreground py-3 px-3.5 border-b border-r border-slate-200/60 dark:border-white/5 shadow-xs',
                                     stickyBg,
                                 )}
                                 style={{ width: NAME_COL, minWidth: NAME_COL }}
@@ -837,10 +765,10 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
                                             )}
                                             style={{ minWidth: cellW, width: dayWidth }}
                                         >
-                                            <span className="block text-[10px] font-black uppercase tracking-wider leading-none">
+                                            <span className="block text-[11px] font-black uppercase tracking-wider leading-none">
                                                 {format(parseISO(d), 'EEE')}
                                             </span>
-                                            <span className="block text-xs font-black tabular-nums mt-0.5 leading-none">
+                                            <span className="block text-[11px] font-black tabular-nums mt-0.5 leading-none">
                                                 {format(parseISO(d), 'd MMM')}
                                             </span>
                                             <span className="sr-only">
@@ -857,10 +785,10 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
                                             )}
                                             style={{ minWidth: WEEK_COL, width: WEEK_COL }}
                                         >
-                                            <span className="block text-[10px] font-black uppercase tracking-wider leading-none">
+                                            <span className="block text-[11px] font-black uppercase tracking-wider leading-none">
                                                 {group.week.label}
                                             </span>
-                                            <span className="block text-[9px] font-bold mt-0.5 leading-none opacity-70">
+                                            <span className="block text-[11px] font-bold mt-0.5 leading-none opacity-70">
                                                 {group.week.isPartial ? 'Full wk' : 'Total'}
                                             </span>
                                             <span className="sr-only">
@@ -876,7 +804,7 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
                                 <th
                                     scope="col"
                                     className={cn(
-                                        'sticky right-0 top-0 z-30 py-2.5 px-3 text-left text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-l border-slate-200/60 dark:border-white/5 shadow-xs',
+                                        'sticky right-0 top-0 z-30 py-2.5 px-3 text-left text-[11px] font-black uppercase tracking-widest text-muted-foreground border-b border-l border-slate-200/60 dark:border-white/5 shadow-xs',
                                         stickyBg,
                                     )}
                                     style={{ minWidth: STATUS_COL, width: STATUS_COL }}
@@ -919,7 +847,7 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
                                             <div className="flex items-center gap-2.5">
                                                 <div
                                                     className={cn(
-                                                        'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 border shadow-2xs',
+                                                        'w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 border shadow-2xs',
                                                         !avatarStyle &&
                                                             'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground border-primary/20',
                                                     )}
@@ -940,11 +868,11 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
                                                         {member.fullName}
                                                     </span>
                                                     <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                                        <span className="text-[10px] font-medium text-muted-foreground truncate max-w-[110px]" title={member.roleName ?? 'No role'}>
+                                                        <span className="text-[11px] font-medium text-muted-foreground truncate max-w-[110px]" title={member.roleName ?? 'No role'}>
                                                             {member.roleName ?? 'No role'}
                                                         </span>
                                                         {member.employmentStatus && (
-                                                            <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground shrink-0 border border-border/30">
+                                                            <span className="text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground shrink-0 border border-border/30">
                                                                 {member.employmentStatus}
                                                             </span>
                                                         )}
@@ -952,7 +880,7 @@ export const TeamAvailabilityGrid: React.FC<Props> = ({
                                                             does not itself enforce. */}
                                                         {isRestricted && (
                                                             <span
-                                                                className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0"
+                                                                className="inline-flex items-center gap-0.5 text-[11px] font-black uppercase tracking-tighter px-1 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0"
                                                                 title="Work-limited visa — hours are capped by their visa conditions"
                                                             >
                                                                 <GraduationCap className="h-2 w-2" aria-hidden="true" />

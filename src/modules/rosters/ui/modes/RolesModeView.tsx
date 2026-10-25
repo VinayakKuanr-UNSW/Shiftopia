@@ -1,3 +1,4 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo } from 'react';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import { format, addDays, parse, isToday } from 'date-fns';
@@ -629,7 +630,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   };
 
   const isLoading = !projection && (isLoadingLevels || isLoadingRoles || isLoadingShifts);
-  if (isLoading) return <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground gap-3"><Loader2 className="w-8 h-8 animate-spin" /><p className="text-sm font-medium tracking-wide">Loading roles…</p></div>;
+  if (isLoading) return <PageState state="loading" className="h-[400px]" title="Loading roles" />;
 
   const totalHours = projection?.stats?.totalNetMinutes != null ? (projection.stats.totalNetMinutes / 60).toFixed(1) : '—';
   const estCost = projection?.stats?.estimatedCost ?? 0;
@@ -638,7 +639,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     <div className="flex flex-col h-full bg-background relative overflow-hidden">
       {isDnDModeActive && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
-          <Badge className="px-4 py-1.5 bg-emerald-600 text-white border border-emerald-500/40 shadow-sm flex items-center gap-2 text-xs font-semibold rounded-full">
+          <Badge className="px-4 py-1.5 bg-emerald-600 text-white border border-emerald-500/40 shadow-sm flex items-center gap-2 text-[11px] font-semibold rounded-full">
             <Zap className="h-3.5 w-3.5" />
             DnD Mode Active
           </Badge>
@@ -660,9 +661,9 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                       <th key={date.toISOString()} data-today={isToday ? "true" : undefined} className={cn("sticky top-0 z-20 min-w-[180px] px-3 py-2.5 text-center transition-colors bg-muted/80 backdrop-blur-md dark:bg-muted/40", holidayName ? "bg-amber-500/10 dark:bg-amber-500/15 border-b-0" : "border-b border-border", isToday && "bg-primary/5")}>
                         <div className={cn("text-[11px] font-bold uppercase tracking-[0.12em] font-mono leading-tight", holidayName ? "text-amber-400 font-extrabold" : isToday ? "text-primary font-bold" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
                         <div className="flex items-center justify-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className={cn("text-sm font-mono tabular-nums leading-none", holidayName ? "text-amber-300 font-bold" : isToday ? "text-primary font-bold" : "text-muted-foreground/60 font-medium")}>{format(date, 'MMM d')}</span>
+                          <span className={cn("text-[13px] font-mono tabular-nums leading-none", holidayName ? "text-amber-300 font-bold" : isToday ? "text-primary font-bold" : "text-muted-foreground/60 font-medium")}>{format(date, 'MMM d')}</span>
                           {holidayName && (
-                            <span className="text-xs italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
+                            <span className="text-[11px] italic font-normal text-amber-400 dark:text-amber-300 truncate max-w-[140px]" title={`ANZ Public Holiday: ${holidayName}`}>
                               {holidayName}
                             </span>
                           )}
@@ -687,7 +688,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                     >
                       {collapsedLevels.has(group.levelNumber) ? <ChevronRight className="w-4 h-4 text-indigo-400" /> : <ChevronDown className="w-4 h-4 text-indigo-400" />}
                     </button>
-                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 font-mono">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 font-mono">
                       {group.levelLabel}
                     </span>
                     <Badge variant="outline" className="text-[11px] font-bold font-mono h-5 bg-indigo-500/10 border-indigo-500/30 text-indigo-300 px-2">
@@ -700,7 +701,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
               {!collapsedLevels.has(group.levelNumber) && group.roles.map((role, idx) => (
                 <tr key={role.id} className={cn("group transition-colors", idx % 2 === 0 ? "bg-card" : "bg-muted/20", "hover:bg-muted/40")}>
                   <td className="sticky left-0 z-20 w-[240px] min-w-[240px] px-4 py-3 align-middle border-r border-b border-border bg-card/90 backdrop-blur-md group-hover:bg-accent/40 transition-colors shadow-[2px_0_6px_-2px_rgba(0,0,0,0.1)]">
-                    <span className="text-sm font-semibold text-foreground/90 group-hover:text-foreground transition-colors">{role.name}</span>
+                    <span className="text-[13px] font-semibold text-foreground/90 group-hover:text-foreground transition-colors">{role.name}</span>
                   </td>
                   {dates.map(date => {
                     const dStr = format(date, 'yyyy-MM-dd');
@@ -724,25 +725,19 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                               detailedCost={(s as any).detailedCost}
                             />
                           ))}
-                          {/* For cells WITH shifts: Horizontal container with + in the middle */}
+                          {/* For cells WITH shifts: Reserved row with + at the bottom right */}
                           {canEdit && !isBulkMode && !isSydneyPast(date) && cellShifts.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCellClick(role.id, date);
-                              }}
-                              title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
-                              aria-label={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
-                              className={cn(
-                                "w-full h-7 rounded-lg border border-dashed transition-all flex items-center justify-center cursor-pointer select-none group/add-strip",
-                                holidayName
-                                  ? "border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/15 text-amber-400"
-                                  : "border-white/10 hover:border-primary/40 bg-slate-900/40 hover:bg-primary/10 text-slate-400 hover:text-primary"
-                              )}
-                            >
-                              <Plus className="h-4 w-4 transition-transform duration-200 group-hover/add-strip:scale-110" />
-                            </button>
+                            <div className="flex items-center justify-end w-full pt-1 mt-auto">
+                              <RosterCellAddButton
+                                onClick={(e) => {
+                                  e?.stopPropagation();
+                                  handleCellClick(role.id, date);
+                                }}
+                                hasShifts={true}
+                                holidayName={holidayName}
+                                title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
+                              />
+                            </div>
                           )}
 
                           {/* For EMPTY cells: Centered add button */}
@@ -777,14 +772,14 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
       </div>
 
       <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <AlertDialogContent className="bg-background border-border">
+        <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Unpublish Shift</AlertDialogTitle><AlertDialogDescription>This shift will be reverted to Draft.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleConfirmUnpublish} className="bg-amber-600">Unpublish</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="bg-background border-border">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-destructive">Delete Shift</AlertDialogTitle>
             <AlertDialogDescription>

@@ -303,7 +303,7 @@ export default function DayInteractionModal({
   // Show warning for past dates
   if (isPastDate) {
     return (
-      <ResponsiveDialog open={isOpen} onOpenChange={onClose} dialogClassName="max-w-md">
+      <ResponsiveDialog open={isOpen} onOpenChange={onClose} size="md">
         <ResponsiveDialog.Header>
           <ResponsiveDialog.Title className="flex items-center gap-2 text-yellow-600">
             <AlertTriangle className="h-5 w-5" />
@@ -328,7 +328,7 @@ export default function DayInteractionModal({
   }
 
   return (
-    <ResponsiveDialog open={isOpen} onOpenChange={onClose} dialogClassName="max-w-2xl">
+    <ResponsiveDialog open={isOpen} onOpenChange={onClose} size="lg">
       <ResponsiveDialog.Header>
         <ResponsiveDialog.Title className="flex items-center gap-2">
           <Clock className="h-5 w-5" />
@@ -341,7 +341,7 @@ export default function DayInteractionModal({
 
       <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
         {isLocked && (
-          <div className="mb-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200 text-sm">
+          <div className="mb-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200 text-[13px]">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             <span>This calendar is locked. You cannot modify availability.</span>
           </div>
@@ -383,14 +383,14 @@ export default function DayInteractionModal({
           {/* Time Slots Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-medium">Time Slots</Label>
+              <Label className="text-[14px] font-medium">Time Slots</Label>
             </div>
 
             {timeSlots.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Clock className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>No time slots set</p>
-                <p className="text-sm">Use quick actions above or add a custom time slot below</p>
+                <p className="text-[13px]">Use quick actions above or add a custom time slot below</p>
                 <Button
                   onClick={addTimeSlot}
                   variant="outline"
@@ -413,7 +413,7 @@ export default function DayInteractionModal({
 
                     {/* Start Time Input */}
                     <div className="flex-1">
-                      <Label className="text-xs text-muted-foreground">Start</Label>
+                      <Label className="text-[11px] text-muted-foreground">Start</Label>
                       <Input
                         type="time"
                         value={slot.startTime}
@@ -426,7 +426,7 @@ export default function DayInteractionModal({
 
                     {/* End Time Input */}
                     <div className="flex-1">
-                      <Label className="text-xs text-muted-foreground">End</Label>
+                      <Label className="text-[11px] text-muted-foreground">End</Label>
                       <Input
                         type="time"
                         value={slot.endTime}

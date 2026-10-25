@@ -72,7 +72,7 @@ export const SingleSelect: React.FC<SingleSelectProps> = ({
                 <button
                     id={id}
                     className={cn(
-                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
+                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-300",
                         "border justify-between w-full h-14 border-border",
                         "hover:scale-[1.01] active:scale-[0.99] relative z-20",
                         isOpen ? "ring-2 ring-indigo-500 bg-indigo-500/5 shadow-indigo-500/20 border-indigo-400/80" : "",
@@ -88,7 +88,7 @@ export const SingleSelect: React.FC<SingleSelectProps> = ({
                     aria-required={required}
                 >
                     <div className="flex flex-col items-start gap-0.5 min-w-0">
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
                             {label}
                             {required && (
                                 <span className="ml-1 text-rose-500 font-bold" aria-hidden="true">
@@ -97,7 +97,7 @@ export const SingleSelect: React.FC<SingleSelectProps> = ({
                             )}
                         </span>
                         <span className={cn(
-                            "truncate text-xs sm:text-sm font-semibold",
+                            "truncate text-[11px] sm:text-[13px] font-semibold",
                             selectedOption
                                 ? "text-slate-900 dark:text-slate-100"
                                 : "text-slate-500 dark:text-slate-400 font-normal"
@@ -131,7 +131,7 @@ export const SingleSelect: React.FC<SingleSelectProps> = ({
                         <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 dark:border-white/10 overflow-hidden [&_[cmdk-input-wrapper]]:border-b-0">
                             <CommandInput 
                                 placeholder={`Search ${label.toLowerCase()}...`} 
-                                className="h-14 text-base border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
+                                className="h-14 text-[14px] border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
                                 autoFocus
                             />
                         </div>
@@ -139,7 +139,7 @@ export const SingleSelect: React.FC<SingleSelectProps> = ({
                         {/* Results Container */}
                         <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
                             <CommandList className="max-h-[300px] p-1.5 scrollbar-none overflow-x-hidden">
-                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-sm">
+                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-[13px]">
                                     No {label.toLowerCase()} found.
                                 </CommandEmpty>
                                 
@@ -169,7 +169,7 @@ export const SingleSelect: React.FC<SingleSelectProps> = ({
                                                     )}>
                                                         {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                                                     </div>
-                                                    <span className="font-semibold text-sm sm:text-base truncate">
+                                                    <span className="font-semibold text-[13px] sm:text-[14px] truncate">
                                                         {opt.name}
                                                     </span>
                                                 </div>
@@ -181,7 +181,7 @@ export const SingleSelect: React.FC<SingleSelectProps> = ({
                             </CommandList>
                             
                             {/* Navigation Guides Footer */}
-                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-indigo-500/5 dark:border-white/5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-indigo-500/50 dark:text-muted-foreground/50">
+                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-indigo-500/5 dark:border-white/5 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.2em] text-indigo-500/50 dark:text-muted-foreground/50">
                                 <div className="flex items-center gap-4">
                                     <span className="flex items-center gap-1">
                                         <kbd className="px-1 py-0.5 rounded border border-indigo-500/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-indigo-500/70 dark:text-inherit font-sans">↑↓</kbd> NAV

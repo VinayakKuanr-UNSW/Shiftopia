@@ -48,6 +48,7 @@ interface PublishRosterButtonProps {
   execute: (plan: PublishRosterPlan) => Promise<PublishRosterResult>;
   selectedViewType?: string;
   selectedViewRange?: string;
+  className?: string;
 }
 
 /**
@@ -91,6 +92,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   execute,
   selectedViewType,
   selectedViewRange,
+  className,
 }) => {
   const [state, setState] = useState<State>({ type: 'idle' });
   const { toast } = useToast();
@@ -278,27 +280,32 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
             aria-describedby={explain ? reasonId : undefined}
             aria-label="Publish roster — send offers, open bidding"
             className={cn(
-              'h-10 min-h-[44px] sm:min-h-[36px] sm:h-9 gap-2 rounded-xl px-4 text-xs font-extrabold uppercase tracking-wider shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950 flex items-center justify-center',
-              'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95',
-              'aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-emerald-600 aria-disabled:active:scale-100',
+              'h-10 w-10 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950',
+              'text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/20 active:scale-95',
+              disabled && 'opacity-40 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent text-slate-400 dark:text-slate-600 active:scale-100',
+              className,
             )}
             title={explain ? undefined : 'Publish roster — send offers, open bidding'}
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
+              <Loader2 className="h-5 w-5 animate-spin shrink-0" aria-hidden="true" />
             ) : (
-              <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <Send className="h-5 w-5 shrink-0" aria-hidden="true" />
             )}
-            Publish
             {explain && <span id={reasonId} className="sr-only">{explain}</span>}
           </button>
         );
-        if (!explain) return trigger;
+
         return (
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs text-xs">{explain}</TooltipContent>
+              <TooltipContent
+                side="bottom"
+                className="text-[11px] uppercase font-extrabold tracking-wider bg-slate-900 border border-slate-700 text-white shadow-xl px-2.5 py-1 rounded-md max-w-xs"
+              >
+                {explain || 'Publish roster — send offers, open bidding'}
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         );
@@ -310,9 +317,9 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
           if (!open && !isExecuting) setState({ type: 'idle' });
         }}
       >
-        <AlertDialogContent className="max-w-xl rounded-2xl border border-slate-200 dark:border-white/10 p-8 bg-white dark:bg-slate-950 shadow-2xl">
+        <AlertDialogContent className="border-slate-200 bg-white dark:bg-slate-950">
           <AlertDialogHeader className="space-y-5">
-            <AlertDialogTitle className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
+            <AlertDialogTitle className="flex items-center gap-2.5">
               Confirm Publish
             </AlertDialogTitle>
             
@@ -322,16 +329,16 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                 <Calendar className="h-6 w-6" />
               </div>
               <div className="flex flex-col text-left">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/40">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-white/40">
                   VIEW SELECTED
                 </span>
                 {selectedViewType && (
-                  <span className="text-base font-extrabold text-slate-900 dark:text-white">
+                  <span className="text-[14px] font-extrabold text-slate-900 dark:text-white">
                     {selectedViewType}
                   </span>
                 )}
                 {selectedViewRange && (
-                  <span className="text-sm text-slate-500 dark:text-white/60 font-semibold mt-0.5">
+                  <span className="text-[13px] text-slate-500 dark:text-white/60 font-semibold mt-0.5">
                     {selectedViewRange}
                   </span>
                 )}
@@ -339,14 +346,14 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
             </div>
 
             <AlertDialogDescription asChild>
-              <div className="space-y-6 text-sm">
+              <div className="space-y-6 text-[13px]">
                 {nothingToDo ? (
-                  <p className="text-muted-foreground text-center py-6 text-base font-medium">
+                  <p className="text-muted-foreground text-center py-6 text-[14px] font-medium">
                     No draft shifts in the current view — nothing to publish.
                   </p>
                 ) : (
                   <>
-                    <p className="text-slate-600 dark:text-slate-400 text-left text-sm font-semibold">
+                    <p className="text-slate-600 dark:text-slate-400 text-left text-[13px] font-semibold">
                       {nothingPublishable
                         ? 'Nothing in this view can be published — every draft is skipped for a reason below.'
                         : 'The following will be applied to every draft shift in the current view:'}
@@ -360,7 +367,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                           <div key={i} className="relative flex items-start gap-4">
                             <div
                               className={cn(
-                                'absolute left-[-25px] flex items-center justify-center w-7 h-7 rounded-full border bg-white dark:bg-slate-950 text-xs font-black transition-colors',
+                                'absolute left-[-25px] flex items-center justify-center w-7 h-7 rounded-full border bg-white dark:bg-slate-950 text-[11px] font-black transition-colors',
                                 active
                                   ? TONE_NODE[step.tone]
                                   : 'border-slate-200 dark:border-white/10 text-slate-400',
@@ -375,7 +382,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                             <div className="flex flex-col">
                               <span
                                 className={cn(
-                                  'text-base font-bold',
+                                  'text-[14px] font-bold',
                                   active
                                     ? 'text-slate-900 dark:text-white'
                                     : 'text-slate-400 dark:text-white/40',
@@ -385,7 +392,7 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
                               </span>
                               <span
                                 className={cn(
-                                  'text-sm',
+                                  'text-[13px]',
                                   active && step.tone === 'danger'
                                     ? 'text-red-500 font-semibold'
                                     : active && step.tone === 'warning'
@@ -408,12 +415,12 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
           <AlertDialogFooter className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
             <AlertDialogCancel 
               disabled={isExecuting}
-              className="w-full sm:w-auto rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 py-6 h-12 font-bold transition-all text-sm"
+              className="w-full sm:w-auto border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 py-6 font-bold text-[13px]"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              className="w-full sm:w-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white/90 font-bold rounded-xl py-6 h-12 shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+              className="w-full sm:w-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white/90 font-bold py-6 shadow-md flex items-center justify-center gap-2 text-[13px]"
               onClick={(e) => {
                 e.preventDefault();
                 handleConfirm();

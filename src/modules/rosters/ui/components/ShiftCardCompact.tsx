@@ -205,7 +205,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 <TooltipTrigger asChild>
                   <si.icon className={cn("h-3 w-3", si.color)} />
                 </TooltipTrigger>
-                <TooltipContent className="text-[10px] py-1 px-2">{si.tooltip}</TooltipContent>
+                <TooltipContent className="text-[11px] py-1 px-2">{si.tooltip}</TooltipContent>
               </Tooltip>
             ))}
           </div>
@@ -217,10 +217,10 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
         {/* IDENTITY */}
         <div className="text-center space-y-1">
-          <div className="text-lg font-bold text-foreground leading-none truncate">
+          <div className="text-[15px] font-bold text-foreground leading-none truncate">
             {shift.employeeName || 'Unassigned'}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium truncate">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium truncate">
             {shift.role}
           </div>
           {/* DEEP DEBUG: Removed */}
@@ -230,7 +230,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
         <div className="flex justify-center">
           <div className="bg-muted border border-border rounded-lg px-4 py-2 flex items-center gap-3 shadow-inner">
             <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-sm font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-wider">
+            <span className="text-[13px] font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-wider">
               {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
             </span>
           </div>
@@ -242,8 +242,8 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
             {/* 1. ID */}
             <div className="flex flex-col items-center gap-0.5">
-              <div className="w-4 h-4 flex items-center justify-center font-mono font-bold text-[10px] text-muted-foreground border border-border rounded">#</div>
-              <span className={cn("text-[9px] font-bold text-center text-blue-600 dark:text-blue-400")}>
+              <div className="w-4 h-4 flex items-center justify-center font-mono font-bold text-[11px] text-muted-foreground border border-border rounded">#</div>
+              <span className={cn("text-[11px] font-bold text-center text-blue-600 dark:text-blue-400")}>
                 {(FSM_STATE_META as Record<string, { displayId: string }>)[stateId]?.displayId ?? stateId}
               </span>
             </div>
@@ -257,7 +257,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (isAssigned) return <UserCheck className="w-4 h-4 text-green-600" />;
                 return <UserPlus className="w-4 h-4 text-amber-500" />;
               })()}
-              <span className="text-[9px] font-bold text-muted-foreground capitalize truncate w-full text-center">
+              <span className="text-[11px] font-bold text-muted-foreground capitalize truncate w-full text-center">
                 {shift.employeeName || shift.assignedEmployeeId ? 'Assigned' : 'Unassigned'}
               </span>
             </div>
@@ -275,7 +275,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (o === 'confirmed') return <BadgeCheck className="w-4 h-4 text-green-600" />;
                 return <Circle className="w-4 h-4 text-gray-300" />;
               })()}
-              <span className={cn("text-[9px] font-bold capitalize truncate w-full text-center", 'text-muted-foreground')}>
+              <span className={cn("text-[11px] font-bold capitalize truncate w-full text-center", 'text-muted-foreground')}>
                 {(() => {
                   if (stateId === 'S2' && !shift.assignmentOutcome) return 'Pending';
                   if (typeof shift.assignmentOutcome === 'string') {
@@ -302,7 +302,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (urg === 'urgent')   return <Flame className="w-4 h-4 text-orange-500" />;
                 return <Gavel className="w-4 h-4 text-blue-500" />;
               })()}
-              <span className={cn("text-[9px] font-bold truncate w-full text-center", (() => {
+              <span className={cn("text-[11px] font-bold truncate w-full text-center", (() => {
                 const b = rawShift.bidding_status;
                 const isActiveBidding = b === 'on_bidding' || b === 'on_bidding_normal' || b === 'on_bidding_urgent';
                 if (isActiveBidding && stateId === 'S5' && computeShiftUrgency(rawShift.shift_date, rawShift.start_time) === 'emergent') return 'text-rose-500';
@@ -327,7 +327,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 // TODO: TradeAccepted? shift.trading_status?
                 return <Minus className="w-4 h-4 text-gray-400" />;
               })()}
-              <span className="text-[9px] font-bold text-muted-foreground truncate w-full text-center">
+              <span className="text-[11px] font-bold text-muted-foreground truncate w-full text-center">
                 {isTrading ? 'TradeRequested' : 'NoTrade'}
               </span>
             </div>

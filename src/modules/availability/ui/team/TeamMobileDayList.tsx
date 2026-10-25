@@ -98,7 +98,7 @@ const getInitials = (name: string) => {
  */
 const Fact: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="flex flex-col gap-0.5 min-w-0">
-        <dt className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        <dt className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
             {label}
         </dt>
         <dd className="text-[13px] font-bold text-foreground truncate">{children}</dd>
@@ -125,10 +125,10 @@ export const TeamMobileDayList: React.FC<Props> = ({
     if (members.length === 0) {
         return (
             <div className="py-12 px-4 text-center border rounded-2xl bg-muted/10">
-                <p className="text-sm font-semibold text-muted-foreground">
+                <p className="text-[13px] font-semibold text-muted-foreground">
                     No team members match the current scope and filters.
                 </p>
-                <p className="text-xs text-muted-foreground/70 mt-1.5">
+                <p className="text-[11px] text-muted-foreground/70 mt-1.5">
                     Widen the scope, or clear the employment filter.
                 </p>
             </div>
@@ -213,7 +213,7 @@ export const TeamMobileDayList: React.FC<Props> = ({
                                 <span
                                     aria-hidden="true"
                                     className={cn(
-                                        'w-10 h-10 rounded-full flex items-center justify-center text-xs font-black shrink-0 border',
+                                        'w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 border',
                                         !showSeverity || severity === 'ok'
                                             ? 'bg-primary/10 text-primary border-primary/20'
                                             : '',
@@ -232,16 +232,16 @@ export const TeamMobileDayList: React.FC<Props> = ({
                                         {member.fullName}
                                     </span>
                                     <span className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                        <span className="text-xs font-medium text-muted-foreground truncate max-w-[45%]">
+                                        <span className="text-[11px] font-medium text-muted-foreground truncate max-w-[45%]">
                                             {member.roleName ?? 'No role'}
                                         </span>
                                         {member.employmentStatus && (
-                                            <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground border border-border/30">
+                                            <span className="text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted/80 text-muted-foreground border border-border/30">
                                                 {member.employmentStatus}
                                             </span>
                                         )}
                                         {isRestricted && (
-                                            <span className="inline-flex items-center gap-0.5 text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                                            <span className="inline-flex items-center gap-0.5 text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
                                                 <GraduationCap className="h-2.5 w-2.5" aria-hidden="true" />
                                                 Visa
                                             </span>
@@ -299,7 +299,7 @@ export const TeamMobileDayList: React.FC<Props> = ({
                                             and wraps — it is a sentence. */}
                                         {cell?.note && (
                                             <div className="col-span-2 flex flex-col gap-0.5 min-w-0">
-                                                <dt className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                                                <dt className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                                                     Why
                                                 </dt>
                                                 <dd className="text-[11px] font-semibold text-muted-foreground leading-snug">
@@ -317,7 +317,7 @@ export const TeamMobileDayList: React.FC<Props> = ({
                                                 <>
                                                     {fmtHours(hoursToday)}h
                                                     {hasDraft && (
-                                                        <span className="ml-1.5 text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                                                        <span className="ml-1.5 text-[11px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
                                                             Draft
                                                         </span>
                                                     )}
@@ -371,7 +371,7 @@ export const TeamMobileDayList: React.FC<Props> = ({
                             </dl>
 
                             {cellMode === 'compliance' && empComp && (
-                                <p className="mt-2.5 text-xs font-semibold text-muted-foreground">
+                                <p className="mt-2.5 text-[11px] font-semibold text-muted-foreground">
                                     {empComp.worstDesc}
                                 </p>
                             )}
