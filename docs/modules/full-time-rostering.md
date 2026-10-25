@@ -36,9 +36,12 @@ per-row FT rule must sort after the resolver (as `trg_shift_ft_one_per_day` does
 - Client: `ALL_GROUP_TYPES` / `GROUP_DISPLAY_NAMES` / `GROUP_COLORS` in
   `src/modules/rosters/domain/projections/constants.ts`. `office-group.test.ts` fails if a file
   that handles The Cutaway does not also handle Office.
-- The Add Shift form offers FT — and starts as FT — only when the shift is in the Office group
-  (`targetEmploymentTypeOptions`, `initialTargetEmploymentType`, `FULL_TIME_GROUP_TYPE` in
-  `src/modules/core/model/employment.types.ts`).
+- Office holds FT only, and FT lives only in Office. The Add Shift form offers just FT in Office
+  and just PT / Casual elsewhere; templates never offer FT (`targetEmploymentTypeOptions`,
+  `targetAfterGroupChange`, `initialTargetEmploymentType`, `FULL_TIME_GROUP_TYPE` in
+  `src/modules/core/model/employment.types.ts`). The database enforces both directions,
+  Office ⇒ FT and FT ⇒ Office, with `trg_shift_z_office_is_ft_only` (named `z_` so it fires after
+  `trg_shift_placement`). The 8 legacy FT shifts outside Office were deleted on 2026-10-22.
 
 ## Rosters page features for FT shifts
 
