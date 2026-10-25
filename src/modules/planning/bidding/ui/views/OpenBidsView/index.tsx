@@ -66,13 +66,14 @@ import { calculateFatigueWithRecovery, getFatigueBand } from '@/modules/rosters/
 import { projectFairnessImpact, classifyShift, aggregateShiftsToEntries, type EmployeeLedgerEntry, type FairnessMetric } from '@/modules/rosters/domain/fairness-ledger';
 import { fairnessLedgerQueries } from '@/modules/rosters/api/fairnessLedger.queries';
 import { BidLedgerImpact, type BidLedgerImpactData } from './BidLedgerImpact';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
+import type { GroupVariant } from '@/modules/rosters/domain/shift-ui';
 
 // =============================================================================
 // GROUP COLOR SYSTEM — venue-inherited theming
 // All class strings are written statically so Tailwind can scan them.
 // =============================================================================
 
-type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';
 
 const GROUP_THEME: Record<GroupVariant, {
   bar: string;       // left stripe color
@@ -128,27 +129,19 @@ const GROUP_THEME: Record<GroupVariant, {
     badge: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20',
     dot:   'bg-cyan-500',
   },
+  // Not a sixth group colour: only reached when a shift maps to none of the
+  // five (a wiring bug, logged by groupVariantFor). Neutral on purpose.
   default: {
-    bar:   'bg-violet-500',
-    tint:  'bg-violet-500/[0.05]',
-    ring:  'ring-violet-500/30',
-    text:  'text-violet-600 dark:text-violet-400',
-    boost: 'bg-violet-500 hover:bg-violet-600 text-white shadow-violet-500/25',
-    badge: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20',
-    dot:   'bg-violet-500',
+    bar:   'bg-slate-400',
+    tint:  'bg-slate-500/[0.04]',
+    ring:  'ring-slate-400/30',
+    text:  'text-slate-600 dark:text-slate-400',
+    boost: 'bg-slate-600 hover:bg-slate-700 text-white shadow-slate-500/25',
+    badge: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20',
+    dot:   'bg-slate-400',
   },
 };
 
-function getGroupVariant(groupType?: string | null, dept?: string): GroupVariant {
-  const d = (dept || '').toLowerCase();
-  const g = (groupType || '').toLowerCase();
-  if (g === 'office') return 'office';
-  if (g.includes('convention') || d.includes('convention')) return 'convention';
-  if (g.includes('exhibition') || d.includes('exhibition')) return 'exhibition';
-  if (g.includes('theatre') || g.includes('theater') || d.includes('theatre') || d.includes('theater')) return 'theatre';
-  if (g.includes('cutaway') || d.includes('cutaway')) return 'cutaway';
-  return 'default';
-}
 
 // =============================================================================
 // HELPERS
@@ -639,7 +632,7 @@ interface RoleCardProps {
 const RoleCard: React.FC<RoleCardProps> = ({
   shift, isSelected, onSelect,
 }) => {
-  const groupVariant = getGroupVariant(shift.groupType, shift.department);
+  const groupVariant = groupVariantFor(shift.groupType);
   const theme = GROUP_THEME[groupVariant];
   const isResolved = shift.toggle === 'resolved';
   const isExpired = shift.toggle === 'expired';
@@ -1602,7 +1595,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                               index={i}
                               isSelected={selectedBid?.id === bid.id}
                               isWinner={expandedShift ? (expandedShift.assignedEmployeeId === bid.employeeId || (!expandedShift.assignedEmployeeId && bid.isWinner)) : false}
-                              groupVariant={getGroupVariant(expandedShift?.groupType, expandedShift?.department)}
+                              groupVariant={groupVariantFor(expandedShift?.groupType)}
                               onSelect={() => {
                                 handleSelectBid(bid, true);
                               }}
@@ -1882,7 +1875,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                             index={i}
                             isSelected={selectedBid?.id === bid.id}
                             isWinner={expandedShift ? (expandedShift.assignedEmployeeId === bid.employeeId || (!expandedShift.assignedEmployeeId && bid.isWinner)) : false}
-                            groupVariant={getGroupVariant(expandedShift?.groupType, expandedShift?.department)}
+                            groupVariant={groupVariantFor(expandedShift?.groupType)}
                             onSelect={() => handleSelectBid(bid)}
                           />
                         ))}
@@ -2142,7 +2135,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         index={i}
                         isSelected={selectedBid?.id === bid.id}
                         isWinner={expandedShift.assignedEmployeeId === bid.employeeId || (!expandedShift.assignedEmployeeId && bid.isWinner)}
-                        groupVariant={getGroupVariant(expandedShift.groupType, expandedShift.department)}
+                        groupVariant={groupVariantFor(expandedShift.groupType)}
                         onSelect={() => handleSelectBid(bid)}
                       />
                     ))}

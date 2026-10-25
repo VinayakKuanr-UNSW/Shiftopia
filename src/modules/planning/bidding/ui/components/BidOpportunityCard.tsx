@@ -8,6 +8,7 @@ import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsVi
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 import { buildShiftCardPay } from '../../../ui/components/shift-card-pay';
 import type { ShiftOpportunity } from '../types';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 const listItemSpring = {
     layout: true as const,
@@ -195,13 +196,7 @@ export const BidOpportunityCard: React.FC<Props> = ({
                 lifecycleStatus={opp.lifecycleStatus || 'Published'}
                 estimatedPay={cardPay.estimatedPay}
                 estimatedPayBreakdown={cardPay.estimatedPayBreakdown}
-                groupVariant={
-                    opp.groupType === 'convention_centre' ? 'convention' :
-                    opp.groupType === 'exhibition_centre' ? 'exhibition' :
-                    opp.groupType === 'theatre' ? 'theatre' :
-                    opp.groupType === 'the_cutaway' ? 'cutaway' :
-                    opp.groupType === 'office' ? 'office' : 'default'
-                }
+                groupVariant={groupVariantFor(opp.groupType)}
                 footerActions={footerActions}
                 topContent={topContent}
                 shiftData={rawShift}

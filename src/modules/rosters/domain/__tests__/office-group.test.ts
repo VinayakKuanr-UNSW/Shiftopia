@@ -15,7 +15,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Constants } from '@/platform/supabase/types';
 import { ALL_GROUP_TYPES, GROUP_COLORS, GROUP_DISPLAY_NAMES } from '../projections/constants';
-import { resolveGroupVariant } from '../shift-ui';
+import { groupVariantFor, resolveGroupVariant } from '../shift-ui';
 import { getDefaultGroups } from '../queries/getGroupsModeGrid.query';
 import { resolveGroupType } from '../../utils/roster-utils';
 
@@ -97,5 +97,57 @@ describe('every per-group map that handles The Cutaway also handles Office', () 
 
     it('has no offenders', () => {
         expect(offenders.map(p => p.slice(SRC.length + 1))).toEqual([]);
+    });
+});
+
+/**
+ * One mapping, no fallback colour (2026-10-25). Bidding, Swaps and My Roster
+ * each carried their own group-to-variant chain; one (swap offers) had no Office
+ * branch, and every chain ended in a purple/violet "default" — so Office shifts
+ * read purple there while the roster showed cyan. With exactly five groups there
+ * is nothing to fall back TO: an unmapped shift is a bug and renders neutral.
+ */
+describe('group colour comes from one mapping, with no purple fallback', () => {
+    it('maps every group by enum value and by display name', () => {
+        for (const type of ALL_GROUP_TYPES) {
+            expect(groupVariantFor(type)).not.toBe('default');
+            expect(groupVariantFor(GROUP_DISPLAY_NAMES[type])).toBe(groupVariantFor(type));
+        }
+        expect(groupVariantFor('office')).toBe('office');
+        expect(groupVariantFor('Office')).toBe('office');
+    });
+
+    it('never guesses a group from department or role names', () => {
+        expect(resolveGroupVariant({ departments: { name: 'Convention Services' } })).toBe('default');
+        expect(resolveGroupVariant({ roles: { name: 'Box Office' } })).toBe('default');
+    });
+
+    const SRC = resolve(process.cwd(), 'src');
+    const stripComments = (code: string) =>
+        code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    const walk = (dir: string): string[] =>
+        readdirSync(dir).flatMap((name) => {
+            const p = join(dir, name);
+            if (statSync(p).isDirectory()) return name === '__tests__' ? [] : walk(p);
+            return /\.(ts|tsx)$/.test(name) ? [p] : [];
+        });
+
+    it('no surface re-derives the variant with its own chain', () => {
+        // e.g. `g === 'office' ? 'office' :` or `.includes('convention') ? 'convention'`
+        const CHAIN = /['"]office['"]\)?\s*\?\s*['"]office['"]|\)\s*\?\s*['"]convention['"]\s*:/;
+        const offenders = walk(SRC)
+            .filter(p => !p.endsWith('domain/shift-ui.ts'))
+            .filter(p => CHAIN.test(stripComments(readFileSync(p, 'utf-8'))))
+            .map(p => p.slice(SRC.length + 1));
+        expect(offenders).toEqual([]);
+    });
+
+    it('the shared card and its CSS fall back to neutral, not purple', () => {
+        const card = stripComments(readFileSync(join(SRC, 'modules/planning/ui/components/SharedShiftCard.tsx'), 'utf-8'));
+        expect(card).not.toMatch(/#9333ea|#a855f7|#7e22ce/i);
+        const css = readFileSync(join(SRC, 'index.css'), 'utf-8');
+        const glassDefault = css.match(/\.dept-card-glass-default \{[^}]*\}/g) ?? [];
+        expect(glassDefault.length).toBe(2);
+        for (const rule of glassDefault) expect(rule).not.toMatch(/purple|147, 51, 234/);
     });
 });

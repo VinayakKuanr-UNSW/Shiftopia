@@ -585,13 +585,16 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                         atmosphere: [effectiveColor, effectiveColor, effectiveColor],
                     };
                 }
-                return { 
-                    badge: 'dept-badge-default', 
+                // Not a sixth group colour: only reached when a shift maps to
+                // none of the five (logged by groupVariantFor). Neutral slate,
+                // never purple — purple here is how Office read as purple.
+                return {
+                    badge: 'dept-badge-default',
                     cardBg: `${base} dept-card-glass-default`,
-                    accent: 'text-primary',
-                    color: '#9333ea',
-                    secondary: '#a855f7',
-                    atmosphere: ['#7e22ce', '#9333ea', '#c084fc'],
+                    accent: 'text-muted-foreground',
+                    color: '#64748b',
+                    secondary: '#94a3b8',
+                    atmosphere: ['#475569', '#64748b', '#94a3b8'],
                 };
         }
     };

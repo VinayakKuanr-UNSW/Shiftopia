@@ -45,6 +45,7 @@ import {
 } from '@/modules/compliance';
 import type { SolverResult } from '@/modules/compliance/v8/swap-engine/types';
 import { validateCompliance } from '@/modules/rosters/services/compliance.service';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 // =============================================================================
 // TYPES
@@ -637,16 +638,7 @@ function ShiftCard({ shift, label, color }: { shift: ShiftData; label: string; c
                 netLength={calcNetMinutes(shift)}
                 paidBreak={0}
                 unpaidBreak={shift.unpaid_break_minutes ?? 0}
-                groupVariant={(() => {
-                    const g = (shift.group_type || '').toLowerCase();
-                    const d = (shift.department_name || '').toLowerCase();
-                    if (g === 'office') return 'office' as const;
-                    if (g.includes('convention') || d.includes('convention')) return 'convention' as const;
-                    if (g.includes('exhibition') || d.includes('exhibition')) return 'exhibition' as const;
-                    if (g.includes('theatre') || d.includes('theatre')) return 'theatre' as const;
-                    if (g.includes('cutaway') || d.includes('cutaway')) return 'cutaway' as const;
-                    return 'default' as const;
-                })()}
+                groupVariant={groupVariantFor(shift.group_type)}
             />
         </div>
     );

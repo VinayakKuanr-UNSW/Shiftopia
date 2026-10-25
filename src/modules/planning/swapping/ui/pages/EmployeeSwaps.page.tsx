@@ -75,6 +75,7 @@ import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableStateRow } from '@/modules/core/ui/primitives/table';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 type TabType = 'available-swaps' | 'my-offers' | 'my-swaps';
 type SortOption = 'date-soonest' | 'date-latest';
@@ -616,10 +617,7 @@ export const EmployeeSwapsPage: React.FC = () => {
         const status = deriveOfferStatus();
 
         // Consistent groupVariant derivation (same as renderMySwapCard / renderAvailableSwapCard)
-        const offerGroupVariant: 'convention' | 'exhibition' | 'theatre' | 'default' =
-            (shift?.group_type === 'convention_centre' || shift?.roles?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
-            (shift?.group_type === 'exhibition_centre' || shift?.roles?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
-            (shift?.group_type === 'theatre' || shift?.roles?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' : 'default';
+        const offerGroupVariant = groupVariantFor(shift?.group_type);
 
         // Derive status icon + label for the icon grid
         const isAwaitingMgr = myOffer?.status === 'SELECTED' && swap.status === 'MANAGER_PENDING';
@@ -703,12 +701,7 @@ export const EmployeeSwapsPage: React.FC = () => {
         const isTerminalRequest = swap.status === 'APPROVED' || swap.status === 'REJECTED' || swap.status === 'CANCELLED' || swap.status === 'MANAGER_PENDING';
         const timerDisplay = isTerminalRequest ? null : timerText;
 
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default' = 
-            shift?.group_type === 'office' ? 'office' :
-            (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
-            (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
-            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
-            (shift?.group_type === 'the_cutaway' || (shift?.departments?.name || '').toLowerCase().includes('cutaway')) ? 'cutaway' : 'default';
+        const groupVariant = groupVariantFor(shift?.group_type);
 
         return (
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
@@ -812,12 +805,7 @@ export const EmployeeSwapsPage: React.FC = () => {
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
 
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default' = 
-            shift?.group_type === 'office' ? 'office' :
-            (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
-            (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
-            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
-            (shift?.group_type === 'the_cutaway' || (shift?.departments?.name || '').toLowerCase().includes('cutaway')) ? 'cutaway' : 'default';
+        const groupVariant = groupVariantFor(shift?.group_type);
 
         return (
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
@@ -890,12 +878,7 @@ export const EmployeeSwapsPage: React.FC = () => {
 
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
         
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default' = 
-            shift?.group_type === 'office' ? 'office' :
-            (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
-            (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
-            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
-            (shift?.group_type === 'the_cutaway' || (shift?.departments?.name || '').toLowerCase().includes('cutaway')) ? 'cutaway' : 'default';
+        const groupVariant = groupVariantFor(shift?.group_type);
 
         const isSelected = selectedSwapIds.includes(swap.id);
 

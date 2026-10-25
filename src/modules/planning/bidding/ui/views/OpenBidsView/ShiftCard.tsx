@@ -22,6 +22,7 @@ import { cn } from '@/modules/core/lib/utils';
 import type { ManagerBidShift, OpenShift, TimeRemaining } from './types';
 import { formatTimeRemaining } from './utils';
 import { buildShiftCardPay } from '../../../../ui/components/shift-card-pay';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 interface ShiftCardProps {
   /** `group.items` is `ManagerBidShift[]`; this card only reads `group` and
@@ -53,16 +54,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   if (durationMins < 0) durationMins += 24 * 60;
   const netMins = durationMins - shift.unpaidBreak;
 
-  // Venue-inherited card theming (mirrors index.tsx getGroupVariant)
-  const g = (shift.groupType || shift.group || '').toLowerCase();
-  const d = (shift.department || '').toLowerCase();
-  const groupVariant =
-    g === 'office' ? 'office' :
-    g.includes('convention') || d.includes('convention') ? 'convention' :
-    g.includes('exhibition') || d.includes('exhibition') ? 'exhibition' :
-    g.includes('theatre') || g.includes('theater') || d.includes('theatre') || d.includes('theater') ? 'theatre' :
-    g.includes('cutaway') || d.includes('cutaway') ? 'cutaway' :
-    'default';
+  const groupVariant = groupVariantFor(shift.groupType || shift.group);
 
   const bidsCount = shift.bidCount ?? (shift as any).bidsCount ?? 0;
   const assignedName = shift.assignedEmployeeName || (shift as any).assigned_employee_name || (shift as any).employeeName;

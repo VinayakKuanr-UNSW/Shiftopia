@@ -855,61 +855,72 @@ export function getAvailableActions(state: ShiftStateID | string, urgency?: Shif
 export type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';
 
 /**
- * Derives the canonical GroupVariant for ICC Sydney venue branding:
- *  - convention: BLUE       (#2563eb / text-blue-500)
- *  - exhibition: GREEN      (#10b981 / text-emerald-500) (matches 'exhibition' or 'expo')
- *  - theatre:    RED        (#ef4444 / text-rose-500)    (matches 'theatre', 'theater', 'dht')
- *  - cutaway:    AMBER      (#d97706 / text-amber-500)   (matches 'cutaway', 'barangaroo')
- *  - office:     CYAN       (#0891b2 / text-cyan-500)    (the GROUP only — see below)
- *  - default:    PURPLE     (#9333ea / text-purple-500)
+ * The five roster groups and their variant, keyed by the `template_group_type`
+ * enum value AND by the group's display name (normalised: lower case, spaces to
+ * underscores), because surfaces carry one or the other.
+ *
+ *  - convention: BLUE     exhibition: EMERALD    theatre: RED
+ *  - cutaway:    AMBER    office:     CYAN
+ *
+ * There is NO fallback colour. The database allows exactly these five groups
+ * (`enforce_exactly_three_groups`, `template_group_type`), so a shift that maps
+ * to none of them is a data or wiring bug: it renders neutral ('default') and
+ * says so in the console during development, instead of being painted a
+ * plausible-looking colour (it used to be purple, which is how Office shifts on
+ * Bidding/Swaps read purple while the roster showed cyan).
+ */
+const GROUP_VARIANT_BY_KEY: Readonly<Record<string, Exclude<GroupVariant, 'default'>>> = {
+    convention_centre: 'convention',
+    exhibition_centre: 'exhibition',
+    theatre: 'theatre',
+    the_cutaway: 'cutaway',
+    office: 'office',
+};
+
+const normaliseGroupKey = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, '_');
+
+/** The variant for a group key or display name; null when it is not one of the five. */
+function variantForKey(value: unknown): Exclude<GroupVariant, 'default'> | null {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    return GROUP_VARIANT_BY_KEY[normaliseGroupKey(value)] ?? null;
+}
+
+/** The variant for a shift's group (enum value or display name). */
+export function groupVariantFor(groupType: string | null | undefined): GroupVariant {
+    const variant = variantForKey(groupType);
+    if (variant) return variant;
+    if (import.meta.env?.DEV && groupType) {
+        console.error(`[groupVariantFor] "${groupType}" is not one of the five roster groups`);
+    }
+    return 'default';
+}
+
+/**
+ * The variant for a shift, read from its GROUP fields only. Department, role and
+ * sub-group names are never matched as free text ("Box Office" is not Office,
+ * an "Events" department is no venue). The extra arguments are accepted because
+ * callers pass the group's display name there; they count only on an exact match.
  */
 export function resolveGroupVariant(
     shiftOrGroupType?: any,
     deptName?: string | null,
     subGroupOrRole?: string | null
 ): GroupVariant {
-    let typeStr = '';
-    let deptStr = deptName || '';
-    let subStr = subGroupOrRole || '';
-
-    if (shiftOrGroupType && typeof shiftOrGroupType === 'object') {
-        const s = shiftOrGroupType;
-        typeStr = [
+    const s = shiftOrGroupType && typeof shiftOrGroupType === 'object' ? shiftOrGroupType : null;
+    const groupFields: unknown[] = s
+        ? [
             s.group_type, s.groupType, s.group_name, s.groupName,
             s.template_group, s.templateGroup,
             s.roster_groups?.external_id, s.roster_groups?.name,
             s.shift_groups?.external_id, s.shift_groups?.name,
-        ].filter(Boolean).join(' ');
+        ]
+        : [shiftOrGroupType];
 
-        deptStr = [
-            deptStr,
-            s.departments?.name, s.department_name, s.departmentName, s.department,
-            s.organizations?.name,
-        ].filter(Boolean).join(' ');
-
-        subStr = [
-            subStr,
-            s.sub_departments?.name, s.sub_group_name, s.subGroupName, s.subGroup,
-            s.roles?.name, s.role_name, s.role, s.roles?.groupType,
-        ].filter(Boolean).join(' ');
-    } else if (typeof shiftOrGroupType === 'string') {
-        typeStr = shiftOrGroupType;
+    for (const candidate of [...groupFields, deptName, subGroupOrRole]) {
+        const variant = variantForKey(candidate);
+        if (variant) return variant;
     }
-
-    const fullText = `${typeStr} ${deptStr} ${subStr}`.toLowerCase();
-
-    // Office (full-time shifts) is decided by the group fields alone, and before
-    // the free-text matches: "office" is too common in role and department names
-    // ("Box Office") to infer from them, and an Office shift in a department whose
-    // name mentions a venue must still read as Office.
-    if (/\boffice\b/i.test(typeStr)) return 'office';
-
-    if (/convention/i.test(fullText)) return 'convention';
-    if (/exhibition|expo/i.test(fullText)) return 'exhibition';
-    if (/theatre|theater|dht/i.test(fullText)) return 'theatre';
-    if (/cutaway|barangaroo/i.test(fullText)) return 'cutaway';
-
-    return 'default';
+    return groupVariantFor(groupFields.find((v): v is string => typeof v === 'string' && !!v.trim()) ?? null);
 }
 
 

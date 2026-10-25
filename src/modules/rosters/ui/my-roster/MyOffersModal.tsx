@@ -35,7 +35,6 @@ import {
 } from 'lucide-react';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
-import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
@@ -46,6 +45,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/modules/core/ui/primitives/dialog';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 /* ═══════════════════════════════════════════════════════════════════════
    TYPES
@@ -296,14 +296,7 @@ const OfferItem: React.FC<{
                 isExpired={isExpired || isLocked}
                 urgency={urgency}
                 shiftData={{ ...offer.shift, sub_group_name: subGroupName } as any}
-                groupVariant={
-                    offer.shift.group_type === 'convention_centre' ? 'convention' :
-                    offer.shift.group_type === 'exhibition_centre' ? 'exhibition' :
-                    offer.shift.group_type === 'theatre' ? 'theatre' :
-                    offer.shift.group_type === 'the_cutaway' ? 'cutaway' :
-                    offer.shift.group_type === 'office' ? 'office' :
-                    resolveGroupVariant(offer.shift as any, offer.shift.departments?.name, offer.shift.sub_departments?.name)
-                }
+                groupVariant={groupVariantFor(offer.shift.group_type)}
                 footerActions={footerActions}
             />
         </div>

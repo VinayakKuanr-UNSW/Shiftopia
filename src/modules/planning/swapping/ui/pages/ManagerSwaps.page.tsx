@@ -37,6 +37,7 @@ import { groupSwapRequests } from '../components/swap-grouping';
 import { SwapRequestsFunctionBar } from '../components/SwapRequestsFunctionBar';
 import { FacetedLoadingSpinner } from '@/modules/core/ui/components/FacetedLoadingSpinner';
 import { Table, tableTokens, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
+import { groupVariantFor, resolveGroupVariant, type GroupVariant } from '@/modules/rosters/domain/shift-ui';
 
 /* ============================================================
    DESIGN TOKENS (Deprecated hex scales, using theme-aware variables)
@@ -57,36 +58,22 @@ const formatTime = (time: string): string => {
 
 
 // Authoritative: shift.group_type is the only signal. No name/uuid fallbacks.
-function getDeptGlassClass(data?: { groupType?: string }): string {
-    const g = (data?.groupType || '').toLowerCase();
-    if (g === 'office')           return 'dept-card-glass-office';
-    if (g.includes('convention')) return 'dept-card-glass-convention';
-    if (g.includes('exhibition')) return 'dept-card-glass-exhibition';
-    if (g.includes('theatre'))    return 'dept-card-glass-theatre';
-    if (g.includes('cutaway'))    return 'dept-card-glass-cutaway';
-    return 'dept-card-glass-default';
-}
 
 
 
 
-function getDeptAccent(dept?: string | null): string {
-    const d = (dept || '').toLowerCase();
-    if (d.includes('convention')) return 'text-blue-600 dark:text-blue-400';
-    if (d.includes('exhibition')) return 'text-emerald-600 dark:text-emerald-400';
-    if (d.includes('theatre')) return 'text-rose-600 dark:text-rose-400';
-    if (d.includes('cutaway')) return 'text-amber-600 dark:text-amber-400';
-    return 'text-muted-foreground';
-}
+/** A request tag is coloured only when it names one of the five groups exactly. */
+const TAG_ACCENT: Record<GroupVariant, string> = {
+    convention: 'text-blue-600 dark:text-blue-400',
+    exhibition: 'text-emerald-600 dark:text-emerald-400',
+    theatre: 'text-rose-600 dark:text-rose-400',
+    cutaway: 'text-amber-600 dark:text-amber-400',
+    office: 'text-cyan-600 dark:text-cyan-400',
+    default: 'text-muted-foreground',
+};
 
-
-function getDeptGlow(dept?: string | null): string {
-    const d = (dept || '').toLowerCase();
-    if (d.includes('convention')) return 'shadow-blue-500/10';
-    if (d.includes('exhibition')) return 'shadow-emerald-500/10';
-    if (d.includes('theatre')) return 'shadow-rose-500/10';
-    if (d.includes('cutaway')) return 'shadow-amber-500/10';
-    return 'shadow-white/5';
+function getDeptAccent(tag?: string | null): string {
+    return TAG_ACCENT[resolveGroupVariant(tag ?? null)];
 }
 
 /* ============================================================
@@ -128,8 +115,6 @@ const ShiftPane: React.FC<{
         );
     }
 
-    const deptClass = getDeptGlassClass({ groupType: data.groupType });
-
     const startTimeRaw = data.time?.split(' - ')[0] || '00:00';
     const endTimeRaw = data.time?.split(' - ')[1] || '00:00';
     return (
@@ -150,13 +135,7 @@ const ShiftPane: React.FC<{
                 unpaidBreak={data.unpaidBreakMinutes}
                 lifecycleStatus={data.lifecycleStatus}
                 estimatedPay={data.estimatedPay > 0 ? `$${data.estimatedPay.toFixed(2)}` : undefined}
-                groupVariant={
-                    deptClass.includes('office') ? 'office' :
-                    deptClass.includes('convention') ? 'convention' :
-                    deptClass.includes('exhibition') ? 'exhibition' :
-                    deptClass.includes('theatre') ? 'theatre' :
-                    deptClass.includes('cutaway') ? 'cutaway' : 'default'
-                }
+                groupVariant={groupVariantFor(data.groupType)}
                 employeeName={data.employeeName}
                 avatarUrl={data.avatar}
                 topContent={

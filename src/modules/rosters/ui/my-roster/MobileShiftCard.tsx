@@ -13,6 +13,7 @@ import {
   toTargetEmploymentType,
 } from '@/modules/core/model/employment.types';
 import { useAuth } from '@/platform/auth/useAuth';
+import { resolveGroupVariant, type GroupVariant } from '@/modules/rosters/domain/shift-ui';
 
 interface MobileShiftCardProps {
   shiftData: {
@@ -65,22 +66,36 @@ const colorClasses: Record<
     border: 'border-cyan-500/20 dark:border-cyan-500/30',
     text: 'text-cyan-600 dark:text-cyan-400',
   },
-  purple: {
-    bg: 'bg-purple-500/5 dark:bg-purple-500/10',
-    bgHover: 'hover:bg-purple-500/10 dark:hover:bg-purple-500/20',
-    border: 'border-purple-500/20 dark:border-purple-500/30',
-    text: 'text-purple-600 dark:text-purple-400',
+  // Not a sixth group colour: only for a shift that maps to none of the five.
+  slate: {
+    bg: 'bg-slate-500/5 dark:bg-slate-500/10',
+    bgHover: 'hover:bg-slate-500/10 dark:hover:bg-slate-500/20',
+    border: 'border-slate-500/20 dark:border-slate-500/30',
+    text: 'text-slate-600 dark:text-slate-400',
   },
 };
 
+const COLOR_KEY_BY_VARIANT: Record<GroupVariant, string> = {
+  convention: 'blue',
+  exhibition: 'green',
+  theatre: 'red',
+  cutaway: 'amber',
+  office: 'cyan',
+  default: 'slate',
+};
+
 function resolveColorKey(groupColor?: string, groupName?: string): string {
-  const c = (groupColor || groupName || '').toLowerCase();
-  if (c === 'office' || c.includes('cyan')) return 'cyan';
-  if (c.includes('exhibition') || c.includes('green') || c.includes('emerald')) return 'green';
-  if (c.includes('theatre') || c.includes('red') || c.includes('rose')) return 'red';
-  if (c.includes('cutaway') || c.includes('amber') || c.includes('yellow')) return 'amber';
-  if (c.includes('purple') || c.includes('violet')) return 'purple';
-  return 'blue';
+  // The group decides (exact name), then the group's colour token. No guess:
+  // a shift that is neither is a wiring bug and renders neutral.
+  const variant = resolveGroupVariant(groupName, groupColor);
+  if (variant !== 'default') return COLOR_KEY_BY_VARIANT[variant];
+  const c = (groupColor || '').toLowerCase();
+  if (c.includes('cyan')) return 'cyan';
+  if (c.includes('blue')) return 'blue';
+  if (c.includes('green') || c.includes('emerald')) return 'green';
+  if (c.includes('red') || c.includes('rose')) return 'red';
+  if (c.includes('amber') || c.includes('yellow')) return 'amber';
+  return 'slate';
 }
 
 export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onClick }) => {

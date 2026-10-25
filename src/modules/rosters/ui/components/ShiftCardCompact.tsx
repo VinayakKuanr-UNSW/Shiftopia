@@ -90,8 +90,10 @@ const getHeaderColor = (color: GroupColor = 'blue'): string => {
     green: 'bg-emerald-100 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100',
     red: 'bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100',
     orange: 'bg-orange-100 dark:bg-orange-900 text-orange-900 dark:text-orange-100',
-    purple: 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100',
-    default: 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
+    amber: 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+    cyan: 'bg-cyan-100 dark:bg-cyan-900 text-cyan-900 dark:text-cyan-100',
+    // Not a sixth group colour: a colour that is none of the five groups' renders neutral.
+    default: 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
   };
   return map[color] || map.default;
 };
