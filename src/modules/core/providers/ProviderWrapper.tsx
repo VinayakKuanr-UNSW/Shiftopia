@@ -17,19 +17,7 @@ import { LocaleProvider } from './LocaleProvider';
 import { CapacitorBridge } from '@/platform/capacitor/CapacitorBridge';
 import { NotificationBridge } from '@/platform/notifications/NotificationBridge';
 import { OfflineBanner } from '@/modules/core/ui/components/OfflineBanner';
-
-/**
- * Smart retry: skip immediately on 4xx client errors (auth failures, validation,
- * not-found) — retrying won't help. Allow up to 2 retries for network errors
- * and 5xx server errors with exponential back-off.
- */
-function shouldRetry(failureCount: number, error: unknown): boolean {
-  if (failureCount >= 2) return false;
-  const status = (error as { status?: number })?.status;
-  // 4xx = client error; no point retrying
-  if (status && status >= 400 && status < 500) return false;
-  return true;
-}
+import { shouldRetry } from '@/modules/core/lib/queryRetry';
 
 const queryClient = new QueryClient({
   defaultOptions: {
