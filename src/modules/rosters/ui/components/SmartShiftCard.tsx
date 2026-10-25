@@ -140,6 +140,22 @@ const GROUP_COLORS: Record<string, { header: string; accent: string; text: strin
 
 
 /**
+ * Bucket-row tones. Each row takes its group's hue so a column reads as one
+ * venue at a glance; past rows drop the hue for a solid neutral that still
+ * clears 4.5:1 contrast (an opacity fade made them unreadable in light mode).
+ */
+type RowTone = { row: string; primary: string; secondary: string; divider: string };
+const ROW_TONES: Record<string, RowTone> = {
+    convention: { row: 'bg-blue-50 hover:bg-blue-100 border-blue-200 dark:bg-blue-500/15 dark:hover:bg-blue-500/25 dark:border-blue-400/20', primary: 'text-blue-950 dark:text-blue-50', secondary: 'text-blue-900/80 dark:text-blue-100/80', divider: 'bg-blue-300/60 dark:bg-white/10' },
+    exhibition: { row: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 dark:border-emerald-400/20', primary: 'text-emerald-950 dark:text-emerald-50', secondary: 'text-emerald-900/80 dark:text-emerald-100/80', divider: 'bg-emerald-300/60 dark:bg-white/10' },
+    theatre: { row: 'bg-red-50 hover:bg-red-100 border-red-200 dark:bg-red-500/15 dark:hover:bg-red-500/25 dark:border-red-400/20', primary: 'text-red-950 dark:text-red-50', secondary: 'text-red-900/80 dark:text-red-100/80', divider: 'bg-red-300/60 dark:bg-white/10' },
+    cutaway: { row: 'bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-400/20', primary: 'text-amber-950 dark:text-amber-50', secondary: 'text-amber-900/80 dark:text-amber-100/80', divider: 'bg-amber-300/60 dark:bg-white/10' },
+    office: { row: 'bg-cyan-50 hover:bg-cyan-100 border-cyan-200 dark:bg-cyan-500/15 dark:hover:bg-cyan-500/25 dark:border-cyan-400/20', primary: 'text-cyan-950 dark:text-cyan-50', secondary: 'text-cyan-900/80 dark:text-cyan-100/80', divider: 'bg-cyan-300/60 dark:bg-white/10' },
+};
+const PAST_ROW_TONE: RowTone = { row: 'bg-slate-100 border-slate-200 dark:bg-slate-800/70 dark:border-white/5', primary: 'text-slate-600 dark:text-slate-300', secondary: 'text-slate-500 dark:text-slate-400', divider: 'bg-slate-300 dark:bg-white/10' };
+
+
+/**
  * Sydney-pinned, via the shared formatter.
  *
  * This used to slice the time straight out of the ISO string and never convert,
@@ -345,16 +361,17 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         return roleName;
     }, [roleName, subDept]);
 
+    const tone = isPast ? PAST_ROW_TONE : ROW_TONES[groupVariant] ?? ROW_TONES.convention;
+
     return (
         <CardShell
             className={cn(
-                'relative group/card cursor-pointer w-full select-none transition-colors duration-150',
-                'bg-slate-900/40 hover:bg-white/[0.06] dark:bg-slate-900/40 dark:hover:bg-white/[0.06]',
+                'relative group/card cursor-pointer w-full select-none transition-colors duration-150 border-b last:border-b-0',
+                tone.row,
                 onClick && (!isFullyLocked || isSelected) && 'cursor-pointer',
                 isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1 bg-blue-500/20',
-                isPast && (isDraft ? 'opacity-70' : 'opacity-85'),
                 className
             )}
             onClick={isFullyLocked || isPast ? undefined : onClick}
@@ -377,7 +394,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 <div className="flex items-center gap-2 min-w-0">
                     <ShiftStateCircleBadge stateId={ctx.state} />
                     <span
-                        className="font-medium text-slate-100 dark:text-slate-100 truncate min-w-0 text-[11px] sm:text-[13px]"
+                        className={cn('font-medium truncate min-w-0 text-[11px] sm:text-[13px]', tone.primary)}
                         title={roleDisplay}
                     >
                         {roleDisplay}
@@ -385,27 +402,27 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 </div>
 
                 {/* Divider */}
-                <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 select-none justify-self-center" aria-hidden="true" />
+                <div className={cn('h-4 w-px select-none justify-self-center', tone.divider)} aria-hidden="true" />
 
                 {/* 2. Timings */}
                 <span
-                    className="font-medium text-slate-300 dark:text-slate-300 text-[11px] sm:text-[13px] tabular-nums text-center truncate"
+                    className={cn('font-medium text-[11px] sm:text-[13px] tabular-nums text-center truncate', tone.secondary)}
                     title={`${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}${costBreakdown.totalCost > 0 ? ` · Est. $${costBreakdown.totalCost.toFixed(0)}` : ''}`}
                 >
                     {formatTime(shift.start_time)} – {formatTime(shift.end_time)}
                 </span>
 
                 {/* Divider */}
-                <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 select-none justify-self-center" aria-hidden="true" />
+                <div className={cn('h-4 w-px select-none justify-self-center', tone.divider)} aria-hidden="true" />
 
                 {/* 3. Assignment */}
                 <div className="flex items-center min-w-0">
                     {employeeName ? (
-                        <span className="text-slate-200 dark:text-slate-200 truncate font-normal text-[11px] sm:text-[13px]" title={employeeName}>
+                        <span className={cn('truncate font-normal text-[11px] sm:text-[13px]', tone.primary)} title={employeeName}>
                             {employeeName}
                         </span>
                     ) : (
-                        <span className="text-amber-400/90 text-[11px] sm:text-[13px] font-medium tracking-tight truncate">
+                        <span className={cn('text-[11px] sm:text-[13px] font-medium tracking-tight truncate', isPast ? 'text-amber-800/80 dark:text-amber-300/70' : 'text-amber-700 dark:text-amber-300')}>
                             Unassigned
                         </span>
                     )}
@@ -418,7 +435,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 >
                     {headerAction || (!isFullyLocked ? (
                         <button
-                            className="h-6 w-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors text-slate-400 hover:text-white"
+                            className="h-6 w-6 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                             aria-label="Shift actions"
                         >
                             <MoreVertical className="h-3.5 w-3.5" />
