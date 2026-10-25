@@ -10,10 +10,100 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
+      _backup_leave_balances_casual_20261001: {
+        Row: {
+          accrued_hours: number | null
+          as_of_date: string | null
+          balance_hours: number | null
+          created_at: string | null
+          employee_id: string | null
+          id: string | null
+          leave_type: string | null
+          updated_at: string | null
+          used_hours: number | null
+        }
+        Insert: {
+          accrued_hours?: number | null
+          as_of_date?: string | null
+          balance_hours?: number | null
+          created_at?: string | null
+          employee_id?: string | null
+          id?: string | null
+          leave_type?: string | null
+          updated_at?: string | null
+          used_hours?: number | null
+        }
+        Update: {
+          accrued_hours?: number | null
+          as_of_date?: string | null
+          balance_hours?: number | null
+          created_at?: string | null
+          employee_id?: string | null
+          id?: string | null
+          leave_type?: string | null
+          updated_at?: string | null
+          used_hours?: number | null
+        }
+        Relationships: []
+      }
+      _backup_retired_structure_20261009: {
+        Row: {
+          backed_up_at: string
+          row_data: Json
+          source: string
+        }
+        Insert: {
+          backed_up_at?: string
+          row_data: Json
+          source: string
+        }
+        Update: {
+          backed_up_at?: string
+          row_data?: Json
+          source?: string
+        }
+        Relationships: []
+      }
+      access_certificate_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after: Json | null
+          before: Json | null
+          certificate_id: string
+          id: number
+          occurred_at: string
+          organization_id: string | null
+          subject_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          certificate_id: string
+          id?: never
+          occurred_at?: string
+          organization_id?: string | null
+          subject_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          certificate_id?: string
+          id?: never
+          occurred_at?: string
+          organization_id?: string | null
+          subject_id?: string
+        }
+        Relationships: []
+      }
       actual_labor_attendance: {
         Row: {
           assigned: number
@@ -92,6 +182,7 @@ export type Database = {
         Row: {
           access_level: Database["public"]["Enums"]["access_level"]
           certificate_type: string
+          contract_id: string
           created_at: string | null
           created_by: string | null
           department_id: string | null
@@ -105,6 +196,7 @@ export type Database = {
         Insert: {
           access_level: Database["public"]["Enums"]["access_level"]
           certificate_type?: string
+          contract_id: string
           created_at?: string | null
           created_by?: string | null
           department_id?: string | null
@@ -118,6 +210,7 @@ export type Database = {
         Update: {
           access_level?: Database["public"]["Enums"]["access_level"]
           certificate_type?: string
+          contract_id?: string
           created_at?: string | null
           created_by?: string | null
           department_id?: string | null
@@ -129,6 +222,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "app_access_certificates_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: true
+            referencedRelation: "user_contracts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "app_access_certificates_created_by_fkey"
             columns: ["created_by"]
@@ -1952,39 +2052,6 @@ export type Database = {
         }
         Relationships: []
       }
-      deleted_shifts: {
-        Row: {
-          deleted_at: string | null
-          deleted_by: string | null
-          deleted_reason: string | null
-          department_id: string | null
-          id: string
-          organization_id: string | null
-          snapshot_data: Json
-          template_id: string | null
-        }
-        Insert: {
-          deleted_at?: string | null
-          deleted_by?: string | null
-          deleted_reason?: string | null
-          department_id?: string | null
-          id: string
-          organization_id?: string | null
-          snapshot_data: Json
-          template_id?: string | null
-        }
-        Update: {
-          deleted_at?: string | null
-          deleted_by?: string | null
-          deleted_reason?: string | null
-          department_id?: string | null
-          id?: string
-          organization_id?: string | null
-          snapshot_data?: Json
-          template_id?: string | null
-        }
-        Relationships: []
-      }
       demand_forecasts: {
         Row: {
           corrected_count: number | null
@@ -2042,13 +2109,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "demand_forecasts_synthesis_run_id_fkey"
-            columns: ["synthesis_run_id"]
-            isOneToOne: false
-            referencedRelation: "synthesis_runs"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "demand_forecasts_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -2060,6 +2120,13 @@ export type Database = {
             columns: ["role_id"]
             isOneToOne: false
             referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "demand_forecasts_synthesis_run_id_fkey"
+            columns: ["synthesis_run_id"]
+            isOneToOne: false
+            referencedRelation: "synthesis_runs"
             referencedColumns: ["id"]
           },
         ]
@@ -3342,60 +3409,6 @@ export type Database = {
           },
         ]
       }
-      leave_request_events: {
-        Row: {
-          actor_id: string | null
-          created_at: string
-          employee_id: string
-          event_type: string
-          id: string
-          leave_request_id: string
-          metadata: Json
-          new_status: string | null
-          old_status: string | null
-          reason: string | null
-        }
-        Insert: {
-          actor_id?: string | null
-          created_at?: string
-          employee_id: string
-          event_type: string
-          id?: string
-          leave_request_id: string
-          metadata?: Json
-          new_status?: string | null
-          old_status?: string | null
-          reason?: string | null
-        }
-        Update: {
-          actor_id?: string | null
-          created_at?: string
-          employee_id?: string
-          event_type?: string
-          id?: string
-          leave_request_id?: string
-          metadata?: Json
-          new_status?: string | null
-          old_status?: string | null
-          reason?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "leave_request_events_leave_request_id_fkey"
-            columns: ["leave_request_id"]
-            isOneToOne: false
-            referencedRelation: "employee_leave_days"
-            referencedColumns: ["request_id"]
-          },
-          {
-            foreignKeyName: "leave_request_events_leave_request_id_fkey"
-            columns: ["leave_request_id"]
-            isOneToOne: false
-            referencedRelation: "leave_requests"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       leave_requests: {
         Row: {
           approval_date: string | null
@@ -4051,6 +4064,7 @@ export type Database = {
           availability: Json | null
           avatar_url: string | null
           can_access_all_departments: boolean | null
+          continuous_service_start: string | null
           created_at: string | null
           date_of_birth: string | null
           email: string
@@ -4082,6 +4096,7 @@ export type Database = {
           availability?: Json | null
           avatar_url?: string | null
           can_access_all_departments?: boolean | null
+          continuous_service_start?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           email: string
@@ -4115,6 +4130,7 @@ export type Database = {
           availability?: Json | null
           avatar_url?: string | null
           can_access_all_departments?: boolean | null
+          continuous_service_start?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           email?: string
@@ -5554,7 +5570,7 @@ export type Database = {
           notes: string | null
           offer_expires_at: string | null
           offer_sent_at: string | null
-          organization_id: string | null
+          organization_id: string
           paid_break_minutes: number | null
           payroll_exported: boolean | null
           published_at: string | null
@@ -5670,7 +5686,7 @@ export type Database = {
           notes?: string | null
           offer_expires_at?: string | null
           offer_sent_at?: string | null
-          organization_id?: string | null
+          organization_id: string
           paid_break_minutes?: number | null
           payroll_exported?: boolean | null
           published_at?: string | null
@@ -5784,7 +5800,7 @@ export type Database = {
           notes?: string | null
           offer_expires_at?: string | null
           offer_sent_at?: string | null
-          organization_id?: string | null
+          organization_id?: string
           paid_break_minutes?: number | null
           payroll_exported?: boolean | null
           published_at?: string | null
@@ -6660,45 +6676,6 @@ export type Database = {
           },
         ]
       }
-      timesheet_audit_log: {
-        Row: {
-          actor: string
-          actor_label: string | null
-          created_at: string
-          decision_id: string | null
-          detail: Json
-          event_type: string
-          id: string
-          shift_id: string
-          source: string
-          timesheet_id: string | null
-        }
-        Insert: {
-          actor?: string
-          actor_label?: string | null
-          created_at?: string
-          decision_id?: string | null
-          detail?: Json
-          event_type: string
-          id?: string
-          shift_id: string
-          source?: string
-          timesheet_id?: string | null
-        }
-        Update: {
-          actor?: string
-          actor_label?: string | null
-          created_at?: string
-          decision_id?: string | null
-          detail?: Json
-          event_type?: string
-          id?: string
-          shift_id?: string
-          source?: string
-          timesheet_id?: string | null
-        }
-        Relationships: []
-      }
       timesheets: {
         Row: {
           approved_at: string | null
@@ -6807,6 +6784,83 @@ export type Database = {
             columns: ["shift_id"]
             isOneToOne: true
             referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      toil_ledger: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_date: string
+          employee_id: string
+          entry_type: string
+          id: string
+          leave_request_id: string | null
+          minutes: number
+          reason: string | null
+          source_timesheet_ids: string[]
+          threshold_minutes: number | null
+          user_contract_id: string
+          worked_minutes: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_date: string
+          employee_id: string
+          entry_type: string
+          id?: string
+          leave_request_id?: string | null
+          minutes: number
+          reason?: string | null
+          source_timesheet_ids?: string[]
+          threshold_minutes?: number | null
+          user_contract_id: string
+          worked_minutes?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          employee_id?: string
+          entry_type?: string
+          id?: string
+          leave_request_id?: string | null
+          minutes?: number
+          reason?: string | null
+          source_timesheet_ids?: string[]
+          threshold_minutes?: number | null
+          user_contract_id?: string
+          worked_minutes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "toil_ledger_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "toil_ledger_leave_request_id_fkey"
+            columns: ["leave_request_id"]
+            isOneToOne: false
+            referencedRelation: "employee_leave_days"
+            referencedColumns: ["request_id"]
+          },
+          {
+            foreignKeyName: "toil_ledger_leave_request_id_fkey"
+            columns: ["leave_request_id"]
+            isOneToOne: false
+            referencedRelation: "leave_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "toil_ledger_user_contract_id_fkey"
+            columns: ["user_contract_id"]
+            isOneToOne: false
+            referencedRelation: "user_contracts"
             referencedColumns: ["id"]
           },
         ]
@@ -7955,20 +8009,20 @@ export type Database = {
         }
         Returns: Json
       }
-      _archive_shift_before_delete: {
-        Args: {
-          p_archived_via: string
-          p_deleted_by: string
-          p_deleted_reason: string
-          p_shift_id: string
-        }
-        Returns: undefined
+      _can_manage_shifts: { Args: never; Returns: boolean }
+      _shift_delete_refusal: {
+        Args: { p_shift: Database["public"]["Tables"]["shifts"]["Row"] }
+        Returns: string
       }
       aa_user_manages_org: {
         Args: { p_org: string; p_user: string }
         Returns: boolean
       }
       accept_swap_offer: { Args: { p_offer_id: string }; Returns: undefined }
+      access_level_label: {
+        Args: { p_level: Database["public"]["Enums"]["access_level"] }
+        Returns: string
+      }
       accrue_leave_balances: { Args: never; Returns: undefined }
       acknowledge_broadcast: {
         Args: { broadcast_uuid: string; employee_uuid: string }
@@ -8019,10 +8073,6 @@ export type Database = {
             }
             Returns: undefined
           }
-      admin_delete_shift_rpc: {
-        Args: { p_admin_id: string; p_shift_id: string }
-        Returns: Json
-      }
       apply_monthly_template:
         | {
             Args: {
@@ -8108,7 +8158,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      auth_can_manage_certificates: { Args: never; Returns: boolean }
       auth_can_manage_rosters: { Args: never; Returns: boolean }
       auth_can_manage_templates: { Args: never; Returns: boolean }
       bid_on_shift_rpc: {
@@ -8164,12 +8213,101 @@ export type Database = {
         Args: { p_employee_id: string; p_week_start_date: string }
         Returns: number
       }
+      caller_access_ceiling: {
+        Args: { p_org_id: string }
+        Returns: Database["public"]["Enums"]["access_level"]
+      }
+      can_act_in_dept: {
+        Args: { p_action: string; p_department_id: string }
+        Returns: boolean
+      }
+      can_act_in_subdept: {
+        Args: { p_action: string; p_sub_department_id: string }
+        Returns: boolean
+      }
+      can_act_on_employee: {
+        Args: { p_action: string; p_employee_id: string }
+        Returns: boolean
+      }
+      can_act_on_planning_request: {
+        Args: { p_action: string; p_request_id: string }
+        Returns: boolean
+      }
+      can_act_on_shift: {
+        Args: { p_action: string; p_shift_id: string }
+        Returns: boolean
+      }
+      can_act_on_swap: {
+        Args: { p_action: string; p_swap_id: string }
+        Returns: boolean
+      }
+      can_act_on_timesheet: {
+        Args: { p_action: string; p_employee_id: string; p_shift_id: string }
+        Returns: boolean
+      }
+      can_change_certificate: {
+        Args: {
+          p_level: Database["public"]["Enums"]["access_level"]
+          p_org_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      can_edit_roster: { Args: { p_roster_id: string }; Returns: boolean }
+      can_edit_roster_group: {
+        Args: { p_roster_group_id: string }
+        Returns: boolean
+      }
       can_edit_roster_shift: {
         Args: { p_roster_shift_id: string }
         Returns: boolean
       }
+      can_edit_template: { Args: { p_template_id: string }; Returns: boolean }
+      can_edit_template_group: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
+      can_edit_template_subgroup: {
+        Args: { p_subgroup_id: string }
+        Returns: boolean
+      }
+      can_grant_certificate: {
+        Args: {
+          p_level: Database["public"]["Enums"]["access_level"]
+          p_org_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      can_manage_contract: {
+        Args: {
+          p_dept_id: string
+          p_org_id: string
+          p_sub_dept_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      can_manage_employee_record: {
+        Args: { p_employee_id: string }
+        Returns: boolean
+      }
       can_manage_first_aid_appointment: {
         Args: { p_employee_id: string; p_org_id: string }
+        Returns: boolean
+      }
+      can_read_certificates_in: { Args: { p_org_id: string }; Returns: boolean }
+      can_view_contract: { Args: { p_contract_id: string }; Returns: boolean }
+      can_view_employee_schedule: {
+        Args: { p_employee_id: string }
+        Returns: boolean
+      }
+      can_write_contract: {
+        Args: {
+          p_level: Database["public"]["Enums"]["access_level"]
+          p_org_id: string
+          p_user_id: string
+        }
         Returns: boolean
       }
       cancel_shift: {
@@ -8295,19 +8433,6 @@ export type Database = {
           version_match: boolean
         }[]
       }
-      cleanup_dead_shifts_batch: {
-        Args: { p_batch_size?: number; p_dry_run?: boolean }
-        Returns: {
-          batch_finished_at: string
-          batch_started_at: string
-          capped: boolean
-          deleted: number
-          dry_run: boolean
-          run_id: string
-          scanned: number
-        }[]
-      }
-      cleanup_test_shifts: { Args: never; Returns: undefined }
       clone_roster_subgroup: {
         Args: { p_new_name: string; p_subgroup_id: string }
         Returns: string
@@ -8414,6 +8539,10 @@ export type Database = {
         Args: { p_employee_id?: string; p_reason?: string; p_shift_id: string }
         Returns: Json
       }
+      employee_on_approved_leave: {
+        Args: { p_date: string; p_employee_id: string }
+        Returns: boolean
+      }
       expire_locked_swaps: {
         Args: never
         Returns: {
@@ -8445,6 +8574,7 @@ export type Database = {
           p_base_rate: number
           p_employment_type: string
           p_first_aid?: boolean
+          p_higher_duties?: boolean
           p_is_training?: boolean
           p_net_minutes: number
           p_requires_flexible?: boolean
@@ -8609,18 +8739,6 @@ export type Database = {
           employee_name: string
           has_availability: boolean
           has_required_skills: boolean
-        }[]
-      }
-      get_employee_event_timeline: {
-        Args: { p_employee_id: string; p_limit?: number }
-        Returns: {
-          event_id: string
-          event_time: string
-          event_type: Database["public"]["Enums"]["shift_event_type"]
-          metadata: Json
-          shift_date: string
-          shift_id: string
-          shift_label: string
         }[]
       }
       get_employee_metrics:
@@ -8929,6 +9047,14 @@ export type Database = {
           worked_count: number
         }[]
       }
+      get_prospective_pay_terms: {
+        Args: { p_employee_ids: string[]; p_shift_ids: string[] }
+        Returns: {
+          employee_id: string
+          pay_terms: Json
+          shift_id: string
+        }[]
+      }
       get_publish_target_state: {
         Args: {
           p_has_assignment: boolean
@@ -9151,45 +9277,7 @@ export type Database = {
           version: number
         }[]
       }
-      get_shift_event_timeline: {
-        Args: { p_shift_id: string }
-        Returns: {
-          actor_id: string
-          actor_name: string
-          actor_role: string
-          assignee_name: string
-          assignment_source: string
-          changes: Json
-          creation_source: string
-          domain: string
-          employee_id: string
-          event_id: string
-          event_time: string
-          event_type: Database["public"]["Enums"]["shift_event_type"]
-          from_state: string
-          from_version: string
-          op: string
-          reason: string
-          to_state: string
-          to_version: string
-        }[]
-      }
       get_shift_flags: { Args: { p_shift_id: string }; Returns: string[] }
-      get_prospective_pay_terms: {
-        Args: { p_employee_ids: string[]; p_shift_ids: string[] }
-        Returns: {
-          employee_id: string
-          pay_terms: Json
-          shift_id: string
-        }[]
-      }
-      get_shift_pay_terms: {
-        Args: { p_shift_ids: string[] }
-        Returns: {
-          pay_terms: Json
-          shift_id: string
-        }[]
-      }
       get_shift_fsm_state: {
         Args: {
           p_assignment_outcome: Database["public"]["Enums"]["shift_assignment_outcome"]
@@ -9201,15 +9289,11 @@ export type Database = {
         }
         Returns: string
       }
-      get_shift_lifecycle: {
-        Args: { p_shift_id: string }
+      get_shift_pay_terms: {
+        Args: { p_shift_ids: string[] }
         Returns: {
-          employee_id: string
-          employee_name: string
-          event_id: string
-          event_time: string
-          event_type: Database["public"]["Enums"]["shift_event_type"]
-          metadata: Json
+          pay_terms: Json
+          shift_id: string
         }[]
       }
       get_shift_start_time: { Args: { p_shift_id: string }; Returns: string }
@@ -9237,6 +9321,30 @@ export type Database = {
         Args: { p_scheduled_start: string }
         Returns: string
       }
+      get_toil_balances: {
+        Args: { p_employee_ids: string[] }
+        Returns: {
+          balance_minutes: number
+          earned_minutes: number
+          eligible: boolean
+          employee_id: string
+          has_history: boolean
+          held_minutes: number
+          next_expiry_date: string
+          next_expiry_minutes: number
+          paid_out_minutes: number
+          taken_minutes: number
+        }[]
+      }
+      get_toil_lots: {
+        Args: { p_employee: string }
+        Returns: {
+          earned_minutes: number
+          expires_on: string
+          lot_date: string
+          remaining_minutes: number
+        }[]
+      }
       get_user_access_levels:
         | {
             Args: never
@@ -9259,6 +9367,7 @@ export type Database = {
         Returns: boolean
       }
       has_shift_started: { Args: { p_shift_id: string }; Returns: boolean }
+      holds_action: { Args: { p_action: string }; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_broadcast_system_manager: { Args: never; Returns: boolean }
       is_first_aid_duty: {
@@ -9266,14 +9375,20 @@ export type Database = {
         Returns: boolean
       }
       is_manager_or_above: { Args: never; Returns: boolean }
+      is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
       is_shift_timesheet_reviewable: {
         Args: { p_shift_id: string }
         Returns: boolean
       }
       is_valid_uuid: { Args: { str: string }; Returns: boolean }
+      is_zeta: { Args: never; Returns: boolean }
       jurisdiction_is_known: {
         Args: { p_jurisdiction: string }
         Returns: boolean
+      }
+      leave_accrual_days: {
+        Args: { p_employee: string; p_from: string }
+        Returns: number
       }
       log_compliance_check: {
         Args: {
@@ -9553,6 +9668,7 @@ export type Database = {
           success: boolean
         }[]
       }
+      shares_organisation_with: { Args: { p_other: string }; Returns: boolean }
       shift_day_typed_shortfall: {
         Args: {
           p_end_time: string
@@ -9568,14 +9684,6 @@ export type Database = {
         Returns: string
       }
       shift_is_security_role: { Args: { p_role_id: string }; Returns: boolean }
-      shift_pay_terms: {
-        Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
-        Returns: Json
-      }
-      shift_pay_terms_for: {
-        Args: { p_employee: string; s: Database["public"]["Tables"]["shifts"]["Row"] }
-        Returns: Json
-      }
       shift_net_minutes: {
         Args: {
           p_end_time: string
@@ -9583,6 +9691,17 @@ export type Database = {
           p_unpaid_break: number
         }
         Returns: number
+      }
+      shift_pay_terms: {
+        Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
+        Returns: Json
+      }
+      shift_pay_terms_for: {
+        Args: {
+          p_employee: string
+          s: Database["public"]["Tables"]["shifts"]["Row"]
+        }
+        Returns: Json
       }
       sm_accept_offer: {
         Args: { p_shift_id: string; p_user_id?: string }
@@ -9753,7 +9872,12 @@ export type Database = {
         Returns: Json
       }
       sm_delete_shift: {
-        Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
+        Args: {
+          p_expected_version?: number
+          p_reason?: string
+          p_shift_id: string
+          p_user_id?: string
+        }
         Returns: Json
       }
       sm_emergency_assign: {
@@ -9866,6 +9990,7 @@ export type Database = {
         Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
+      sm_request_is_system: { Args: never; Returns: boolean }
       sm_request_trade:
         | {
             Args: { p_shift_id: string; p_target_employee_id?: string }
@@ -9879,6 +10004,48 @@ export type Database = {
             }
             Returns: Json
           }
+      sm_require_assignee_or: {
+        Args: { p_actor: string; p_manager_action: string; p_shift_id: string }
+        Returns: undefined
+      }
+      sm_require_roster_action: {
+        Args: { p_action: string; p_roster_id: string }
+        Returns: undefined
+      }
+      sm_require_scope: {
+        Args: {
+          p_action: string
+          p_dept_id: string
+          p_org_id: string
+          p_sub_dept_id: string
+        }
+        Returns: undefined
+      }
+      sm_require_self: { Args: { p_actor: string }; Returns: undefined }
+      sm_require_shift_action: {
+        Args: { p_action: string; p_shift_id: string }
+        Returns: undefined
+      }
+      sm_require_shift_data_action: {
+        Args: { p_action: string; p_shift_data: Json }
+        Returns: undefined
+      }
+      sm_require_template_apply: {
+        Args: {
+          p_target_dept_id: string
+          p_target_sub_dept_id: string
+          p_template_id: string
+        }
+        Returns: undefined
+      }
+      sm_require_template_create_in: {
+        Args: { p_sub_department_id: string }
+        Returns: undefined
+      }
+      sm_require_template_edit: {
+        Args: { p_template_id: string }
+        Returns: undefined
+      }
       sm_select_bid_winner: {
         Args: { p_shift_id: string; p_user_id?: string; p_winner_id: string }
         Returns: Json
@@ -9913,72 +10080,6 @@ export type Database = {
           value: string
         }[]
       }
-      test_all_transitions: {
-        Args: never
-        Returns: {
-          actual_success: boolean
-          details: string
-          expected_success: boolean
-          from_state: string
-          passed: boolean
-          test_name: string
-          to_state: string
-        }[]
-      }
-      test_concurrency_races_v3: {
-        Args: never
-        Returns: {
-          actor: string
-          details: string
-          resulting_state: string
-          success: boolean
-          test_name: string
-        }[]
-      }
-      test_create_shifts: {
-        Args: { p_count: number; p_hours_from_now?: string; p_state: string }
-        Returns: string[]
-      }
-      test_identity_and_permissions_v3: {
-        Args: never
-        Returns: {
-          actual_success: boolean
-          details: string
-          expected_success: boolean
-          passed: boolean
-          test_name: string
-        }[]
-      }
-      test_reentrancy_and_idempotency_v3: {
-        Args: never
-        Returns: {
-          actual_success: boolean
-          details: string
-          expected_success: boolean
-          passed: boolean
-          test_name: string
-        }[]
-      }
-      test_time_boundaries_v3: {
-        Args: never
-        Returns: {
-          actual_success: boolean
-          details: string
-          expected_success: boolean
-          passed: boolean
-          test_name: string
-        }[]
-      }
-      test_transition_matrix_v3: {
-        Args: never
-        Returns: {
-          action: string
-          details: string
-          from_state: string
-          success: boolean
-          to_state: string
-        }[]
-      }
       toggle_roster_lock_for_range: {
         Args: {
           p_dept_id: string
@@ -9992,12 +10093,19 @@ export type Database = {
           updated_count: number
         }[]
       }
-      undo_template_batch:
-        | { Args: { p_batch_id: string }; Returns: Json }
-        | {
-            Args: { p_batch_id: string; p_dry_run?: boolean; p_user_id?: string }
-            Returns: Json
-          }
+      toil_adjust: {
+        Args: { p_employee: string; p_minutes: number; p_reason: string }
+        Returns: string
+      }
+      toil_process_expiries: { Args: never; Returns: number }
+      toil_request_payout: {
+        Args: { p_employee: string; p_minutes: number; p_note?: string }
+        Returns: string
+      }
+      undo_template_batch: {
+        Args: { p_batch_id: string; p_dry_run?: boolean; p_user_id?: string }
+        Returns: Json
+      }
       unpublish_roster_day: {
         Args: {
           p_reason?: string
@@ -10168,7 +10276,7 @@ export type Database = {
         | "leave_approved"
         | "leave_rejected"
         | "timesheet_adjusted"
-      rbac_scope: "SELF" | "SUB_DEPT" | "DEPT" | "ORG"
+      rbac_scope: "SELF" | "SUB_DEPT" | "DEPT" | "ORG" | "CONTRACTED"
       roster_day_status: "draft" | "published" | "locked"
       roster_status: "draft" | "published" | "archived"
       shift_assignment_outcome:
@@ -10308,12 +10416,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10337,11 +10445,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10362,11 +10470,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10387,11 +10495,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10404,11 +10512,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -10487,7 +10595,7 @@ export const Constants = {
         "leave_rejected",
         "timesheet_adjusted",
       ],
-      rbac_scope: ["SELF", "SUB_DEPT", "DEPT", "ORG"],
+      rbac_scope: ["SELF", "SUB_DEPT", "DEPT", "ORG", "CONTRACTED"],
       roster_day_status: ["draft", "published", "locked"],
       roster_status: ["draft", "published", "archived"],
       shift_assignment_outcome: [
@@ -10599,3 +10707,4 @@ export const Constants = {
     },
   },
 } as const
+
