@@ -35,15 +35,18 @@ for r, floor in (("queries", 1000), ("calls_rpc", 30), ("documents", 800), ("war
 # 2. layer node populations
 db = sum(1 for i in N if i.startswith(("db_", "mig_")))
 mem = sum(1 for i in N if i.startswith("mem_"))
-check(db >= 1400, f"db/sql nodes {db}")
+# 1395 after the 10-13 re-baseline squashed the migration history.
+check(db >= 1350, f"db/sql nodes {db}")
 check(mem >= 100, f"memory nodes {mem}")
 
 # 3. provenance regression: label dedup must not invent callers.
 #    Ground truth verified by grep on 2026-09-06; re-verified 2026-10-05 after
 #    the leave rewrite, which moved leave.api.ts onto sm_unassign_shift /
 #    sm_delete_shift (it no longer calls sm_apply_shift_op).
-truth = {"src_modules_rosters_api_shifts_api_ts",
-         "supabase_functions_auto_assign_bids_index_ts"}
+#    Node ids lost their "_ts" suffix in the graphify upgrade (2026-10-25).
+#    shifts.commands.ts also calls it but the AST layer misses that edge.
+truth = {"src_modules_rosters_api_shifts_api",
+         "supabase_functions_auto_assign_bids_index"}
 got = {e["source"] for e in E
        if e.get("target") == "db_fn_sm_apply_shift_op" and e.get("relation") == "calls_rpc"}
 check(got == truth, f"sm_apply_shift_op callers exact ({len(got)} found)"
