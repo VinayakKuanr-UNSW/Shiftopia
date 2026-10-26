@@ -170,9 +170,13 @@ export async function fetchV8EmployeeContext(
     const activeContractStatus: string | undefined = headline?.employment_status;
     const rawStatus = activeContractStatus || profile?.employment_type || '';
     const rawType = rawStatus.toLowerCase().replace(/[-_]/g, ' ');
+    // 'Flexible Part-Time' must be mapped before the /part/ fallback below,
+    // which would read it as plain part-time and silently drop the cl 35.3(g)
+    // ten-day streak cap V8_STREAK_LIMIT applies only to flexi.
     const employmentTypeMap: Record<string, ContractType> = {
         'full time':   'FULL_TIME',
         'full_time':   'FULL_TIME', // fallback
+        'flexible part time': 'FLEXI_PART_TIME',
         'part time':   'PART_TIME',
         'part_time':   'PART_TIME', // fallback
         'casual':      'CASUAL',

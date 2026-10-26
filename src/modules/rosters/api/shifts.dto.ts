@@ -1,5 +1,4 @@
 import { TemplateGroupType } from '../domain/shift.entity';
-import type { ShapeExemption } from './shift-shape-gate';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
 export interface CreateShiftData {
@@ -17,8 +16,13 @@ export interface CreateShiftData {
     shift_subgroup_id?: string | null;
     role_id?: string | null;
     remuneration_level?: number | null;
+    /** The paid rest pauses (cl 37) only. The meal break is the window below. */
     paid_break_minutes?: number;
+    /** The meal-break window's length, or 0 where the meal break is paid (security). */
     unpaid_break_minutes?: number;
+    /** Meal-break start and end, `HH:mm`. Required once a shift runs over 5 hours (cl 36.1). */
+    break_start?: string | null;
+    break_end?: string | null;
     timezone?: string;
     start_at?: string | null;
     end_at?: string | null;
@@ -45,22 +49,6 @@ export interface CreateShiftData {
     /** Narrows a 'PT' target to Flexible Part-Time staff only. */
     target_requires_flexible?: boolean;
     demand_group_id?: string | null;
-    /**
-     * Named, RULE-SCOPED bypass for the Layer-1 shape gate in
-     * `shiftsCommands.createShift`.
-     *
-     * Absent (the normal case) means a shift whose shape breaches the EBA is
-     * refused. Present means the LISTED rules are recorded and written anyway,
-     * and the reason says why — the demand synthesiser sets it because its
-     * output is a coverage skeleton with no breaks modelled, inserted as Draft
-     * for a manager to complete. Rules it does not list still block.
-     *
-     * This was a bare reason string until 2026-08-19, which waived every rule
-     * at once: the synthesiser's "breaks are filled in by the manager" also
-     * silently waived cl 56.2's four-hour public-holiday minimum. Never
-     * persisted; it is a client-side instruction to the gate.
-     */
-    shape_exempt?: ShapeExemption;
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {

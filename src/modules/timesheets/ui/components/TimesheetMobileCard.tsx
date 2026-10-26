@@ -7,6 +7,7 @@ import {
     Check,
     X,
     RotateCcw,
+    AlertTriangle,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
@@ -31,7 +32,7 @@ import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projecti
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
-import { validateBillableEdit, billableVarianceVsRoster } from '../../domain/billable-edit';
+import { validateBillableEdit, billableVarianceVsRoster, parseHHMM } from '../../domain/billable-edit';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
@@ -145,6 +146,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     const [localAdjEnd, setLocalAdjEnd] = useState(entry.adjustedEnd || '');
     const [localPaidBreak, setLocalPaidBreak] = useState(entry.paidBreak || '0');
     const [localUnpaidBreak, setLocalUnpaidBreak] = useState(entry.unpaidBreak || '0');
+    const [localActualBreakStart, setLocalActualBreakStart] = useState(entry.actualBreakStart || '');
+    const [localActualBreakEnd, setLocalActualBreakEnd] = useState(entry.actualBreakEnd || '');
 
     // Billable variance-reason flow (mirrors the desktop row).
     const [varianceOpen, setVarianceOpen] = useState(false);
@@ -175,6 +178,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
+                break_start: entry.rosteredBreakStart || undefined,
                 scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
             });
         } catch {
@@ -212,6 +216,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
+                break_start: entry.actualBreakStart || entry.rosteredBreakStart || undefined,
                 scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
             }, entry.netLengthMinutes);
         } catch {
@@ -243,6 +248,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         setLocalAdjEnd(entry.adjustedEnd || entry.scheduledEnd || '');
         setLocalPaidBreak(entry.paidBreak || '0');
         setLocalUnpaidBreak(entry.unpaidBreak || '0');
+        setLocalActualBreakStart(entry.actualBreakStart || '');
+        setLocalActualBreakEnd(entry.actualBreakEnd || '');
         setIsEditing(true);
     };
 
@@ -387,6 +394,10 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             scheduledEnd: entry.scheduledEnd,
             unpaidBreakMinutes: parseFloat(localUnpaidBreak) || 0,
             requiredMinutes,
+            actualBreakStart: localActualBreakStart || null,
+            actualBreakEnd: localActualBreakEnd || null,
+            rosteredBreakStart: entry.rosteredBreakStart || null,
+            rosteredBreakEnd: entry.rosteredBreakEnd || null,
         });
         if (!v.ok) {
             toast({ title: 'Check the edit', description: v.error!, variant: 'destructive' });
@@ -398,6 +409,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             adjustedEnd: v.normalizedEnd,
             paidBreak: localPaidBreak,
             unpaidBreak: localUnpaidBreak,
+            actualBreakStart: v.normalizedBreakStart || null,
+            actualBreakEnd: v.normalizedBreakEnd || null,
             isAdjustedManual: true,
         };
         if (v.startChanged && !v.needArrivalReason) payload.arrivalVarianceReason = null;
@@ -461,6 +474,10 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             })()}
             paidBreak={parseInt(entry.paidBreak) || 0}
             unpaidBreak={parseInt(entry.unpaidBreak) || 0}
+            rosteredBreakStart={entry.rosteredBreakStart}
+            rosteredBreakEnd={entry.rosteredBreakEnd}
+            actualBreakStart={entry.actualBreakStart}
+            actualBreakEnd={entry.actualBreakEnd}
             lifecycleStatus={entry.liveStatus}
             groupVariant={resolveGroupVariant(entry.groupType, `${entry.group} ${entry.department}`, entry.role)}
             employeeName={entry.employee}
@@ -505,6 +522,12 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             }}
             topContent={
                 <div className="flex items-center gap-2">
+                    {entry.hasBreakVarianceFlag && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                            Break dev {entry.breakVarianceMinutes ? `±${entry.breakVarianceMinutes}m` : '>15m'}
+                        </span>
+                    )}
                     {isSelectMode && (
                         <button
                             onClick={onToggleSelect}
@@ -554,6 +577,50 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                     <input 
                                         value={localUnpaidBreak} 
                                         onChange={e => setLocalUnpaidBreak(e.target.value)} 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 w-full">
+                                <div className="space-y-1 min-w-0">
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Actual Break Start</Label>
+                                    <input 
+                                        value={localActualBreakStart} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setLocalActualBreakStart(val);
+                                            if (val && localActualBreakEnd) {
+                                                const s = parseHHMM(val);
+                                                const end = parseHHMM(localActualBreakEnd);
+                                                if (s !== null && end !== null) {
+                                                    const dur = end <= s ? end + 1440 - s : end - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    setLocalUnpaidBreak(entry.isSecurityRole ? '0' : String(dur));
+                                                }
+                                            }
+                                        }} 
+                                        placeholder="HH:MM"
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                    />
+                                </div>
+                                <div className="space-y-1 min-w-0">
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Actual Break End</Label>
+                                    <input 
+                                        value={localActualBreakEnd} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setLocalActualBreakEnd(val);
+                                            if (localActualBreakStart && val) {
+                                                const s = parseHHMM(localActualBreakStart);
+                                                const end = parseHHMM(val);
+                                                if (s !== null && end !== null) {
+                                                    const dur = end <= s ? end + 1440 - s : end - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    setLocalUnpaidBreak(entry.isSecurityRole ? '0' : String(dur));
+                                                }
+                                            }
+                                        }} 
+                                        placeholder="HH:MM"
                                         className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>

@@ -25,11 +25,11 @@ import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 
 import { useOfficeLeave, useOfficeWeekShifts, useOfficeWorld, useRosterCoverage } from '../../hooks/useOffice';
-import { computeProposal } from '../../api/office.commands';
+import { copyCyclesFor } from '../../api/office.commands';
 import { copyShiftToDates } from '../../api/copyShift';
 import { copyOutcomeToast, planCopy } from '../../domain/copyPlan';
 import { indexApprovedLeave, indexOfficeWeek } from '../../domain/plannedWeek';
-import type { IsoWeekday, OfficePattern } from '../../domain/types';
+import type { IsoWeekday } from '../../domain/types';
 import { CopyShiftDialog } from './CopyShiftDialog';
 
 export interface CopyShiftSource {
@@ -56,18 +56,10 @@ export interface CopyShiftFlowProps {
     onCopied?: () => void;
 }
 
-/**
- * No patterns. `computeProposal` is called, with none, for ONE output: the
- * employee's cycles over the copy range (contracted ceiling, hours rostered, and
- * leave / public-holiday credit), which `planCopy` checks cl 35.1(a) against.
- */
-const NO_PATTERNS: ReadonlyMap<string, OfficePattern> = new Map();
-
 export const CopyShiftFlow: React.FC<CopyShiftFlowProps> = ({
     source, defaultEndDate, referenceDate, onClose, onCopied,
 }) => {
     const { toast } = useToast();
-    const generatedAt = React.useMemo(() => new Date().toISOString(), []);
 
     const [copyStart, setCopyStart] = React.useState('');
     const [copyEnd, setCopyEnd] = React.useState('');
@@ -103,16 +95,8 @@ export const CopyShiftFlow: React.FC<CopyShiftFlowProps> = ({
     /** `undefined` while loading; `null` when the employee has no ledger in this team. */
     const copyCycles = React.useMemo(() => {
         if (!source || !copyWorld.data) return undefined;
-        const { ledgers } = computeProposal({
-            world: copyWorld.data,
-            patternsByEmployee: NO_PATTERNS as Map<string, OfficePattern>,
-            organizationId: source.organizationId,
-            departmentId: source.departmentId,
-            subDepartmentId: source.subDepartmentId,
-            periodStart: copyStart, periodEnd: copyEnd, referenceDate, generatedAt,
-        });
-        return ledgers.find(l => l.employeeId === source.employeeId)?.cycles ?? null;
-    }, [source, copyWorld.data, copyStart, copyEnd, referenceDate, generatedAt]);
+        return copyCyclesFor(copyWorld.data, source.employeeId, copyStart, copyEnd);
+    }, [source, copyWorld.data, copyStart, copyEnd]);
 
     const blockedReason = copyCycles === null
         ? `${source?.employeeName || 'This employee'} is not one of this team's full-time employees, `
@@ -160,6 +144,8 @@ export const CopyShiftFlow: React.FC<CopyShiftFlowProps> = ({
                 endTime: String(sh.end_time ?? '').slice(0, 5),
                 unpaidBreakMinutes: Number(sh.unpaid_break_minutes ?? 0),
                 paidBreakMinutes: Number(sh.paid_break_minutes ?? 0),
+                breakStart: sh.break_start ? String(sh.break_start).slice(0, 5) : null,
+                breakEnd: sh.break_end ? String(sh.break_end).slice(0, 5) : null,
                 roleId: source.roleId,
             }, copyPlan.targets, {
                 onProgress: (done, total) => setCopyProgress({ done, total }),

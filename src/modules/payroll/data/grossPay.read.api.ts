@@ -363,6 +363,8 @@ export function mapShiftRowToGrossPayInput(
     isOvernight: !!row.is_overnight,
     scheduledLengthMinutes: row.scheduled_length_minutes ?? undefined,
     hoursSource,
+    breakStart: ts?.actual_break_start ?? row.break_start ?? null,
+    unpaidBreakMinutes: unpaidBreak,
 
     isCancelled,
     isNoShow,
@@ -507,6 +509,7 @@ async function fetchHydratedShiftRows(
       actual_end,
       paid_break_minutes,
       unpaid_break_minutes,
+      break_start,
       net_length_minutes,
       scheduled_length_minutes,
       remuneration_level,
@@ -552,7 +555,7 @@ async function fetchHydratedShiftRows(
   const shiftIds = rows.map((r) => r.id);
   const { data: timesheets, error: tsErr } = await supabase
     .from('timesheets')
-    .select('id, shift_id, start_time, end_time, unpaid_break_minutes, status')
+    .select('id, shift_id, start_time, end_time, unpaid_break_minutes, actual_break_start, status')
     .in('shift_id', shiftIds);
   if (tsErr) console.error('[grossPay.read] timesheets query error:', tsErr);
   const tsByShift = new Map(

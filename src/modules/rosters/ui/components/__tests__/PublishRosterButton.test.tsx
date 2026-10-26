@@ -119,6 +119,29 @@ describe('PublishRosterButton — result', () => {
     });
 });
 
+describe('PublishRosterButton — leaving mid-publish', () => {
+    const tryToLeave = () => {
+        const e = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+    };
+
+    it('asks the browser to confirm leaving while publishing, and stops once it ends', async () => {
+        let finish!: (r: { published: number; failed: number }) => void;
+        const execute = vi.fn(() => new Promise<{ published: number; failed: number }>(r => { finish = r; }));
+        await openWith(plan({ assignedIds: ['a'] }), execute);
+
+        expect(tryToLeave()).toBe(false);
+        fireEvent.click(screen.getByRole('button', { name: /confirm publish/i }));
+        await waitFor(() => expect(execute).toHaveBeenCalled());
+        expect(tryToLeave()).toBe(true);
+
+        finish({ published: 1, failed: 0 });
+        await waitFor(() => expect(h.toast).toHaveBeenCalled());
+        expect(tryToLeave()).toBe(false);
+    });
+});
+
 describe('PublishRosterButton — disabled', () => {
     it('stays focusable and says why when it cannot be used', () => {
         const loadPlan = vi.fn();

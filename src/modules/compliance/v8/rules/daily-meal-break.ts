@@ -1,6 +1,7 @@
 import { V8Hit, V8RuleEvaluator, V8Shift } from '../types';
 import { parseTimeToMinutes, normalizedEndMinutes } from '../utils/time';
 import { shiftStartDate } from '../utils/rest-gap';
+import { mealBreakMinutes } from '../utils/meal-break';
 
 /**
  * V8 Rule: Daily Meal Break — the limb of cl 36.1 a single shift cannot answer.
@@ -29,11 +30,10 @@ import { shiftStartDate } from '../utils/rest-gap';
  * to three hours. The ceiling therefore stays where the shape layer has it —
  * on the unpaid break declared within one shift.
  *
- * Security is paid through the break (Sch 3 §3.2(a) full-time, §5.3(a) event),
- * so for them the qualifying in-shift interval is the paid allotment, capped
- * the same way the shape layer caps it — `paid_break_minutes` pools the meal
- * break with the cl 37 rest pauses, and only the meal-break part of it answers
- * this clause.
+ * Security is paid through the break (Sch 3 §3.2(a) full-time, §5.3(a) event).
+ * The in-shift interval is the meal-break window either way (`mealBreakMinutes`);
+ * for Security it is paid, and `paid_break_minutes` — the cl 37 rest pauses —
+ * never answers this clause.
  *
  * Applies to every employment type: cl 36.1 says "a Team Member", without
  * qualification, and the fact pattern reaches casuals most often.
@@ -50,9 +50,6 @@ export const DAILY_MEAL_BREAK_THRESHOLD_MINUTES = 300;
 
 /** cl 36.1 — "not less than thirty (30) minutes". */
 export const DAILY_MEAL_BREAK_MIN_MINUTES = 30;
-
-/** cl 36.1 — "and not more than sixty (60) minutes". The in-shift ceiling. */
-export const DAILY_MEAL_BREAK_MAX_MINUTES = 60;
 
 interface Engagement {
     shift: V8Shift;
@@ -90,10 +87,7 @@ export const dailyMealBreakRule: V8RuleEvaluator = (ctx) => {
             .map(s => {
                 const start = parseTimeToMinutes(s.start_time);
                 const end = normalizedEndMinutes(s.start_time, s.end_time);
-                const declared = isSecurity
-                    ? Math.min(s.paid_break_minutes || 0, DAILY_MEAL_BREAK_MAX_MINUTES)
-                    : (s.unpaid_break_minutes || 0);
-                return { shift: s, start, end, inShiftBreak: declared };
+                return { shift: s, start, end, inShiftBreak: mealBreakMinutes(s, isSecurity) };
             })
             .sort((a, b) => a.start - b.start);
 

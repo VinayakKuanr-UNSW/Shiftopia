@@ -40,6 +40,9 @@ const raw = readMigrationFile(MIGRATION);
  */
 const sql = raw.replace(/--.*$/gm, '');
 
+/** The meal-break window predicate that replaced the meal-break CHECK, comments stripped. */
+const breakWindowSql = readMigrationFile('20261025102855_shift_break_window.sql').replace(/--.*$/gm, '');
+
 /** The integer a named constraint compares against. */
 function constraintBody(name: string): string {
     const m = new RegExp(`ADD CONSTRAINT ${name}\\s+CHECK \\(([\\s\\S]*?)\\)\\s*\\n\\s*NOT VALID`).exec(sql);
@@ -81,10 +84,14 @@ describe('the database backstop agrees with the shape layer', () => {
             .toContain(`>= ${Math.min(...tiers)}`);
     });
 
-    it('uses the same cl 36.1 threshold and minimum', () => {
-        const body = constraintBody('shifts_shape_meal_break');
-        expect(body).toContain(`<= ${DEFAULT_SHAPE_CONFIG.meal_break_threshold_minutes}`);
-        expect(body).toContain(`>= ${DEFAULT_SHAPE_CONFIG.meal_break_min_minutes}`);
+    it('uses the same cl 36.1 threshold and 30–60 range for the meal-break window', () => {
+        // The window predicate replaced `shifts_shape_meal_break` (dropped in the
+        // break-window migration), so the meal-break numbers are pinned there.
+        expect(breakWindowSql).toContain(`> ${DEFAULT_SHAPE_CONFIG.meal_break_threshold_minutes}`);
+        expect(breakWindowSql).toContain(
+            `NOT BETWEEN ${DEFAULT_SHAPE_CONFIG.meal_break_min_minutes} AND ${DEFAULT_SHAPE_CONFIG.meal_break_max_minutes}`,
+        );
+        expect(breakWindowSql).toContain('DROP CONSTRAINT shifts_shape_meal_break');
     });
 
     it('uses the same cl 37 rest-pause thresholds', () => {
@@ -97,12 +104,11 @@ describe('the database backstop agrees with the shape layer', () => {
 });
 
 describe('the backstop stays loose exactly where it cannot see', () => {
-    it('accepts EITHER break field for the meal break', () => {
-        // The app reads the unpaid field, or the paid one for Security. A row
-        // cannot resolve a role name, so requiring the unpaid field would
-        // reject every lawful Security shift.
-        expect(constraintBody('shifts_shape_meal_break'))
-            .toMatch(/unpaid_break_minutes, 0\) \+ COALESCE\(paid_break_minutes, 0\) >= 30/);
+    it('accepts an unpaid total of 0 against any meal-break window', () => {
+        // The app deducts the window, or nothing for Security, whose meal break
+        // is paid. A row cannot resolve a role name, so requiring the deduction
+        // would reject every lawful Security shift.
+        expect(breakWindowSql).toMatch(/NOT IN \(\s*0,/);
     });
 
     it('does not attempt the public-holiday minimum', () => {

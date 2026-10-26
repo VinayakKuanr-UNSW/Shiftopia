@@ -4,9 +4,9 @@ Server-side worker that drains open-for-bidding shifts in a manager-supplied
 scope and commits a winner for each through the existing
 `sm_apply_shift_op('select_winner', …)` gateway with version-CAS. It builds one
 consistent snapshot under the service role (open shifts + their pending bids +
-F3 fairness debts), then **decides each shift per-bidder by calling the deployed
-`evaluate-compliance` Edge Function over HTTP** — the first bidder whose result
-is not `'violated'` wins.
+F3 fairness debts), then **decides each shift per-bidder by asking the
+database's EBA engine (`eba_check_assignment`)** — the first bidder with no
+BLOCKING finding wins.
 
 Implements `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/01-auto-assign-bids-refactor.md` §2 (orchestration)
 and §8 (API), bound by `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/00-contracts-and-conventions.md`
@@ -27,7 +27,7 @@ shift bidding closes with no winner
 bid_review_queue (PENDING)
    │  cron → POST /tick → sm_bid_queue_claim (SKIP LOCKED)
    ▼
-decideShift()  (reused: first compliance-clear bidder via evaluate-compliance)
+decideShift()  (reused: first compliance-clear bidder via eba_check_assignment)
    ▼
 sm_bid_auto_decide  →  bid_decisions (+ audit)
    │  AUTO_APPROVE → commit via hardened sm_select_bid_winner
@@ -55,8 +55,8 @@ then turn AutoPilot **ON** for an org (`bid_approval_rules` row with
 This function was refactored to **approach A** (2026-06-24): the vendored v8 TS
 compliance engine was **dropped**. The function now imports ONLY
 `@supabase/supabase-js`, Deno built-ins, and `./types.ts`, so it bundles under
-Deno exactly like the other deployed functions (`evaluate-compliance`,
-`autoschedule-*`, `get-roster-view`): supabase-js + `fetch` + pure local TS.
+Deno exactly like the other deployed functions (`get-roster-view`, and the
+retired `autoschedule-*`): supabase-js + `fetch` + pure local TS.
 
 ### What changed
 
@@ -85,24 +85,21 @@ maximise total coverage). That is the accepted v1 cost of self-containment;
 revisit with approach B (vendor + `deno check`) later if global optimality is
 needed.
 
-### Correctness caveat — compliance rule set
+### Compliance rule set (2026-10-26)
 
-`evaluate-compliance` is **not** the v8 engine. It runs four DB-RPC checks:
-overlap, **weekly hours capped at 48h** (`calculate_weekly_hours`), **11h rest**
-(`validate_rest_period`), and qualification (`check_shift_compliance`). The v8
-bidding engine enforced a broader/different rule set (e.g. fatigue streak /
-20-in-28 / spread-of-hours / student-visa 48h windows). So a bidder this worker
-clears may have failed a v8-only rule, and vice-versa. The 48h weekly cap here is
-the AU default, not the v8 ordinary-hours model. This is acceptable for v1
-because the deployed `sm_select_bid_winner` gateway re-enforces its own P0 guards
-(time-lock, winner-pending, FSM legality) at commit regardless.
+The worker asks `eba_check_assignment` — the database's EBA engine, the same
+rules `trg_shift_eba_compliance` enforces at commit on every shift write. It
+used to POST the `evaluate-compliance` edge function, whose fixed 4-check subset
+(overlap, 48h week, 11h rest, qualification) was house policy rather than the
+EBA; that function is retired. Even a bidder this worker clears is re-checked by
+the trigger when the winner is committed.
 
-> **Status:** self-contained scaffold. The draft migration that creates
+> **Status:** self-contained scaffold, **not deployed** on the dev project (as
+> of 2026-10-26). The draft migration that creates
 > `assignment_runs` / `assignment_decisions` / `assignment_events` and the
 > `sm_assignment_run_*` RPCs lives at
 > `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/migrations-draft/0001_assignment_audit_and_engine.sql`
-> and must be promoted to prod **before** this function will work end-to-end.
-> `evaluate-compliance` is already deployed in prod.
+> and must be promoted **before** this function will work end-to-end.
 
 ---
 
@@ -161,30 +158,24 @@ There is **nothing to vendor**. `index.ts` imports only:
 - `./types.ts` (pure local wire types).
 
 No `@compliance`, no `_vendor/`, no shims, no `import.meta.env`. The function
-bundles under Deno like `evaluate-compliance` / `autoschedule-*`. The only mapped
+bundles under Deno like `get-roster-view`. The only mapped
 specifier in `import_map.json` is the supabase-js pin.
 
 ### How compliance is called
 
-For each `(shift, bidder)` the worker POSTs to the deployed function:
+For each `(shift, bidder)`, on the service-role client (which the RPC's guard
+admits):
 
 ```
-POST ${SUPABASE_URL}/functions/v1/evaluate-compliance
-  headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-             apikey: ${SERVICE_ROLE_KEY},
-             'Content-Type': 'application/json' }
-  body: { employee_id: <bidder>,
-          shift_date, start_time:'HH:mm:ss', end_time:'HH:mm:ss',
-          net_length_minutes: <gross − unpaid break>,
-          shift_id: <shift.id>,                 // enables the qualification check
-          override_role_id, override_skill_ids, override_license_ids }
+service.rpc('eba_check_assignment', { p_shift_id: <shift.id>, p_employee_id: <bidder> })
 ```
 
-Response `status`: `'violated'` = blocking (bidder out), `'warned'` = warning
-(eligible unless `options.reject_warnings`), `'passed'` = clear, `'unavailable'`
-= checks couldn't run (**fail-closed** ⇒ treated as not eligible). The first
-bidder that is not blocked wins the shift. A `fetch`/HTTP failure is mapped to
-`'unavailable'` so a transport blip never silently passes an ineligible bidder.
+The engine reads the shift's date, times, break window, role and required
+qualifications from the row itself. Its rows fold into a status: any BLOCKING
+row = `'violated'` (bidder out), any WARNING = `'warned'` (eligible unless
+`options.reject_warnings`), none = `'passed'`. An RPC error is `'unavailable'`
+(**fail-closed** ⇒ treated as not eligible). The first bidder that is not
+blocked wins the shift.
 
 ---
 

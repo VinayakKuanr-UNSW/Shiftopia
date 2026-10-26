@@ -4,7 +4,6 @@
  */
 
 // Domain Layer - Commands (Write Operations)
-export * from './domain/commands/createShift.command';
 export * from './domain/commands/updateShift.command';
 export * from './domain/commands/assignShift.command';
 export * from './domain/commands/publishRoster.command';

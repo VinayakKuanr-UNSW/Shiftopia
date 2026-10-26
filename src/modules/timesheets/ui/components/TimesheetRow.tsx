@@ -46,8 +46,8 @@ import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.typ
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
 import { parseZonedDateTime, SYDNEY_TZ } from "@/modules/core/lib/date.utils";
 import { getProtectionContext, getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
-import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from "../../domain/variance-reasons";
-import { validateBillableEdit, billableVarianceVsRoster } from "../../domain/billable-edit";
+import { validateBillableEdit, billableVarianceVsRoster, parseHHMM } from "../../domain/billable-edit";
+import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
@@ -138,6 +138,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         adjustedEnd: entry.adjustedEnd || "",
         paidBreak: entry.paidBreak || "0",
         unpaidBreak: entry.unpaidBreak || "0",
+        actualBreakStart: entry.actualBreakStart || "",
+        actualBreakEnd: entry.actualBreakEnd || "",
     });
     // Snapshot of the editor prefill — only sides the manager actually CHANGED
     // are persisted (and thus become manual/`*`). Saving an untouched side
@@ -344,6 +346,10 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             scheduledEnd: entry.scheduledEnd,
             unpaidBreakMinutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
             requiredMinutes,
+            actualBreakStart: editedAdjusted.actualBreakStart || null,
+            actualBreakEnd: editedAdjusted.actualBreakEnd || null,
+            rosteredBreakStart: entry.rosteredBreakStart || null,
+            rosteredBreakEnd: entry.rosteredBreakEnd || null,
         });
         if (!v.ok) {
             setTimingError(v.error!);
@@ -364,6 +370,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             employmentType: entry.employmentType,
             is_training: entry.isTraining,
             unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
+            break_start: v.normalizedBreakStart || entry.actualBreakStart || entry.rosteredBreakStart || undefined,
             scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
         });
         const approximatePay = cost.payBasis === 'salary' ? 'Salaried' : `$${cost.totalCost.toFixed(2)}`;
@@ -375,6 +382,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             ...(endChanged ? { adjustedEnd } : {}),
             paidBreak: editedAdjusted.paidBreak,
             unpaidBreak: editedAdjusted.unpaidBreak,
+            actualBreakStart: v.normalizedBreakStart || null,
+            actualBreakEnd: v.normalizedBreakEnd || null,
             length: calculatedValues.length,
             netLength: calculatedValues.netLength,
             differential: calculatedValues.differential,
@@ -434,6 +443,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             adjustedEnd: entry.adjustedEnd || "",
             paidBreak: entry.paidBreak || "0",
             unpaidBreak: entry.unpaidBreak || "0",
+            actualBreakStart: entry.actualBreakStart || "",
+            actualBreakEnd: entry.actualBreakEnd || "",
         });
         setTimingError('');
         setIsEditingAdjusted(false);
@@ -457,6 +468,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 ...prefill,
                 paidBreak: entry.paidBreak || "0",
                 unpaidBreak: entry.unpaidBreak || "0",
+                actualBreakStart: entry.actualBreakStart || "",
+                actualBreakEnd: entry.actualBreakEnd || "",
             });
             setInitialEdit(prefill);
             setIsEditingAdjusted(true);
@@ -608,14 +621,62 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             />
                         </td>
                         <td className={`${cellClass} bg-primary/5`}>
-                            <input
-                                type="number"
-                                step="0.25"
-                                min="0"
-                                value={editedAdjusted.unpaidBreak}
-                                onChange={(e) => setEditedAdjusted({ ...editedAdjusted, unpaidBreak: e.target.value })}
-                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-[11px] font-black shadow-sm"
-                            />
+                            <div className="flex flex-col gap-1">
+                                <input
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    value={editedAdjusted.unpaidBreak}
+                                    onChange={(e) => setEditedAdjusted({ ...editedAdjusted, unpaidBreak: e.target.value })}
+                                    className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-[11px] font-black shadow-sm"
+                                    title="Unpaid break minutes"
+                                />
+                                <div className="flex items-center gap-1">
+                                    <input
+                                        type="text"
+                                        placeholder="Start"
+                                        value={editedAdjusted.actualBreakStart}
+                                        onChange={(e) => {
+                                            const start = e.target.value;
+                                            const updated = { ...editedAdjusted, actualBreakStart: start };
+                                            if (start && editedAdjusted.actualBreakEnd) {
+                                                const s = parseHHMM(start);
+                                                const end = parseHHMM(editedAdjusted.actualBreakEnd);
+                                                if (s !== null && end !== null) {
+                                                    const dur = end <= s ? end + 1440 - s : end - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    updated.unpaidBreak = entry.isSecurityRole ? '0' : String(dur);
+                                                }
+                                            }
+                                            setEditedAdjusted(updated);
+                                        }}
+                                        className="bg-background border border-primary/30 rounded px-1 py-0.5 w-14 text-[11px] font-mono shadow-sm"
+                                        title="Actual break start (HH:MM)"
+                                    />
+                                    <span className="text-[11px] text-muted-foreground">-</span>
+                                    <input
+                                        type="text"
+                                        placeholder="End"
+                                        value={editedAdjusted.actualBreakEnd}
+                                        onChange={(e) => {
+                                            const end = e.target.value;
+                                            const updated = { ...editedAdjusted, actualBreakEnd: end };
+                                            if (editedAdjusted.actualBreakStart && end) {
+                                                const s = parseHHMM(editedAdjusted.actualBreakStart);
+                                                const endM = parseHHMM(end);
+                                                if (s !== null && endM !== null) {
+                                                    const dur = endM <= s ? endM + 1440 - s : endM - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    updated.unpaidBreak = entry.isSecurityRole ? '0' : String(dur);
+                                                }
+                                            }
+                                            setEditedAdjusted(updated);
+                                        }}
+                                        className="bg-background border border-primary/30 rounded px-1 py-0.5 w-14 text-[11px] font-mono shadow-sm"
+                                        title="Actual break end (HH:MM)"
+                                    />
+                                </div>
+                            </div>
                         </td>
                         <td className={`${cellClass} bg-primary/10 border-r border-border/30`}>
                             <div className="flex flex-col">
@@ -687,7 +748,31 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             {entry.paidBreak || '0'}
                         </td>
                         <td className={cn(cellClass, "font-medium text-foreground/80")}>
-                            {entry.unpaidBreak || '0'}
+                            <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5">
+                                    <span>{entry.unpaidBreak || '0'}</span>
+                                    {entry.actualBreakStart && entry.actualBreakEnd && (
+                                        <span className="text-[11px] font-mono text-muted-foreground/60">
+                                            ({entry.actualBreakStart}–{entry.actualBreakEnd})
+                                        </span>
+                                    )}
+                                </div>
+                                {entry.hasBreakVarianceFlag && (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 w-fit border border-amber-500/20 cursor-default">
+                                                    <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                                    {entry.breakVarianceMinutes != null ? `±${entry.breakVarianceMinutes}m` : '>15m dev'}
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Actual break ({entry.actualBreakStart}–{entry.actualBreakEnd}) deviates {entry.breakVarianceMinutes != null ? `${entry.breakVarianceMinutes}m` : '>15m'} from rostered break ({entry.rosteredBreakStart || '-'}–{entry.rosteredBreakEnd || '-'}). Manager review required.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                )}
+                            </div>
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.netLength}

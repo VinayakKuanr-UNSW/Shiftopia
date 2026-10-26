@@ -16,8 +16,14 @@ export const formSchema = z.object({
     shift_date: z.date().optional(),
     start_time: z.string().min(1, 'Start time is required'),
     end_time: z.string().min(1, 'End time is required'),
+    /** The paid rest pauses (cl 37) only. */
     paid_break_minutes: z.number().min(0).optional(),
-    unpaid_break_minutes: z.number().min(0).optional(),
+    /**
+     * The meal break, `HH:mm`. There is no unpaid-minutes field: those are the
+     * window's length (none for security), derived rather than typed.
+     */
+    break_start: z.string().optional().nullable(),
+    break_end: z.string().optional().nullable(),
     timezone: z.string().default('Australia/Sydney'),
     assigned_employee_id: z.string().optional().nullable(),
     required_skills: z.array(z.string()).optional(),
@@ -48,6 +54,12 @@ export const formSchema = z.object({
      * Ignored outside template mode, where a shift has a concrete date instead.
      */
     day_of_week: z.number().int().min(0).max(6).optional().nullable(),
+    /**
+     * Every weekday picked in the template day picker. Adding a shift with
+     * several days saves one template shift per day; `day_of_week` mirrors the
+     * first so the save gates keep reading one field. `null` = every day.
+     */
+    days_of_week: z.array(z.number().int().min(0).max(6)).optional().nullable(),
 });
 
 export type FormValues = z.infer<typeof formSchema>;
@@ -262,6 +274,12 @@ export interface ShiftFormDrawerContentProps {
     canSave?: boolean;
     isLoading?: boolean;
     saveBlockReason?: string | null;
+
+    // Left-rail header (the modal's own title bar was folded into the rail)
+    title?: string;
+    subtitle?: string;
+    /** Rendered top-right of the form pane, e.g. Unpublish and Close. */
+    headerActions?: React.ReactNode;
 }
 
 /**

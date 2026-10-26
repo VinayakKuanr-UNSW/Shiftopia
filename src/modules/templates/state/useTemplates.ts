@@ -1145,6 +1145,8 @@ export function useTemplates(): UseTemplatesReturn {
                 end_time: s.endTime || (s as any).end_time,
                 paid_break_minutes: s.paidBreakDuration ?? (s as any).paid_break_minutes ?? 0,
                 unpaid_break_minutes: s.unpaidBreakDuration ?? (s as any).unpaid_break_minutes ?? 0,
+                break_start: s.breakStart ?? (s as any).break_start ?? null,
+                break_end: s.breakEnd ?? (s as any).break_end ?? null,
                 required_skills: [...(s.skills || (s as any).required_skills || [])],
                 required_licenses: [...(s.licenses || (s as any).required_licenses || [])],
                 site_tags: [...(s.siteTags || (s as any).site_tags || [])],
@@ -1395,4 +1397,3 @@ export function useTemplates(): UseTemplatesReturn {
 
 export default useTemplates;
 
-export { useSnapRosterAsTemplate } from '../hooks/queries/useTemplateQueries';

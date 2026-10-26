@@ -9,14 +9,15 @@
  *   1. Each shift was re-read with `getShiftById`, which returns `null` on ANY
  *      error. `null` has no assignee, so the shift was treated as unassigned
  *      and published with no compliance check at all.
- *   2. When the `evaluate-compliance` edge function errored, the local fallback
- *      checked only past-date / start=end and reported `passed`.
+ *   2. When the compliance engine errored, the local fallback checked only
+ *      past-date / start=end and reported `passed`.
  * And it fired every read and every compliance call at once: 2N+1 requests,
- * all N in flight (N = 500 measured) — exactly the burst that makes the edge
- * function error and so triggers (2).
+ * all N in flight (N = 500 measured) — exactly the burst that makes the
+ * engine error and so triggers (2).
  *
  * The REAL compliance service runs here; only the network is mocked
- * (`supabase.functions.invoke`, the batched shift read, the RPC client).
+ * (`supabase.rpc` for eba_check_assignment, the batched shift read, the RPC
+ * client). `h.invoke` answers in verdicts; engineRowsFor turns them into rows.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -31,9 +32,11 @@ const h = vi.hoisted(() => ({
     invokeCount: 0,
     inFlight: 0,
     maxInFlight: 0,
+    gatewayCode: 'APPLIED',
 }));
 
-vi.mock('@/platform/supabase/client', () => {
+vi.mock('@/platform/supabase/client', async () => {
+    const { engineRowsFor } = await import('@/test/ebaEngineRows');
     return {
         supabase: {
             from: () => {
@@ -54,15 +57,13 @@ vi.mock('@/platform/supabase/client', () => {
                 };
                 return chain;
             },
-            functions: {
-                invoke: async (...args: any[]) => {
-                    h.invokeCount++;
-                    h.inFlight++;
-                    h.maxInFlight = Math.max(h.maxInFlight, h.inFlight);
-                    await new Promise(r => setTimeout(r, 1));
-                    h.inFlight--;
-                    return h.invoke(...args);
-                },
+            rpc: async (...args: any[]) => {
+                h.invokeCount++;
+                h.inFlight++;
+                h.maxInFlight = Math.max(h.maxInFlight, h.inFlight);
+                await new Promise(r => setTimeout(r, 1));
+                h.inFlight--;
+                return engineRowsFor(await h.invoke(...args));
             },
         },
     };
@@ -70,7 +71,7 @@ vi.mock('@/platform/supabase/client', () => {
 
 vi.mock('@/platform/supabase/rpc/client', () => ({
     requireUser: async () => ({ id: 'user-1' }),
-    callRpc: async (fn: string, args: any) => { h.rpcCalls.push({ fn, args }); return { code: 'APPLIED' }; },
+    callRpc: async (fn: string, args: any) => { h.rpcCalls.push({ fn, args }); return { code: h.gatewayCode }; },
     callAuthenticatedRpc: async (fn: string, paramsFn: (u: string) => any) => {
         const args = paramsFn('user-1');
         h.rpcCalls.push({ fn, args });
@@ -87,6 +88,8 @@ vi.mock('../shifts.queries', () => ({
             h.loadCalls.push(ids);
             return h.loadRows(ids);
         },
+        // The single-shift read publishShift used before it shared this path.
+        getShiftById: async (id: string) => (await h.loadRows([id])).get(id) ?? null,
     },
 }));
 
@@ -102,6 +105,8 @@ const shift = (id: string, assigned = true) => ({
     start_at: IN_10_DAYS.toISOString(),
     unpaid_break_minutes: 30,
     assigned_employee_id: assigned ? EMP : null,
+    target_employment_type: 'Casual',
+    version: 1,
 });
 const rowsFor = (ids: string[], assigned = true) => new Map(ids.map(id => [id, shift(id, assigned)]));
 const passed = { status: 'passed', violations: [], warnings: [], weeklyHours: 6, maxWeeklyHours: 48, checksPerformed: ['overlap', 'weekly_hours', 'rest_period', 'qualification'], checksSkipped: [], qualificationViolations: [] };
@@ -114,6 +119,7 @@ beforeEach(() => {
     h.inResult = null;
     h.invokeCount = h.inFlight = h.maxInFlight = 0;
     h.rpcResult = null;
+    h.gatewayCode = 'APPLIED';
     h.loadRows = async (ids) => rowsFor(ids);
     h.invoke = async () => ({ data: passed, error: null });
 });
@@ -214,6 +220,138 @@ describe('bulkPublishShifts — when the server refuses the batch', () => {
             'Not authorised: shift.publish is not granted to you in this scope',
             'Not authorised: shift.publish is not granted to you in this scope',
         ]);
+    });
+});
+
+describe('bulkPublishShifts — a shift changed between its check and the write', () => {
+    it('sends the server the version each shift had when it was checked', async () => {
+        h.loadRows = async () => new Map([['a', { ...shift('a'), version: 4 }], ['b', { ...shift('b', false), version: 9 }]]);
+
+        await shiftsCommands.bulkPublishShifts(['a', 'b']);
+
+        expect(publishCalls()[0].args.p_expected_versions).toEqual({ a: 4, b: 9 });
+    });
+
+    it('reports a shift the server refused as stale as changed after its check, and publishes the rest', async () => {
+        h.rpcResult = () => ({ success: true, total_requested: 2, success_count: 1, failure_count: 1, stale_ids: ['b'] });
+        h.inResult = async (_col, vals) => ({
+            data: vals.map(id => ({ id, lifecycle_status: id === 'a' ? 'Published' : 'Draft' })),
+            error: null,
+        });
+
+        const res = await shiftsCommands.bulkPublishShifts(['a', 'b']);
+
+        expect(res.publishedIds).toEqual(['a']);
+        expect(res.dbFailed).toEqual([{ id: 'b', reason: expect.stringMatching(/changed after it was checked/i) }]);
+    });
+});
+
+describe('bulkPublishShifts — a shift that has already started', () => {
+    it('refuses it as too late without asking the compliance engine', async () => {
+        const started = new Date(Date.now() - 3_600_000);
+        h.loadRows = async () => new Map([['a', { ...shift('a'), start_at: started.toISOString() }]]);
+
+        const res = await shiftsCommands.bulkPublishShifts(['a']);
+
+        expect(h.invokeCount).toBe(0);
+        expect(publishCalls()).toHaveLength(0);
+        expect(res.complianceFailed).toEqual([{ id: 'a', reason: expect.stringMatching(/already started/i) }]);
+    });
+});
+
+describe('bulkPublishShifts — the connection drops during the publish call', () => {
+    const dropConnection = () => { h.rpcResult = () => { throw new Error('TypeError: Failed to fetch'); }; };
+    const dbShows = (status: string) => {
+        h.inResult = async (_col, vals) => ({ data: vals.map(id => ({ id, lifecycle_status: status })), error: null });
+    };
+
+    it('reports shifts the server did publish as published, not failed', async () => {
+        dropConnection();
+        dbShows('Published');
+
+        const res = await shiftsCommands.bulkPublishShifts(['a', 'b']);
+
+        expect(res.publishedIds).toEqual(['a', 'b']);
+        expect(res.dbFailed).toEqual([]);
+    });
+
+    it('reports shifts still in Draft as not published, keeping the network error', async () => {
+        dropConnection();
+        dbShows('Draft');
+
+        const res = await shiftsCommands.bulkPublishShifts(['a']);
+
+        expect(res.publishedIds).toEqual([]);
+        expect(res.dbFailed).toEqual([{ id: 'a', reason: expect.stringMatching(/Failed to fetch/) }]);
+    });
+
+    it('says it could not confirm when the follow-up read fails too', async () => {
+        dropConnection();
+        h.inResult = async () => ({ data: [], error: { message: 'network down' } });
+
+        const res = await shiftsCommands.bulkPublishShifts(['a']);
+
+        expect(res.publishedIds).toEqual([]);
+        expect(res.dbFailed).toEqual([{ id: 'a', reason: expect.stringMatching(/could not confirm.*reload/i) }]);
+    });
+});
+
+describe('bulkPublishShifts — emergency publish (starts within 4h)', () => {
+    const IN_2_HOURS = new Date(Date.now() + 2 * 3_600_000).toISOString();
+    const gatewayCalls = () => h.rpcCalls.filter(c => c.fn === 'sm_apply_shift_op');
+    beforeEach(() => {
+        h.loadRows = async () => new Map([['a', { ...shift('a'), start_at: IN_2_HOURS, version: 7 }]]);
+    });
+
+    it('sends the version its compliance check saw, with no second read', async () => {
+        const res = await shiftsCommands.bulkPublishShifts(['a']);
+
+        expect(h.inCalls).toHaveLength(0);
+        expect(gatewayCalls()[0].args.p_expected_version).toBe(7);
+        expect(res.publishedIds).toEqual(['a']);
+    });
+
+    it('says the shift changed after its check when the version no longer matches', async () => {
+        h.gatewayCode = 'VERSION_CONFLICT';
+
+        const res = await shiftsCommands.bulkPublishShifts(['a']);
+
+        expect(res.publishedIds).toEqual([]);
+        expect(res.dbFailed).toEqual([{ id: 'a', reason: expect.stringMatching(/changed after it was checked/i) }]);
+    });
+});
+
+describe('publishShift — a single publish is re-checked like a bulk one', () => {
+    const anyPublishCall = () => h.rpcCalls.filter(c => /publish/.test(c.fn));
+
+    it('refuses an assigned draft that now breaks a rule, with the rule', async () => {
+        h.invoke = async () => ({
+            data: { ...passed, status: 'violated', violations: ['Minimum rest period of 11 hours between consecutive shifts is not met'] },
+            error: null,
+        });
+
+        await expect(shiftsCommands.publishShift('a')).rejects.toThrow(/Minimum rest period/);
+        expect(anyPublishCall()).toHaveLength(0);
+    });
+
+    it('refuses when the compliance engine is unreachable', async () => {
+        h.invoke = async () => ({ data: null, error: new Error('FunctionsHttpError: 503') });
+
+        await expect(shiftsCommands.publishShift('a')).rejects.toThrow(/unreachable/i);
+        expect(anyPublishCall()).toHaveLength(0);
+    });
+
+    it('refuses an unassigned full-time shift, saying it must be assigned first', async () => {
+        h.loadRows = async () => new Map([['a', { ...shift('a', false), target_employment_type: 'FT' }]]);
+
+        await expect(shiftsCommands.publishShift('a')).rejects.toThrow(/full-time shift must be assigned/i);
+        expect(anyPublishCall()).toHaveLength(0);
+    });
+
+    it('publishes an assigned draft that still passes', async () => {
+        await expect(shiftsCommands.publishShift('a')).resolves.toEqual({ success: true });
+        expect(h.invokeCount).toBe(1);
+        expect(publishCalls()[0].args.p_shift_ids).toEqual(['a']);
     });
 });
 

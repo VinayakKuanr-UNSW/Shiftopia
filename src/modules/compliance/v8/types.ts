@@ -43,7 +43,11 @@ export interface V8Shift {
     start_time:            string;    // HH:mm
     end_time:              string;    // HH:mm
     unpaid_break_minutes?: number;
+    /** cl 37 rest pauses only. A Security meal break is paid but lives in the window below. */
     paid_break_minutes?:   number;
+    /** The meal-break window (shifts.break_start/break_end). Optional: not every caller hydrates it. */
+    break_start?:          string | null;
+    break_end?:            string | null;
     role_id?:              V8RoleId;
     /**
      * Which job this shift is for. Needed by V8_EMPLOYMENT_TARGET to pick the

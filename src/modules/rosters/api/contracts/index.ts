@@ -151,6 +151,8 @@ export const BulkPublishResponseSchema = z.object({
   message: z.string().optional(),
   /** Set on `success: false` — the RPC's EXCEPTION handler returns SQLERRM here. */
   error: z.string().optional(),
+  /** Shifts whose version no longer matched `p_expected_versions` — not published. */
+  stale_ids: z.array(z.string()).optional(),
   errors: z.array(z.object({
     shift_id: z.string(),
     reason: z.string(),
@@ -262,6 +264,9 @@ export const ApplyShiftOpResponseSchema = z.object({
   version: z.number().int().optional(),
   state: z.string().optional(),
   note: z.string().nullable().optional(),
+  // WRITE_REJECTED with note EBA_COMPLIANCE_BREACH: the rule broken and why.
+  rule_id: z.string().nullable().optional(),
+  details: z.string().nullable().optional(),
   error: z.string().optional(),
   // VERSION_CONFLICT extras
   current_version: z.number().int().optional(),

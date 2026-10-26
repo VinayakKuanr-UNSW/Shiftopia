@@ -5521,7 +5521,9 @@ export type Database = {
           bidding_enabled: boolean | null
           bidding_open_at: string | null
           bidding_status: Database["public"]["Enums"]["shift_bidding_status"]
+          break_end: string | null
           break_minutes: number | null
+          break_start: string | null
           cancellation_reason: string | null
           cancelled_at: string | null
           cancelled_by_user_id: string | null
@@ -5638,7 +5640,9 @@ export type Database = {
           bidding_enabled?: boolean | null
           bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
+          break_end?: string | null
           break_minutes?: number | null
+          break_start?: string | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by_user_id?: string | null
@@ -5752,7 +5756,9 @@ export type Database = {
           bidding_enabled?: boolean | null
           bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
+          break_end?: string | null
           break_minutes?: number | null
+          break_start?: string | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
           cancelled_by_user_id?: string | null
@@ -6529,6 +6535,8 @@ export type Database = {
         Row: {
           assigned_employee_id: string | null
           assigned_employee_name: string | null
+          break_end: string | null
+          break_start: string | null
           created_at: string | null
           day_of_week: number | null
           end_time: string | null
@@ -6556,6 +6564,8 @@ export type Database = {
         Insert: {
           assigned_employee_id?: string | null
           assigned_employee_name?: string | null
+          break_end?: string | null
+          break_start?: string | null
           created_at?: string | null
           day_of_week?: number | null
           end_time?: string | null
@@ -6583,6 +6593,8 @@ export type Database = {
         Update: {
           assigned_employee_id?: string | null
           assigned_employee_name?: string | null
+          break_end?: string | null
+          break_start?: string | null
           created_at?: string | null
           day_of_week?: number | null
           end_time?: string | null
@@ -6678,6 +6690,8 @@ export type Database = {
       }
       timesheets: {
         Row: {
+          actual_break_end: string | null
+          actual_break_start: string | null
           approved_at: string | null
           approved_by: string | null
           arrival_variance_reason: string | null
@@ -6707,6 +6721,8 @@ export type Database = {
           work_date: string
         }
         Insert: {
+          actual_break_end?: string | null
+          actual_break_start?: string | null
           approved_at?: string | null
           approved_by?: string | null
           arrival_variance_reason?: string | null
@@ -6736,6 +6752,8 @@ export type Database = {
           work_date: string
         }
         Update: {
+          actual_break_end?: string | null
+          actual_break_start?: string | null
           approved_at?: string | null
           approved_by?: string | null
           arrival_variance_reason?: string | null
@@ -8038,18 +8056,6 @@ export type Database = {
         }
         Returns: Json
       }
-      add_roster_shift: {
-        Args: {
-          p_roster_subgroup_id: string
-          p_shift_data: Json
-          p_user_id: string
-        }
-        Returns: {
-          error_message: string
-          shift_id: string
-          success: boolean
-        }[]
-      }
       add_roster_subgroup_range:
         | {
             Args: {
@@ -8073,40 +8079,6 @@ export type Database = {
             }
             Returns: undefined
           }
-      apply_monthly_template:
-        | {
-            Args: {
-              p_month: string
-              p_organization_id: string
-              p_template_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_month: string
-              p_organization_id: string
-              p_template_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_month: string
-              p_organization_id: string
-              p_template_id: string
-            }
-            Returns: Json
-          }
-      apply_template_to_date_range: {
-        Args: {
-          p_end_date: string
-          p_start_date: string
-          p_template_id: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
       apply_template_to_date_range_v2: {
         Args: {
           p_end_date: string
@@ -8142,10 +8114,6 @@ export type Database = {
           success: boolean
         }[]
       }
-      assign_shift_employee: {
-        Args: { p_actor_id?: string; p_employee_id: string; p_shift_id: string }
-        Returns: Json
-      }
       assign_shift_rpc: {
         Args: { p_employee_id: string; p_shift_id: string }
         Returns: Json
@@ -8168,47 +8136,6 @@ export type Database = {
         Args: { p_actor_id?: string; p_shift_ids: string[] }
         Returns: Json
       }
-      calculate_net_hours: {
-        Args: {
-          p_end_time: string
-          p_start_time: string
-          p_unpaid_break_minutes: number
-        }
-        Returns: number
-      }
-      calculate_shift_hours: {
-        Args: {
-          p_end_time: string
-          p_paid_break_minutes: number
-          p_start_time: string
-          p_unpaid_break_minutes: number
-        }
-        Returns: {
-          net_hours: number
-          total_hours: number
-        }[]
-      }
-      calculate_shift_length:
-        | {
-            Args: {
-              p_end_time: string
-              p_paid_break_minutes?: number
-              p_start_time: string
-              p_unpaid_break_minutes?: number
-            }
-            Returns: {
-              net_length: number
-              total_length: number
-            }[]
-          }
-        | {
-            Args: {
-              p_end_time: string
-              p_start_time: string
-              p_unpaid_break_minutes?: number
-            }
-            Returns: number
-          }
       calculate_weekly_hours: {
         Args: { p_employee_id: string; p_week_start_date: string }
         Returns: number
@@ -8433,10 +8360,6 @@ export type Database = {
           version_match: boolean
         }[]
       }
-      clone_roster_subgroup: {
-        Args: { p_new_name: string; p_subgroup_id: string }
-        Returns: string
-      }
       clone_roster_subgroup_v2: {
         Args: {
           p_dept_id: string
@@ -8458,20 +8381,6 @@ export type Database = {
       compute_prediction_outcomes: {
         Args: { p_only_event_id?: string; p_slice_minutes?: number }
         Returns: number
-      }
-      create_planning_period: {
-        Args: {
-          p_auto_publish?: boolean
-          p_auto_seed?: boolean
-          p_dept_id: string
-          p_end_date: string
-          p_org_id: string
-          p_override_past?: boolean
-          p_start_date: string
-          p_sub_dept_ids: string[]
-          p_template_id?: string
-        }
-        Returns: Json
       }
       create_profile_for_user: {
         Args: {
@@ -8526,15 +8435,6 @@ export type Database = {
         Returns: number
       }
       delete_user_entirely: { Args: { user_uuid: string }; Returns: undefined }
-      emergency_assign_shift: {
-        Args: {
-          p_assigned_by: string
-          p_employee_id: string
-          p_reason?: string
-          p_shift_id: string
-        }
-        Returns: Json
-      }
       employee_cancel_shift: {
         Args: { p_employee_id?: string; p_reason?: string; p_shift_id: string }
         Returns: Json
@@ -8572,6 +8472,7 @@ export type Database = {
       fn_eba_estimate_shift_cost: {
         Args: {
           p_base_rate: number
+          p_break_start?: string | null
           p_employment_type: string
           p_first_aid?: boolean
           p_higher_duties?: boolean
@@ -8581,6 +8482,7 @@ export type Database = {
           p_scheduled_minutes: number
           p_shift_date: string
           p_start_time: string
+          p_unpaid_break_minutes?: number
         }
         Returns: number
       }
@@ -9467,46 +9369,6 @@ export type Database = {
         Args: { p_jurisdiction?: string }
         Returns: string
       }
-      publish_roster_day: {
-        Args: {
-          p_published_by_user_id?: string
-          p_roster_day_id: string
-          p_skip_already_published?: boolean
-          p_skip_compliance?: boolean
-        }
-        Returns: Database["public"]["CompositeTypes"]["publish_batch_result"]
-        SetofOptions: {
-          from: "*"
-          to: "publish_batch_result"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      publish_roster_for_range: {
-        Args: {
-          p_dept_id: string
-          p_end_date: string
-          p_org_id: string
-          p_start_date: string
-          p_sub_dept_id: string
-          p_user_id?: string
-        }
-        Returns: Json
-      }
-      publish_roster_shift: {
-        Args: {
-          p_published_by_user_id: string
-          p_roster_shift_id: string
-          p_skip_compliance?: boolean
-        }
-        Returns: Database["public"]["CompositeTypes"]["publish_shift_result"]
-        SetofOptions: {
-          from: "*"
-          to: "publish_shift_result"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       publish_shift: {
         Args: { p_actor_id?: string; p_shift_id: string }
         Returns: Json
@@ -9644,18 +9506,6 @@ export type Database = {
           success: boolean
         }[]
       }
-      select_bid_winner: {
-        Args: {
-          p_selected_by?: string
-          p_shift_id: string
-          p_winner_employee_id: string
-        }
-        Returns: Json
-      }
-      select_bidding_winner: {
-        Args: { p_admin_id?: string; p_employee_id: string; p_shift_id: string }
-        Returns: Json
-      }
       set_batch_id: { Args: { batch_id: string }; Returns: undefined }
       set_roster_day_status: {
         Args: {
@@ -9745,14 +9595,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      sm_approve_trade: {
-        Args: {
-          p_new_employee_id: string
-          p_shift_id: string
-          p_user_id?: string
-        }
-        Returns: Json
-      }
       sm_assignment_run_finish: {
         Args: {
           p_error?: string
@@ -9770,14 +9612,6 @@ export type Database = {
           p_options?: Json
           p_policy_version?: number
           p_scope: Json
-        }
-        Returns: Json
-      }
-      sm_bulk_assign: {
-        Args: {
-          p_employee_id: string
-          p_shift_ids: string[]
-          p_user_id?: string
         }
         Returns: Json
       }
@@ -9810,7 +9644,7 @@ export type Database = {
         Returns: Json
       }
       sm_bulk_publish_shifts: {
-        Args: { p_actor_id?: string; p_shift_ids: string[] }
+        Args: { p_actor_id?: string; p_expected_versions?: Json; p_shift_ids: string[] }
         Returns: Json
       }
       sm_cancel_shift: {
@@ -10058,20 +9892,6 @@ export type Database = {
         Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
-      sm_update_shift:
-        | {
-            Args: { p_shift_data: Json; p_shift_id: string; p_user_id: string }
-            Returns: boolean
-          }
-        | {
-            Args: {
-              p_expected_version?: number
-              p_shift_data: Json
-              p_shift_id: string
-              p_user_id: string
-            }
-            Returns: boolean
-          }
       state_machine_regression_snapshot_v3: {
         Args: never
         Returns: {

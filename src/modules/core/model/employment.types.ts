@@ -85,20 +85,21 @@ export const CREATABLE_TARGET_EMPLOYMENT_TYPES: readonly TargetEmploymentType[] 
  *
  * The Office group and every other group are mutually exclusive:
  *  - Office holds full-time shifts ONLY, so only 'FT' is offered there;
- *  - every other group holds PT / Casual only (no 'FT');
- *  - templates never hold FT (`enforce_no_ft_template_shifts`), so a template
- *    offers PT / Casual even for an Office sub-group.
+ *  - every other group holds PT / Casual only (no 'FT').
+ * Templates follow the same rule: full-time rostering is done from templates,
+ * in their Office group.
  *
  * The current value is kept in the list when it falls outside the rule, so a
- * legacy row still renders (see above). The database backs the shift rule with
- * `trg_shift_office_is_ft_only`.
+ * legacy row still renders (see above). The database backs the rule with
+ * `trg_shift_z_office_is_ft_only` (shifts) and
+ * `trg_template_shift_office_is_ft_only` (template shifts).
  */
 export function targetEmploymentTypeOptions(
     current: TargetEmploymentType | null | undefined,
-    opts: { groupType?: string | null; isTemplate?: boolean } = {},
+    opts: { groupType?: string | null } = {},
 ): readonly TargetEmploymentType[] {
     const allowed: readonly TargetEmploymentType[] =
-        !opts.isTemplate && opts.groupType === FULL_TIME_GROUP_TYPE
+        opts.groupType === FULL_TIME_GROUP_TYPE
             ? ['FT']
             : CREATABLE_TARGET_EMPLOYMENT_TYPES;
     if (!current || allowed.includes(current)) return allowed;
@@ -136,11 +137,10 @@ export function initialTargetEmploymentType(
 export function targetAfterGroupChange(
     current: TargetEmploymentType | null | undefined,
     groupType: string | null | undefined,
-    isTemplate = false,
 ): TargetEmploymentType | undefined {
-    const allowed = targetEmploymentTypeOptions(undefined, { groupType, isTemplate });
+    const allowed = targetEmploymentTypeOptions(undefined, { groupType });
     if (current && allowed.includes(current)) return current;
-    return isTemplate ? undefined : initialTargetEmploymentType(undefined, groupType);
+    return initialTargetEmploymentType(undefined, groupType);
 }
 
 export const TARGET_EMPLOYMENT_TYPE_LABELS: Record<TargetEmploymentType, string> = {

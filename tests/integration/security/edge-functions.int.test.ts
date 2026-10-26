@@ -1,6 +1,7 @@
 /**
- * The two edge functions the browser calls, which run with the service-role
- * key and so must authorise the caller themselves.
+ * The edge function the browser calls, which runs with the service-role key
+ * and so must authorise the caller itself — and the compliance RPC that
+ * replaced the other one (evaluate-compliance, retired 2026-10-26).
  *
  * get-roster-view had a real pre-auth leak: until 2026-10-05 the public anon
  * key alone returned any organisation's roster and staff list, because
@@ -84,27 +85,39 @@ describe('edge function get-roster-view', () => {
     });
 });
 
-describe('edge function evaluate-compliance', () => {
+// The evaluate-compliance edge function was retired 2026-10-26: the browser and
+// auto-assign-bids now ask the database's EBA engine directly, which carries
+// the same guard (can_view_employee_schedule). Its assertions moved with it.
+describe('compliance RPC eba_check_assignment', () => {
     const check = {
-        employee_id: EMPLOYEE_X, shift_date: '2026-12-05', start_time: '09:00', end_time: '12:00', net_length_minutes: 180,
+        p_shift_id: null, p_employee_id: EMPLOYEE_X, p_shift_date: '2026-12-05', p_start_time: '09:00', p_end_time: '12:00',
     };
 
+    async function rpc(caller: Caller): Promise<{ status: number; json: any }> {
+        const { apiUrl, anonKey } = stack();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json', apikey: anonKey };
+        if (caller === 'anon') headers.Authorization = `Bearer ${anonKey}`;
+        else if (caller !== 'none') headers.Authorization = `Bearer ${personaToken(caller)}`;
+        const res = await fetch(`${apiUrl}/rest/v1/rpc/eba_check_assignment`, { method: 'POST', headers, body: JSON.stringify(check) });
+        return { status: res.status, json: await res.json().catch(() => null) };
+    }
+
     it('refuses the anon key', async () => {
-        expect((await invoke('evaluate-compliance', check, 'anon')).status).toBe(401);
+        expect((await rpc('anon')).status).toBe(401);
     });
 
     it('refuses a manager in another organisation', async () => {
-        const r = await invoke('evaluate-compliance', check, 'F');
+        const r = await rpc('F');
         expect(r.status).toBe(403);
-        expect(r.json?.weeklyHours).toBeUndefined();
+        expect(Array.isArray(r.json)).toBe(false);
     });
 
     it.each([
         ['X', 'the employee themselves'],
         ['D', 'a manager whose scope covers the employee\'s contract'],
     ] as const)('answers %s — %s', async (p, _who) => {
-        const r = await invoke('evaluate-compliance', check, p);
+        const r = await rpc(p);
         expect(r.status).toBe(200);
-        expect(r.json.status).not.toBe('unavailable');
+        expect(Array.isArray(r.json) && r.json.length > 0).toBe(true);
     });
 });

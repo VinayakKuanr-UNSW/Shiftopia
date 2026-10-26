@@ -90,8 +90,10 @@ export type ShapeRuleId =
     | 'SHAPE_MIN_ENGAGEMENT_PH'
     | 'SHAPE_FT_MIN_DAY'
     | 'SHAPE_MIN_ENGAGEMENT'
+    | 'SHAPE_BREAK_WINDOW'
     | 'SHAPE_MEAL_BREAK'
     | 'SHAPE_MEAL_BREAK_CEILING'
+    | 'SHAPE_MEAL_BREAK_TIMING'
     | 'SHAPE_REST_PAUSE_1'
     | 'SHAPE_REST_PAUSE_2'
     | 'SHAPE_SECURITY_PAID_BREAK';
@@ -144,11 +146,17 @@ export interface ShapeHit {
 
 export type ShapeField =
     | 'start_time' | 'end_time'
+    | 'break_start' | 'break_end'
     | 'unpaid_break_minutes' | 'paid_break_minutes'
     | 'target_employment_type';
 
 export interface ShapeFix {
-    field: 'end_time' | 'unpaid_break_minutes' | 'paid_break_minutes';
+    /**
+     * Never the meal break: WHEN it is taken is the manager's call (user
+     * decision 2026-10-25), so the meal-break rules state the requirement and
+     * offer no one-click value.
+     */
+    field: 'end_time' | 'paid_break_minutes';
     /** `HH:mm` for `end_time`, minutes for the break fields. The minimum that complies. */
     value: string | number;
     /** Button text — says exactly what will happen. e.g. "Extend to 16:36". */
@@ -170,8 +178,22 @@ export interface ShapeInput {
     start_time:            string;
     /** HH:mm */
     end_time:              string;
+    /**
+     * The minutes deducted from the shift: the meal-break window's length, or 0
+     * where the meal break is paid (security). Validated against the window by
+     * SHAPE_BREAK_WINDOW, not re-derived, so a caller that sends a stale total
+     * is told rather than silently corrected.
+     */
     unpaid_break_minutes?: number;
+    /** The paid rest pauses (cl 37) ONLY. The meal break is the window. */
     paid_break_minutes?:   number;
+    /**
+     * The meal break's start and end, `HH:mm`, resolved against `start_time`
+     * across midnight. Pay reads where it falls (cl 43 night hours, cl 41 day
+     * loadings) and cl 36.2 reads how long was worked either side of it.
+     */
+    break_start?:          string | null;
+    break_end?:            string | null;
     is_training?:          boolean;
     /** Mandatory on the shifts table; drives which minimum applies. */
     target_employment_type: ShapeEmploymentTarget;
@@ -191,8 +213,8 @@ export interface ShapeInput {
      * conflict, and it conflicts here: security meal breaks are PAID —
      * §3.2(a) for full-time security, §5.3(a) and (c) for part-time and casual
      * event security, both on the basis that the member stays available to
-     * respond. So for security, net length equals gross, and the meal-break
-     * requirement is met from the PAID break field rather than the unpaid one.
+     * respond. So for security, net length equals gross: the meal-break window
+     * is still required, but nothing is deducted for it.
      */
     is_security?: boolean;
     /**
@@ -261,12 +283,17 @@ export interface ShapeConfig {
      * 12-hour shift owes exactly the same 30–60 minutes as a 5½-hour one.
      */
     meal_break_threshold_minutes: number;
-    /** cl 36.1 — minimum unpaid meal break once the threshold is crossed. 30m. */
+    /** cl 36.1 — minimum meal break. 30m. Any meal break, not only a required one. */
     meal_break_min_minutes:      number;
-    /** cl 36.1 — maximum unpaid meal break. 60m. */
+    /** cl 36.1 — maximum meal break. 60m. */
     meal_break_max_minutes:      number;
-    /** The values the form offers as one-tap fixes. Any length in 30–60 is lawful. */
-    meal_break_choices:          number[];
+    /**
+     * cl 36.2 — the longest stretch worked without a meal break that the
+     * Employer "will endeavour" to avoid. 5h. A different provision from the
+     * cl 36.1 threshold that happens to share its number: 36.1 says whether a
+     * break is owed, 36.2 says where it should fall.
+     */
+    meal_break_latest_minutes:   number;
     /** cl 37.1 — net length at which the first paid rest pause is due. 4h. */
     rest_pause_1_threshold_minutes: number;
     /** cl 37.2 — net length at which the second paid rest pause is due. 8h. */
@@ -283,7 +310,7 @@ export const DEFAULT_SHAPE_CONFIG: ShapeConfig = {
     meal_break_threshold_minutes:   300,  // 5h
     meal_break_min_minutes:          30,
     meal_break_max_minutes:          60,
-    meal_break_choices:      [30, 45, 60],
+    meal_break_latest_minutes:      300,  // 5h — cl 36.2
     rest_pause_1_threshold_minutes: 240,  // 4h
     rest_pause_2_threshold_minutes: 480,  // 8h
     rest_pause_minutes:              15,

@@ -5,7 +5,7 @@
  * Runs at shift CREATION; see ./types.ts for the layering rationale.
  */
 
-export { evaluateShiftShape, requiredMinEngagementMinutes } from './evaluate';
+export { evaluateShiftShape, requiredMinEngagementMinutes, mealBreakWindow } from './evaluate';
 
 export type {
     ShapeInput,

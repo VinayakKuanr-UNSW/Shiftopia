@@ -176,6 +176,9 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
             isPersonalLeave: (shift as any).isPersonalLeave,
             isCarerLeave: (shift as any).isCarerLeave,
             previousWage: (shift as any).previousWage,
+            // cl 41 / 43 attach to hours WORKED — the break's position moves them.
+            unpaid_break_minutes: shift.unpaid_break_minutes ?? 0,
+            break_start: shift.break_start,
             employmentType: pay.employmentType,
             isSecurityRole: pay.isSecurityRole,
             classificationLevel: pay.classificationLevel,

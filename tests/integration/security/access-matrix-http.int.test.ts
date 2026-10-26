@@ -117,7 +117,9 @@ async function matrixLine(p: Persona): Promise<string> {
     const rdel = await c.rpc('sm_delete_shift', { p_shift_id: shift(2) });
     line += ' rdel2=' + rpcOutcome(rdel.data, rdel.error, (d) => d?.code === 'FORBIDDEN');
     fresh();
-    const bulk = await c.rpc('sm_bulk_assign', { p_shift_ids: [shift(1), shift(3)], p_employee_id: x });
+    // sm_bulk_assign was dropped (20261026071831); the bulk assign that remains
+    // is the autoscheduler's commit.
+    const bulk = await c.rpc('sm_bulk_assign_atomic', { p_assignments: [{ employee_id: x, shift_ids: [shift(1), shift(3)] }] });
     line += ' bulk13=' + rpcOutcome(bulk.data, bulk.error, (d) => /^not authorized/i.test(d?.error ?? ''));
     fresh();
     const cxl = await c.rpc('sm_cancel_swap_request', { p_swap_id: SWAPS[1] });

@@ -87,6 +87,12 @@ export interface TimesheetRow {
     length: string; // Auto-calculated
     paidBreak: string;
     unpaidBreak: string;
+    rosteredBreakStart?: string | null;
+    rosteredBreakEnd?: string | null;
+    actualBreakStart?: string | null;
+    actualBreakEnd?: string | null;
+    breakVarianceMinutes?: number | null;
+    hasBreakVarianceFlag?: boolean;
     netLength: string; // Auto-calculated
     /** Raw minutes behind `netLength` (already EBA-floored) — feeds the Billable Pay estimate. */
     netLengthMinutes?: number;

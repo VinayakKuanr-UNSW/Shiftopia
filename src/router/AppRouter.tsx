@@ -179,10 +179,6 @@ const AppRouter: React.FC = () => {
 
                     <Route element={<FeatureGate feature="rosters" />}>
                         <Route path="/rosters" element={<RostersPlannerPage />} />
-                        {/* The Office page was retired 2026-10-04: full-time
-                            shifts live on the Rosters page, in the Office group.
-                            Old links land there rather than on a 404. */}
-                        <Route path="/office" element={<Navigate to="/rosters" replace />} />
                     </Route>
 
                     {/* Creating a shift is a managerial write: view-only levels

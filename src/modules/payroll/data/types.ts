@@ -19,6 +19,8 @@ export interface GrossPayTimesheetRow {
   /** Manager-adjusted billable end — 'HH:MM[:SS]' or null. */
   end_time: string | null;
   unpaid_break_minutes: number | null;
+  /** When the meal break was actually taken — 'HH:MM[:SS]' or null (not recorded). */
+  actual_break_start?: string | null;
   /** timesheet_status enum: 'draft'|'submitted'|'approved'|'rejected'|'no_show'. */
   status: string | null;
 }
@@ -60,6 +62,8 @@ export interface GrossPayShiftRow {
   actual_end?: string | null;
   paid_break_minutes?: number | null;
   unpaid_break_minutes?: number | null;
+  /** The rostered meal-break start — 'HH:MM[:SS]' or null. */
+  break_start?: string | null;
   net_length_minutes?: number | null;
   scheduled_length_minutes?: number | null;
   remuneration_level?: number | null;

@@ -24,7 +24,8 @@ vi.mock('../../hooks/useOffice', () => ({
     useOfficeWorld: () => ({ data: { employees: [] }, isLoading: false }),
 }));
 vi.mock('../../api/office.commands', () => ({
-    computeProposal: () => ({ ledgers: proposal.ledgers }),
+    copyCyclesFor: (_world: unknown, employeeId: string) =>
+        proposal.ledgers.find(l => l.employeeId === employeeId)?.cycles ?? null,
 }));
 vi.mock('../../api/copyShift', () => ({ copyShiftToDates: vi.fn() }));
 vi.mock('@/modules/core/ui/primitives/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));

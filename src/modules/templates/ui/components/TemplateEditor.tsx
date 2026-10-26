@@ -261,6 +261,8 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       endTime: shiftData.end_time || shiftData.endTime,
       paidBreakDuration: shiftData.paid_break_minutes || shiftData.paidBreakDuration || 0,
       unpaidBreakDuration: shiftData.unpaid_break_minutes || shiftData.unpaidBreakDuration || 0,
+      breakStart: shiftData.break_start ?? shiftData.breakStart ?? null,
+      breakEnd: shiftData.break_end ?? shiftData.breakEnd ?? null,
       skills: shiftData.skills || [],
       licenses: shiftData.licenses || [],
       siteTags: shiftData.siteTags || [],
@@ -273,8 +275,8 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       // (a zod enum), so dropping it here was what made every new template shift
       // fail to save with a 400 once the column became mandatory.
       targetEmploymentType:
-        // No guessed fallback ('FT' or 'Casual'). Templates cannot hold FT rows
-        // (`enforce_no_ft_template_shifts`), and inventing 'Casual' silently
+        // No guessed fallback ('FT' or 'Casual'). FT is valid only in the Office
+        // group (`trg_template_shift_office_is_ft_only`), and inventing 'Casual' silently
         // re-typed shifts whose target was lost upstream. The modal's zod enum
         // guarantees a value; if it is ever missing, the NOT NULL column makes
         // the save fail loudly rather than persist a made-up target.

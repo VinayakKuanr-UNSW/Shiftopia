@@ -16,7 +16,6 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { ROSTER_STRUCTURE_KEY } from './useRosterStructure';
 import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { templateKeys } from '@/modules/templates/hooks/queries/useTemplateQueries';
-import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import { rostersApi } from '@/modules/rosters/api/rosters.api';
 import {
   cloneRosterSubgroup,
@@ -227,73 +226,6 @@ export function useToggleRosterLock() {
   });
 }
 
-// ── usePublishRoster ──────────────────────────────────────────────────────────
-
-interface PublishRosterVariables {
-  organizationId:  string;
-  departmentId:    string;
-  subDepartmentId: string | null;
-  startDate:       string;
-  endDate:         string;
-}
-
-export function usePublishRoster() {
-  const queryClient = useQueryClient();
-  const { toast }   = useToast();
-
-  return useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async (vars: PublishRosterVariables): Promise<any> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.rpc as any)('publish_roster_for_range', {
-        p_org_id:      vars.organizationId,
-        p_dept_id:     vars.departmentId,
-        p_sub_dept_id: vars.subDepartmentId,
-        p_start_date:  vars.startDate,
-        p_end_date:    vars.endDate,
-      });
-
-      if (error) throw error;
-      return data;
-    },
-
-    onSuccess: (data, vars) => {
-      // Publishing changes lifecycle_status on many shifts — must refresh lists
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
-
-      // F1 fairness-ledger refresh. Publishing is the natural cadence at which
-      // assignments become authoritative, so rebuild the rolling-window ledger
-      // for this org against today's window_end. This keeps debts fresh without
-      // a separate cron: the incremental updateAfterCommit handles the solver's
-      // own commits, and this covers manual edits + the daily window roll-forward
-      // (getEmployeeDebts reads `window_end = today`, which only exists once a
-      // recompute has run for today). Org-wide (no dept filter) so the team
-      // average matches the org-wide read path. Fire-and-forget: a ledger hiccup
-      // must never surface as a publish failure.
-      if (vars?.organizationId) {
-        fairnessLedgerService
-          .recomputeLedger(vars.organizationId, new Date())
-          .catch(err =>
-            console.error('[usePublishRoster] Fairness ledger recompute failed:', err),
-          );
-      }
-
-      const rosters = (data?.rosters_published as number | undefined) ?? 0;
-      const shifts  = (data?.shifts_published  as number | undefined) ?? 0;
-      toast({
-        title:       'Roster Published',
-        description: `Published ${rosters} roster${rosters !== 1 ? 's' : ''} and ${shifts} shift${shifts !== 1 ? 's' : ''}.`,
-      });
-    },
-
-    onError: (err) => {
-      console.error('[usePublishRoster]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to publish roster'), variant: 'destructive' });
-    },
-  });
-}
-
 // ── useApplyTemplate ──────────────────────────────────────────────────────────
 
 interface ApplyTemplateVariables {
@@ -348,7 +280,7 @@ async function loadPlacedTemplateShifts(templateId: string): Promise<PlacedTempl
     .from('template_shifts')
     .select(
       'id, name, role_name, start_time, end_time, unpaid_break_minutes, ' +
-      'paid_break_minutes, day_of_week, target_employment_type, target_requires_flexible',
+      'paid_break_minutes, break_start, break_end, day_of_week, target_employment_type, target_requires_flexible',
     )
     .in('subgroup_id', subGroups.map(sg => sg.id));
   if (sErr) throw sErr;

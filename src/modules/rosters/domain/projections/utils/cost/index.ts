@@ -305,6 +305,8 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     // break if it is told about it. Omitting this key silently PAID the break on
     // every caller that relies on that fallback.
     unpaid_break_minutes: shift.unpaid_break_minutes,
+    // cl 41 / 43 attach to hours WORKED — where the break sits moves them.
+    break_start: shift.break_start,
     employmentType: pay.employmentType,
     isSecurityRole: pay.isSecurityRole,
     classificationLevel: pay.classificationLevel,
@@ -364,6 +366,7 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     previousWage: shift.previousWage,
     // See estimateCostFromShift — without this the unpaid meal break is paid.
     unpaid_break_minutes: shift.unpaid_break_minutes,
+    break_start: shift.break_start,
     employmentType: pay.employmentType,
     isSecurityRole: pay.isSecurityRole,
     classificationLevel: pay.classificationLevel,

@@ -80,7 +80,6 @@ import {
 } from '@/modules/rosters/api/shifts.api';
 import { useRosterProjections } from '@/modules/rosters/hooks/useRosterProjections';
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
-import { usePublishRoster } from '@/modules/rosters/state/useRosterMutations';
 import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPrefetch';
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';

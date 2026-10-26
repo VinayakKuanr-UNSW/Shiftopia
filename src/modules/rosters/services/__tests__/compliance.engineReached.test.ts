@@ -2,7 +2,7 @@
  * `validateShiftCompliance` must say whether the real compliance engine
  * answered.
  *
- * When the `evaluate-compliance` edge function errors, `validateCompliance`
+ * When the database engine (`eba_check_assignment`) errors, `validateCompliance`
  * falls back to a local check that only sees past dates and start=end, and
  * reports `passed`. Interactive screens treat that as best effort (they run the
  * client engine too). A write cannot: Publish must not confirm or offer a shift
@@ -14,9 +14,10 @@ const h = vi.hoisted(() => ({
     invoke: (async () => ({ data: null, error: null })) as (...a: any[]) => Promise<any>,
 }));
 
-vi.mock('@/platform/supabase/client', () => ({
-    supabase: { functions: { invoke: (...a: any[]) => h.invoke(...a) } },
-}));
+vi.mock('@/platform/supabase/client', async () => {
+    const { engineRowsFor } = await import('@/test/ebaEngineRows');
+    return { supabase: { rpc: async (...a: any[]) => engineRowsFor(await h.invoke(...a)) } };
+});
 
 import { complianceService } from '../compliance.service';
 
@@ -28,7 +29,7 @@ beforeEach(() => {
 });
 
 describe('validateShiftCompliance — engineReached', () => {
-    it('is false when the edge function errors, even though the local fallback passes', async () => {
+    it('is false when the engine errors, even though the local fallback passes', async () => {
         h.invoke = async () => ({ data: null, error: new Error('FunctionsHttpError: 503') });
 
         const r = await complianceService.validateShiftCompliance(EMP, FUTURE, '09:00:00', '15:00:00', 330, 's1');
@@ -36,7 +37,7 @@ describe('validateShiftCompliance — engineReached', () => {
         expect(r.engineReached).toBe(false);
     });
 
-    it('is false when the edge function throws', async () => {
+    it('is false when the engine call throws', async () => {
         h.invoke = async () => { throw new Error('TypeError: Failed to fetch'); };
 
         const r = await complianceService.validateShiftCompliance(EMP, FUTURE, '09:00:00', '15:00:00', 330, 's1');

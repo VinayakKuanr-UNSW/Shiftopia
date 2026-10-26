@@ -144,6 +144,40 @@ async function ensureDefaultRosterSubgroup(
 }
 
 /**
+ * The breaks a synthesized shift owes. The synthesiser is the one shift creator
+ * with no manager in the loop, so it places the meal break itself: 30 minutes
+ * (cl 36.1) once the span passes five hours, in the middle of the span on the
+ * quarter hour, so neither stretch is longer than it has to be (cl 36.2). Then
+ * the paid rest pauses cl 37 owes on what is left.
+ *
+ * Skeletons used to be written break-less under a shape exemption — which the
+ * table's CHECK constraints refused, so every synthesized shift over five hours
+ * failed to insert. A real break costs half an hour of coverage per person;
+ * a shift that cannot be saved costs all of it.
+ */
+function skeletonBreaks(startMinutes: number, endMinutes: number): {
+  break_start: string | null;
+  break_end: string | null;
+  unpaid_break_minutes: number;
+  paid_break_minutes: number;
+} {
+  const gross = endMinutes - startMinutes;
+  const meal = gross > 300 ? 30 : 0;
+  const net = gross - meal;
+  const paid = net >= 480 ? 30 : net >= 240 ? 15 : 0;
+  if (meal === 0) {
+    return { break_start: null, break_end: null, unpaid_break_minutes: 0, paid_break_minutes: paid };
+  }
+  const from = startMinutes + Math.floor((gross - meal) / 2 / 15) * 15;
+  return {
+    break_start: minutesToTime(from),
+    break_end: minutesToTime(from + meal),
+    unpaid_break_minutes: meal,
+    paid_break_minutes: paid,
+  };
+}
+
+/**
  * Validate a synthesized shift before insertion (no employee assigned yet).
  *
  * Two layers, because they answer different questions:
@@ -166,18 +200,14 @@ function runSkeletonCompliance(
 ): { status: string; blocked: boolean } {
   const startTime = minutesToTime(shift.startMinutes);
   const endTime = minutesToTime(shift.endMinutes);
+  const breaks = skeletonBreaks(shift.startMinutes, shift.endMinutes);
 
-  // Layer 1 — shift shape. The synthesizer emits no breaks, so any synthesized
-  // shift over 5h net raises SHAPE_MEAL_BREAK, which is BLOCKING (cl 36.1 is an
-  // entitlement, not advice). That is recorded here and deliberately not acted
-  // on — see the exemption on the create payload below for why these rows are
-  // still written.
+  // Layer 1 — shift shape, judged with the breaks the payload will carry.
   const shapeResult = evaluateShiftShape({
     shift_date: shiftDate,
     start_time: startTime,
     end_time: endTime,
-    unpaid_break_minutes: 0,
-    paid_break_minutes: 0,
+    ...breaks,
     is_training: false,
     target_employment_type: (shift.target_employment_type as ShapeEmploymentTarget) ?? 'Casual',
     target_requires_flexible: shift.target_requires_flexible ?? false,
@@ -191,7 +221,7 @@ function runSkeletonCompliance(
     end_time: endTime,
     role_id: shift.roleId,
     required_qualifications: [],
-    break_minutes: 0,
+    break_minutes: breaks.unpaid_break_minutes,
   };
 
   const result = runV8Orchestrator(buildSkeletonInput({ candidateShift }));
@@ -230,29 +260,9 @@ function expandToCreatePayloads(
       organization_id: params.organizationId ?? null,
       timezone: params.timezone ?? 'Australia/Sydney',
       creation_source: 'synthesizer',
-      // Layer-1 exemption, scoped to the rules the justification actually
-      // covers. A synthesized shift is a COVERAGE SKELETON: it says "this many
-      // people, these hours" and models no breaks at all, so every skeleton
-      // over 5h net fails cl 36.1 by construction. Blocking them would make
-      // demand synthesis produce nothing for a normal 8-hour day.
-      //
-      // The alternative — having the synthesizer emit a compliant 30m break —
-      // was NOT taken here: it would change net paid hours, and therefore the
-      // cost and coverage figures the demand model reports, which is a product
-      // decision rather than a compliance fix. The skeletons land as Draft with
-      // their shape findings recorded for the manager who completes them.
-      //
-      // NAMED RULES, not a blanket pass (2026-08-19). This was one reason
-      // string that waived EVERYTHING, so the sentence "breaks are filled in by
-      // the manager" was also, silently, waiving cl 56.2's four-hour
-      // public-holiday minimum and cl 12's engagement tiers. A missing break is
-      // something a manager can add later; a two-hour engagement on Christmas
-      // Day is not a gap in the skeleton, it is the wrong shift. Those still
-      // block, which is what forces the demand model to ask for a lawful one.
-      shape_exempt: {
-        rules: ['SHAPE_MEAL_BREAK', 'SHAPE_REST_PAUSE_1', 'SHAPE_REST_PAUSE_2'],
-        reason: 'demand synthesis skeleton — breaks are filled in by the manager',
-      },
+      // A lawful break, placed by the synthesiser — see skeletonBreaks. The
+      // manager can move it; there is no exemption to write one without.
+      ...skeletonBreaks(shift.startMinutes, shift.endMinutes),
       synthesis_run_id: params.synthesisRunId ?? null,
       shift_subgroup_id: rosterSubgroupId,
       notes: shift.reasons?.[0],

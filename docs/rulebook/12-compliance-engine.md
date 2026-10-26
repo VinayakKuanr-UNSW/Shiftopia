@@ -14,6 +14,8 @@ Ch. 2 §9 presented the compliance engine as a single funnel: every caller → o
 
 ### 1.2 Six real entry points, three rule sets, inconsistent audit logging
 
+> **Superseded 2026-10-26 — the database enforces the EBA itself.** `internal.eba_evaluate` (a pure SQL rule core) behind `public.eba_check_assignment` (guarded by `can_view_employee_schedule`) is checked at COMMIT on every shift write by the deferred trigger `trg_shift_eba_compliance` — whichever path wrote the row. The `evaluate-compliance` edge function and its fixed 4-check subset (11h rest, 48h week — house rules, not the EBA) are retired; `auto-assign-bids` calls the RPC, and `auto-approve-swaps` is no longer in the tree. V8 and the SQL core are held to one answer key: `src/modules/compliance/__tests__/eba-parity/scenarios.json` (V8 in CI; `node scripts/gen-eba-parity-sql.mjs` for the database). The table below is the pre-2026-10-26 picture of the *client-side* paths.
+
 ```mermaid
 graph TB
     subgraph FullEngine["Full 15-rule ACTIVE_RULES (v8/engine.ts)"]
@@ -44,10 +46,10 @@ graph TB
 | Swap accept/approve | Full 15-rule `ACTIVE_RULES` (×2, one per party) | Yes, automatic |
 | Autoscheduler — commit-time re-validation | Full 15-rule `ACTIVE_RULES` (via `V8SwapEngine`, not the orchestrator) | **No** |
 | Autoscheduler — proposal generation | Separate Python CP-SAT hard/soft/coverage/cost model | No (different system entirely) |
-| `auto-approve-swaps` worker (Swap AutoPilot) | Fixed 4-check subset (overlap, 48h weekly cap, 11h rest, qualification) via Edge Function `evaluate-compliance` | No |
-| `auto-assign-bids` worker (Bid AutoPilot) | Same fixed 4-check subset | No |
+| `auto-approve-swaps` worker (Swap AutoPilot) | ~~Fixed 4-check subset via Edge Function `evaluate-compliance`~~ — worker no longer in the tree (2026-10-26) | No |
+| `auto-assign-bids` worker (Bid AutoPilot) | The database EBA engine, `eba_check_assignment` (2026-10-26; was the 4-check subset) | No |
 
-**⚠ Finding (OPEN, documented drift risk, flagged by the code's own authors):** the Edge Function subset covers roughly 4 of the 15 rules — daily-hours cap, 20-in-28, streak limit, spread-of-hours, split-shift, meal-break, min-engagement, multi-hire eligibility, student-visa, and leave-conflict are **not** enforced on the AutoPilot paths. Both AutoPilot workers' own READMEs explicitly call this out as an accepted v1 gap and warn that if a new BLOCKING rule is ever added to `ACTIVE_RULES`, nothing mechanically propagates it to the deployed Edge Function — no test or CI gate keeps them in sync.
+**✓ Finding (RESOLVED 2026-10-26 — see the note above):** the Edge Function subset covers roughly 4 of the 15 rules — daily-hours cap, 20-in-28, streak limit, spread-of-hours, split-shift, meal-break, min-engagement, multi-hire eligibility, student-visa, and leave-conflict are **not** enforced on the AutoPilot paths. Both AutoPilot workers' own READMEs explicitly call this out as an accepted v1 gap and warn that if a new BLOCKING rule is ever added to `ACTIVE_RULES`, nothing mechanically propagates it to the deployed Edge Function — no test or CI gate keeps them in sync.
 
 **⚠ Finding (OPEN, dormant infrastructure):** `src/modules/compliance/v8/orchestrator/{batch,bidding,swapping,conflict-resolver}/` implement a genuinely sophisticated global-optimization layer — dependency-graph batch execution, greedy fairness-aware bid selection across all shifts simultaneously, structural swap-conflict resolution, and a resource-contention graph solver with GREEDY/SOLVER/HYBRID strategy selection. **None of it has any caller outside its own package** (confirmed by repo-wide grep) and none of it is re-exported from the module's public `index.ts`. The live bid-accept and swap-accept paths bypass this entirely, calling `runV8Orchestrator` per-employee directly instead. This is real, working, seemingly-tested-in-isolation code with zero production callers — worth confirming with the team whether it's future infrastructure being staged or safe to remove.
 
@@ -68,7 +70,7 @@ graph TB
 | Rule ID | File | Severity | What it checks | Threshold/formula | Award/legal citation | Scope |
 |---|---|---|---|---|---|---|
 | `V8_LEAVE_CONFLICT` | leave-conflict.ts | **BLOCKING** | Candidate shift falls on an approved-leave date | date-in-set check | Leave system, not an EBA clause | All, candidate-scoped |
-| `V8_NO_OVERLAP` | structural-rules.ts | **BLOCKING** | Two same-date shifts overlap in time | `nextStart < currentEnd` | Data-integrity, no clause | All, incl. history |
+| `V8_NO_OVERLAP` | structural-rules.ts | **BLOCKING** | Two shifts overlap in time, on the absolute timeline (an overnight shift overlaps the next morning's — same-date only until 2026-10-26) | consecutive pair with a negative gap | Data-integrity, no clause | All, incl. history |
 | `V8_MIN_ENGAGEMENT` | min-engagement.ts | **BLOCKING** | Shift duration below the minimum for its day-type | Training 120min › Sunday/PH 240min › standard 180min (precedence in that order) | ICC EBA (shared source of truth with payroll's billable-time floor) | All, candidate-scoped |
 | `V8_QUALIFICATIONS` | employment-rules.ts | **BLOCKING** | Required skill/license/qualification missing entirely | required ⊄ held | — | All |
 | `V8_QUALIFICATION_EXPIRED` | employment-rules.ts | **BLOCKING** | Required qualification held but expired by shift date | `expires_at < shiftDate` | — | All (rich-quals data path) |

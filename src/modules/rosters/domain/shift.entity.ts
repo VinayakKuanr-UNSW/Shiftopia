@@ -89,8 +89,13 @@ export interface Shift {
     is_overnight: boolean;
     scheduled_length_minutes: number | null;
     break_minutes: number;
+    /** The paid rest pauses (cl 37) only. */
     paid_break_minutes: number;
+    /** The meal-break window's length, or 0 where the meal break is paid (security). */
     unpaid_break_minutes: number;
+    /** Rostered meal-break start, `HH:mm:ss`, resolved against `start_time` across midnight. */
+    break_start?: string | null;
+    break_end?: string | null;
     net_length_minutes: number | null;
     total_hours: number | null;
     timezone: string;

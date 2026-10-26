@@ -1,0 +1,2084 @@
+{
+ "$comment": "EBA engine parity: every scenario must give the same blocking and warning rule ids from V8 (v8-parity.test.ts) and from internal.eba_evaluate (scripts/gen-eba-parity-sql.mjs). Generated; history is compliant on its own, so only the candidate can trip a rule.",
+ "scenarios": [
+  {
+   "name": "rest gap: 9h between days blocks",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "23:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "08:00",
+     "end": "12:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_MIN_REST_GAP"
+   ],
+   "warning": []
+  },
+  {
+   "name": "rest gap: exactly 10h passes",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "23:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "rest gap: 8h by written agreement passes",
+   "employee": {
+    "contract_type": "CASUAL",
+    "rest_gap_8h": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "23:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "07:00",
+     "end": "11:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "rest gap: 7.5h under the 8h agreement blocks",
+   "employee": {
+    "contract_type": "CASUAL",
+    "rest_gap_8h": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "23:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "06:30",
+     "end": "10:30",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_MIN_REST_GAP"
+   ],
+   "warning": []
+  },
+  {
+   "name": "rest gap: multi-hire side needs only 8h",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "23:00",
+     "unpaid": 30,
+     "multi_hire": true
+    },
+    {
+     "date": "2026-11-03",
+     "start": "08:00",
+     "end": "12:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "rest gap: both sides salaried is advisory",
+   "employee": {
+    "contract_type": "FULL_TIME",
+    "salaried": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "23:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "08:00",
+     "end": "12:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": [
+    "V8_MIN_REST_GAP"
+   ]
+  },
+  {
+   "name": "rest gap: one EBA side keeps the rule",
+   "employee": {
+    "contract_type": "FULL_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "23:00",
+     "unpaid": 30,
+     "salaried": true
+    },
+    {
+     "date": "2026-11-03",
+     "start": "08:00",
+     "end": "12:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_MIN_REST_GAP"
+   ],
+   "warning": []
+  },
+  {
+   "name": "rest gap: measured from an overnight finish",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "22:00",
+     "end": "06:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "14:00",
+     "end": "18:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_MIN_REST_GAP"
+   ],
+   "warning": []
+  },
+  {
+   "name": "rest gap: two parts of one day are not a rest-gap pair",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "18:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "daily hours: exactly 12h net passes",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "12:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-02",
+     "start": "12:30",
+     "end": "19:30",
+     "candidate": true,
+     "unpaid": 30
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "daily hours: 12.5h net blocks",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "12:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-02",
+     "start": "12:30",
+     "end": "20:00",
+     "candidate": true,
+     "unpaid": 30
+    }
+   ],
+   "blocking": [
+    "V8_MAX_DAILY_HOURS"
+   ],
+   "warning": []
+  },
+  {
+   "name": "engagements: a third casual shift blocks",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "09:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "10:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "17:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_MAX_DAILY_ENGAGEMENTS"
+   ],
+   "warning": []
+  },
+  {
+   "name": "engagements: a training candidate is not counted",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "09:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "10:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "17:00",
+     "candidate": true,
+     "training": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "engagements: a training shift already there is not counted",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "09:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "10:00",
+     "end": "13:00",
+     "training": true
+    },
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "17:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "engagements: no cap for part-time",
+   "employee": {
+    "contract_type": "PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "09:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "10:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "17:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "split spread: 13.5h net blocks and the 5h gap warns",
+   "employee": {
+    "contract_type": "PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "15:00",
+     "end": "19:30",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_SPLIT_SHIFT_SPREAD"
+   ],
+   "warning": [
+    "V8_SPLIT_SHIFT"
+   ]
+  },
+  {
+   "name": "split spread: 12h with a 3h gap passes",
+   "employee": {
+    "contract_type": "PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "13:00",
+     "end": "18:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "split spread: meal breaks are excluded",
+   "employee": {
+    "contract_type": "PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "12:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-02",
+     "start": "13:00",
+     "end": "19:00",
+     "candidate": true,
+     "unpaid": 30
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "split spread: salaried throughout is advisory",
+   "employee": {
+    "contract_type": "PART_TIME",
+    "salaried": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "15:00",
+     "end": "19:30",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": [
+    "V8_SPLIT_SHIFT_SPREAD"
+   ]
+  },
+  {
+   "name": "split spread: a multi-hire part has no split-shift gap",
+   "employee": {
+    "contract_type": "PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00",
+     "multi_hire": true
+    },
+    {
+     "date": "2026-11-02",
+     "start": "15:00",
+     "end": "19:30",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_SPLIT_SHIFT_SPREAD"
+   ],
+   "warning": []
+  },
+  {
+   "name": "split spread: flexible part-time is in scope",
+   "employee": {
+    "contract_type": "FLEXI_PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "15:00",
+     "end": "19:30",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_SPLIT_SHIFT_SPREAD"
+   ],
+   "warning": [
+    "V8_SPLIT_SHIFT"
+   ]
+  },
+  {
+   "name": "split spread: full-time is out of scope",
+   "employee": {
+    "contract_type": "FULL_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "15:00",
+     "end": "19:30",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "casual security: 13h gross spread blocks",
+   "employee": {
+    "contract_type": "CASUAL",
+    "security": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "10:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "19:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_CASUAL_SECURITY_SPREAD"
+   ],
+   "warning": []
+  },
+  {
+   "name": "casual security: a 2.5h engagement blocks",
+   "employee": {
+    "contract_type": "CASUAL",
+    "security": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "08:30"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "10:00",
+     "end": "16:00",
+     "candidate": true,
+     "meal": 30,
+     "paid": 10
+    }
+   ],
+   "blocking": [
+    "V8_CASUAL_SECURITY_ENGAGEMENT"
+   ],
+   "warning": []
+  },
+  {
+   "name": "casual security: 3h + 6h with a paid meal passes",
+   "employee": {
+    "contract_type": "CASUAL",
+    "security": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "09:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "10:00",
+     "end": "16:00",
+     "candidate": true,
+     "meal": 30,
+     "paid": 10
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "meal: two abutting 3h shifts block",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "08:00",
+     "end": "11:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "11:00",
+     "end": "14:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_DAILY_MEAL_BREAK"
+   ],
+   "warning": []
+  },
+  {
+   "name": "meal: a 30-minute gap between parts passes",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "08:00",
+     "end": "11:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "11:30",
+     "end": "14:30",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "meal: a 15-minute gap blocks",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "08:00",
+     "end": "11:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "11:15",
+     "end": "14:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_DAILY_MEAL_BREAK"
+   ],
+   "warning": []
+  },
+  {
+   "name": "meal: security's paid window counts, its rest pauses do not decide",
+   "employee": {
+    "contract_type": "CASUAL",
+    "security": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "08:00",
+     "end": "14:00",
+     "meal": 30,
+     "paid": 10
+    },
+    {
+     "date": "2026-11-02",
+     "start": "14:00",
+     "end": "17:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "meal: security with only rest pauses blocks",
+   "employee": {
+    "contract_type": "CASUAL",
+    "security": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "08:00",
+     "end": "11:00",
+     "paid": 10
+    },
+    {
+     "date": "2026-11-02",
+     "start": "11:00",
+     "end": "14:00",
+     "candidate": true,
+     "paid": 10
+    }
+   ],
+   "blocking": [
+    "V8_DAILY_MEAL_BREAK"
+   ],
+   "warning": []
+  },
+  {
+   "name": "20-in-28: a 21st day blocks",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-13",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-14",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-15",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-16",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-17",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-18",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-19",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-20",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-21",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-22",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_20_IN_28"
+   ],
+   "warning": []
+  },
+  {
+   "name": "20-in-28: the window has moved on",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-13",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-14",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-15",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-16",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-17",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-18",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-19",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-20",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-21",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-30",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "20-in-28: an overnight shift works its finishing day",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-13",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-14",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-15",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-16",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-17",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-18",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-19",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-20",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-21",
+     "start": "22:00",
+     "end": "02:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_20_IN_28"
+   ],
+   "warning": []
+  },
+  {
+   "name": "20-in-28: a shift ending at midnight does not",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-13",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-14",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-15",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-16",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-17",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-18",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-19",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-20",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-21",
+     "start": "20:00",
+     "end": "00:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "streak: an 11th consecutive day blocks flexi",
+   "employee": {
+    "contract_type": "FLEXI_PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_STREAK_LIMIT"
+   ],
+   "warning": []
+  },
+  {
+   "name": "streak: part-time has no streak cap",
+   "employee": {
+    "contract_type": "PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "streak: a day off resets it",
+   "employee": {
+    "contract_type": "FLEXI_PART_TIME"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-13",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "visa: 49h in a fortnight blocks",
+   "employee": {
+    "contract_type": "CASUAL",
+    "student_visa": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_STUDENT_VISA_LIMIT"
+   ],
+   "warning": []
+  },
+  {
+   "name": "visa: exactly 48h passes",
+   "employee": {
+    "contract_type": "CASUAL",
+    "student_visa": true
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "12:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "visa: no restriction, no limit",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "13:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "ordinary hours: 152.5h in the 4-week cycle blocks",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-13",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-14",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-15",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-16",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-17",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-18",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-19",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-20",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-21",
+     "start": "08:00",
+     "end": "18:30",
+     "candidate": true,
+     "unpaid": 30
+    }
+   ],
+   "blocking": [
+    "V8_ORD_HOURS_AVG"
+   ],
+   "warning": []
+  },
+  {
+   "name": "ordinary hours: exactly 152h passes",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-04",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-05",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-06",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-07",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-08",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-09",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-10",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-11",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-12",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-13",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-14",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-15",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-16",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-17",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-18",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-19",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-20",
+     "start": "09:00",
+     "end": "17:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-21",
+     "start": "08:00",
+     "end": "18:00",
+     "candidate": true,
+     "unpaid": 30
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  },
+  {
+   "name": "ordinary hours: FT security run 336h over 8 weeks",
+   "employee": {
+    "contract_type": "FULL_TIME",
+    "security": true
+   },
+   "shifts": [
+    {
+     "date": "2026-10-05",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-07",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-09",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-11",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-13",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-15",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-17",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-19",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-21",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-23",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-25",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-27",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-29",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-10-31",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-02",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-04",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-06",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-08",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-10",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-12",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-14",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-16",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-18",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-20",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-22",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-24",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-26",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-28",
+     "start": "06:00",
+     "end": "18:00",
+     "meal": 30
+    },
+    {
+     "date": "2026-11-29",
+     "start": "06:00",
+     "end": "07:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_ORD_HOURS_AVG"
+   ],
+   "warning": []
+  },
+  {
+   "name": "overlap: same day blocks (and leaves no meal break)",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "12:00",
+     "end": "16:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_DAILY_MEAL_BREAK",
+    "V8_NO_OVERLAP"
+   ],
+   "warning": []
+  },
+  {
+   "name": "overlap: across midnight blocks",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "22:00",
+     "end": "06:00",
+     "unpaid": 30
+    },
+    {
+     "date": "2026-11-03",
+     "start": "05:00",
+     "end": "09:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_NO_OVERLAP"
+   ],
+   "warning": []
+  },
+  {
+   "name": "overlap: abutting is not overlapping",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "13:00"
+    },
+    {
+     "date": "2026-11-02",
+     "start": "13:00",
+     "end": "15:00",
+     "candidate": true
+    }
+   ],
+   "blocking": [
+    "V8_DAILY_MEAL_BREAK"
+   ],
+   "warning": []
+  },
+  {
+   "name": "a lone compliant shift passes",
+   "employee": {
+    "contract_type": "CASUAL"
+   },
+   "shifts": [
+    {
+     "date": "2026-11-02",
+     "start": "09:00",
+     "end": "17:00",
+     "candidate": true,
+     "unpaid": 30
+    }
+   ],
+   "blocking": [],
+   "warning": []
+  }
+ ]
+}

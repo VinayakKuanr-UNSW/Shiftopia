@@ -48,10 +48,10 @@ describe('Apply carries the group identity', () => {
         expect(src).toContain('subGroupName: string;');
     });
 
-    it('applyOffice passes both to createShift', () => {
+    it('copyShiftToDates passes both to createShift', () => {
         // Without these two lines the shifts are written, parented, and
         // invisible — the failure this file exists to prevent recurring.
-        const src = read('src/modules/office/api/office.commands.ts');
+        const src = read('src/modules/office/api/copyShift.ts');
         expect(src).toContain('group_type: target.groupType');
         expect(src).toContain('sub_group_name: target.subGroupName');
     });

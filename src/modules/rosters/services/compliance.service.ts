@@ -1,16 +1,14 @@
 /**
  * Compliance Service
  *
- * Delegates all four compliance checks to the `evaluate-compliance` Edge
- * Function, which runs them in parallel server-side using the service_role
- * key — bypassing RLS so cross-department shifts are always visible.
+ * Asks the database's EBA engine, `eba_check_assignment` — the same rules every
+ * shift write answers to at commit (trg_shift_eba_compliance). It reads the
+ * person's whole schedule itself, RLS-blind, and answers only callers who may
+ * already see that person's shifts (can_view_employee_schedule).
  *
- * Benefits over the previous per-RPC approach:
- *  - 1 HTTP round-trip instead of 4 (saves ~150 ms on a typical connection)
- *  - All checks run with service_role — no RLS blind spots
- *  - Server-side fault isolation: one check failure never cancels the others
- *  - The overall status is 'unavailable' only if ALL checks failed —
- *    never silently treated as 'passed'
+ * If the engine cannot be reached, a local check that sees only the shift
+ * itself runs instead, and the result says so (`engineReached: false`) — it is
+ * never reported as the engine's verdict.
  *
  * Legacy adapter at the bottom maintains backward compatibility with
  * existing callers using complianceService.validateShiftCompliance().
@@ -58,6 +56,106 @@ export interface ComplianceResult {
   qualificationViolations: QualificationViolation[];
 }
 
+export interface EbaCheckRow {
+  is_compliant: boolean;
+  rule_id: string | null;
+  rule_name: string | null;
+  tier: string | null;
+  summary: string | null;
+  details: string | null;
+  payload: Record<string, any> | null;
+}
+
+export function mapEbaRowsToComplianceResult(data: EbaCheckRow | EbaCheckRow[]): ComplianceResult {
+  const rows = Array.isArray(data) ? data : (data ? [data] : []);
+  const violations: string[] = [];
+  const warnings: string[] = [];
+  const qualificationViolations: QualificationViolation[] = [];
+  let weeklyHours = 0;
+
+  for (const row of rows) {
+    if (!row || (!row.rule_id && row.is_compliant)) {
+      continue;
+    }
+    const message = row.details || row.summary || row.rule_name || 'EBA compliance rule violation';
+    if (row.tier === 'BLOCKING' || row.is_compliant === false) {
+      violations.push(message);
+      if (
+        row.rule_id === 'V8_QUALIFICATIONS' ||
+        row.rule_id === 'V8_QUALIFICATION_EXPIRED' ||
+        row.payload?.skill_id ||
+        row.payload?.license_id
+      ) {
+        const isExpired = row.rule_id === 'V8_QUALIFICATION_EXPIRED' || Boolean(row.payload?.expiration_date);
+        const isSkill = Boolean(row.payload?.skill_id);
+        qualificationViolations.push({
+          type: isSkill
+            ? (isExpired ? 'SKILL_EXPIRED' : 'SKILL_MISSING')
+            : (isExpired ? 'LICENSE_EXPIRED' : 'LICENSE_MISSING'),
+          message,
+          role_id: row.payload?.role_id,
+          license_id: row.payload?.license_id,
+          license_name: row.payload?.license_name,
+          skill_id: row.payload?.skill_id,
+          skill_name: row.payload?.skill_name,
+          expiration_date: row.payload?.expiration_date,
+        });
+      }
+    } else if (row.tier === 'WARNING') {
+      warnings.push(message);
+    }
+
+    if (row.payload?.total_hours != null) {
+      weeklyHours = Number(row.payload.total_hours);
+    }
+  }
+
+  let status: ComplianceStatus = 'passed';
+  if (violations.length > 0) {
+    status = 'violated';
+  } else if (warnings.length > 0) {
+    status = 'warned';
+  } else {
+    status = 'passed';
+  }
+
+  return {
+    status,
+    violations,
+    warnings,
+    weeklyHours,
+    maxWeeklyHours: MAX_WEEKLY_HOURS,
+    checksPerformed: ['eba_check_assignment'],
+    checksSkipped: [],
+    qualificationViolations,
+  };
+}
+
+function parseMinutes(timeStr?: string | null): number {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':');
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
+  return h * 60 + m;
+}
+
+function calculateUnpaidBreakMinutes(
+  startTime?: string | null,
+  endTime?: string | null,
+  netLengthMinutes?: number | null,
+  explicitUnpaid?: number | null
+): number {
+  if (typeof explicitUnpaid === 'number' && !isNaN(explicitUnpaid)) {
+    return explicitUnpaid;
+  }
+  if (!startTime || !endTime || netLengthMinutes == null) {
+    return 0;
+  }
+  let gross = parseMinutes(endTime) - parseMinutes(startTime);
+  if (gross < 0) gross += 24 * 60;
+  return Math.max(0, gross - Number(netLengthMinutes));
+}
+
 export interface ComplianceInput {
   employeeId: string;
   shiftDate: string;
@@ -73,13 +171,15 @@ export interface ComplianceInput {
   overrideSkillIds?: string[];
   /** Optional override for required licenses */
   overrideLicenseIds?: string[];
+  /** Optional explicit unpaid break minutes */
+  unpaidBreakMinutes?: number;
 }
 
 // ── Main compliance entry point ────────────────────────────────────────────
 
 const MAX_WEEKLY_HOURS = 48;
 
-/** `checksSkipped` marker: the edge function never answered; any verdict is local. */
+/** `checksSkipped` marker: the database engine never answered; any verdict is local. */
 const REMOTE_ENGINE_SKIPPED = 'remote_evaluate_compliance';
 
 const UNAVAILABLE_RESULT: ComplianceResult = {
@@ -94,39 +194,45 @@ const UNAVAILABLE_RESULT: ComplianceResult = {
 };
 
 /**
- * Run all four compliance checks via the evaluate-compliance Edge Function.
- *
- * All checks run server-side in parallel with service_role access.
- * Falls back to local hard-validation if the function is unreachable.
+ * Run EBA compliance checks via the eba_check_assignment RPC, falling back to a local check.
  */
 export async function validateCompliance(input: ComplianceInput): Promise<ComplianceResult> {
   if (!isValidUuid(input.employeeId)) {
     return UNAVAILABLE_RESULT;
   }
 
-  try {
-    const { data, error } = await supabase.functions.invoke<ComplianceResult>('evaluate-compliance', {
-      body: {
-        employee_id:          input.employeeId,
-        shift_date:           input.shiftDate,
-        start_time:           input.startTime,
-        end_time:             input.endTime,
-        net_length_minutes:   input.netLengthMinutes,
-        exclude_shift_id:     input.excludeV8ShiftId ?? null,
-        shift_id:             input.shiftId ?? null,
-        override_role_id:     input.overrideV8RoleId ?? null,
-        override_skill_ids:   input.overrideSkillIds ?? null,
-        override_license_ids: input.overrideLicenseIds ?? null,
-      },
-    });
+  const unpaidBreakMins = calculateUnpaidBreakMinutes(
+    input.startTime,
+    input.endTime,
+    input.netLengthMinutes,
+    input.unpaidBreakMinutes
+  );
+  const targetShiftId = isValidUuid(input.shiftId)
+    ? input.shiftId
+    : (isValidUuid(input.excludeV8ShiftId) ? input.excludeV8ShiftId : null);
 
-    if (!error && data) {
-      return data;
+  // 1. Direct database RPC via SECURITY DEFINER eba_check_assignment
+  if (typeof (supabase as any)?.rpc === 'function') {
+    try {
+      const { data, error } = await (supabase as any).rpc('eba_check_assignment', {
+        p_shift_id: targetShiftId,
+        p_employee_id: input.employeeId,
+        p_shift_date: input.shiftDate,
+        p_start_time: input.startTime,
+        p_end_time: input.endTime,
+        p_unpaid_break_mins: unpaidBreakMins,
+        p_role_id: isValidUuid(input.overrideV8RoleId) ? input.overrideV8RoleId : null,
+      });
+
+      if (!error && data) {
+        return mapEbaRowsToComplianceResult(data);
+      }
+      if (error) {
+        console.warn('[validateCompliance] supabase.rpc(eba_check_assignment) error, performing local fallback check:', error);
+      }
+    } catch (rpcErr) {
+      console.warn('[validateCompliance] supabase.rpc(eba_check_assignment) threw, performing local fallback check:', rpcErr);
     }
-
-    console.warn('[validateCompliance] Remote edge function unreachable, performing local fallback check:', error);
-  } catch (err) {
-    console.warn('[validateCompliance] Edge function invocation threw error, performing local fallback check:', err);
   }
 
   // Graceful local client-side hard-validation fallback
@@ -143,12 +249,6 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
 
     return {
       status: hv.passed ? 'passed' : 'violated',
-      // `HardValidationResult` exposes `passed` + `errors`, never
-      // `violations`/`warnings`. This read undefined for both, so any consumer
-      // doing `.length` or `.map()` on them crashed — on the OFFLINE fallback
-      // path, i.e. exactly when the edge function is already unreachable.
-      // Every hard-validation code (PAST_SHIFT/OVERLAP/INVALID_TIME/DUPLICATE)
-      // is blocking, so they all map to violations.
       violations: hv.errors.map(e => e.message),
       warnings: [],
       weeklyHours: 0,

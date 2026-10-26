@@ -48,7 +48,7 @@ import {
     type ShapeGateInput,
 } from '../shift-shape-gate';
 
-/** 09:00–17:30 less 30m unpaid = 8h net, with both rest pauses paid. Lawful. */
+/** 09:00–17:30 less a 13:00–13:30 meal break = 8h net, both rest pauses paid. Lawful. */
 function lawful(over: Partial<ShapeGateInput> = {}): ShapeGateInput {
     return {
         shift_date: '2026-06-01',      // a Monday, not a public holiday
@@ -56,10 +56,15 @@ function lawful(over: Partial<ShapeGateInput> = {}): ShapeGateInput {
         end_time:   '17:30',
         unpaid_break_minutes: 30,
         paid_break_minutes:   30,
+        break_start: '13:00',
+        break_end:   '13:30',
         target_employment_type: 'Casual',
         ...over,
     };
 }
+
+/** No meal break at all. */
+const NO_BREAK = { unpaid_break_minutes: 0, break_start: null, break_end: null } as const;
 
 beforeEach(() => {
     resetSecurityRoleCache();
@@ -70,16 +75,24 @@ beforeEach(() => {
 describe('the gate refuses an unlawful shape', () => {
     it('throws on an 8-hour shift with no meal break (cl 36.1)', async () => {
         await expect(
-            assertShapeForRow(lawful({ unpaid_break_minutes: 0 })),
+            assertShapeForRow(lawful(NO_BREAK)),
         ).rejects.toThrow(/meal break/i);
     });
 
     it('throws on a 90-minute casual engagement (cl 12.5(c))', async () => {
         await expect(
             assertShapeForRow(lawful({
-                end_time: '10:30', unpaid_break_minutes: 0, paid_break_minutes: 0,
+                end_time: '10:30', ...NO_BREAK, paid_break_minutes: 0,
             })),
         ).rejects.toThrow(/minimum/i);
+    });
+
+    it('reads the meal-break window, not just its length', async () => {
+        // A break placed after the shift has ended is no break at all, whatever
+        // its minutes say — and pay would be priced from where it claims to sit.
+        await expect(
+            assertShapeForRow(lawful({ break_start: '18:00', break_end: '18:30' })),
+        ).rejects.toThrow(/inside the shift|start after the shift starts/i);
     });
 
     it('names every blocking rule, not just the first', async () => {
@@ -90,7 +103,7 @@ describe('the gate refuses an unlawful shape', () => {
         // mutually exclusive by length, so past 8h the requirement simply IS
         // 30 minutes and cl 37.1's separate "15m" is not also reported.
         const err = await assertShapeForRow(
-            lawful({ unpaid_break_minutes: 0, paid_break_minutes: 0 }),
+            lawful({ ...NO_BREAK, paid_break_minutes: 0 }),
         ).then(() => null, e => e);
         expect(err).toBeTruthy();
         expect(err.violations.map((v: string) => v)).toHaveLength(2);
@@ -108,7 +121,7 @@ describe('the gate refuses an unlawful shape', () => {
         // cl 35.1(d). SHAPE_SPREAD_GUARDRAIL notes the tether and permits it.
         const r = await assertShapeForRow(lawful({
             start_time: '06:00', end_time: '19:00',
-            unpaid_break_minutes: 60, paid_break_minutes: 30,
+            unpaid_break_minutes: 60, break_start: '11:00', break_end: '12:00', paid_break_minutes: 30,
         }));
         expect(r.status).toBe('WARNING');
         expect(r.blocking).toBe(false);
@@ -117,12 +130,10 @@ describe('the gate refuses an unlawful shape', () => {
 
 describe('Schedule 3 is resolved from the role', () => {
     it('accepts a security shift whose meal break is PAID', async () => {
-        // 30m paid, 0m unpaid. Under the general rules that reads as no meal
-        // break at all and the save is refused — which is what would happen if
-        // the gate never looked up the role.
-        const security = lawful({
-            unpaid_break_minutes: 0, paid_break_minutes: 60, role_id: 'role-sec',
-        });
+        // Window set, 0m unpaid. Under the general rules that reads as a meal
+        // break that deducts nothing and the save is refused — which is what
+        // would happen if the gate never looked up the role.
+        const security = lawful({ unpaid_break_minutes: 0, role_id: 'role-sec' });
         await expect(assertShapeForRow(security)).resolves.toBeTruthy();
 
         // The identical shift on a general role is a breach.
@@ -133,8 +144,7 @@ describe('Schedule 3 is resolved from the role', () => {
 
     it('measures net as gross for security, since the break is paid', async () => {
         const r = await evaluateShapeForRow(lawful({
-            start_time: '09:00', end_time: '17:00',
-            unpaid_break_minutes: 0, paid_break_minutes: 60, role_id: 'role-sec',
+            start_time: '09:00', end_time: '17:00', unpaid_break_minutes: 0, role_id: 'role-sec',
         }));
         expect(r.net_minutes).toBe(480);
     });
@@ -156,9 +166,7 @@ describe('Schedule 3 is resolved from the role', () => {
 
     it('fails open — and stricter — when the role lookup breaks', async () => {
         h.state.rolesError = { message: 'network' };
-        const r = await evaluateShapeForRow(lawful({
-            unpaid_break_minutes: 0, paid_break_minutes: 60, role_id: 'role-sec',
-        }));
+        const r = await evaluateShapeForRow(lawful({ unpaid_break_minutes: 0, role_id: 'role-sec' }));
         // Judged by the general rules: a visible false refusal the manager can
         // retry, never a silent pass.
         expect(r.blocking).toBe(true);
@@ -168,9 +176,7 @@ describe('Schedule 3 is resolved from the role', () => {
         h.state.rolesError = { message: 'network' };
         await evaluateShapeForRow(lawful({ role_id: 'role-sec' }));
         h.state.rolesError = null;
-        const r = await evaluateShapeForRow(lawful({
-            unpaid_break_minutes: 0, paid_break_minutes: 60, role_id: 'role-sec',
-        }));
+        const r = await evaluateShapeForRow(lawful({ unpaid_break_minutes: 0, role_id: 'role-sec' }));
         expect(r.blocking).toBe(false);
     });
 });
@@ -183,12 +189,12 @@ describe('an untargeted shift is judged as the form judges it', () => {
         const untargeted = await evaluateShapeForRow(lawful({
             target_employment_type: null,
             start_time: '09:00', end_time: '12:00',
-            unpaid_break_minutes: 0, paid_break_minutes: 15,
+            ...NO_BREAK, paid_break_minutes: 15,
         }));
         const casual = await evaluateShapeForRow(lawful({
             target_employment_type: 'Casual',
             start_time: '09:00', end_time: '12:00',
-            unpaid_break_minutes: 0, paid_break_minutes: 15,
+            ...NO_BREAK, paid_break_minutes: 15,
         }));
         expect(untargeted.hits.map(x => x.rule_id)).toEqual(casual.hits.map(x => x.rule_id));
         expect(untargeted.passed).toBe(true);
@@ -202,44 +208,3 @@ describe('an untargeted shift is judged as the form judges it', () => {
     });
 });
 
-describe('the bypass is named, reasoned, and RULE-SCOPED', () => {
-    it('allows a blocking rule through when that rule is listed', async () => {
-        const r = await assertShapeForRow(
-            lawful({ unpaid_break_minutes: 0 }),
-            { exempt: { rules: ['SHAPE_MEAL_BREAK'], reason: 'demand synthesis skeleton' } },
-        );
-        expect(r.blocking).toBe(true);   // still recorded, not laundered
-    });
-
-    it('still throws when the exemption is absent', async () => {
-        await expect(
-            assertShapeForRow(lawful({ unpaid_break_minutes: 0 })),
-        ).rejects.toThrow();
-    });
-
-    it('still throws when the breached rule is NOT the one listed', async () => {
-        // The synthesiser's real waiver. It must not also excuse a two-hour
-        // engagement — the whole reason the blanket string was replaced.
-        await expect(
-            assertShapeForRow(
-                lawful({ start_time: '09:00', end_time: '11:00', unpaid_break_minutes: 0 }),
-                { exempt: { rules: ['SHAPE_MEAL_BREAK'], reason: 'demand synthesis skeleton' } },
-            ),
-        ).rejects.toThrow();
-    });
-
-    it('enforces the unlisted rule even when a listed one is ALSO breached', async () => {
-        // Two breaches at once: no meal break (waived) and a public-holiday
-        // engagement under four hours (not waived). Partitioning, not
-        // short-circuiting, is what makes the second one survive.
-        await expect(
-            assertShapeForRow(
-                lawful({
-                    shift_date: '2026-12-25', start_time: '09:00', end_time: '11:00',
-                    unpaid_break_minutes: 0, target_employment_type: 'Casual',
-                }),
-                { exempt: { rules: ['SHAPE_MEAL_BREAK'], reason: 'demand synthesis skeleton' } },
-            ),
-        ).rejects.toThrow();
-    });
-});

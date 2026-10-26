@@ -26,7 +26,6 @@ import {
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { LEAVE_POLICIES, resolveOrdinaryHoursCredit } from '@/modules/leave/domain/leave-policy';
 import type { LeaveElectionMode, LeaveTypeCode } from '@/modules/leave/model/leave.types';
-import type { SnapshotShiftRef } from './digest';
 import type {
     EmployeeContractFacts,
     ExistingShift,
@@ -61,8 +60,6 @@ export interface EligibleEmployee {
 export interface EligibilityLoad {
     employees: EligibleEmployee[];
     findings: Finding[];
-    /** Fed to `inputDigest`. */
-    rawContracts: Array<Record<string, unknown>>;
 }
 
 const CONTRACT_COLUMNS =
@@ -104,12 +101,12 @@ export async function loadEligibleEmployees(
             overridable: false,
             calculation: { error: error.message },
         });
-        return { employees: [], findings, rawContracts: [] };
+        return { employees: [], findings };
     }
 
     const rows = (scoped ?? []) as unknown as Array<Record<string, unknown>>;
     const userIds = [...new Set(rows.map(r => String(r.user_id)))].sort();
-    if (userIds.length === 0) return { employees: [], findings, rawContracts: [] };
+    if (userIds.length === 0) return { employees: [], findings };
 
     // EVERY active contract for those people, including ones outside this
     // sub-department — `resolveComplianceBasis` and `isWhollyFullTime` are only
@@ -213,18 +210,12 @@ export async function loadEligibleEmployees(
     employees.sort((a, b) =>
         a.facts.employeeId < b.facts.employeeId ? -1 : a.facts.employeeId > b.facts.employeeId ? 1 : 0);
 
-    return { employees, findings, rawContracts: rows };
+    return { employees, findings };
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
    Consumption
    ──────────────────────────────────────────────────────────────────────────── */
-
-export interface ConsumptionLoad {
-    shiftsByEmployee: Map<string, ExistingShift[]>;
-    /** Every shift read, for the snapshot digest. */
-    snapshotRefs: SnapshotShiftRef[];
-}
 
 /**
  * Existing shifts for these employees over a date window, in EVERY
@@ -237,15 +228,14 @@ export async function loadExistingShifts(
     employeeIds: readonly string[],
     fromDate: string,
     toDate: string,
-): Promise<ConsumptionLoad> {
+): Promise<Map<string, ExistingShift[]>> {
     const shiftsByEmployee = new Map<string, ExistingShift[]>();
-    const snapshotRefs: SnapshotShiftRef[] = [];
-    if (employeeIds.length === 0) return { shiftsByEmployee, snapshotRefs };
+    if (employeeIds.length === 0) return shiftsByEmployee;
 
     const { data, error } = await supabase
         .from('shifts')
         .select(
-            'id, version, assigned_employee_id, shift_date, start_time, end_time, ' +
+            'id, assigned_employee_id, shift_date, start_time, end_time, ' +
             'net_length_minutes, scheduled_length_minutes, unpaid_break_minutes, ' +
             'sub_department_id, lifecycle_status, is_cancelled, deleted_at, ' +
             'roster_id, rosters!inner(is_locked, status)',
@@ -287,8 +277,6 @@ export async function loadExistingShifts(
         const bucket = shiftsByEmployee.get(employeeId);
         if (bucket) bucket.push(shift);
         else shiftsByEmployee.set(employeeId, [shift]);
-
-        snapshotRefs.push({ id: shift.id, version: Number(row.version ?? 0) });
     }
 
     // Stable order in, stable order out.
@@ -298,7 +286,7 @@ export async function loadExistingShifts(
             : (a.date < b.date ? -1 : 1)));
     }
 
-    return { shiftsByEmployee, snapshotRefs };
+    return shiftsByEmployee;
 }
 
 /* ────────────────────────────────────────────────────────────────────────────

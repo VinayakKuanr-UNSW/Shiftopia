@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -101,6 +101,18 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   const isLoading = state.type === 'loading';
   const isExecuting = state.type === 'executing';
   const dialogOpen = state.type === 'confirming' || state.type === 'executing';
+
+  // Closing the tab mid-publish leaves the manager without the result (and the
+  // emergency shifts, published one by one, half done), so the browser asks first.
+  useEffect(() => {
+    if (!isExecuting) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isExecuting]);
 
   const plan =
     state.type === 'confirming' || state.type === 'executing' ? state.plan : null;
@@ -220,6 +232,12 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
     danger: '✗',
   };
 
+  // Only checks that hit a shift get a row; the rest collapse to one line.
+  const activeSteps = steps.filter((s) => s.count > 0);
+  const emptyStepLabels = steps
+    .filter((s) => s.count === 0)
+    .map((s) => s.title.replace(/^0 /, ''));
+
   const handleClick = async () => {
     // aria-disabled, not `disabled`: the button stays focusable, so guard here.
     if (disabled || state.type !== 'idle') return;
@@ -317,110 +335,83 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
           if (!open && !isExecuting) setState({ type: 'idle' });
         }}
       >
-        <AlertDialogContent className="border-slate-200 bg-white dark:bg-slate-950">
-          <AlertDialogHeader className="space-y-5">
-            <AlertDialogTitle className="flex items-center gap-2.5">
-              Confirm Publish
-            </AlertDialogTitle>
-            
-            {/* VIEW SELECTED Card */}
-            <div className="flex items-center gap-4 p-5 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-2xl shadow-sm">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-500">
-                <Calendar className="h-6 w-6" />
+        {/* Header and footer pinned, the checklist scrolls: the dialog never
+            outgrows the viewport however many skip reasons apply. */}
+        <AlertDialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden border-slate-200 bg-white p-0 dark:bg-slate-950">
+          <AlertDialogHeader className="space-y-3 border-b border-slate-100 px-5 pb-4 pt-5 text-left dark:border-white/10">
+            <AlertDialogTitle>Confirm Publish</AlertDialogTitle>
+            {(selectedViewType || selectedViewRange) && (
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-600 dark:text-white/70">
+                <Calendar className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+                <span>{[selectedViewType, selectedViewRange].filter(Boolean).join(' · ')}</span>
               </div>
-              <div className="flex flex-col text-left">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-white/40">
-                  VIEW SELECTED
-                </span>
-                {selectedViewType && (
-                  <span className="text-[14px] font-extrabold text-slate-900 dark:text-white">
-                    {selectedViewType}
-                  </span>
-                )}
-                {selectedViewRange && (
-                  <span className="text-[13px] text-slate-500 dark:text-white/60 font-semibold mt-0.5">
-                    {selectedViewRange}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <AlertDialogDescription asChild>
-              <div className="space-y-6 text-[13px]">
-                {nothingToDo ? (
-                  <p className="text-muted-foreground text-center py-6 text-[14px] font-medium">
-                    No draft shifts in the current view — nothing to publish.
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-slate-600 dark:text-slate-400 text-left text-[13px] font-semibold">
-                      {nothingPublishable
-                        ? 'Nothing in this view can be published — every draft is skipped for a reason below.'
-                        : 'The following will be applied to every draft shift in the current view:'}
-                    </p>
-
-                    {/* Stepper / Timeline Checklist — every calculation */}
-                    <div className="relative pl-8 space-y-6 text-left before:absolute before:left-[13px] before:top-2.5 before:bottom-2.5 before:w-[2px] before:bg-slate-100 dark:before:bg-white/10">
-                      {steps.map((step, i) => {
-                        const active = step.count > 0;
-                        return (
-                          <div key={i} className="relative flex items-start gap-4">
-                            <div
-                              className={cn(
-                                'absolute left-[-25px] flex items-center justify-center w-7 h-7 rounded-full border bg-white dark:bg-slate-950 text-[11px] font-black transition-colors',
-                                active
-                                  ? TONE_NODE[step.tone]
-                                  : 'border-slate-200 dark:border-white/10 text-slate-400',
-                              )}
-                            >
-                              {active ? (
-                                <span>{TONE_GLYPH[step.tone]}</span>
-                              ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/20" />
-                              )}
-                            </div>
-                            <div className="flex flex-col">
-                              <span
-                                className={cn(
-                                  'text-[14px] font-bold',
-                                  active
-                                    ? 'text-slate-900 dark:text-white'
-                                    : 'text-slate-400 dark:text-white/40',
-                                )}
-                              >
-                                {step.title}
-                              </span>
-                              <span
-                                className={cn(
-                                  'text-[13px]',
-                                  active && step.tone === 'danger'
-                                    ? 'text-red-500 font-semibold'
-                                    : active && step.tone === 'warning'
-                                      ? 'text-amber-600 dark:text-amber-400 font-semibold'
-                                      : 'text-slate-500 dark:text-white/60 font-medium',
-                                )}
-                              >
-                                {step.desc}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            </AlertDialogDescription>
+            )}
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
-            <AlertDialogCancel 
+
+          <AlertDialogDescription asChild>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 text-left text-[13px]">
+              {nothingToDo ? (
+                <p className="py-6 text-center text-[14px] font-medium text-muted-foreground">
+                  No draft shifts in the current view — nothing to publish.
+                </p>
+              ) : (
+                <>
+                  <p className="mb-3 font-semibold text-slate-600 dark:text-slate-400">
+                    {nothingPublishable
+                      ? 'Nothing in this view can be published — every draft is skipped for a reason below.'
+                      : 'Applied to every draft shift in the current view:'}
+                  </p>
+                  <ul className="space-y-2">
+                    {activeSteps.map((step) => (
+                      <li
+                        key={step.title}
+                        className="flex items-start gap-3 rounded-xl border border-slate-100 px-3 py-2.5 dark:border-white/10"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-black',
+                            TONE_NODE[step.tone],
+                          )}
+                        >
+                          {TONE_GLYPH[step.tone]}
+                        </span>
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-[14px] font-bold text-slate-900 dark:text-white">
+                            {step.title}
+                          </span>
+                          <span
+                            className={cn(
+                              step.tone === 'warning'
+                                ? 'font-semibold text-amber-600 dark:text-amber-400'
+                                : 'font-medium text-slate-500 dark:text-white/60',
+                            )}
+                          >
+                            {step.desc}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {emptyStepLabels.length > 0 && (
+                    <p className="mt-3 text-[11px] font-medium text-slate-400 dark:text-white/40">
+                      None: {emptyStepLabels.join(' · ')}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </AlertDialogDescription>
+
+          <AlertDialogFooter className="gap-2 border-t border-slate-100 px-5 py-4 dark:border-white/10">
+            <AlertDialogCancel
               disabled={isExecuting}
-              className="w-full sm:w-auto border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 py-6 font-bold text-[13px]"
+              className="mt-0 w-full border border-slate-200 font-bold text-[13px] hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5 sm:w-auto"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              className="w-full sm:w-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white/90 font-bold py-6 shadow-md flex items-center justify-center gap-2 text-[13px]"
+              className="w-full sm:w-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white/90 font-bold shadow-md flex items-center justify-center gap-2 text-[13px]"
               onClick={(e) => {
                 e.preventDefault();
                 handleConfirm();

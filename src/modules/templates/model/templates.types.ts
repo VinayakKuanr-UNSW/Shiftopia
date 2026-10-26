@@ -114,8 +114,13 @@ export interface TemplateShift {
   startTime: string;
   endTime: string;
   netLength?: number;
+  /** The paid rest pauses (cl 37) only. */
   paidBreakDuration: number;
+  /** The meal break's length, or 0 where it is paid (security). */
   unpaidBreakDuration: number;
+  /** Meal-break start and end, `HH:mm`. Required once the shift runs over 5 hours (cl 36.1). */
+  breakStart?: string | null;
+  breakEnd?: string | null;
   requiredStaff?: number;
   skills: string[];
   licenses: string[];
@@ -277,24 +282,6 @@ export interface VersionCheckResult {
 export interface NameValidationResult {
   is_valid: boolean;
   error_message: string | null;
-}
-
-/* ============================================================
-      CAPTURE TEMPLATE TYPES
-      ============================================================ */
-
-export interface CaptureTemplateInput {
-  startDate: string;        // YYYY-MM-DD
-  endDate: string;          // YYYY-MM-DD
-  subDepartmentId: string;
-  templateName: string;
-}
-
-export interface CaptureTemplateResult {
-  templateId: string;
-  shiftsCaptured: number;
-  /** Full-time shifts in the range, left out because templates cannot hold them. */
-  shiftsSkippedFullTime: number;
 }
 
 /* ============================================================

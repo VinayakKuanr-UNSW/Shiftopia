@@ -284,8 +284,8 @@ graph TB
         Orchestrator["runV8Orchestrator (orchestrator/index.ts)"]
         Dormant["orchestrator/{batch,bidding,swapping,conflict-resolver}<br/>— built, zero callers, NOT part of the live path"]
     end
-    subgraph EdgeFixed["Edge Function evaluate-compliance — fixed 4-check subset only"]
-        FixedCheck["overlap + 48h weekly + 11h rest + qualification"]
+    subgraph DbEngine["Database EBA engine (2026-10-26)"]
+        DbCheck["eba_check_assignment → internal.eba_evaluate<br/>enforced at COMMIT by trg_shift_eba_compliance"]
     end
 
     Bidding --> Orchestrator
@@ -300,7 +300,7 @@ graph TB
     Result -.->|"BLOCKING, automatic"| RejectionLog[compliance_rejections table]
 ```
 
-**Corrected from an earlier pass of this diagram — see Ch. 12 for full detail.** The two AutoPilot Edge Function workers (`auto-approve-swaps`, `auto-assign-bids`) do **not** run the full 15-rule engine — they call a separately-deployed Edge Function with a fixed 4-check subset (overlap, 48h weekly cap, 11h rest, qualification), a documented v1 gap per those workers' own READMEs. The autoscheduler's commit-time validation *does* run the full rule set, but via a different wrapper (`V8SwapEngine`) that bypasses `runV8Orchestrator` — so its BLOCKING results are never written to `compliance_rejections`, unlike manual assign and bid/swap accept. `adapters/` is organized by protocol version (v1/v2), not by caller — the real per-caller input builders live in `planning/unified/compliance/input-builder.ts`. The `orchestrator/{batch,bidding,swapping,conflict-resolver}` subfolders implement a sophisticated global-optimization layer with zero production callers today.
+**Corrected from an earlier pass of this diagram — see Ch. 12 for full detail.** Since 2026-10-26 the database checks every shift write against the EBA at commit (`trg_shift_eba_compliance`), whichever path wrote it, and `auto-assign-bids` asks that engine directly; the `evaluate-compliance` edge function and its fixed 4-check subset (11h rest, 48h week) are retired. The autoscheduler's commit-time validation *does* run the full rule set, but via a different wrapper (`V8SwapEngine`) that bypasses `runV8Orchestrator` — so its BLOCKING results are never written to `compliance_rejections`, unlike manual assign and bid/swap accept. `adapters/` is organized by protocol version (v1/v2), not by caller — the real per-caller input builders live in `planning/unified/compliance/input-builder.ts`. The `orchestrator/{batch,bidding,swapping,conflict-resolver}` subfolders implement a sophisticated global-optimization layer with zero production callers today.
 
 **Structural rule confirmed (Verified, via Ch. 1 §2.4/2.9/2.10/2.11):** every caller module goes through the same `v8/orchestrator` + `v8/rules` — there is no second, independently-implemented compliance path. This is the platform's single most important architectural invariant; Ch. 12 (Compliance Engine deep dive) will document each rule in `rules/` individually.
 

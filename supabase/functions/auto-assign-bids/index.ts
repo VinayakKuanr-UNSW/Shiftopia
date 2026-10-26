@@ -10,16 +10,16 @@
 // -----------------------------------------------------------------------------
 // DECISION MODEL — APPROACH A (per-shift first-clear-bidder)
 // -----------------------------------------------------------------------------
-// This worker does NOT host the vendored v8 compliance engine. Instead it calls
-// the already-deployed `evaluate-compliance` Edge Function over HTTP, once per
-// (shift, bidder), mirroring the hardened CLIENT path (OpenBidsView handleAutoAssign):
+// This worker does NOT host the vendored v8 compliance engine. It asks the
+// database's EBA engine (`eba_check_assignment`, the rules every shift write
+// answers to) once per (shift, bidder):
 //
 //   for each open shift in scope (chronological):
 //     fetch its pending bids (FIFO; F3 fairness-debt owed bidders first)
 //     for each bidder (in that order):
-//       POST evaluate-compliance { employee_id=bidder, + the SHIFT's date/start/
-//         end/net_length_minutes + shift_id (for the qualification check) }
-//       first bidder whose status !== 'violated' WINS
+//       rpc eba_check_assignment(shift_id, bidder) — the engine reads the
+//         shift's times, break, role and qualifications from the row itself
+//       first bidder with no BLOCKING finding WINS
 //       ('warned' counts as eligible unless options.reject_warnings)
 //     commit that winner via the gateway (version-CAS, bounded retry)
 //
@@ -33,8 +33,8 @@
 // -----------------------------------------------------------------------------
 // This function imports ONLY: jsr:@supabase/supabase-js, Deno built-ins, and
 // ./types.ts. No @compliance, no _vendor engine, no import-map aliasing beyond
-// the supabase-js pin. It bundles under Deno like evaluate-compliance /
-// autoschedule-* (supabase-js + fetch + pure local TS).
+// the supabase-js pin. It bundles under Deno like the other functions
+// (supabase-js + fetch + pure local TS).
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import type {
@@ -77,9 +77,6 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 // no user JWT. Mirrors auto-approve-swaps / auto-verify-timesheets.
 const WORKER_SECRET = Deno.env.get('WORKER_SECRET');
 const TICK_BATCH = Number(Deno.env.get('BID_WORKER_BATCH_SIZE') ?? '10') || 10;
-
-// The deployed compliance engine we delegate to (per-bidder, over HTTP).
-const COMPLIANCE_FN_URL = `${SUPABASE_URL ?? ''}/functions/v1/evaluate-compliance`;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -150,33 +147,21 @@ interface Snapshot {
 }
 
 // =============================================================================
-// COMPLIANCE (deployed evaluate-compliance) — wire shapes
+// COMPLIANCE (eba_check_assignment) — wire shapes
 // =============================================================================
 
-/** Request body for the deployed evaluate-compliance function. */
-interface ComplianceRequest {
-  employee_id: string;
-  shift_date: string;
-  start_time: string; // 'HH:mm:ss'
-  end_time: string; // 'HH:mm:ss'
-  net_length_minutes: number; // gross − unpaid break (paid minutes)
-  shift_id?: string | null; // enables the qualification check
-  exclude_shift_id?: string | null; // unused here (bidder not yet on this shift)
-  override_role_id?: string | null;
-  override_skill_ids?: string[] | null;
-  override_license_ids?: string[] | null;
+/** One row of public.eba_check_assignment. */
+interface EbaCheckRow {
+  rule_id: string | null;
+  tier: string | null;
+  details: string | null;
 }
 
-/** Response from the deployed evaluate-compliance function. */
+/** A bidder's verdict, folded from the engine's rows. */
 interface ComplianceResult {
   status: 'passed' | 'violated' | 'warned' | 'unavailable';
   violations: string[];
   warnings: string[];
-  weeklyHours: number;
-  maxWeeklyHours: number;
-  checksPerformed: string[];
-  checksSkipped: string[];
-  qualificationViolations: unknown[];
 }
 
 // =============================================================================
@@ -306,7 +291,7 @@ async function handleStartRun(
     if (dryRun) {
       const preview: PreviewDecision[] = [];
       for (const shift of orderedShifts) {
-        preview.push(await decideShift(shift, snap, options));
+        preview.push(await decideShift(service, shift, snap, options));
       }
       const summary = summarizePreview(preview);
       await persistDryRunDecisions(service, runId, preview);
@@ -324,7 +309,7 @@ async function handleStartRun(
     // ── (G) COMMIT path: decide each shift, then commit its winner (if any). ──
     const summary = emptySummary();
     for (const shift of orderedShifts) {
-      const decision = await decideShift(shift, snap, options);
+      const decision = await decideShift(service, shift, snap, options);
 
       if (decision.outcome !== 'ASSIGNED' || !decision.winner) {
         // No clear bidder — record SKIPPED_* (engine-side; no gateway call).
@@ -370,10 +355,11 @@ async function handleStartRun(
 }
 
 // =============================================================================
-// DECIDE — per-shift first-clear-bidder via evaluate-compliance (APPROACH A)
+// DECIDE — per-shift first-clear-bidder via eba_check_assignment (APPROACH A)
 // =============================================================================
 
 async function decideShift(
+  service: SupabaseClient,
   shift: ShiftRow,
   snap: Snapshot,
   options: AssignmentOptions,
@@ -388,26 +374,11 @@ async function decideShift(
     };
   }
 
-  // Per-bid compliance payload constants for this shift (identical per bidder).
-  const startHHmmss = hhmmss(shift.start_time);
-  const endHHmmss = hhmmss(shift.end_time);
-  const netMinutes = paidMinutes(shift);
-
   const runnersUp: PreviewDecision['runners_up'] = [];
   const rejectWarnings = options.reject_warnings ?? false;
 
   for (const bid of bids) {
-    const compliance = await evaluateCompliance({
-      employee_id: bid.employee_id,
-      shift_date: shift.shift_date,
-      start_time: startHHmmss,
-      end_time: endHHmmss,
-      net_length_minutes: netMinutes,
-      shift_id: shift.id, // R4/R5: enables the qualification check
-      override_role_id: shift.role_id,
-      override_skill_ids: shift.required_skills,
-      override_license_ids: shift.required_licenses,
-    });
+    const compliance = await evaluateCompliance(service, shift.id, bid.employee_id);
 
     // 'violated' = blocking ⇒ this bidder is out. 'warned' is eligible unless the
     // run explicitly rejects warnings. 'passed' is clear. 'unavailable' means the
@@ -449,45 +420,34 @@ async function decideShift(
     outcome: 'SKIPPED_BLOCKED',
     winner: null,
     runners_up: runnersUp,
-    reason: 'All bids blocked by compliance (evaluate-compliance).',
+    reason: 'All bids blocked by compliance (eba_check_assignment).',
   };
 }
 
 /**
- * Call the deployed evaluate-compliance Edge Function over HTTP under the service
- * role. A transport/HTTP failure is mapped to 'unavailable' (fail-closed: the
- * bidder is treated as not eligible rather than silently passed).
+ * Ask the database's EBA engine whether this bidder may work this shift. The
+ * service role passes its guard. An RPC failure is 'unavailable' (fail-closed:
+ * the bidder is treated as not eligible rather than silently passed).
  */
-async function evaluateCompliance(body: ComplianceRequest): Promise<ComplianceResult> {
-  try {
-    const res = await fetch(COMPLIANCE_FN_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        apikey: SERVICE_ROLE_KEY ?? '',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      return unavailableResult(`evaluate-compliance HTTP ${res.status}`);
-    }
-    return (await res.json()) as ComplianceResult;
-  } catch (e) {
-    return unavailableResult(`evaluate-compliance fetch failed: ${String(e)}`);
+async function evaluateCompliance(
+  service: SupabaseClient,
+  shiftId: string,
+  employeeId: string,
+): Promise<ComplianceResult> {
+  const { data, error } = await service.rpc('eba_check_assignment', {
+    p_shift_id: shiftId,
+    p_employee_id: employeeId,
+  });
+  if (error) {
+    return { status: 'unavailable', violations: [], warnings: [`eba_check_assignment: ${error.message}`] };
   }
-}
-
-function unavailableResult(reason: string): ComplianceResult {
+  const rows = (data ?? []) as EbaCheckRow[];
+  const violations = rows.filter((r) => r.tier === 'BLOCKING').map((r) => r.details ?? r.rule_id ?? 'EBA rule');
+  const warnings = rows.filter((r) => r.tier === 'WARNING').map((r) => r.details ?? r.rule_id ?? 'EBA rule');
   return {
-    status: 'unavailable',
-    violations: [],
-    warnings: [reason],
-    weeklyHours: 0,
-    maxWeeklyHours: 48,
-    checksPerformed: [],
-    checksSkipped: ['overlap', 'weekly_hours', 'rest_period', 'qualification'],
-    qualificationViolations: [],
+    status: violations.length > 0 ? 'violated' : warnings.length > 0 ? 'warned' : 'passed',
+    violations,
+    warnings,
   };
 }
 
@@ -726,8 +686,8 @@ async function handleRollback(
 //
 // APPROACH A: the snapshot now only needs the open shifts, their pending bids
 // (ordered FIFO with the F3 fairness-debt boost), and the bidders' display
-// names. Per-bidder compliance is delegated to evaluate-compliance at decision
-// time (it reads the bidder's full schedule itself, under its own service role),
+// names. Per-bidder compliance is delegated to eba_check_assignment at decision
+// time (it reads the bidder's full schedule itself),
 // so we no longer hydrate V8 employee contexts or existing-shift windows here.
 // =============================================================================
 
@@ -871,7 +831,7 @@ async function loadFairnessDebts(
 // AUTOPILOT — POST /tick autonomous queue drain (ON/OFF)
 //
 // Drains bid_review_queue: for each queued shift, reuse decideShift() (first
-// compliance-clear bidder via evaluate-compliance) to PICK a winner, then hand
+// compliance-clear bidder via eba_check_assignment) to PICK a winner, then hand
 // it to sm_bid_auto_decide, which owns the commit (idempotency / kill-switch,
 // then delegates to the hardened sm_select_bid_winner). This worker never
 // writes shifts directly.
@@ -1037,7 +997,7 @@ async function processTickRow(service: SupabaseClient, row: BidQueueRow, summary
     // Reuse the request-run selection brain: first compliance-clear bidder.
     // AutoPilot NEVER auto-assigns a bidder with a compliance warning — any warned
     // bidder is skipped and, if no clear bidder exists, the shift routes to a manager.
-    const decision = await decideShift(shift, snap, { reject_warnings: true });
+    const decision = await decideShift(service, shift, snap, { reject_warnings: true });
     const winnerId = decision.outcome === 'ASSIGNED' ? decision.winner?.employee_id ?? null : null;
     const kind = winnerId ? 'AUTO_APPROVE' : 'MANUAL_REVIEW';
     const winnerName = decision.winner?.name ?? null;
@@ -1299,40 +1259,6 @@ function summarizePreview(preview: PreviewDecision[]): RunSummary {
   const s = emptySummary();
   for (const p of preview) bumpSummary(s, p.outcome);
   return s;
-}
-
-/** gross − unpaid break (paid minutes), for evaluate-compliance weekly projection. */
-function paidMinutes(s: ShiftRow): number {
-  const gross = minutesBetween(s.start_time, s.end_time);
-  return Math.max(0, gross - (s.unpaid_break_minutes ?? 0));
-}
-
-function minutesBetween(start: string, end: string): number {
-  const sm = toMinutes(start);
-  const em = toMinutes(end);
-  // Overnight shift: end < start ⇒ wraps midnight.
-  return em >= sm ? em - sm : 24 * 60 - sm + em;
-}
-
-function toMinutes(t: string): number {
-  const [h, m] = hhmm(t).split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-function hhmm(t: string): string {
-  // Accepts 'HH:mm', 'HH:mm:ss', or a full ISO timestamp; returns 'HH:mm'.
-  if (/^\d{2}:\d{2}/.test(t)) return t.slice(0, 5);
-  const d = new Date(t);
-  if (!isNaN(d.getTime())) {
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  }
-  return t;
-}
-
-/** 'HH:mm:ss' — the shape the overlap/rest RPCs (via evaluate-compliance) expect. */
-function hhmmss(t: string): string {
-  if (/^\d{2}:\d{2}:\d{2}/.test(t)) return t.slice(0, 8);
-  return `${hhmm(t)}:00`;
 }
 
 /** Stable sort (Array.prototype.sort is spec-stable in V8/Deno, but be explicit). */

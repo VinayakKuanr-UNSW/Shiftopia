@@ -179,6 +179,12 @@ export const TimesheetPage: React.FC = () => {
         netLengthMinutes: shift.netLengthMinutes,
         paidBreak: String(shift.paidBreakMinutes),
         unpaidBreak: String(shift.unpaidBreakMinutes),
+        rosteredBreakStart: shift.rosteredBreakStart,
+        rosteredBreakEnd: shift.rosteredBreakEnd,
+        actualBreakStart: shift.actualBreakStart,
+        actualBreakEnd: shift.actualBreakEnd,
+        breakVarianceMinutes: shift.breakVarianceMinutes,
+        hasBreakVarianceFlag: shift.hasBreakVarianceFlag,
         approximatePay: shift.payBasis === 'salary'
             ? 'Salaried'
             : shift.estimatedPay ? `$${shift.estimatedPay.toFixed(2)}` : '-',

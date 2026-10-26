@@ -30,10 +30,42 @@ import type {
     Finding,
     IsoWeekday,
     LeaveDay,
+    RawLeaveDay,
 } from './types';
 
 /** cl 35.x(a) — the weekly basis the ladder is built from. */
 export const DEFAULT_WEEKLY_HOURS = 38;
+
+/**
+ * Ordinary hours per weekday, from the contract: weekly hours spread over
+ * Monday–Friday (7.6h for 38h full-time).
+ *
+ * cl 44.7 pays annual leave for "ordinary hours of work in the period" and
+ * cl 56.4 pays a public holiday someone "would ordinarily be rostered to work";
+ * crediting either at 0h is wrong, and let the copy ceiling ignore leave
+ * entirely. Monday–Friday is the full-time office week; a leave day that falls
+ * on a weekend credits nothing, as it would have without the leave.
+ */
+export function contractHoursByWeekday(contractedWeeklyHours: number | null | undefined): Map<IsoWeekday, number> {
+    const daily = (contractedWeeklyHours && contractedWeeklyHours > 0 ? contractedWeeklyHours : DEFAULT_WEEKLY_HOURS) / 5;
+    return new Map<IsoWeekday, number>([[1, daily], [2, daily], [3, daily], [4, daily], [5, daily]]);
+}
+
+/**
+ * How many hours each leave day discharges: what the employee ordinarily works
+ * on that weekday. Leave on a day they do not work discharges nothing — there
+ * was no obligation there to discharge.
+ */
+export function attachLeaveCredit(
+    raw: readonly RawLeaveDay[],
+    hoursByWeekday: ReadonlyMap<IsoWeekday, number>,
+    weekdayOf: (date: string) => IsoWeekday,
+): LeaveDay[] {
+    return raw.map(day => ({
+        ...day,
+        creditHours: hoursByWeekday.get(weekdayOf(day.date)) ?? 0,
+    }));
+}
 
 export interface RequirementInput {
     facts: EmployeeContractFacts;

@@ -104,6 +104,67 @@ describe('validateBillableEdit', () => {
             expect(r.ok).toBe(true);
         });
     });
+
+    describe('actual meal break window', () => {
+        it('accepts a valid actual break between 30 and 60 minutes inside the shift', () => {
+            const r = validateBillableEdit({
+                ...clean,
+                actualBreakStart: '13:00',
+                actualBreakEnd: '13:30',
+                rosteredBreakStart: '13:00',
+                rosteredBreakEnd: '13:30',
+            });
+            expect(r.ok).toBe(true);
+            expect(r.normalizedBreakStart).toBe('13:00');
+            expect(r.normalizedBreakEnd).toBe('13:30');
+            expect(r.hasBreakVarianceFlag).toBe(false);
+        });
+
+        it('rejects an actual break shorter than 30 minutes', () => {
+            const r = validateBillableEdit({
+                ...clean,
+                actualBreakStart: '13:00',
+                actualBreakEnd: '13:20',
+            });
+            expect(r.ok).toBe(false);
+            expect(r.error).toMatch(/between 30 and 60 minutes/i);
+        });
+
+        it('rejects an actual break longer than 60 minutes', () => {
+            const r = validateBillableEdit({
+                ...clean,
+                actualBreakStart: '13:00',
+                actualBreakEnd: '14:15',
+            });
+            expect(r.ok).toBe(false);
+            expect(r.error).toMatch(/between 30 and 60 minutes/i);
+        });
+
+        it('rejects an actual break outside the shift span', () => {
+            const r = validateBillableEdit({
+                ...clean,
+                editedStart: '09:00',
+                editedEnd: '17:00',
+                actualBreakStart: '17:30',
+                actualBreakEnd: '18:00',
+            });
+            expect(r.ok).toBe(false);
+            expect(r.error).toMatch(/fall within/i);
+        });
+
+        it('flags when actual break deviates > 15 minutes from rostered break', () => {
+            const r = validateBillableEdit({
+                ...clean,
+                actualBreakStart: '14:00',
+                actualBreakEnd: '14:30',
+                rosteredBreakStart: '12:00',
+                rosteredBreakEnd: '12:30',
+            });
+            expect(r.ok).toBe(true);
+            expect(r.hasBreakVarianceFlag).toBe(true);
+            expect(r.breakVarianceMinutes).toBe(120);
+        });
+    });
 });
 
 describe('billableVarianceVsRoster (approval gate)', () => {

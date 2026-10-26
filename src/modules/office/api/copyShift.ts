@@ -36,6 +36,9 @@ export interface CopySourceShift {
     endTime: string;
     unpaidBreakMinutes: number;
     paidBreakMinutes: number;
+    /** The meal-break window, `HH:mm`, copied as-is: a copy is the same shift on another day. */
+    breakStart: string | null;
+    breakEnd: string | null;
     roleId: string;
 }
 
@@ -91,6 +94,8 @@ export async function copyShiftToDates(
                 end_time: source.endTime,
                 unpaid_break_minutes: source.unpaidBreakMinutes,
                 paid_break_minutes: source.paidBreakMinutes,
+                break_start: source.breakStart,
+                break_end: source.breakEnd,
                 role_id: source.roleId,
                 target_employment_type: 'FT',
                 assigned_employee_id: source.employeeId,

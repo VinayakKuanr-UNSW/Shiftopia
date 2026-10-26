@@ -131,6 +131,8 @@ const SHIFT_SELECT = `
   break_minutes,
   paid_break_minutes,
   unpaid_break_minutes,
+  break_start,
+  break_end,
   net_length_minutes,
   total_hours,
   timezone,
@@ -241,10 +243,15 @@ export class ShiftRangeIncompleteError extends Error {
     }
 }
 
-/** The fields bulk publish needs to route and compliance-check a shift. */
+/**
+ * The fields bulk publish needs to route and compliance-check a shift. `version`
+ * is the one the check saw: the emergency write sends it as its CAS, so a shift
+ * changed after its check is refused rather than published unchecked.
+ */
 export type PublishCheckRow = Pick<
     Shift,
-    'id' | 'shift_date' | 'start_time' | 'end_time' | 'start_at' | 'unpaid_break_minutes' | 'assigned_employee_id'
+    | 'id' | 'shift_date' | 'start_time' | 'end_time' | 'start_at' | 'unpaid_break_minutes'
+    | 'assigned_employee_id' | 'target_employment_type' | 'version'
 >;
 
 export interface DateRangeFilters {
@@ -620,7 +627,7 @@ export const shiftsQueries = {
         const results = await Promise.all(batches.map(async (ids) => {
             const { data, error } = await supabase
                 .from('shifts')
-                .select('id, shift_date, start_time, end_time, start_at, unpaid_break_minutes, assigned_employee_id')
+                .select('id, shift_date, start_time, end_time, start_at, unpaid_break_minutes, assigned_employee_id, target_employment_type, version')
                 .in('id', ids)
                 .is('deleted_at', null);
             if (error) throw new Error(error.message);

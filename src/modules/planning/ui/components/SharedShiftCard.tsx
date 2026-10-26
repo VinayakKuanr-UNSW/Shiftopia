@@ -58,6 +58,10 @@ interface SharedShiftCardProps {
     netLength: number; // in minutes
     paidBreak: number;
     unpaidBreak: number;
+    rosteredBreakStart?: string | null;
+    rosteredBreakEnd?: string | null;
+    actualBreakStart?: string | null;
+    actualBreakEnd?: string | null;
     timerText?: string | null;
     isExpired?: boolean;
     lifecycleStatus?: string;
@@ -445,6 +449,10 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     netLength,
     paidBreak,
     unpaidBreak,
+    rosteredBreakStart,
+    rosteredBreakEnd,
+    actualBreakStart,
+    actualBreakEnd,
     timerText,
     isExpired,
     lifecycleStatus = 'Published',
@@ -985,7 +993,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                     Timings: {startTime} – {endTime}
                                 </div>
                                 <div className="text-[11px] font-mono font-bold text-muted-foreground">
-                                    Breaks: Paid {paidBreak}m · Unpaid {unpaidBreak}m
+                                    Breaks: Paid {paidBreak}m · Unpaid {unpaidBreak}m{rosteredBreakStart && rosteredBreakEnd ? ` (${rosteredBreakStart}–${rosteredBreakEnd})` : ''}
                                 </div>
                                 <div className="text-[13px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                                     {/* The SCHEDULED net, derived from the SCHEDULED span — NOT the
@@ -1044,7 +1052,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                         Timings: {clockIn || '--:--'} – {clockOut || '--:--'}
                                     </div>
                                     <div className="text-[11px] font-mono font-bold text-muted-foreground">
-                                        Breaks: {clockIn || clockOut ? `Paid ${paidBreak}m · Unpaid ${unpaidBreak}m` : '--'}
+                                        Breaks: {clockIn || clockOut ? `Paid ${paidBreak}m · Unpaid ${unpaidBreak}m${actualBreakStart && actualBreakEnd ? ` (${actualBreakStart}–${actualBreakEnd})` : ''}` : '--'}
                                     </div>
                                     <div className={cn("text-[13px] font-mono font-semibold", (clockIn && clockOut) ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/40")}>
                                         Gross: {clockIn && clockOut ? formatMins(calculateGrossMinutes(clockIn, clockOut)) : '--'} · Net: {clockIn && clockOut ? formatMins(Math.max(0, (calculateGrossMinutes(clockIn, clockOut) || 0) - unpaidBreak)) : '--'}
@@ -1153,7 +1161,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                         />
                                     </div>
                                     <div className="text-[11px] font-mono font-bold text-muted-foreground">
-                                        Breaks: Paid {paidBreak}m · Unpaid {unpaidBreak}m
+                                        Breaks: Paid {paidBreak}m · Unpaid {unpaidBreak}m{actualBreakStart && actualBreakEnd ? ` (${actualBreakStart}–${actualBreakEnd})` : (rosteredBreakStart && rosteredBreakEnd ? ` (${rosteredBreakStart}–${rosteredBreakEnd})` : '')}
                                     </div>
                                     <div className="text-[13px] font-mono font-semibold text-indigo-600 dark:text-indigo-400">
                                         Gross: {formatMins(calculateGrossMinutes(adjustedStart || clockIn || startTime, adjustedEnd || clockOut || endTime))} · Net: {formatMins(Math.max(0, (calculateGrossMinutes(adjustedStart || clockIn || startTime, adjustedEnd || clockOut || endTime) || 0) - unpaidBreak))}

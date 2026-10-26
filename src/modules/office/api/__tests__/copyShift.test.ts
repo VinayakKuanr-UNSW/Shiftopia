@@ -31,7 +31,8 @@ const { copyShiftToDates, COPY_CONCURRENCY } = await import('../copyShift');
 
 const source = {
     employeeId: 'e1', organizationId: 'o', departmentId: 'd', subDepartmentId: 's',
-    startTime: '08:00', endTime: '16:36', unpaidBreakMinutes: 30, paidBreakMinutes: 0, roleId: 'r',
+    startTime: '08:00', endTime: '16:36', unpaidBreakMinutes: 30, paidBreakMinutes: 0,
+    breakStart: '12:00', breakEnd: '12:30', roleId: 'r',
 };
 const dates = Array.from({ length: 19 }, (_, i) => `2026-10-${String(i + 5).padStart(2, '0')}`);
 

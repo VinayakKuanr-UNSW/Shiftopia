@@ -45,12 +45,17 @@ describe('the target picker', () => {
         expect(targetEmploymentTypeOptions('FT', { groupType: 'office' })).toEqual(['FT']);
     });
 
-    it('never offers full-time outside Office, or in a template', () => {
+    it('never offers full-time outside Office', () => {
         expect(targetEmploymentTypeOptions(undefined, { groupType: 'convention_centre' }))
             .toEqual(['PT', 'Casual']);
-        // enforce_no_ft_template_shifts: templates cannot hold FT, even in Office.
-        expect(targetEmploymentTypeOptions(undefined, { groupType: 'office', isTemplate: true }))
-            .toEqual(['PT', 'Casual']);
+    });
+
+    it('locks Office to full-time in templates too', () => {
+        // Full-time rostering moved into templates when Baseline FT was retired;
+        // the template form must not offer PT / Casual in Office. (The picker
+        // call sites are pinned to the group alone further down.)
+        expect(targetAfterGroupChange(undefined, 'office')).toBe('FT');
+        expect(targetAfterGroupChange('Casual', 'office')).toBe('FT');
     });
 
     it('keeps a legacy out-of-rule value renderable', () => {
@@ -61,7 +66,6 @@ describe('the target picker', () => {
         expect(targetAfterGroupChange('Casual', 'office')).toBe('FT');
         expect(targetAfterGroupChange('FT', 'convention_centre')).toBeUndefined();
         expect(targetAfterGroupChange('PT', 'convention_centre')).toBe('PT');
-        expect(targetAfterGroupChange('FT', 'office', true)).toBeUndefined();
     });
 
     it('keeps an existing full-time shift renderable anywhere', () => {
@@ -72,13 +76,13 @@ describe('the target picker', () => {
     });
 
     it.each([['mobile sheet', SHEET], ['desktop drawer', DRAWER]])(
-        'the %s picker derives its options from the group and template mode',
+        'the %s picker derives its options from the group alone (templates included)',
         (_label, path) => {
             // Both variants render the picker, so a change to one and not the
             // other leaves the two devices disagreeing.
             const src = stripComments(read(path));
             expect(src).toMatch(
-                /targetEmploymentTypeOptions\(field\.value,\s*\{\s*groupType:\s*watchGroup,\s*isTemplate:\s*isTemplateMode,?\s*\}\)/);
+                /targetEmploymentTypeOptions\(field\.value,\s*\{\s*groupType:\s*watchGroup,?\s*\}\)/);
             expect(src).not.toMatch(/options=\{TARGET_EMPLOYMENT_TYPES\.map/);
         },
     );

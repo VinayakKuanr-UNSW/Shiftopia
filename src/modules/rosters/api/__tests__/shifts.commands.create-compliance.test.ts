@@ -2,13 +2,13 @@
  * Creating a shift WITH an employee must not save it unchecked.
  *
  * `createShift` gates an assigned shift on `validateShiftCompliance`. When the
- * `evaluate-compliance` edge function was unreachable, the local fallback
- * reported `passed`, so the shift was saved with nobody having checked rest
- * gaps, weekly hours or qualifications. Decision (2026-10-18): block it, the
- * same as Publish. An unassigned shift has no person to check and still saves.
+ * compliance engine was unreachable, the local fallback reported `passed`, so
+ * the shift was saved with nobody having checked rest gaps, weekly hours or
+ * qualifications. Decision (2026-10-18): block it, the same as Publish. An
+ * unassigned shift has no person to check and still saves.
  *
- * The REAL compliance service runs; only `supabase.functions.invoke` and the
- * RPC client are mocked.
+ * The REAL compliance service runs; only `supabase.rpc` (eba_check_assignment,
+ * answered in verdicts through engineRowsFor) and the RPC client are mocked.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -17,7 +17,8 @@ const h = vi.hoisted(() => ({
     invoke: (async () => ({ data: null, error: null })) as (...a: any[]) => Promise<any>,
 }));
 
-vi.mock('@/platform/supabase/client', () => {
+vi.mock('@/platform/supabase/client', async () => {
+    const { engineRowsFor } = await import('@/test/ebaEngineRows');
     const chain: any = new Proxy({}, {
         get(_t, prop) {
             if (prop === 'then') return (res: any) => Promise.resolve({ data: [{ id: 'shift-1' }], error: null }).then(res);
@@ -28,7 +29,7 @@ vi.mock('@/platform/supabase/client', () => {
     return {
         supabase: {
             from: () => chain,
-            functions: { invoke: (...a: any[]) => h.invoke(...a) },
+            rpc: async (...a: any[]) => engineRowsFor(await h.invoke(...a)),
         },
     };
 });
@@ -44,7 +45,8 @@ vi.mock('../shifts.queries', () => ({
     shiftsQueries: {
         getShiftById: async (id: string) => ({
             id, version: 1, shift_date: '2099-01-01', start_time: '09:00', end_time: '17:30',
-            unpaid_break_minutes: 30, paid_break_minutes: 30, is_training: false, role_id: null, roles: null,
+            unpaid_break_minutes: 30, break_start: '13:00', break_end: '13:30', paid_break_minutes: 30,
+            is_training: false, role_id: null, roles: null,
         }),
     },
 }));
@@ -61,6 +63,8 @@ const baseShift = {
     start_time: '09:00',
     end_time: '17:30',
     unpaid_break_minutes: 30,
+    break_start: '13:00',
+    break_end: '13:30',
     paid_break_minutes: 30,
 };
 const passed = { status: 'passed', violations: [], warnings: [], weeklyHours: 8, maxWeeklyHours: 48, checksPerformed: ['overlap'], checksSkipped: [], qualificationViolations: [] };

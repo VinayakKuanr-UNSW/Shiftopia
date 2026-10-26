@@ -19,6 +19,10 @@ function shift(overrides: Partial<ShapeInput> = {}): ShapeInput {
     };
 }
 
+/** A meal-break window and the unpaid minutes it deducts. */
+const meal = (break_start: string, break_end: string, unpaid_break_minutes: number) =>
+    ({ break_start, break_end, unpaid_break_minutes });
+
 const ids = (r: ReturnType<typeof evaluateShiftShape>) => r.hits.map(h => h.rule_id).sort();
 const has = (r: ReturnType<typeof evaluateShiftShape>, id: string) => r.hits.some(h => h.rule_id === id);
 
@@ -144,31 +148,102 @@ describe('meal break (cl 36.1)', () => {
     it('is satisfied by the 30m minimum at ANY shift length', () => {
         // Regression: a 10h+ shift used to demand 60m, which cl 36.1 does not say.
         for (const end of ['15:30', '18:00', '20:00']) {
-            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: end, unpaid_break_minutes: 30, paid_break_minutes: 30 }));
+            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: end, ...meal('10:00', '10:30', 30), paid_break_minutes: 30 }));
             expect(has(r, 'SHAPE_MEAL_BREAK'), `end=${end}`).toBe(false);
         }
     });
 
-    it('accepts any value across the lawful 30-60 range', () => {
-        for (const mins of [30, 45, 60]) {
-            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '18:00', unpaid_break_minutes: mins, paid_break_minutes: 30 }));
+    it('accepts any length across the lawful 30-60 range', () => {
+        for (const [to, mins] of [['10:30', 30], ['10:45', 45], ['11:00', 60]] as const) {
+            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '18:00', ...meal('10:00', to, mins), paid_break_minutes: 30 }));
             expect(has(r, 'SHAPE_MEAL_BREAK'), `${mins}m`).toBe(false);
             expect(has(r, 'SHAPE_MEAL_BREAK_CEILING'), `${mins}m`).toBe(false);
         }
     });
 
-    it('offers the whole lawful range as fixes, not just the floor', () => {
+    it('BLOCKS a break under 30m whatever the shift length, as the table does', () => {
+        // Under 30 minutes is not a meal break at all. A 4h shift needs none, but
+        // one it does carry must still be lawful — the CHECK refuses it either way.
+        const r = evaluateShiftShape(shift({ end_time: '13:20', ...meal('11:00', '11:20', 20), paid_break_minutes: 15 }));
+        expect(has(r, 'SHAPE_MEAL_BREAK')).toBe(true);
+        expect(r.passed).toBe(false);
+    });
+
+    it('offers no one-click time — when the break is taken is the manager\'s call', () => {
         const r = evaluateShiftShape(shift({ end_time: '15:00' }));
-        const fix = r.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK')!.fix!;
-        expect(fix.value).toBe(30);
-        expect(fix.options?.map(o => o.value)).toEqual([30, 45, 60]);
+        expect(r.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK')!.fix).toBeUndefined();
     });
 
     it('BLOCKS a meal break over 60m at any shift length', () => {
         for (const end of ['16:00', '20:00']) {
-            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: end, unpaid_break_minutes: 90 }));
+            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: end, ...meal('10:00', '11:30', 90) }));
             expect(has(r, 'SHAPE_MEAL_BREAK_CEILING'), `end=${end}`).toBe(true);
             expect(r.passed).toBe(false);
+        }
+    });
+});
+
+describe('meal break window', () => {
+    it('BLOCKS unpaid minutes with no start and end — pay depends on where they fall', () => {
+        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '15:00', unpaid_break_minutes: 30, paid_break_minutes: 30 }));
+        expect(has(r, 'SHAPE_BREAK_WINDOW')).toBe(true);
+        expect(r.passed).toBe(false);
+    });
+
+    it('BLOCKS a window with only one end', () => {
+        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '15:00', break_start: '10:00', unpaid_break_minutes: 30 }));
+        expect(r.hits.find(h => h.rule_id === 'SHAPE_BREAK_WINDOW')?.field).toBe('break_end');
+    });
+
+    it('BLOCKS a window that is not strictly inside the shift', () => {
+        for (const [from, to] of [['06:00', '06:30'], ['14:30', '15:00'], ['16:00', '16:30']]) {
+            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '15:00', ...meal(from, to, 30), paid_break_minutes: 30 }));
+            expect(has(r, 'SHAPE_BREAK_WINDOW'), `${from}-${to}`).toBe(true);
+        }
+    });
+
+    it('BLOCKS unpaid minutes that disagree with the window', () => {
+        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '15:00', break_start: '10:00', break_end: '10:30', unpaid_break_minutes: 45, paid_break_minutes: 30 }));
+        expect(has(r, 'SHAPE_BREAK_WINDOW')).toBe(true);
+    });
+
+    it('resolves a window across midnight', () => {
+        const r = evaluateShiftShape(shift({ start_time: '20:00', end_time: '04:30', ...meal('00:30', '01:00', 30), paid_break_minutes: 30 }));
+        expect(has(r, 'SHAPE_BREAK_WINDOW')).toBe(false);
+        expect(has(r, 'SHAPE_MEAL_BREAK')).toBe(false);
+        expect(r.net_minutes).toBe(480);
+    });
+});
+
+describe('meal break timing (cl 36.2)', () => {
+    // "will endeavour to ensure all Team Members do not work in excess of five
+    // (5) hours without being provided with a meal break" — an endeavour, with an
+    // operational exception in the same sentence, so it warns and never blocks.
+    const at = (from: string, to: string) => shift({ start_time: '06:00', end_time: '15:00', ...meal(from, to, 30), paid_break_minutes: 30 });
+
+    it('warns, never blocks, when more than 5h is worked before the break', () => {
+        const r = evaluateShiftShape(at('11:30', '12:00'));
+        const hit = r.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK_TIMING')!;
+        expect(hit.status).toBe('WARNING');
+        expect(hit.calculation?.minutes_before_break).toBe(330);
+        expect(r.passed).toBe(true);
+    });
+
+    it('warns when more than 5h is worked after it', () => {
+        const r = evaluateShiftShape(at('08:00', '08:30'));
+        expect(r.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK_TIMING')?.calculation?.minutes_after_break).toBe(390);
+    });
+
+    it('is silent when neither stretch passes 5h', () => {
+        expect(has(evaluateShiftShape(at('10:00', '10:30')), 'SHAPE_MEAL_BREAK_TIMING')).toBe(false);
+    });
+
+    it('always warns on a shift too long to split into two 5h stretches', () => {
+        // 11h worked around one meal break cannot be two stretches of five; the
+        // agreement grants only one break, so the warning is the truth about it.
+        for (const [from, to] of [['10:00', '11:00'], ['11:00', '12:00'], ['12:00', '13:00']]) {
+            const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '18:00', ...meal(from, to, 60), paid_break_minutes: 30 }));
+            expect(has(r, 'SHAPE_MEAL_BREAK_TIMING'), from).toBe(true);
         }
     });
 });
@@ -220,25 +295,43 @@ describe('rest pauses (cl 37)', () => {
 });
 
 describe('one-click remedies', () => {
-    it('offers every blocking finding a fix that actually resolves it', () => {
+    /** The rules whose remedy is placing the meal break — the manager's call, never a fix. */
+    const MEAL_RULES = new Set(['SHAPE_MEAL_BREAK', 'SHAPE_BREAK_WINDOW', 'SHAPE_MEAL_BREAK_CEILING']);
+    const plus = (t: string, mins: number) => {
+        const m = (Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)) + mins) % 1440;
+        return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    };
+
+    it('never offers a meal-break time as a fix', () => {
+        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '18:00', unpaid_break_minutes: 30 }));
+        expect(r.hits.filter(h => MEAL_RULES.has(h.rule_id)).every(h => !h.fix)).toBe(true);
+    });
+
+    it('offers every other blocking finding a fix that actually resolves it', () => {
         const cases: ShapeInput[] = [
             shift({ end_time: '10:00' }),                                              // under min engagement
             shift({ target_employment_type: 'FT', end_time: '12:00' }),                // under FT floor
             shift({ start_time: '06:00', end_time: '19:00' }),                         // over spread
             shift({ start_time: '06:00', end_time: '18:00' }),                         // meal + rest pauses
-            shift({ end_time: '16:00', unpaid_break_minutes: 90 }),                    // over break ceiling
         ];
 
         for (const c of cases) {
             let current = { ...c };
             // Applying each suggested fix in turn must reach a passing shape —
             // a remedy that does not resolve its own finding is worse than none.
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < 8; i++) {
                 const r = evaluateShiftShape(current);
                 if (r.passed) break;
                 const withFix = r.hits.find(h => h.blocking && h.fix);
-                expect(withFix, `no fix offered for ${r.hits.map(h => h.rule_id).join()}`).toBeTruthy();
-                current = { ...current, [withFix!.fix!.field]: withFix!.fix!.value } as ShapeInput;
+                if (!withFix) {
+                    // Only the meal break may be left without a fix. Stand in for
+                    // the manager with a lawful 30m break four hours in.
+                    expect(r.hits.filter(h => h.blocking).map(h => h.rule_id).every(id => MEAL_RULES.has(id)),
+                        `no fix offered for ${r.hits.map(h => h.rule_id).join()}`).toBe(true);
+                    current = { ...current, ...meal(plus(current.start_time, 240), plus(current.start_time, 270), 30) };
+                    continue;
+                }
+                current = { ...current, [withFix.fix!.field]: withFix.fix!.value } as ShapeInput;
             }
             expect(evaluateShiftShape(current).passed, `unresolved: ${JSON.stringify(current)}`).toBe(true);
         }
@@ -347,7 +440,7 @@ describe('result contract', () => {
         // that governs split shifts and is measured EXCLUDING breaks. Refusing
         // a lawful roster is a worse failure than flagging one, so the house
         // guardrail warns and the shift saves.
-        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '19:00', unpaid_break_minutes: 60, paid_break_minutes: 30 }));
+        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '19:00', ...meal('11:00', '12:00', 60), paid_break_minutes: 30 }));
         expect(r.net_minutes).toBe(720);
         expect(has(r, 'SHAPE_MAX_DURATION')).toBe(false);
         expect(has(r, 'SHAPE_SPREAD_GUARDRAIL')).toBe(true);
@@ -356,7 +449,7 @@ describe('result contract', () => {
     });
 
     it('allows an exactly-12h span', () => {
-        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '18:00', unpaid_break_minutes: 60, paid_break_minutes: 30 }));
+        const r = evaluateShiftShape(shift({ start_time: '06:00', end_time: '18:00', ...meal('11:00', '12:00', 60), paid_break_minutes: 30 }));
         expect(has(r, 'SHAPE_SPREAD_GUARDRAIL')).toBe(false);
         expect(r.passed).toBe(true);
     });

@@ -568,3 +568,39 @@ describe('payContractOn — the linked contract on the shift date', () => {
     expect(payContractOn({ ...contract, is_trainee: true }, [], '2026-10-08').usesWageScheme).toBe(true);
   });
 });
+
+describe('mapShiftRowToGrossPayInput — where the meal break was taken', () => {
+  // Monday 14:00–22:30, casual, a 30-minute unpaid break. Taken at 22:00 the
+  // break is the last half hour and nothing is worked after 22:00. Taken at
+  // 18:00, 22:00–22:30 is worked, and that half hour is night work (cl 43).
+  const evening = (actualBreakStart: string | null, rosteredBreakStart: string | null) => baseRow({
+    start_time: '14:00',
+    end_time: '22:30',
+    unpaid_break_minutes: 30,
+    break_start: rosteredBreakStart,
+    net_length_minutes: 480,
+    scheduled_length_minutes: 510,
+    _employmentType: 'casual',
+    _timesheet: {
+      id: 't1', shift_id: 's1', start_time: null, end_time: null,
+      unpaid_break_minutes: 30, status: 'approved', actual_break_start: actualBreakStart,
+    },
+  });
+
+  it('passes the break actually taken over the rostered one', () => {
+    const input = mapShiftRowToGrossPayInput(evening('18:00', '22:00'))!;
+    expect(input.breakStart).toBe('18:00');
+    expect(input.unpaidBreakMinutes).toBe(30);
+  });
+
+  it('falls back to the rostered break when none was recorded', () => {
+    expect(mapShiftRowToGrossPayInput(evening(null, '20:00'))!.breakStart).toBe('20:00');
+  });
+
+  it('pays the night half hour an 18:00 break moves to 22:00–22:30', () => {
+    const lateBreak = computeShiftGrossPay(mapShiftRowToGrossPayInput(evening('22:00', null))!);
+    const earlyBreak = computeShiftGrossPay(mapShiftRowToGrossPayInput(evening('18:00', null))!);
+    expect(earlyBreak.paidHours).toBe(lateBreak.paidHours);
+    expect(earlyBreak.grossPay).toBeGreaterThan(lateBreak.grossPay);
+  });
+});

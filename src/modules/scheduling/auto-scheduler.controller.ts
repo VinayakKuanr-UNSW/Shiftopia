@@ -1713,6 +1713,9 @@ export class AutoSchedulerController {
                         is_overnight: (shift as any).is_overnight ?? false,
                         is_cancelled: false,
                         shift_date: shift.shift_date,
+                        // cl 41 / 43 attach to hours WORKED — the break's position moves them.
+                        unpaid_break_minutes: isSecurityShift ? 0 : (shift.unpaid_break_minutes ?? 0),
+                        break_start: (shift as { break_start?: string | null }).break_start ?? null,
                         employmentType: employmentType as any,
                         isSecurityRole: isSecurityShift,
                         // Prefer the employee's REAL Schedule 1/2 classification

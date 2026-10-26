@@ -37,6 +37,14 @@ export interface GrossPayShiftInput {
   isOvernight?: boolean;
   scheduledLengthMinutes?: number;
   hoursSource?: GrossPayHoursSource;
+  /**
+   * The meal break as taken (the timesheet's actual break, else the rostered
+   * one) and its unpaid minutes. Neither changes the hours — `netMinutes`
+   * already has the break out — only WHERE the worked minutes fall, which the
+   * night rate (cl 43) and the day loadings (cl 41) are paid on.
+   */
+  breakStart?: string | null;
+  unpaidBreakMinutes?: number;
 
   // Not-worked / leave status.
   isCancelled?: boolean;
@@ -425,6 +433,8 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
     end_time: input.endTime ?? '',
     rate: input.rate,
     scheduled_length_minutes: input.scheduledLengthMinutes ?? 0,
+    unpaid_break_minutes: input.unpaidBreakMinutes,
+    break_start: input.breakStart,
     is_overnight: !!input.isOvernight,
     is_cancelled: false,
     shift_date: input.shiftDate,

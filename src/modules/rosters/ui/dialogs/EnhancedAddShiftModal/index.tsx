@@ -13,13 +13,12 @@
  */
 
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Form } from '@/modules/core/ui/primitives/form';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Loader2, X, Plus, Save, Undo2, CalendarPlus, CalendarCheck } from 'lucide-react';
+import { X, Undo2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
-import { useOptionalSidebar } from '@/modules/core/ui/primitives/sidebar';
 import { ShiftFormDrawerContent } from './components/ShiftFormDrawerContent';
 import { ShiftFormSheet } from './components/ShiftFormSheet';
 import { useFocusTrap } from '@/modules/core/hooks/useFocusTrap';
@@ -33,10 +32,7 @@ import { CancelConfirmDialog } from './components';
 // ── Component ─────────────────────────────────────────────────────────
 export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (props) => {
     const { isOpen, onClose } = props;
-    const { isDark } = useTheme();
     const isMobile = useIsMobile();
-    const sidebar = useOptionalSidebar();
-    const isSidebarCollapsed = sidebar ? sidebar.state === 'collapsed' : false;
     const isTemplateMode = props.isTemplateMode ?? false;
     const editMode = props.editMode ?? false;
 
@@ -200,14 +196,16 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         ? `#${props.existingShift.id.slice(0, 8).toUpperCase()}`
         : resolvedContext.date || 'New shift specification';
 
-    return (
+    // Portalled to <body> like every other dialog. Rendered inside <main>
+    // (which is `isolate`), it was trapped beneath the fixed z-50 sidebar card,
+    // which then overlapped the modal. At body level and z-50 it ties with the
+    // sidebar and wins on DOM order; tooltips and popovers opened from inside
+    // the form portal later still, so they stay above it.
+    return createPortal(
         <>
-            {/* Backdrop overlay (z-40 so nested z-50 select dropdowns portal above) */}
+            {/* Backdrop over the whole viewport, sidebar included. */}
             <div
-                className={cn(
-                    "fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/50 backdrop-blur-sm animate-in fade-in-0 duration-200 transition-[left] duration-300 ease-in-out",
-                    isSidebarCollapsed ? "left-0" : "md:left-[280px]"
-                )}
+                className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/50 backdrop-blur-sm animate-in fade-in-0 duration-200"
                 role="dialog"
                 aria-modal="true"
                 aria-label={editMode ? 'Edit Shift' : 'Create Shift'}
@@ -216,54 +214,10 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                 <div
                     ref={dialogRef}
                     className={cn(
-                        'relative flex w-full max-w-[960px] max-h-[92vh] flex-col overflow-hidden rounded-2xl sm:rounded-3xl border shadow-2xl transition-all animate-in zoom-in-95 duration-200',
+                        'relative flex w-full max-w-[1040px] h-[min(760px,92vh)] flex-col overflow-hidden rounded-2xl sm:rounded-3xl border shadow-2xl transition-all animate-in zoom-in-95 duration-200',
                         surface,
                     )}
                 >
-                    {/* ── CLEAN TOP HEADER ── */}
-                    <div className={cn(
-                        'flex flex-shrink-0 items-center justify-between gap-3 border-b px-5 py-3.5 sm:px-6',
-                        isDark ? 'border-white/10 bg-[#0c0e14]/90' : 'border-border/60 bg-card/90',
-                        'backdrop-blur-xl',
-                    )}>
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                {editMode ? <CalendarCheck className="h-4 w-4" /> : <CalendarPlus className="h-4 w-4" />}
-                            </div>
-                            <div>
-                                <h2 className="text-[14px] sm:text-[15px] font-bold tracking-tight text-foreground">
-                                    {editMode ? 'Edit Shift' : 'Create Shift'}
-                                </h2>
-                                <p className="text-[11px] text-muted-foreground font-mono">
-                                    {subtitleText}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            {canUnpublish && (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={handleUnpublish}
-                                    className="h-8 gap-1.5 rounded-lg border border-purple-500/20 px-3 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
-                                >
-                                    <Undo2 className="h-3.5 w-3.5" />
-                                    <span className="hidden sm:inline">Unpublish</span>
-                                </Button>
-                            )}
-
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={handleCancel}
-                                aria-label="Close dialog"
-                                className="h-8 w-8 rounded-full p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
 
                     {/* ── BODY FORM ── */}
                     <Form {...form}>
@@ -314,6 +268,32 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                 isScheduleDefined={isScheduleDefined}
                                 currentStep={1}
                                 onCancel={handleCancel}
+                                title={editMode ? 'Edit Shift' : 'Create Shift'}
+                                subtitle={subtitleText}
+                                headerActions={
+                                    <>
+                                        {canUnpublish && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={handleUnpublish}
+                                                className="h-9 gap-1.5 rounded-lg border border-purple-500/20 px-3 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+                                            >
+                                                <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                                Unpublish
+                                            </Button>
+                                        )}
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={handleCancel}
+                                            aria-label="Close dialog"
+                                            className="h-9 w-9 rounded-lg p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        >
+                                            <X className="h-4 w-4" aria-hidden="true" />
+                                        </Button>
+                                    </>
+                                }
                                 onSubmit={handleSubmit}
                                 canSave={canSave}
                                 isLoading={isLoading}
@@ -329,7 +309,8 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                 onOpenChange={setShowCancelConfirm}
                 onConfirm={onClose}
             />
-        </>
+        </>,
+        document.body,
     );
 };
 

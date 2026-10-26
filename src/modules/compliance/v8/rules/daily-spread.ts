@@ -1,6 +1,7 @@
 import { V8Hit, V8RuleEvaluator, V8Shift } from '../types';
 import { parseTimeToMinutes, normalizedEndMinutes } from '../utils/time';
 import { isSalariedShift } from '../utils/governing-contract';
+import { mealBreakMinutes } from '../utils/meal-break';
 
 /**
  * V8 Rule: Daily Spread — two clauses, two populations, two measures.
@@ -65,11 +66,11 @@ interface DayGroup {
     shifts:   V8Shift[];
     /** First start to last end, in minutes. */
     gross:    number;
-    /** Meal (unpaid) plus rest (paid) breaks across the day's engagements. */
+    /** Meal-break windows plus rest pauses across the day's engagements. */
     breaks:   number;
 }
 
-function groupByDay(shifts: V8Shift[]): DayGroup[] {
+function groupByDay(shifts: V8Shift[], isSecurity: boolean): DayGroup[] {
     const byDate = new Map<string, V8Shift[]>();
     for (const s of shifts) {
         const date = s.date || s.shift_date || '';
@@ -92,7 +93,7 @@ function groupByDay(shifts: V8Shift[]): DayGroup[] {
         for (const s of dayShifts) {
             earliest = Math.min(earliest, parseTimeToMinutes(s.start_time));
             latest = Math.max(latest, normalizedEndMinutes(s.start_time, s.end_time));
-            breaks += (s.unpaid_break_minutes || 0) + (s.paid_break_minutes || 0);
+            breaks += mealBreakMinutes(s, isSecurity) + (s.paid_break_minutes || 0);
         }
         groups.push({ date, shifts: dayShifts, gross: latest - earliest, breaks });
     }
@@ -111,7 +112,7 @@ export const dailySpreadRule: V8RuleEvaluator = (ctx) => {
 
     if (!isSplitShiftPopulation && !isCasualSecurity) return [];
 
-    for (const day of groupByDay(shifts)) {
+    for (const day of groupByDay(shifts, employee.is_security_role === true)) {
         if (isSplitShiftPopulation) {
             // cl 39.2 — NET of meal and rest breaks.
             const net = Math.max(0, day.gross - day.breaks);

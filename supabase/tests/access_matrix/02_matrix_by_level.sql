@@ -79,7 +79,11 @@ BEGIN
         END;
         r := r || ' rdel2=' || res;
         BEGIN
-            j := public.sm_bulk_assign(ARRAY['b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000003']::uuid[], x);
+            -- sm_bulk_assign was dropped (20261026071831); the bulk assign
+            -- that remains is the autoscheduler's commit.
+            j := public.sm_bulk_assign_atomic(jsonb_build_array(jsonb_build_object(
+                     'employee_id', x,
+                     'shift_ids', jsonb_build_array('b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000003'))));
             res := CASE WHEN j->>'error' ILIKE 'Not authorized%' THEN 'F' ELSE 'y' END;
             RAISE EXCEPTION USING ERRCODE = 'P0099';
         EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;

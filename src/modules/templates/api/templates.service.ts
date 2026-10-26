@@ -2,7 +2,6 @@ import { supabase } from '@/platform/supabase/client';
 import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import { Group, SubGroup, Template } from '../model/templates.types';
 import type { Shift } from '@/modules/rosters/model/shift.types';
-import type { CaptureTemplateInput, CaptureTemplateResult } from '../model/templates.types';
 
 /* ============================================================
    TYPES
@@ -265,55 +264,3 @@ export const templatesService = {
     return this.updateTemplate(templateId, { groups: template.groups });
   },
 };
-
-export async function captureRosterAsTemplate(
-  input: CaptureTemplateInput
-): Promise<CaptureTemplateResult> {
-  const { data, error } = await supabase.rpc('capture_roster_as_template', {
-    p_start_date: input.startDate,
-    p_end_date: input.endDate,
-    p_sub_department_id: input.subDepartmentId,
-    p_template_name: input.templateName,
-  });
-
-  if (error) {
-    console.error('[captureRosterAsTemplate] Error:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint
-    });
-    
-    const msg = error.message ?? '';
-    if (msg.includes('UNAUTHORIZED'))
-      throw new Error('You do not have permission to access this subdepartment.');
-    if (msg.includes('INVALID_DATE_RANGE'))
-      throw new Error('End date must be on or after start date.');
-    if (msg.includes('INVALID_NAME'))
-      throw new Error('Template name must be between 3 and 100 characters.');
-    if (msg.includes('DUPLICATE_TEMPLATE_NAME'))
-      throw new Error('A template with this name already exists in this subdepartment.');
-    if (msg.includes('ONLY_FULL_TIME_IN_RANGE'))
-      throw new Error('Every shift in this range is full-time, and templates cannot hold full-time shifts.');
-    if (msg.includes('NO_SHIFTS_IN_RANGE'))
-      throw new Error('No shifts found in the selected date range.');
-    if (msg.includes('DATE_RANGE_TOO_LARGE'))
-      throw new Error('Date range cannot exceed 35 days.');
-    if (msg.includes('ORG_DEPT_MISSING_IN_SHIFTS'))
-      throw new Error('The captured shifts are missing required organization or department information.');
-    
-    throw new Error('Failed to capture template. Please check the console for details.');
-  }
-
-  if (!data) {
-    throw new Error('No response from capture_roster_as_template RPC');
-  }
-
-  // Handle both snake_case and camelCase to be safe
-  const d = data as any;
-  return {
-    templateId: d.templateId || d.template_id,
-    shiftsCaptured: d.shiftsCaptured ?? d.shifts_captured,
-    shiftsSkippedFullTime: d.shifts_skipped_full_time ?? 0,
-  };
-}
