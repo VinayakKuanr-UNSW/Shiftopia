@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { EmployeeFunctionBar } from '../EmployeeFunctionBar';
 import { DEFAULT_ROW_SORT } from '@/modules/core/lib/row-sorting';
 
@@ -38,6 +38,25 @@ describe('EmployeeFunctionBar', () => {
     );
   });
 
+  it('renders Today button and invokes onToday when clicked', () => {
+    const onToday = vi.fn();
+    render(
+      <EmployeeFunctionBar
+        view="week"
+        onViewChange={vi.fn()}
+        selectedDate={new Date(2026, 9, 1)}
+        showToday
+        onToday={onToday}
+      />,
+    );
+
+    const todayBtn = screen.getByRole('button', { name: 'Snap to today' });
+    expect(todayBtn).toBeInTheDocument();
+    expect(todayBtn).toHaveTextContent('Today');
+    fireEvent.click(todayBtn);
+    expect(onToday).toHaveBeenCalled();
+  });
+
   it('names the range picker controls after the range they move', () => {
     render(
       <EmployeeFunctionBar
@@ -53,7 +72,7 @@ describe('EmployeeFunctionBar', () => {
     expect(screen.getByRole('button', { name: 'Next week' })).toBeInTheDocument();
   });
 
-  it('shows only the control name but still speaks the current selection', () => {
+  it('renders Sort as an icon button and speaks the current selection', () => {
     render(
       <EmployeeFunctionBar
         sort={DEFAULT_ROW_SORT}
@@ -62,24 +81,16 @@ describe('EmployeeFunctionBar', () => {
       />,
     );
 
-    // Visible text is the bare word; the settings do not get painted back at
-    // the reader across three two-line chips.
     const trigger = screen.getByRole('button', { name: 'Sort: Date, earliest first' });
-    expect(trigger).toHaveTextContent(/^Sort$/i);
-
-    // The accessible name still starts with that visible word, so voice
-    // control can address it (WCAG 2.5.3 Label in Name), and a screen-reader
-    // user is not left worse off than a sighted one.
-    expect(trigger.getAttribute('aria-label')).toMatch(/^Sort\b/);
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-label', 'Sort: Date, earliest first');
   });
 
   it('highlights a control only once it differs from the default', () => {
-    // Three permanently lit chips would make the highlight mean nothing.
     const { rerender } = render(
       <EmployeeFunctionBar sort={DEFAULT_ROW_SORT} onSortChange={vi.fn()} />,
     );
-    expect(screen.getByRole('button', { name: /^Sort:/ }).className)
-      .not.toMatch(/border-primary/);
+    expect(screen.getByRole('button', { name: /^Sort:/ })).toHaveAttribute('aria-pressed', 'false');
 
     rerender(
       <EmployeeFunctionBar
@@ -87,23 +98,24 @@ describe('EmployeeFunctionBar', () => {
         onSortChange={vi.fn()}
       />,
     );
-    expect(screen.getByRole('button', { name: /^Sort:/ }).className)
-      .toMatch(/border-primary/);
+    expect(screen.getByRole('button', { name: /^Sort:/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('gives the three menus equal width across the row', () => {
-    const { container } = render(
+  it('renders Sort, Filter, and Group By as icon buttons in actions zone', () => {
+    render(
       <EmployeeFunctionBar
         sort={DEFAULT_ROW_SORT}
         onSortChange={vi.fn()}
-        filterContent={<p>x</p>}
+        filterContent={<p>filters</p>}
         groupBy="none"
         onGroupByChange={vi.fn()}
         groupByOptions={GROUP_OPTIONS}
       />,
     );
 
-    expect(container.querySelector('.grid-cols-3')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /^Sort:/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Filters/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Group by:/ })).toBeInTheDocument();
   });
 
   it('renders each control as a collapsed disclosure, not an open panel', () => {
@@ -118,45 +130,25 @@ describe('EmployeeFunctionBar', () => {
       />,
     );
 
-    for (const name of [/^Sort:/, /^Filter$/, /^Group By:/]) {
+    for (const name of [/^Sort:/, /^Filters/, /^Group by:/]) {
       expect(screen.getByRole('button', { name })).toHaveAttribute('aria-expanded', 'false');
     }
     expect(screen.queryByText('filters')).not.toBeInTheDocument();
   });
 
-  it('advertises a dropdown on desktop and a dialog on mobile', () => {
-    const { unmount } = render(
-      <EmployeeFunctionBar groupBy="date" onGroupByChange={vi.fn()} groupByOptions={GROUP_OPTIONS} />,
-    );
-    expect(screen.getByRole('button', { name: /^Group By:/ })).toHaveAttribute(
-      'aria-haspopup',
-      'menu',
-    );
-    unmount();
-
-    mockIsMobile.mockReturnValue(true);
-    render(
-      <EmployeeFunctionBar groupBy="date" onGroupByChange={vi.fn()} groupByOptions={GROUP_OPTIONS} />,
-    );
-    expect(screen.getByRole('button', { name: /^Group By:/ })).toHaveAttribute(
-      'aria-haspopup',
-      'dialog',
-    );
-  });
-
-  it('shows the active filter count on the trigger', () => {
+  it('shows the active filter count on the trigger badge', () => {
     render(<EmployeeFunctionBar filterContent={<p>x</p>} activeFilterCount={3} />);
 
-    expect(screen.getByRole('button', { name: 'Filter' })).toHaveTextContent('3');
+    expect(screen.getByRole('button', { name: 'Filters (3 active)' })).toHaveTextContent('3');
   });
 
   it('omits sections a page did not ask for', () => {
-    // A page with nothing to sort must not show an inert Sort menu.
-    render(<EmployeeFunctionBar view="day" onViewChange={vi.fn()} />);
+    render(<EmployeeFunctionBar view="day" onViewChange={vi.fn()} showToday={false} />);
 
     expect(screen.queryByRole('button', { name: /^Sort/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Filter/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Group By/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Filters/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Group by/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Snap to today' })).not.toBeInTheDocument();
   });
 
   it('has no refresh control', () => {

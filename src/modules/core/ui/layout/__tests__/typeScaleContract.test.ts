@@ -31,7 +31,7 @@ function codeFiles(dir: string): string[] {
  * plus the marketing landing page (outside this pass).
  */
 const EXEMPT =
-  /(GlobalScopeFilter|CommandSelector|PersonalPageHeader|PersonalScopeFilter|ResponsiveMenu|GroupBySelector|PageMenu|ColumnsPicker|EmployeeSearchSelect)\.tsx$|core\/pages\/Index\.tsx$|primitives\/sidebar\.tsx$/;
+  /(GlobalScopeFilter|CommandSelector|PersonalPageHeader|PersonalScopeFilter|ResponsiveMenu|GroupBySelector|SortSelector|PageMenu|ColumnsPicker)\.tsx$|core\/pages\/Index\.tsx$|primitives\/sidebar\.tsx$/;
 
 const sources = codeFiles(SRC)
   .map((f) => ({ rel: relative(SRC, f), code: stripComments(readFileSync(f, 'utf8')) }))

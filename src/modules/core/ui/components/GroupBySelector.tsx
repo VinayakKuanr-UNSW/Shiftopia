@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layers, Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
     Popover, PopoverContent, PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
@@ -49,7 +48,6 @@ export function GroupBySelector<T extends string = RowGroupBy>({
     className,
     triggerVariant = 'dropdown',
 }: GroupBySelectorProps<T>) {
-    const { isDark } = useTheme();
     const [open, setOpen] = useState(false);
     const active = options.find(o => o.value === value);
     const isNone = value === 'none';
@@ -91,9 +89,7 @@ export function GroupBySelector<T extends string = RowGroupBy>({
                         ? "ring-2 ring-primary bg-primary/10 border-primary/40 text-primary shadow-primary/20"
                         : !isNone
                             ? "bg-primary/10 border-primary/30 text-primary"
-                            : isDark
-                                ? "bg-[#111827]/60 border-white/5 text-white/70 hover:text-white hover:bg-[#111827]/80"
-                                : "bg-slate-100 border-slate-200/50 text-muted-foreground hover:text-foreground hover:bg-slate-200",
+                            : "bg-slate-100 dark:bg-[#111827]/60 border-slate-200/50 dark:border-white/5 text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-[#111827]/80",
                     className,
                 )}
             >

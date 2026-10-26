@@ -95,6 +95,8 @@ const MyRosterPage: React.FC = () => {
             onViewChange={(v) => setView(v as ViewType)}
             selectedDate={selectedDate}
             onDateChange={handleDateSelect}
+            showToday
+            onToday={() => handleDateSelect(new Date())}
             rangeLabel={rangeLabel}
             onPrevious={() => setSelectedDate(navigateDate(selectedDate, view, -1))}
             onNext={() => setSelectedDate(navigateDate(selectedDate, view, 1))}

@@ -33,7 +33,7 @@ import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import * as import_GroupSummaryCell from '@/modules/rosters/ui/components/GroupSummaryCell';
 import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
-import { useShiftsByDateRange, useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
+import { useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -363,14 +363,11 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     return format(addDays(new Date(startDate), viewType === '3day' ? 2 : 0), 'yyyy-MM-dd');
   }, [startDate, selectedDate, viewType]);
 
-  const { data: internalShifts = [], isLoading: isLoadingShifts } = useShiftsByDateRange(
-    projection ? null : (organizationId || null),
-    startDate,
-    endDate,
-    { departmentIds, subDepartmentIds }
-  );
-
-  const activeShifts: Shift[] = parentShifts ?? internalShifts;
+  // The planner owns the shifts query and always passes the result down. A
+  // second query here used a different cache key (raw [] filters vs the
+  // planner's undefined), so it fired its own request whose data was never
+  // read, and held a competing spinner over the planner's loading overlay.
+  const activeShifts: Shift[] = parentShifts ?? [];
   const unpublishMutation = useUnpublishShift();
 
   const openShiftForm = useShiftFormNav();
@@ -629,7 +626,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     });
   };
 
-  const isLoading = !projection && (isLoadingLevels || isLoadingRoles || isLoadingShifts);
+  const isLoading = !projection && (isLoadingLevels || isLoadingRoles);
   if (isLoading) return <PageState state="loading" className="h-[400px]" title="Loading roles" />;
 
   const totalHours = projection?.stats?.totalNetMinutes != null ? (projection.stats.totalNetMinutes / 60).toFixed(1) : '—';

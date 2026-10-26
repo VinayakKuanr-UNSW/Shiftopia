@@ -63,6 +63,7 @@ import {
   computeRange, navigateDate, formatRangeLabel,
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import {
+  TimesheetFilterDrawer,
   TimesheetFilterPanel,
   type ActiveFilters,
   EMPTY_FILTERS,
@@ -696,23 +697,33 @@ const AttendancePage: React.FC = () => {
             onViewChange={(v) => handleViewTypeChange(v as ViewType)}
             selectedDate={selectedDate}
             onDateChange={(d) => { setSelectedDate(d); setRange(computeRange(d, viewType)); }}
+            showToday
+            onToday={() => {
+              const now = new Date();
+              let snapped = now;
+              if (viewType === 'week') snapped = startOfWeekAU(now);
+              if (viewType === 'month') snapped = startOfMonth(now);
+              setSelectedDate(snapped);
+              setRange(computeRange(snapped, viewType));
+            }}
             rangeLabel={mobileDateLabel}
             onPrevious={handleMobilePrev}
             onNext={handleMobileNext}
             sort={sort}
             onSortChange={setSort}
             sortOptions={['date', 'startTime', 'role', 'group', 'status']}
-            activeFilterCount={activeFilterCount}
-            filterContent={
-              <TimesheetFilterPanel
+            filters={
+              <TimesheetFilterDrawer
                 entries={filterRows}
                 appliedFilters={appliedFilters}
                 onApply={setAppliedFilters}
+                activeCount={activeFilterCount}
                 statusFilter={statusFilter}
                 onStatusFilterChange={(st) => setStatusFilter(st as StatusFilter)}
                 statusCounts={statusCounts}
                 statusOptions={ATTENDANCE_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
                 statusSectionLabel="Attendance Status"
+                triggerVariant="icon"
               />
             }
             groupBy={groupBy}
