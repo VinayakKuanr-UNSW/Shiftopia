@@ -13,7 +13,7 @@
  * - Licensing & Mandatory Qualifications (e.g., Security 1AC)
  */
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { format, parseISO } from 'date-fns';
 import {
   ShieldCheck,
@@ -93,7 +93,9 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
   const netHours = netMins / 60;
 
   // Run ICC Sydney EBA Audit Rules
-  const auditResults: AuditRuleResult[] = useMemo(() => {
+  // Plain computation, not useMemo: it sits after the `!shift` early return,
+  // where a hook breaks the rules of hooks.
+  const auditResults: AuditRuleResult[] = (() => {
     const results: AuditRuleResult[] = [];
 
     // 1. Clause 40.1 — Minimum Engagement Floor
@@ -239,13 +241,7 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
     }
 
     return results;
-  }, [
-    durationHours,
-    unpaidBreakMins,
-    targetEmployment,
-    employeeName,
-    roleName,
-  ]);
+  })();
 
   const hasBreach = auditResults.some(r => r.status === 'breach');
   const hasWarning = auditResults.some(r => r.status === 'warning');

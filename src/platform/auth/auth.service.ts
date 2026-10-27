@@ -93,9 +93,12 @@ export const authService = {
     async getUserProfile(userId: string): Promise<User | null> {
         try {
             // 1. Fetch Profile
+            // Explicit columns, never `*`: phone, date of birth and emergency
+            // contacts are not selectable by `authenticated`, and a 42501 here
+            // would be read as a rejected credential and end the session.
             const { data: profile, error: profileErr } = await supabase
                 .from('profiles')
-                .select('*')
+                .select('id, employee_code, first_name, last_name, full_name, email, employment_type, is_active, preferences')
                 .eq('id', userId)
                 .single();
 

@@ -11,6 +11,11 @@ import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import type { V8ContractType } from '@/modules/compliance/v8/types';
 import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
 
+// Embedded profile columns for swap participants. Never `*`: contact and
+// personal columns (phone, date of birth, emergency contacts) are not
+// readable by other users, and `*` would make PostgREST fail the whole query.
+const SWAP_PROFILE_COLUMNS = 'id, first_name, last_name, full_name, email, avatar_url, employment_type';
+
 // Audit C-4: the swap engine's SwapPartyInput.contract_type uses the
 // shorthand 'FT' | 'PT' | 'CASUAL' union; fetchV8EmployeeContext (the
 // same helper the manager-approval orchestrator uses) returns the V2
@@ -285,8 +290,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*)
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
             `)
             .eq('requester_id', employeeId);
 
@@ -312,8 +317,8 @@ export const swapsApi = {
                         sub_departments(name),
                         organizations(name)
                     ),
-                    requested_by:profiles!requester_id(*),
-                    swap_with:profiles!target_id(*)
+                    requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                    swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
                 ),
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
@@ -406,8 +411,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*)
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
             `)
             .eq('status', 'OPEN')
             .is('target_id', null)
@@ -462,8 +467,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*)
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
             `)
             .eq('id', swapId)
             .single();
@@ -587,7 +592,7 @@ export const swapsApi = {
             .from('swap_offers')
             .select(`
                 *,
-                offerer:profiles!offerer_id(*),
+                offerer:profiles!offerer_id(${SWAP_PROFILE_COLUMNS}),
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
                     scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
@@ -654,8 +659,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*),
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS}),
                 swap_offers (
                     id,
                     status,

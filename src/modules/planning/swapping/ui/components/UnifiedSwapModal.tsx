@@ -238,9 +238,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                     }
 
                     // Availability warnings (NON-BLOCKING)
-                    for (const w of result.value.warnings || []) {
-                        if (!hardBlocks.length || true) softWarnings.push(w);
-                    }
+                    softWarnings.push(...(result.value.warnings || []));
                     for (const v of result.value.violations || []) {
                         if (v.toLowerCase().includes('overlap')) softWarnings.push('Schedule overlap detected');
                         else if (v.toLowerCase().includes('weekly') || v.toLowerCase().includes('hours')) softWarnings.push('May exceed weekly hours');

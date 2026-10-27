@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-    rostersApi as enhancedRosterService,
-    CreateRosterFromTemplateParams
-} from '@/modules/rosters/api/rosters.api';
+import { rostersApi as enhancedRosterService } from '@/modules/rosters/api/rosters.api';
 // ── Query Key Factory ──────────────────────────────────────────────
 export const rosterKeys = {
     all: ['enhanced-rosters'] as const,
@@ -75,23 +72,6 @@ export function useCheckDateRangeConflict(
 }
 
 // ── Mutations ──────────────────────────────────────────────────────
-
-/**
- * Mutation: Create rosters from template for date range
- */
-export function useCreateRostersFromTemplate() {
-    const queryClient = useQueryClient();
-    return useMutation({
-        mutationFn: (params: CreateRosterFromTemplateParams) =>
-            enhancedRosterService.createRostersFromTemplate(params),
-        onSuccess: async () => {
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: rosterKeys.all }),
-                queryClient.invalidateQueries({ queryKey: ['rosters'] }),
-            ]);
-        },
-    });
-}
 
 /**
  * Mutation: Update roster

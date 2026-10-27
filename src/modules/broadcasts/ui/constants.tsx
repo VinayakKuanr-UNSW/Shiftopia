@@ -74,12 +74,6 @@ export const PRIORITY_CONFIG: Record<
     bg: 'bg-blue-500/10 border-blue-500/20',
     icon: <MessageSquare className="h-3.5 w-3.5" />,
   },
-  low: {
-    label: 'Low',
-    color: 'text-slate-400',
-    bg: 'bg-slate-500/10 border-slate-500/20',
-    icon: <MessageSquare className="h-3.5 w-3.5" />,
-  },
 };
 
 // ── Participant role icons ──

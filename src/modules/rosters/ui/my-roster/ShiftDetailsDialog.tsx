@@ -24,6 +24,8 @@ import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
 import DropShiftDrawer from './DropShiftDrawer';
+import { AddToCalendar } from './AddToCalendar';
+import { useOnlineStatus } from '@/modules/core/hooks/useOnlineStatus';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
@@ -157,7 +159,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
 
   const isS3PendingOffer = shiftData?.shift.lifecycle_status === 'Published' && shiftData?.shift.assignment_status === 'assigned' && !shiftData?.shift.assignment_outcome;
 
-  const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
+  // Offline the dialog may be showing a saved copy; swap/drop need the server.
+  const isOnline = useOnlineStatus();
+  const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast || !isOnline;
   // Full-time hours are fixed: an FT shift is never swapped or dropped to
   // Bidding (the database refuses both). Changes go through leave or the manager.
   const isFullTimeShift = (shiftData?.shift as any)?.target_employment_type === 'FT';
@@ -469,6 +473,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                         {dropLabel}
                       </Button>
                     </div>
+                  )}
+                  {!shift.is_cancelled && !isPast && (
+                    <AddToCalendar shift={shift} groupName={groupName} subGroupName={subGroupName} />
                   )}
                   {isWithinLockoutPeriod && !isPast && !isActiveOrCommenced && (
                     <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3">

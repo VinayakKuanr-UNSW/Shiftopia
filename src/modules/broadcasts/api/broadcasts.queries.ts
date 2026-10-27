@@ -11,6 +11,7 @@
 // ============================================================
 
 import { supabase } from '@/platform/supabase/client';
+import type { Tables } from '@/platform/supabase/types';
 import type {
     BroadcastGroupWithStats,
     BroadcastGroupFull,
@@ -486,7 +487,47 @@ export const broadcastNotificationQueries = {
 
         const { data, error } = await query;
         if (error) throw error;
-        return toCamelCase(data || []);
+        return broadcastNotificationQueries.hydrate(data || []);
+    },
+
+    /**
+     * `broadcast_notifications` holds only the fan-out row (broadcast_id,
+     * employee_id, is_read). Subject, priority, author and group live on the
+     * parent broadcast, and the table has no FK to embed through, so fetch
+     * them in one batched query. Rows whose broadcast is gone are dropped.
+     */
+    async hydrate(
+        rows: Array<Pick<Tables<'broadcast_notifications'>, 'id' | 'broadcast_id' | 'created_at' | 'is_read'>>
+    ): Promise<BroadcastNotification[]> {
+        if (rows.length === 0) return [];
+
+        const { data, error } = await supabase
+            .from('broadcasts')
+            .select(
+                `id, subject, priority, channel_id,
+                profiles!author_id(id, first_name, last_name, email),
+                broadcast_channels(group_id, broadcast_groups(name))`
+            )
+            .in('id', [...new Set(rows.map((r) => r.broadcast_id))]);
+        if (error) throw error;
+
+        const byId = new Map((data ?? []).map((b: any) => [b.id, b]));
+        return rows.flatMap((row) => {
+            const b = byId.get(row.broadcast_id);
+            if (!b) return [];
+            return [{
+                id: row.id,
+                broadcastId: row.broadcast_id,
+                channelId: b.channel_id,
+                groupId: b.broadcast_channels?.group_id ?? '',
+                groupName: b.broadcast_channels?.broadcast_groups?.name ?? '',
+                subject: b.subject,
+                authorName: normalizeAuthor(b.profiles)?.name ?? 'Unknown',
+                priority: b.priority,
+                createdAt: row.created_at ?? '',
+                isRead: row.is_read ?? false,
+            }];
+        });
     },
 
     /**

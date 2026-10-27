@@ -67,12 +67,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      # Build args, not runtime env: the container serves a static bundle and
+      # Vite bakes VITE_* in at build time. Supabase values come from .env.
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - VITE_OPTIMIZER_URL=http://localhost:5005
+        - VITE_ML_URL=http://localhost:8000
     container_name: superman-web
     ports:
       - '8080:80'
-    environment:
-      - VITE_OPTIMIZER_URL=http://localhost:5005
-      - VITE_ML_URL=http://localhost:8000
     depends_on:
       optimizer:
         condition: service_healthy

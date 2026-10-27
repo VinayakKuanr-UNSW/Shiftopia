@@ -70,6 +70,8 @@ export function useShiftBids(shiftId: string | null): UseShiftBidsReturn {
           )
         `)
         .eq('shift_id', shiftId)
+        // A withdrawn bid can't be assigned (WINNER_NOT_PENDING); don't offer it.
+        .neq('status', 'withdrawn')
         .order('created_at', { ascending: false });
 
       if (error) {

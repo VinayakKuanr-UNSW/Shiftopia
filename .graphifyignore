@@ -9,6 +9,8 @@ android/
 # The almond repo is a FORK of this repo (merge base 8af1d4e), not a separate
 # project — indexing it duplicates ~2,755 nodes of src/.
 capstone-project-26t2-9900-t17b-almond/
+# The donut repo is another fork (merge base 99ec855c).
+capstone-project-26t2-9900-t19b-donut/
 
 # Vendored / generated
 node_modules/

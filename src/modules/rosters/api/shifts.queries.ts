@@ -1648,7 +1648,7 @@ export const shiftsQueries = {
                     roles(name),
                     remuneration_levels(level_name),
                     assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
-                    shift_bids(id)
+                    shift_bids(id, status)
                 `)
                 .eq('organization_id', organizationId)
                 .is('deleted_at', null)

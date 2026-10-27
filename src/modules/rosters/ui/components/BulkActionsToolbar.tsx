@@ -85,6 +85,8 @@ type ActionState =
       preview: ActionPreview;
       /** IDs returned by async validation — passed directly to execution (skips re-check). */
       validatedIds?: string[];
+      /** Why each excluded shift failed compliance, shown in the confirm dialog. */
+      complianceFailures?: Array<{ id: string; reason: string }>;
     }
   | { type: 'processing'; action: ConfirmAction }
   | {
@@ -96,6 +98,13 @@ type ActionState =
     };
 
 const IDLE: ActionState = { type: 'idle' };
+
+/** Distinct failure reasons with how many shifts hit each, most common first. */
+function countReasons(failures: Array<{ reason: string }>): Array<[string, number]> {
+  const counts = new Map<string, number>();
+  for (const f of failures) counts.set(f.reason, (counts.get(f.reason) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1]);
+}
 
 // =============================================================================
 // PROPS
@@ -224,6 +233,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             warned: 0,
           },
           validatedIds: validation.eligible,
+          complianceFailures: validation.complianceFailed,
         });
       } catch {
         toast({ title: 'Validation failed', description: 'Could not run compliance checks.', variant: 'destructive' });
@@ -674,6 +684,13 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                         {preview!.blocked} shift{preview!.blocked !== 1 ? 's' : ''} failed compliance or were already published — excluded.
                       </p>
                     )}
+                    {(actionState.complianceFailures?.length ?? 0) > 0 && (
+                      <ul className="list-disc list-inside space-y-0.5 text-destructive text-[11px]">
+                        {countReasons(actionState.complianceFailures!).map(([reason, n]) => (
+                          <li key={reason}>{n > 1 ? `${n} × ` : ''}{reason}</li>
+                        ))}
+                      </ul>
+                    )}
                   </>
                 ) : (
                   <>
@@ -697,7 +714,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             <AlertDialogAction
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={(e) => { e.preventDefault(); handlePublish(); }}
-              disabled={isPublishing}
+              disabled={isPublishing || preview?.eligible === 0}
             >
               {isPublishing ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Publishing…</>

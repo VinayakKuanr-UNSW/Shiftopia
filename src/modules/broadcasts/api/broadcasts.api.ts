@@ -163,7 +163,15 @@ export const broadcastRealtimeService = {
                     table: 'broadcast_notifications',
                     filter: `employee_id=eq.${employeeId}`,
                 },
-                (payload) => onInsert(toCamelCase(payload.new))
+                // The INSERT row has no subject/author/group; hydrate it first.
+                (payload) => {
+                    broadcastNotificationQueries
+                        .hydrate([payload.new as any])
+                        .then(([notification]) => notification && onInsert(notification))
+                        .catch((error) =>
+                            console.error('[broadcasts] Failed to load new notification:', error)
+                        );
+                }
             )
             .subscribe();
     },

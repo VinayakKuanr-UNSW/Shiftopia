@@ -55,8 +55,9 @@ android/app/src/main/res/xml/config.xml
 e2e/.auth/
 /coverage/
 
-# Reference-repo working copy (the almond fork, cloned for comparison)
+# Reference-repo working copies (forks of this repo, cloned for comparison)
 capstone-project-26t2-9900-t17b-almond/
+capstone-project-26t2-9900-t19b-donut/
 
 # Claude Code agent worktrees — transient; never commit as gitlinks
 .claude/worktrees/

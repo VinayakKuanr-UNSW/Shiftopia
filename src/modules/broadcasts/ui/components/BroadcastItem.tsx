@@ -63,12 +63,6 @@ const PRIORITY_CONFIG: Record<
         bg: 'bg-blue-500/20 border-blue-500/40',
         icon: <MessageSquare className="h-3.5 w-3.5" />,
     },
-    low: {
-        label: 'Low',
-        color: 'text-slate-400',
-        bg: 'bg-slate-500/20 border-slate-500/40',
-        icon: <MessageSquare className="h-3.5 w-3.5" />,
-    },
 };
 
 const ROLE_CONFIG: Record<

@@ -446,7 +446,6 @@ for b in range(num_batches):
         lines.append(f"    DELETE FROM public.availability_rules WHERE profile_id = '{u_id}';")
         lines.append(f"    DELETE FROM public.employee_skills WHERE employee_id = '{u_id}';")
         lines.append(f"    DELETE FROM public.employee_licenses WHERE employee_id = '{u_id}';")
-        lines.append(f"    DELETE FROM public.employee_reliability_metrics WHERE employee_id = '{u_id}';")
         lines.append(f"    DELETE FROM public.employee_performance_metrics WHERE employee_id = '{u_id}';")
 
         # 4. Primary Contract
@@ -527,25 +526,13 @@ for b in range(num_batches):
             lines.append(f"    END IF;")
 
 
-        # 10. Reliability metrics
+        # 10. Shift-history figures (feed the performance metrics below)
         shifts_ass = 15 + (u['idx'] * 13) % 75
         cancels = (u['idx'] % 4 == 0) and 1 or 0
         lates = (u['idx'] % 6 == 0) and 1 or 0
         noshow = 1 if (u['idx'] % 49 == 0) else 0
         completed = max(0, shifts_ass - cancels - noshow)
         ontime = round(100.0 * (completed - lates) / max(1, completed), 1)
-        c_rate = round(float(cancels) / max(1, shifts_ass), 3)
-
-        lines.append(f"    INSERT INTO public.employee_reliability_metrics (")
-        lines.append(f"        id, employee_id, total_shifts_assigned, total_shifts_completed,")
-        lines.append(f"        total_cancellations, total_late_arrivals, total_no_shows,")
-        lines.append(f"        total_swaps_accepted, total_swaps_completed, cancellation_rate,")
-        lines.append(f"        on_time_percentage, swap_completion_rate, last_updated_at")
-        lines.append(f"    ) VALUES (")
-        lines.append(f"        gen_random_uuid(), '{u_id}', {shifts_ass}, {completed},")
-        lines.append(f"        {cancels}, {lates}, {noshow}, 2, 2, {c_rate},")
-        lines.append(f"        {ontime}, 100.0, now()")
-        lines.append(f"    );")
 
         # 11. Performance metrics
         offered = shifts_ass + 5

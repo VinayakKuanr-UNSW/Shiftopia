@@ -382,7 +382,7 @@ const AppearanceSettings: React.FC = () => {
    PROFILE SETTINGS
    ============================================================ */
 const ProfileSettings: React.FC = () => {
-  const { user, updateProfile } = useSettings();
+  const { user, updateProfile, myPhone, isPhoneLoaded } = useSettings();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -396,14 +396,17 @@ const ProfileSettings: React.FC = () => {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        phone: (user as any).phone || '',
+        phone: myPhone,
       });
     }
-  }, [user]);
+  }, [user, myPhone]);
 
   const handleSave = () => {
     updateProfile.mutate({
       ...formData,
+      // Until the stored number has loaded, the field is blank, not empty:
+      // sending it would wipe the phone (the old `user.phone` was never set).
+      phone: isPhoneLoaded ? formData.phone : undefined,
       fullName: `${formData.firstName} ${formData.lastName}`.trim(),
     });
   };

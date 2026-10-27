@@ -1,0 +1,36 @@
+# Build context for Dockerfile.web (repo root). ml/ and optimizer-service/ are
+# built from their own directories and are not affected by this file.
+
+# Secrets. `.env.local` carries the DB password and Vercel token; the VITE_*
+# values the bundle needs come in as build args instead (see docker-compose.yml).
+.env
+.env.*
+!.env.example
+# Holds the Supabase access token for the MCP server.
+.mcp.json
+
+# `npm ci` installs Linux binaries inside the image; copying the host's
+# node_modules over them breaks native deps (rollup, esbuild) on macOS hosts.
+node_modules
+dist
+coverage
+playwright-report
+test-results
+
+.git
+.github
+.vercel
+.claude
+supabase/.temp
+graphify-out
+capstone-project-*
+
+android
+ml
+optimizer-service
+.venv
+.pytest_cache
+.idea
+.vscode
+scratch
+.DS_Store

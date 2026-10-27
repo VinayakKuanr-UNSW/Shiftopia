@@ -2,7 +2,8 @@
 // Broadcast Types
 // Extracted from src/api/models/types.ts
 
-export type BroadcastPriority = 'urgent' | 'high' | 'normal' | 'low';
+// Mirrors broadcasts_priority_check; the DB has never accepted 'low'.
+export type BroadcastPriority = 'urgent' | 'high' | 'normal';
 export type BroadcastStatus = 'active' | 'archived' | 'expired';
 export type AcknowledgementStatus = 'pending' | 'acknowledged';
 export type BroadcastParticipantRole = 'admin' | 'broadcaster' | 'lead' | 'member';

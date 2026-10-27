@@ -46,12 +46,6 @@ const PRIORITY_CONFIG: Record<
         bg: 'bg-blue-500/20 border-blue-500/40',
         icon: <MessageSquare className="h-3.5 w-3.5" />,
     },
-    low: {
-        label: 'Low',
-        color: 'text-slate-400',
-        bg: 'bg-slate-500/20 border-slate-500/40',
-        icon: <MessageSquare className="h-3.5 w-3.5" />,
-    },
 };
 
 const formatFileSizeLocal = (bytes: number): string => {
@@ -160,7 +154,7 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
                 <div className="flex items-center gap-4 mb-4">
                     <span className="text-[13px] text-muted-foreground">Priority:</span>
                     <div className="flex gap-2">
-                        {(['low', 'normal', 'high', 'urgent'] as BroadcastPriority[]).map((p) => (
+                        {(['normal', 'high', 'urgent'] as BroadcastPriority[]).map((p) => (
                             <Button
                                 key={p}
                                 variant={priority === p ? 'default' : 'outline'}
@@ -175,10 +169,7 @@ export const ComposeSection: React.FC<ComposeSectionProps> = ({
                                     'bg-orange-600 hover:bg-orange-700',
                                     priority === p &&
                                     p === 'normal' &&
-                                    'bg-blue-600 hover:bg-blue-700',
-                                    priority === p &&
-                                    p === 'low' &&
-                                    'bg-slate-600 hover:bg-slate-700'
+                                    'bg-blue-600 hover:bg-blue-700'
                                 )}
                             >
                                 {PRIORITY_CONFIG[p].icon}

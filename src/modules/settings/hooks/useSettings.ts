@@ -39,6 +39,18 @@ export const useSettings = (props?: UseSettingsProps) => {
         staleTime: 1000 * 60 * 5, // 5 minutes
     });
 
+    // Own phone. Contact columns are not selectable on profiles, so they come
+    // through a definer RPC that only ever returns the caller's row.
+    const privateProfile = useQuery({
+        queryKey: ['my-private-profile', user?.id],
+        queryFn: async () => {
+            const { data, error } = await (supabase as any).rpc('get_my_private_profile');
+            if (error) throw error;
+            return (data?.[0] ?? null) as { phone: string | null } | null;
+        },
+        enabled: !!user?.id,
+    });
+
     // Update Profile Mutation (first_name, last_name, email, phone)
     const updateProfile = useMutation({
         mutationFn: async (payload: {
@@ -65,6 +77,7 @@ export const useSettings = (props?: UseSettingsProps) => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['user-profile', user?.id] });
+            queryClient.invalidateQueries({ queryKey: ['my-private-profile', user?.id] });
             toast({ title: 'Profile updated successfully' });
             props?.onSuccess?.();
         },
@@ -173,6 +186,8 @@ export const useSettings = (props?: UseSettingsProps) => {
 
     return {
         user,
+        myPhone: privateProfile.data?.phone ?? '',
+        isPhoneLoaded: privateProfile.isSuccess,
         orgBranding,
         isOrgLoading,
         updateProfile,

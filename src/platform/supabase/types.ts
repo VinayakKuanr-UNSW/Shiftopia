@@ -1503,45 +1503,6 @@ export type Database = {
           },
         ]
       }
-      broadcast_group_members: {
-        Row: {
-          employee_id: string
-          group_id: string
-          id: string
-          is_admin: boolean | null
-          joined_at: string | null
-        }
-        Insert: {
-          employee_id: string
-          group_id: string
-          id?: string
-          is_admin?: boolean | null
-          joined_at?: string | null
-        }
-        Update: {
-          employee_id?: string
-          group_id?: string
-          id?: string
-          is_admin?: boolean | null
-          joined_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "broadcast_group_members_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "broadcast_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "broadcast_group_members_group_id_fkey"
-            columns: ["group_id"]
-            isOneToOne: false
-            referencedRelation: "v_broadcast_groups_with_stats"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       broadcast_groups: {
         Row: {
           color: string | null
@@ -2536,44 +2497,6 @@ export type Database = {
         }
         Relationships: []
       }
-      employee_leave_balances: {
-        Row: {
-          annual_leave_balance_hours: number | null
-          created_at: string | null
-          employee_id: string
-          id: string
-          last_updated_at: string | null
-          sick_leave_balance_hours: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          annual_leave_balance_hours?: number | null
-          created_at?: string | null
-          employee_id: string
-          id?: string
-          last_updated_at?: string | null
-          sick_leave_balance_hours?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          annual_leave_balance_hours?: number | null
-          created_at?: string | null
-          employee_id?: string
-          id?: string
-          last_updated_at?: string | null
-          sick_leave_balance_hours?: number | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_leave_balances_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       employee_licenses: {
         Row: {
           created_at: string | null
@@ -2838,57 +2761,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      employee_reliability_metrics: {
-        Row: {
-          cancellation_rate: number | null
-          created_at: string | null
-          employee_id: string
-          id: string
-          last_updated_at: string | null
-          on_time_percentage: number | null
-          swap_completion_rate: number | null
-          total_cancellations: number | null
-          total_late_arrivals: number | null
-          total_no_shows: number | null
-          total_shifts_assigned: number | null
-          total_shifts_completed: number | null
-          total_swaps_accepted: number | null
-          total_swaps_completed: number | null
-        }
-        Insert: {
-          cancellation_rate?: number | null
-          created_at?: string | null
-          employee_id: string
-          id?: string
-          last_updated_at?: string | null
-          on_time_percentage?: number | null
-          swap_completion_rate?: number | null
-          total_cancellations?: number | null
-          total_late_arrivals?: number | null
-          total_no_shows?: number | null
-          total_shifts_assigned?: number | null
-          total_shifts_completed?: number | null
-          total_swaps_accepted?: number | null
-          total_swaps_completed?: number | null
-        }
-        Update: {
-          cancellation_rate?: number | null
-          created_at?: string | null
-          employee_id?: string
-          id?: string
-          last_updated_at?: string | null
-          on_time_percentage?: number | null
-          swap_completion_rate?: number | null
-          total_cancellations?: number | null
-          total_late_arrivals?: number | null
-          total_no_shows?: number | null
-          total_shifts_assigned?: number | null
-          total_shifts_completed?: number | null
-          total_swaps_accepted?: number | null
-          total_swaps_completed?: number | null
-        }
-        Relationships: []
       }
       employee_skills: {
         Row: {
@@ -4239,54 +4111,6 @@ export type Database = {
           },
         ]
       }
-      rest_period_violations: {
-        Row: {
-          employee_id: string
-          first_shift_end: string
-          first_shift_id: string
-          id: string
-          rest_hours: number
-          second_shift_id: string
-          second_shift_start: string
-          violation_detected_at: string | null
-        }
-        Insert: {
-          employee_id: string
-          first_shift_end: string
-          first_shift_id: string
-          id?: string
-          rest_hours: number
-          second_shift_id: string
-          second_shift_start: string
-          violation_detected_at?: string | null
-        }
-        Update: {
-          employee_id?: string
-          first_shift_end?: string
-          first_shift_id?: string
-          id?: string
-          rest_hours?: number
-          second_shift_id?: string
-          second_shift_start?: string
-          violation_detected_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "rest_period_violations_first_shift_id_fkey"
-            columns: ["first_shift_id"]
-            isOneToOne: false
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rest_period_violations_second_shift_id_fkey"
-            columns: ["second_shift_id"]
-            isOneToOne: false
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       role_levels: {
         Row: {
           hierarchy_rank: number
@@ -4793,44 +4617,6 @@ export type Database = {
           },
         ]
       }
-      shift_bid_windows: {
-        Row: {
-          closes_at: string
-          created_at: string | null
-          id: string
-          opens_at: string
-          shift_id: string
-          status: string
-          total_bids: number | null
-        }
-        Insert: {
-          closes_at: string
-          created_at?: string | null
-          id?: string
-          opens_at?: string
-          shift_id: string
-          status?: string
-          total_bids?: number | null
-        }
-        Update: {
-          closes_at?: string
-          created_at?: string | null
-          id?: string
-          opens_at?: string
-          shift_id?: string
-          status?: string
-          total_bids?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shift_bid_windows_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: true
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       shift_bids: {
         Row: {
           allocation_reason: string | null
@@ -4979,42 +4765,6 @@ export type Database = {
             foreignKeyName: "shift_compliance_snapshots_shift_id_fkey"
             columns: ["shift_id"]
             isOneToOne: true
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      shift_event_tags: {
-        Row: {
-          created_at: string | null
-          event_tag_id: string
-          id: string
-          shift_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          event_tag_id: string
-          id?: string
-          shift_id: string
-        }
-        Update: {
-          created_at?: string | null
-          event_tag_id?: string
-          id?: string
-          shift_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shift_event_tags_event_tag_id_fkey"
-            columns: ["event_tag_id"]
-            isOneToOne: false
-            referencedRelation: "event_tags"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_event_tags_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
@@ -5452,54 +5202,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      shift_templates: {
-        Row: {
-          created_at: string | null
-          created_by: string | null
-          department_id: string
-          description: string | null
-          end_date: string | null
-          groups: Json
-          id: string
-          is_draft: boolean
-          name: string
-          start_date: string | null
-          sub_department_id: string | null
-          updated_at: string | null
-          updated_by: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          created_by?: string | null
-          department_id: string
-          description?: string | null
-          end_date?: string | null
-          groups?: Json
-          id?: string
-          is_draft?: boolean
-          name: string
-          start_date?: string | null
-          sub_department_id?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string | null
-          department_id?: string
-          description?: string | null
-          end_date?: string | null
-          groups?: Json
-          id?: string
-          is_draft?: boolean
-          name?: string
-          start_date?: string | null
-          sub_department_id?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Relationships: []
       }
       shifts: {
         Row: {
@@ -6128,41 +5830,6 @@ export type Database = {
             columns: ["supervisor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      swap_approvals: {
-        Row: {
-          action: string
-          actioned_at: string | null
-          approver_id: string
-          comments: string | null
-          id: string
-          swap_request_id: string
-        }
-        Insert: {
-          action: string
-          actioned_at?: string | null
-          approver_id: string
-          comments?: string | null
-          id?: string
-          swap_request_id: string
-        }
-        Update: {
-          action?: string
-          actioned_at?: string | null
-          approver_id?: string
-          comments?: string | null
-          id?: string
-          swap_request_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "swap_approvals_swap_request_id_fkey"
-            columns: ["swap_request_id"]
-            isOneToOne: false
-            referencedRelation: "swap_requests"
             referencedColumns: ["id"]
           },
         ]

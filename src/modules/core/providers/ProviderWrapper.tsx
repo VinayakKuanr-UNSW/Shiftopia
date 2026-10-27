@@ -17,6 +17,7 @@ import { LocaleProvider } from './LocaleProvider';
 import { CapacitorBridge } from '@/platform/capacitor/CapacitorBridge';
 import { NotificationBridge } from '@/platform/notifications/NotificationBridge';
 import { OfflineBanner } from '@/modules/core/ui/components/OfflineBanner';
+import { OfflineCacheGate } from '@/platform/offline/OfflineCacheGate';
 import { shouldRetry } from '@/modules/core/lib/queryRetry';
 
 const queryClient = new QueryClient({
@@ -66,6 +67,7 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
                   <SidebarProvider defaultOpen={true}>
                     <div className="h-full w-full overflow-hidden">
                       <OfflineBanner />
+                      <OfflineCacheGate />
                       <Toaster />
                       <Sonner />
                       <RosterUIProvider>
