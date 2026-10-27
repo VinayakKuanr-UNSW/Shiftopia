@@ -525,6 +525,9 @@ export interface AutoSchedulerResult {
     auditedUncoveredCount?: number;
     capacityCheck?: CapacityCheck;
     proposals: ValidatedProposal[];
+    /** shift id → row version the preview validated. Apply sends it to
+     *  sm_bulk_assign_atomic so a shift changed since is not booked. */
+    shiftVersions?: Record<string, number>;
     canCommit: boolean;
     usedFallback: boolean;
     /** Per-category solver objective breakdown forwarded from the Python service.

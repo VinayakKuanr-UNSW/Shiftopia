@@ -1820,6 +1820,13 @@ export class AutoSchedulerController {
             failing,
             uncoveredV8ShiftIds,
             proposals: compliantProposals,  // only assignments we will actually book
+            // The exact snapshot this preview validated. A shift without a
+            // version is omitted, and the RPC refuses an absent entry.
+            shiftVersions: Object.fromEntries(
+                input.shifts
+                    .filter(s => typeof s.version === 'number')
+                    .map(s => [s.id, s.version as number]),
+            ),
             canCommit: passing > 0,
             usedFallback,
             capacityCheck,
@@ -1887,11 +1894,12 @@ export class AutoSchedulerController {
      *
      * Flow:
      *   1. Group the compliant proposals by employee.
-     *   2. Send the whole list to sm_bulk_assign_atomic via ONE RPC call with a
-     *      per-attempt idempotency key (crypto.randomUUID). Atomic across all
-     *      employees: a hard DB error writes nothing; a retry with the same key
-     *      is a no-op. The RPC's lost-update guard skips any shift claimed by
-     *      another employee since preview and returns it as a conflict.
+     *   2. Send the whole list to sm_bulk_assign_atomic via ONE RPC call with
+     *      the shift versions the preview validated. Atomic across all
+     *      employees: a hard DB error writes nothing. Any shift claimed,
+     *      edited or published since preview is refused and returned as a
+     *      conflict; one already assigned to the intended employee counts as
+     *      booked, so a retried Apply is safe.
      *   3. Map the RPC's per_employee breakdown back to CommitResult shape.
      *
      * NOTE: there is deliberately NO per-employee compliance re-simulation. The
@@ -1900,10 +1908,6 @@ export class AutoSchedulerController {
      * proposals are 100% compliant; re-validating here via scenarioLoader's
      * DB-fetch path used a DIFFERENT data context and disagreed with the preview,
      * silently dropping ~23% of valid assignments. preview == commit now.
-     *
-     * Idempotency key is generated fresh per commit attempt so a manager
-     * clicking Apply twice gets two independent attempts — each is idempotent
-     * within itself (retry-safe) but does not deduplicate across attempts.
      */
     async commit(result: AutoSchedulerResult): Promise<CommitResult> {
         const byEmployee = new Map<string, string[]>();
@@ -1926,23 +1930,18 @@ export class AutoSchedulerController {
         // injectedData, so it re-fetched a DIFFERENT data context from the DB
         // than the preview injected (V8 employee context + existing-roster
         // window). That made it disagree with the preview and silently drop ~23%
-        // of valid assignments. The ONLY genuine apply-time concurrency concern —
-        // a shift claimed by another employee since preview — is handled
-        // atomically by sm_bulk_assign_atomic's lost-update guard, which skips
-        // such shifts and returns them as conflicts. So what the preview approves
-        // is exactly what books.
+        // of valid assignments. Apply-time drift — a shift claimed by someone
+        // else, edited, or published since preview — is refused atomically by
+        // sm_bulk_assign_atomic against the versions the preview validated, and
+        // returned as conflicts. So what the preview approves is exactly what
+        // books, or nothing does.
         const entries = Array.from(byEmployee.entries());
         const atomicAssignments = entries.map(([employeeId, shiftIds]) => ({ employeeId, shiftIds }));
 
-        const idempotencyKey = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-            ? crypto.randomUUID()
-            : undefined;
+        const atomicResult = await assignmentCommitter.commitAtomic(atomicAssignments, result.shiftVersions);
 
-        const atomicResult = await assignmentCommitter.commitAtomic(atomicAssignments, idempotencyKey);
-
-        // Failures/conflicts now come solely from the atomic RPC: a shift grabbed
-        // by another employee since preview (lost-update guard → conflict), or a
-        // hard DB error (→ failedEmployees).
+        // Failures/conflicts come solely from the atomic RPC: a shift changed or
+        // claimed since preview (→ conflict), or a hard DB error (→ failedEmployees).
         const allFailedEmployees = atomicResult.failedEmployees;
         const allConflicts = atomicResult.concurrencyConflicts;
 
@@ -1950,7 +1949,6 @@ export class AutoSchedulerController {
             totalCommitted: atomicResult.totalCommitted,
             failedEmployees: allFailedEmployees,
             concurrencyConflicts: allConflicts,
-            idempotencyKey: idempotencyKey ?? 'none',
         });
 
         // ── F1 fairness-ledger write-back ─────────────────────────────────────

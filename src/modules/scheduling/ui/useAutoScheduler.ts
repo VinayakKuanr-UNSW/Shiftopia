@@ -267,6 +267,9 @@ export function useAutoScheduler({
                 // rest breaks", so HC-9 and dailySpreadRule both read this.
                 // Already in SHIFT_SELECT; this projection was the only gap.
                 paid_break_minutes: s.paid_break_minutes ?? 0,
+                // Apply returns this to sm_bulk_assign_atomic, which refuses a
+                // shift edited after the preview validated this snapshot.
+                version: s.version,
                 // EVERY field the solver and V8 read must be projected here.
                 // These are optional on ShiftMeta, so omitting one is not a type
                 // error — it silently disables the rule that consumes it. That is

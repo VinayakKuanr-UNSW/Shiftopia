@@ -1701,24 +1701,6 @@ export type Database = {
           },
         ]
       }
-      bulk_assign_idempotency: {
-        Row: {
-          created_at: string
-          key: string
-          result: Json
-        }
-        Insert: {
-          created_at?: string
-          key: string
-          result: Json
-        }
-        Update: {
-          created_at?: string
-          key?: string
-          result?: Json
-        }
-        Relationships: []
-      }
       bulk_operations: {
         Row: {
           actor_id: string
@@ -9285,7 +9267,7 @@ export type Database = {
       sm_bulk_assign_atomic: {
         Args: {
           p_assignments: Json
-          p_idempotency_key?: string
+          p_expected_versions?: Json
           p_user_id?: string
         }
         Returns: Json

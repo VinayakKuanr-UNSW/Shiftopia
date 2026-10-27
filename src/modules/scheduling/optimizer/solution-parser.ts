@@ -33,6 +33,9 @@ export interface ShiftMeta {
      * does and refuses pairings V8 would accept.
      */
     paid_break_minutes?: number;
+    /** The row version this snapshot was read at. Apply sends it back so the
+     *  DB refuses a shift edited after the preview checked it. */
+    version?: number;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: TargetEmploymentType | null;
     /** Narrows a 'PT' target to Flexible Part-Time staff only. */

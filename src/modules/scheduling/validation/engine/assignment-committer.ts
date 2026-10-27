@@ -3,7 +3,7 @@
  *
  * Commit path:
  *
- *   commitAtomic(assignments, idempotencyKey?)
+ *   commitAtomic(assignments, expectedVersions?)
  *     Multi-employee atomic path. Calls sm_bulk_assign_atomic for N pairs in a
  *     single DB transaction. Used by AutoSchedulerController.commit() to ensure
  *     all employees are written atomically or rolled back together.
@@ -17,7 +17,8 @@ import type { BulkAssignAtomicResponse } from '@/modules/rosters/api/contracts';
 export interface AtomicCommitResult {
     success: boolean;
     totalCommitted: number;
-    /** Shift IDs that were not applied because another employee now holds them. */
+    /** Shift IDs not applied: another employee now holds them, or they changed
+     *  (version moved, or no longer a Draft) since the preview checked them. */
     concurrencyConflicts: string[];
     /** Employee IDs whose entire commit set produced zero committed shifts. */
     failedEmployees: string[];
@@ -32,17 +33,17 @@ export class AssignmentCommitter {
      *
      * Sends all (employee → shifts[]) pairs to sm_bulk_assign_atomic in a single
      * RPC call which runs inside one implicit plpgsql transaction. Either ALL
-     * qualifying rows are written (shifts that pass the lost-update guard) or on
-     * a hard DB error NONE are. Shifts held by a different employee are returned
-     * as concurrency conflicts, not errors.
+     * qualifying rows are written or on a hard DB error NONE are. Shifts held by
+     * a different employee, or changed since the preview, are returned as
+     * concurrency conflicts, not errors.
      *
-     * @param assignments     Pairs to commit.
-     * @param idempotencyKey  If supplied and already stored, the cached result is
-     *                        returned without re-executing any UPDATEs.
+     * @param assignments       Pairs to commit.
+     * @param expectedVersions  shift id → version the preview validated. See
+     *                          shiftsCommands.bulkAssignShiftsAtomic.
      */
     async commitAtomic(
         assignments: { employeeId: string; shiftIds: string[] }[],
-        idempotencyKey?: string,
+        expectedVersions?: Record<string, number>,
     ): Promise<AtomicCommitResult> {
         if (assignments.length === 0) {
             return {
@@ -55,15 +56,11 @@ export class AssignmentCommitter {
             };
         }
 
-        console.debug(
-            '[AssignmentCommitter] Atomic commit: %d employees, key=%s',
-            assignments.length,
-            idempotencyKey ?? 'none',
-        );
+        console.debug('[AssignmentCommitter] Atomic commit: %d employees', assignments.length);
 
         let response: BulkAssignAtomicResponse;
         try {
-            response = await shiftsCommands.bulkAssignShiftsAtomic(assignments, idempotencyKey);
+            response = await shiftsCommands.bulkAssignShiftsAtomic(assignments, expectedVersions);
         } catch (err: any) {
             console.error('[AssignmentCommitter] Atomic RPC error:', err);
             return {
