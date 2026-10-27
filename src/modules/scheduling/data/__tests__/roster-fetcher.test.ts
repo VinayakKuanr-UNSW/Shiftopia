@@ -182,6 +182,34 @@ describe('RosterFetcher.fetchExistingRoster', () => {
         expect(result.get('e2')).toHaveLength(1);
     });
 
+    it('carries paid_break_minutes so the solver nets rest pauses out of the cl 39.2 spread on pinned shifts', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            bulkRpc: {
+                data: [
+                    {
+                        id: 'paused', assigned_employee_id: 'e1',
+                        shift_date: '2026-05-10', start_time: '06:00:00',
+                        end_time: '11:00:00', unpaid_break_minutes: 0, paid_break_minutes: 20,
+                    },
+                    {
+                        id: 'legacy', assigned_employee_id: 'e2',
+                        shift_date: '2026-05-10', start_time: '06:00:00',
+                        end_time: '11:00:00', unpaid_break_minutes: 0, paid_break_minutes: null,
+                    },
+                ],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchExistingRoster(
+            [shift('s1', '2026-05-15')],
+            [employee('e1'), employee('e2')],
+        );
+
+        expect(result.get('e1')![0].paid_break_minutes).toBe(20);
+        expect(result.get('e2')![0].paid_break_minutes).toBe(0);
+    });
+
     it('excludes the candidate shifts themselves from the existing-roster context', async () => {
         // The shift the solver is being asked about (s1) shouldn't be
         // returned as "already committed" — that would make it look
@@ -326,6 +354,49 @@ describe('RosterFetcher.fetchAvailability', () => {
         // Slot presence → assume "has data"
         expect(result.get('e1')!.hasAnyData).toBe(true);
         warnSpy.mockRestore();
+    });
+
+    it('marks employee as "has data" when in-window slots exist even if rules table had no record for them', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            availabilitySlots: {
+                data: [{
+                    profile_id: 'e1', slot_date: '2026-05-15',
+                    start_time: '08:00:00', end_time: '18:00:00',
+                }],
+                error: null,
+            },
+            availabilityRules: { data: [], error: null },
+        }));
+
+        const result = await fetcher.fetchAvailability(
+            [shift('s1', '2026-05-15')],
+            [employee('e1')],
+        );
+
+        expect(result.get('e1')!.hasAnyData).toBe(true);
+        expect(result.get('e1')!.slots).toHaveLength(1);
+    });
+
+    it('marks multiple employees as "has data" across repeated rule rows without limit starvation', async () => {
+        // e1 has 5 rules, e2 has 1 rule. Neither should starve the other.
+        const fetcher = new RosterFetcher(mockSupabase({
+            availabilitySlots: { data: [], error: null },
+            availabilityRules: {
+                data: [
+                    { profile_id: 'e1' }, { profile_id: 'e1' }, { profile_id: 'e1' },
+                    { profile_id: 'e1' }, { profile_id: 'e1' }, { profile_id: 'e2' },
+                ],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchAvailability(
+            [shift('s1', '2026-05-15')],
+            [employee('e1'), employee('e2')],
+        );
+
+        expect(result.get('e1')!.hasAnyData).toBe(true);
+        expect(result.get('e2')!.hasAnyData).toBe(true);
     });
 
     it('treats Full-Time employees as contract-available without querying availability rules/slots', async () => {

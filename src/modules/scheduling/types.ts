@@ -66,6 +66,9 @@ export interface ExistingShiftRef {
     end_time: string;       // HH:MM
     duration_minutes: number;
     unpaid_break_minutes: number;
+    /** cl 39.2 nets rest breaks out of the split-shift spread; the solver's
+     *  HC-9/HC-13 read this on pinned shifts as well as candidates. */
+    paid_break_minutes?: number;
 }
 
 /**
@@ -225,6 +228,17 @@ export interface OptimizerEmployee {
     ordinary_span_end?: string | null;
     /** ISO weekdays (1=Mon .. 7=Sun) the span applies on. Empty = all seven. */
     ordinary_days?: number[];
+    /**
+     * cl 35.x(a) declared work cycle (1-4 weeks) and the Monday it counts from
+     * (`hr.user_contracts`). The solver's HC-4 averages ordinary hours over this
+     * ANCHORED cycle and falls back to 4 / '2024-01-01' when omitted.
+     *
+     * NOT YET HYDRATED by the controller. Harmless today only because every
+     * contract carries those defaults; once one declares another cycle the
+     * solver will average on the wrong window while V8 uses the declared one.
+     */
+    ordinary_hours_cycle_weeks?: number;
+    ordinary_hours_cycle_anchor?: string;
     /**
      * Severity-based availability windows: tuples of
      * `[start_time, end_time, severity]` where severity is 'HARD',

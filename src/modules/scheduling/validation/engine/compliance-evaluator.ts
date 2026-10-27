@@ -47,6 +47,9 @@ function candidateToRosterShift(s: CandidateShift): RosterShift {
         start_time: s.start_time,
         end_time: s.end_time,
         unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+        // Dropping this made dailySpreadRule measure a wider cl 39.2 spread than
+        // the solver and the DB trigger, rejecting lawful split shifts.
+        paid_break_minutes: s.paid_break_minutes ?? 0,
         role_id: s.role_id ?? undefined,
         sub_department_id: s.sub_department_id ?? null,
         user_contract_id: s.user_contract_id ?? null,

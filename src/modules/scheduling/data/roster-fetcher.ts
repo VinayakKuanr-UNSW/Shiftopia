@@ -129,6 +129,7 @@ export class RosterFetcher {
                     start_time: string;
                     end_time: string;
                     unpaid_break_minutes: number;
+                    paid_break_minutes: number | null;
                 }>;
 
                 // Group by employee
@@ -146,6 +147,7 @@ export class RosterFetcher {
                                 normalizeTime(r.end_time),
                             ),
                             unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
+                            paid_break_minutes: r.paid_break_minutes ?? 0,
                         }));
                     result.set(emp.id, refs);
                 }
@@ -189,6 +191,7 @@ export class RosterFetcher {
                                 normalizeTime(r.end_time),
                             ),
                             unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
+                            paid_break_minutes: r.paid_break_minutes ?? 0,
                         }));
                     result.set(emp.id, refs);
                 } catch (err) {
@@ -298,8 +301,7 @@ export class RosterFetcher {
         const { data: hasDataRows, error: hasErr } = await this.supabase
             .from('availability_rules')
             .select('profile_id')
-            .in('profile_id', nonFtEmployeeIds)
-            .limit(nonFtEmployeeIds.length);
+            .in('profile_id', nonFtEmployeeIds);
 
         if (hasErr) {
             // Fall back to inferring from in-window slots: if the employee
@@ -329,7 +331,7 @@ export class RosterFetcher {
             const slots = slotsByEmp.get(emp.id) ?? [];
             const hasAnyData = hasErr
                 ? slots.length > 0
-                : hasDataSet.has(emp.id);
+                : (hasDataSet.has(emp.id) || slots.length > 0);
             result.set(emp.id, { slots, hasAnyData });
         }
 

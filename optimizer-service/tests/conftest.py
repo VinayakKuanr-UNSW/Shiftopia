@@ -16,6 +16,9 @@ from __future__ import annotations
 import os
 import sys
 
+# Ensure test runs default to disabled auth unless overridden
+os.environ.setdefault('OPTIMIZER_AUTH_DISABLED', 'true')
+
 import pytest
 
 # Make the model_builder importable from the tests/ subdirectory.

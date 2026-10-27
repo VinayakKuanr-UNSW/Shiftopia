@@ -410,6 +410,7 @@ class ExistingShiftInput:
     unpaid_break_minutes: int = 0
     start_abs: int = 0
     end_abs: int = 0
+    paid_break_minutes: int = 0
 
 
 @dataclass
@@ -836,19 +837,83 @@ def existing_blocks_proposal(
     proposed: ShiftInput,
     existing_list: list[ExistingShiftInput],
     standard_min_rest: int,
+    emp: Optional['EmployeeInput'] = None,
 ) -> bool:
     """True if any of the employee's existing (pinned) shifts overlaps or
-    violates rest-gap against the proposed shift.
+    violates rest-gap or same-day labour rules against the proposed shift.
     
     Respects ICC EBA Multi-Hire rule: 8h (480m) gap if either shift is MULTI_HIRE, 
     otherwise standard 10h (600m).
     """
+    # FT works at most one shift per day (cl 39.1 + trigger fn_shift_ft_one_per_day)
+    # trg_shift_ft_one_per_day triggers when target_employment_type == 'FT'
+    if getattr(proposed, 'target_employment_type', None) == 'FT' or (
+        emp is not None and emp.employment_type == 'FT' and getattr(proposed, 'target_employment_type', None) is not None
+    ):
+        if any(ex.shift_date == proposed.shift_date for ex in existing_list):
+            return True
+
     for ex in existing_list:
         # Multi-hire logic: if the proposed shift is multi-hire, 
         # the required gap drops to 8h (480m).
         required = 480 if getattr(proposed, 'shift_type', 'NORMAL') == 'MULTI_HIRE' else standard_min_rest
         if rest_gap_violated(proposed, ex, required):
             return True
+
+        # Same-day checks against pinned existing shifts
+        if emp is not None and proposed.shift_date == ex.shift_date:
+            s_abs_start, s_abs_end = shift_window(proposed)
+            ex_abs_start, ex_abs_end = shift_window(ex)
+
+            # (a) 12h Daily Spread (cl 39.2 for PT / Sch 3 §5.3(g) for Casual Security)
+            is_split_pop = emp.employment_type == 'PT'
+            is_casual_sec = emp.employment_type == 'Casual' and emp.is_security_role
+            if is_split_pop or is_casual_sec:
+                gross = max(s_abs_end, ex_abs_end) - min(s_abs_start, ex_abs_start)
+                if is_split_pop:
+                    breaks = (
+                        (getattr(proposed, 'unpaid_break_minutes', 0) or 0)
+                        + (getattr(proposed, 'paid_break_minutes', 0) or 0)
+                        + (getattr(ex, 'unpaid_break_minutes', 0) or 0)
+                        + (getattr(ex, 'paid_break_minutes', 0) or 0)
+                    )
+                    net = max(0, gross - breaks)
+                    if net > SPLIT_SHIFT_SPREAD_MINUTES:
+                        return True
+                elif is_casual_sec:
+                    if gross > CASUAL_SECURITY_SPREAD_MINUTES:
+                        return True
+
+            # (b) Daily Pairing Rules (cl 36.1 and Sch 3 §5.3(g))
+            def in_shift_break(sh):
+                if emp.is_security_role:
+                    return min(getattr(sh, 'paid_break_minutes', 0) or 0, 60)
+                return getattr(sh, 'unpaid_break_minutes', 0) or 0
+
+            def worked(sh):
+                return max(0, sh.duration_minutes - in_shift_break(sh))
+
+            if is_casual_sec and (
+                worked(proposed) < CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES
+                or worked(ex) < CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES
+            ):
+                return True
+
+            if worked(proposed) + worked(ex) > DAILY_MEAL_BREAK_THRESHOLD_MINUTES:
+                if s_abs_start < ex_abs_start:
+                    gap = max(0, ex_abs_start - s_abs_end)
+                else:
+                    gap = max(0, s_abs_start - ex_abs_end)
+                longest_break = max(in_shift_break(proposed), in_shift_break(ex), gap)
+                if longest_break < DAILY_MEAL_BREAK_MIN_MINUTES:
+                    return True
+
+    # (c) Casual max 2 engagements per day (cl 35.4(f))
+    if emp is not None and emp.employment_type == 'Casual':
+        same_day_ex = sum(1 for ex in existing_list if ex.shift_date == proposed.shift_date)
+        if same_day_ex >= MAX_CASUAL_DAILY_ENGAGEMENTS:
+            return True
+
     return False
 
 
@@ -1018,9 +1083,9 @@ def employee_eligible(
     if c.enforce_skill_match and shift.required_license_ids:
         if not set(shift.required_license_ids).issubset(set(emp.license_ids)):
             return False
-    # HC-3: Rest Gap / Overlap with EXISTING
+    # HC-3: Rest Gap / Overlap / Same-day pairing with EXISTING
     if emp.existing_shifts and existing_blocks_proposal(
-        shift, emp.existing_shifts, c.min_rest_minutes,
+        shift, emp.existing_shifts, c.min_rest_minutes, emp=emp,
     ):
         if not c.relax_constraints:
             return False
@@ -1205,7 +1270,7 @@ def compute_greedy_hint(
             if conflict:
                 continue
             if emp.existing_shifts and existing_blocks_proposal(
-                shift, emp.existing_shifts, required,
+                shift, emp.existing_shifts, required, emp=emp,
             ):
                 continue
             load = sum(s.duration_minutes for s in assigned_shifts[emp.id])
@@ -2214,6 +2279,38 @@ class ScheduleModelBuilder:
                     # Tier 0: Hard Legal Compliance (100,000,000 penalty)
                     self._hard_legal_slack_terms.append(100_000_000 * engage_over)
 
+            # 4d. Full-Time 1-shift/day (ICC EBA cl. 39.1 + fn_shift_ft_one_per_day)
+            # A full-time employee works one shift a day; split shifts are not permitted.
+            # trg_shift_ft_one_per_day enforces this when target_employment_type == 'FT'.
+            if emp.employment_type == 'FT':
+                ft_new: dict[int, list] = {}
+                ft_existing: set[int] = set()
+                for s in self.data.shifts:
+                    if s.target_employment_type != 'FT':
+                        continue
+                    var = self._x.get((emp.id, s.id))
+                    if var is None:
+                        continue
+                    di = (shift_window(s)[0] // 1440) - d0_abs
+                    if 0 <= di < num_calendar_days:
+                        ft_new.setdefault(di, []).append(var)
+                for ex in emp.existing_shifts:
+                    di = (shift_window(ex)[0] // 1440) - d0_abs
+                    if 0 <= di < num_calendar_days:
+                        ft_existing.add(di)
+                for di, vars_on_day in ft_new.items():
+                    if di in ft_existing:
+                        for v in vars_on_day:
+                            self.model.Add(v == 0)
+                    elif len(vars_on_day) > 1:
+                        ft_over = self.model.NewIntVar(
+                            0, len(vars_on_day), f'ft1d_{emp.id[:4]}_{di}'
+                        )
+                        self.model.Add(
+                            cp_model.LinearExpr.Sum(vars_on_day) - ft_over <= 1
+                        )
+                        self._hard_legal_slack_terms.append(100_000_000 * ft_over)
+
             # 5. Student Visa Constraint (HC-12: Rolling 14 days, Dynamic Limit)
             if emp.is_student:
                 for i in range(num_calendar_days):
@@ -2288,7 +2385,6 @@ class ScheduleModelBuilder:
             shifts_by_day.setdefault(s.shift_date, []).append(s)
 
         for date, day_shifts in shifts_by_day.items():
-            if len(day_shifts) < 2: continue
             for emp in self.data.employees:
                 # TWO populations, TWO measures — see the docstring.
                 #
@@ -2309,13 +2405,18 @@ class ScheduleModelBuilder:
                 if not is_split_shift_population and not is_casual_security:
                     continue
 
+                ex_shifts = [ex for ex in emp.existing_shifts if ex.shift_date == date]
+
                 active_vars = []
                 for s in day_shifts:
                     var = self._x.get((emp.id, s.id))
                     if var is not None:
                         active_vars.append((s, var))
                 
-                if len(active_vars) < 2: continue
+                if len(active_vars) + len(ex_shifts) < 2:
+                    continue
+                if not active_vars:
+                    continue
 
                 # CRITICAL: compare day-relative minutes (0..2880), NOT
                 # absolute minutes since 1970. shift_window() returns
@@ -2336,6 +2437,20 @@ class ScheduleModelBuilder:
                     self.model.Add(d_start <= s_start_rel).OnlyEnforceIf(v)
                     self.model.Add(d_end >= s_end_rel).OnlyEnforceIf(v)
 
+                any_active = None
+                if ex_shifts:
+                    any_active = self.model.NewBoolVar(f'spread_active_{emp.id[:4]}_{date}')
+                    for _, v in active_vars:
+                        self.model.Add(any_active >= v)
+                    self.model.Add(any_active <= cp_model.LinearExpr.Sum([v for _, v in active_vars]))
+                    for ex in ex_shifts:
+                        ex_abs_start, ex_abs_end = shift_window(ex)
+                        ex_day_base = (ex_abs_start // 1440) * 1440
+                        ex_start_rel = ex_abs_start - ex_day_base
+                        ex_end_rel = ex_abs_end - ex_day_base
+                        self.model.Add(d_start <= ex_start_rel).OnlyEnforceIf(any_active)
+                        self.model.Add(d_end >= ex_end_rel).OnlyEnforceIf(any_active)
+
                 # cl 39.2 says "excluding meal AND rest breaks", so BOTH fields
                 # come out — not just the unpaid meal. Reading only the unpaid
                 # half measured a longer spread than the labour layer did and
@@ -2353,9 +2468,19 @@ class ScheduleModelBuilder:
                             for s, v in active_vars
                         ) if mins > 0
                     ]
+                    break_components = [mins * v for mins, v in break_terms]
+                    if ex_shifts and any_active is not None:
+                        ex_break_sum = sum(
+                            (getattr(ex, 'unpaid_break_minutes', 0) or 0)
+                            + (getattr(ex, 'paid_break_minutes', 0) or 0)
+                            for ex in ex_shifts
+                        )
+                        if ex_break_sum > 0:
+                            break_components.append(ex_break_sum * any_active)
+
                     break_expr = cp_model.LinearExpr.Sum(
-                        [mins * v for mins, v in break_terms]
-                    ) if break_terms else 0
+                        break_components
+                    ) if break_components else 0
                     limit = SPLIT_SHIFT_SPREAD_MINUTES
                 else:
                     break_expr = 0
@@ -2417,9 +2542,6 @@ class ScheduleModelBuilder:
             shifts_by_day.setdefault(s.shift_date, []).append(s)
 
         for date, day_shifts in shifts_by_day.items():
-            if len(day_shifts) < 2:
-                continue
-
             for emp in self.data.employees:
                 is_casual_security = (
                     emp.employment_type == 'Casual' and emp.is_security_role
@@ -2441,12 +2563,16 @@ class ScheduleModelBuilder:
                 def worked(sh):
                     return max(0, sh.duration_minutes - in_shift_break(sh))
 
+                ex_shifts = [ex for ex in emp.existing_shifts if ex.shift_date == date]
+
                 active = []
                 for s in day_shifts:
                     var = self._x.get((emp.id, s.id))
                     if var is not None:
                         active.append((s, var))
-                if len(active) < 2:
+                if len(active) + len(ex_shifts) < 2:
+                    continue
+                if not active:
                     continue
 
                 for i in range(len(active)):
@@ -2489,6 +2615,41 @@ class ScheduleModelBuilder:
                         self.model.Add(pair >= v_i + v_j - 1)
                         # Tier 0: Hard Legal Compliance, same weight as every
                         # other legal cap here.
+                        self._hard_legal_slack_terms.append(100_000_000 * pair)
+
+                # Pairings between candidate shift and pinned existing shift
+                for s_i, v_i in active:
+                    for ex in ex_shifts:
+                        breaches = []
+                        if is_casual_security and (
+                            worked(s_i) < CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES
+                            or worked(ex) < CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES
+                        ):
+                            breaches.append('sec3h')
+
+                        a_start, a_end = shift_window(s_i)
+                        b_start, b_end = shift_window(ex)
+                        if b_start < a_start:
+                            a_start, a_end, b_start, b_end = b_start, b_end, a_start, a_end
+                        gap = max(0, b_start - a_end)
+
+                        longest_break = max(
+                            in_shift_break(s_i), in_shift_break(ex), gap
+                        )
+                        if (
+                            worked(s_i) + worked(ex) > DAILY_MEAL_BREAK_THRESHOLD_MINUTES
+                            and longest_break < DAILY_MEAL_BREAK_MIN_MINUTES
+                        ):
+                            breaches.append('meal')
+
+                        if not breaches:
+                            continue
+
+                        # ex is fixed (1), so if v_i == 1, pair is breached
+                        pair = self.model.NewBoolVar(
+                            f'pair_{"_".join(breaches)}_{emp.id[:4]}_{s_i.id[:4]}_{ex.id[:4]}'
+                        )
+                        self.model.Add(pair >= v_i)
                         self._hard_legal_slack_terms.append(100_000_000 * pair)
 
     # -- HC-6: Time-Coupled Capacity --------------------------------------------
@@ -2636,22 +2797,31 @@ class ScheduleModelBuilder:
             cost_mult = _strategy_mult(self.data.strategy.cost_weight)
             weighted_allowance = int(allowance_cents * cost_mult)
 
-            shifts_by_day_sc12 = {}
+            shifts_by_day_sc12: dict[str, list] = {}
             for sh in self.data.shifts:
                 shifts_by_day_sc12.setdefault(sh.shift_date, []).append(sh)
 
             for emp in self.data.employees:
                 if emp.employment_type != 'PT':
                     continue
-                for date, day_shifts in shifts_by_day_sc12.items():
-                    if len(day_shifts) < 2:
-                        continue
+
+                emp_existing_by_date: dict[str, list] = {}
+                for ex in emp.existing_shifts:
+                    emp_existing_by_date.setdefault(ex.shift_date, []).append(ex)
+
+                all_dates = set(shifts_by_day_sc12.keys()) | set(emp_existing_by_date.keys())
+                for date in all_dates:
+                    day_shifts = shifts_by_day_sc12.get(date, [])
+                    ex_shifts = emp_existing_by_date.get(date, [])
+
                     active = [
                         (sh, self._x[(emp.id, sh.id)])
                         for sh in day_shifts
                         if (emp.id, sh.id) in self._x
                     ]
-                    if len(active) < 2:
+                    if len(active) + len(ex_shifts) < 2:
+                        continue
+                    if not active:
                         continue
 
                     # Which PAIRS are close enough to be a split shift is fixed
@@ -2673,6 +2843,19 @@ class ScheduleModelBuilder:
                             )
                             self.model.Add(pv >= v_i + v_j - 1)
                             pair_vars.append(pv)
+
+                    # Candidate vs pinned existing shifts
+                    for s_i, v_i in active:
+                        for ex in ex_shifts:
+                            a_start, a_end = shift_window(s_i)
+                            b_start, b_end = shift_window(ex)
+                            if b_start < a_start:
+                                a_start, a_end, b_start, b_end = b_start, b_end, a_start, a_end
+                            gap = b_start - a_end
+                            if gap < 0 or gap > MAX_SPLIT_SHIFT_GAP_MINUTES:
+                                continue
+                            # ex is already committed (indicator 1), so pv >= v_i + 1 - 1 => pv >= v_i
+                            pair_vars.append(v_i)
 
                     if not pair_vars:
                         continue

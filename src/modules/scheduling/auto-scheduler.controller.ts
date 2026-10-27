@@ -890,6 +890,7 @@ async function greedyFallback(
                                 end_time: e.end_time,
                                 assigned_employee_id: emp.id,
                                 unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
+                                paid_break_minutes: e.paid_break_minutes ?? 0,
                             })) as any,
                             employee: {
                                 id: emp.id,
@@ -2169,6 +2170,7 @@ export class AutoSchedulerController {
                     id: s.id, shift_date: s.shift_date, start_time: s.start_time,
                     end_time: s.end_time, duration_minutes: s.duration_minutes,
                     unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+                    paid_break_minutes: s.paid_break_minutes ?? 0,
                 });
                 pinsByEmp.set(p.employeeId, arr);
             }
@@ -2281,6 +2283,7 @@ export class AutoSchedulerController {
                                 role_id: p.roleId,
                                 lifecycle_status: 'draft',
                                 unpaid_break_minutes: p.unpaidBreakMinutes ?? 0,
+                                paid_break_minutes: p.paidBreakMinutes ?? 0,
                                 // Without these the rebuilt candidate loses its
                                 // employment target and V8_EMPLOYMENT_TARGET goes
                                 // silent, so this validator would keep ratifying
@@ -2295,6 +2298,7 @@ export class AutoSchedulerController {
                                 end_time: e.end_time,
                                 assigned_employee_id: group.employeeId,
                                 unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
+                                paid_break_minutes: e.paid_break_minutes ?? 0,
                             })) as any,
                             employee: {
                                 id: group.employeeId,

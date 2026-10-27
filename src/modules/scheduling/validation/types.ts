@@ -34,6 +34,8 @@ export interface CandidateShift {
     /** The contract a committed shift is linked to (shifts.user_contract_id). */
     user_contract_id?: string | null;
     unpaid_break_minutes?: number;
+    /** Paid rest pauses. `dailySpreadRule` nets them out of the cl 39.2 spread. */
+    paid_break_minutes?: number;
     /** Qualification IDs required to work this shift (skill IDs). */
     required_skills?: string[] | null;
     /** Qualification IDs required to work this shift (license IDs). */
