@@ -53,6 +53,7 @@ vi.mock('@/modules/scheduling/data/roster-fetcher', async (importOriginal) => {
             // Empty = no contract has an ordinary-hours envelope, which is
             // production's state and keeps this test about day-type flags only.
             fetchOrdinaryHoursEnvelopes: vi.fn().mockResolvedValue(new Map()),
+            fetchOrdinaryHoursCycles:    vi.fn().mockResolvedValue(new Map()),
         },
     };
 });
@@ -69,6 +70,7 @@ vi.mock('@/modules/rosters/services/fairnessLedger.service', () => ({
 
 import { AutoSchedulerController } from '../auto-scheduler.controller';
 import { optimizerClient } from '@/modules/scheduling/optimizer/optimizer.client';
+import { rosterFetcher } from '@/modules/scheduling/data/roster-fetcher';
 
 const mockOptimize = optimizerClient.optimize as ReturnType<typeof vi.fn>;
 
@@ -155,5 +157,30 @@ describe('F-01: optimizer payload day-type flags', () => {
             expect(typeof s.is_sunday, `${id}.is_sunday`).toBe('boolean');
             expect(typeof s.is_public_holiday, `${id}.is_public_holiday`).toBe('boolean');
         }
+    });
+});
+
+// Same producer-side reasoning, for the employee half of the payload: the solver
+// accepted the declared work cycle for weeks while no producer ever sent it, so
+// it averaged everyone over 4 weeks while V8 used the declared cycle.
+describe('optimizer payload: declared work cycle', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2027-01-05T00:00:00Z'));
+    });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('sends each employee the cycle the fetcher resolved', async () => {
+        (rosterFetcher.fetchOrdinaryHoursCycles as ReturnType<typeof vi.fn>).mockResolvedValueOnce(new Map([
+            ['e1', { ordinary_hours_cycle_weeks: 2, ordinary_hours_cycle_anchor: '2026-03-02' }],
+        ]));
+        await shiftsSentToOptimizer({ wed: WEEKDAY });
+
+        const request = mockOptimize.mock.calls[0][0] as { employees: Array<Record<string, unknown>> };
+        expect(request.employees[0]).toMatchObject({
+            ordinary_hours_cycle_weeks: 2,
+            ordinary_hours_cycle_anchor: '2026-03-02',
+        });
     });
 });

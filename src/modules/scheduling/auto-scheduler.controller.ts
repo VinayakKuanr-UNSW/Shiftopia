@@ -1071,6 +1071,9 @@ export class AutoSchedulerController {
         // which is production's current state and a safe one.
         const envelopes = await rosterFetcher.fetchOrdinaryHoursEnvelopes(input.employees);
         throwIfAborted();
+        // Declared cl 35.x(a) work cycle (solver HC-4), resolved as V8 resolves it.
+        const workCycles = await rosterFetcher.fetchOrdinaryHoursCycles(input.employees);
+        throwIfAborted();
         const totalExisting = Array.from(existingRoster.values())
             .reduce((acc, list) => acc + list.length, 0);
         if (totalExisting > 0) {
@@ -1397,6 +1400,7 @@ export class AutoSchedulerController {
                 // `unavailable_dates`: a caller-supplied `employeeDetails` must
                 // not be able to widen someone's rosterable span.
                 ...(envelopes.get(e.id) ?? {}),
+                ...(workCycles.get(e.id) ?? {}),
                 // WINDOW-SCALED limits — like `unavailable_dates` below, these MUST
                 // sit after the `...det` spread. They were previously written above
                 // it, so any caller-supplied `employeeDetails` carrying either key

@@ -88,8 +88,8 @@ const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({
     // drops it at the wire boundary and the envelope silently stops binding —
     // which for an FT, who carries no availability slots, means available 24/7.
     ordinary_span_start: 0, ordinary_span_end: 0, ordinary_days: 0,
-    // cl 35.x(a) anchored work cycle (HC-4). Accepted on the wire; see the
-    // OptimizerEmployee comment for its hydration status.
+    // cl 35.x(a) anchored work cycle (HC-4). Dropped at the wire it would leave
+    // the solver averaging on 4 weeks while V8 used the declared cycle.
     ordinary_hours_cycle_weeks: 0, ordinary_hours_cycle_anchor: 0,
     availability_overrides: 0, fairness_debts: 0,
     initial_effective_minutes: 0,

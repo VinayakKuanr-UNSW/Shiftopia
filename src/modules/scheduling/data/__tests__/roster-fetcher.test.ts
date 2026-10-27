@@ -588,6 +588,38 @@ describe('RosterFetcher.fetchOrdinaryHoursEnvelopes', () => {
 // fetchEmployeeContractDetails
 // ---------------------------------------------------------------------------
 
+describe('RosterFetcher.fetchOrdinaryHoursCycles', () => {
+    const cycleRow = (user_id: string, weeks: number | null, anchor: string | null) => ({
+        user_id, ordinary_hours_cycle_weeks: weeks, ordinary_hours_cycle_anchor: anchor,
+    });
+
+    it('resolves a multi-contract person as V8 does: shortest cycle, first declared anchor', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [
+                    cycleRow('p1', 4, null),
+                    cycleRow('p1', 2, '2026-03-02'),
+                    cycleRow('p2', 3, '2025-06-02'),
+                ],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchOrdinaryHoursCycles([employee('p1', 'PT'), employee('p2', 'PT')]);
+
+        expect(result.get('p1')).toEqual({ ordinary_hours_cycle_weeks: 2, ordinary_hours_cycle_anchor: '2026-03-02' });
+        expect(result.get('p2')).toEqual({ ordinary_hours_cycle_weeks: 3, ordinary_hours_cycle_anchor: '2025-06-02' });
+    });
+
+    it('returns nothing on a failed read, so the solver keeps its 4-week default', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: null, error: { message: 'boom' } },
+        }));
+
+        expect((await fetcher.fetchOrdinaryHoursCycles([employee('p1', 'PT')])).size).toBe(0);
+    });
+});
+
 describe('RosterFetcher.fetchEmployeeContractDetails', () => {
     it('returns empty map for empty employee list', async () => {
         const fetcher = new RosterFetcher(mockSupabase({}));

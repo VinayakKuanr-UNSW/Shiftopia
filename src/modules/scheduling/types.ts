@@ -232,10 +232,8 @@ export interface OptimizerEmployee {
      * cl 35.x(a) declared work cycle (1-4 weeks) and the Monday it counts from
      * (`hr.user_contracts`). The solver's HC-4 averages ordinary hours over this
      * ANCHORED cycle and falls back to 4 / '2024-01-01' when omitted.
-     *
-     * NOT YET HYDRATED by the controller. Harmless today only because every
-     * contract carries those defaults; once one declares another cycle the
-     * solver will average on the wrong window while V8 uses the declared one.
+     * Hydrated by `RosterFetcher.fetchOrdinaryHoursCycles`, which resolves a
+     * multi-contract person exactly as V8 does (shortest cycle, first anchor).
      */
     ordinary_hours_cycle_weeks?: number;
     ordinary_hours_cycle_anchor?: string;

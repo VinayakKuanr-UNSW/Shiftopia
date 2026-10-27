@@ -24,6 +24,7 @@ import type { AvailabilityOverrideRef, ExistingShiftRef, OptimizerEmployee } fro
 import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 import { isFullTimeEmployee } from '@/modules/core/model/employment.types';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import { normaliseCycleAnchor, resolveGoverningCycleWeeks } from '@/modules/compliance/ordinary-hours-cycle';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 // =============================================================================
@@ -622,6 +623,55 @@ export class RosterFetcher {
                 '[RosterFetcher] Ordinary-hours envelope binds for %d/%d employees (HC-5e)',
                 result.size, employees.length,
             );
+        }
+        return result;
+    }
+
+    /**
+     * Declared cl 35.x(a) work cycle per employee (solver HC-4).
+     *
+     * Resolved EXACTLY as V8 resolves it in `fetchV8EmployeeContext`, through the
+     * same two helpers: the SHORTEST cycle across the person's Active contracts
+     * and the first declared anchor. Any other pick lets the solver average over
+     * a window V8 does not, so it proposes rosters the labour layer rejects.
+     *
+     * On a failed read the map is empty and the solver falls back to 4 weeks from
+     * 2024-01-01 — the same defaults V8 takes when it cannot read the columns.
+     */
+    async fetchOrdinaryHoursCycles(
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, Pick<OptimizerEmployee, 'ordinary_hours_cycle_weeks' | 'ordinary_hours_cycle_anchor'>>> {
+        const result = new Map<string, Pick<OptimizerEmployee, 'ordinary_hours_cycle_weeks' | 'ordinary_hours_cycle_anchor'>>();
+        if (employees.length === 0) return result;
+
+        const { data, error } = await this.supabase
+            .from('user_contracts')
+            .select('user_id,ordinary_hours_cycle_weeks,ordinary_hours_cycle_anchor')
+            .in('user_id', employees.map(e => e.id))
+            .eq('status', 'Active');
+
+        if (error) {
+            console.warn('[RosterFetcher] Work-cycle fetch failed — solver uses the default 4-week cycle this run', error);
+            return result;
+        }
+
+        type Row = {
+            user_id: string;
+            ordinary_hours_cycle_weeks: number | null;
+            ordinary_hours_cycle_anchor: string | null;
+        };
+        const byUser = new Map<string, Row[]>();
+        for (const row of (data ?? []) as Row[]) {
+            byUser.set(row.user_id, [...(byUser.get(row.user_id) ?? []), row]);
+        }
+
+        for (const [userId, rows] of byUser) {
+            result.set(userId, {
+                ordinary_hours_cycle_weeks: resolveGoverningCycleWeeks(rows.map(r => r.ordinary_hours_cycle_weeks)),
+                ordinary_hours_cycle_anchor: normaliseCycleAnchor(
+                    rows.find(r => r.ordinary_hours_cycle_anchor)?.ordinary_hours_cycle_anchor,
+                ),
+            });
         }
         return result;
     }
