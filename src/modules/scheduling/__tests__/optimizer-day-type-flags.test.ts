@@ -160,6 +160,17 @@ describe('F-01: optimizer payload day-type flags', () => {
     });
 });
 
+describe('optimizer payload: empty input', () => {
+    it('refuses a run with no shifts instead of sending NaN weekly caps', async () => {
+        vi.clearAllMocks();
+        await expect(new AutoSchedulerController().run({
+            shifts: [],
+            employees: [{ id: 'e1', name: 'Emp One', contract_type: 'FT', contracted_role_ids: ['role-A'] }],
+        } as never)).rejects.toThrow(/No shifts to schedule/);
+        expect(mockOptimize).not.toHaveBeenCalled();
+    });
+});
+
 // Same producer-side reasoning, for the employee half of the payload: the solver
 // accepted the declared work cycle for weeks while no producer ever sent it, so
 // it averaged everyone over 4 weeks while V8 used the declared cycle.

@@ -484,6 +484,7 @@ interface WeeklyOrdinaryEntry {
     shiftDate: string;
     startTime: string;
     endTime: string;
+    unpaidBreakMinutes: number;
     isExisting: boolean;
 }
 
@@ -494,12 +495,19 @@ interface WeeklyOrdinaryEntry {
  * (casual weekly OT is ambiguous under the EA — see cost/standard.ts).
  * Existing shifts seed the running total; only proposal shift IDs are
  * ever present in the returned map.
+ *
+ * Hours accrue NET of the unpaid break, as `netMinutesFromDTO` does in the
+ * roster pipeline: a meal break is not worked, and counting it pushed staff
+ * into weekly overtime early. `shifts` supplies proposals' breaks, which
+ * `ValidatedProposal` does not carry.
  */
 export function buildGreedyFallbackPriorOrdinaryMap(
     proposals: ValidatedProposal[],
     existingRoster: Map<string, ExistingShiftRef[]>,
+    shifts: ShiftMeta[] = [],
 ): Map<string, number> {
     const prior = new Map<string, number>();
+    const unpaidByShift = new Map(shifts.map(s => [s.id, s.unpaid_break_minutes ?? 0]));
     const byEmpWeek = new Map<string, Map<string, WeeklyOrdinaryEntry[]>>();
 
     const pushEntry = (employeeId: string, entry: WeeklyOrdinaryEntry) => {
@@ -514,7 +522,8 @@ export function buildGreedyFallbackPriorOrdinaryMap(
     for (const [employeeId, shifts] of existingRoster.entries()) {
         for (const s of shifts) {
             pushEntry(employeeId, {
-                key: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time, isExisting: true,
+                key: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time,
+                unpaidBreakMinutes: s.unpaid_break_minutes ?? 0, isExisting: true,
             });
         }
     }
@@ -522,7 +531,8 @@ export function buildGreedyFallbackPriorOrdinaryMap(
         if (!p.passing || !p.employeeId) continue;
         if (/casual/i.test(p.employmentType || '')) continue;
         pushEntry(p.employeeId, {
-            key: p.shiftId, shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime, isExisting: false,
+            key: p.shiftId, shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime,
+            unpaidBreakMinutes: unpaidByShift.get(p.shiftId) ?? 0, isExisting: false,
         });
     }
 
@@ -534,7 +544,7 @@ export function buildGreedyFallbackPriorOrdinaryMap(
             let running = 0;
             for (const entry of list) {
                 if (!entry.isExisting) prior.set(entry.key, running);
-                const net = durationMinutes(entry.startTime, entry.endTime) / 60;
+                const net = Math.max(0, durationMinutes(entry.startTime, entry.endTime) - entry.unpaidBreakMinutes) / 60;
                 const dailyOt = Math.max(0, net - 12);
                 running += Math.max(0, net - dailyOt);
             }
@@ -980,6 +990,12 @@ export class AutoSchedulerController {
         // ── Layer -1: Request-size guard (matches Python service) ────────────
         // Done before any I/O so the user sees a useful error instead of a
         // late HTTP 400 from the optimizer.
+        //
+        // Empty is refused too: the window maths below reads dates[0], so no
+        // shifts made every scaled weekly cap NaN, which serialises as null.
+        if (input.shifts.length === 0) {
+            throw new Error('No shifts to schedule in this range — widen the dates or the scope filter.');
+        }
         if (input.shifts.length > MAX_OPTIMIZER_SHIFTS) {
             throw new AutoSchedulerInputTooLargeError(
                 `Too many shifts (${input.shifts.length}). The optimizer accepts at most ${MAX_OPTIMIZER_SHIFTS} per run — narrow the date range.`,
@@ -1664,7 +1680,7 @@ export class AutoSchedulerController {
             // A no-op (undefined lookups) on the optimizer path, since it's only
             // consulted inside the `usedFallback` branch below.
             const fallbackPriorOrdinaryMap = usedFallback
-                ? buildGreedyFallbackPriorOrdinaryMap(validatedProposals, existingRoster)
+                ? buildGreedyFallbackPriorOrdinaryMap(validatedProposals, existingRoster, input.shifts)
                 : new Map<string, number>();
 
             for (const p of validatedProposals) {

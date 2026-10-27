@@ -1737,7 +1737,10 @@ class ScheduleModelBuilder:
         # cannot be on two overlapping shifts, so cluster-level pool caps
         # add no information.
         self._add_min_contract_hours()  # HC-7: FT/PT minimum utilization
-        self._add_min_engagement()      # HC-8: 3h/4h min engagement
+        # HC-8 (minimum engagement) is not modelled here: it is a SHAPE rule,
+        # enforced BLOCKING when a shift is created, so no shift reaching the
+        # solver can be below its own minimum. See the degenerate-shift guard
+        # in `employee_eligible`.
         self._add_spread_of_hours()     # HC-9: 12h daily spread
         self._add_daily_pairing_rules() # HC-13: Sch 3 §5.3(g) floor + cl 36.1 break
         self._add_objective()
@@ -2345,11 +2348,6 @@ class ScheduleModelBuilder:
                 self.model.Add(w_var_max - max_slack <= emp.max_weekly_minutes)
                 self._workload_slack_terms.append(100_000_000 * max_slack)
 
-    # -- HC-8: Minimum Engagement ----------------------------------------------
-    def _add_min_engagement(self):
-        # Now handled via pre-filtering in employee_eligible (Precision Fix #5)
-        pass
-
     # -- HC-9: Daily Spread (cl 39.2 + Sch 3 §5.3(g)) --------------------------
     def _add_spread_of_hours(self):
         """Daily spread caps — two clauses, two populations, two measures.
@@ -2651,17 +2649,6 @@ class ScheduleModelBuilder:
                         )
                         self.model.Add(pair >= v_i)
                         self._hard_legal_slack_terms.append(100_000_000 * pair)
-
-    # -- HC-6: Time-Coupled Capacity --------------------------------------------
-
-    def _add_time_capacity(self):
-        """Deprecated. HC-2 (no-overlap) already guarantees a single employee
-        cannot occupy two overlapping shifts; cluster-level pool caps were
-        redundant and brittle to employment_type string drift.
-
-        Kept as a no-op so any external caller still resolves the method.
-        """
-        return
 
     # -- HC-7: Minimum Contract Hours ------------------------------------------
 
