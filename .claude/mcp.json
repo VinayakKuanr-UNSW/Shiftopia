@@ -9,7 +9,7 @@
       ],
       "env": {
         "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-        "SUPABASE_ACCESS_TOKEN": "sbp_d1e3f13d3b88929ce98ce8d6ac51de56cc26f9ac"
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
       }
     }
   }
