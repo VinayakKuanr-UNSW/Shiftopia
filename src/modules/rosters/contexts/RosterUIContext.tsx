@@ -4,8 +4,7 @@
  * All state has moved to `useRosterStore` (Zustand).
  * This file now:
  *  1. Re-exports the types callers import from here
- *  2. Provides a `RosterUIProvider` that owns the one auth-sync effect
- *  3. Exposes `useRosterUI()` / `useRosterUIOptional()` as compatibility hooks
+ *  2. Exposes `useRosterUI()` / `useRosterUIOptional()` as compatibility hooks
  *     that read directly from the Zustand store — no Context overhead, no
  *     Provider re-render cascade
  *
@@ -26,8 +25,7 @@
  * (useRosterStore partialize): a reload returns to the date last viewed.
  */
 
-import React, { useCallback, useMemo, useEffect } from 'react';
-import { useAuth } from '@/platform/auth/useAuth';
+import React, { useCallback, useMemo } from 'react';
 import {
   useRosterStore,
   selectDepartmentId,
@@ -87,49 +85,6 @@ interface RosterUIContextValue {
   getDaysInRange:              () => Date[];
   viewOptions:                 typeof VIEW_OPTIONS;
 }
-
-// ── Provider — owns ONLY the auth-sync effect ─────────────────────────────────
-
-interface RosterUIProviderProps { children: React.ReactNode }
-
-export const RosterUIProvider: React.FC<RosterUIProviderProps> = ({ children }) => {
-  const { activeContract, accessScope } = useAuth();
-
-  const selectedOrganizationId      = useRosterStore(s => s.selectedOrganizationId);
-  const selectedDepartmentIds       = useRosterStore(s => s.selectedDepartmentIds);
-  const selectedSubDepartmentIds    = useRosterStore(s => s.selectedSubDepartmentIds);
-  const setSelectedOrganizationId   = useRosterStore(s => s.setSelectedOrganizationId);
-  const setSelectedDepartmentIds    = useRosterStore(s => s.setSelectedDepartmentIds);
-  const setSelectedSubDepartmentIds = useRosterStore(s => s.setSelectedSubDepartmentIds);
-
-  useEffect(() => {
-    if (!activeContract) return;
-
-    // Sync org from active contract
-    if (activeContract.organizationId && selectedOrganizationId !== activeContract.organizationId) {
-      setSelectedOrganizationId(activeContract.organizationId);
-    }
-
-    // Dept-restricted roles (gamma/beta/alpha = Manager and below)
-    const effectiveAccess = accessScope?.accessLevel ?? activeContract.accessLevel;
-    const isDeptRestricted = ['gamma', 'beta', 'alpha'].includes(effectiveAccess);
-
-    if (isDeptRestricted && activeContract.departmentId &&
-        !selectedDepartmentIds.includes(activeContract.departmentId)) {
-      setSelectedDepartmentIds([activeContract.departmentId]);
-    }
-
-    // Sub-dept-restricted roles (beta/alpha = Team Lead + Member)
-    const isSubDeptRestricted = ['beta', 'alpha'].includes(effectiveAccess);
-    if (isSubDeptRestricted && activeContract.subDepartmentId &&
-        !selectedSubDepartmentIds.includes(activeContract.subDepartmentId)) {
-      setSelectedSubDepartmentIds([activeContract.subDepartmentId]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeContract?.organizationId, activeContract?.departmentId, activeContract?.subDepartmentId, accessScope?.accessLevel]);
-
-  return <>{children}</>;
-};
 
 // ── useRosterUI — reads Zustand, exposes the legacy Context API ───────────────
 

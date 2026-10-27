@@ -9,7 +9,6 @@ import { PersonaProvider, PersonaRouteSync } from '@/platform/auth/PersonaProvid
 import { ScopeFilterProvider } from '@/platform/auth/ScopeFilterContext';
 import { ThemeProvider } from '@/modules/core/contexts/ThemeContext';
 import { OrgSelectionProvider } from '@/modules/core/contexts/OrgSelectionContext';
-import { RosterUIProvider } from '@/modules/rosters/contexts/RosterUIContext';
 import { SidebarProvider } from '@/modules/core/ui/primitives/sidebar';
 import { Toaster } from '@/modules/core/ui/primitives/toaster';
 import { Toaster as Sonner } from '@/modules/core/ui/primitives/sonner';
@@ -70,7 +69,6 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
                       <OfflineCacheGate />
                       <Toaster />
                       <Sonner />
-                      <RosterUIProvider>
                          <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: false }}>
                           {/* Both are null-rendering and no-op off-device;
                               they sit inside the Router because they use
@@ -84,7 +82,6 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
                           <PersonaRouteSync />
                           {children}
                         </BrowserRouter>
-                      </RosterUIProvider>
                     </div>
                   </SidebarProvider>
                 </ThemeProvider>

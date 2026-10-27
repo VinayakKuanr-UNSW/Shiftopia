@@ -84,7 +84,7 @@ import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPref
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { soleOrgId, soleId } from '@/platform/auth/scope-narrowing';
+import { soleOrgId, soleId, orgIdOnceSynced } from '@/platform/auth/scope-narrowing';
 import {
   preflightPublish,
   preflightUnpublish,
@@ -146,7 +146,7 @@ const MONTH_INTERACTIVE_SHIFT_LIMIT = 1500;
 const NewRostersPage: React.FC = () => {
   const { toast } = useToast();
   const { hasPermission, user } = useAuth();
-  const { scope, setScope, isGammaLocked, scopeTree } = useScopeFilter('managerial');
+  const { scope, setScope, isGammaLocked, scopeTree, isLoading: isScopeLoading } = useScopeFilter('managerial');
   const queryClient = useQueryClient();
 
   const { showUnfilledPanel, setShowUnfilledPanel, isDnDModeActive } = useRosterStore(
@@ -235,6 +235,15 @@ const NewRostersPage: React.FC = () => {
     });
   }, [scope.org_ids.join(','), scope.dept_ids.join(','), scope.subdept_ids.join(',')]);
 
+  // Data queries key off this, so they wait until the store above holds the
+  // resolved scope rather than a persisted or half-synced one — see
+  // `orgIdOnceSynced`.
+  const scopedOrgId = orgIdOnceSynced(
+    scope,
+    { orgId: selectedOrganizationId, deptIds: selectedDepartmentIds, subDeptIds: selectedSubDepartmentIds },
+    isScopeLoading,
+  );
+
   // ==================== CONTEXT STATE ====================
   const [selectedRosterId, setSelectedRosterId] = useState<string | null>(null);
 
@@ -315,7 +324,7 @@ const NewRostersPage: React.FC = () => {
   // individual hooks fire. On navigation back to this page the caches are
   // already warm — no waterfall of 5-7 separate network requests.
   useRosterViewPrefetch({
-    orgId: selectedOrganizationId,
+    orgId: scopedOrgId,
     startDate,
     endDate,
     deptIds: selectedDepartmentIds,
@@ -360,7 +369,7 @@ const NewRostersPage: React.FC = () => {
     // that currently exists, so it looked harmless — but it would silently query
     // the wrong org's shifts for anyone else. A null orgId gates the query off,
     // which is exactly what the comment above describes.
-    isGroupBucketView ? null : (selectedOrganizationId || soleOrgId(scope)),
+    isGroupBucketView ? null : scopedOrgId,
     startDate,
     endDate,
     queryFilters
@@ -389,7 +398,7 @@ const NewRostersPage: React.FC = () => {
     summaryMap,
     isLoading: isSummaryLoading,
   } = useRosterSummary(
-    selectedOrganizationId,
+    scopedOrgId,
     startDate,
     endDate,
     queryFilters,
@@ -401,7 +410,7 @@ const NewRostersPage: React.FC = () => {
   // across ALL modes/views (replaces the old bucket-vs-projection branch which
   // showed inconsistent totals and counted cancelled shifts in bucket view).
   const { stats: plannerStats } = useRosterPlannerStats(
-    selectedOrganizationId,
+    scopedOrgId,
     startDate,
     endDate,
     queryFilters,
@@ -455,7 +464,7 @@ const NewRostersPage: React.FC = () => {
   // Lookup data for projections (stable TanStack Query cache refs)
   const { data: roles = [] } = useRoles(selectedOrganizationId || undefined, selectedDepartmentIds[0], selectedSubDepartmentIds[0]);
   const { data: levels = [] } = useRemunerationLevels();
-  const { data: eventsData = [] } = useEvents(selectedOrganizationId || undefined);
+  const { data: eventsData = [] } = useEvents(scopedOrgId || undefined);
 
   // ==================== PROJECTION ENGINE ====================
   const projection = useRosterProjections({

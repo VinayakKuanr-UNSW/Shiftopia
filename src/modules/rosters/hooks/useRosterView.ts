@@ -7,7 +7,7 @@ import { useState, useCallback, useMemo } from 'react';
  * Hook for roster view state and navigation.
  * 
  * Priority:
- * - Uses context state if RosterUIProvider exists
+ * - Uses the shared roster store state when available
  * - Falls back to local state if context unavailable
  * - Never mixes both at the same time
  */

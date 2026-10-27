@@ -9,7 +9,8 @@
  *  - No Provider re-render cascade — components subscribe granularly
  *  - Selectors are composable and memoised at call-site
  *  - Date objects survive hydration via custom storage serialiser
- *  - Auth sync lives in a single useEffect in RosterUIProvider (not scattered)
+ *  - The place selection is written by ONE effect, in RostersPlannerPage,
+ *    from the scope filter — never seeded from the active contract
  *
  * Consumer API (backward-compatible with useRosterUI):
  *   const store = useRosterStore();

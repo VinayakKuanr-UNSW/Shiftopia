@@ -3,6 +3,7 @@ import {
   orgIds, deptIds, subDeptIds,
   soleOrgId, soleDeptId, soleSubDeptId,
   isOrgAmbiguous, isDeptAmbiguous, isSubDeptAmbiguous,
+  orgIdOnceSynced,
 } from '../scope-narrowing';
 import type { ScopeSelection } from '../types';
 
@@ -113,5 +114,33 @@ describe('ambiguity is distinct from emptiness', () => {
     expect(isOrgAmbiguous(real)).toBe(false);
     expect(soleDeptId(real)).toBeNull();
     expect(isDeptAmbiguous(real)).toBe(true);
+  });
+});
+
+// The Roster Planner fired get-roster-view twice per manager load with a wider
+// place than the manager may see (org-wide, then department-wide) and got 403s,
+// because its store lagged the resolved scope. Queries now wait for this.
+describe('orgIdOnceSynced', () => {
+  const resolved = scope({ org_ids: [A], dept_ids: [B], subdept_ids: [C] });
+  const synced = { orgId: A, deptIds: [B], subDeptIds: [C] };
+
+  it('returns the organisation once the store holds the resolved scope', () => {
+    expect(orgIdOnceSynced(resolved, synced, false)).toBe(A);
+  });
+
+  it('withholds it while the scope is still loading', () => {
+    expect(orgIdOnceSynced(resolved, synced, true)).toBeNull();
+  });
+
+  it('withholds it for a persisted org with no places yet (the org-wide 403)', () => {
+    expect(orgIdOnceSynced(resolved, { orgId: A, deptIds: [], subDeptIds: [] }, false)).toBeNull();
+  });
+
+  it('withholds it for a department without its sub-department (the dept-wide 403)', () => {
+    expect(orgIdOnceSynced(resolved, { orgId: A, deptIds: [B], subDeptIds: [] }, false)).toBeNull();
+  });
+
+  it('withholds it when the store still names a different organisation', () => {
+    expect(orgIdOnceSynced(resolved, { ...synced, orgId: B }, false)).toBeNull();
   });
 });
