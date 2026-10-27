@@ -104,6 +104,13 @@ export const fairnessLedgerQueries = {
         });
 
         if (error) {
+            // 42501: the recompute is org-wide and needs org.manage, so a
+            // manager's AutoScheduler Apply is refused by design. Not a failure:
+            // nightly_fairness_recompute refreshes the ledger for everyone.
+            if ((error as { code?: string }).code === '42501') {
+                console.info('[FairnessLedger] Recompute is admin-only; the nightly job will refresh the ledger.');
+                return 0;
+            }
             console.error('[FairnessLedger] requestRecompute failed:', error.message);
             throw new Error(`fairnessLedger.requestRecompute failed: ${error.message}`);
         }
