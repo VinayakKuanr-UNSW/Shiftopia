@@ -8050,7 +8050,6 @@ export type Database = {
         }
         Returns: Json
       }
-      debug_exec_sql: { Args: { sql: string }; Returns: Json }
       debug_states: {
         Args: { p_shift_ids: string[] }
         Returns: {
