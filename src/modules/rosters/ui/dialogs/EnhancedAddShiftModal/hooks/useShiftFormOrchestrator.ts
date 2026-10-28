@@ -1106,10 +1106,10 @@ export function useShiftFormOrchestrator({
                 const [sh, sm] = values.start_time.split(':').map(Number);
                 const [eh, em] = values.end_time.split(':').map(Number);
                 const startMin = sh * 60 + sm;
-                let endMin = eh * 60 + em;
+                const endMin = eh * 60 + em;
                 const isOvernight = endMin <= startMin;
 
-                let endAtDate = parseZonedDateTime(shiftDateStr, values.end_time, tzone);
+                const endAtDate = parseZonedDateTime(shiftDateStr, values.end_time, tzone);
                 if (isOvernight) {
                     endAtDate.setDate(endAtDate.getDate() + 1);
                 }

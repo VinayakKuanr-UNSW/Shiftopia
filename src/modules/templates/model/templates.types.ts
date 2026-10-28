@@ -450,7 +450,7 @@ export function calculateNetHours(
     return 0;
   }
 
-  let startMins = startH * 60 + startM;
+  const startMins = startH * 60 + startM;
   let endMins = endH * 60 + endM;
 
   if (endMins <= startMins) {

@@ -14,7 +14,7 @@ export const calculateShiftLength = (start: string, end: string): number => {
     if (!start || !end) return 0;
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
-    let startMin = sh * 60 + sm;
+    const startMin = sh * 60 + sm;
     let endMin = eh * 60 + em;
     if (endMin <= startMin) endMin += 24 * 60;
     return (endMin - startMin) / 60;

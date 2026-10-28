@@ -1681,10 +1681,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       case '3day':
         for (let i = 0; i < 3; i++) result.push(addDays(selectedDate, i));
         break;
-      case 'week':
+      case 'week': {
         const weekStart = startOfWeekAU(selectedDate);
         for (let i = 0; i < 7; i++) result.push(addDays(weekStart, i));
         break;
+      }
       case 'month': {
         // Bound to the selected month ± a small buffer (matches the parent
         // fetch window in RostersPlannerPage). Previously this extended to

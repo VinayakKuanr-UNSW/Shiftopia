@@ -861,10 +861,12 @@ function OverlapVisualization({ error }: { error: { message: string; context?: {
     };
     
     // Normalize times for percentage calculation (handle day wrap)
-    let s1 = toP(existingStart), e1 = toP(existingEnd);
+    const s1 = toP(existingStart);
+    let e1 = toP(existingEnd);
     if (e1 <= s1) e1 += 100;
-    
-    let s2 = toP(newStart), e2 = toP(newEnd);
+
+    const s2 = toP(newStart);
+    let e2 = toP(newEnd);
     if (e2 <= s2) e2 += 100;
     
     // Viewport window (zoom into the relevant 8-hour block around the overlap)

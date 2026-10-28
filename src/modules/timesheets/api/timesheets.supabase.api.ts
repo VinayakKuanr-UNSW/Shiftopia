@@ -517,7 +517,7 @@ function calculateMinutes(start: string, end: string): number {
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
 
-    let startMins = sh * 60 + sm;
+    const startMins = sh * 60 + sm;
     let endMins = eh * 60 + em;
 
     // Handle overnight

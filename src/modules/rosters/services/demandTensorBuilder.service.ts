@@ -486,7 +486,7 @@ export async function buildScopeDemand(
   // Hoisted: referenced by the return statement below regardless of engineMode.
   // In ml_only mode this stays empty; in shadow/primary it is populated inside
   // the try block and read both for DB persistence and the return payload.
-  let allFinalizedRows: import('../api/demandTensor.queries').DemandTensorInsertRow[] = [];
+  const allFinalizedRows: import('../api/demandTensor.queries').DemandTensorInsertRow[] = [];
 
   if (engineMode !== 'ml_only' && events.length > 0) {
     try {
