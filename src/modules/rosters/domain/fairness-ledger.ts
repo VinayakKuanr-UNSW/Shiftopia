@@ -463,10 +463,6 @@ const zeroValues = (): Record<FairnessMetric, number> => ({
     denial_rate: 0,
 });
 
-/** Contracted minutes across the whole rolling window. */
-function contractedWindowMinutes(contractedWeekly: number, windowWeeks: number): number {
-    return contractedWeekly * 60 * windowWeeks;
-}
 
 /**
  * Overtime minutes over the window's contracted total (same formula as

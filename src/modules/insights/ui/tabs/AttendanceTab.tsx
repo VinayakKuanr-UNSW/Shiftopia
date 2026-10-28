@@ -8,8 +8,8 @@
  *  - Who needs attention detail table
  */
 
-import React, { useState } from 'react';
-import { Activity, CheckCircle2, Clock, UserX, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { Activity, CheckCircle2, Clock, UserX } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';

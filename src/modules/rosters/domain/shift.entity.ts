@@ -21,21 +21,6 @@ type AssignmentStatusText =
     | 'assigned'
     | 'pending'
     | 'declined';
-type AssignmentMethodText =
-    | 'manual'
-    | 'template'
-    | 'bid'
-    | 'trade'
-    | 'auto';
-type CancellationTypeText = 'standard' | 'late' | 'critical' | 'no_show';
-type BiddingPriorityText = 'normal' | 'urgent' | 'critical';
-type ComplianceStatusText =
-    | 'compliant'
-    | 'warning'
-    | 'violation'
-    | 'pending'
-    | 'overridden';
-type LockReasonText = 'published' | 'timesheet' | 'admin' | 'payroll';
 
 /* ============================================================
    INTERFACES

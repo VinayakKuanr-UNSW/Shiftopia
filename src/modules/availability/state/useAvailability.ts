@@ -21,7 +21,6 @@ import {
   getAvailabilityRules,
   getAvailabilitySlots,
   deleteAvailabilityRule,
-  getCurrentProfileId,
 } from "../api/availability.api";
 
 import {

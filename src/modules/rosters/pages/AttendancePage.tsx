@@ -12,12 +12,12 @@ import type { Variants } from 'framer-motion';
 import {
   format, parseISO, startOfMonth,
 } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useQuery } from '@tanstack/react-query';
 import {
   Fingerprint, MapPin, Loader2, UserX, LogIn, LogOut,
   CheckCircle, Timer,
-  BarChart3, ChevronLeft, ChevronRight,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { page, surface } from '@/modules/core/ui/layout/pageTokens';
@@ -56,21 +56,18 @@ import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHea
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { EmployeeFunctionBar, type EmployeeViewRange } from '@/modules/core/ui/components/EmployeeFunctionBar';
 import { sortRows, DEFAULT_ROW_SORT, type RowSort } from '@/modules/core/lib/row-sorting';
-import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import {
-  UnifiedRosterNavigator, type ViewType, type DateRange,
+  type ViewType, type DateRange,
   computeRange, navigateDate, formatRangeLabel,
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import {
   TimesheetFilterDrawer,
-  TimesheetFilterPanel,
   type ActiveFilters,
   EMPTY_FILTERS,
   countActiveFilters,
   applyTimesheetFilters,
 } from '@/modules/timesheets/ui/components/TimesheetFilterDrawer';
-import { GroupBySelector } from '@/modules/core/ui/components/GroupBySelector';
 import { GroupSectionHeader } from '@/modules/core/ui/components/GroupSectionHeader';
 import { groupRows, isTodayBucketKey, type RowGroupBy } from '@/modules/core/lib/row-grouping';
 import {
@@ -91,10 +88,6 @@ import { isSecurityRoleName } from '@/modules/compliance/security-role';
 const pageVariants: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.04, delayChildren: 0.02 } },
-};
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: { ease: [0.16, 1, 0.3, 1], duration: 0.4 } },
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -508,12 +501,6 @@ const ATTENDANCE_STATUS_TABS: { id: StatusFilter; label: string; icon: React.FC<
   { id: 'unknown', label: ATTENDANCE_STATUS_LABELS.unknown, icon: Fingerprint, accent: 'slate' },
 ];
 
-const attendanceAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
-  amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
-  emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
-  red:     { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
-  slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
-};
 
 const AttendancePage: React.FC = () => {
   const { user } = useAuth();

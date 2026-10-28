@@ -15,7 +15,6 @@
  */
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { supabase } from '@/platform/supabase/client';
 import { loadOfficeWorld, type OfficeWorld } from '../api/office.commands';
 import { loadRosterCoverage } from '../api/rosterTarget';
 import { loadLeaveDays } from '../api/office.loaders';
@@ -36,42 +35,7 @@ const officeKeys = {
         [...officeKeys.all, 'leave-days', [...employeeIds].sort(), start, end] as const,
 };
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Sub-departments the manager may roster
-   ──────────────────────────────────────────────────────────────────────────── */
 
-interface SubDepartmentOption {
-    id: string;
-    name: string;
-    departmentId: string;
-    organizationId: string;
-}
-
-function useRosterableSubDepartments(subdeptIds: readonly string[]) {
-    return useQuery({
-        queryKey: officeKeys.subDepartments(subdeptIds),
-        enabled: subdeptIds.length > 0,
-        queryFn: async (): Promise<SubDepartmentOption[]> => {
-            const { data, error } = await supabase
-                .from('sub_departments')
-                .select('id, name, department_id, departments!inner(id, organization_id)')
-                .in('id', subdeptIds as string[])
-                .order('name');
-
-            if (error) throw error;
-
-            return (data ?? []).map(row => {
-                const dept = (row as { departments?: { organization_id?: string } }).departments;
-                return {
-                    id: String(row.id),
-                    name: String(row.name ?? ''),
-                    departmentId: String(row.department_id ?? ''),
-                    organizationId: String(dept?.organization_id ?? ''),
-                };
-            }).filter(s => s.departmentId && s.organizationId);
-        },
-    });
-}
 
 /* ────────────────────────────────────────────────────────────────────────────
    The world, and applying against it

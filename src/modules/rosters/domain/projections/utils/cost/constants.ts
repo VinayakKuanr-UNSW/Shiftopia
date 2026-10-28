@@ -7,26 +7,16 @@
 export { isPublicHolidayISO } from '@/modules/core/lib/holidays';
 
 export const SUNDAY = 0;
-const MONDAY = 1;
-const TUESDAY = 2;
-const WEDNESDAY = 3;
-const THURSDAY = 4;
-const FRIDAY = 5;
 export const SATURDAY = 6;
 
 // Clause 43 Night Shift Multipliers
-const TIME_AND_QUARTER_MULTIPLIER = 1.25;
 export const TIME_AND_HALF_MULTIPLIER = 1.5;
-const TIME_AND_THREE_QUARTERS_MULTIPLIER = 1.75;
 export const DOUBLE_TIME_MULTIPLIER = 2.0;
 export const DOUBLE_TIME_AND_HALF_MULTIPLIER = 2.5;
-const DOUBLE_TIME_AND_THREE_QUARTERS_MULTIPLIER = 2.75;
 
 // Loading Constants
 export const CASUAL_LOADING = 1.25;
 export const ANNUAL_LEAVE_LOADING = 0.175;
-const ADDITIONAL_LOADING1 = 0.05;
-const ADDITIONAL_LOADING2 = 0.10;
 
 // Allowance Constants (Clause 28 / Schedule 2 §3 — values as at 2025 vote)
 export const ALLOWANCE_MEAL = 13.61;              // per occasion (cl. 28.1)

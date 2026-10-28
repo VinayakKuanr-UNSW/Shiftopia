@@ -20,7 +20,6 @@ import {
     EmployeeAvailability,
     AvailabilityWindow,
     AVAILABILITY_PRIORITY,
-    AvailabilityType,
 } from './availabilityResolution.types';
 
 /* ============================================================

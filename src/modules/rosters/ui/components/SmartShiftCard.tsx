@@ -6,12 +6,11 @@
  * - Detailed: Full info card with compliance warnings, skills, and actions
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
     Clock,
     User,
     AlertTriangle,
-    Megaphone,
     Edit,
     XCircle,
     CheckCircle,
@@ -19,10 +18,7 @@ import {
     GripVertical,
     MoreHorizontal,
     MoreVertical,
-    Flame,
-    Lock,
     CopyPlus,
-    Shield,
     Sparkles,
     Gavel,
     Briefcase,
@@ -41,8 +37,6 @@ import {
     getLockState, 
     getProtectionContext,
     getShiftStatusIcons,
-    getTimeRule,
-    getLiveRuleBadges,
     resolveGroupVariant,
 } from '../../domain/shift-ui';
 import { EditingPresenceBadge } from './EditingPresenceBadge';
@@ -51,7 +45,7 @@ import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import { ShiftStateCircleBadge } from './ShiftStateCircleBadge';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
-import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
+import { COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
 import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
@@ -322,7 +316,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     const isFullyLocked = isLocked || fsmLock.fullyLocked || isPast;
 
     const statusStr = getNormalizedStatus(shift);
-    const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
     const costBreakdown = useMemo(() => {
@@ -513,7 +506,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     
     // Centralized protection logic
     const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
-    const isProtected = protection.isProtected || fsmLock.partialLock;
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 

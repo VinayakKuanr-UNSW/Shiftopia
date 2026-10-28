@@ -10,7 +10,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
     CheckCircle2,
-    XCircle,
     AlertTriangle,
     Circle,
     Play,
@@ -25,9 +24,7 @@ import {
     Layers,
     Server,
     FileCheck,
-    BadgeCheck,
-    Timer
-} from 'lucide-react';
+    BadgeCheck} from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -39,7 +36,6 @@ import {
     ComplianceRule
 } from '@/modules/compliance';
 import { validateCompliance } from '@/modules/rosters/services/compliance.service';
-import { format, parseISO } from 'date-fns';
 
 function calcNetMinutes(s: { start_time: string; end_time: string; unpaid_break_minutes?: number }): number {
     const parse = (t: string) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + (m || 0); };
@@ -457,39 +453,6 @@ export function ComplianceTabContent({
 // HARD VALIDATION CARD
 // =============================================================================
 
-function HardValidationCard({ result }: { result: HardValidationResult }) {
-    const [expanded, setExpanded] = useState(!result.passed);
-    return (
-        <div className="rounded-xl overflow-hidden border border-red-500/30 bg-red-500/5 dark:bg-red-950/20 shadow-lg transition-all duration-300">
-            <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-red-500/5 dark:hover:bg-white/5 transition-colors" onClick={() => setExpanded(!expanded)}>
-                <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400 border border-red-500/20">
-                        <XCircle className="h-5 w-5" />
-                    </div>
-                    <div>
-                        <div className="font-black text-red-900 dark:text-white flex items-center gap-2 tracking-tight uppercase text-[13px]">
-                            Scheduling Conflict
-                            <span className="text-[11px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest bg-red-600 text-white border border-red-600 shadow-sm">
-                                BLOCKING
-                            </span>
-                        </div>
-                        <div className="text-[11px] text-red-700/70 dark:text-red-200/60 mt-0.5 font-medium">Critical scheduling error detected</div>
-                    </div>
-                </div>
-                <ChevronDown className={cn("h-5 w-5 text-red-900/30 dark:text-white/40 transition-transform duration-300", expanded && "rotate-180")} />
-            </div>
-            {expanded && (
-                <div className="border-t border-red-500/20 bg-white/50 dark:bg-red-950/30 p-5 space-y-4">
-                    {result.errors.map((err, idx) => (
-                        <div key={idx} className="p-4 bg-red-500/5 dark:bg-red-500/10 rounded-xl border border-red-500/10 text-[13px] text-red-800 dark:text-red-200 font-medium leading-relaxed">
-                            {err.message}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
 
 // =============================================================================
 // COMPLIANCE RULE CARD (CLIENT-SIDE)

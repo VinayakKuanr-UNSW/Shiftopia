@@ -24,7 +24,6 @@
  */
 import type { AccessCertificate, AccessLevel } from './types';
 
-type Suite = 'personal' | 'managerial' | 'admin';
 
 /**
  * What the Managerial suite lets this person do.

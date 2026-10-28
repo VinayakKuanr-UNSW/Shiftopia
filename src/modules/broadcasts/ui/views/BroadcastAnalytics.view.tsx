@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart3, TrendingUp, Users, MessageSquare, Eye, Clock } from 'lucide-react';
+import { TrendingUp, Users, MessageSquare, Eye, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';

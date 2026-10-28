@@ -10,29 +10,20 @@ import {
   Group,
   SubGroup,
   TemplateShift,
-  TemplateConflict,
   CreateTemplateInput,
   SaveTemplateResult,
-  PublishTemplateResult,
   VersionCheckResult,
-  NameValidationResult,
   ValidationResult,
   dbTemplateToFrontend,
   frontendToDbGroups,
   normalizeRemunerationLevel,
   validateTemplateName,
   validateShift,
-  validateDateRange,
-  validateTemplateForPublish,
   sanitizeString,
   sanitizeTemplateName,
   deepClone,
   generateTempId,
-  isTempId,
-  formatDateForDb,
 } from '@/modules/templates/model/templates.types';
-import { SYDNEY_TZ, getTodayInTimezone, getNowInTimezone } from '@/modules/core/lib/date.utils';
-import { parse, isSameMonth, startOfMonth, endOfMonth, format as formatCb } from 'date-fns';
 import {
   validateTemplateShapes,
   describeTemplateShapeFailures,
@@ -45,11 +36,6 @@ import {
 const LOG_PREFIX = '[Templates]';
 const IS_DEV = process.env.NODE_ENV === 'development';
 
-const DEFAULT_GROUPS = [
-  { name: 'Convention Centre', color: '#3b82f6', icon: 'building' },
-  { name: 'Exhibition Centre', color: '#22c55e', icon: 'layout-grid' },
-  { name: 'Theatre', color: '#ef4444', icon: 'theater' },
-];
 
 /* ============================================================
    LOGGING

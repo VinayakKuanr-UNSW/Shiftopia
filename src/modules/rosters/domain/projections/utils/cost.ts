@@ -12,10 +12,7 @@ export * from './cost/constants';
 
 import { 
   estimateShiftCost as dispatcherEstimateShiftCost,
-  estimateDetailedShiftCost as dispatcherEstimateDetailedShiftCost,
-  estimateCostFromShift as dispatcherEstimateCostFromShift,
-  estimateDetailedCostFromShift as dispatcherEstimateDetailedCostFromShift
-} from './cost/index';
+  estimateDetailedShiftCost as dispatcherEstimateDetailedShiftCost} from './cost/index';
 
 // Re-export these names explicitly to avoid any 'export *' ambiguity
 export { 

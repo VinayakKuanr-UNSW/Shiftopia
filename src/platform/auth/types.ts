@@ -107,24 +107,6 @@ export interface ScopeSelection {
     subdept_ids: string[];
 }
 
-// =============================================
-// Resolved Scope (output of Scope Resolution Engine)
-// =============================================
-
-interface ResolvedScope {
-    /** The scope tree of allowed options */
-    allowedScopeTree: ScopeTree;
-    /** Whether the organization field is locked (not selectable) */
-    organizationLocked: boolean;
-    /** Whether the department field is locked */
-    departmentLocked: boolean;
-    /** Whether the sub-department field is locked */
-    subDepartmentLocked: boolean;
-    /** Whether multi-select is enabled (true for Alpha/Beta personal certs) */
-    multiSelectEnabled: boolean;
-    /** Whether the entire filter should be hidden (e.g. Gamma fully locked) */
-    hidden: boolean;
-}
 
 export interface User {
     id: string;

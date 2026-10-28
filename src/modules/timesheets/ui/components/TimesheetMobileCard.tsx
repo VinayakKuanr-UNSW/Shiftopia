@@ -1,15 +1,11 @@
 import React, { useState, useMemo, forwardRef } from 'react';
 import {
     UserX,
-    ArrowRight,
-    Edit3,
     CheckSquare,
     Check,
     X,
-    RotateCcw,
     AlertTriangle,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Label } from '@/modules/core/ui/primitives/label';
@@ -22,8 +18,6 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
 import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
-import { TimesheetStatusBadge } from './TimesheetStatusBadge';
-import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
@@ -32,7 +26,7 @@ import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projecti
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
-import { validateBillableEdit, billableVarianceVsRoster, parseHHMM } from '../../domain/billable-edit';
+import { validateBillableEdit, parseHHMM } from '../../domain/billable-edit';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
@@ -54,48 +48,6 @@ interface TimesheetMobileCardProps {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const DataRow: React.FC<{
-    label: string;
-    start: string;
-    end?: string;
-    emphasis?: boolean;
-    muted?: boolean;
-    accentColor?: string;
-    style?: React.CSSProperties;
-}> = ({ label, start, end, emphasis, muted, accentColor, style }) => (
-    <div 
-        style={style}
-        className={cn(
-            "flex items-center justify-between py-2 transition-all duration-300",
-            muted ? "opacity-30" : "opacity-100"
-        )}
-    >
-        <span className="text-[12px] font-medium text-foreground/50">
-            {label}
-        </span>
-        <div className="flex items-center gap-3">
-            <span className={cn(
-                "tabular-nums tracking-tight",
-                emphasis ? "text-[16px] font-bold text-foreground" : "text-[14px] font-medium text-foreground/90",
-                accentColor && !muted ? accentColor : ""
-            )}>
-                {start}
-            </span>
-            {end && (
-                <>
-                    <ArrowRight className="h-3 w-3 text-foreground/20" />
-                    <span className={cn(
-                        "tabular-nums tracking-tight",
-                        emphasis ? "text-[16px] font-bold text-foreground" : "text-[14px] font-medium text-foreground/90",
-                        accentColor && !muted ? accentColor : ""
-                    )}>
-                        {end}
-                    </span>
-                </>
-            )}
-        </div>
-    </div>
-);
 
 /**
  * Sydney-pinned, via the shared formatter.
@@ -317,7 +269,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         return { color: '#9333ea', secondary: '#a855f7', atmosphere: ['#7e22ce', '#9333ea', '#c084fc'], tint: 'transparent' };
     }, [entry.groupType, entry.group, entry.department, entry.subDepartment, entry.organization]);
 
-    const themeColor = theme.color;
 
     const isFinalized = useMemo(() => {
         const tsStatus = (entry.timesheetStatus || '').toLowerCase();

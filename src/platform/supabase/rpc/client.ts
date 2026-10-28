@@ -19,8 +19,6 @@ import { supabase } from '@/platform/supabase/client';
 import {
   AppError,
   AuthenticationError,
-  PermissionError,
-  toAppError,
   type RPCErrorCode,
 } from './errors';
 

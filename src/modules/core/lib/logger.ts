@@ -93,12 +93,6 @@ export const logger = {
     },
 };
 
-/**
- * Generate a correlation ID for request tracing
- */
-function generateCorrelationId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
 
 /**
  * Create a scoped logger for a specific module

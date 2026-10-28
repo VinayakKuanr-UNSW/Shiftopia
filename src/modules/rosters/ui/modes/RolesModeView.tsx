@@ -1,15 +1,13 @@
 import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo } from 'react';
-import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import { format, addDays, parse, isToday } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import { 
   Plus, 
   MoreHorizontal,
   Edit2,
   Undo2,
-  Loader2,
   Briefcase,
   Zap,
   ChevronDown,
@@ -21,17 +19,9 @@ import {
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
-import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
-import * as import_GroupSummaryCell from '@/modules/rosters/ui/components/GroupSummaryCell';
 import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
 import { useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
@@ -630,7 +620,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   if (isLoading) return <PageState state="loading" className="h-[400px]" title="Loading roles" />;
 
   const totalHours = projection?.stats?.totalNetMinutes != null ? (projection.stats.totalNetMinutes / 60).toFixed(1) : '—';
-  const estCost = projection?.stats?.estimatedCost ?? 0;
 
   return (
     <div className="flex flex-col h-full bg-background relative overflow-hidden">

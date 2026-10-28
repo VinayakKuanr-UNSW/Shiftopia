@@ -27,7 +27,6 @@ import { useAvailabilityScope } from '../state/useAvailabilityScope';
 import { resolveComplianceBasis, type ContractBasis } from '../domain/contract-basis';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import type { ScopeSelection } from '@/platform/auth/types';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { formatEnvelopeDaysClause, formatEnvelopeTime } from '../ui/envelope-format';

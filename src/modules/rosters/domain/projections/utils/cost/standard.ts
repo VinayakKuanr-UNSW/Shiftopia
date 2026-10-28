@@ -709,6 +709,3 @@ export function estimateShiftCost(options: CostCalculatorOptions, ctx?: AwardCon
   return estimateDetailedShiftCost(options, ctx).totalCost;
 }
 
-function toOrdinaryRate(rate: number): number {
-  return rate / 1.25;
-}

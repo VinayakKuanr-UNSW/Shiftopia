@@ -18,14 +18,10 @@
 
 import React, { useState } from 'react';
 import {
-  Megaphone,
-  Plus,
-  RefreshCw,
   BarChart3,
   Bell,
   LayoutGrid,
 } from 'lucide-react';
-import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -41,7 +37,7 @@ import { BroadcastAnalytics } from '../views/BroadcastAnalytics.view';
 import { ControlRoom } from './ControlRoom';
 import { CreateGroupDialog } from '../dialogs/CreateGroupDialog';
 import { EditGroupDialog } from '../dialogs/EditGroupDialog';
-import { BroadcastGroupWithStats, CreateBroadcastGroupRequest } from '../../model/broadcast.types';
+import { BroadcastGroupWithStats } from '../../model/broadcast.types';
 
 
 // ============================================================================
@@ -159,13 +155,6 @@ export function BroadcastsManagerScreen({
   // HANDLERS
   // ========================================
 
-  const handleRefresh = async () => {
-    await refetch();
-    toast({
-      title: 'Refreshed',
-      description: 'Broadcast groups have been refreshed.',
-    });
-  };
 
   const handleCreateGroup = async (data: {
     name: string;

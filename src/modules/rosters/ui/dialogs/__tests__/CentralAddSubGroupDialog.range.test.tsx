@@ -7,7 +7,6 @@
  * the RPC creates a roster day for every date in the range.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const h = vi.hoisted(() => ({ mutateAsync: vi.fn() }));

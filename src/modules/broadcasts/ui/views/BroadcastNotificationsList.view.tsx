@@ -15,9 +15,7 @@ export const BroadcastNotificationsList: React.FC = () => {
         notifications,
         isLoading,
         markAsRead,
-        markAllAsRead,
-        refetch
-    } = useBroadcastNotifications();
+        markAllAsRead    } = useBroadcastNotifications();
 
     // Derived state for local loading of specific actions if needed
     const [isMarkingAll, setIsMarkingAll] = useState(false);

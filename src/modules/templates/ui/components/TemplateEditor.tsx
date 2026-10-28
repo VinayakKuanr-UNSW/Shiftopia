@@ -1,29 +1,7 @@
 // src/components/templates/TemplateEditor.tsx
 import React, { useState, useMemo } from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
-import {
-  Plus,
-  Users,
-  Building2,
-  LayoutGrid,
-  Theater,
-} from 'lucide-react';
-import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
+import { formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import { Separator } from '@/modules/core/ui/primitives/separator';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/modules/core/ui/primitives/collapsible';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
-import { cn } from '@/modules/core/lib/utils';
 import {
   Template,
   Group,
@@ -84,34 +62,6 @@ interface TemplateEditorProps {
   ) => void;
 }
 
-const GROUP_CONFIG: Record<
-  string,
-  {
-    icon: React.ReactNode;
-    gradient: string;
-    border: string;
-    badge: string;
-  }
-> = {
-  'Convention Centre': {
-    icon: <Building2 className="h-5 w-5" />,
-    gradient: 'from-blue-600/20 via-blue-500/10 to-transparent',
-    border: 'border-blue-500/30',
-    badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  },
-  'Exhibition Centre': {
-    icon: <LayoutGrid className="h-5 w-5" />,
-    gradient: 'from-emerald-600/20 via-emerald-500/10 to-transparent',
-    border: 'border-emerald-500/30',
-    badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  },
-  Theatre: {
-    icon: <Theater className="h-5 w-5" />,
-    gradient: 'from-red-600/20 via-red-500/10 to-transparent',
-    border: 'border-red-500/30',
-    badge: 'bg-red-500/20 text-red-400 border-red-500/30',
-  },
-};
 
 const TemplateEditor: React.FC<TemplateEditorProps> = ({
   template,
@@ -133,7 +83,6 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
 }) => {
   const isPublished = template.status === 'published';
   const isArchived = template.status === 'archived';
-  const isDraft = template.status === 'draft';
   const isReadOnly = readOnly || isPublished || isArchived;
 
   // Collapse states

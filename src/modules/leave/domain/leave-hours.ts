@@ -33,8 +33,6 @@ import { LEAVE_POLICIES } from './leave-policy';
 import type { LeaveTypeCode } from '../model/leave.types';
 import { isPublicHoliday } from '@/modules/core/lib/holidays';
 
-/** 38h / 5 days — the EBA cl 36 ordinary day, and the divisor `leave-policy.ts` accrues on. */
-const DEFAULT_ORDINARY_DAYS_PER_WEEK = 5;
 /** Mon-Fri, ISO weekdays. Used when the contract records no ordinary_days. */
 const DEFAULT_ORDINARY_DAYS: readonly number[] = [1, 2, 3, 4, 5];
 

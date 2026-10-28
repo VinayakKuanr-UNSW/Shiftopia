@@ -3,7 +3,6 @@ import { createAvailabilityFromForm } from '../availability.service';
 import { createAvailabilityException } from '../exceptions.api';
 import * as contractBasisApi from '../contract-basis.api';
 import * as availabilityApi from '../availability.api';
-import { supabase } from '@/platform/supabase/client';
 
 vi.mock('../contract-basis.api', () => ({
   fetchScopedContractBasis: vi.fn(),

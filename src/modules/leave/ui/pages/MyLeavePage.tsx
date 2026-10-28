@@ -20,7 +20,7 @@ import { format } from 'date-fns';
 import { ClipboardList, WalletCards } from 'lucide-react';
 
 import { cn } from '@/modules/core/lib/utils';
-import { text, touch } from '@/modules/core/ui/typography';
+import { text } from '@/modules/core/ui/typography';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';

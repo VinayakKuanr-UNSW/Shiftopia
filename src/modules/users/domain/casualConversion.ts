@@ -15,13 +15,13 @@
 
 const ELIGIBILITY_MONTHS = 6;
 
-interface CasualConversionInput {
+export interface CasualConversionInput {
   employmentStatus: string | null | undefined;
   contractStatus: string | null | undefined; // e.g. 'Active'
   startDate: string | null | undefined;      // YYYY-MM-DD
 }
 
-interface CasualConversionStatus {
+export interface CasualConversionStatus {
   /** True only for an ACTIVE casual contract. */
   isCasual: boolean;
   /** Whole months of continuous service on this contract, as of today. */

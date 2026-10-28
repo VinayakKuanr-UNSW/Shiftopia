@@ -4,7 +4,7 @@
 
 import { SwapScenario, SolverResult, ConstraintViolation, SolverConfig } from './types';
 import { v8Engine, V8Engine } from '../engine';
-import { V8ContractType, V8Employee, V8Shift, V8Status } from '../types';
+import { V8ContractType, V8Employee, V8Shift } from '../types';
 import { ComplianceResult, ComplianceCalculation } from '../../types';
 
 /**

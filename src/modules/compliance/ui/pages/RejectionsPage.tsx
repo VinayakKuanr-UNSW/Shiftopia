@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, ShieldX, Cpu, ListFilter, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { RefreshCw, ShieldX, Cpu, ListFilter } from 'lucide-react';
 import { supabase } from '@/platform/supabase/client';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';

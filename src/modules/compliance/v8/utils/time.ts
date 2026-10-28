@@ -48,9 +48,3 @@ export function normalizedEndMinutes(start?: string | null, end?: string | null)
     return e;
 }
 
-/**
- * Compare two date strings (YYYY-MM-DD).
- */
-function compareDates(a: string, b: string): number {
-    return a.localeCompare(b);
-}

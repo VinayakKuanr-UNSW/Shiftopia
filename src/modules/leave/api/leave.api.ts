@@ -18,7 +18,6 @@ import type {
 } from '../model/leave.types';
 import { LEAVE_POLICIES } from '../domain/leave-policy';
 import type { EmployeeUnit } from '../domain/leave-approval';
-import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ── Balances ─────────────────────────────────────────────────────────────────

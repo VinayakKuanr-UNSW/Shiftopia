@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { projectGroup } from '../../projections/projectors/group.projector';
 import type { Shift } from '../../shift.entity';

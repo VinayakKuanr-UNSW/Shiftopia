@@ -3,7 +3,6 @@ import { Hash, Search, X, Loader2, Shield } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import { cn } from '@/modules/core/lib/utils';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { useEmployeeBroadcasts } from '../../state/useBroadcasts';
 import { MessageItem } from '../components/MessageItem';

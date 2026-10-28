@@ -304,12 +304,6 @@ export const useRosterStore = create<RosterState>()(
 // ── Derived / computed selectors ──────────────────────────────────────────────
 // Call these with useRosterStore(selectXxx) for granular subscriptions.
 
-/** The selected date as a real Date object. Derived from the ISO string. */
-// parseISO of the 'yyyy-MM-dd' calendar key yields local-midnight, so the
-// selected day never drifts a day west of GMT (new Date('yyyy-MM-dd') is
-// UTC-midnight and would).
-const selectSelectedDate = (s: RosterState): Date =>
-  parseISO(s._selectedDateISO);
 
 /** Backward-compat: first selected department (single-select legacy API) */
 export const selectDepartmentId = (s: RosterState): string | null =>

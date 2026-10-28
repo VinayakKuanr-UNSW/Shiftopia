@@ -13,15 +13,12 @@ import {
     MessageSquare,
     UserX,
     Lock,
-    ShieldCheck,
-    RotateCcw,
     Pencil,
     Clock,
     User,
     Bot,
     TrendingUp,
 } from "lucide-react";
-import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
 
 
 import { cn } from "@/modules/core/lib/utils";
@@ -46,12 +43,12 @@ import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.typ
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
 import { parseZonedDateTime, SYDNEY_TZ } from "@/modules/core/lib/date.utils";
 import { getProtectionContext, getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
-import { validateBillableEdit, billableVarianceVsRoster, parseHHMM } from "../../domain/billable-edit";
+import { validateBillableEdit, parseHHMM } from "../../domain/billable-edit";
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
-import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 
 /* Billable-time provenance icons (F16) — explicit iconography, not a bare `*`. */
 type BillableSource = 'manual' | 'snapped' | 'auto' | null | undefined;

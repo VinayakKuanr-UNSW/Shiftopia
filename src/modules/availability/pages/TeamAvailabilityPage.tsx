@@ -49,7 +49,6 @@ import CoverageHeatmap from '../ui/team/CoverageHeatmap';
 import NearMissPanel from '../ui/team/NearMissPanel';
 import { RosterPaginationFooter } from '@/modules/rosters/ui/components/RosterPaginationFooter';
 import GridFunctionBar, {
-    VIEWS,
     CELL_MODES,
     type ViewKey,
     type SortOptionKey,

@@ -86,9 +86,8 @@ export function MyBroadcastsScreen({
   
   // Use hoisted search for group filtering, internal search for channel filtering
   const effectiveGroupSearch = hoistedSearchQuery;
-  const effectiveChannelSearch = internalSearchQuery;
 
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [, setIsOnline] = useState(navigator.onLine);
   const [channelSheetOpen, setChannelSheetOpen] = useState(false);
 
   // Data

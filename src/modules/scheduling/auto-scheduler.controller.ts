@@ -62,7 +62,6 @@ import type {
     OptimizerStrategy,
     OptimizerHealth,
     OptimizerStatus,
-    UncoveredAudit,
     CapacityCheck,
     CapacityDayBreakdown,
     PillarScores,
@@ -875,7 +874,6 @@ async function greedyFallback(
             // No overqualification penalty (single-mode policy): holding a
             // role's contract makes that shift a legitimate assignment, so a
             // multi-role employee is not penalised for taking a lower role.
-            const finalScore = candidate.score;
 
             const existingV8ShiftIds = assignedByEmployee.get(emp.id) ?? [];
             const candidateIds = [...existingV8ShiftIds, shift.id];

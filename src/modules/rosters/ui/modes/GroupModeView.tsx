@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/platform/supabase/client';
 import { getSydneyNow, isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
   Plus,
-  Check,
   Loader2,
   MoreHorizontal,
   MoreVertical,
   Edit2,
   Trash2,
-  Gavel,
   Send,
   Undo2,
   Ban,
@@ -18,11 +15,8 @@ import {
   ChevronDown,
   ChevronRight,
   Zap,
-  Lock,
-  Wand2,
   Users,
   CopyPlus,
-  Maximize2,
   Layers,
   ShieldCheck,
 } from 'lucide-react';
@@ -38,8 +32,8 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes, parse } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { format, addDays, isToday, isBefore, startOfDay, parseISO, differenceInHours, differenceInMinutes, parse } from 'date-fns';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import {
   ShiftContext,
@@ -70,17 +64,14 @@ import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/compon
 // React.memo() const through a namespace object, so on hot update the member
 // read back as undefined and React threw "type is invalid ... got: undefined"
 // at the call site below.
-import { GroupSummaryCell } from '@/modules/rosters/ui/components/GroupSummaryCell';
 import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
 import { GroupStatsSummary } from '@/modules/rosters/ui/components/GroupStatsSummary';
-import { ShiftCardLegend } from '@/modules/rosters/ui/components/ShiftCardLegend';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import {
   Shift,
   TemplateGroupType,
 } from '@/modules/rosters/api/shifts.api';
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
-import { RosterStructure, RosterGroupStructure, RosterSubGroupStructure } from '@/modules/rosters/model/roster.types';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
@@ -104,7 +95,7 @@ import {
   useRenameSubGroup,
   useCloneSubGroup
 } from '@/modules/rosters/state/useRosterMutations';
-import { computeShiftUrgency, computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
+import { computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { startOfMonth, endOfMonth, endOfWeek } from 'date-fns';
 import {
@@ -122,15 +113,12 @@ import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShif
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import {
-  PeopleModeEmployee,
-  PeopleModeShift,
   DND_SHIFT_TYPE,
   DND_EMPLOYEE_TYPE,
   EmployeeDragItem,
   ShiftDragItem,
 } from './people-mode.types';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
-import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 // complianceService and calculateMinutesBetweenTimes removed — handleShiftDrop now
@@ -138,13 +126,11 @@ import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 
 import { canDragShift, canDropOnTarget } from '@/modules/rosters/utils/dnd.utils';
 import { ToastAction } from '@/modules/core/ui/primitives/toast';
-import type { GroupProjection } from '@/modules/rosters/domain/projections/types';
 import { ALL_GROUP_TYPES } from '@/modules/rosters/domain/projections/constants';
 import { CopyShiftFlow, type CopyShiftSource } from '@/modules/office/ui/components/CopyShiftFlow';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 
 // ============================================================================
 // DRAG & DROP TYPE
@@ -602,13 +588,6 @@ const UNASSIGNED_GLASS_STYLE = {
 };
 
 // Default sub-groups per group type - Empty by default, populated by templates
-const DEFAULT_SUB_GROUPS_MAP: Record<TemplateGroupType, string[]> = {
-  convention_centre: [],
-  exhibition_centre: [],
-  theatre: [],
-  the_cutaway: [],
-  office: [],
-};
 
 // Human-readable group names
 const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
@@ -624,111 +603,10 @@ const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
    COVERAGE SIGNAL BAR — segmented LED strip for group headers
    ============================================================ */
 
-/** `420` → `7h 0m`; used as each cost panel's supporting hours figure. */
-const formatNetMinutes = (mins: number): string => {
-  const safe = Math.max(0, Math.round(mins));
-  return `${Math.floor(safe / 60)}h ${safe % 60}m`;
-};
 
-interface CostPanelProps {
-  label: string;
-  amount: number;
-  minutes: number;
-  /** Denominator line — what the amount is actually over. */
-  countLabel: string;
-  /** Amber tint: some shifts in scope resolved no rate, so the total is short. */
-  warn?: boolean;
-  /** Dim the amount when it is a structural zero rather than a real $0. */
-  muted?: boolean;
-  tone: 'planned' | 'actual';
-}
 
-/**
- * One cost total for the CURRENT view, with its own denominator.
- *
- * The denominator is the point: a bare "$0.00" cannot distinguish "nothing has
- * been worked yet" from "nothing could be priced" from "genuinely free". The
- * previous single Est. Cost read $0.00 across a fully-costed 156-shift roster
- * because it silently counted only ASSIGNED shifts.
- */
-const CostPanel: React.FC<CostPanelProps> = ({
-  label, amount, minutes, countLabel, warn = false, muted = false, tone,
-}) => (
-  <div
-    className={cn(
-      'rounded-lg border px-3 py-1.5 min-w-[132px]',
-      tone === 'planned'
-        ? 'border-blue-400/25 bg-blue-400/[0.06]'
-        : 'border-emerald-400/25 bg-emerald-400/[0.06]',
-    )}
-  >
-    <div className="flex items-baseline justify-between gap-3">
-      <span
-        className={cn(
-          'text-[11px] font-bold uppercase tracking-wider',
-          tone === 'planned' ? 'text-blue-300/80' : 'text-emerald-300/80',
-        )}
-      >
-        {label}
-      </span>
-      <span className="text-[11px] text-muted-foreground/60 tabular-nums">
-        {formatNetMinutes(minutes)}
-      </span>
-    </div>
-    <div
-      className={cn(
-        'font-semibold tabular-nums leading-tight',
-        muted ? 'text-muted-foreground/50' : 'text-foreground',
-      )}
-    >
-      ${amount.toFixed(2)}
-    </div>
-    <div
-      className={cn(
-        'text-[11px] leading-tight',
-        warn ? 'text-amber-400' : 'text-muted-foreground/50',
-      )}
-      title={warn ? 'Some shifts in view have no resolvable pay rate and contribute $0 to this total.' : undefined}
-    >
-      {countLabel}
-    </div>
-  </div>
-);
 
-interface CoverageSignalBarProps {
-  pct: number;      // 0-100
-  accent: string;   // 'blue' | 'emerald' | 'red' | 'amber' | 'cyan' | 'gray'
-  segments?: number;
-}
 
-const CoverageSignalBar: React.FC<CoverageSignalBarProps> = ({ pct, accent, segments = 10 }) => {
-  const filled = Math.round((pct / 100) * segments);
-  const colorMap: Record<string, string> = {
-    blue: 'bg-blue-400',
-    emerald: 'bg-emerald-400',
-    red: 'bg-red-400',
-    amber: 'bg-amber-400',
-    cyan: 'bg-cyan-400',
-    gray: 'bg-slate-400',
-  };
-  const barColor = colorMap[accent] ?? 'bg-white/40';
-  return (
-    <div className="flex items-center gap-[2px]" aria-label={`${pct}% staffed`}>
-      {Array.from({ length: segments }).map((_, i) => (
-        <div
-          key={i}
-          style={{ animationDelay: `${i * 40}ms` }}
-          className={cn(
-            'h-[5px] w-[14px] rounded-sm transition-all duration-300',
-            i < filled
-              ? cn(barColor, 'opacity-90 animate-[signalFill_0.3s_ease_forwards]')
-              : 'bg-muted-foreground/10 dark:bg-white/10'
-          )}
-        />
-      ))}
-    </div>
-  );
-};
 
 /* ============================================================
    SUBGROUP BODY
@@ -1237,15 +1115,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                       }
                     }
 
-                    const handleToggleSelect = () => {
-                      if (selectableCount === 0) return;
-                      const selectedCount = eligibleIds.filter(id => selectedV8ShiftIdsSet.has(id)).length;
-                      if (selectedCount === selectableCount) {
-                        onDeselectShiftIds?.(eligibleIds);
-                      } else {
-                        onSelectShiftIds?.(eligibleIds);
-                      }
-                    };
 
                     return (
                       <div
@@ -1409,7 +1278,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // Get enhanced filters and selection state from context
   const {
     advancedFilters,
-    hasActiveFilters,
   } = useRosterUI();
 
   const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
@@ -1787,7 +1655,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // ==================== EMERGENCY ALERT STATE ====================
   const [isEmergencyAlertOpen, setIsEmergencyAlertOpen] = useState(false);
-  const [emergencyAlertMessage, setEmergencyAlertMessage] = useState('');
+  const [emergencyAlertMessage] = useState('');
 
   // ==================== SUB-GROUP ACTIONS STATE ====================
   const [activeSubGroup, setActiveSubGroup] = useState<{ id: string, name: string, groupExternalId: string } | null>(null);
@@ -2124,19 +1992,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     return 'Open';
   };
 
-  const getDefaultGroups = (): VisualGroup[] => {
-    return ALL_GROUP_TYPES.map((type) => ({
-      id: type,
-      name: GROUP_DISPLAY_NAMES[type],
-      type,
-      color: GLASS_STYLES[type].accent,
-      subGroups: DEFAULT_SUB_GROUPS_MAP[type].map((name) => ({
-        id: `${type}-${name}`,
-        name,
-        shifts: {},
-      })),
-    }));
-  };
 
   // ==================== BUILD VISUAL GROUPS (BUCKET VIEW / SUMMARY) ====================
   // Scalability path: in the Group-mode default Bucket View the grid renders
@@ -2148,102 +2003,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // templates always render even when empty. Per-cell totals still resolve via
   // the existing `summaryData.get(`${dateKey}::${group.type}::${subGroup.name}`)`
   // lookup in the render path; rows just need to exist without shift data.
-  const buildVisualGroupsFromSummary = (
-    summary: Map<string, import('@/modules/rosters/api/rosterSummary.queries').RosterSummaryCellDTO>,
-  ): VisualGroup[] => {
-    // Start from the three default template groups (guaranteed to render).
-    const base = getDefaultGroups();
-    const byType = new Map<string, VisualGroup>(base.map(g => [g.type, g]));
-
-    // Track subgroup names already present per group so we don't duplicate.
-    const subNamesByType = new Map<string, Set<string>>();
-    for (const g of base) {
-      subNamesByType.set(g.type, new Set(g.subGroups.map(sg => sg.name)));
-    }
-
-    // Populate subgroups from database structure (rosterStructures) first
-    // so empty subgroups render in the summary bucket view.
-    rosterStructures.forEach(roster => {
-      roster.groups.forEach(group => {
-        const type = (group.externalId || 'unassigned') as TemplateGroupType | 'unassigned';
-        let groupEntry = byType.get(type);
-        if (!groupEntry) {
-          const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
-          groupEntry = {
-            id: group.id || type,
-            name: GROUP_DISPLAY_NAMES[type] ?? group.name ?? type,
-            type,
-            color: isTemplate
-              ? GLASS_STYLES[type as TemplateGroupType].accent
-              : UNASSIGNED_GLASS_STYLE.accent,
-            subGroups: [],
-          };
-          byType.set(type, groupEntry);
-          subNamesByType.set(type, new Set());
-        }
-
-        group.subGroups.forEach(sg => {
-          const existingNames = subNamesByType.get(type)!;
-          if (!existingNames.has(sg.name)) {
-            existingNames.add(sg.name);
-            groupEntry.subGroups.push({
-              id: sg.id,
-              name: sg.name,
-              shifts: {},
-            });
-          }
-        });
-      });
-    });
-
-    // Collect distinct (group_type, sub_group_name) pairs from the summary.
-    for (const cell of summary.values()) {
-      const type = (cell.group_type || 'unassigned') as TemplateGroupType | 'unassigned';
-      const subName = cell.sub_group_name || 'General';
-
-      let group = byType.get(type);
-      if (!group) {
-        // A group present in the summary but not in the default templates
-        // (e.g. an ad-hoc / unassigned bucket). Create it so its rows render.
-        const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
-        group = {
-          id: type,
-          name: GROUP_DISPLAY_NAMES[type] ?? type,
-          type,
-          color: isTemplate
-            ? GLASS_STYLES[type as TemplateGroupType].accent
-            : UNASSIGNED_GLASS_STYLE.accent,
-          subGroups: [],
-        };
-        byType.set(type, group);
-        subNamesByType.set(type, new Set());
-      }
-
-      const existingNames = subNamesByType.get(type)!;
-      if (!existingNames.has(subName)) {
-        existingNames.add(subName);
-        group.subGroups.push({
-          id: `summary-${type}-${subName}`,
-          name: subName,
-          shifts: {}, // Bucket View renders aggregate cells — no per-shift data.
-        });
-      }
-    }
-
-    // Stable ordering: templates first (in canonical order), then any extras.
-    const order: Record<string, number> = {
-      convention_centre: 0,
-      exhibition_centre: 1,
-      theatre: 2,
-      the_cutaway: 3,
-      office: 4,
-    };
-    const groups = Array.from(byType.values()).sort(
-      (a, b) => (order[a.type] ?? 99) - (order[b.type] ?? 99),
-    );
-    groups.forEach(g => g.subGroups.sort((a, b) => a.name.localeCompare(b.name)));
-    return groups;
-  };
 
   // ==================== DERIVE VISUAL GROUPS VIA MEMO ====================
   const visualGroups = useMemo((): VisualGroup[] => {
@@ -2663,7 +2422,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const groupConfig = GROUP_COLORS[shift.groupColor as TemplateGroupType] || GROUP_COLORS.convention_centre;
     const accentColor = groupConfig.accent === 'emerald' ? 'green' : groupConfig.accent;
 
-    const lifecycleStatus = shift.isPublished ? 'published' : shift.isDraft ? 'draft' : 'draft';
 
     const menu = (
       <DropdownMenu modal={false}>

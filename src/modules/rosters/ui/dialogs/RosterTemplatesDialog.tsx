@@ -58,17 +58,13 @@ import {
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import {
     AlertTriangle,
-    CalendarPlus,
     CalendarRange,
     Check,
-    ChevronRight,
     FileStack,
     History,
-    Layers,
     Loader2,
     RotateCcw,
     Search,
-    Send,
     User,
     Sparkles,
 } from 'lucide-react';

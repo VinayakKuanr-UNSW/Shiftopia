@@ -448,8 +448,6 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
         [employeeGroups, sortField, sortDirection],
     );
 
-    const stepIndex = phase === 'idle' ? 0 : phase === 'optimizing' || phase === 'validating' ? 1 : 2;
-    const steps = ['Set up', 'Optimising', 'Review'];
 
     const progressPct = Math.min(
         98,

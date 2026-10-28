@@ -32,7 +32,6 @@ import {
   buildDemandAnalysisForRoles,
   resolveMLRoleById,
   resolveMLRoleByNameFallback,
-  ML_KNOWN_ROLES,
   type EventInput,
   type MLKnownRole,
 } from './mlClient.service';

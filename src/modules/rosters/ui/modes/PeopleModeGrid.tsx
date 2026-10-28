@@ -10,13 +10,11 @@ import {
   Edit2,
   Zap,
   Flame,
-  Maximize2,
   Users,
   Search,
   X,
   ShieldCheck,
   Layers,
-  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
@@ -32,7 +30,6 @@ import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialo
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import type { RawLeaveDay } from '@/modules/office/domain/types';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
-import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -40,7 +37,6 @@ import { useCreateShift } from '@/modules/rosters/state/useRosterShifts';
 import { 
   PeopleModeEmployee, 
   PeopleModeShift, 
-  DND_UNFILLED_SHIFT, 
   DND_SHIFT_TYPE,
   ShiftDragItem
 } from './people-mode.types';
@@ -54,7 +50,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
@@ -72,7 +67,6 @@ import {
 
 // Re-export for backward compatibility if needed, or just use the imported ones
 export type EmployeeShift = PeopleModeShift;
-type Employee = PeopleModeEmployee;
 
 // ── Module-scope no-op so that an absent onAssignShift prop doesn't bust
 //    referential equality on every render of every DroppableDateCell.
@@ -333,7 +327,6 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   const createShiftMutation = useCreateShift();
   const {
     bulkModeActive: globalBulkModeActive,
-    selectedV8ShiftIds: globalSelectedV8ShiftIds,
     toggleShiftSelection: globalToggleShiftSelection,
   } = useRosterStore(
     useShallow((s) => ({

@@ -211,7 +211,6 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
               <TableBody>
                 {sortedShifts.map((shift) => {
                   const isOpen = !!expanded[shift.shiftId];
-                  const contentId = `gross-pay-detail-${shift.shiftId}`;
 
                   const dateLabel = formatShiftDate(shift.shiftDate);
                   const shiftIdLabel = shift.shiftId.slice(0, 8);

@@ -41,14 +41,12 @@ import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
 import { useComplianceRunner } from './useComplianceRunner';
 import { runV8Orchestrator } from '@/modules/compliance/v8';
-import { buildAssignInput, buildSkeletonInput } from '@/modules/planning/unified/compliance/input-builder';
 import type { V8OrchestratorInput, V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
 import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG, mealBreakWindow } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { initialTargetEmploymentType } from '@/modules/core/model/employment.types';
 import { daysFromTemplateDay } from '../components/TemplateDaySelect';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
-import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { getAvailabilityView } from '@/modules/availability/api/availability-view.api';
 
@@ -345,7 +343,6 @@ export function useShiftFormOrchestrator({
           || h.rule_id === 'SHAPE_MIN_ENGAGEMENT_PH'
           || h.rule_id === 'SHAPE_FT_MIN_DAY',
     );
-    const isNetLengthValid = isEvaluable && shape.passed;
 
     // ── Read-only checks ─────────────────────────────────────────────────────
     const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
@@ -398,7 +395,6 @@ export function useShiftFormOrchestrator({
     const hasRoster = !!derivedRosterId;
 
     const selectedRoster = useMemo(() => rosters.find(r => r.id === derivedRosterId), [rosters, derivedRosterId]);
-    const isRosterActive = isTemplateMode || selectedRoster?.status === 'published' || selectedRoster?.status === 'draft';
 
     const isContextInherited = isGridLaunch || isEditModeSource;
 
@@ -595,9 +591,7 @@ export function useShiftFormOrchestrator({
 
     const {
         runChecks,
-        clearResults,
-        isRunning: isComplianceRunning
-    } = useComplianceRunner({
+        clearResults    } = useComplianceRunner({
         buildComplianceInput,
         hardValidation,
         setComplianceResults: setComplianceResultsWithGuard,

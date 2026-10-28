@@ -11,7 +11,6 @@
  *   2+ editors → "Sarah +N editing"
  */
 
-import React from 'react';
 import { Pencil } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import {

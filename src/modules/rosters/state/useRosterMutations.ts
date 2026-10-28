@@ -181,50 +181,7 @@ export function useEnsureRosters() {
   });
 }
 
-// ── useToggleRosterLock ───────────────────────────────────────────────────────
 
-interface ToggleRosterLockVariables {
-  organizationId:  string;
-  departmentId:    string;
-  subDepartmentId: string | null;
-  startDate:       string;
-  endDate:         string;
-  isLocked:        boolean;
-}
-
-function useToggleRosterLock() {
-  const queryClient = useQueryClient();
-  const { toast }   = useToast();
-
-  return useMutation({
-    mutationFn: async (vars: ToggleRosterLockVariables) => {
-      const { error, count } = await supabase.rpc('toggle_roster_lock_for_range', {
-        p_org_id:      vars.organizationId as string,
-        p_dept_id:     vars.departmentId as string,
-        p_sub_dept_id: vars.subDepartmentId as string,
-        p_start_date:  vars.startDate,
-        p_end_date:    vars.endDate,
-        p_lock_status: vars.isLocked,
-      }, { count: 'exact' });
-
-      if (error) throw error;
-      return count;
-    },
-
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
-      toast({
-        title:       vars.isLocked ? 'Roster Locked' : 'Roster Unlocked',
-        description: `Successfully ${vars.isLocked ? 'locked' : 'unlocked'} the roster for the selected range.`,
-      });
-    },
-
-    onError: (err) => {
-      console.error('[useToggleRosterLock]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to toggle roster lock'), variant: 'destructive' });
-    },
-  });
-}
 
 // ── useApplyTemplate ──────────────────────────────────────────────────────────
 
@@ -443,42 +400,6 @@ export function useApplyTemplate() {
 
 // ── useClearTemplate ──────────────────────────────────────────────────────────
 
-function useClearTemplate() {
-  const queryClient = useQueryClient();
-  const { toast }   = useToast();
-
-  return useMutation({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async ({ rosterId, templateId, userId }: { rosterId: string; templateId: string; userId: string }): Promise<any> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase.rpc as any)('sm_clear_template_application', {
-        p_roster_id:   rosterId,
-        p_template_id: templateId,
-        p_user_id:     userId,
-      });
-
-      if (error) throw error;
-      return data;
-    },
-
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
-
-      const deleted = (data?.shifts_deleted as number | undefined) ?? 0;
-      toast({
-        title:       'Template Cleared',
-        description: `Removed ${deleted} template-derived shift${deleted !== 1 ? 's' : ''}.`,
-      });
-    },
-
-    onError: (err) => {
-      console.error('[useClearTemplate]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to clear template'), variant: 'destructive' });
-    },
-  });
-}
 
 // ── Sub-group changes: delete / rename / clone ────────────────────────────────
 //

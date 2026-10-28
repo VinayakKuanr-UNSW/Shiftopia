@@ -606,12 +606,3 @@ export async function getTeamFairnessStanding(
     return out;
 }
 
-const teamAvailabilityApi = {
-    getTeamMembers,
-    getTeamShifts,
-    getTeamLeaveDays,
-    getTeamRestrictedWorkLimits,
-    getTeamFairnessStanding,
-    resolveRequired,
-    getResolvedAvailabilities,
-};

@@ -4,7 +4,6 @@ import * as StandardEngine from './standard';
 import * as SecurityEngine from './security';
 import { Shift } from '../../../shift.entity';
 import type { AwardContext } from './award-context';
-import { buildAwardContext } from './award-context';
 import { resolveShiftAllowances } from './shift-allowances';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 

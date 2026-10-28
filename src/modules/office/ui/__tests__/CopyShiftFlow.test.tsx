@@ -10,7 +10,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import * as React from 'react';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 
 const proposal = vi.hoisted(() => ({ ledgers: [] as Array<{ employeeId: string; cycles: unknown[] }> }));

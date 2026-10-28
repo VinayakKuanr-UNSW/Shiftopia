@@ -11,7 +11,7 @@
  * NO auto-run logic here or in the hook. The user always clicks first.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
     Shield, AlertOctagon, AlertTriangle, CheckCircle2, XCircle,
     Play, Loader2, RefreshCw, Circle, ChevronDown, Info,
@@ -21,7 +21,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { V8_RULE_METADATA as RULE_METADATA } from '@/modules/compliance/v8/metadata';
 import type { UseCompliancePanelReturn } from './useCompliancePanel';
 import type { V8Hit } from '@/modules/compliance/v8/types';
-import { type PassedRule, UI_VALIDATED_RULES } from './bucket-map';
+import { UI_VALIDATED_RULES } from './bucket-map';
 
 // =============================================================================
 // TYPES

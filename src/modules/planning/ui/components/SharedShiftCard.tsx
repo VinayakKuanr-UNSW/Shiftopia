@@ -1,18 +1,11 @@
 import { cardTokens } from '@/modules/core/ui/primitives/card';
 import React, { forwardRef } from 'react';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import {
     Clock,
     Calendar,
-    Building2,
-    ShieldCheck,
-    ArrowLeftRight,
-    MapPin,
     Signal,
-    Zap,
     Lock,
-    Flame,
     ChevronDown,
     ChevronRight,
     User,
@@ -227,25 +220,6 @@ const BillableSourceIcon: React.FC<{
     );
 };
 
-const DataRow: React.FC<{
-    label: string;
-    value: React.ReactNode;
-    emphasis?: boolean;
-    accentColor?: string;
-}> = ({ label, value, emphasis, accentColor }) => (
-    <div className="flex items-center justify-between py-1.5 border-b border-foreground/[0.04] last:border-0">
-        <span className="text-[11px] font-semibold text-muted-foreground/40 uppercase tracking-widest shrink-0">
-            {label}
-        </span>
-        <div className={cn(
-            "tabular-nums tracking-tight font-semibold font-mono flex items-center gap-2 text-right justify-end",
-            emphasis ? "text-[14px] text-foreground" : "text-[12px] text-foreground/70",
-            accentColor
-        )}>
-            {value}
-        </div>
-    </div>
-);
 
 function parseTimeToMinutes(timeStr?: string | null): number | null {
     if (!timeStr || timeStr === '--:--' || timeStr === '-' || timeStr === '—') return null;

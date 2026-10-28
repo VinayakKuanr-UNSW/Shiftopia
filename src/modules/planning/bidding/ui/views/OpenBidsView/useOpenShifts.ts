@@ -41,7 +41,6 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
     data: shifts = EMPTY_SHIFTS,
     isLoading,
     refetch,
-    isError,
   } = useQuery({
     queryKey: shiftKeys.managerBidShifts(queryFilters.organizationId, queryFilters),
     queryFn: async () => {

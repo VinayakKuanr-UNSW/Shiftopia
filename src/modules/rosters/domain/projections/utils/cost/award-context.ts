@@ -159,20 +159,6 @@ export function getDateFacts(ctx: AwardContext, dateStr: string): DateFacts {
 // straddle a Sydney DST switch. `fastNightMinutes` is likewise a wall-clock
 // window overlap and is not DST-adjusted, for the same reason.
 
-/**
- * Documentation marker for the DST boundary above. This is a pure no-op that
- * exists so the boundary is greppable and its rationale travels with the code:
- * given a naive (non-DST-adjusted) minute count, the estimator uses it as-is.
- * Correcting a real DST-crossing duration must happen UPSTREAM (where real
- * instants live) before the value reaches this engine.
- *
- * @param naiveMinutes minutes derived from start/end strings or supplied by the
- *                     caller, assuming a flat 24h day (no DST offset applied).
- * @returns the same value, unchanged — the estimator does not adjust for DST.
- */
-function dstNaiveMinutes(naiveMinutes: number): number {
-  return naiveMinutes;
-}
 
 // ── Fast Time Utilities ──────────────────────────────────────────────────────
 //
@@ -191,21 +177,6 @@ export function parseTimeToMinutes(time: string): number {
   return (Number(parts[0]) * 60) + Number(parts[1]);
 }
 
-/**
- * Compute net minutes from start/end time strings and overnight flag.
- * Replaces the `parseISO` → `differenceInMinutes` chain.
- */
-function fastNetMinutes(
-  startTime: string,
-  endTime: string,
-  isOvernight: boolean,
-  unpaidBreakMinutes: number = 0,
-): number {
-  let start = parseTimeToMinutes(startTime);
-  let end = parseTimeToMinutes(endTime);
-  if (end <= start || isOvernight) end += 1440;
-  return Math.max(0, (end - start) - unpaidBreakMinutes);
-}
 
 /**
  * Compute the number of minutes that overlap with the night shift window

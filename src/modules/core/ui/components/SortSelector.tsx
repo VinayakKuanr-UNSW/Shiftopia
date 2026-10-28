@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowUpDown, Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import {

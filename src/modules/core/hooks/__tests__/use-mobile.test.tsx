@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, act } from '@testing-library/react';
-import * as React from 'react';
 
 /**
  * `useIsMobile` is called by 25 component types, one of which is the roster

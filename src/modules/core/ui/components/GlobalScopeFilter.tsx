@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ScopeTree, ScopeOrg, ScopeDept, ScopeSelection } from '@/platform/auth/types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ScopeTree, ScopeSelection } from '@/platform/auth/types';
 import type { ScopeMode } from '@/platform/auth/scope-selection';
-import { ChevronDown, Lock, Building2, Layers, Users2, Filter, MoreHorizontal, Check, Settings2 } from 'lucide-react';
+import { ChevronDown, Lock, Building2, Layers, Users2, Filter, Check, Settings2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import {
@@ -12,7 +12,6 @@ import {
     SheetTrigger,
     SheetDescription,
 } from '@/modules/core/ui/primitives/sheet';
-import { Button } from '@/modules/core/ui/primitives/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primitives/popover';
 import {
     Command,

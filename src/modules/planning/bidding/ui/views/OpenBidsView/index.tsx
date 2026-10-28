@@ -5,7 +5,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, addDays, subDays } from 'date-fns';
-import { formatCalendarDate, formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,13 +14,13 @@ import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
-import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from '@/modules/core/ui/primitives/drawer';
+import { Drawer, DrawerContent, DrawerTitle } from '@/modules/core/ui/primitives/drawer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/modules/core/ui/primitives/dialog';
 import {
   Search, Flame, Clock, CheckCircle, CircleSlash, Loader2, Inbox,
-  Users, Zap, ShieldCheck, ShieldAlert, Shield, Gavel,
-  CircleCheck, CircleX, XCircle, TriangleAlert, ChevronDown, ChevronRight, ChevronLeft,
-  Sparkles, UserCheck as LucideUserCheck, History, ArrowUpDown, ArrowUp, ArrowDown, BarChart2,
+  Users, Zap, ShieldCheck, 
+  CircleX, XCircle, TriangleAlert, ChevronRight, ChevronLeft,
+  Sparkles, UserCheck as LucideUserCheck, ArrowUp, ArrowDown, 
   Layers,
 } from 'lucide-react';
 import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
@@ -45,13 +45,10 @@ import {
 } from '@/modules/compliance';
 import { runV8Orchestrator } from '@/modules/compliance/v8';
 import { buildBidInput } from '@/modules/planning/unified/compliance/input-builder';
-import type { V8Hit, V8Result } from '@/modules/compliance/v8/types';
-import type { V8OrchestratorInput } from '@/modules/compliance/v8/orchestrator/types';
+import type { V8Hit } from '@/modules/compliance/v8/types';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { validateCompliance } from '@/modules/rosters/services/compliance.service';
-import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
-import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
-import { calculateTimeRemaining, formatTimeRemaining } from './utils';
+import { calculateTimeRemaining } from './utils';
 import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts } from './types';
 import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
@@ -59,7 +56,6 @@ import { useShiftBids } from './useShiftBids';
 import { ShiftCard } from './ShiftCard';
 import { useTimeTicker } from './useTimeTicker';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
-import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { classifyBuckets, getBucketSummary } from '@/modules/compliance/ui/bucket-map';
 import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modules/compliance/ui/useCompliancePanel';
 import { calculateFatigueWithRecovery, getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
@@ -147,16 +143,6 @@ const GROUP_THEME: Record<GroupVariant, {
 // HELPERS
 // =============================================================================
 
-function formatTimeLeft(deadline: string): { label: string; colorCls: string; isUrgent: boolean } {
-  const tr = calculateTimeRemaining(deadline);
-  if (tr.isExpired) return { label: 'EXPIRED', colorCls: 'text-rose-600 dark:text-rose-400', isUrgent: true };
-  const totalHours = tr.hours;
-  if (totalHours === 0) return { label: `${tr.minutes}m`, colorCls: 'text-rose-600 dark:text-rose-400', isUrgent: true };
-  if (totalHours < 2) return { label: `${totalHours}h ${tr.minutes}m`, colorCls: 'text-rose-600 dark:text-rose-400', isUrgent: true };
-  const days = Math.floor(totalHours / 24);
-  const label = days > 0 ? `${days}d ${totalHours % 24}h` : `${totalHours}h ${tr.minutes}m`;
-  return { label, colorCls: 'text-amber-600 dark:text-amber-400', isUrgent: false };
-}
 
 function getInitials(name: string): string {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);

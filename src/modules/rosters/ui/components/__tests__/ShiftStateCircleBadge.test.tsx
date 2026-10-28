@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { ShiftStateCircleBadge, STATE_ICONS } from '../ShiftStateCircleBadge';
+import { ShiftStateCircleBadge } from '../ShiftStateCircleBadge';
 import { SHIFT_STATE_BADGE_TOKENS, type ShiftStateID } from '../../../domain/shift-fsm';
 
 describe('ShiftStateCircleBadge', () => {

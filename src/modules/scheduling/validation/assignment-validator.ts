@@ -28,7 +28,6 @@ import { shiftSorter }           from './engine/shift-sorter';
 import { incrementalValidator }  from './engine/incremental-validator';
 import { complianceEvaluator }   from './engine/compliance-evaluator';
 import { conflictReporter }      from './engine/conflict-reporter';
-import { assignmentCommitter }   from './engine/assignment-committer';
 import type {
     ValidationRunOptions,
     ValidationRunResult,

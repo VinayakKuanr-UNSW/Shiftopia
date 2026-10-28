@@ -20,7 +20,7 @@
  * Keyboard: Alt+P toggles expand/collapse
  */
 
-import React, { useEffect, useReducer, useState, useCallback, useRef } from 'react';
+import { useEffect, useReducer, useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
     queryPerfTracker,

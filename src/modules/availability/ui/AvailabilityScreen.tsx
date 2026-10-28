@@ -19,13 +19,9 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { addMonths, subMonths, format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { itemVariants, tabTransition } from '@/modules/core/ui/motion/presets';
 import {
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
   Calendar,
   ClipboardList,
   Settings,
@@ -34,7 +30,6 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { CalendarDays } from 'lucide-react';
 
 import { useAssignedShiftsForAvailability } from '../state/useAssignedShiftsForAvailability';
 import { AvailabilityRule, AvailabilityFormPayload } from '../model/availability.types';

@@ -103,8 +103,6 @@ const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelectMember
     const { isDark } = useTheme();
 
     // Fixed 00:00 to 24:00 (00:00) 24-hour day grid with 1-hour steps
-    const fromHour = 0;
-    const toHour = 24;
     const span = 24;
     const pct = (minutes: number) => (minutes / 60 / span) * 100;
 

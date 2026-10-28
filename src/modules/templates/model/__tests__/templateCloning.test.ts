@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Group, SubGroup, Template, TemplateShift } from '../templates.types';
+import type { SubGroup, Template, TemplateShift } from '../templates.types';
 import { deepClone, generateTempId } from '../templates.types';
 
 describe('template cloning property fidelity', () => {

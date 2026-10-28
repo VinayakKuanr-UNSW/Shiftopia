@@ -14,10 +14,6 @@ import {
   resolveCandidateV8ShiftId,
 } from '../../compliance/input-builder';
 import type { PlanningOffer, PlanningRequest } from '../../types';
-import {
-  makeV8Hit,
-  makeV8Result,
-} from '../helpers/fixtures';
 
 const employeeContext = (
   employeeId: string,

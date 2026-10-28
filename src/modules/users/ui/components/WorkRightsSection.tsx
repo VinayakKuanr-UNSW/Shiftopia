@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { Label } from '@/modules/core/ui/primitives/label';

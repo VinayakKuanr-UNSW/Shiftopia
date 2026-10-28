@@ -1,6 +1,5 @@
 import { Dialog, DialogContent, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import React, { useState } from "react";
-import { motion } from "framer-motion";
 import { RefreshCw, Zap, ShieldCheck, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/modules/core/ui/primitives/button";
 import { Badge } from "@/modules/core/ui/primitives/badge";

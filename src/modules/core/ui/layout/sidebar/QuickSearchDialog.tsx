@@ -12,7 +12,6 @@ import {
   RefreshCw,
   TrendingUp,
   User,
-  Shield,
   ShieldX,
   Sparkles,
   Radio,

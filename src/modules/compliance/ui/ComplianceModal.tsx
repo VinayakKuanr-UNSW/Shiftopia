@@ -17,7 +17,6 @@ import {
 } from '../types';
 import { getRegisteredRules, runRule } from '../v8';
 import { cn } from '@/modules/core/lib/utils';
-import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 
 // =============================================================================
 // TYPES

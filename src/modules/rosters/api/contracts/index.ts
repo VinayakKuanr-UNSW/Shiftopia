@@ -121,7 +121,6 @@ const ShiftCoreSchema = z.object({
   updated_at: z.string(),
 }).passthrough(); // allow joined relation fields through without failure
 
-type ShiftCore = z.infer<typeof ShiftCoreSchema>;
 
 // ── RPC Response schemas ───────────────────────────────────────────────────
 
@@ -130,8 +129,6 @@ type ShiftCore = z.infer<typeof ShiftCoreSchema>;
 // will fetch the full row to satisfy the Shift entity interface.
 export const CreateShiftResponseSchema = z.string().uuid();
 export const UpdateShiftResponseSchema = z.boolean();
-type CreateShiftResponse = z.infer<typeof CreateShiftResponseSchema>;
-type UpdateShiftResponse = z.infer<typeof UpdateShiftResponseSchema>;
 
 // sm_publish_shift
 export const PublishShiftResponseSchema = z.object({
@@ -140,7 +137,6 @@ export const PublishShiftResponseSchema = z.object({
   to_state: z.string().optional(),
   error: z.string().optional(),
 });
-type PublishShiftResponse = z.infer<typeof PublishShiftResponseSchema>;
 
 // sm_bulk_publish_shifts
 export const BulkPublishResponseSchema = z.object({
@@ -158,7 +154,6 @@ export const BulkPublishResponseSchema = z.object({
     reason: z.string(),
   })).optional(),
 }).passthrough();
-type BulkPublishResponse = z.infer<typeof BulkPublishResponseSchema>;
 
 
 
@@ -201,7 +196,6 @@ export const DeleteShiftResponseSchema = z.object({
   message: z.string().optional(),
   code: z.string().optional(),
 });
-type DeleteShiftResponse = z.infer<typeof DeleteShiftResponseSchema>;
 
 // sm_manager_cancel
 export const CancelShiftResponseSchema = z.object({
@@ -209,21 +203,18 @@ export const CancelShiftResponseSchema = z.object({
   new_status: z.string().optional(),
   message: z.string().optional(),
 });
-type CancelShiftResponse = z.infer<typeof CancelShiftResponseSchema>;
 
 // sm_accept_offer / sm_reject_offer / sm_decline_offer
 export const OfferActionResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),
 });
-type OfferActionResponse = z.infer<typeof OfferActionResponseSchema>;
 
 // sm_request_trade
 export const RequestTradeResponseSchema = z.object({
   success: z.boolean(),
   trade_id: z.string().optional(),
 });
-type RequestTradeResponse = z.infer<typeof RequestTradeResponseSchema>;
 
 // sm_employee_drop_shift
 export const EmployeeDropResponseSchema = z.object({
@@ -233,7 +224,6 @@ export const EmployeeDropResponseSchema = z.object({
   message: z.string().optional(),
   error: z.string().optional(),
 });
-type EmployeeDropResponse = z.infer<typeof EmployeeDropResponseSchema>;
 
 // sm_close_bidding
 export const CloseBiddingResponseSchema = z.object({
@@ -273,7 +263,6 @@ export const ApplyShiftOpResponseSchema = z.object({
   current_state: z.string().optional(),
   attempted: z.string().optional(),
 }).passthrough();
-type ApplyShiftOpResponse = z.infer<typeof ApplyShiftOpResponseSchema>;
 
 // Compliance RPCs
 const OverlapCheckSchema = z.boolean().nullable().transform(v => v ?? false);
@@ -288,4 +277,3 @@ const ApplyTemplateResponseSchema = z.object({
   roster_id: UuidSchema.optional(),
   error: z.string().optional(),
 });
-type ApplyTemplateResponse = z.infer<typeof ApplyTemplateResponseSchema>;

@@ -1,7 +1,6 @@
 import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { Shift } from '@/modules/rosters';
-import { ShiftRuleHeader } from '@/modules/rosters/ui/components/ShiftRuleHeader';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 
 interface ShiftPillProps {

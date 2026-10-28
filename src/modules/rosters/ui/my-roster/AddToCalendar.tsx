@@ -1,4 +1,3 @@
-import React from 'react';
 import { Capacitor } from '@capacitor/core';
 import { CalendarPlus } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';

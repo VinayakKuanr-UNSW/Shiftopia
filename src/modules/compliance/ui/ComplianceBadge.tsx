@@ -5,7 +5,6 @@
  * Clickable to open detailed modal.
  */
 
-import React from 'react';
 import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { ComplianceCheckResult } from '../types';
 import { cn } from '@/modules/core/lib/utils';

@@ -16,9 +16,9 @@
  * - Show slot data
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
-import { Pencil, Trash2, Calendar, Clock, Repeat, AlertCircle } from 'lucide-react';
+import { Pencil, Trash2, Calendar, Clock, Repeat } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';

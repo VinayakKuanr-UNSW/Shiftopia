@@ -5,7 +5,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
-import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
@@ -287,8 +287,6 @@ export async function getShiftsForTimesheet(
 
             const scheduledMins = shift.scheduled_length_minutes ||
                 calculateMinutes(shift.start_time, shift.end_time);
-            const netMins = shift.net_length_minutes ||
-                (scheduledMins - (shift.unpaid_break_minutes || 0));
 
 
             // Resolve each side ONCE — every field below (net minutes, adjusted

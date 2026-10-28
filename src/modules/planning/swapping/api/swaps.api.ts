@@ -9,7 +9,7 @@ import { mapShiftOpResultToUx } from '@/modules/rosters/domain/shift-ops.contrac
 import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/modules/compliance';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import type { V8ContractType } from '@/modules/compliance/v8/types';
-import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
+import { addDays, subDays, format, differenceInHours, parse } from 'date-fns';
 
 // Embedded profile columns for swap participants. Never `*`: contact and
 // personal columns (phone, date of birth, emergency contacts) are not

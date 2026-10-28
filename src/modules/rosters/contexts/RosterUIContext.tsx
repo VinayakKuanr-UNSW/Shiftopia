@@ -25,7 +25,7 @@
  * (useRosterStore partialize): a reload returns to the date last viewed.
  */
 
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   useRosterStore,
   selectDepartmentId,
@@ -40,7 +40,6 @@ import {
   type DateRange,
   type ComplianceFilterStatus,
 } from '../state/useRosterStore';
-import { eachDayOfInterval } from 'date-fns';
 
 // ── Re-export types (callers import from this path) ──────────────────────────
 

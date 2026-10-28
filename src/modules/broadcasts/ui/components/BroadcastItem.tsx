@@ -6,14 +6,11 @@ import {
     Bell,
     MessageSquare,
     MoreVertical,
-    Eye,
-    BellRing,
     FileText,
     Image,
     FileSpreadsheet,
     File,
     Download,
-    CheckCircle2,
     Shield,
     Crown,
     Trash2,
@@ -21,7 +18,6 @@ import {
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
-import { Progress } from '@/modules/core/ui/primitives/progress';
 import {
     DropdownMenu,
     DropdownMenuContent,

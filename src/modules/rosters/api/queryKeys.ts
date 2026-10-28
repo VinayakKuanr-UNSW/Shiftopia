@@ -49,11 +49,6 @@ export interface ShiftFilters {
 
 // ── Template query keys ───────────────────────────────────────────────────────
 
-const templateKeys = {
-  all: ['templates'] as const,
-  history: () => ['templates', 'history'] as const,
-  detail: (id: string) => ['templates', 'detail', id] as const,
-};
 
 // ── Roster-level query keys ───────────────────────────────────────────────────
 

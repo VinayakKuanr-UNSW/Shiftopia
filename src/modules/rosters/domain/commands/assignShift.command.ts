@@ -442,12 +442,3 @@ export async function executeAssignShift(
     }
 }
 
-/**
- * Execute unassign shift command.
- * No compliance checks required for unassignment.
- */
-async function executeUnassignShift(
-    shiftId: string,
-): Promise<AssignShiftOutput> {
-    return executeAssignShift({ shiftId, employeeId: null });
-}

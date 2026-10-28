@@ -1,4 +1,4 @@
-import { startOfDay, isBefore, isAfter, isSameDay, format as formatDateFns, parseISO } from 'date-fns';
+import { startOfDay, isBefore, isSameDay, format as formatDateFns, parseISO } from 'date-fns';
 import { toZonedTime, format as formatZoned, toDate } from 'date-fns-tz';
 
 // Default fallback timezone if none provided
@@ -34,15 +34,6 @@ export const isPastInTimezone = (date: Date, timezone: string = SYDNEY_TZ): bool
     return isBefore(date, today);
 };
 
-/**
- * Checks if a date is strictly in the future relative to "Today" in the specified timezone
- * @param date The date to check
- * @param timezone The IANA timezone identifier
- */
-const isFutureInTimezone = (date: Date, timezone: string = SYDNEY_TZ): boolean => {
-    const today = getTodayInTimezone(timezone);
-    return isAfter(date, today);
-};
 
 /**
  * Checks if a date is "Today" in the specified timezone
@@ -266,10 +257,6 @@ export const getSydneyNow = (): Date => getNowInTimezone(SYDNEY_TZ);
  */
 export const isSydneyPast = (date: Date): boolean => isPastInTimezone(date, SYDNEY_TZ);
 
-/**
- * @deprecated Use isFutureInTimezone(date, timezone) instead
- */
-const isSydneyFuture = (date: Date): boolean => isFutureInTimezone(date, SYDNEY_TZ);
 
 /**
  * @deprecated Use isTodayInTimezone(date, timezone) instead

@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useOnlineStatus } from '../useOnlineStatus';
 
 describe('useOnlineStatus hook', () => {
-  const originalNavigator = window.navigator;
 
   beforeEach(() => {
     vi.restoreAllMocks();

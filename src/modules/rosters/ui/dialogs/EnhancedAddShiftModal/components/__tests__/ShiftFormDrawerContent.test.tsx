@@ -1,8 +1,7 @@
-import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useForm, FormProvider } from 'react-hook-form';
-import { ShiftFormDrawerContent, STEP, STEP_META } from '../ShiftFormDrawerContent';
+import { ShiftFormDrawerContent } from '../ShiftFormDrawerContent';
 
 // Helper test wrapper with react-hook-form
 function TestWrapper({ defaultValues = {}, drawerProps = {} }: { defaultValues?: any; drawerProps?: any }) {

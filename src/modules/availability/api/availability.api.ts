@@ -89,25 +89,6 @@ export async function getAvailabilityRules(
   return (data as AvailabilityRule[]) ?? [];
 }
 
-/**
- * Fetch a single availability rule by ID.
- */
-async function getAvailabilityRule(
-  ruleId: string
-): Promise<AvailabilityRule | null> {
-  const { data, error } = await supabase
-    .from("availability_rules")
-    .select("*")
-    .eq("id", ruleId)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw error;
-  }
-
-  return data as AvailabilityRule;
-}
 
 // ============================================================================
 // READ (SLOTS – CALENDAR & SCHEDULER)
@@ -150,16 +131,6 @@ export async function getAvailabilitySlots(
 // UPDATE (DISALLOWED)
 // ============================================================================
 
-/**
- * @deprecated
- * Direct updates are forbidden.
- * Editing MUST use delete + create.
- */
-async function updateAvailabilityRule(): Promise<never> {
-  throw new Error(
-    "Direct updates are not allowed. Use delete + create pattern."
-  );
-}
 
 // ============================================================================
 // DELETE (RULES)

@@ -2,21 +2,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
-import { Plus, FileText, Loader2, AlertCircle, Building2, Factory, Network, ArrowRight } from 'lucide-react';
+import { Plus, FileText, Loader2, AlertCircle, Building2, Factory, Network } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import { validateTemplateName, sanitizeTemplateName } from '@/modules/templates/model/templates.types';
-import { format, addMonths, startOfMonth } from 'date-fns';
 import { shiftsApi as enhancedShiftService } from '@/modules/rosters';
 import { supabase } from '@/platform/supabase/client';
 
@@ -52,9 +44,9 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedSubDeptId, setSelectedSubDeptId] = useState<string>('');
-  const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
-  const [isLoadingDepts, setIsLoadingDepts] = useState(false);
-  const [isLoadingSubDepts, setIsLoadingSubDepts] = useState(false);
+  const [, setIsLoadingOrgs] = useState(false);
+  const [, setIsLoadingDepts] = useState(false);
+  const [, setIsLoadingSubDepts] = useState(false);
 
   // Generation options (Current month + 24 future months)
   const years = useMemo(() => {

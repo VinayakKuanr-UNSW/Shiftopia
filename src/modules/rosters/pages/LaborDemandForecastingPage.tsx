@@ -32,7 +32,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 // Domain
@@ -63,13 +63,6 @@ import {
   DropdownMenuTrigger,
 } from "@/modules/core/ui/primitives/dropdown-menu";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/modules/core/ui/primitives/select";
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -90,18 +83,12 @@ import {
   AlertTriangle,
   AlertCircle,
   ArrowRightLeft,
-  Award,
-  Building2,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   Database,
   DollarSign,
   Eye,
-  GitBranch,
   Info,
-  Layers,
-  Lock,
   Layout,
   Minus,
   Plus,
@@ -126,7 +113,6 @@ import {
   buildScopeDemand,
   type ScopeDemandResult,
 } from "../services/demandTensorBuilder.service";
-import { synthesizeShifts } from "../services/shiftSynthesizer.service";
 import {
   ConfirmGenerationModal,
   type GenerationOptions,
@@ -803,7 +789,6 @@ const LaborDemandForecastingPage: React.FC = () => {
     setScope,
     scopeKey,
     isGammaLocked,
-    isLoading: isScopeLoading,
   } = useScopeFilter("managerial");
 
   // Multi-department derived IDs
@@ -820,7 +805,6 @@ const LaborDemandForecastingPage: React.FC = () => {
   // Use the first selected dept name if available (simple fallback)
   const departmentName = departmentId ? "Selected Department" : null; 
   const subDepartmentName = subDepartmentId ? "Selected Sub-Department" : null;
-  const hasCompleteSelection = scope.org_ids.length > 0 && scope.dept_ids.length > 0;
 
   // ── Local state ─────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState(() =>

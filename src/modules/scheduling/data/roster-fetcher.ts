@@ -25,7 +25,6 @@ import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 import { isFullTimeEmployee } from '@/modules/core/model/employment.types';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { normaliseCycleAnchor, resolveGoverningCycleWeeks } from '@/modules/compliance/ordinary-hours-cycle';
-import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 // =============================================================================
 // SHARED UTILITIES — pure functions, no I/O

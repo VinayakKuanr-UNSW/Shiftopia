@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { OpenBidsView } from '../views/OpenBidsView';
 import type { BidToggle, ToggleCounts, ManagerBidShift } from '../views/OpenBidsView/types';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -23,13 +23,13 @@ const ManagerBidsPage: React.FC = () => {
     const [groupBy, setGroupBy] = useState<RowGroupBy>('none');
     const [activeToggle, setActiveToggle] = useState<BidToggle>('urgent');
     const [counts, setCounts] = useState<ToggleCounts>({ standard: 0, urgent: 0, resolved: 0, expired: 0 });
-    const [shifts, setShifts] = useState<ManagerBidShift[]>([]);
+    const [, setShifts] = useState<ManagerBidShift[]>([]);
     const [autoAssign, setAutoAssign] = useState<{ run: () => void; isRunning: boolean }>({ run: () => {}, isRunning: false });
 
     // Period / Date navigation: defaults to current month (matches forward-looking open bids)
     const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
     const [viewType, setViewType] = useState<ViewType>('month');
-    const [range, setRange] = useState<DateRange>(() => computeRange(new Date(), 'month'));
+    const [, setRange] = useState<DateRange>(() => computeRange(new Date(), 'month'));
     const [startDate, setStartDate] = useState<Date>(() => computeRange(new Date(), 'month').start);
     const [endDate, setEndDate] = useState<Date>(() => computeRange(new Date(), 'month').end);
 

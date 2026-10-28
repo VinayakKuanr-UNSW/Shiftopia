@@ -21,10 +21,6 @@ export const itemVariants: Variants = {
 
 // Cards/rows that are interactive (hover lift, tap scale).
 // Spread directly onto a motion element as props.
-const cardInteractive = {
-  whileHover: { y: -2, transition: { duration: 0.15 } },
-  whileTap: { scale: 0.98, transition: { duration: 0.1 } },
-} as const;
 
 // Tab/segment crossfade. Use with <AnimatePresence mode="wait">.
 export const tabTransition = {
@@ -50,11 +46,3 @@ export const listItemSpring = {
 } as const;
 
 // Drawer/modal inner body fade-in.
-const drawerContentVariants: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { ease: [0.16, 1, 0.3, 1], duration: 0.3 },
-  },
-};

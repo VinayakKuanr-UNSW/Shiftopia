@@ -26,11 +26,6 @@ import { compileRule, evaluateRule, type CompiledRule } from '../domain/ruleEval
 import { ruleApplies } from '../domain/ruleMatcher';
 import type { FunctionCode } from '../api/supervisorFeedback.dto';
 
-interface CellKey {
-    slice_idx: number;
-    function_code: FunctionCode;
-    level: number;
-}
 
 const NUM_LEVELS = 8;
 

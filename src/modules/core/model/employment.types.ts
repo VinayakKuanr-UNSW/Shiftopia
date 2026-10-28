@@ -1,25 +1,3 @@
-// Employment type — canonical domain vocabulary
-//
-// There are TWO vocabularies in this system and conflating them has already
-// caused silent bugs, so they are named separately here:
-//
-//   EmploymentStatus      — what the DB stores per contract
-//                           (`public.employment_status` enum, 4 values, LONG form)
-//   TargetEmploymentType  — what the SOLVER compares against
-//                           (3 values, SHORT form)
-//
-// The solver deliberately collapses 'Flexible Part-Time' onto 'PT' and carries
-// flexibility on a SEPARATE axis (`EmployeeInput.is_flexible`). See
-// `_EMPLOYMENT_TYPE_ALIASES` / `normalize_employment_type()` in
-// optimizer-service/model_builder.py — the functions below are the TypeScript
-// mirror of that table and MUST stay in step with it.
-
-/** The DB's `public.employment_status` enum, verbatim. */
-type EmploymentStatus =
-    | 'Full-Time'
-    | 'Part-Time'
-    | 'Casual'
-    | 'Flexible Part-Time';
 
 /**
  * The solver's canonical set. Also the accepted values of

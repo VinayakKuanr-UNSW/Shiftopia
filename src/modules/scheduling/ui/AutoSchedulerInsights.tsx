@@ -13,7 +13,7 @@
  * All data comes from the solver via AutoSchedulerResult (pillars,
  * bindingConstraints, alternatives). Purely presentational.
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
     Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend,

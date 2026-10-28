@@ -96,64 +96,9 @@ export interface AvailabilityFormPayload {
   sub_department_id?: string | null;
 }
 
-// ============================================================================
-// LEGACY COMPATIBILITY TYPES (to be phased out)
-// ============================================================================
 
-/**
- * @deprecated Use AvailabilityType instead
- * Keeping for backwards compatibility during migration
- */
-type AvailabilityStatus =
-  | 'Available'
-  | 'Unavailable'
-  | 'Partial'
-  | 'Limited'
-  | 'Tentative'
-  | 'On Leave'
-  | 'Not Specified';
 
-/**
- * @deprecated Legacy time slot type, use AvailabilitySlot instead
- */
-interface TimeSlot {
-  id?: string;
-  startTime: string;
-  endTime: string;
-  status?: AvailabilityStatus;
-  daysOfWeek?: number[];
-}
 
-/**
- * @deprecated Legacy day availability type
- * Being phased out in favor of AvailabilitySlot
- */
-interface DayAvailability {
-  id: string;
-  employeeId: string;
-  date: string;
-  status: AvailabilityStatus;
-  notes?: string;
-  timeSlots: TimeSlot[];
-}
-
-/**
- * @deprecated Presets should be handled differently
- * Consider moving to a separate presets module
- */
-interface AvailabilityPreset {
-  id: string;
-  name: string;
-  type: string;
-  pattern?: any;
-  timeSlots: Array<{
-    id?: string;
-    startTime: string;
-    endTime: string;
-    status: string;
-    daysOfWeek?: number[];
-  }>;
-}
 
 // ============================================================================
 // UTILITY TYPE GUARDS
@@ -163,16 +108,4 @@ interface AvailabilityPreset {
 // UTILITY TYPE GUARDS
 // ============================================================================
 
-function isFullDayRule(rule: AvailabilityRule): boolean {
-  // Can consider full day if times are 00:00:00 and 23:59:59 or similar convention, 
-  // but DB schema requires times. For now, we check the strings.
-  // Assuming '00:00:00' and '23:59:59' or similar. 
-  // Actually, UI often sets null for full day, but DB requires NOT NULL time.
-  // We will assume the SERVICE layer handles the conversion, but the MODEL layer 
-  // now enforces string.
-  return rule.start_time === '00:00:00' && rule.end_time === '23:59:59';
-}
 
-function isRecurringRule(rule: AvailabilityRule): boolean {
-  return rule.repeat_type !== 'none';
-}

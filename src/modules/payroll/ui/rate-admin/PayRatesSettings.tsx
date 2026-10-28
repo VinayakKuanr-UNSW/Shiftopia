@@ -16,7 +16,7 @@
 import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useMemo, useState } from 'react';
 import {
-  Loader2, Database, Info, Calendar,
+  Database, Info,
 } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';

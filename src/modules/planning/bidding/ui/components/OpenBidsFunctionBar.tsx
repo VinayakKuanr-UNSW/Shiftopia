@@ -4,7 +4,6 @@ import {
   LayoutGrid,
   Filter,
   Zap,
-  Loader2,
   RefreshCw,
   Check,
   Flame,

@@ -7,7 +7,6 @@ import {
     Shield,
     ArrowLeftRight,
     Loader2,
-    RefreshCw,
     Gavel,
     X,
     Check,

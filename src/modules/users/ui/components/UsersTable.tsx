@@ -21,7 +21,6 @@ import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Ban, ChevronDown, Chevr
 import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
 import { ACCESS_LEVEL_CONFIG, accessLevelLabel } from '@/platform/auth/constants';
-import type { AccessLevel } from '@/platform/auth/types';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import {
@@ -246,7 +245,6 @@ const STICKY_ACTIONS = 'sticky right-0 shadow-[-1px_0_0_hsl(var(--border))]';
 const SORT_WORDS: Record<UsersSort['direction'], string> = { ascending: 'ascending', descending: 'descending' };
 
 const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100] as const;
-type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
 
 // ── The table ────────────────────────────────────────────────────────────────
 
@@ -440,7 +438,6 @@ export const UsersTable: React.FC<UsersTableProps> = ({
         const { group: g, contract: c } = row;
         const triggerKey = `${surface}:${row.key}`;
         const what = c ? `${g.person.name}, ${roleOf(c)}` : g.person.name;
-        const item = 'min-h-11 md:min-h-9 gap-2';
         return (
             <PageMenu modal={false}>
                 <PageMenuTrigger asChild>

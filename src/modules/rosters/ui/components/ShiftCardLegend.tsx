@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
     Edit,
-    Megaphone,
     Hourglass,
     CheckCircle,
     XCircle,
@@ -15,7 +14,6 @@ import {
     HelpCircle,
     CopyPlus,
     Clock,
-    UserPlus,
     Gavel,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';

@@ -13,7 +13,7 @@
  */
 
 import { RepeatType, AvailabilityFormPayload } from '../model/availability.types';
-import { getTodayInTimezone, SYDNEY_TZ, isPastInTimezone } from '@/modules/core/lib/date.utils';
+import { SYDNEY_TZ, isPastInTimezone } from '@/modules/core/lib/date.utils';
 
 // ============================================================================
 // ERROR MESSAGES
@@ -234,134 +234,10 @@ export function validateAvailabilityForm(
 // RECURRENCE RULE GENERATION
 // ============================================================================
 
-/**
- * Generate RRULE string from repeat configuration
- * Used by service layer when creating recurring rules
- */
-function generateRecurrenceRule(
-  repeatType: RepeatType,
-  repeatDays?: number[]
-): string | null {
-  switch (repeatType) {
-    case 'none':
-      return null;
 
-    case 'daily':
-      return 'FREQ=DAILY';
-
-    case 'weekly':
-      if (!repeatDays || repeatDays.length === 0) {
-        throw new Error(AVAILABILITY_ERRORS.WEEKLY_REPEAT_NO_DAYS);
-      }
-      // Convert 0=Sunday to RRULE format (SU,MO,TU,WE,TH,FR,SA)
-      const dayMap = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-      const days = repeatDays.map((d) => dayMap[d]).join(',');
-      return `FREQ=WEEKLY;BYDAY=${days}`;
-
-    case 'fortnightly':
-      return 'FREQ=WEEKLY;INTERVAL=2';
-
-    default:
-      return null;
-  }
-}
-
-/**
- * Parse RRULE string to extract repeat configuration
- * Used when editing existing rules to pre-fill form
- */
-function parseRecurrenceRule(rrule: string | null): {
-  repeatType: RepeatType;
-  repeatDays?: number[];
-} {
-  if (!rrule) {
-    return { repeatType: 'none' };
-  }
-
-  if (rrule.includes('FREQ=DAILY')) {
-    return { repeatType: 'daily' };
-  }
-
-  if (rrule.includes('FREQ=WEEKLY')) {
-    if (rrule.includes('INTERVAL=2')) {
-      return { repeatType: 'fortnightly' };
-    }
-
-    const dayMatch = rrule.match(/BYDAY=([A-Z,]+)/);
-    if (dayMatch) {
-      const dayMap: Record<string, number> = {
-        SU: 0,
-        MO: 1,
-        TU: 2,
-        WE: 3,
-        TH: 4,
-        FR: 5,
-        SA: 6,
-      };
-      const days = dayMatch[1].split(',').map((d) => dayMap[d]).filter((d) => d !== undefined);
-      return { repeatType: 'weekly', repeatDays: days };
-    }
-    return { repeatType: 'weekly', repeatDays: [] };
-  }
-
-  return { repeatType: 'none' };
-}
 
 // ============================================================================
 // TIME SLOT OVERLAP DETECTION
 // ============================================================================
 
-/**
- * Check if two time ranges overlap
- */
-function doTimeSlotsOverlap(
-  slot1Start: string,
-  slot1End: string,
-  slot2Start: string,
-  slot2End: string
-): boolean {
-  // Convert HH:MM to minutes for easier comparison
-  const toMinutes = (time: string): number => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-  };
 
-  const start1 = toMinutes(slot1Start);
-  const end1 = toMinutes(slot1End);
-  const start2 = toMinutes(slot2Start);
-  const end2 = toMinutes(slot2End);
-
-  // Check overlap: slot1 starts before slot2 ends AND slot1 ends after slot2 starts
-  return start1 < end2 && end1 > start2;
-}
-
-/**
- * Validate that multiple time slots don't overlap
- */
-function validateNoOverlappingSlots(
-  slots: Array<{ startTime: string; endTime: string }>
-): ValidationResult {
-  const errors: string[] = [];
-
-  for (let i = 0; i < slots.length; i++) {
-    for (let j = i + 1; j < slots.length; j++) {
-      if (
-        doTimeSlotsOverlap(
-          slots[i].startTime,
-          slots[i].endTime,
-          slots[j].startTime,
-          slots[j].endTime
-        )
-      ) {
-        errors.push(
-          `${AVAILABILITY_ERRORS.OVERLAPPING_SLOTS} (${slots[i].startTime}-${slots[i].endTime} overlaps with ${slots[j].startTime}-${slots[j].endTime})`
-        );
-      }
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
-}

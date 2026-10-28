@@ -23,8 +23,6 @@ import { FT_AVAILABILITY_ERROR, resolveProfileId } from './availability.service'
 
 export type ExceptionSeverity = 'HARD' | 'SOFT' | 'PREFERENCE';
 
-/** Severities an employee may set on themselves. Mirrors the RLS WITH CHECK. */
-const SELF_SERVICE_SEVERITIES: ExceptionSeverity[] = ['SOFT', 'PREFERENCE'];
 
 export interface AvailabilityException {
     id: string;

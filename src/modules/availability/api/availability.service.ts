@@ -20,8 +20,6 @@
 import {
   createAvailabilityRule,
   deleteAvailabilityRule,
-  deleteAvailabilityRulesInRange,
-  getAvailabilityRules,
   getCurrentProfileId,
 } from "./availability.api";
 
@@ -146,50 +144,6 @@ async function insertRuleFromForm(
 // BATCH CREATE (CONFIGURATION LEVEL)
 // ============================================================================
 
-/**
- * Batch create availability rules.
- *
- * NOTE:
- * - This creates multiple RULES
- * - Each rule independently triggers slot generation via DB
- * - This is configuration logic, NOT slot logic
- *
- * PERFORMANCE NOTE:
- * - This is chatty (N inserts)
- * - Acceptable for now
- * - Can be optimized later via bulk insert or RPC
- */
-async function batchCreateAvailabilityRules(
-  profileId: string,
-  payload: AvailabilityFormPayload
-): Promise<AvailabilityRule[]> {
-  // Resolved and guarded ONCE for the whole range — see `insertRuleFromForm`.
-  const resolvedProfileId = await assertCanDeclareFor(
-    profileId,
-    payload.sub_department_id
-  );
-
-  const start = payload.start_date;
-  const end = payload.repeat_end_date ?? payload.start_date;
-
-  const rules: AvailabilityRule[] = [];
-  let cursor = new Date(start);
-
-  while (cursor <= end) {
-    const singleDayPayload: AvailabilityFormPayload = {
-      ...payload,
-      start_date: new Date(cursor),
-      repeat_type: "none",
-    };
-
-    const rule = await insertRuleFromForm(resolvedProfileId, singleDayPayload);
-
-    rules.push(rule);
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return rules;
-}
 
 // ============================================================================
 // EDIT OPERATIONS (DELETE + CREATE)
@@ -222,81 +176,16 @@ export async function editAvailabilityRule(
   return insertRuleFromForm(resolvedProfileId, payload);
 }
 
-/**
- * Replace all availability rules in a date range.
- *
- * Used for:
- * - Presets
- * - Bulk overrides
- *
- * IMPORTANT:
- * - Deletes rules first
- * - Slots auto-deleted
- * - New rules inserted
- * - Slots auto-generated
- */
-async function replaceAvailabilityInRange(
-  profileId: string,
-  payload: AvailabilityFormPayload
-): Promise<AvailabilityRule[]> {
-  // BEFORE the range delete — same reasoning as `editAvailabilityRule`, with a
-  // wider blast radius: this one clears every rule in the range.
-  const resolvedProfileId = await assertCanDeclareFor(
-    profileId,
-    payload.sub_department_id
-  );
-
-  const startDate = format(payload.start_date, "yyyy-MM-dd");
-  const endDate = format(
-    payload.repeat_end_date ?? payload.start_date,
-    "yyyy-MM-dd"
-  );
-
-  // SCOPED, and this is the line where getting it wrong is unrecoverable:
-  // replacing a Set-up preset must not delete the same person's Front of House
-  // declarations. An unscoped call still clears the range across every job,
-  // which is what an unscoped replace means.
-  await deleteAvailabilityRulesInRange(
-    resolvedProfileId,
-    startDate,
-    endDate,
-    payload.sub_department_id
-  );
-
-  return batchCreateAvailabilityRules(resolvedProfileId, payload);
-}
 
 // ============================================================================
 // DELETE OPERATIONS
 // ============================================================================
 
-/**
- * Delete a single availability rule.
- *
- * Slots are removed automatically via ON DELETE CASCADE.
- */
-async function deleteAvailability(
-  ruleId: string
-): Promise<void> {
-  await deleteAvailabilityRule(ruleId);
-}
 
 // ============================================================================
 // READ OPERATIONS
 // ============================================================================
 
-/**
- * Fetch availability rules for UI display and editing.
- *
- * NOTE:
- * - Slots are fetched separately from availability_slots
- * - This function NEVER returns slots
- */
-async function fetchAvailabilityRules(
-  profileId: string
-): Promise<AvailabilityRule[]> {
-  return getAvailabilityRules(profileId);
-}
 
 // ============================================================================
 // PROFILE RESOLUTION

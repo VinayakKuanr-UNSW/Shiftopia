@@ -6,7 +6,7 @@ import {
     assignmentEvaluator,
     assignmentResultToComplianceResults,
 } from '@/modules/compliance';
-import { validateCompliance, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
+import { validateCompliance } from '@/modules/rosters/services/compliance.service';
 
 interface UseComplianceRunnerProps {
     buildComplianceInput: () => ComplianceCheckInput;
@@ -27,16 +27,6 @@ function calcNetMinutes(s: { start_time: string; end_time: string; unpaid_break_
     return Math.max(0, gross - (s.unpaid_break_minutes ?? 0));
 }
 
-/** Build a human-readable summary from qualification violations */
-function buildQualificationSummary(violations: QualificationViolation[]): string {
-    if (violations.length === 0) return 'Employee meets all qualification requirements';
-    const types = new Set(violations.map(v => v.type));
-    const parts: string[] = [];
-    if (types.has('ROLE_MISMATCH')) parts.push('role mismatch');
-    if (types.has('LICENSE_MISSING') || types.has('LICENSE_EXPIRED')) parts.push('license issue');
-    if (types.has('SKILL_MISSING') || types.has('SKILL_EXPIRED')) parts.push('skill issue');
-    return `Qualification violations: ${parts.join(', ')}`;
-}
 
 export function useComplianceRunner({
     buildComplianceInput,

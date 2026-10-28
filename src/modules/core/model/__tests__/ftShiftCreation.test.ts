@@ -18,7 +18,6 @@ import { resolve } from 'node:path';
 import {
     CREATABLE_TARGET_EMPLOYMENT_TYPES,
     FULL_TIME_GROUP_TYPE,
-    TARGET_EMPLOYMENT_TYPES,
     initialTargetEmploymentType,
     targetEmploymentTypeOptions,
     targetAfterGroupChange,

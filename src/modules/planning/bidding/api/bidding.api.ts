@@ -7,15 +7,6 @@ import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Bid, BidStatus } from '../model/bid.types';
 
 // --- Helper Functions ---
-const mapDbStatusToBidStatus = (dbStatus: string): BidStatus => {
-    const map: Record<string, BidStatus> = {
-        'pending': 'pending',
-        'accepted': 'selected', // UI 'selected' matches DB 'accepted'
-        'rejected': 'rejected',
-        'withdrawn': 'withdrawn'
-    };
-    return map[dbStatus] || 'pending';
-};
 
 const mapBidStatusToDbStatus = (status: BidStatus): string => {
     const map: Record<BidStatus, string> = {

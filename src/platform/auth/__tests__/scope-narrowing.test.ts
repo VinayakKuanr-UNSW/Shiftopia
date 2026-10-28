@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   orgIds, deptIds, subDeptIds,
   soleOrgId, soleDeptId, soleSubDeptId,
-  isOrgAmbiguous, isDeptAmbiguous, isSubDeptAmbiguous,
+  isOrgAmbiguous, isDeptAmbiguous, 
   orgIdOnceSynced,
 } from '../scope-narrowing';
 import type { ScopeSelection } from '../types';

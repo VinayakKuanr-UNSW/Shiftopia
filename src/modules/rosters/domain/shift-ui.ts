@@ -20,12 +20,9 @@ import {
 } from './shift-fsm';
 import { type ShiftUrgency } from './bidding-urgency';
 import { 
-    ShieldCheck, 
     Lock, 
-    Edit, 
     Shield,
     Clock,
-    CheckCircle2,
 } from 'lucide-react';
 import { type Shift } from './shift.entity';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
@@ -692,10 +689,6 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     return { arrival, departure };
 }
 
-/** Arrival / departure halves of the Payroll Rules model — mirrors Live Rules labels. */
-type PayrollArrivalRule = 'Early In' | 'On Time In' | 'Late In';
-type PayrollDepartureRule = 'Early Out' | 'On Time Out' | 'Late Out';
-type PayrollRule = PayrollArrivalRule | PayrollDepartureRule;
 
 /** The two-badge Payroll Rules result — billable IN vs start, billable OUT vs end. */
 interface PayrollRuleBadges {

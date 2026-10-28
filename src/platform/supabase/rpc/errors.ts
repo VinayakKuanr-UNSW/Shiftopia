@@ -131,31 +131,14 @@ export class PermissionError extends AppError {
   }
 }
 
-/** Optimistic lock conflict — another actor updated the record */
-class ConflictError extends AppError {
-  constructor(resourceType: string, id: string) {
-    super({
-      code: 'CONFLICT',
-      message: `${resourceType} was modified by another user. Please refresh and try again.`,
-      details: { resourceType, id },
-    });
-    this.name = 'ConflictError';
-  }
-}
 
 // ── Type guards ────────────────────────────────────────────────────────────
 
 export const isAppError = (e: unknown): e is AppError =>
   e instanceof AppError;
 
-const isComplianceError = (e: unknown): e is ComplianceError =>
-  e instanceof ComplianceError;
 
-const isStateTransitionError = (e: unknown): e is StateTransitionError =>
-  e instanceof StateTransitionError;
 
-const isAuthError = (e: unknown): e is AuthenticationError =>
-  e instanceof AuthenticationError;
 
 /** Coerce any thrown value into an AppError for safe handling */
 export function toAppError(e: unknown, rpcName?: string): AppError {

@@ -10,12 +10,10 @@ import { ComplianceError, ComplianceUnavailableError } from '@/platform/supabase
 import { assertShapeForRow, assertShapeForShiftId } from './shift-shape-gate';
 import {
     CreateShiftResponseSchema,
-    UpdateShiftResponseSchema,
     PublishShiftResponseSchema,
     BulkPublishResponseSchema,
     BulkAssignAtomicResponse,
     BulkAssignAtomicResponseSchema,
-    BulkDeleteResponse,
     BulkDeleteResponseSchema,
     DeleteShiftResponseSchema,
     CancelShiftResponseSchema,

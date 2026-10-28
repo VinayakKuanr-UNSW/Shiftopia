@@ -2,7 +2,7 @@
  * V8 Compliance Engine — Swap Engine Types
  */
 
-import { V8Status, V8Shift, ContractRecordV2 } from '../types';
+import { V8Shift, ContractRecordV2 } from '../types';
 
 export type RosterShift = V8Shift;
 

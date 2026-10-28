@@ -4,14 +4,10 @@ import { Capacitor } from '@capacitor/core';
 import { useAuth } from '@/platform/auth/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowRight,
   ChevronRight,
   Plus,
   Star,
   CalendarDays,
-  Bell,
-  Repeat,
-  Clock,
   BarChart3,
   Gavel,
   ArrowLeftRight,

@@ -15,9 +15,6 @@ import {
   SlidersHorizontal,
   Lock,
   X,
-  Target,
-  Sparkles,
-  Zap,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -26,7 +23,6 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';

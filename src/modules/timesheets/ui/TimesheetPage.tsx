@@ -16,7 +16,6 @@ import {
 } from './components/TimesheetFilterDrawer';
 import {
     TimesheetFunctionBar,
-    TIMESHEET_STATUS_TABS,
 } from './components/TimesheetFunctionBar';
 import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
 import {

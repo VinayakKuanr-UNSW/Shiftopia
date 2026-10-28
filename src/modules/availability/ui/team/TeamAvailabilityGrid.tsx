@@ -16,14 +16,11 @@ import { format, parseISO } from 'date-fns';
 import {
     AlertTriangle,
     CheckCircle2,
-    ChevronDown,
     GraduationCap,
-    HelpCircle,
     ShieldAlert,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { isWeekendISO } from '../../domain/team-coverage';
 import type {
     EmpComp,
     EmployeeHours,
@@ -46,7 +43,6 @@ import {
 import { hoursFill, severityStyle, stateSoft, type ComplianceSeverity } from './coverage-palette';
 import {
     TEAM_DAY_STATE_LABELS,
-    TEAM_DAY_STATE_ORDER,
     type TeamDayCell,
     type TeamMember,
 } from '../../model/team-availability.types';

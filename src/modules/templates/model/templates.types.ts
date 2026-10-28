@@ -9,96 +9,10 @@ import type { TargetEmploymentType } from '@/modules/core/model/employment.types
 
 type TemplateStatus = 'draft' | 'published' | 'archived';
 
-/* ============================================================
-      DATABASE TYPES (snake_case - matches Supabase)
-      ============================================================ */
 
-interface DbRosterTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  status: TemplateStatus;
-  organization_id: string;
-  department_id: string;
-  sub_department_id: string;
-  published_month: string | null;
-  published_at: string | null;
-  published_by: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  created_by: string | null;
-  last_edited_by: string | null;
-  version: number;
-  applied_count: number;
-  created_at: string;
-  updated_at: string;
-  is_base_template?: boolean;
-  is_active?: boolean;
-}
 
-interface DbTemplateGroup {
-  id: string;
-  template_id: string;
-  name: string;
-  description: string | null;
-  color: string;
-  icon: string | null;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-}
 
-interface DbTemplateSubgroup {
-  id: string;
-  group_id: string;
-  name: string;
-  description: string | null;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-}
 
-interface DbTemplateShift {
-  id: string;
-  subgroup_id: string;
-  name: string | null;
-  role_id: string | null;
-  role_name: string | null;
-  remuneration_level: number | null;
-  remuneration_level_name: string | null;
-  start_time: string;
-  end_time: string;
-  paid_break_minutes: number;
-  unpaid_break_minutes: number;
-  net_length_hours: number | null;
-  required_skills: string[];
-  required_licenses: string[];
-  site_tags: string[];
-  event_tags: string[];
-  notes: string | null;
-  sort_order: number;
-  assigned_employee_id: string | null;
-  assigned_employee_name: string | null;
-  created_at: string;
-  updated_at: string;
-  /** 0 = Sunday .. 6 = Saturday. NULL is the "any day" wildcard. */
-  day_of_week: number | null;
-  /** NOT NULL: 'FT' | 'PT' | 'Casual'. No default — an insert must supply it. */
-  target_employment_type: TargetEmploymentType;
-  target_requires_flexible: boolean;
-}
-
-interface DbTemplateSnapshot {
-  id: string;
-  template_id: string;
-  snapshot_data: any;
-  published_for_month: string | null;
-  start_date: string;
-  end_date: string;
-  published_at: string;
-  published_by: string | null;
-  template_version: number;
-}
 
 /* ============================================================
       FRONTEND TYPES (camelCase)
@@ -171,10 +85,6 @@ export interface Group {
   sortOrder: number;
 }
 
-interface DateRange {
-  start: Date;
-  end: Date;
-}
 
 export interface Template {
   id: string | number;
@@ -234,26 +144,8 @@ export interface CreateTemplateInput {
   month?: string; // YYYY-MM
 }
 
-interface UpdateTemplateInput {
-  name?: string;
-  description?: string;
-}
 
-interface SaveTemplateInput {
-  templateId: string;
-  expectedVersion: number;
-  name: string;
-  description?: string;
-  groups: Group[];
-}
 
-interface PublishTemplateInput {
-  templateId: string;
-  expectedVersion: number;
-  startDate: Date;
-  endDate: Date;
-  forceOverride?: boolean;
-}
 
 /* ============================================================
       RPC RESPONSE TYPES
@@ -613,15 +505,7 @@ export function validateTemplateForPublish(
 // Re-export for backward compatibility
 export { sanitizeString, sanitizeTemplateName } from '../utils/template-sanitizer';
 
-function isValidUUID(id: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    id
-  );
-}
 
-function isValidTime(time: string): boolean {
-  return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
-}
 
 export function formatTimeDisplay(time: string): string {
   if (!time) return '--:--';
@@ -672,9 +556,6 @@ export function deepClone<T>(obj: T): T {
 // Re-export for backward compatibility
 export { generateTempId, isTempId } from '../utils/id-generator';
 
-function areTemplatesEqual(a: Template, b: Template): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
 
 export function getTemplateStats(template: Template): {
   groupCount: number;

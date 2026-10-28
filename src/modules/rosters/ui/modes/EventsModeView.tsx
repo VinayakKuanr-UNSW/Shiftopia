@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Users, AlertTriangle, Plus, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2, ShieldCheck, Layers, Trash2 } from 'lucide-react';
+import { Calendar, Users, AlertTriangle, Plus, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2, ShieldCheck, Layers } from 'lucide-react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Card } from '@/modules/core/ui/primitives/card';
-import { Button } from '@/modules/core/ui/primitives/button';
 import { format, parseISO } from 'date-fns';
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { useEvents, useUnpublishShift, useCreateShift } from '@/modules/rosters/state/useRosterShifts';
@@ -15,9 +14,7 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { cn } from '@/modules/core/lib/utils';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
-import { isShiftLocked } from '@/modules/rosters/domain/policies/canEditShift.policy';
 import type { EventsProjection } from '@/modules/rosters/domain/projections/types';
-import { coverageVariant } from '@/modules/rosters/domain/projections/utils/coverage';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import {
   Tooltip,

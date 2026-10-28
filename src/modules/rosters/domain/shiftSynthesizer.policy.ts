@@ -360,7 +360,7 @@ export function applySupervisorRatios(
         (s) => s.subDepartmentId === rule.subDepartmentId && s.roleId === rule.supervisorV8RoleId
       );
 
-      for (const [key, win] of windows) {
+      for (const [, win] of windows) {
         const supervisorsNeeded = Math.ceil(win.headcount / rule.ratio);
         const alreadyHave = existingSupervisors
           .filter((s) => s.startMinutes === win.start && s.endMinutes === win.end)

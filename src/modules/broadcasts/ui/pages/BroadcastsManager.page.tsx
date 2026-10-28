@@ -15,7 +15,7 @@ const BroadcastsManagerPage: React.FC = () => {
 
   const [controlRoomOpen, setControlRoomOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [refreshTrigger] = useState(0);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   return (

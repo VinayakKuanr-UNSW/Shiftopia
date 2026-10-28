@@ -5,7 +5,6 @@ import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo } from 'react';
 import {
   FileText,
-  Plus,
   Search,
   MoreVertical,
   Pencil,

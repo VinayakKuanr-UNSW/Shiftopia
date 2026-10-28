@@ -14,7 +14,7 @@ const MyBroadcastsPage: React.FC = () => {
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [refreshTrigger] = useState(0);
   const [isInChannel, setIsInChannel] = useState(false);
 
   return (

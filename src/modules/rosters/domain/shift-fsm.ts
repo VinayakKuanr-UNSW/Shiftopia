@@ -195,10 +195,6 @@ export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
 
 // ─── Convenience helpers ──────────────────────────────────────────────────────
 
-/** Returns state metadata alongside the derived state ID. */
-function getShiftFSMStateInfo(shift: ShiftFSMInput): ShiftFSMStateInfo {
-    return FSM_STATE_META[getShiftFSMState(shift)];
-}
 
 /** True if the shift is in any terminal state (no further transitions possible). */
 export function isShiftTerminal(shift: ShiftFSMInput): boolean {

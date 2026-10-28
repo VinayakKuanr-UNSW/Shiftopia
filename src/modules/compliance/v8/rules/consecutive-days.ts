@@ -1,4 +1,4 @@
-import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
+import { V8Hit, V8RuleEvaluator } from '../types';
 import { parseTimeToMinutes } from '../utils/time';
 
 /**

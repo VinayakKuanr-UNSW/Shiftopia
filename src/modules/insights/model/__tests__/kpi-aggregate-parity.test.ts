@@ -225,7 +225,7 @@ describe('every drill-down link points at a branch that exists', () => {
     });
 
     it('every metric the UI links from resolves to a real branch', async () => {
-        const { analysisMetricId, analysisHref } = await import('../metric-registry');
+        const { analysisMetricId } = await import('../metric-registry');
 
         // The registry ids the tabs actually pass to analysisHref.
         const linked = [

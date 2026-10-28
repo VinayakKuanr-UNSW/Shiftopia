@@ -1,9 +1,9 @@
 import React from 'react';
-import { RefreshCcw, LayoutGrid, List, Search, Calendar, Settings, Layers, Filter, X } from 'lucide-react';
+import { RefreshCcw, LayoutGrid, List, Search, X } from 'lucide-react';
 import { DateRangePicker } from '@/modules/core/ui/calendar';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { addDays, endOfMonth, format, startOfMonth } from 'date-fns';
+import { addDays, endOfMonth, startOfMonth } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import {

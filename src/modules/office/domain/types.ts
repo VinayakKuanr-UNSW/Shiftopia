@@ -38,71 +38,7 @@ import type { OrdinaryCycleWeeks } from '@/modules/compliance/ordinary-hours-cyc
  */
 export type IsoWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-/**
- * One slot in a baseline pattern — a weekday plus a shift shape.
- *
- * Sourced from a `baseline_ft_patterns` row. Carries NO date: a pattern
- * describes a repeating week, and turning it into dates is
- * `candidateGenerator`'s job.
- */
-interface PatternSlot {
-    /**
-     * `baseline_ft_patterns.id`, or a synthetic key for a row not yet saved.
-     *
-     * NOT called `templateShiftId` any more. It once held a `template_shifts`
-     * id, and leaving the old name on a field carrying a different table's key
-     * is how the wrong id gets copied into the wrong column.
-     */
-    sourceSlotId: string;
-    /**
-     * REQUIRED, and the reason `patternValidator` exists.
-     *
-     * The predecessor of this table was `template_shifts`, where every
-     * production row had `day_of_week = NULL` — which
-     * `apply_template_to_date_range_v2` reads as "stamp on every day". A pattern
-     * whose day is null is not a pattern but a shape with no schedule, so the
-     * field is required here rather than optional with a plausible default, and
-     * `baseline_ft_patterns.iso_day_of_week` is NOT NULL for the same reason.
-     */
-    dayOfWeek: IsoWeekday;
-    /** `HH:mm`, naive Sydney local — the same basis `shifts.start_time` uses. */
-    startTime: string;
-    /** `HH:mm`. May be <= startTime for a shift crossing midnight. */
-    endTime: string;
-    unpaidBreakMinutes: number;
-    paidBreakMinutes: number;
-    /** Gross span minus the UNPAID break. The universal measure in this codebase. */
-    netMinutes: number;
-    roleId: string;
-    /** Tie-break for deterministic ordering within a day. */
-    sortOrder: number;
-}
 
-/**
- * ONE EMPLOYEE'S standing pattern — every day they normally work.
- *
- * This used to be one shared `roster_templates` row per sub-department, applied
- * to the whole team. That model cannot represent production: the four full-time
- * employees in this database hold three different roles, and a pattern naming a
- * role the contract does not authorise is BLOCKING
- * (`BFT_PATTERN_ROLE_MISMATCH`). Since a pattern-level failure aborts the whole
- * run, one shared template generated nothing for anybody — including the one
- * person whose role it did match.
- *
- * A working pattern is a fact about a PERSON. Hence the employee on the type.
- */
-interface OfficePattern {
-    employeeId: string;
-    /**
-     * The engagement this pattern discharges. A person may hold several active
-     * contracts and the hours belong to exactly one of them, so this is carried
-     * rather than looked up later from whichever contract happens to be first.
-     */
-    userContractId: string;
-    /** The team being rostered. Every slot belongs to it; none carries its own. */
-    subDepartmentId: string;
-    slots: PatternSlot[];
-}
 
 /* ────────────────────────────────────────────────────────────────────────────
    Requirement — what the contract owes
@@ -224,31 +160,6 @@ export interface CycleRequirement {
     deficitHoursIfElectionUnpaid: number;
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Candidate — a shift that does not exist yet
-   ──────────────────────────────────────────────────────────────────────────── */
-
-interface Candidate {
-    employeeId: string;
-    userContractId: string;
-    sourceSlotId: string;
-    /** `yyyy-MM-dd`. */
-    shiftDate: string;
-    startTime: string;
-    endTime: string;
-    unpaidBreakMinutes: number;
-    paidBreakMinutes: number;
-    netMinutes: number;
-    roleId: string;
-    /** Which cycle's deficit this candidate is discharging. */
-    cycleIndex: number;
-    /**
-     * Stable natural key. Deliberately a readable composite rather than a hash:
-     * a hash cannot be debugged from a database row, and the uniqueness this
-     * needs is exact, not probabilistic. See `buildIdempotencyKey`.
-     */
-    idempotencyKey: string;
-}
 
 /* ────────────────────────────────────────────────────────────────────────────
    Findings
@@ -287,7 +198,3 @@ export interface Finding {
     overridable: boolean;
 }
 
-/** Convenience: is this finding set safe to act on? */
-function hasBlocking(findings: readonly Finding[]): boolean {
-    return findings.some(f => f.severity === 'BLOCKING');
-}

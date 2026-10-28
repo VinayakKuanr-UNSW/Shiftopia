@@ -12,7 +12,6 @@
 
 import type { Shift } from './shift.entity';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { getTimeRule } from './shift-ui';
 
 // ============================================================
 // TYPES
@@ -29,14 +28,6 @@ interface BulkPreflightSummary {
     warned: Array<{ id: string; reason: string }>;
 }
 
-/**
- * Structured result returned by every bulk execution.
- * Enables partial-success UX — never treat a partial failure as total failure.
- */
-interface BulkExecutionResult {
-    successIds: string[];
-    failed: Array<{ id: string; reason: string }>;
-}
 
 // ============================================================
 // PRE-FLIGHT VALIDATORS (sync — no network calls)

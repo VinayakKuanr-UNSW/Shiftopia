@@ -93,4 +93,3 @@ export const touch = {
   targetY: 'min-h-[44px]',
 } as const;
 
-type TextStyle = keyof typeof text;

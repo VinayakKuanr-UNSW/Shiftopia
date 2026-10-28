@@ -5,7 +5,6 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import * as React from 'react';
 import type { LeaveRequest } from '../model/leave.types';
 import type { LeaveShiftConflict, TeamMemberContext } from '../api/leave.api';
 

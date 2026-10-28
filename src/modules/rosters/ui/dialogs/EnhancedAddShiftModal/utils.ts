@@ -1,4 +1,4 @@
-import { isBefore, startOfDay, parseISO, format } from 'date-fns';
+import { format } from 'date-fns';
 import { isPastInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import type { Role } from './types';
 
@@ -27,13 +27,6 @@ export const formatHours = (h: number): string => {
     return `${hours}h ${mins}m`;
 };
 
-const formatTimeDisplay = (time: string): string => {
-    if (!time) return '—';
-    const [h, m] = time.split(':').map(Number);
-    const period = h >= 12 ? 'PM' : 'AM';
-    const hour12 = h % 12 || 12;
-    return `${hour12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${period}`;
-};
 
 export const isDateInPast = (date: Date | undefined, timezone: string = SYDNEY_TZ): boolean => {
     if (!date) return false;

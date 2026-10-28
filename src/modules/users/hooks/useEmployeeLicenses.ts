@@ -27,14 +27,6 @@ export interface EmployeeLicense {
     };
 }
 
-interface NewEmployeeLicense {
-    employee_id: string;
-    license_id: string;
-    issue_date?: string;
-    expiration_date?: string;
-    status?: 'Active' | 'Expired' | 'Suspended';
-    license_type?: 'Standard' | 'WorkRights' | 'Professional';
-}
 
 // Hook to fetch employee's licenses
 export const useEmployeeLicenses = (
@@ -66,37 +58,6 @@ export const useEmployeeLicenses = (
 };
 
 // Hook to add employee license
-const useAddEmployeeLicense = () => {
-    const queryClient = useQueryClient();
-    const { toast } = useToast();
-
-    return useMutation({
-        mutationFn: async (license: NewEmployeeLicense) => {
-            const { data, error } = await supabase
-                .from('employee_licenses')
-                .insert(license)
-                .select(`
-          *,
-          license:licenses(id, name, description)
-        `)
-                .single();
-
-            if (error) throw error;
-            return data as EmployeeLicense;
-        },
-        onSuccess: async (_, variables) => {
-            await queryClient.invalidateQueries({ queryKey: ['employee_licenses', variables.employee_id] });
-            toast({ title: 'Success', description: 'License added successfully' });
-        },
-        onError: (error: any) => {
-            toast({
-                title: 'Error',
-                description: error.message || 'Failed to add license',
-                variant: 'destructive'
-            });
-        },
-    });
-};
 
 // Hook to update employee license
 export const useUpdateEmployeeLicense = () => {
