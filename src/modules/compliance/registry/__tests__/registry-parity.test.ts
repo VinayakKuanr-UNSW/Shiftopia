@@ -34,6 +34,8 @@ import { V8_RULE_METADATA } from '../../v8/metadata';
 const V8_RULES_DIR = 'src/modules/compliance/v8/rules';
 const SHAPE_EVALUATE = 'src/modules/compliance/shape/evaluate.ts';
 const REGISTRY_RULES = 'src/modules/compliance/registry/rules.ts';
+// Outside the engines: bid review synthesises V8_AVAILABILITY_CONFLICT itself.
+const OPEN_BIDS_VIEW = 'src/modules/planning/bidding/ui/views/OpenBidsView/index.tsx';
 
 /** `rule_id` / `rule_name` / `status` triples as literally written in source. */
 function scrape(source: string, prefix: string): Map<string, { name: string; tier: string }> {
@@ -79,7 +81,11 @@ describe('registry parity with the implementations', () => {
     it('lists no rule that no implementation emits', () => {
         // The failure that put a phantom `V8_MAX_CONSECUTIVE_DAYS` in the panel's
         // "Passed" column on every single evaluation.
-        const emitted = new Set([...emittedV8().keys(), ...emittedShape().keys()]);
+        const emitted = new Set([
+            ...emittedV8().keys(),
+            ...emittedShape().keys(),
+            ...scrape(readFileSync(OPEN_BIDS_VIEW, 'utf8'), 'V8_').keys(),
+        ]);
         const phantom = allRules().map(r => r.id).filter(id => !emitted.has(id));
         expect(phantom, `registered but never emitted: ${phantom.join(', ')}`).toEqual([]);
     });

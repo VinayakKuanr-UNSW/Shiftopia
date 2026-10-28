@@ -22,7 +22,6 @@ export type {
 } from './v8';
 
 // Engine functions
-// export * from './hard-validation'; // Removed to avoid conflict with prevalidation
 export {
     runV8LegacyBridge,
     runV8ComplexBridge,
