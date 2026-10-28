@@ -383,11 +383,14 @@ export async function fetchEmployeeShiftsV2(
     });
 
     if (error) {
-        // An empty history makes every cumulative rule pass, so never let a
-        // refusal (42501: not this employee's roster) or a failure read as
-        // "no shifts" without a trace.
-        console.warn('[fetchEmployeeShiftsV2] Shift window read failed for', employeeId, error);
-        return [];
+        // An empty history makes every cumulative rule pass, so a refusal
+        // (42501: not this employee's roster) or a failure must not read as
+        // "no shifts". Callers (useCompliancePanel, the assign command, swap
+        // approval) already treat a throw as "cannot proceed".
+        throw Object.assign(
+            new Error(`Could not load the shift history for ${employeeId}: ${error.message}`),
+            { cause: error },
+        );
     }
     if (!data) return [];
 

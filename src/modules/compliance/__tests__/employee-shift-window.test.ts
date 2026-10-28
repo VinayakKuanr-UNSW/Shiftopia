@@ -28,12 +28,15 @@ describe('fetchEmployeeShiftsV2', () => {
         expect(shift.paid_break_minutes).toBe(20);
     });
 
-    it('logs a refused read instead of passing it off silently as an empty roster', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        rpc.mockResolvedValueOnce({ data: null, error: { code: '42501', message: 'not authorised' } });
+    it('rejects a refused read instead of passing it off as an empty roster', async () => {
+        // An empty history makes every cumulative rule pass, so a refusal that
+        // came back as [] turned "could not check" into "compliant".
+        const refusal = { code: '42501', message: 'not authorised' };
+        rpc.mockResolvedValueOnce({ data: null, error: refusal });
 
-        expect(await fetchEmployeeShiftsV2('e2', '2026-08-17')).toEqual([]);
-        expect(warn).toHaveBeenCalled();
-        warn.mockRestore();
+        const read = fetchEmployeeShiftsV2('e2', '2026-08-17');
+
+        await expect(read).rejects.toThrow(/shift history for e2/);
+        await expect(read).rejects.toMatchObject({ cause: refusal });
     });
 });

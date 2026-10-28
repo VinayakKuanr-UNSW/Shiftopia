@@ -4,10 +4,12 @@
 -- 20261027100556 meant to allow "the two parties to a LIVE swap", but pointed
 -- the rule at planning_requests / planning_offers. Those tables have never held
 -- a row: live swaps are shift_swaps + swap_offers (sm_create_swap_request,
--- sm_accept_trade, swaps.api.ts). So the branch could never match, and when an
--- employee accepts a trade, validateSwapCompliance's read of the offerer's
--- history was refused (42501). fetchEmployeeShiftsV2 turns a refusal into an
--- empty history, so every cumulative rule passed for the offerer unchecked.
+-- sm_accept_trade, swaps.api.ts). So the branch could never match. (Correction,
+-- same day: swap compliance did not call this function at the time; it read
+-- shifts under RLS, which shows an employee almost none of the counterparty's
+-- roster. swaps.api.ts now reads both parties' history through this function,
+-- which is what makes the rule below load-bearing. trg_shift_eba_compliance
+-- still checks every resulting assignment at commit.)
 --
 -- The rule is the one 20261027100556 stated, on the tables that hold swaps:
 -- while a swap is open (OPEN, OFFER_SELECTED, MANAGER_PENDING), its requester
