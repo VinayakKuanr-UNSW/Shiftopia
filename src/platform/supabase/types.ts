@@ -104,36 +104,6 @@ export type Database = {
         }
         Relationships: []
       }
-      actual_labor_attendance: {
-        Row: {
-          assigned: number
-          created_at: string
-          event_id: string
-          id: string
-          present: number
-          role: string
-          time_slot: number
-        }
-        Insert: {
-          assigned?: number
-          created_at?: string
-          event_id: string
-          id?: string
-          present?: number
-          role: string
-          time_slot: number
-        }
-        Update: {
-          assigned?: number
-          created_at?: string
-          event_id?: string
-          id?: string
-          present?: number
-          role?: string
-          time_slot?: number
-        }
-        Relationships: []
-      }
       allowed_locations: {
         Row: {
           created_at: string
@@ -1700,36 +1670,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      bulk_operations: {
-        Row: {
-          actor_id: string
-          completed_at: string | null
-          created_at: string
-          id: string
-          operation_type: string
-          status: Database["public"]["Enums"]["bulk_operation_status"]
-          summary_json: Json | null
-        }
-        Insert: {
-          actor_id: string
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          operation_type: string
-          status?: Database["public"]["Enums"]["bulk_operation_status"]
-          summary_json?: Json | null
-        }
-        Update: {
-          actor_id?: string
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          operation_type?: string
-          status?: Database["public"]["Enums"]["bulk_operation_status"]
-          summary_json?: Json | null
-        }
-        Relationships: []
       }
       cancellation_history: {
         Row: {
@@ -3425,62 +3365,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ml_prediction_outcomes: {
-        Row: {
-          abs_error: number | null
-          actual_count: number
-          computed_at: string
-          corrected_count: number
-          event_id: string
-          forecast_id: string
-          id: string
-          model_version: string
-          predicted_count: number
-          residual: number | null
-          role: string
-          role_id: string | null
-          time_slot: number
-        }
-        Insert: {
-          abs_error?: number | null
-          actual_count: number
-          computed_at?: string
-          corrected_count: number
-          event_id: string
-          forecast_id: string
-          id?: string
-          model_version: string
-          predicted_count: number
-          residual?: number | null
-          role: string
-          role_id?: string | null
-          time_slot: number
-        }
-        Update: {
-          abs_error?: number | null
-          actual_count?: number
-          computed_at?: string
-          corrected_count?: number
-          event_id?: string
-          forecast_id?: string
-          id?: string
-          model_version?: string
-          predicted_count?: number
-          residual?: number | null
-          role?: string
-          role_id?: string | null
-          time_slot?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ml_prediction_outcomes_forecast_id_fkey"
-            columns: ["forecast_id"]
-            isOneToOne: true
-            referencedRelation: "demand_forecasts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       model_manifests: {
         Row: {
           encoders_hash: string | null
@@ -4090,45 +3974,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "rbac_actions"
             referencedColumns: ["code"]
-          },
-        ]
-      }
-      role_levels: {
-        Row: {
-          hierarchy_rank: number
-          id: string
-          level_code: string
-          remuneration_level: number | null
-          role_id: string
-        }
-        Insert: {
-          hierarchy_rank: number
-          id?: string
-          level_code: string
-          remuneration_level?: number | null
-          role_id: string
-        }
-        Update: {
-          hierarchy_rank?: number
-          id?: string
-          level_code?: string
-          remuneration_level?: number | null
-          role_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "role_levels_remuneration_level_fkey"
-            columns: ["remuneration_level"]
-            isOneToOne: false
-            referencedRelation: "remuneration_levels"
-            referencedColumns: ["level_number"]
-          },
-          {
-            foreignKeyName: "role_levels_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -5059,27 +4904,6 @@ export type Database = {
           },
         ]
       }
-      shift_subgroups: {
-        Row: {
-          created_at: string | null
-          group_id: string
-          id: string
-          name: string
-        }
-        Insert: {
-          created_at?: string | null
-          group_id: string
-          id?: string
-          name: string
-        }
-        Update: {
-          created_at?: string | null
-          group_id?: string
-          id?: string
-          name?: string
-        }
-        Relationships: []
-      }
       shift_swaps: {
         Row: {
           approved_at: string | null
@@ -5816,44 +5640,6 @@ export type Database = {
           },
         ]
       }
-      swap_notifications: {
-        Row: {
-          created_at: string | null
-          id: string
-          is_read: boolean | null
-          message: string
-          notification_type: string
-          recipient_user_id: string
-          swap_request_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          is_read?: boolean | null
-          message: string
-          notification_type: string
-          recipient_user_id: string
-          swap_request_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          is_read?: boolean | null
-          message?: string
-          notification_type?: string
-          recipient_user_id?: string
-          swap_request_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "swap_notifications_swap_request_id_fkey"
-            columns: ["swap_request_id"]
-            isOneToOne: false
-            referencedRelation: "swap_requests"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       swap_offers: {
         Row: {
           compliance_snapshot: Json | null
@@ -5994,53 +5780,6 @@ export type Database = {
             columns: ["original_shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      swap_validations: {
-        Row: {
-          daily_hours_check: boolean | null
-          employee_id: string
-          id: string
-          is_valid: boolean | null
-          monthly_hours_check: boolean | null
-          rest_period_check: boolean | null
-          skill_match_check: boolean | null
-          swap_request_id: string
-          validated_at: string | null
-          validation_errors: Json | null
-        }
-        Insert: {
-          daily_hours_check?: boolean | null
-          employee_id: string
-          id?: string
-          is_valid?: boolean | null
-          monthly_hours_check?: boolean | null
-          rest_period_check?: boolean | null
-          skill_match_check?: boolean | null
-          swap_request_id: string
-          validated_at?: string | null
-          validation_errors?: Json | null
-        }
-        Update: {
-          daily_hours_check?: boolean | null
-          employee_id?: string
-          id?: string
-          is_valid?: boolean | null
-          monthly_hours_check?: boolean | null
-          rest_period_check?: boolean | null
-          skill_match_check?: boolean | null
-          swap_request_id?: string
-          validated_at?: string | null
-          validation_errors?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "swap_validations_swap_request_id_fkey"
-            columns: ["swap_request_id"]
-            isOneToOne: false
-            referencedRelation: "swap_requests"
             referencedColumns: ["id"]
           },
         ]

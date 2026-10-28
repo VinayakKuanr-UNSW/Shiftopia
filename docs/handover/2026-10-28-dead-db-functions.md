@@ -1,6 +1,6 @@
 # Dead database functions: drop proposal (2026-10-28)
 
-**Status: DRAFT, not applied.** Review the list, then apply as one migration (via MCP, then rename the file to the recorded version, per the usual flow).
+**Status: APPLIED 2026-10-28** as `supabase/migrations/20261028055110_drop_dead_functions.sql`, after re-checking that nothing depended on any of them. The held-back list below is still present.
 
 ## How "dead" was established
 
