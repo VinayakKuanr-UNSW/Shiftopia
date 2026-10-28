@@ -41,42 +41,7 @@ function errorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-// ── useAddSubGroup ────────────────────────────────────────────────────────────
 
-interface AddSubGroupVariables {
-  rosterGroupId: string;
-  name:          string;
-  sortOrder?:    number;
-}
-
-export function useAddSubGroup() {
-  const queryClient = useQueryClient();
-  const { toast }   = useToast();
-
-  return useMutation({
-    mutationFn: async ({ rosterGroupId, name, sortOrder = 999 }: AddSubGroupVariables) => {
-      const { data, error } = await supabase
-        .from('roster_subgroups')
-        .insert({ roster_group_id: rosterGroupId, name, sort_order: sortOrder })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
-      toast({ title: 'Subgroup Created', description: 'The new subgroup has been added.' });
-    },
-
-    onError: (err) => {
-      console.error('[useAddSubGroup]', err);
-      toast({ title: 'Error', description: errorMessage(err, 'Failed to add subgroup'), variant: 'destructive' });
-    },
-  });
-}
 
 // ── useAddSubGroupRange ───────────────────────────────────────────────────────
 

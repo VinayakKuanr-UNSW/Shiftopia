@@ -92,19 +92,6 @@ type ShiftAction =
     | 'CLOCK_IN' | 'CLOCK_OUT' | 'MARK_NO_SHOW'
     | 'CANCEL';
 
-interface ProtectionContext {
-    status: 'LOCKED' | 'PROTECTED' | 'DRAFT';
-    label: string;
-    isLocked: boolean;
-    isProtected: boolean;
-    icon: React.ComponentType<{ className?: string, size?: number | string }> | undefined;
-    colorClass: string;
-    icons: Array<{
-        Icon: React.ComponentType<{ className?: string, size?: number | string }>;
-        label: string;
-        colorClass: string;
-    }>;
-}
 
 interface ShiftStatusIcon {
     icon: React.ComponentType<{ className?: string; size?: string | number }>;
@@ -219,85 +206,6 @@ export function getLockState(state: ShiftStateID | string): ShiftLockState {
     return { fullyLocked: true, partialLock: false };
 }
 
-/**
- * Get protection and lock state context for a shift
- */
-export function getProtectionContext(
-    shift: Partial<Shift>, 
-    isPast: boolean
-): ProtectionContext {
-    const status = (shift.lifecycle_status || '').toLowerCase();
-    const tsStatus = (shift.timesheet_status || '').toLowerCase();
-    const attStatus = (shift.attendance_status || '').toLowerCase();
-
-    const icons: ProtectionContext['icons'] = [];
-
-    // 1. Clock Icon: Finalized or No Show
-    const isNoShow = attStatus === 'no_show' || tsStatus === 'no_show';
-    const isFinalized = ['submitted', 'verified', 'approved', 'rejected'].includes(tsStatus);
-
-    if (isFinalized || isNoShow) {
-        icons.push({ 
-            Icon: Clock, 
-            label: isNoShow ? 'No Show' : 'Finalized',
-            colorClass: 'text-slate-400'
-        });
-    }
-
-    // 2. Shield Icon: Published
-    if (status === 'published' || status === 'completed') {
-        icons.push({ 
-            Icon: Shield, 
-            label: 'Published',
-            colorClass: 'text-slate-400'
-        });
-    }
-
-    // 3. Lock Icon: Past
-    if (isPast) {
-        icons.push({ 
-            Icon: Lock, 
-            label: 'Past',
-            colorClass: 'text-slate-400'
-        });
-    }
-
-    // Legacy return for backward compatibility if still used as single object
-    // Default to the most "important" state for the legacy fields
-    if (isPast) {
-        return {
-            status: 'LOCKED',
-            label: 'Locked',
-            isLocked: true,
-            isProtected: false,
-            icon: Lock,
-            colorClass: 'text-slate-500',
-            icons
-        };
-    }
-
-    if (status === 'published' || status === 'completed') {
-        return {
-            status: 'PROTECTED',
-            label: 'Protected',
-            isLocked: false,
-            isProtected: true,
-            icon: Shield,
-            colorClass: 'text-slate-400',
-            icons
-        };
-    }
-
-    return {
-        status: 'DRAFT',
-        label: 'Open',
-        isLocked: false,
-        isProtected: false,
-        icon: undefined,
-        colorClass: '',
-        icons
-    };
-}
 
 /**
  * Derives specific status icons for Roster Planner cards.
