@@ -3547,58 +3547,6 @@ export type Database = {
         }
         Relationships: []
       }
-      planning_offers: {
-        Row: {
-          created_at: string
-          id: string
-          offered_by: string
-          offered_shift_id: string | null
-          request_id: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          offered_by: string
-          offered_shift_id?: string | null
-          request_id: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          offered_by?: string
-          offered_shift_id?: string | null
-          request_id?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "planning_offers_offered_by_fkey"
-            columns: ["offered_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "planning_offers_offered_shift_id_fkey"
-            columns: ["offered_shift_id"]
-            isOneToOne: false
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "planning_offers_request_id_fkey"
-            columns: ["request_id"]
-            isOneToOne: false
-            referencedRelation: "planning_requests"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       planning_periods: {
         Row: {
           created_at: string
@@ -3672,86 +3620,6 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "v_template_full"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      planning_requests: {
-        Row: {
-          compliance_evaluated_at: string | null
-          compliance_snapshot: Json | null
-          created_at: string
-          decided_at: string | null
-          id: string
-          initiated_by: string
-          manager_id: string | null
-          manager_notes: string | null
-          reason: string | null
-          shift_id: string
-          status: string
-          target_employee_id: string | null
-          type: string
-          updated_at: string
-        }
-        Insert: {
-          compliance_evaluated_at?: string | null
-          compliance_snapshot?: Json | null
-          created_at?: string
-          decided_at?: string | null
-          id?: string
-          initiated_by: string
-          manager_id?: string | null
-          manager_notes?: string | null
-          reason?: string | null
-          shift_id: string
-          status?: string
-          target_employee_id?: string | null
-          type: string
-          updated_at?: string
-        }
-        Update: {
-          compliance_evaluated_at?: string | null
-          compliance_snapshot?: Json | null
-          created_at?: string
-          decided_at?: string | null
-          id?: string
-          initiated_by?: string
-          manager_id?: string | null
-          manager_notes?: string | null
-          reason?: string | null
-          shift_id?: string
-          status?: string
-          target_employee_id?: string | null
-          type?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "planning_requests_initiated_by_fkey"
-            columns: ["initiated_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "planning_requests_manager_id_fkey"
-            columns: ["manager_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "planning_requests_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "planning_requests_target_employee_id_fkey"
-            columns: ["target_employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -7499,10 +7367,6 @@ export type Database = {
         Args: { p_action: string; p_employee_id: string }
         Returns: boolean
       }
-      can_act_on_planning_request: {
-        Args: { p_action: string; p_request_id: string }
-        Returns: boolean
-      }
       can_act_on_shift: {
         Args: { p_action: string; p_shift_id: string }
         Returns: boolean
@@ -8670,17 +8534,6 @@ export type Database = {
         Returns: Json
       }
       sm_expire_offer_now: { Args: { p_shift_id: string }; Returns: Json }
-      sm_finalize_planning_request: {
-        Args: {
-          p_manager_id: string
-          p_manager_notes: string
-          p_offer_id: string
-          p_request_id: string
-          p_shift_updated_at: string
-          p_target_shift_updated_at?: string
-        }
-        Returns: undefined
-      }
       sm_handle_auto_clock_out: {
         Args: never
         Returns: {
