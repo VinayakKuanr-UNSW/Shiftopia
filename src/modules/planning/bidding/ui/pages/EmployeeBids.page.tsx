@@ -99,7 +99,6 @@ const EmployeeBidsPage: React.FC = () => {
     const [isBulkModeActive, setIsBulkModeActive] = useState<boolean>(false);
 
     // Compliance Check State
-    const [] = useState<string | null>(null);
     const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(null);
     const [showComplianceDialog, setShowComplianceDialog] = useState(false);
     const [pendingBidShift, setPendingBidShift] = useState<ShiftData | null>(null);

@@ -597,7 +597,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const handleConfirmUnpublish = async () => {
     if (!confirmV8ShiftId) return;
     try { await unpublishMutation.mutateAsync({ shiftId: confirmV8ShiftId, reason: 'Unpublished via Roles view' }); } 
-    catch {} finally { setIsConfirmOpen(false); setConfirmV8ShiftId(null); }
+    catch { /* mutation onError handles rollback; toast not needed here */ } finally { setIsConfirmOpen(false); setConfirmV8ShiftId(null); }
   };
 
   const handleCellClick = (roleId: string, date: Date) => {
