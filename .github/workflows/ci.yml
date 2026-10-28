@@ -17,6 +17,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Manual run on any branch, for stacked PRs whose base is not main and so
+  # never trigger the two events above. Verification only: deploy skips it.
+  workflow_dispatch:
 
 concurrency:
   group: ci-deploy-${{ github.ref }}
@@ -157,6 +160,7 @@ jobs:
   deploy:
     name: Deploy (Vercel)
     needs: [verify, rls-audit, api-integration]
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
