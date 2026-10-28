@@ -78,59 +78,6 @@ function getRowClass(groupType: string | null | undefined, dept: string): string
 }
 
 // Status configuration with icons, colors, and labels
-const getStatusConfig = (status: string) => {
-    switch (status) {
-        case 'OPEN':
-            return {
-                icon: Clock,
-                label: 'Open',
-                helperText: 'Awaiting offers',
-                textColor: 'text-amber-400',
-            };
-        case 'MANAGER_PENDING':
-            return {
-                icon: LucideUserCheck,
-                label: 'Pending Manager',
-                helperText: 'Awaiting approval',
-                textColor: 'text-blue-400',
-            };
-        case 'APPROVED':
-            return {
-                icon: CheckCircle2,
-                label: 'Approved',
-                helperText: 'Approved',
-                textColor: 'text-emerald-400',
-            };
-        case 'REJECTED':
-            return {
-                icon: XCircle,
-                label: 'Rejected',
-                helperText: 'Rejected',
-                textColor: 'text-red-400',
-            };
-        case 'CANCELLED':
-            return {
-                icon: X,
-                label: 'Cancelled',
-                helperText: 'Cancelled',
-                textColor: 'text-gray-400',
-            };
-        case 'EXPIRED':
-            return {
-                icon: Clock,
-                label: 'Expired',
-                helperText: 'Expired',
-                textColor: 'text-gray-400',
-            };
-        default:
-            return {
-                icon: Clock,
-                label: status,
-                helperText: '',
-                textColor: 'text-gray-400',
-            };
-    }
-};
 
 // =============================================================================
 // SWAP PRIORITY — unified TTS derivation via shared bidding-urgency utility
@@ -382,7 +329,6 @@ const EmployeeSwapsPage: React.FC = () => {
     }, [confirmDialog, cancelSwap]);
 
     // 1. Manager Review Swaps — includes requests I created AND swaps where I offered
-    const managerReviewSwaps = mySwapRequests.filter(s => s.status === 'MANAGER_PENDING');
 
     // 2. Filter my swap requests (Consolidated View)
     //    Include: OPEN, MANAGER_PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED
@@ -608,7 +554,6 @@ const EmployeeSwapsPage: React.FC = () => {
     // Render swap card for "My Requests" and "Manager Review" tab
     const renderMySwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
-        const statusConfig = getStatusConfig(swap.status);
         
         // Offer close = shift start − 4h (T−4h lockout), tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
@@ -785,7 +730,6 @@ const EmployeeSwapsPage: React.FC = () => {
     // ========================================================================
     const renderSwapListItem = (swap: ShiftSwap, tab: TabType) => {
         const shift = (swap as any).requester_shift;
-        const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         
         // Offer close = shift start − 4h (T−4h lockout), tz-correct.

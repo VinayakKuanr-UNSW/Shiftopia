@@ -10,7 +10,7 @@ import { useBroadcastNotifications } from '../../state/useBroadcasts';
 import { PageState } from '@/modules/core/ui/components/PageState';
 
 export const BroadcastNotificationsList: React.FC = () => {
-    const { user } = useAuth();
+    useAuth();
     const {
         notifications,
         isLoading,

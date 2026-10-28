@@ -24,7 +24,6 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import {
-    getProtectionContext,
     getTimeRule,
     getLiveRuleBadges,
     getPayrollRuleBadges,
@@ -474,10 +473,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     group,
     moveTopContentToBottom = false,
 }, ref) => {
-    const protection = React.useMemo(() => getProtectionContext(
-        { lifecycle_status: lifecycleStatus as 'Draft' | 'Published' | 'InProgress' | 'Completed' | 'Cancelled' },
-        isPast
-    ), [lifecycleStatus, isPast]);
 
     const rawTimesheetStatus = (timesheetStatus || shiftData?.timesheet_status || shiftData?.timesheetStatus || 'draft').toLowerCase();
 

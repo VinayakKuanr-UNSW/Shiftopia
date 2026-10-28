@@ -1,6 +1,5 @@
 import { Dialog, DialogContent, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import React, { useState, useEffect, useMemo } from 'react';
-import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { Check, X, ArrowLeftRight, CheckCircle, XCircle, Gavel, ShieldCheck, ShieldAlert, ShieldX, ScanSearch, Circle, Layers } from 'lucide-react';
 import { ManagerComplianceApprovalModal } from '../components/ManagerComplianceApprovalModal';
 
@@ -472,10 +471,9 @@ const ManagerSwapsPage: React.FC = () => {
     const { hasPermission } = useAuth();
     // Delta and epsilon see every swap request in scope but decide none (access suites).
     const canEdit = hasPermission('managerial-write');
-    const isMobile = useIsMobile();
     const orgSelection = useOrgSelection();
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
-    const { isDark } = useTheme();
+    useTheme();
 
     // The dept/sub-dept lines were already the correct pattern, spelled inline;
     // `soleOrgId` extends it to the organisation, which was still taking `[0]`.

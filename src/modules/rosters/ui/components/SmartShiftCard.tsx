@@ -35,7 +35,6 @@ import type { Shift } from '../../domain/shift.entity';
 import { 
     getShiftUIContext, 
     getLockState, 
-    getProtectionContext,
     getShiftStatusIcons,
     resolveGroupVariant,
 } from '../../domain/shift-ui';
@@ -274,10 +273,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     isPeopleMode = false,
     dense = false,
 }) => {
-    const colors = useMemo(
-        () => GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow,
-        [groupColor],
-    );
 
     const employeeName = (shift as any).employeeName
         || (shift as any).employee_name
@@ -308,10 +303,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         actual_start:       shift.actual_start      ?? null,
     }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
-    const stateDisplay = useMemo(
-        () => getShiftStateDisplay(ctx.state),
-        [ctx.state],
-    );
     const fsmLock = getLockState(ctx.state);
     const isFullyLocked = isLocked || fsmLock.fullyLocked || isPast;
 
@@ -505,7 +496,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
     
     // Centralized protection logic
-    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
@@ -856,18 +846,6 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
     const roleName = shift.roles?.name || 'No Role';
 
-    const ctx = useMemo(() => getShiftUIContext({
-        lifecycle_status:   shift.lifecycle_status  ?? 'Draft',
-        assignment_status:  shift.assignment_status ?? 'unassigned',
-        assignment_outcome: shift.assignment_outcome ?? null,
-        trading_status:     shift.trading_status    ?? null,
-        is_cancelled:       shift.is_cancelled      ?? false,
-        scheduled_start:    shift.scheduled_start   ?? null,
-        scheduled_end:      shift.scheduled_end     ?? null,
-        start_at:           shift.start_at          ?? null,
-        end_at:             shift.end_at            ?? null,
-        actual_start:       shift.actual_start      ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
 
 

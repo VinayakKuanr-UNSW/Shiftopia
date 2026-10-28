@@ -13,7 +13,7 @@ import type {
 } from '../types';
 import type { WorkerShiftDTO, WorkerRoleDTO, WorkerLevelDTO, ProjectedShiftResult } from '../worker/protocol';
 import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
-import { GROUP_COLORS, UNASSIGNED_COLORS, ALL_GROUP_TYPES, levelColorClass } from '../constants';
+import { levelColorClass } from '../constants';
 import { minutesToHours } from '../utils/duration';
 import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
 import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
@@ -39,9 +39,6 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
   const estimatedCost = detail.totalCost;
 
   const groupType = shift.groupType ?? null;
-  const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
-    ? GROUP_COLORS[groupType]
-    : UNASSIGNED_COLORS;
 
   const stateId = determineShiftState({
     lifecycle_status: shift.lifecycleStatus as any,

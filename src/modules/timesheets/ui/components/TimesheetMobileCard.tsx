@@ -17,14 +17,12 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
-import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { isShiftFinished, isEntryReviewable, cleanTime, calculateHoursBetween } from './TimesheetTable.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { validateBillableEdit, parseHHMM } from '../../domain/billable-edit';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
@@ -60,22 +58,6 @@ function formatTime(t: string | null | undefined): string {
     return formatClockTime(t, 'h:mm a', '—') ?? '—';
 }
 
-function getDisplayStatus(entry: TimesheetRow): { label: string; variant: string; isPrimary: boolean } {
-    const tsStatus = (entry.timesheetStatus || '').toLowerCase();
-    const attStatus = (entry.attendanceStatus || '').toLowerCase();
-    const live = entry.liveStatus;
-
-    if (tsStatus === 'approved') return { label: 'Approved', variant: 'APPROVED', isPrimary: true };
-    if (tsStatus === 'rejected') return { label: 'Rejected', variant: 'REJECTED', isPrimary: true };
-    if (attStatus === 'no_show') return { label: 'No Show', variant: 'NO_SHOW', isPrimary: true };
-
-    if (live === 'Ongoing Session') return { label: 'Active', variant: 'ACTIVE', isPrimary: true };
-    if (live === 'Completed') return { label: 'Completed', variant: 'COMPLETED', isPrimary: true };
-    if (live === 'Upcoming') return { label: 'Upcoming', variant: 'UPCOMING', isPrimary: true };
-
-    if (tsStatus === 'submitted') return { label: 'Published', variant: 'SUBMITTED', isPrimary: false };
-    return { label: 'Draft', variant: 'DRAFT', isPrimary: false };
-}
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
@@ -215,59 +197,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
 
     const isPending = ['submitted', 'draft', 'pending'].includes((entry.timesheetStatus || '').toLowerCase());
     
-    const theme = useMemo(() => {
-        const type = entry.groupType;
-        const group = (entry.group || '').toLowerCase();
-        const dept = (entry.department || '').toLowerCase();
-        const subDept = (entry.subDepartment || '').toLowerCase();
-        const org = (entry.organization || '').toLowerCase();
-        
-        const isConvention = type === 'convention_centre' || group.includes('convention') || dept.includes('convention') || subDept.includes('convention') || org.includes('convention');
-        const isExhibition = type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
-        const isTheatre = type === 'theatre' || group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
-        const isCutaway = type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway') || subDept.includes('cutaway') || org.includes('cutaway');
-        // Office by the group alone, and first: "office" is too common in
-        // department and role names to infer, and an Office shift in a
-        // department named after a venue must still read as Office.
-        const isOffice = type === 'office' || group === 'office';
-
-        if (isOffice) return {
-            color: '#0891b2',
-            secondary: '#06b6d4',
-            atmosphere: ['#0e7490', '#0891b2', '#22d3ee'],
-            tint: 'rgba(6, 182, 212, 0.04)'
-        };
-
-        if (isConvention) return { 
-            color: '#2563eb', 
-            secondary: '#3b82f6', 
-            atmosphere: ['#1d4ed8', '#2563eb', '#60a5fa'],
-            tint: 'rgba(37, 99, 235, 0.04)'
-        };
-        
-        if (isExhibition) return { 
-            color: '#10b981', 
-            secondary: '#059669', 
-            atmosphere: ['#059669', '#10b981', '#34d399'],
-            tint: 'rgba(16, 185, 129, 0.04)'
-        };
-        
-        if (isTheatre) return {
-            color: '#ef4444',
-            secondary: '#dc2626',
-            atmosphere: ['#991b1b', '#ef4444', '#f87171'],
-            tint: 'rgba(239, 68, 68, 0.04)'
-        };
-
-        if (isCutaway) return {
-            color: '#d97706',
-            secondary: '#f59e0b',
-            atmosphere: ['#b45309', '#d97706', '#fbbf24'],
-            tint: 'rgba(245, 158, 11, 0.04)'
-        };
-
-        return { color: '#9333ea', secondary: '#a855f7', atmosphere: ['#7e22ce', '#9333ea', '#c084fc'], tint: 'transparent' };
-    }, [entry.groupType, entry.group, entry.department, entry.subDepartment, entry.organization]);
 
 
     const isFinalized = useMemo(() => {
@@ -279,23 +208,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     
     const showNoShowBtn = isShiftOver && (!entry.clockIn || entry.clockIn === '-') && (!entry.clockOut || entry.clockOut === '-') && entry.attendanceStatus !== 'no_show' && !readOnly && !!onMarkNoShow && !isFinalized;
 
-    const displayStatus = useMemo(() => getDisplayStatus(entry), [entry]);
 
-    const isPast = useMemo(() => {
-        if (!entry.date || !entry.scheduledEnd) return false;
-        try {
-            // Compare the shift's Sydney wall-clock end instant against the real
-            // current epoch — browser-timezone-independent.
-            return parseZonedDateTime(String(entry.date), entry.scheduledEnd, SYDNEY_TZ).getTime() < Date.now();
-        } catch {
-            return false;
-        }
-    }, [entry.date, entry.scheduledEnd]);
 
-    const protection = useMemo(() => getProtectionContext(
-        { lifecycle_status: entry.liveStatus as any },
-        isPast
-    ), [entry.liveStatus, isPast]);
 
     const reviewLockedToast = () => toast({
         title: 'Locked',

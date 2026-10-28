@@ -6,7 +6,6 @@ import {
   useDeleteShift,
   usePublishShift,
   useUnpublishShift,
-  useCreateShift,
   useBulkPublishShifts,
   useBulkUnpublishShifts,
   useBulkDeleteShifts,
@@ -82,7 +81,6 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const deleteMutation = useDeleteShift();
   const publishMutation = usePublishShift();
   const unpublishMutation = useUnpublishShift();
-  const createShiftMutation = useCreateShift();
 
   // Fetch data with guaranteed organization ID fallback and enabled only when modal is open
   // The hardcoded literal here was the id of the only organisation that exists,

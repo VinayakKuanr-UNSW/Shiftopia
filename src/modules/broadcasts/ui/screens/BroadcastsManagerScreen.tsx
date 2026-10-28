@@ -77,7 +77,7 @@ export function BroadcastsManagerScreen({
   showCreateDialogOverride = false,
   onCloseCreateDialog,
 }: BroadcastsManagerScreenProps) {
-  const { toast } = useToast();
+  useToast();
   const sidebar = useOptionalSidebar();
 
   // ========================================

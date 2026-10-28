@@ -85,8 +85,6 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
   const durationHours = durationMins / 60;
 
   const unpaidBreakMins = Number(row.unpaid_break_minutes ?? 0);
-  const paidBreakMins = Number(row.paid_break_minutes ?? 0);
-  const netMins = Math.max(0, durationMins - unpaidBreakMins);
 
   // Run ICC Sydney EBA Audit Rules
   // Plain computation, not useMemo: it sits after the `!shift` early return,

@@ -41,8 +41,7 @@ import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
-import { parseZonedDateTime, SYDNEY_TZ } from "@/modules/core/lib/date.utils";
-import { getProtectionContext, getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
+import { getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
 import { validateBillableEdit, parseHHMM } from "../../domain/billable-edit";
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
@@ -148,21 +147,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         isShiftFinished(entry.date, entry.scheduledStart, entry.scheduledEnd, entry.clockOut),
     [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.clockOut]);
 
-    const isPast = useMemo(() => {
-        if (!entry.date || !entry.scheduledEnd) return false;
-        try {
-            // Compare the shift's Sydney wall-clock end instant against the real
-            // current epoch — browser-timezone-independent.
-            return parseZonedDateTime(String(entry.date), entry.scheduledEnd, SYDNEY_TZ).getTime() < Date.now();
-        } catch {
-            return false;
-        }
-    }, [entry.date, entry.scheduledEnd]);
 
-    const protection = useMemo(() => getProtectionContext(
-        { lifecycle_status: entry.liveStatus as any },
-        isPast
-    ), [entry.liveStatus, isPast]);
 
     // Single shared projection — keeps row, mobile card, and bulk-select gating
     // derived from the exact same ShiftDotInput (incl. per-side manual signals).
@@ -485,12 +470,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
     /* -- render ------------------------------------------------ */
     const cellClass = cn(tableTokens.cell, "px-3 whitespace-nowrap");
-    const editableCellClass = cn(
-        cellClass,
-        (!isFinalized && !readOnly && !reviewLocked)
-            ? "cursor-pointer hover:bg-primary/5 hover:text-primary font-medium text-foreground/80"
-            : "font-medium text-foreground/60"
-    );
 
     return (
         <>{/* TimesheetRow.tsx */}

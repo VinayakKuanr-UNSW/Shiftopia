@@ -44,7 +44,6 @@ import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primitives/popover';
 import { Check } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
-import { getBidPriority } from '../utils/bid-priority';
 import { getDeptColor, getRowClass } from '../utils/bid-dept-styles';
 import { getParticipationStatus } from '../utils/bid-participation';
 import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
@@ -94,10 +93,6 @@ const EmployeeBidsPage: React.FC = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const todayStr = formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd');
-    const todayDate = React.useMemo(() => {
-        const d = new Date(); d.setHours(0, 0, 0, 0); return d;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [todayStr]);
 
     // Selection (for bulk bid on not_participated eligible shifts)
     const [selectedV8ShiftIds, setSelectedV8ShiftIds] = useState<any[]>([]);
@@ -392,17 +387,6 @@ const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     // SHIFT COUNTS BY DATE (dot indicators — pre-date-filter)
     // ========================================================================
-    const shiftsByDate = React.useMemo(() => {
-        const map = new Map<string, { count: number; hasUrgent: boolean }>();
-        shiftsTableSort.sortedData.forEach(shift => {
-            const existing = map.get(shift.date) || { count: 0, hasUrgent: false };
-            map.set(shift.date, {
-                count: existing.count + 1,
-                hasUrgent: existing.hasUrgent || getBidPriority(shift) === 'urgent',
-            });
-        });
-        return map;
-    }, [shiftsTableSort.sortedData]);
 
     // ========================================================================
     // DATE-FILTERED BID OPPORTUNITIES

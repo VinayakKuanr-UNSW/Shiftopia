@@ -46,9 +46,6 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
   const estimatedCost = detail.totalCost;
 
   const groupType = shift.groupType ?? null;
-  const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
-    ? GROUP_COLORS[groupType]
-    : UNASSIGNED_COLORS;
 
   const stateId = determineShiftState({
     lifecycle_status: shift.lifecycleStatus as any,

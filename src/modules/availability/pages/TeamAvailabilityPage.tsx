@@ -153,9 +153,9 @@ const SkeletonRows: React.FC<{ rows?: number }> = ({ rows = 8 }) => (
 
 const TeamAvailabilityPage: React.FC = () => {
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
-    const { user } = useAuth();
-    const { isDark } = useTheme();
-    const { toast } = useToast();
+    useAuth();
+    useTheme();
+    useToast();
     const isMobile = useIsMobile();
 
     const [anchorDate, setAnchorDate] = React.useState<Date>(() => new Date());

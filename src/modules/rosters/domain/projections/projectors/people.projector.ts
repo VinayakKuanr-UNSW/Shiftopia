@@ -20,7 +20,6 @@ import { minutesToHours } from '../utils/duration';
 import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
 import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
 import { determineShiftState } from '../../shift-state.utils';
-import { GROUP_COLORS, UNASSIGNED_COLORS, ALL_GROUP_TYPES } from '../constants';
 import { computeUtilizationPct, isOverContractedHours, periodContractedHours, computePeakFatigue } from '../utils/workload';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -75,9 +74,6 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
   const estimatedCost = detail.totalCost;
 
   const groupType = shift.groupType ?? null;
-  const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
-    ? GROUP_COLORS[groupType] 
-    : UNASSIGNED_COLORS;
 
   const stateId = determineShiftState({
     lifecycle_status: shift.lifecycleStatus as any,

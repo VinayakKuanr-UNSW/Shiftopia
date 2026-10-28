@@ -21,7 +21,7 @@ interface AppLayoutProps {
 }
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) => {
-  const { t } = useTranslation();
+  useTranslation();
   const { state, openMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
 

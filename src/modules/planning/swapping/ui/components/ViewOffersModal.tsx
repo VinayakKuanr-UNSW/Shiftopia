@@ -123,7 +123,6 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
     });
 
     const myShift = currentSwap?.originalShift;
-    const pendingOffers = offers?.filter(o => o.status === 'SUBMITTED') || [];
     const acceptedOffer = offers?.find(o => o.status === 'SELECTED');
 
     // Determine what to display based on status

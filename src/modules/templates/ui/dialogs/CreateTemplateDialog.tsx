@@ -49,10 +49,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   const [, setIsLoadingSubDepts] = useState(false);
 
   // Generation options (Current month + 24 future months)
-  const years = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    return [currentYear, currentYear + 1, currentYear + 2];
-  }, []);
 
   const { activeContract, user } = useAuth();
 

@@ -225,8 +225,6 @@ export function ComplianceTabContent({
                         const roleViolations = allViolations.filter(v => v.type === 'ROLE_MISMATCH');
                         const missingViolations = allViolations.filter(v =>
                             v.type === 'LICENSE_MISSING' || v.type === 'SKILL_MISSING');
-                        const expiredViolations = allViolations.filter(v =>
-                            v.type === 'LICENSE_EXPIRED' || v.type === 'SKILL_EXPIRED');
 
                         newResults['ROLE_CONTRACT_MATCH'] = {
                             rule_id: 'ROLE_CONTRACT_MATCH',

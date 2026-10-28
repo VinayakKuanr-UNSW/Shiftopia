@@ -43,8 +43,8 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
   onDelete,
   onClone,
 }) => {
-  const { data: skillsLookup } = useSkills();
-  const { data: licensesLookup } = useLicenses();
+  useSkills();
+  useLicenses();
 
   const roleLabel = shift.roleName || shift.name || 'Unnamed Shift';
   const remunerationLabel =

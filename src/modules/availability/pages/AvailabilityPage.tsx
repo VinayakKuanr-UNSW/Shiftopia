@@ -75,7 +75,7 @@ const AvailabilityPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const { toast } = useToast();
+  useToast();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 

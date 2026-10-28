@@ -40,8 +40,7 @@ import { formSchema, FormValues, EnhancedAddShiftModalProps, ShiftContext } from
 import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
 import { useComplianceRunner } from './useComplianceRunner';
-import { runV8Orchestrator } from '@/modules/compliance/v8';
-import type { V8OrchestratorInput, V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
+import type { V8OrchestratorInput } from '@/modules/compliance/v8/orchestrator/types';
 import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG, mealBreakWindow } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { initialTargetEmploymentType } from '@/modules/core/model/employment.types';
@@ -337,12 +336,6 @@ export function useShiftFormOrchestrator({
 
     // Both gates now read the same source. Times must be present before a shape
     // verdict means anything — an empty form is "incomplete", not "invalid".
-    const isEvaluable = shape.status !== 'INCOMPLETE';
-    const isMinLengthValid = isEvaluable && !shape.hits.some(
-        h => h.rule_id === 'SHAPE_MIN_ENGAGEMENT'
-          || h.rule_id === 'SHAPE_MIN_ENGAGEMENT_PH'
-          || h.rule_id === 'SHAPE_FT_MIN_DAY',
-    );
 
     // ── Read-only checks ─────────────────────────────────────────────────────
     const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
@@ -394,7 +387,6 @@ export function useShiftFormOrchestrator({
     const derivedRosterId = selectedRosterId || safeContext.rosterId || (editMode ? existingShift?.roster_id : null);
     const hasRoster = !!derivedRosterId;
 
-    const selectedRoster = useMemo(() => rosters.find(r => r.id === derivedRosterId), [rosters, derivedRosterId]);
 
     const isContextInherited = isGridLaunch || isEditModeSource;
 
@@ -867,93 +859,8 @@ export function useShiftFormOrchestrator({
     // v2-powered "Run All" — replaces v1 rule runners in ComplianceTabContent.
     // Maps v2 V8Hit[] results back to the v1 ComplianceResult format so
     // existing rule card visualizations continue to work unchanged.
-    const runV2Compliance = useCallback(async (): Promise<void> => {
-        const v2Input = buildV2ComplianceInput();
-        if (!v2Input) return;
-
-        const v2Result = runV8Orchestrator(v2Input, { stage: 'DRAFT' }) as V8OrchestratorResult;
-        const hits = v2Result.hits;
-        const hitMap = new Map(hits.map(h => [h.rule_id.toUpperCase(), h]));
-
-        // Map v2 rule IDs → v1 rule IDs used by ComplianceTabContent cards
-        // R02 removed (duration validated in Step 1; training exemption handled there)
-        // R09 removed (R04 is the authoritative work-pattern limit)
-        // R12 removed (merged into R11 — single "qualifications" rule)
-        const V2_TO_V1: Record<string, string> = {
-            'R01_NO_OVERLAP':          'NO_OVERLAP',
-            'R03_MAX_DAILY_HOURS':     'MAX_DAILY_HOURS',
-            'R04_MAX_WORKING_DAYS':    'WORKING_DAYS_CAP',
-            'R05_STUDENT_VISA':        'STUDENT_VISA_48H',
-            'R06_ORD_HOURS_AVG':       'AVG_FOUR_WEEK_CYCLE',
-            'R07_REST_GAP':            'MIN_REST_GAP',
-            'R10_ROLE_CONTRACT_MATCH': 'ROLE_CONTRACT_MATCH',
-            'R11_QUALIFICATIONS':      'QUALIFICATION_MATCH',
-        };
-
-        const delta = v2Result.delta_explanation;
-
-        // Build a full v1 results map — one entry per mapped v1 rule ID.
-        const newResults: Record<string, any> = {};
-
-        Object.entries(V2_TO_V1).forEach(([v2Id, v1Id]) => {
-            const hit = hitMap.get(v2Id);
-
-            if (!hit) {
-                // Rule passed — mark as pass with a minimal valid calculation
-                newResults[v1Id] = {
-                    rule_id: v1Id,
-                    rule_name: v1Id.replace(/_/g, ' '),
-                    status: 'pass',
-                    summary: 'Check passed',
-                    details: '',
-                    calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
-                    blocking: false,
-                };
-            } else {
-                // Rule fired — map severity to v1 status
-                const isBlocking = hit.status === 'BLOCKING';
-
-                // Build calculation object enriched for specific rule visualizations
-                const calculation: Record<string, unknown> = {
-                    existing_hours: delta?.before?.peak_daily_hours ?? 0,
-                    candidate_hours: 0,
-                    total_hours: delta?.after?.peak_daily_hours ?? 0,
-                    limit: 12,
-                };
-
-                if (v1Id === 'WORKING_DAYS_CAP' && delta) {
-                    calculation.days_worked = delta.after.working_days_28d;
-                    calculation.limit = 20;
-                    calculation.period_days = 28;
-                } else if (v1Id === 'AVG_FOUR_WEEK_CYCLE' && delta) {
-                    calculation.total_hours = delta.after.total_hours_28d;
-                    calculation.limit = 38 * 4;
-                    calculation.average_weekly_hours = delta.after.total_hours_28d / 4;
-                }
-
-                newResults[v1Id] = {
-                    rule_id: v1Id,
-                    rule_name: v1Id.replace(/_/g, ' '),
-                    status: isBlocking ? 'fail' : 'warning',
-                    summary: hit.summary,
-                    details: hit.details || hit.summary,
-                    calculation,
-                    blocking: isBlocking,
-                };
-            }
-        });
-
-        // Commit all results atomically
-        setComplianceResultsWithGuard(newResults);
-        setComplianceHasRun(true);
-        setComplianceNeedsRerun(false);
-    }, [buildV2ComplianceInput, setComplianceResultsWithGuard, setComplianceHasRun, setComplianceNeedsRerun]);
 
     // ── Handlers ─────────────────────────────────────────────────────────────
-    const handleComplianceComplete = useCallback(() => {
-        setComplianceHasRun(true);
-        setComplianceNeedsRerun(false);
-    }, []);
 
     const handleCancel = useCallback(() => {
         if (form.formState.isDirty) {

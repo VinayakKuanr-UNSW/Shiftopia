@@ -59,7 +59,7 @@ import { ShiftBottomSheet } from './ShiftBottomSheet';
 import { TemplateDaySelect, firstTemplateDay } from './TemplateDaySelect';
 import { SingleSelect } from './SingleSelect';
 import { FIELD_CARD, FIELD_INPUT, FIELD_LABEL } from '@/modules/core/ui/components/PickerField';
-import { formatHours, calculateShiftLength } from '../utils';
+import { formatHours } from '../utils';
 import type { ShiftFormSheetProps } from '../types';
 import {
     targetEmploymentTypeOptions,
@@ -275,10 +275,6 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     }, [assignedEmployee, existingShift, watchEmployeeId]);
 
     /* ── Break recommendation ── */
-    const localLength = useMemo(
-        () => calculateShiftLength(watchStart, watchEnd),
-        [watchStart, watchEnd],
-    );
 
     /* ── Compliance: run before submission, not after ──
        Mirrors the desktop step-5 auto-run. Guarded on status so the panel's own

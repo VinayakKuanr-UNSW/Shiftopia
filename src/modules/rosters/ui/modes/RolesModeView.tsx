@@ -619,7 +619,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const isLoading = !projection && (isLoadingLevels || isLoadingRoles);
   if (isLoading) return <PageState state="loading" className="h-[400px]" title="Loading roles" />;
 
-  const totalHours = projection?.stats?.totalNetMinutes != null ? (projection.stats.totalNetMinutes / 60).toFixed(1) : '—';
 
   return (
     <div className="flex flex-col h-full bg-background relative overflow-hidden">

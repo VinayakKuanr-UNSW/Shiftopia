@@ -32,7 +32,7 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, isToday, isBefore, startOfDay, parseISO, differenceInHours, differenceInMinutes, parse } from 'date-fns';
+import { format, addDays, isToday, isBefore, startOfDay, parseISO, differenceInHours, parse } from 'date-fns';
 import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import {
@@ -76,10 +76,6 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
   useDeleteShift,
-  useUpdateShift,
-  useBulkDeleteShifts,
-  useBulkPublishShifts,
-  useBulkUnpublishShifts,
   usePublishShift,
   useUnpublishShift,
   useCreateShift,
@@ -89,8 +85,6 @@ import {
   patchLists,
 } from '@/modules/rosters/state/useRosterShifts';
 import {
-  useAddSubGroup,
-  useAddSubGroupRange,
   useDeleteSubGroup,
   useRenameSubGroup,
   useCloneSubGroup
@@ -838,7 +832,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
     return 0;
   }, [summaryData, summaryCellsForGroup]);
 
-  const coveragePct = totalShifts > 0 ? Math.min(100, Math.round((assignedShifts / totalShifts) * 100)) : 100;
 
   const filteredShiftsForStats = useMemo(() =>
     externalShifts.filter(s => s.group_type === group.type),
@@ -1274,7 +1267,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   showBudget = false,
 }) => {
   const { toast } = useToast();
-  const { isDark } = useTheme();
+  useTheme();
   // Get enhanced filters and selection state from context
   const {
     advancedFilters,
@@ -1351,15 +1344,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // TanStack Query mutation hooks (auto-invalidate caches on success)
   const deleteShiftMutation = useDeleteShift();
-  const updateShiftMutation = useUpdateShift(); // For DnD group changes
-  const bulkDeleteMutation = useBulkDeleteShifts();
-  const bulkPublishMutation = useBulkPublishShifts();
-  const bulkUnpublishMutation = useBulkUnpublishShifts();
   const publishShiftMutation = usePublishShift();
   const unpublishShiftMutation = useUnpublishShift();
   const createShiftMutation = useCreateShift();
-  const addSubGroupMutation = useAddSubGroup();
-  const addSubGroupRangeMutation = useAddSubGroupRange();
   const queryClient = useQueryClient();
 
   // ==================== UNDO HANDLER ====================
@@ -2411,7 +2398,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
     const now = new Date();
     const hoursToStart = differenceInHours(shiftStart, now);
-    const minutesToStart = differenceInMinutes(shiftStart, now);
     const isEmergency = hoursToStart < 4;
 
     // DEBUG: Log calculation for shifts starting soon

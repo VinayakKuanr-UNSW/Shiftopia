@@ -30,7 +30,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 
 const TemplatesPage: React.FC = () => {
-  const { toast } = useToast();
+  useToast();
   const { scope, setScope, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('managerial');
   // Delta and epsilon see every template in scope but change none (access suites).
   const canEdit = useAuth().hasPermission('managerial-write');

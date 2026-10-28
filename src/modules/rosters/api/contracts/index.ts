@@ -58,10 +58,6 @@ const FulfillmentStatusSchema = z.enum([
 
 // ── Shift state ID (resolved by shiftStateMachine) ────────────────────────
 
-const ShiftStateIDSchema = z.enum([
-  'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7',
-  'S8', 'S9', 'S10', 'S11', 'S12', 'S13', 'S14', 'S15', 'UNKNOWN',
-]);
 
 // ── Shift core schema — the DB canonical representation ───────────────────
 // Note: We use .passthrough() so that unknown columns (joined relations)
@@ -128,7 +124,6 @@ const ShiftCoreSchema = z.object({
 // Note: These return primitives in the DB, but the frontend command layer
 // will fetch the full row to satisfy the Shift entity interface.
 export const CreateShiftResponseSchema = z.string().uuid();
-const UpdateShiftResponseSchema = z.boolean();
 
 // sm_publish_shift
 export const PublishShiftResponseSchema = z.object({
@@ -264,9 +259,6 @@ export const ApplyShiftOpResponseSchema = z.object({
 }).passthrough();
 
 // Compliance RPCs
-const OverlapCheckSchema = z.boolean().nullable().transform(v => v ?? false);
-const WeeklyHoursSchema = z.number().nullable().transform(v => v ?? 0);
-const RestPeriodSchema = z.boolean().nullable().transform(v => v ?? true);
 
 // apply_template_to_date_range_v2
 const ApplyTemplateResponseSchema = z.object({
