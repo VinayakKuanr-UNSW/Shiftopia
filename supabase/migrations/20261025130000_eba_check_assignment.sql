@@ -1216,7 +1216,3 @@ $function$;
 
 REVOKE ALL ON FUNCTION public._apply_shift_op_write(uuid, text, jsonb, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public._apply_shift_op_write(uuid, text, jsonb, uuid) TO service_role;
-
-INSERT INTO supabase_migrations.schema_migrations(version, name, statements)
-VALUES ('20261025130000', 'eba_check_assignment', ARRAY['Migration 20261025130000 applied successfully'])
-ON CONFLICT (version) DO NOTHING;
