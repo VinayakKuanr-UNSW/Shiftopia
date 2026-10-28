@@ -615,8 +615,6 @@ export function useTemplates(): UseTemplatesReturn {
                 dayOfWeek: s.dayOfWeek !== undefined ? s.dayOfWeek : null,
                 targetEmploymentType: s.targetEmploymentType ?? null,
                 targetRequiresFlexible: s.targetRequiresFlexible ?? false,
-                assignedEmployeeId: s.assignedEmployeeId ?? null,
-                assignedEmployeeName: s.assignedEmployeeName ?? null,
               })),
             };
 
@@ -678,8 +676,6 @@ export function useTemplates(): UseTemplatesReturn {
                       dayOfWeek: shift.dayOfWeek !== undefined ? shift.dayOfWeek : null,
                       targetEmploymentType: shift.targetEmploymentType ?? null,
                       targetRequiresFlexible: shift.targetRequiresFlexible ?? false,
-                      assignedEmployeeId: shift.assignedEmployeeId ?? null,
-                      assignedEmployeeName: shift.assignedEmployeeName ?? null,
                     } as TemplateShift,
                   ],
                 };
@@ -865,7 +861,7 @@ export function useTemplates(): UseTemplatesReturn {
       // Prepare groups data for RPC
       const groupsData = frontendToDbGroups(localTemplate.groups);
 
-      // Debug log: print shift data to verify role/employee is included
+      // Debug log: print shift data to verify the role is included
       console.log('[SaveTemplate] groupsData shifts:', groupsData.map(g => ({
         group: g.name,
         subGroups: g.subGroups.map((sg: any) => ({
@@ -874,8 +870,6 @@ export function useTemplates(): UseTemplatesReturn {
             name: sh.name,
             roleId: sh.roleId,
             roleName: sh.roleName,
-            assignedEmployeeId: sh.assignedEmployeeId,
-            assignedEmployeeName: sh.assignedEmployeeName,
           }))
         }))
       })));
@@ -1140,8 +1134,6 @@ export function useTemplates(): UseTemplatesReturn {
                 notes: s.notes || (s as any).notes || null,
                 sort_order: idx,
                 day_of_week: s.dayOfWeek !== undefined ? s.dayOfWeek : ((s as any).day_of_week !== undefined ? (s as any).day_of_week : null),
-                assigned_employee_id: s.assignedEmployeeId || (s as any).assigned_employee_id || null,
-                assigned_employee_name: s.assignedEmployeeName || (s as any).assigned_employee_name || null,
                 target_employment_type: (s.targetEmploymentType || (s as any).target_employment_type)!,
                 target_requires_flexible: s.targetRequiresFlexible ?? (s as any).target_requires_flexible ?? false,
               }));
