@@ -1,18 +1,10 @@
 {
   "common": {
-    "welcome": "Bienvenue",
-    "settings": "Paramètres",
-    "logout": "Déconnexion",
     "save": "Enregistrer les modifications",
     "cancel": "Annuler",
-    "loading": "Chargement...",
-    "search": "Rechercher...",
-    "refresh": "Rafraîchir",
-    "period": "Période",
     "admin": "Admin"
   },
   "nav": {
-    "overview": "Aperçu",
     "my_roster": "Mon Planning",
     "my_attendance": "Mes Présences",
     "my_availabilities": "Mes Disponibilités",
@@ -35,7 +27,6 @@
     "users": "Utilisateurs",
     "my_leave": "Mes Congés",
     "leave_approvals": "Approbations de Congés",
-    "team_availability": "Disponibilités de l’équipe",
     "gross_pay": "Salaire Brut",
     "compliance_rejections": "Refus de Conformité"
   },

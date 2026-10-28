@@ -1,18 +1,10 @@
 {
   "common": {
-    "welcome": "Welcome back",
-    "settings": "Settings",
-    "logout": "Logout",
     "save": "Save Changes",
     "cancel": "Cancel",
-    "loading": "Loading...",
-    "search": "Search...",
-    "refresh": "Refresh",
-    "period": "Period",
     "admin": "Admin"
   },
   "nav": {
-    "overview": "Overview",
     "my_roster": "My Roster",
     "my_attendance": "My Attendance",
     "my_availabilities": "My Availabilities",
@@ -35,7 +27,6 @@
     "users": "Users",
     "my_leave": "My Leave",
     "leave_approvals": "Leave Approvals",
-    "team_availability": "Grid",
     "grid": "Grid",
     "gross_pay": "Gross Pay",
     "compliance_rejections": "Compliance Rejections"
