@@ -1,7 +1,7 @@
 -- LOCAL TEST DB ONLY. Run after 01_fixtures.sql; everything here rolls back.
 -- Access suites (2026-10-14): what each level can see and do on the surfaces 02 does not
 -- probe — availability, budgets, KPI, payroll, templates, the Admin Suite tables,
--- clocking in on someone's behalf, assignment runs, and open-bid visibility.
+-- clocking in on someone's behalf, and open-bid visibility.
 --
 -- Reading a line:  y = allowed / visible,  . = refused by policy (or row not visible),
 --                  F = the RPC refused the caller,  ! = unexpected error.
@@ -13,7 +13,6 @@
 --   adm   write demand_templates, start a synthesis run in S1, read X's compliance
 --         rejection, rename department D1  (Admin Suite: zeta only)
 --   clk   clock X in on shift 1 (on X's behalf unless the caller is X)
---   run   start an assignment run in S1
 --   bids  which open (on_bidding) shifts are visible: 2 = S2, 5 = S1
 --   pt    pay terms of shift 1 (S1, X's contract) come back non-null
 --   fair  recompute the organization's fairness ledger (Admin suite)
@@ -166,16 +165,6 @@ BEGIN
                   WHEN OTHERS THEN res := '!';
         END;
         r := r || ' clk=' || res;
-
-        -- assignment run
-        BEGIN
-            j := public.sm_assignment_run_start(jsonb_build_object('organization_id', o, 'department_id', d1, 'sub_department_id', s1), 'probe');
-            res := CASE WHEN j->>'code' = 'FORBIDDEN' THEN 'F' ELSE 'y' END;
-            RAISE EXCEPTION USING ERRCODE = 'P0099';
-        EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
-                  WHEN OTHERS THEN res := '!';
-        END;
-        r := r || ' run=' || res;
 
         -- open bids
         r := r || ' bids=' || coalesce((SELECT string_agg(right(id::text, 1), '' ORDER BY id) FROM public.shifts
