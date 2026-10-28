@@ -68,6 +68,11 @@ function setUp(): void {
                        ('${R_F2}', 'theatre', 'PM Base')) AS s(roster_id, ext, name)
           JOIN public.roster_groups g ON g.roster_id = s.roster_id::uuid AND g.external_id = s.ext;
 
+        -- SH_TH_P stands for a shift written before its day passed. Nothing may
+        -- create one now (trg_shift_not_started), so only that trigger is off,
+        -- and only inside this transaction: an error rolls the DISABLE back too.
+        BEGIN;
+        ALTER TABLE public.shifts DISABLE TRIGGER trg_shift_not_started;
         INSERT INTO public.shifts (id, roster_id, roster_subgroup_id, organization_id, department_id, sub_department_id,
                                    shift_date, start_time, end_time, target_employment_type)
         SELECT s.id::uuid, r.id, rs.id, '${ORG}', '${D1}', '${S2}', r.start_date, '09:00', '12:00', 'Casual'
@@ -77,6 +82,11 @@ function setUp(): void {
           JOIN public.rosters r          ON r.id = s.roster_id::uuid
           JOIN public.roster_groups g    ON g.roster_id = r.id AND g.external_id = s.ext
           JOIN public.roster_subgroups rs ON rs.roster_group_id = g.id AND rs.name = 'AM Base';
+        -- The INSERT queued the deferred overlap/EBA checks, and ALTER TABLE is
+        -- refused while events are pending (55006). Run them now, not at COMMIT.
+        SET CONSTRAINTS ALL IMMEDIATE;
+        ALTER TABLE public.shifts ENABLE TRIGGER trg_shift_not_started;
+        COMMIT;
     `);
     const [[f, f2, p]] = db(`SELECT (SELECT start_date FROM public.rosters WHERE id = '${R_F}'),
                                     (SELECT start_date FROM public.rosters WHERE id = '${R_F2}'),
