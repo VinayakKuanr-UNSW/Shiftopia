@@ -1,3 +1,13 @@
+// =============================================================================
+// GENERATED FILE — DO NOT EDIT BY HAND.
+//
+// Regenerate with:  npm run db:types
+//
+// Every edit made here is silently reverted by the next regeneration, and in
+// the meantime the type checker is asserting things about the database that
+// are not true. If a type here is wrong, the schema is what needs changing.
+// =============================================================================
+
 export type Json =
   | string
   | number
@@ -4787,7 +4797,6 @@ export type Database = {
           id: string
           is_cancelled: boolean
           is_draft: boolean | null
-          is_first_aid_duty: boolean
           is_from_template: boolean
           is_locked: boolean | null
           is_on_bidding: boolean | null
@@ -4824,8 +4833,6 @@ export type Database = {
           scheduled_start: string | null
           shift_date: string
           shift_group_id: string | null
-          shift_pay_terms: Json | null
-          my_shift_pay_terms: Json | null
           start_at: string | null
           start_time: string
           sub_department_id: string | null
@@ -7306,26 +7313,6 @@ export type Database = {
             Args: { p_actor_id?: string; p_reason: string; p_shift_id: string }
             Returns: Json
           }
-      capture_roster_as_template:
-        | {
-            Args: {
-              p_end_date: string
-              p_start_date: string
-              p_sub_department_id: string
-              p_template_name: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_end_date: string
-              p_start_date: string
-              p_sub_department_id: string
-              p_template_name: string
-              p_user_id: string
-            }
-            Returns: Json
-          }
       check_daily_hours_limit: {
         Args: {
           p_additional_hours: number
@@ -7414,6 +7401,26 @@ export type Database = {
         Returns: Json
       }
       delete_user_entirely: { Args: { user_uuid: string }; Returns: undefined }
+      eba_check_assignment: {
+        Args: {
+          p_employee_id: string
+          p_end_time?: string
+          p_role_id?: string
+          p_shift_date?: string
+          p_shift_id: string
+          p_start_time?: string
+          p_unpaid_break_mins?: number
+        }
+        Returns: {
+          details: string
+          is_compliant: boolean
+          payload: Json
+          rule_id: string
+          rule_name: string
+          summary: string
+          tier: string
+        }[]
+      }
       employee_on_approved_leave: {
         Args: { p_date: string; p_employee_id: string }
         Returns: boolean
@@ -7421,7 +7428,7 @@ export type Database = {
       fn_eba_estimate_shift_cost: {
         Args: {
           p_base_rate: number
-          p_break_start?: string | null
+          p_break_start?: string
           p_employment_type: string
           p_first_aid?: boolean
           p_higher_duties?: boolean
@@ -7635,6 +7642,7 @@ export type Database = {
         Returns: {
           end_time: string
           id: string
+          paid_break_minutes: number
           shift_date: string
           start_time: string
           unpaid_break_minutes: number
@@ -7651,6 +7659,7 @@ export type Database = {
           assigned_employee_id: string
           end_time: string
           id: string
+          paid_break_minutes: number
           shift_date: string
           start_time: string
           unpaid_break_minutes: number
@@ -7856,6 +7865,15 @@ export type Database = {
           p_start_date: string
         }
         Returns: Json
+      }
+      get_my_private_profile: {
+        Args: never
+        Returns: {
+          date_of_birth: string
+          emergency_contact_name: string
+          emergency_contact_phone: string
+          phone: string
+        }[]
       }
       get_prospective_pay_terms: {
         Args: { p_employee_ids: string[]; p_shift_ids: string[] }
@@ -8200,6 +8218,16 @@ export type Database = {
         }[]
       }
       shares_organisation_with: { Args: { p_other: string }; Returns: boolean }
+      shift_break_window_breach: {
+        Args: {
+          p_break_end: string
+          p_break_start: string
+          p_end_time: string
+          p_start_time: string
+          p_unpaid_break: number
+        }
+        Returns: string
+      }
       shift_day_typed_shortfall: {
         Args: {
           p_end_time: string
@@ -8215,6 +8243,10 @@ export type Database = {
         Returns: string
       }
       shift_is_security_role: { Args: { p_role_id: string }; Returns: boolean }
+      shift_minutes_after_start: {
+        Args: { p_start: string; p_t: string }
+        Returns: number
+      }
       shift_net_minutes: {
         Args: {
           p_end_time: string
@@ -8313,7 +8345,11 @@ export type Database = {
         Returns: Json
       }
       sm_bulk_publish_shifts: {
-        Args: { p_actor_id?: string; p_expected_versions?: Json; p_shift_ids: string[] }
+        Args: {
+          p_actor_id?: string
+          p_expected_versions?: Json
+          p_shift_ids: string[]
+        }
         Returns: Json
       }
       sm_cancel_swap_request: { Args: { p_swap_id: string }; Returns: Json }
@@ -9069,4 +9105,3 @@ export const Constants = {
     },
   },
 } as const
-
