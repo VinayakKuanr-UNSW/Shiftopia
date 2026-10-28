@@ -49,6 +49,7 @@ function input(over: Partial<CopyPlanInput> = {}): CopyPlanInput {
         cycles: [cycle()],
         // The day before the fixture fortnight, so no date in it is past.
         today: '2026-09-27',
+        startedToday: false,
         ...over,
     };
 }
@@ -112,6 +113,20 @@ describe('planCopy', () => {
         // would bury the one date that genuinely could not be written.
         const plan = planCopy(input({ excludeWeekdays: new Set<IsoWeekday>([6, 7]) }));
         expect(plan.skipped).toEqual([]);
+    });
+
+    it('skips today once the shift’s start time has passed, and says so', () => {
+        // The date-only check let a copy onto today at 09:00 through at 14:00;
+        // the database now refuses a shift that starts in the past.
+        const started = planCopy(input({ today: '2026-09-30', startedToday: true }));
+        expect(started.targets).not.toContain('2026-09-30');
+        expect(started.skipped).toContainEqual({
+            date: '2026-09-30', reason: 'Start time has already passed today',
+        });
+        expect(started.targets).toContain('2026-10-01');
+
+        const notYet = planCopy(input({ today: '2026-09-30', startedToday: false }));
+        expect(notYet.targets).toContain('2026-09-30');
     });
 
     it('skips a day with approved leave, and says so', () => {

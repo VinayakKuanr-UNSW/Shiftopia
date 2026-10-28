@@ -43,6 +43,12 @@ export interface CopyPlanInput {
      * behaves like the roster grid, which never creates a shift in the past.
      */
     today: string;
+    /**
+     * Whether the source's start time has already passed today (Sydney). A copy
+     * onto today at that time would start in the past, which the database
+     * refuses (trg_shift_not_started) — so today is skipped, not attempted.
+     */
+    startedToday: boolean;
 }
 
 interface CopySkip {
@@ -98,7 +104,7 @@ function cycleFor(
 export function planCopy(input: CopyPlanInput): CopyPlan {
     const {
         sourceDate, netMinutes, startDate, endDate, excludeWeekdays,
-        existing, approvedLeave, writableDates, lockedOutDates, cycles, today,
+        existing, approvedLeave, writableDates, lockedOutDates, cycles, today, startedToday,
     } = input;
 
     const targets: string[] = [];
@@ -120,6 +126,10 @@ export function planCopy(input: CopyPlanInput): CopyPlan {
 
         if (date < today) {
             skipped.push({ date, reason: 'In the past' });
+            continue;
+        }
+        if (date === today && startedToday) {
+            skipped.push({ date, reason: 'Start time has already passed today' });
             continue;
         }
         if (approvedLeave.has(date)) {

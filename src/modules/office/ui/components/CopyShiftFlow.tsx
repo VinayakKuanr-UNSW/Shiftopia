@@ -21,6 +21,7 @@
 
 import React from 'react';
 
+import { isSydneyStarted } from '@/modules/core/lib/date.utils';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 
@@ -126,6 +127,7 @@ export const CopyShiftFlow: React.FC<CopyShiftFlowProps> = ({
             lockedOutDates: copyRangeCoverage.data?.lockedOut ?? new Set<string>(),
             cycles: copyCycles,
             today: referenceDate,
+            startedToday: isSydneyStarted(referenceDate, String(sh.start_time ?? '')),
         });
     }, [source, copyStart, copyEnd, copyExcluded, copyCycles,
         copyRangeShifts.data, copyRangeLeave.data, copyRangeCoverage.data, referenceDate]);
