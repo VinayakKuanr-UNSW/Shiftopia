@@ -45,8 +45,7 @@ WITH spec(ord, sch, rel, blank) AS (VALUES
     (18, 'public', 'function_map',             '{}'),
     (19, 'public', 'labor_correction_factors', '{}'),
     (20, 'public', 'work_rules',               '{}'),
-    (21, 'public', 'system_config',            '{last_modified_by}'),
-    (22, 'public', 'dead_shift_cleanup_rules', '{updated_by}')
+    (21, 'public', 'system_config',            '{last_modified_by}')
 ),
 resolved AS (
     SELECT s.ord, s.blank,

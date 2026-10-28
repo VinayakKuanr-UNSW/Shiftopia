@@ -17,7 +17,7 @@ graph TB
         Tables["~139 tables (public) + 7 (hr)"]
         RPCs["~336 functions incl. sm_* gateway RPCs"]
         Triggers["92 triggers → audit/notify/derive"]
-        Cron["pg_cron: nightly_leave_accrual, dead_shift_cleanup"]
+        Cron["pg_cron: nightly_leave_accrual, shift-state-processor, …"]
     end
 
     subgraph EdgeFn["Supabase Edge Functions"]

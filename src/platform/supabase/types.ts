@@ -14,60 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      _backup_leave_balances_casual_20261001: {
-        Row: {
-          accrued_hours: number | null
-          as_of_date: string | null
-          balance_hours: number | null
-          created_at: string | null
-          employee_id: string | null
-          id: string | null
-          leave_type: string | null
-          updated_at: string | null
-          used_hours: number | null
-        }
-        Insert: {
-          accrued_hours?: number | null
-          as_of_date?: string | null
-          balance_hours?: number | null
-          created_at?: string | null
-          employee_id?: string | null
-          id?: string | null
-          leave_type?: string | null
-          updated_at?: string | null
-          used_hours?: number | null
-        }
-        Update: {
-          accrued_hours?: number | null
-          as_of_date?: string | null
-          balance_hours?: number | null
-          created_at?: string | null
-          employee_id?: string | null
-          id?: string | null
-          leave_type?: string | null
-          updated_at?: string | null
-          used_hours?: number | null
-        }
-        Relationships: []
-      }
-      _backup_retired_structure_20261009: {
-        Row: {
-          backed_up_at: string
-          row_data: Json
-          source: string
-        }
-        Insert: {
-          backed_up_at?: string
-          row_data: Json
-          source: string
-        }
-        Update: {
-          backed_up_at?: string
-          row_data?: Json
-          source?: string
-        }
-        Relationships: []
-      }
       access_certificate_events: {
         Row: {
           action: string
@@ -1844,96 +1790,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      dead_shift_cleanup_log: {
-        Row: {
-          capped: boolean
-          created_at: string
-          deleted: number
-          dry_run: boolean
-          error: string | null
-          finished_at: string | null
-          id: string
-          run_id: string
-          scanned: number
-          started_at: string
-        }
-        Insert: {
-          capped?: boolean
-          created_at?: string
-          deleted?: number
-          dry_run: boolean
-          error?: string | null
-          finished_at?: string | null
-          id?: string
-          run_id: string
-          scanned?: number
-          started_at: string
-        }
-        Update: {
-          capped?: boolean
-          created_at?: string
-          deleted?: number
-          dry_run?: boolean
-          error?: string | null
-          finished_at?: string | null
-          id?: string
-          run_id?: string
-          scanned?: number
-          started_at?: string
-        }
-        Relationships: []
-      }
-      dead_shift_cleanup_rules: {
-        Row: {
-          batch_size: number
-          created_at: string
-          department_id: string | null
-          dry_run: boolean
-          enabled: boolean
-          id: string
-          max_deletes_per_run: number
-          max_deletes_window_hours: number
-          organization_id: string | null
-          retention_hours: number
-          rules: Json
-          updated_at: string
-          updated_by: string | null
-          version: number
-        }
-        Insert: {
-          batch_size?: number
-          created_at?: string
-          department_id?: string | null
-          dry_run?: boolean
-          enabled?: boolean
-          id?: string
-          max_deletes_per_run?: number
-          max_deletes_window_hours?: number
-          organization_id?: string | null
-          retention_hours?: number
-          rules?: Json
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Update: {
-          batch_size?: number
-          created_at?: string
-          department_id?: string | null
-          dry_run?: boolean
-          enabled?: boolean
-          id?: string
-          max_deletes_per_run?: number
-          max_deletes_window_hours?: number
-          organization_id?: string | null
-          retention_hours?: number
-          rules?: Json
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Relationships: []
       }
       demand_forecasts: {
         Row: {
@@ -8225,10 +8081,6 @@ export type Database = {
       my_shift_pay_terms: {
         Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
         Returns: Json
-      }
-      notify_admins_pending_department_assignments: {
-        Args: never
-        Returns: undefined
       }
       notify_user:
         | {
