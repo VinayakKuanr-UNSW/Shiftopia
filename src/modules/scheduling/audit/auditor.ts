@@ -135,7 +135,7 @@ export interface AvailabilityData {
     hasAnyData: boolean;
 }
 
-export interface AuditOptions {
+interface AuditOptions {
     targetShiftIds: string[];
     allShifts: ShiftMeta[];
     allEmployees: EmployeeMeta[];

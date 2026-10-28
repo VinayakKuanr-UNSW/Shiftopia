@@ -21,7 +21,7 @@ import type {
   BroadcastParticipantRole,
 } from '../../model/broadcast.types';
 
-export interface MessageItemProps {
+interface MessageItemProps {
   message: BroadcastWithDetails;
   compact?: boolean;
 }
@@ -152,4 +152,3 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) =>
   );
 };
 
-export default MessageItem;

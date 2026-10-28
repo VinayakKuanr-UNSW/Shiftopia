@@ -39,7 +39,7 @@ export interface DemandTemplateRow {
     updated_at: string;
 }
 
-export interface TemplateInput {
+interface TemplateInput {
     template_code: string;
     cluster_key: ClusterKey;
     shifts: TemplateShiftCell[];

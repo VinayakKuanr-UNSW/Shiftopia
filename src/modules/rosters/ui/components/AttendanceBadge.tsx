@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import type { AttendanceStatus } from '../../domain/shift.entity';
 
-export interface AttendanceBadgeProps {
+interface AttendanceBadgeProps {
   attendanceStatus: AttendanceStatus;
   actualStart: string | null;
   scheduledStart: string; // ISO datetime: shift_date + 'T' + start_time
@@ -101,4 +101,3 @@ export const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
   );
 };
 
-export default AttendanceBadge;

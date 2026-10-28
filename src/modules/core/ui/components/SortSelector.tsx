@@ -23,7 +23,7 @@ import {
     type SortDirection,
 } from '@/modules/core/lib/row-sorting';
 
-export interface SortSelectorProps {
+interface SortSelectorProps {
     value: RowSort;
     onChange: (value: RowSort) => void;
     options?: RowSortBy[];
@@ -231,4 +231,3 @@ export function SortSelector({
     );
 }
 
-export default SortSelector;

@@ -20,7 +20,7 @@ import {
  *   - useSubmitFeedback()           — mutation to insert a row
  */
 
-export const supervisorFeedbackKeys = {
+const supervisorFeedbackKeys = {
     all: ['supervisor_feedback'] as const,
     byEvent: (eventId: string) => ['supervisor_feedback', 'byEvent', eventId] as const,
     byBucket: (functionCode: string, level: number, ruleVersion?: number, limit?: number) =>
@@ -34,7 +34,7 @@ export const supervisorFeedbackKeys = {
         ] as const,
 } as const;
 
-export function useEventFeedback(eventId: string | null | undefined) {
+function useEventFeedback(eventId: string | null | undefined) {
     return useQuery<SupervisorFeedbackRow[], Error>({
         queryKey: eventId ? supervisorFeedbackKeys.byEvent(eventId) : ['supervisor_feedback', 'byEvent', 'null'],
         queryFn: () => supervisorFeedbackQueries.listForEvent(eventId!),
@@ -43,7 +43,7 @@ export function useEventFeedback(eventId: string | null | undefined) {
     });
 }
 
-export interface UseFeedbackMultiplierOptions extends FeedbackBucketKey {
+interface UseFeedbackMultiplierOptions extends FeedbackBucketKey {
     /** Trailing window size (default 10). */
     limit?: number;
     /** Restrict to a specific rule generation. */
@@ -58,7 +58,7 @@ export interface UseFeedbackMultiplierOptions extends FeedbackBucketKey {
  * Reads the trailing feedback window for a bucket and runs the accumulator.
  * Returns multiplier + provenance (which rows contributed, with weights).
  */
-export function useFeedbackMultiplier(opts: UseFeedbackMultiplierOptions) {
+function useFeedbackMultiplier(opts: UseFeedbackMultiplierOptions) {
     return useQuery<FeedbackMultiplierResult, Error>({
         queryKey: supervisorFeedbackKeys.byBucket(
             opts.function_code,

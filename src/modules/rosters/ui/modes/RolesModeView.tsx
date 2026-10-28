@@ -801,4 +801,3 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   );
 };
 
-export default RolesModeView;

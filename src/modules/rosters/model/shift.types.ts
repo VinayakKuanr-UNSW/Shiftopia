@@ -5,20 +5,20 @@
 import type { ShiftWorkflowStatus } from '@/modules/planning/unified/types';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
 
-export type LifecycleStatus =
+type LifecycleStatus =
     | 'draft'
     | 'scheduled'
     | 'active'
     | 'completed'
     | 'cancelled';
 
-export type ShiftFlagType =
+type ShiftFlagType =
     | 'on_bidding'
     | 'trade_requested'
     | 'high_priority'
     | 'compliance_issue';
 
-export interface LifecycleConfig {
+interface LifecycleConfig {
     status: LifecycleStatus;
     label: string;
     color: string;
@@ -27,7 +27,7 @@ export interface LifecycleConfig {
     description: string;
 }
 
-export interface ShiftFlag {
+interface ShiftFlag {
     id: string;
     shiftId: string;
     flagType: ShiftFlagType;
@@ -37,7 +37,7 @@ export interface ShiftFlag {
     updatedAt: string;
 }
 
-export interface ShiftFlagConfig {
+interface ShiftFlagConfig {
     type: ShiftFlagType;
     icon: string;
     label: string;
@@ -46,7 +46,7 @@ export interface ShiftFlagConfig {
     priority: number;
 }
 
-export interface LifecycleLogEntry {
+interface LifecycleLogEntry {
     id: string;
     shiftId: string;
     oldStatus: LifecycleStatus | null;
@@ -128,7 +128,7 @@ export interface Roster {
    LIFECYCLE CONFIGS
    ============================================================ */
 
-export const LIFECYCLE_CONFIGS: Record<LifecycleStatus, LifecycleConfig> = {
+const LIFECYCLE_CONFIGS: Record<LifecycleStatus, LifecycleConfig> = {
     draft: {
         status: 'draft',
         label: 'Draft',
@@ -171,7 +171,7 @@ export const LIFECYCLE_CONFIGS: Record<LifecycleStatus, LifecycleConfig> = {
     },
 };
 
-export const SHIFT_FLAG_CONFIGS: Record<ShiftFlagType, ShiftFlagConfig> = {
+const SHIFT_FLAG_CONFIGS: Record<ShiftFlagType, ShiftFlagConfig> = {
     on_bidding: {
         type: 'on_bidding',
         icon: 'Gavel',

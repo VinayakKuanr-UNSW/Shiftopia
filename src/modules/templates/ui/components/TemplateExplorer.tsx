@@ -83,10 +83,10 @@ export interface ExplorerTemplate {
   subDepartmentName?: string;
 }
 
-export type SortField = 'name' | 'updated' | 'created' | 'shifts' | 'groups' | 'version';
-export type SortDirection = 'asc' | 'desc';
+type SortField = 'name' | 'updated' | 'created' | 'shifts' | 'groups' | 'version';
+type SortDirection = 'asc' | 'desc';
 
-export interface TemplateExplorerProps {
+interface TemplateExplorerProps {
   templates: ExplorerTemplate[];
   selectedTemplateId: string | null;
   onSelectTemplate: (id: string) => void;

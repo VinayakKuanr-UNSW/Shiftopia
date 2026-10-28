@@ -37,7 +37,7 @@
 
 // ── Scope filter shape (mirrors manager/employee filter params) ───────────────
 
-export interface BroadcastScopeFilter {
+interface BroadcastScopeFilter {
   organizationId?: string;
   departmentId?: string;
   subDepartmentId?: string;

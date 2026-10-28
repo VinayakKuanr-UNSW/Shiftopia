@@ -99,7 +99,7 @@ export interface ContractBasisInput {
  * `null` span ends mean unrestricted, which is every contract in production
  * until one is explicitly opted in.
  */
-export interface OrdinaryHoursEnvelope {
+interface OrdinaryHoursEnvelope {
     /** 'HH:mm:ss', or null when unrestricted. */
     spanStart: string | null;
     spanEnd: string | null;

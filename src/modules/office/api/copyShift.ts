@@ -27,7 +27,7 @@
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { resolveRosterTarget } from './rosterTarget';
 
-export interface CopySourceShift {
+interface CopySourceShift {
     employeeId: string;
     organizationId: string;
     departmentId: string;
@@ -42,7 +42,7 @@ export interface CopySourceShift {
     roleId: string;
 }
 
-export interface CopyOutcome {
+interface CopyOutcome {
     /** Dates written, in date order. */
     created: string[];
     failed: Array<{ date: string; reason: string }>;

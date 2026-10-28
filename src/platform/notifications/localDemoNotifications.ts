@@ -11,7 +11,7 @@ export type LocalDemoNotification = {
   source: 'local-demo';
 };
 
-export type LocalDemoNotificationInput = Pick<
+type LocalDemoNotificationInput = Pick<
   LocalDemoNotification,
   'type' | 'title' | 'message' | 'link'
 >;

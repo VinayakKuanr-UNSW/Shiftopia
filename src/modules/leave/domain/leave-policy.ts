@@ -284,7 +284,7 @@ export function projectBalance(
 }
 
 /** Adjacency context for the cl 45.4 certificate rule (audit M-12). */
-export interface CertificateAdjacency {
+interface CertificateAdjacency {
   /** The day immediately before the leave start, or immediately after the
    *  leave end, is a Saturday or Sunday. */
   adjacentToWeekend?: boolean;
@@ -300,7 +300,7 @@ export interface CertificateAdjacency {
 }
 
 /** What `computeCertificateAdjacency` can use beyond the calendar. */
-export interface CertificateContext {
+interface CertificateContext {
   /** yyyy-MM-dd dates the person is rostered, covering at least a week either side. */
   rosteredDates?: ReadonlySet<string>;
   /** Their OTHER pending or approved leave (this request excluded). */
@@ -417,7 +417,7 @@ export function computeCertificateAdjacency(
 /**
  * Leave types that have a trackable balance (for display in the balance cards).
  */
-export const BALANCE_TRACKED_TYPES: LeaveTypeCode[] = (
+const BALANCE_TRACKED_TYPES: LeaveTypeCode[] = (
   Object.values(LEAVE_POLICIES) as LeavePolicy[]
 )
   .filter((p) => p.balanceTracked)

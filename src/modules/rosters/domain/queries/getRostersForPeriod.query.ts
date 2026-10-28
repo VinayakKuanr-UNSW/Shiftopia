@@ -5,7 +5,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface RosterSummary {
+interface RosterSummary {
     id: string;
     shiftDate: string;
     departmentId: string;
@@ -16,7 +16,7 @@ export interface RosterSummary {
     finalizedAt?: string;
 }
 
-export interface GetRostersInput {
+interface GetRostersInput {
     departmentId: string;
     subDepartmentId: string;
     startDate: string;
@@ -26,7 +26,7 @@ export interface GetRostersInput {
 /**
  * Fetch rosters for a given period and department/sub-department
  */
-export async function getRostersForPeriod(
+async function getRostersForPeriod(
     input: GetRostersInput
 ): Promise<RosterSummary[]> {
     const { departmentId, subDepartmentId, startDate, endDate } = input;
@@ -67,7 +67,7 @@ export async function getRostersForPeriod(
 /**
  * Fetch a single roster by ID
  */
-export async function getRosterById(
+async function getRosterById(
     rosterId: string
 ): Promise<RosterSummary | null> {
     if (!rosterId) return null;

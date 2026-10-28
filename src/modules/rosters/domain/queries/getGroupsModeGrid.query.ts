@@ -13,7 +13,7 @@ import { ALL_GROUP_TYPES, GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/p
    TYPES
    ============================================================ */
 
-export interface VisualGroup {
+interface VisualGroup {
     id: string;
     name: string;
     type: TemplateGroupType;
@@ -21,7 +21,7 @@ export interface VisualGroup {
     subGroups: VisualSubGroup[];
 }
 
-export interface VisualSubGroup {
+interface VisualSubGroup {
     id: string;
     name: string;
     shifts: Record<string, ShiftDisplay[]>;
@@ -73,7 +73,7 @@ function getShiftStatus(shift: Shift): ShiftDisplay['status'] {
  * Build visual groups from raw shifts
  * This is the core grouping logic, moved from UI
  */
-export function buildGroupsModeGrid(
+function buildGroupsModeGrid(
     shifts: Shift[],
     subDepartmentId?: string
 ): VisualGroup[] {
@@ -190,7 +190,7 @@ export function getDefaultGroups(): VisualGroup[] {
  * Fetch shifts for multiple dates and build the grid
  * This encapsulates the data fetching loop + transformer
  */
-export async function fetchGroupsModeGrid(
+async function fetchGroupsModeGrid(
     organizationId: string,
     dates: Date[],
     departmentId?: string,

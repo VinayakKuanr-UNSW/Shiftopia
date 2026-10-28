@@ -69,7 +69,7 @@ import { isSecurityRoleName } from '@/modules/compliance/security-role';
 // TYPES & HELPERS
 // ============================================================================
 
-export type ShiftCardVariant = 'compact' | 'detailed' | 'comfortable';
+type ShiftCardVariant = 'compact' | 'detailed' | 'comfortable';
 export interface ComplianceInfo {
     status: 'compliant' | 'warning' | 'violation';
     violations: string[];
@@ -78,7 +78,7 @@ export interface ComplianceInfo {
     maxWeeklyHours?: number;
 }
 
-export interface SmartShiftCardProps {
+interface SmartShiftCardProps {
     shift: Shift;
     variant?: ShiftCardVariant;
     compliance?: ComplianceInfo;
@@ -1083,4 +1083,3 @@ const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
 
 export const SmartShiftCard = React.memo(SmartShiftCardImpl);
 
-export default SmartShiftCard;

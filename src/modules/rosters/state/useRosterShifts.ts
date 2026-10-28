@@ -36,7 +36,7 @@ import { shiftKeys, rosterKeys, type ShiftFilters } from '../api/queryKeys';
  * gone, rejected, …). The `.message` is the human-readable UX copy; `.shiftOpResult`
  * carries the raw gateway envelope for richer handling (diff, refresh).
  */
-export interface ShiftOpError extends Error {
+interface ShiftOpError extends Error {
   shiftOpResult: ShiftOpResult;
 }
 
@@ -83,7 +83,7 @@ function invalidateShiftAggregates(queryClient: ReturnType<typeof useQueryClient
 
 // ── Shared optimistic-update helpers ─────────────────────────────────────────
 
-export type Snapshot = [readonly unknown[], Shift[] | undefined][];
+type Snapshot = [readonly unknown[], Shift[] | undefined][];
 
 export function snapshotLists(queryClient: ReturnType<typeof useQueryClient>): Snapshot {
   return queryClient.getQueriesData<Shift[]>({ queryKey: shiftKeys.lists });
@@ -191,7 +191,7 @@ export function useShiftsByDateRange(
   });
 }
 
-export function useEmployeeShifts(
+function useEmployeeShifts(
   employeeId: string | null,
   startDate: string | null,
   endDate: string | null,
@@ -204,7 +204,7 @@ export function useEmployeeShifts(
   });
 }
 
-export function useShiftDetail(shiftId: string | null) {
+function useShiftDetail(shiftId: string | null) {
   return useQuery({
     queryKey: shiftKeys.detail(shiftId ?? ''),
     queryFn: () => shiftsQueries.getShiftById(shiftId!),
@@ -270,7 +270,7 @@ export function useMyOffersHistory(
 
 // ── Lookup hooks ──────────────────────────────────────────────────────────────
 
-export function useOrganizations() {
+function useOrganizations() {
   return useQuery({
     queryKey: shiftKeys.lookups.organizations(),
     queryFn: () => shiftsQueries.getOrganizations(),
@@ -278,7 +278,7 @@ export function useOrganizations() {
   });
 }
 
-export function useDepartments(organizationId?: string) {
+function useDepartments(organizationId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.departments(organizationId),
     queryFn: () => shiftsQueries.getDepartments(organizationId),
@@ -697,7 +697,7 @@ export function useDeleteShift() {
  * (the foundation for wiring edit / approve_trade / reject_trade once their
  * gateway-semantics prerequisites are met).
  */
-export function useApplyShiftOp() {
+function useApplyShiftOp() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -1012,7 +1012,7 @@ export function useBulkDeleteShifts() {
  * Optimized for resizing buckets — applies shifts in parallel to the server
  * but performs a single optimistic surgical patch to the list views.
  */
-export function useBulkUpdateShiftTimes() {
+function useBulkUpdateShiftTimes() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -1337,7 +1337,7 @@ export function useRequestTrade() {
 
 // ── Compliance validation ─────────────────────────────────────────────────────
 
-export function useComplianceValidation() {
+function useComplianceValidation() {
   return useMutation({
     mutationFn: (params: {
       employeeId: string;
@@ -1523,7 +1523,7 @@ export function useShiftDeltaSync(params: {
  * Combined hook for the most common shift operations in a single date view.
  * Prefer individual hooks when you only need one or two operations.
  */
-export function useRosterShifts(
+function useRosterShifts(
   organizationId: string | null,
   date: string | null,
   filters?: ShiftFilters,

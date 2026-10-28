@@ -2,7 +2,7 @@
 // Organization & Core Domain Types
 // Extracted from src/api/models/types.ts
 
-export interface Department {
+interface Department {
     id: string;
     organizationId: string;
     name: string;
@@ -10,7 +10,7 @@ export interface Department {
     updatedAt: string;
 }
 
-export interface SubDepartment {
+interface SubDepartment {
     id: string;
     departmentId: string;
     name: string;
@@ -18,7 +18,7 @@ export interface SubDepartment {
     updatedAt: string;
 }
 
-export interface Role {
+interface Role {
     id: string;
     name: string;
     departmentId?: string;
@@ -29,7 +29,7 @@ export interface Role {
     updatedAt: string;
 }
 
-export interface RemunerationLevel {
+interface RemunerationLevel {
     level: number;
     description?: string;
     hourlyRate: number;
@@ -37,7 +37,7 @@ export interface RemunerationLevel {
     updatedAt: string;
 }
 
-export interface Organization {
+interface Organization {
     id: string;
     name: string;
     createdAt: string;

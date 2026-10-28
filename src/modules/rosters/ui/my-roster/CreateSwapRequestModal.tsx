@@ -17,7 +17,7 @@ import { Shift } from '@/modules/rosters';
 import { useSwaps } from '@/modules/planning';
 import { MobileShiftCard } from './MobileShiftCard';
 
-export interface CreateSwapRequestModalProps {
+interface CreateSwapRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
   shift: Shift;

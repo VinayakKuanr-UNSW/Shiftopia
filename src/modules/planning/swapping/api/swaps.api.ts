@@ -190,7 +190,7 @@ export interface CreateSwapData {
 }
 
 // Extended interface with relations
-export interface ShiftSwapRelations extends ShiftSwap {
+interface ShiftSwapRelations extends ShiftSwap {
     requester_shift?: any; // Was original_shift
     target_shift?: any;   // Was offered_shift
     requested_by?: any; // profile

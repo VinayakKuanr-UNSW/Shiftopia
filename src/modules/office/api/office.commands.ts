@@ -63,7 +63,7 @@ export interface OfficeWorld {
  * over-roster them. Reading extra days can only ever make the count more
  * complete, so widening is always the safe direction.
  */
-export function widenToCycles(
+function widenToCycles(
     periodStart: string,
     periodEnd: string,
     anchors: ReadonlyArray<{ anchor: string; weeks: number }>,

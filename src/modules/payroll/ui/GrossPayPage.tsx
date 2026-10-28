@@ -27,7 +27,7 @@ import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface GrossPayPageProps {
+interface GrossPayPageProps {
   /**
    * Optional fixed period bounds. When omitted the page shows its own
    * date-range selector (defaulting to the current Monday-anchored week).
@@ -46,7 +46,7 @@ function currentWeekBounds(): PeriodBounds {
   };
 }
 
-export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeNames }) => {
+const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeNames }) => {
   const [range, setRange] = useState<PeriodBounds>(() => bounds ?? currentWeekBounds());
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 

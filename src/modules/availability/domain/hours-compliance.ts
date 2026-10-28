@@ -45,7 +45,7 @@ import type {
     TeamMember,
 } from '../model/team-availability.types';
 
-export interface NetMinutesInput {
+interface NetMinutesInput {
     net_length_minutes?: number | null;
     scheduled_length_minutes?: number | null;
     /** The part of the break that is NOT paid. The only part deducted. */
@@ -112,7 +112,7 @@ export function mondayOfWeekKey(key: string): string {
     return format(parseISO(`${key}-1`), 'yyyy-MM-dd');
 }
 
-export function isoWeekKey(date: Date): string {
+function isoWeekKey(date: Date): string {
     return `${getISOWeekYear(date)}-W${String(getISOWeek(date)).padStart(2, '0')}`;
 }
 
@@ -139,9 +139,9 @@ export interface ShiftHours {
     subDeptName?: string | null;
 }
 
-export type CompV8Severity = 'violation' | 'warning' | 'ok';
+type CompV8Severity = 'violation' | 'warning' | 'ok';
 
-export interface WindowViolation {
+interface WindowViolation {
     /**
      * Widened from `2 | 3 | 4`: the declared cycle may be 1 week, and Schedule 3
      * runs 8 for full-time security.
@@ -176,9 +176,9 @@ export interface EmpComp {
 
 // ── EBA constants ────────────────────────────────────────────────────────────
 
-export const EBA_WEEKLY_LIMIT = 38;   // h/week — default weekly basis (fallback)
+const EBA_WEEKLY_LIMIT = 38;   // h/week — default weekly basis (fallback)
 /** cl 35.1(d)/35.2(d)/35.3(d)/35.4(c) — "up to twelve (12) ordinary hours on any one day". */
-export const DAILY_CAP_HARD = 12;
+const DAILY_CAP_HARD = 12;
 
 /**
  * HOUSE POLICY, not the Agreement.
@@ -188,10 +188,10 @@ export const DAILY_CAP_HARD = 12;
  * it is warning-only, so it costs nothing — but it was sitting unlabelled beside
  * genuine EBA rules, which invites a manager to defend it as one.
  */
-export const DAILY_CAP_SOFT = 10;
-export const NEAR_LIMIT_RATIO = 0.90; // 90 % of limit triggers warning badge
+const DAILY_CAP_SOFT = 10;
+const NEAR_LIMIT_RATIO = 0.90; // 90 % of limit triggers warning badge
 
-export const ROLLING_WINDOWS = [
+const ROLLING_WINDOWS = [
     { weeks: 2 as const, days: 14 },
     { weeks: 3 as const, days: 21 },
     { weeks: 4 as const, days: 28 },

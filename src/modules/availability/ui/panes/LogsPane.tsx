@@ -42,7 +42,7 @@ import { AvailabilityRule } from '../../model/availability.types';
 // TYPES
 // ============================================================================
 
-export interface LogsPaneProps {
+interface LogsPaneProps {
   rules: AvailabilityRule[];
   isLoading: boolean;
   onEditRule: (rule: AvailabilityRule) => void;
@@ -300,4 +300,3 @@ export function LogsPane({
   );
 }
 
-export default LogsPane;

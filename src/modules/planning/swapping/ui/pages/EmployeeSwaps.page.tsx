@@ -223,7 +223,7 @@ export type SwapPriority = ShiftUrgency;
  * Compute swap/offer priority — delegates to the shared TTS utility.
  * Accepts either (shiftDate, startTime) or an ISO startAt datetime.
  */
-export const getSwapPriority = (
+const getSwapPriority = (
     _now: Date,
     shiftDate?: string,
     startTime?: string,
@@ -351,7 +351,7 @@ const isSwapExpired = (now: Date, startAt?: string, shiftDate?: string, startTim
     return now.getTime() >= start.getTime() - EMERGENT_WINDOW_MS;
 };
 
-export const EmployeeSwapsPage: React.FC = () => {
+const EmployeeSwapsPage: React.FC = () => {
     const now = useMinuteTick();
     const { toast } = useToast();
     const { isDark } = useTheme();

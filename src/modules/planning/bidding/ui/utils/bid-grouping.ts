@@ -4,7 +4,7 @@ import type { ShiftOpportunity } from '../types';
 
 export type BidGroupBy = 'none' | 'date' | 'subDepartment' | 'group' | 'subGroupName' | 'role';
 
-export interface BidGroup {
+interface BidGroup {
     key: string;
     label: string;
     items: ShiftOpportunity[];

@@ -498,7 +498,7 @@ const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId
    MAIN COMPONENT
    ============================================================ */
 
-export const ManagerSwapsPage: React.FC = () => {
+const ManagerSwapsPage: React.FC = () => {
     const { toast } = useToast();
     const { user, activeContract, hasPermission } = useAuth();
     // Delta and epsilon see every swap request in scope but decide none (access suites).

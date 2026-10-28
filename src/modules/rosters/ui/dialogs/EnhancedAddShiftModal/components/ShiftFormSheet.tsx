@@ -1322,4 +1322,3 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     );
 };
 
-export default ShiftFormSheet;

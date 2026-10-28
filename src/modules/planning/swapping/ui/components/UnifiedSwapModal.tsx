@@ -56,7 +56,7 @@ import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCar
 // TYPES
 // =============================================================================
 
-export interface UnifiedSwapModalProps {
+interface UnifiedSwapModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirmOffer: (shiftId: string | undefined) => void;
@@ -639,4 +639,3 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
     );
 };
 
-export default UnifiedSwapModal;

@@ -14,7 +14,7 @@ import { createStore, del, get, set, type UseStore } from 'idb-keyval';
 import { persistQueryClient, type PersistedClient, type Persister } from '@tanstack/react-query-persist-client';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
-export const OFFLINE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const OFFLINE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const PERSIST_THROTTLE_MS = 1_000;
 const CACHE_KEY = 'react-query';
 
@@ -36,13 +36,13 @@ export function isOfflineQuery(key: QueryKey, userId: string): boolean {
   return false;
 }
 
-export interface OfflinePersister extends Persister {
+interface OfflinePersister extends Persister {
   /** Drops the saved cache and any write still waiting on the throttle. */
   clear: () => Promise<void>;
 }
 
 /** IndexedDB persister; writes are throttled because the cache changes often. */
-export function createIdbPersister(): OfflinePersister {
+function createIdbPersister(): OfflinePersister {
   // Opened lazily: creating the store touches indexedDB, absent in tests/SSR.
   let store: UseStore | undefined;
   const db = () => (store ??= createStore('shiftopia-offline', 'query-cache'));

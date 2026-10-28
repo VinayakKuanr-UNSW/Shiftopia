@@ -21,8 +21,8 @@ import {
 
 // ─── Band helpers ─────────────────────────────────────────────────────────────
 
-export type PaxBand = '<100' | '100-300' | '300-600' | '600-1500' | '1500+';
-export type RoomBand = '1' | '2-3' | '4+';
+type PaxBand = '<100' | '100-300' | '300-600' | '600-1500' | '1500+';
+type RoomBand = '1' | '2-3' | '4+';
 
 /** Pure, deterministic pax-band classifier. */
 export function classifyPaxBand(pax: number): PaxBand {
@@ -57,7 +57,7 @@ export function computeMedian(values: number[]): number {
 
 // ─── Cluster key builder ──────────────────────────────────────────────────────
 
-export interface EventClusterInput {
+interface EventClusterInput {
     event_type: string | null;
     pax: number;
     service_type: string | null;
@@ -112,7 +112,7 @@ interface EventRow {
 
 // ─── Auto-build logic ─────────────────────────────────────────────────────────
 
-export interface TryAutoBuildOptions {
+interface TryAutoBuildOptions {
     /** Minimum number of distinct events required before a template is emitted. Default 10. */
     minSampleSize?: number;
     /**

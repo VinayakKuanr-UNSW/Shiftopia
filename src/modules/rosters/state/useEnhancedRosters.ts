@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { rostersApi as enhancedRosterService } from '@/modules/rosters/api/rosters.api';
 // ── Query Key Factory ──────────────────────────────────────────────
-export const rosterKeys = {
+const rosterKeys = {
     all: ['enhanced-rosters'] as const,
     byDate: (date: string, departmentId: string) =>
         ['enhanced-rosters', date, departmentId] as const,
@@ -16,7 +16,7 @@ export const rosterKeys = {
 /**
  * Query: Get roster by date
  */
-export function useRosterByDate(date: string, departmentId: string) {
+function useRosterByDate(date: string, departmentId: string) {
     return useQuery({
         queryKey: rosterKeys.byDate(date, departmentId),
         queryFn: () => enhancedRosterService.getRosterByDate(date, departmentId),
@@ -27,7 +27,7 @@ export function useRosterByDate(date: string, departmentId: string) {
 /**
  * Query: Get rosters by date range
  */
-export function useRostersByDateRange(
+function useRostersByDateRange(
     startDate: string,
     endDate: string,
     departmentId: string,
@@ -51,7 +51,7 @@ export function useRostersByDateRange(
 /**
  * Query: Check for date range conflicts
  */
-export function useCheckDateRangeConflict(
+function useCheckDateRangeConflict(
     startDate: string,
     endDate: string,
     departmentId: string,
@@ -76,7 +76,7 @@ export function useCheckDateRangeConflict(
 /**
  * Mutation: Update roster
  */
-export function useUpdateRoster() {
+function useUpdateRoster() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({
@@ -104,7 +104,7 @@ export function useUpdateRoster() {
 /**
  * Mutation: Assign employee to shift
  */
-export function useAssignEmployeeToShift() {
+function useAssignEmployeeToShift() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({

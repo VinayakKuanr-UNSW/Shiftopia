@@ -29,7 +29,7 @@ import {
 // TYPES
 // ============================================================================
 
-export interface GroupStatsSummaryProps {
+interface GroupStatsSummaryProps {
     shifts: Shift[];
     className?: string;
     /** Compact mode shows fewer stats (for narrow headers) */
@@ -197,4 +197,3 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     );
 };
 
-export default GroupStatsSummary;

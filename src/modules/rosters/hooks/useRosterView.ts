@@ -11,7 +11,7 @@ import { useState, useCallback, useMemo } from 'react';
  * - Falls back to local state if context unavailable
  * - Never mixes both at the same time
  */
-export const useRosterView = () => {
+const useRosterView = () => {
     // Try to get context - will be null if provider is missing
     const contextState = useRosterUIOptional();
 

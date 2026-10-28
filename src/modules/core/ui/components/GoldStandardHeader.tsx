@@ -76,7 +76,7 @@ interface BuiltInFunctionBarProps {
     functionBarChildren?: React.ReactNode;
 }
 
-export interface GoldStandardHeaderProps
+interface GoldStandardHeaderProps
     extends TitleRowProps,
         ScopeRowProps,
         BuiltInFunctionBarProps {

@@ -13,29 +13,29 @@ import type { V8Hit, V8Status } from '@/modules/compliance/v8/types';
 // ACTOR IDs
 // =============================================================================
 
-export const MGR_ID    = 'aaaaaaaa-0000-0000-0000-000000000001';
-export const EMP_A_ID  = 'aaaaaaaa-0000-0000-0000-000000000002';
-export const EMP_B_ID  = 'aaaaaaaa-0000-0000-0000-000000000003';
-export const EMP_C_ID  = 'aaaaaaaa-0000-0000-0000-000000000004';
+const MGR_ID    = 'aaaaaaaa-0000-0000-0000-000000000001';
+const EMP_A_ID  = 'aaaaaaaa-0000-0000-0000-000000000002';
+const EMP_B_ID  = 'aaaaaaaa-0000-0000-0000-000000000003';
+const EMP_C_ID  = 'aaaaaaaa-0000-0000-0000-000000000004';
 
 // =============================================================================
 // SHIFT IDs
 // =============================================================================
 
 /** Open shift — no assigned_employee_id, workflow_status = IDLE */
-export const SHIFT_OPEN_ID   = 'bbbbbbbb-0000-0000-0000-000000000001';
+const SHIFT_OPEN_ID   = 'bbbbbbbb-0000-0000-0000-000000000001';
 /** EMP_B's shift — assigned to EMP_B, workflow_status = IDLE */
-export const SHIFT_EMP_B_ID  = 'bbbbbbbb-0000-0000-0000-000000000002';
+const SHIFT_EMP_B_ID  = 'bbbbbbbb-0000-0000-0000-000000000002';
 /** EMP_A's shift — assigned to EMP_A, workflow_status = IDLE */
-export const SHIFT_EMP_A_ID  = 'bbbbbbbb-0000-0000-0000-000000000003';
+const SHIFT_EMP_A_ID  = 'bbbbbbbb-0000-0000-0000-000000000003';
 
 // =============================================================================
 // REQUEST / OFFER IDs (deterministic for snapshot-style assertions)
 // =============================================================================
 
-export const REQUEST_ID  = 'cccccccc-0000-0000-0000-000000000001';
-export const OFFER_ID    = 'cccccccc-0000-0000-0000-000000000002';
-export const OFFER_ID_2  = 'cccccccc-0000-0000-0000-000000000003';
+const REQUEST_ID  = 'cccccccc-0000-0000-0000-000000000001';
+const OFFER_ID    = 'cccccccc-0000-0000-0000-000000000002';
+const OFFER_ID_2  = 'cccccccc-0000-0000-0000-000000000003';
 
 // =============================================================================
 // SHIFT ROW FIXTURES
@@ -46,9 +46,9 @@ const FUTURE_DATE  = '2099-12-31';
 const FUTURE_START = '09:00:00';
 
 /** Shared updated_at timestamp used in snapshot assertions */
-export const SHIFT_UPDATED_AT = '2099-01-01T00:00:00.000Z';
+const SHIFT_UPDATED_AT = '2099-01-01T00:00:00.000Z';
 
-export const openShiftRow = {
+const openShiftRow = {
   id:                   SHIFT_OPEN_ID,
   assigned_employee_id: null,
   workflow_status:      'IDLE',
@@ -65,13 +65,13 @@ export const openShiftRow = {
   net_length:           7.5,
 };
 
-export const empBShiftRow = {
+const empBShiftRow = {
   ...openShiftRow,
   id:                   SHIFT_EMP_B_ID,
   assigned_employee_id: EMP_B_ID,
 };
 
-export const empAShiftRow = {
+const empAShiftRow = {
   ...openShiftRow,
   id:                   SHIFT_EMP_A_ID,
   assigned_employee_id: EMP_A_ID,
@@ -81,7 +81,7 @@ export const empAShiftRow = {
 // REQUEST ROW FIXTURES
 // =============================================================================
 
-export const openBidRequestRow = {
+const openBidRequestRow = {
   id:                    REQUEST_ID,
   type:                  'BID',
   status:                'OPEN',
@@ -98,14 +98,14 @@ export const openBidRequestRow = {
   updated_at:            '2099-01-01T00:00:00.000Z',
 };
 
-export const openSwapRequestRow = {
+const openSwapRequestRow = {
   ...openBidRequestRow,
   type:        'SWAP',
   shift_id:    SHIFT_EMP_A_ID,
   initiated_by: EMP_A_ID,
 };
 
-export const managerPendingBidRequestRow = {
+const managerPendingBidRequestRow = {
   ...openBidRequestRow,
   status:              'MANAGER_PENDING',
   target_employee_id:  EMP_A_ID,
@@ -118,7 +118,7 @@ export const managerPendingBidRequestRow = {
   compliance_evaluated_at: new Date().toISOString(),
 };
 
-export const managerPendingSwapRequestRow = {
+const managerPendingSwapRequestRow = {
   ...openSwapRequestRow,
   status:              'MANAGER_PENDING',
   target_employee_id:  EMP_B_ID,
@@ -137,7 +137,7 @@ export const managerPendingSwapRequestRow = {
 // OFFER ROW FIXTURES
 // =============================================================================
 
-export const submittedBidOfferRow = {
+const submittedBidOfferRow = {
   id:               OFFER_ID,
   request_id:       REQUEST_ID,
   offered_by:       EMP_A_ID,
@@ -147,19 +147,19 @@ export const submittedBidOfferRow = {
   updated_at:       '2099-01-01T00:00:00.000Z',
 };
 
-export const selectedBidOfferRow = {
+const selectedBidOfferRow = {
   ...submittedBidOfferRow,
   status: 'SELECTED',
 };
 
-export const submittedSwapOfferRow = {
+const submittedSwapOfferRow = {
   ...submittedBidOfferRow,
   id:               OFFER_ID,
   offered_by:       EMP_B_ID,
   offered_shift_id: SHIFT_EMP_B_ID,
 };
 
-export const selectedSwapOfferRow = {
+const selectedSwapOfferRow = {
   ...submittedSwapOfferRow,
   status: 'SELECTED',
 };
@@ -205,13 +205,13 @@ export function makeV8Result(
   };
 }
 
-export const passComplianceResult: V8OrchestratorResult = makeV8Result('PASS');
+const passComplianceResult: V8OrchestratorResult = makeV8Result('PASS');
 
-export const blockingComplianceResult: V8OrchestratorResult = makeV8Result('BLOCKING', [
+const blockingComplianceResult: V8OrchestratorResult = makeV8Result('BLOCKING', [
   makeV8Hit('R01_no_overlap', 'BLOCKING', 'Shift overlaps with existing assignment'),
 ]);
 
-export const warningComplianceResult: V8OrchestratorResult = makeV8Result('WARNING', [
+const warningComplianceResult: V8OrchestratorResult = makeV8Result('WARNING', [
   makeV8Hit('R03_avg_four_week', 'WARNING', 'Average weekly hours approaching limit'),
 ]);
 
@@ -219,7 +219,7 @@ export const warningComplianceResult: V8OrchestratorResult = makeV8Result('WARNI
 // EMPLOYEE CONTEXT (minimal, passes all field checks)
 // =============================================================================
 
-export const empContextA = {
+const empContextA = {
   employee_id:             EMP_A_ID,
   employment_type:         'full_time',
   weekly_hour_limit:       40,
@@ -228,7 +228,7 @@ export const empContextA = {
   role_id:                 'role-0001',
 };
 
-export const empContextB = {
+const empContextB = {
   ...empContextA,
   employee_id: EMP_B_ID,
 };

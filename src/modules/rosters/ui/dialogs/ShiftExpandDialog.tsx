@@ -36,7 +36,7 @@ import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 
-export interface ShiftExpandDialogProps {
+interface ShiftExpandDialogProps {
     /** The raw shift row. Null keeps the dialog closed. */
     shift: Shift | null;
     /** Further shifts the same person holds that day — a cl 39.1 breach, said out loud. */
@@ -45,7 +45,7 @@ export interface ShiftExpandDialogProps {
 }
 
 /** "7h 36m". */
-export function formatDuration(mins: number): string {
+function formatDuration(mins: number): string {
     const h = Math.floor(mins / 60);
     const m = Math.round(mins % 60);
     return m === 0 ? `${h}h` : h === 0 ? `${m}m` : `${h}h ${m}m`;
@@ -80,7 +80,7 @@ const UNPRICED = (
 );
 
 /** A second shift on the same day. Shown, never hidden. */
-export const SplitShiftBadge: React.FC<{ alsoOnThisDay: readonly Shift[] }> = ({ alsoOnThisDay }) => (
+const SplitShiftBadge: React.FC<{ alsoOnThisDay: readonly Shift[] }> = ({ alsoOnThisDay }) => (
     <div className="flex items-center gap-1.5">
         <Tooltip>
             <TooltipTrigger asChild>
@@ -199,4 +199,3 @@ export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, als
     );
 };
 
-export default ShiftExpandDialog;

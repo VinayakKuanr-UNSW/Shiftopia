@@ -1,6 +1,6 @@
 import { Shift } from '../domain/shift.entity';
 
-export interface ShiftLayout {
+interface ShiftLayout {
   top: number;
   height: number;
 }

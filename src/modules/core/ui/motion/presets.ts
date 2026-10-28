@@ -21,7 +21,7 @@ export const itemVariants: Variants = {
 
 // Cards/rows that are interactive (hover lift, tap scale).
 // Spread directly onto a motion element as props.
-export const cardInteractive = {
+const cardInteractive = {
   whileHover: { y: -2, transition: { duration: 0.15 } },
   whileTap: { scale: 0.98, transition: { duration: 0.1 } },
 } as const;
@@ -50,7 +50,7 @@ export const listItemSpring = {
 } as const;
 
 // Drawer/modal inner body fade-in.
-export const drawerContentVariants: Variants = {
+const drawerContentVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   show: {
     opacity: 1,

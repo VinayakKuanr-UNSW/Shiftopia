@@ -2424,4 +2424,3 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 );
 };
 
-export default OpenBidsView;

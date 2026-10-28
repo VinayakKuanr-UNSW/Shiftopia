@@ -13,20 +13,20 @@ export interface GenerationOptions {
   enforceMinimumStaff: boolean;
 }
 
-export const DEFAULT_OPTIONS: GenerationOptions = {
+const DEFAULT_OPTIONS: GenerationOptions = {
   mergeMicroPeaks: true,
   enforceMinMax: true,
   enforceSupervisorRatios: true,
   enforceMinimumStaff: true,
 };
 
-export interface PreviewGroup {
+interface PreviewGroup {
   roleName: string;
   count: number;
   totalHours: number;
 }
 
-export interface ComplianceWarning {
+interface ComplianceWarning {
   severity: "warn" | "info";
   message: string;
 }

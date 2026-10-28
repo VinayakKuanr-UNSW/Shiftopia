@@ -30,7 +30,7 @@ import {
     type AvailabilityScope,
 } from '../api/contract-basis.api';
 
-export interface UseAvailabilityScopeResult {
+interface UseAvailabilityScopeResult {
     /** Every job this person holds a contract in, declarable ones first. */
     scopes: AvailabilityScope[];
     /**
@@ -85,4 +85,3 @@ export function useAvailabilityScope(
     };
 }
 
-export default useAvailabilityScope;

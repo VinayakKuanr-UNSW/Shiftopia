@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatTime(timeString: string): string {
+function formatTime(timeString: string): string {
   // Handle formats like "09:00:00" or "09:00"
   const parts = timeString.split(':');
   if (parts.length < 2) return timeString;
@@ -29,18 +29,18 @@ export function getDepartmentColor(department: string): string {
   return 'purple'; // Default color
 }
 
-export function getHourFromTimeString(timeString: string): number {
+function getHourFromTimeString(timeString: string): number {
   const parts = timeString.split(':');
   return parseInt(parts[0]);
 }
 
-export function getShiftDuration(startTime: string, endTime: string): number {
+function getShiftDuration(startTime: string, endTime: string): number {
   const startHour = getHourFromTimeString(startTime);
   const endHour = getHourFromTimeString(endTime);
   return endHour - startHour;
 }
 
-export function timeToPosition(timeString: string, startHour: number = 0, endHour: number = 24): number {
+function timeToPosition(timeString: string, startHour: number = 0, endHour: number = 24): number {
   const parts = timeString.split(':');
   const hour = parseInt(parts[0]);
   const minutes = parseInt(parts[1] || '0');

@@ -5,12 +5,12 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface CreateSubGroupInput {
+interface CreateSubGroupInput {
     groupId: string;
     name: string;
 }
 
-export interface CreateSubGroupOutput {
+interface CreateSubGroupOutput {
     success: boolean;
     subGroupId?: string;
     error?: string;
@@ -19,7 +19,7 @@ export interface CreateSubGroupOutput {
 /**
  * Execute create sub-group command
  */
-export async function executeCreateSubGroup(
+async function executeCreateSubGroup(
     input: CreateSubGroupInput
 ): Promise<CreateSubGroupOutput> {
     const { groupId, name } = input;

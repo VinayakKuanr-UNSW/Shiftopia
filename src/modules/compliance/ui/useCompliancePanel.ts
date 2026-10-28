@@ -22,7 +22,7 @@ export interface PanelResult {
     };
 }
 
-export interface UseCompliancePanelOptions {
+interface UseCompliancePanelOptions {
     /**
      * Async function that returns the V8 compliance input(s).
      */

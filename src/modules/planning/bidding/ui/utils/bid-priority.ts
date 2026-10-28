@@ -2,9 +2,9 @@ import React from 'react';
 import { Flame, Zap, Signal } from 'lucide-react';
 import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
-export type BidPriority = 'normal' | 'urgent' | 'emergent';
+type BidPriority = 'normal' | 'urgent' | 'emergent';
 
-export const PRIORITY_CONFIG: Record<BidPriority, {
+const PRIORITY_CONFIG: Record<BidPriority, {
     label: string;
     badgeCls: string;
     icon: React.ElementType;

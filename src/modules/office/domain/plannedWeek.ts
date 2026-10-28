@@ -42,7 +42,7 @@ export interface OfficeDay {
 }
 
 /** Indexed employee → date → cell. */
-export type OfficeWeekIndex = ReadonlyMap<string, ReadonlyMap<string, OfficeDay>>;
+type OfficeWeekIndex = ReadonlyMap<string, ReadonlyMap<string, OfficeDay>>;
 
 /**
  * Index the week's shifts by employee and date.

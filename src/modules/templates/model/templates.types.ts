@@ -7,13 +7,13 @@ import type { TargetEmploymentType } from '@/modules/core/model/employment.types
    BASE TYPES
    ============================================================ */
 
-export type TemplateStatus = 'draft' | 'published' | 'archived';
+type TemplateStatus = 'draft' | 'published' | 'archived';
 
 /* ============================================================
       DATABASE TYPES (snake_case - matches Supabase)
       ============================================================ */
 
-export interface DbRosterTemplate {
+interface DbRosterTemplate {
   id: string;
   name: string;
   description: string | null;
@@ -36,7 +36,7 @@ export interface DbRosterTemplate {
   is_active?: boolean;
 }
 
-export interface DbTemplateGroup {
+interface DbTemplateGroup {
   id: string;
   template_id: string;
   name: string;
@@ -48,7 +48,7 @@ export interface DbTemplateGroup {
   updated_at: string;
 }
 
-export interface DbTemplateSubgroup {
+interface DbTemplateSubgroup {
   id: string;
   group_id: string;
   name: string;
@@ -58,7 +58,7 @@ export interface DbTemplateSubgroup {
   updated_at: string;
 }
 
-export interface DbTemplateShift {
+interface DbTemplateShift {
   id: string;
   subgroup_id: string;
   name: string | null;
@@ -88,7 +88,7 @@ export interface DbTemplateShift {
   target_requires_flexible: boolean;
 }
 
-export interface DbTemplateSnapshot {
+interface DbTemplateSnapshot {
   id: string;
   template_id: string;
   snapshot_data: any;
@@ -171,7 +171,7 @@ export interface Group {
   sortOrder: number;
 }
 
-export interface DateRange {
+interface DateRange {
   start: Date;
   end: Date;
 }
@@ -234,12 +234,12 @@ export interface CreateTemplateInput {
   month?: string; // YYYY-MM
 }
 
-export interface UpdateTemplateInput {
+interface UpdateTemplateInput {
   name?: string;
   description?: string;
 }
 
-export interface SaveTemplateInput {
+interface SaveTemplateInput {
   templateId: string;
   expectedVersion: number;
   name: string;
@@ -247,7 +247,7 @@ export interface SaveTemplateInput {
   groups: Group[];
 }
 
-export interface PublishTemplateInput {
+interface PublishTemplateInput {
   templateId: string;
   expectedVersion: number;
   startDate: Date;
@@ -362,7 +362,7 @@ export function dbShiftToFrontend(dbShift: any): TemplateShift {
   };
 }
 
-export function dbSubgroupToFrontend(dbSubgroup: any): SubGroup {
+function dbSubgroupToFrontend(dbSubgroup: any): SubGroup {
   const shifts = Array.isArray(dbSubgroup.shifts) ? dbSubgroup.shifts : [];
   return {
     id: dbSubgroup.id,
@@ -375,7 +375,7 @@ export function dbSubgroupToFrontend(dbSubgroup: any): SubGroup {
   };
 }
 
-export function dbGroupToFrontend(dbGroup: any): Group {
+function dbGroupToFrontend(dbGroup: any): Group {
   const subGroups = Array.isArray(dbGroup.subGroups) ? dbGroup.subGroups : [];
   return {
     id: dbGroup.id,
@@ -613,13 +613,13 @@ export function validateTemplateForPublish(
 // Re-export for backward compatibility
 export { sanitizeString, sanitizeTemplateName } from '../utils/template-sanitizer';
 
-export function isValidUUID(id: string): boolean {
+function isValidUUID(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     id
   );
 }
 
-export function isValidTime(time: string): boolean {
+function isValidTime(time: string): boolean {
   return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
 }
 
@@ -672,7 +672,7 @@ export function deepClone<T>(obj: T): T {
 // Re-export for backward compatibility
 export { generateTempId, isTempId } from '../utils/id-generator';
 
-export function areTemplatesEqual(a: Template, b: Template): boolean {
+function areTemplatesEqual(a: Template, b: Template): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 

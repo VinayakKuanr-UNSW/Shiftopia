@@ -30,13 +30,13 @@ import {
 // ... (LockConfig and GlobalScopeFilterProps interfaces remain same, eliding for brevity if possible, but tool rules say exact match or replace block)
 // I'll replace the whole file for safety if needed, or just the main component and imports.
 
-export interface LockConfig {
+interface LockConfig {
     orgLocked: boolean;
     deptLocked: boolean;
     subDeptLocked: boolean;
 }
 
-export interface GlobalScopeFilterProps {
+interface GlobalScopeFilterProps {
     /** The allowed scope tree from the permission object */
     allowedScopeTree: ScopeTree;
     /** Which fields are locked (derived from certificate level) */
@@ -672,4 +672,3 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     );
 };
 
-export default GlobalScopeFilter;

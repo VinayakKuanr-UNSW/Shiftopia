@@ -27,7 +27,7 @@ const TABS: { id: UserEditTab; label: string }[] = [
     { id: 'first-aid', label: 'First aid' },
 ];
 
-export interface UserEditDialogProps {
+interface UserEditDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     person: PersonRef | null;
@@ -106,4 +106,3 @@ export const UserEditDialog: React.FC<UserEditDialogProps> = ({
     );
 };
 
-export default UserEditDialog;

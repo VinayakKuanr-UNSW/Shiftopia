@@ -23,7 +23,7 @@ import {
     type MetricStatus,
 } from '../../model/metric-registry';
 
-export interface KpiColumn {
+interface KpiColumn {
     /** Registry metric id, or a bare key for an ungraded count. */
     key: string;
     /** Overrides the registry label. */
@@ -272,4 +272,3 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
     );
 };
 
-export default KpiDetailTable;

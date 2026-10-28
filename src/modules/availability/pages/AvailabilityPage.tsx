@@ -71,7 +71,7 @@ function useBreakpoint(): Breakpoint {
   return breakpoint;
 }
 
-export const AvailabilityPage: React.FC = () => {
+const AvailabilityPage: React.FC = () => {
   const breakpoint = useBreakpoint();
   const navigate = useNavigate();
   const { user } = useAuth();

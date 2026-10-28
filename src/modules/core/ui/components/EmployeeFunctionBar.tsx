@@ -32,7 +32,7 @@ const RANGE_OPTIONS: { id: EmployeeViewRange; short: string; label: string }[] =
   { id: 'month', short: 'M', label: 'Month' },
 ];
 
-export interface EmployeeFunctionBarProps {
+interface EmployeeFunctionBarProps {
   /** ── Line 1: view range ── */
   view?: EmployeeViewRange;
   onViewChange?: (view: EmployeeViewRange) => void;
@@ -301,4 +301,3 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
   );
 };
 
-export default EmployeeFunctionBar;

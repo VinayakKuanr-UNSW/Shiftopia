@@ -22,7 +22,7 @@ import { loadLeaveDays } from '../api/office.loaders';
 
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 
-export const officeKeys = {
+const officeKeys = {
     all: ["office"] as const,
     subDepartments: (subdeptIds: readonly string[]) =>
         [...officeKeys.all, 'sub-departments', [...subdeptIds].sort()] as const,
@@ -40,14 +40,14 @@ export const officeKeys = {
    Sub-departments the manager may roster
    ──────────────────────────────────────────────────────────────────────────── */
 
-export interface SubDepartmentOption {
+interface SubDepartmentOption {
     id: string;
     name: string;
     departmentId: string;
     organizationId: string;
 }
 
-export function useRosterableSubDepartments(subdeptIds: readonly string[]) {
+function useRosterableSubDepartments(subdeptIds: readonly string[]) {
     return useQuery({
         queryKey: officeKeys.subDepartments(subdeptIds),
         enabled: subdeptIds.length > 0,

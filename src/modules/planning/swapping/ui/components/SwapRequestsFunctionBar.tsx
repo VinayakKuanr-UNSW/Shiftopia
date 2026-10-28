@@ -43,7 +43,7 @@ import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
 import { SWAP_GROUP_BY_OPTIONS } from './swap-grouping';
 import type { SwapStatus } from '../../model/swap.types';
 
-export const SWAP_STATUS_TABS: {
+const SWAP_STATUS_TABS: {
   id: SwapStatus | 'all';
   label: string;
   icon: typeof Clock;
@@ -207,7 +207,7 @@ const SWAP_VIEWS: ReadonlyArray<ToolbarSegmentedOption<'card' | 'table'>> = [
   { id: 'card', icon: <LayoutGrid className="h-3.5 w-3.5" />, label: 'Card' },
 ];
 
-export interface SwapRequestsFunctionBarProps {
+interface SwapRequestsFunctionBarProps {
   viewMode: 'card' | 'table';
   onViewModeChange: (mode: 'card' | 'table') => void;
   selectedDate: Date;
@@ -298,4 +298,3 @@ export const SwapRequestsFunctionBar: React.FC<SwapRequestsFunctionBarProps> = (
   );
 };
 
-export default SwapRequestsFunctionBar;

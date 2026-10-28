@@ -22,7 +22,7 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import type { MetricStatus } from '@/modules/insights/model/metric-registry';
 
-export interface KpiDelta {
+interface KpiDelta {
     /** Signed movement against the comparison period. */
     value: number;
     /** 'points' for rate metrics (absolute pp), 'percent' for counts. */
@@ -33,7 +33,7 @@ export interface KpiDelta {
     suppressedReason?: string;
 }
 
-export interface KpiTileProps {
+interface KpiTileProps {
     /** Overline/title. Sentence case. */
     label: string;
     /** Pre-formatted display value, or null/undefined for missing data. */
@@ -256,4 +256,3 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     return <div>{body}</div>;
 };
 
-export default KpiTile;

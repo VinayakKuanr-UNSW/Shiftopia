@@ -63,7 +63,7 @@ function weekdaysBetween(start: string, end: string): number {
     return n;
 }
 
-export interface RequestLeaveDialogProps {
+interface RequestLeaveDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     employeeId: string;

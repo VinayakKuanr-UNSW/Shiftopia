@@ -17,13 +17,13 @@ const DEFAULT_WINDOW_SIZE = 3;
 // Minimum ratio of the raw slot demand that smoothed demand may fall to before reverting to raw demand.
 const MIN_RAW_DEMAND_RATIO = 0.9;
 
-export interface MicroPeak {
+interface MicroPeak {
   slotStart: number;
   slotEnd: number;
   headcount: number;
 }
 
-export interface DemandAnalysisResult {
+interface DemandAnalysisResult {
   roleId: string;
   subDepartmentId: string;
   buildingType: TemplateGroupType;
@@ -35,7 +35,7 @@ export interface DemandAnalysisResult {
 }
 
 // Smooths headcount values by replacing each slot's headcount with the average of itself and its neighbors
-export function smoothDemand(
+function smoothDemand(
   slots: DemandSlot[],
   windowSize = DEFAULT_WINDOW_SIZE,
 ): DemandSlot[] {
@@ -139,7 +139,7 @@ function applyOverstaffTolerance(
 }
 
 // Create long core shifts covering the majority of the demand window then subtract covered demand
-export function packShifts(demand: DemandAnalysisResult): SynthesizedShift[] {
+function packShifts(demand: DemandAnalysisResult): SynthesizedShift[] {
   const { roleId, subDepartmentId, buildingType, primaryPeak } = demand;
 
   const residualSlots = demand.smoothedSlots.map((s) => ({ ...s }));
@@ -217,7 +217,7 @@ export function packShifts(demand: DemandAnalysisResult): SynthesizedShift[] {
 /**
  * Runtime-configurable options for the shift-packing pipeline.
  */
-export interface SynthesizeShiftsOptions {
+interface SynthesizeShiftsOptions {
   /** Pad shifts < 3h and split shifts > 12h. Default: true. */
   enforceMinMax?: boolean;
   /** Merge sub-1h spikes into adjacent shifts. Default: false. */

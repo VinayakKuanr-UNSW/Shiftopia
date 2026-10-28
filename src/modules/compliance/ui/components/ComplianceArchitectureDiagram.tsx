@@ -238,4 +238,3 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
   );
 };
 
-export default ComplianceArchitectureDiagram;

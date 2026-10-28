@@ -23,7 +23,7 @@ import { getTimeRule } from './shift-ui';
  * `blocked`  = shifts that CANNOT be processed (will be skipped).
  * `warned`   = shifts that WILL be processed but carry a risk/side-effect.
  */
-export interface BulkPreflightSummary {
+interface BulkPreflightSummary {
     eligibleIds: string[];
     blocked: Array<{ id: string; reason: string }>;
     warned: Array<{ id: string; reason: string }>;
@@ -33,7 +33,7 @@ export interface BulkPreflightSummary {
  * Structured result returned by every bulk execution.
  * Enables partial-success UX — never treat a partial failure as total failure.
  */
-export interface BulkExecutionResult {
+interface BulkExecutionResult {
     successIds: string[];
     failed: Array<{ id: string; reason: string }>;
 }

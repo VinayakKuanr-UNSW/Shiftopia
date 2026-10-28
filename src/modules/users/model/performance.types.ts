@@ -3,7 +3,7 @@
  * Includes Explainability, Behavioral Indicators, and Performance Flags.
  */
 
-export type PerformanceFlag = 'OK' | 'WARN' | 'CRITICAL' | 'INSUFFICIENT_DATA';
+type PerformanceFlag = 'OK' | 'WARN' | 'CRITICAL' | 'INSUFFICIENT_DATA';
 
 export type PerformanceMetrics = {
     // Raw Counts

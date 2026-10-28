@@ -67,7 +67,7 @@ interface RosterShiftInput {
     sub_department_id?: string | null;
 }
 
-export interface ManagerComplianceApprovalModalProps {
+interface ManagerComplianceApprovalModalProps {
     isOpen: boolean;
     onClose: () => void;
     /** Called when manager confirms approval (after compliance passes) */
@@ -739,4 +739,3 @@ export function ManagerComplianceApprovalModal({
     );
 }
 
-export default ManagerComplianceApprovalModal;

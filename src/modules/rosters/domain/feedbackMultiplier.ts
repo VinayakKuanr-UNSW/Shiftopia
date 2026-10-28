@@ -20,7 +20,7 @@
 
 import type { FeedbackVerdict, SupervisorFeedbackRow } from '../api/supervisorFeedback.dto';
 
-export const FEEDBACK_MULT_DEFAULTS = {
+const FEEDBACK_MULT_DEFAULTS = {
     /** Decay factor per row (newer = more weight). 0.85 → ~10 rows of meaningful signal. */
     lambda: 0.85,
     /** Per-severity boost for an UNDER verdict. */

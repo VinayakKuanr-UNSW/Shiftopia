@@ -3118,4 +3118,3 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   );
 };
 
-export default GroupModeView;

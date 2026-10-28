@@ -172,7 +172,7 @@ export async function evaluateShapeForRow(input: ShapeGateInput): Promise<ShapeR
     });
 }
 
-export interface ShapeGateOptions {
+interface ShapeGateOptions {
     /** Included in the thrown error so the message names the operation. */
     rpcName?: string;
 }
@@ -210,7 +210,7 @@ const SHAPE_COLUMNS =
     'is_training, target_employment_type, target_requires_flexible, role_id, roles(name)';
 
 /** The subset of a shift a caller may be changing. Absent ⇒ unchanged. */
-export type ShapePatch = Partial<Omit<ShapeGateInput, 'role_name'>>;
+type ShapePatch = Partial<Omit<ShapeGateInput, 'role_name'>>;
 
 /**
  * Judge a shift AFTER a pending change, given only its id.

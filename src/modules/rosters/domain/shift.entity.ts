@@ -16,26 +16,26 @@ export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | '
 
 export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre' | 'the_cutaway' | 'office';
 
-export type AssignmentStatusText =
+type AssignmentStatusText =
     | 'unassigned'
     | 'assigned'
     | 'pending'
     | 'declined';
-export type AssignmentMethodText =
+type AssignmentMethodText =
     | 'manual'
     | 'template'
     | 'bid'
     | 'trade'
     | 'auto';
-export type CancellationTypeText = 'standard' | 'late' | 'critical' | 'no_show';
-export type BiddingPriorityText = 'normal' | 'urgent' | 'critical';
-export type ComplianceStatusText =
+type CancellationTypeText = 'standard' | 'late' | 'critical' | 'no_show';
+type BiddingPriorityText = 'normal' | 'urgent' | 'critical';
+type ComplianceStatusText =
     | 'compliant'
     | 'warning'
     | 'violation'
     | 'pending'
     | 'overridden';
-export type LockReasonText = 'published' | 'timesheet' | 'admin' | 'payroll';
+type LockReasonText = 'published' | 'timesheet' | 'admin' | 'payroll';
 
 /* ============================================================
    INTERFACES

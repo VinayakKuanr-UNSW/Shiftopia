@@ -195,7 +195,7 @@ export async function getResolvedAvailabilities(
  * Get availability for a single profile on a single date.
  * Convenience wrapper used by the assign-shift availability warnings.
  */
-export async function getEmployeeAvailabilityForDate(
+async function getEmployeeAvailabilityForDate(
     profileId: string,
     date: Date,
     /** See `getResolvedAvailabilities`. Omit for the person-wide answer. */
@@ -210,7 +210,7 @@ export async function getEmployeeAvailabilityForDate(
     return profileMap.get(dateStr) || null;
 }
 
-export const availabilityApi = {
+const availabilityApi = {
     getResolvedAvailabilities,
     getEmployeeAvailabilityForDate,
 };

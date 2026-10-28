@@ -88,7 +88,7 @@ export function deriveV8Status(hits: V8Hit[]): V8Status {
     return 'PASS';
 }
 
-export function combineV8SwapResults(
+function combineV8SwapResults(
     result_a: V8OrchestratorResult,
     result_b: V8OrchestratorResult,
 ): { status: V8Status; per_employee: [V8OrchestratorResult, V8OrchestratorResult] } {

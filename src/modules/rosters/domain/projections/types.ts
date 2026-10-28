@@ -39,7 +39,7 @@ export interface GroupColorSet {
 
 // ── Atomic projected shift ────────────────────────────────────────────────────
 
-export interface ProjectedShift {
+interface ProjectedShift {
   /** Shift row PK */
   id:              string;
   /** Stable React key — safe to use directly as `key` prop */

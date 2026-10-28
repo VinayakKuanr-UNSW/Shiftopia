@@ -5,7 +5,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface UpdateShiftInput {
+interface UpdateShiftInput {
     shiftId: string;
     startTime?: string;
     endTime?: string;
@@ -18,7 +18,7 @@ export interface UpdateShiftInput {
     status?: string;
 }
 
-export interface UpdateShiftOutput {
+interface UpdateShiftOutput {
     success: boolean;
     error?: string;
 }
@@ -26,7 +26,7 @@ export interface UpdateShiftOutput {
 /**
  * Execute update shift command
  */
-export async function executeUpdateShift(
+async function executeUpdateShift(
     input: UpdateShiftInput
 ): Promise<UpdateShiftOutput> {
     const { shiftId, ...updates } = input;

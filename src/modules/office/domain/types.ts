@@ -45,7 +45,7 @@ export type IsoWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
  * describes a repeating week, and turning it into dates is
  * `candidateGenerator`'s job.
  */
-export interface PatternSlot {
+interface PatternSlot {
     /**
      * `baseline_ft_patterns.id`, or a synthetic key for a row not yet saved.
      *
@@ -91,7 +91,7 @@ export interface PatternSlot {
  *
  * A working pattern is a fact about a PERSON. Hence the employee on the type.
  */
-export interface OfficePattern {
+interface OfficePattern {
     employeeId: string;
     /**
      * The engagement this pattern discharges. A person may hold several active
@@ -228,7 +228,7 @@ export interface CycleRequirement {
    Candidate — a shift that does not exist yet
    ──────────────────────────────────────────────────────────────────────────── */
 
-export interface Candidate {
+interface Candidate {
     employeeId: string;
     userContractId: string;
     sourceSlotId: string;
@@ -254,7 +254,7 @@ export interface Candidate {
    Findings
    ──────────────────────────────────────────────────────────────────────────── */
 
-export type Severity = 'BLOCKING' | 'WARNING' | 'INFO';
+type Severity = 'BLOCKING' | 'WARNING' | 'INFO';
 
 /**
  * Every finding leads with plain English and carries the clause second.
@@ -288,6 +288,6 @@ export interface Finding {
 }
 
 /** Convenience: is this finding set safe to act on? */
-export function hasBlocking(findings: readonly Finding[]): boolean {
+function hasBlocking(findings: readonly Finding[]): boolean {
     return findings.some(f => f.severity === 'BLOCKING');
 }

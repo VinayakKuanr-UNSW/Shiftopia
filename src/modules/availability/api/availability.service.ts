@@ -159,7 +159,7 @@ async function insertRuleFromForm(
  * - Acceptable for now
  * - Can be optimized later via bulk insert or RPC
  */
-export async function batchCreateAvailabilityRules(
+async function batchCreateAvailabilityRules(
   profileId: string,
   payload: AvailabilityFormPayload
 ): Promise<AvailabilityRule[]> {
@@ -235,7 +235,7 @@ export async function editAvailabilityRule(
  * - New rules inserted
  * - Slots auto-generated
  */
-export async function replaceAvailabilityInRange(
+async function replaceAvailabilityInRange(
   profileId: string,
   payload: AvailabilityFormPayload
 ): Promise<AvailabilityRule[]> {
@@ -275,7 +275,7 @@ export async function replaceAvailabilityInRange(
  *
  * Slots are removed automatically via ON DELETE CASCADE.
  */
-export async function deleteAvailability(
+async function deleteAvailability(
   ruleId: string
 ): Promise<void> {
   await deleteAvailabilityRule(ruleId);
@@ -292,7 +292,7 @@ export async function deleteAvailability(
  * - Slots are fetched separately from availability_slots
  * - This function NEVER returns slots
  */
-export async function fetchAvailabilityRules(
+async function fetchAvailabilityRules(
   profileId: string
 ): Promise<AvailabilityRule[]> {
   return getAvailabilityRules(profileId);

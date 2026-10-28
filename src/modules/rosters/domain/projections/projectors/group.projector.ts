@@ -182,7 +182,7 @@ function toGroupKey(externalId: string | null, name: string): TemplateGroupType 
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export interface GroupProjectorContext {
+interface GroupProjectorContext {
   rosterStructures?: WorkerRosterStructureDTO[];
 }
 

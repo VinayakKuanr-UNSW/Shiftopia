@@ -109,7 +109,7 @@ export const useFirstAidQualifications = (employeeId: string, onDate: string) =>
         enabled: !!employeeId,
     });
 
-export interface NewFirstAidAppointment {
+interface NewFirstAidAppointment {
     organization_id: string;
     employee_id: string;
     effective_from: string;

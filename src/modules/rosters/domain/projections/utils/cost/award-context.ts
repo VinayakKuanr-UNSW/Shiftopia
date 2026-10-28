@@ -20,7 +20,7 @@ import { isPublicHolidayISO } from './constants';
  * Every field that previously required a per-shift `new Date()` or
  * `isPublicHolidayISO()` call is pre-baked here.
  */
-export interface DateFacts {
+interface DateFacts {
   /** The original YYYY-MM-DD string */
   dateStr: string;
   /** 0 = Sunday, 6 = Saturday */
@@ -170,7 +170,7 @@ export function getDateFacts(ctx: AwardContext, dateStr: string): DateFacts {
  *                     caller, assuming a flat 24h day (no DST offset applied).
  * @returns the same value, unchanged — the estimator does not adjust for DST.
  */
-export function dstNaiveMinutes(naiveMinutes: number): number {
+function dstNaiveMinutes(naiveMinutes: number): number {
   return naiveMinutes;
 }
 
@@ -195,7 +195,7 @@ export function parseTimeToMinutes(time: string): number {
  * Compute net minutes from start/end time strings and overnight flag.
  * Replaces the `parseISO` → `differenceInMinutes` chain.
  */
-export function fastNetMinutes(
+function fastNetMinutes(
   startTime: string,
   endTime: string,
   isOvernight: boolean,

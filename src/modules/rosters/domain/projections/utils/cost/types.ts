@@ -184,7 +184,7 @@ export interface CostCalculatorOptions {
   priorOrdinaryHoursThisWeek?: number;
 }
 
-export interface CostEngine {
+interface CostEngine {
   estimateDetailedShiftCost(options: CostCalculatorOptions): ShiftCostBreakdown;
   estimateShiftCost(options: CostCalculatorOptions): number;
 }

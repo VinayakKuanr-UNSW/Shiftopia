@@ -308,7 +308,7 @@ export const useRosterStore = create<RosterState>()(
 // parseISO of the 'yyyy-MM-dd' calendar key yields local-midnight, so the
 // selected day never drifts a day west of GMT (new Date('yyyy-MM-dd') is
 // UTC-midnight and would).
-export const selectSelectedDate = (s: RosterState): Date =>
+const selectSelectedDate = (s: RosterState): Date =>
   parseISO(s._selectedDateISO);
 
 /** Backward-compat: first selected department (single-select legacy API) */

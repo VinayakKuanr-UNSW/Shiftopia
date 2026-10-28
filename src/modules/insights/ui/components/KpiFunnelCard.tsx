@@ -22,7 +22,7 @@ export interface FunnelStep {
     color?: string;
 }
 
-export interface KpiFunnelCardProps {
+interface KpiFunnelCardProps {
     title: string;
     badgeText?: string;
     subtitle?: string;
@@ -172,4 +172,3 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
     );
 };
 
-export default KpiFunnelCard;

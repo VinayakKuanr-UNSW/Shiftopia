@@ -201,4 +201,3 @@ export function GroupBySelector<T extends string = RowGroupBy>({
     );
 }
 
-export default GroupBySelector;

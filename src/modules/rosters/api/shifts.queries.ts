@@ -27,9 +27,9 @@ function actionableOfferFloor(): string {
 
 // ── Lookup types ──────────────────────────────────────────────────────────────
 
-export interface OrgSummary { id: string; name: string }
-export interface DeptSummary { id: string; name: string; organization_id: string }
-export interface SubDeptSummary { id: string; name: string; department_id: string }
+interface OrgSummary { id: string; name: string }
+interface DeptSummary { id: string; name: string; organization_id: string }
+interface SubDeptSummary { id: string; name: string; department_id: string }
 /**
  * `remuneration_level` is the role's optional DEFAULT level for new shifts —
  * not the pay level, which belongs to the contract. `eba_level_min/max` is the
@@ -44,8 +44,8 @@ export interface RoleSummary {
     eba_level_max: number | null;
 }
 export interface RemunerationLevel { level_number: number; level_name: string; description: string | null }
-export interface SkillSummary { id: string; name: string; description: string | null; category: string | null }
-export interface LicenseSummary { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
+interface SkillSummary { id: string; name: string; description: string | null; category: string | null }
+interface LicenseSummary { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
 export interface ProfileSummary {
     id: string;
     first_name: string;
@@ -56,7 +56,7 @@ export interface ProfileSummary {
     contracted_weekly_hours?: number;
 }
 export interface TemplateSummary { id: string; name: string; description: string | null; department_id: string; sub_department_id: string | null; status: string; organization_id: string; applied_count: number | null }
-export interface RosterSlot { groupType: string; subGroupName: string }
+interface RosterSlot { groupType: string; subGroupName: string }
 
 // ── Shared select fragment for shift rows ─────────────────────────────────────
 
@@ -206,10 +206,10 @@ const MAX_PAGES = 25;
 export const INTERACTIVE_ROW_CAP = 8_000;
 
 // Maximum shifts allowed during Publish planning (unblocks org-month views up to 25k shifts).
-export const PUBLISH_PLAN_ROW_CAP = 25_000;
+const PUBLISH_PLAN_ROW_CAP = 25_000;
 
 /** Lightweight column selection for publish planning (no heavy joins or full audit columns). */
-export const PUBLISH_PLAN_SELECT = `
+const PUBLISH_PLAN_SELECT = `
   id,
   organization_id,
   department_id,
@@ -254,7 +254,7 @@ export type PublishCheckRow = Pick<
     | 'assigned_employee_id' | 'target_employment_type' | 'version'
 >;
 
-export interface DateRangeFilters {
+interface DateRangeFilters {
     departmentId?: string;
     subDepartmentId?: string;
     departmentIds?: string[];

@@ -32,7 +32,7 @@
  * that agreement is known.
  */
 
-export interface RestGapCandidate {
+interface RestGapCandidate {
   id: string;
   employeeId: string;
   shiftDate: string;

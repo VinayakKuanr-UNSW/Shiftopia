@@ -19,7 +19,7 @@ const ICC_TIMEZONE = 'Australia/Sydney';
 const SLICES_PER_DAY = 48;
 const MINUTES_PER_SLICE = 30;
 
-export interface VenueopsEventL1Row {
+interface VenueopsEventL1Row {
     event_id: string;
     name: string;
     start_date_time: string;

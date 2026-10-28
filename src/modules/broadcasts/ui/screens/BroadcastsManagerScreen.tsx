@@ -48,7 +48,7 @@ import { BroadcastGroupWithStats, CreateBroadcastGroupRequest } from '../../mode
 // TYPES
 // ============================================================================
 
-export interface BroadcastsManagerScreenProps {
+interface BroadcastsManagerScreenProps {
   /**
    * Layout mode for responsive design
    * - 'desktop': Three-column layout with sidebar
@@ -414,4 +414,3 @@ export function BroadcastsManagerScreen({
   );
 }
 
-export default BroadcastsManagerScreen;

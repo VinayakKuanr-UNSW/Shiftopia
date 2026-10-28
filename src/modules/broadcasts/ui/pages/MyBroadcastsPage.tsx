@@ -9,7 +9,7 @@ import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 
-export const MyBroadcastsPage: React.FC = () => {
+const MyBroadcastsPage: React.FC = () => {
   const breakpoint = useBreakpoint();
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 

@@ -19,7 +19,7 @@ import { getTodayInTimezone, SYDNEY_TZ, isPastInTimezone } from '@/modules/core/
 // ERROR MESSAGES
 // ============================================================================
 
-export const AVAILABILITY_ERRORS = {
+const AVAILABILITY_ERRORS = {
   DATE_RANGE_INVALID: 'End date must be after or equal to start date',
   TIME_PAIR_MISSING: 'Start and end time must both be set',
   TIME_ZERO_LENGTH: 'Time window cannot be zero length',
@@ -87,7 +87,7 @@ export function translateDatabaseError(error: string | Error | unknown): string 
 // VALIDATION FUNCTIONS
 // ============================================================================
 
-export interface ValidationResult {
+interface ValidationResult {
   valid: boolean;
   errors: string[];
 }
@@ -95,7 +95,7 @@ export interface ValidationResult {
 /**
  * Validate date range
  */
-export function validateDateRange(startDate: Date, endDate: Date, timezone: string = SYDNEY_TZ): ValidationResult {
+function validateDateRange(startDate: Date, endDate: Date, timezone: string = SYDNEY_TZ): ValidationResult {
   const errors: string[] = [];
 
   if (startDate > endDate) {
@@ -139,7 +139,7 @@ export function validateDateRange(startDate: Date, endDate: Date, timezone: stri
 /**
  * Validate time range
  */
-export function validateTimeRange(
+function validateTimeRange(
   startTime: string | null,
   endTime: string | null
 ): ValidationResult {
@@ -180,7 +180,7 @@ export function validateTimeRange(
 /**
  * Validate repeat configuration
  */
-export function validateRepeatConfiguration(
+function validateRepeatConfiguration(
   repeatType: RepeatType,
   repeatDays?: number[]
 ): ValidationResult {
@@ -238,7 +238,7 @@ export function validateAvailabilityForm(
  * Generate RRULE string from repeat configuration
  * Used by service layer when creating recurring rules
  */
-export function generateRecurrenceRule(
+function generateRecurrenceRule(
   repeatType: RepeatType,
   repeatDays?: number[]
 ): string | null {
@@ -270,7 +270,7 @@ export function generateRecurrenceRule(
  * Parse RRULE string to extract repeat configuration
  * Used when editing existing rules to pre-fill form
  */
-export function parseRecurrenceRule(rrule: string | null): {
+function parseRecurrenceRule(rrule: string | null): {
   repeatType: RepeatType;
   repeatDays?: number[];
 } {
@@ -314,7 +314,7 @@ export function parseRecurrenceRule(rrule: string | null): {
 /**
  * Check if two time ranges overlap
  */
-export function doTimeSlotsOverlap(
+function doTimeSlotsOverlap(
   slot1Start: string,
   slot1End: string,
   slot2Start: string,
@@ -338,7 +338,7 @@ export function doTimeSlotsOverlap(
 /**
  * Validate that multiple time slots don't overlap
  */
-export function validateNoOverlappingSlots(
+function validateNoOverlappingSlots(
   slots: Array<{ startTime: string; endTime: string }>
 ): ValidationResult {
   const errors: string[] = [];

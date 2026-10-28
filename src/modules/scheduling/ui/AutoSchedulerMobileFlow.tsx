@@ -1081,4 +1081,3 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
     );
 };
 
-export default AutoSchedulerMobileFlow;

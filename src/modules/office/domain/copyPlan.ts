@@ -45,7 +45,7 @@ export interface CopyPlanInput {
     today: string;
 }
 
-export interface CopySkip {
+interface CopySkip {
     date: string;
     reason: string;
 }

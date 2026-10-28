@@ -254,4 +254,3 @@ export const PayRatesSettings: React.FC = () => {
   );
 };
 
-export default PayRatesSettings;

@@ -10,7 +10,7 @@ import {
 } from '../../domain/shift-ui';
 import type { ShiftStateDisplay } from '../../domain/shift-fsm';
 
-export interface ShiftRuleHeaderProps {
+interface ShiftRuleHeaderProps {
     /** Minimal schedule + attendance fields needed to derive both rules. */
     shift: ShiftDotInput;
     /** `compact` (dense grids) tightens type/padding; `detailed` is roomier. */
@@ -225,4 +225,3 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
 
 export const ShiftRuleHeader = React.memo(ShiftRuleHeaderImpl);
 
-export default ShiftRuleHeader;

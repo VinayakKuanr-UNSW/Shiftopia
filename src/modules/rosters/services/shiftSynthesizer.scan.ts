@@ -25,11 +25,11 @@ export function markSynthesisAsApplied(hash: string): void {
   previewCache.clear();
 }
 
-export function hasSynthesisBeenApplied(hash: string): boolean {
+function hasSynthesisBeenApplied(hash: string): boolean {
   return appliedHashes.has(hash);
 }
 
-export async function generateSnapshotHash(
+async function generateSnapshotHash(
   demandTensors: DemandTensor[],
   existingDraftShifts: Shift[],
 ): Promise<string> {
@@ -62,7 +62,7 @@ export async function generateSnapshotHash(
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function suggestSafeDeletions(
+function suggestSafeDeletions(
   demandTensors: DemandTensor[],
   existingShifts: Shift[],
 ): { safeDeletions: string[]; adjustedResiduals: Map<string, number> } {

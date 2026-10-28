@@ -79,7 +79,7 @@ const itemVariants = {
 // ============================================================================
 // COMPONENT
 // ============================================================================
-export const EmployeeBidsPage: React.FC = () => {
+const EmployeeBidsPage: React.FC = () => {
     const { user } = useAuth();
     const breakpoint = useBreakpoint();
     const isMobile = breakpoint === 'mobile';

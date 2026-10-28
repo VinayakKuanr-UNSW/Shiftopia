@@ -311,7 +311,7 @@ const SHIFT_PAGE_SIZE = 1000;
 const SHIFT_ROW_CAP = 8000;
 const SHIFT_MAX_PAGES = 25;
 
-export interface TeamShiftsResult {
+interface TeamShiftsResult {
     shifts: RawTeamShift[];
     /**
      * The read hit its ceiling and the range is only partly represented. Hours
@@ -504,7 +504,7 @@ export async function getTeamLeaveDays(
  * only change needed here — the rest of the page already reads `required`
  * source-agnostically.
  */
-export async function getRequiredFromDemand(
+async function getRequiredFromDemand(
     _scope: ScopeSelection,
     _startDate: Date,
     _endDate: Date,
@@ -520,7 +520,7 @@ export async function getRequiredFromDemand(
     return null;
 }
 
-export interface RequiredResolution {
+interface RequiredResolution {
     required: Map<string, Map<number, number>> | null;
     source: RequiredSource;
 }
@@ -606,7 +606,7 @@ export async function getTeamFairnessStanding(
     return out;
 }
 
-export const teamAvailabilityApi = {
+const teamAvailabilityApi = {
     getTeamMembers,
     getTeamShifts,
     getTeamLeaveDays,

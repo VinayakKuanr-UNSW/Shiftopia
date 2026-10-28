@@ -10,7 +10,7 @@ const TEMPLATE_VIEWS: ReadonlyArray<ToolbarSegmentedOption<'list' | 'grid'>> = [
   { id: 'grid', icon: <LayoutGrid className="h-3.5 w-3.5" />, label: 'Card' },
 ];
 
-export interface TemplateFunctionBarProps {
+interface TemplateFunctionBarProps {
   statusFilter: StatusFilter;
   onStatusFilterChange: (status: StatusFilter) => void;
   searchQuery: string;
@@ -132,4 +132,3 @@ export const TemplateFunctionBar: React.FC<TemplateFunctionBarProps> = ({
   );
 };
 
-export default TemplateFunctionBar;

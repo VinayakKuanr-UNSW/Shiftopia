@@ -39,7 +39,7 @@ export const isPastInTimezone = (date: Date, timezone: string = SYDNEY_TZ): bool
  * @param date The date to check
  * @param timezone The IANA timezone identifier
  */
-export const isFutureInTimezone = (date: Date, timezone: string = SYDNEY_TZ): boolean => {
+const isFutureInTimezone = (date: Date, timezone: string = SYDNEY_TZ): boolean => {
     const today = getTodayInTimezone(timezone);
     return isAfter(date, today);
 };
@@ -269,7 +269,7 @@ export const isSydneyPast = (date: Date): boolean => isPastInTimezone(date, SYDN
 /**
  * @deprecated Use isFutureInTimezone(date, timezone) instead
  */
-export const isSydneyFuture = (date: Date): boolean => isFutureInTimezone(date, SYDNEY_TZ);
+const isSydneyFuture = (date: Date): boolean => isFutureInTimezone(date, SYDNEY_TZ);
 
 /**
  * @deprecated Use isTodayInTimezone(date, timezone) instead

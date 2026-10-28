@@ -121,7 +121,7 @@ const INITIAL_STATE: ContractWizardFormState = {
 const num = (v: unknown): number => (v == null || v === '' ? 0 : Number(v) || 0);
 
 /** A saved contract row, as the form edits it. */
-export function formStateFromContract(c: Record<string, any>): ContractWizardFormState {
+function formStateFromContract(c: Record<string, any>): ContractWizardFormState {
     return {
         ...INITIAL_STATE,
         organization_id: c.organization_id ?? '',
@@ -213,7 +213,7 @@ export interface HoursRule {
  *   Flexible Part-Time — 624–1,976 h/year            (cl 12.4(a), 35.3(a))
  * Null for Casual or an unchosen type: neither carries contracted hours.
  */
-export function evaluateHoursRule(status: string, weekly: number, annual: number): HoursRule | null {
+function evaluateHoursRule(status: string, weekly: number, annual: number): HoursRule | null {
     if (status === 'Full-Time') {
         return {
             valid: weekly === FULL_TIME_WEEKLY_HOURS,
@@ -251,7 +251,7 @@ export function evaluateHoursRule(status: string, weekly: number, annual: number
 }
 
 /** Rule text copied verbatim from AddContractDialog.tsx's mixedPermanentConflict. */
-export const MIXED_PERMANENT_MESSAGE =
+const MIXED_PERMANENT_MESSAGE =
     'A Full-Time engagement is 38 hours and cannot be combined with another permanent (PT/FPT) engagement. Make additional roles Casual.';
 
 /**
@@ -278,9 +278,9 @@ export interface WizardPayContext {
     eaTopAnnualRate: number | null;
 }
 
-export const NO_PAY_CONTEXT: WizardPayContext = { band: null, isSecurityRole: false, eaTopAnnualRate: null };
+const NO_PAY_CONTEXT: WizardPayContext = { band: null, isSecurityRole: false, eaTopAnnualRate: null };
 
-export interface WizardTermsEvaluation {
+interface WizardTermsEvaluation {
     pay: PayEvaluation;
     engagement: EngagementEvaluation;
 }

@@ -19,7 +19,7 @@ import { computeRangeKeys, type ViewType } from '@/modules/rosters/domain/view-r
 import { loadLeaveDays } from '@/modules/office/api/office.loaders';
 import { indexApprovedLeaveDays } from '@/modules/rosters/hooks/useApprovedLeaveDays';
 
-export interface LoadPublishPlanInput {
+interface LoadPublishPlanInput {
     organizationId: string | null;
     selectedDate: Date;
     viewType: ViewType;
@@ -38,7 +38,7 @@ const defaultDeps: LoadPublishPlanDeps = {
     loadLeave: loadLeaveDays,
 };
 
-export const EMPTY_PUBLISH_PLAN: PublishRosterPlan = {
+const EMPTY_PUBLISH_PLAN: PublishRosterPlan = {
     assignedIds: [],
     unassignedIds: [],
     emergentAssignedIds: [],

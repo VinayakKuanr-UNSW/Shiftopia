@@ -6,20 +6,20 @@ import { computeShiftUrgency, isOnBidding } from '@/modules/rosters/domain/biddi
 // ENUMS
 // ============================================================
 
-export type RosterDayStatus = 'draft' | 'published' | 'locked';
-export type AssignmentStatus =
+type RosterDayStatus = 'draft' | 'published' | 'locked';
+type AssignmentStatus =
     | 'assigned'
     | 'confirmed'
     | 'swapped'
     | 'dropped'
     | 'no_show';
-export type ApplyMode = 'merge' | 'replace' | 'skip_existing';
+type ApplyMode = 'merge' | 'replace' | 'skip_existing';
 
 // ============================================================
 // FILTER TYPES (from roster.d.ts)
 // ============================================================
 
-export type FilterCategory =
+type FilterCategory =
     | 'employee'
     | 'region'
     | 'location'
@@ -35,7 +35,7 @@ export type FilterCategory =
     | 'shiftType'
     | 'eventType';
 
-export interface FilterOption {
+interface FilterOption {
     id: string;
     label: string;
     category: FilterCategory;
@@ -47,7 +47,7 @@ export interface FilterOption {
 // the My Roster views all use `domain/shift.entity.ts#Shift`. The shared type was
 // unusable by the people it was for. It now lives beside the Shift it wraps.
 
-export interface ShiftAssignment {
+interface ShiftAssignment {
     shiftId: string;
     employeeId: string;
 }
@@ -56,7 +56,7 @@ export interface ShiftAssignment {
 // DATABASE TYPES (snake_case)
 // ============================================================
 
-export interface DbRosterDay {
+interface DbRosterDay {
     id: string;
     organization_id: string;
     start_date: string;
@@ -70,7 +70,7 @@ export interface DbRosterDay {
     locked_by: string | null;
 }
 
-export interface DbRosterGroup {
+interface DbRosterGroup {
     id: string;
     roster_id: string; // Changed from roster_day_id to match schema
     name: string;
@@ -80,7 +80,7 @@ export interface DbRosterGroup {
     updated_at: string;
 }
 
-export interface DbRosterSubgroup {
+interface DbRosterSubgroup {
     id: string;
     roster_group_id: string;
     name: string;
@@ -112,7 +112,7 @@ export interface RosterStructure {
     appliedTemplateIds: string[];
 }
 
-export interface DbRosterShift {
+interface DbRosterShift {
     id: string;
     roster_subgroup_id: string;
     template_shift_id: string | null;
@@ -138,7 +138,7 @@ export interface DbRosterShift {
     assignment_outcome?: 'confirmed' | 'no_show' | null;
 }
 
-export interface DbRosterAssignment {
+interface DbRosterAssignment {
     id: string;
 
     roster_shift_id: string;
@@ -150,7 +150,7 @@ export interface DbRosterAssignment {
     notes: string | null;
 }
 
-export interface DbRosterTemplateApplication {
+interface DbRosterTemplateApplication {
     id: string;
     template_id: string;
     template_snapshot_id: string | null;
@@ -162,7 +162,7 @@ export interface DbRosterTemplateApplication {
     shifts_skipped: number;
 }
 
-export interface RosterShiftWithLiveState {
+interface RosterShiftWithLiveState {
     // Core Roster Data
     id: string;
     roster_subgroup_id: string;
@@ -226,7 +226,7 @@ export interface RosterShiftWithLiveState {
 // FRONTEND TYPES (camelCase)
 // ============================================================
 
-export interface RosterAssignment {
+interface RosterAssignment {
     id: string;
     employeeId: string;
     employeeName?: string;
@@ -234,7 +234,7 @@ export interface RosterAssignment {
     assignedAt: string;
 }
 
-export interface RosterShift {
+interface RosterShift {
     id: string;
     templateV8ShiftId: string | null;
     name: string | null;
@@ -259,7 +259,7 @@ export interface RosterShift {
     assignmentOutcome?: 'confirmed' | 'no_show' | null;
 }
 
-export interface RosterSubgroup {
+interface RosterSubgroup {
     id: string;
     templateSubgroupId: string | null;
     name: string;
@@ -268,7 +268,7 @@ export interface RosterSubgroup {
     shifts: RosterShift[];
 }
 
-export interface RosterGroup {
+interface RosterGroup {
     id: string;
     name: string;
     color: string;
@@ -277,7 +277,7 @@ export interface RosterGroup {
     subgroups: RosterSubgroup[];
 }
 
-export interface AppliedTemplate {
+interface AppliedTemplate {
     templateId: string;
     templateName: string;
     appliedAt: string;
@@ -287,7 +287,7 @@ export interface AppliedTemplate {
     shiftsSkipped: number;
 }
 
-export interface RosterDay {
+interface RosterDay {
     id: string;
     organizationId: string;
     startDate: string;
@@ -306,7 +306,7 @@ export interface RosterDay {
     assignedCount: number;
 }
 
-export interface RosterDaySummary {
+interface RosterDaySummary {
     startDate: string;
     endDate: string;
     rosterDayId: string | null;
@@ -320,7 +320,7 @@ export interface RosterDaySummary {
 // RPC RESULT TYPES
 // ============================================================
 
-export interface ApplyTemplateResult {
+interface ApplyTemplateResult {
     success: boolean;
     days_processed: number;
     shifts_created: number;
@@ -328,19 +328,19 @@ export interface ApplyTemplateResult {
     error_message: string | null;
 }
 
-export interface AddShiftResult {
+interface AddShiftResult {
     success: boolean;
     shift_id: string | null;
     error_message: string | null;
 }
 
-export interface AssignEmployeeResult {
+interface AssignEmployeeResult {
     success: boolean;
     assignment_id: string | null;
     error_message: string | null;
 }
 
-export interface SetStatusResult {
+interface SetStatusResult {
     success: boolean;
     error_message: string | null;
 }
@@ -349,7 +349,7 @@ export interface SetStatusResult {
 // INPUT TYPES
 // ============================================================
 
-export interface NewRosterShift {
+interface NewRosterShift {
     name?: string;
     roleId?: string;
     roleName?: string;
@@ -371,7 +371,7 @@ export interface NewRosterShift {
 // ============================================================
 
 /** Shift data structured for the GroupModeView grid */
-export interface GroupModeShift {
+interface GroupModeShift {
     id: string;
     role: string;
     startTime: string;
@@ -389,14 +389,14 @@ export interface GroupModeShift {
 }
 
 /** SubGroup with shifts organized by date */
-export interface GroupModeSubGroup {
+interface GroupModeSubGroup {
     id: string;
     name: string;
     shifts: Record<string, GroupModeShift[]>; // key = 'YYYY-MM-DD'
 }
 
 /** Department/Group for GroupModeView */
-export interface GroupModeDepartment {
+interface GroupModeDepartment {
     id: string;
     name: string;
     color: string;
@@ -439,7 +439,7 @@ export function getGroupColor(name: string | null | undefined): string {
 /**
  * Convert DB roster day view to frontend format
  */
-export function dbRosterDayToFrontend(db: any): RosterDay {
+function dbRosterDayToFrontend(db: any): RosterDay {
     return {
         id: db.id,
         organizationId: db.organization_id,
@@ -516,7 +516,7 @@ export function dbRosterDayToFrontend(db: any): RosterDay {
 /**
  * Convert roster day summary from RPC
  */
-export function dbRosterDaySummaryToFrontend(db: any): RosterDaySummary {
+function dbRosterDaySummaryToFrontend(db: any): RosterDaySummary {
     return {
         startDate: db.start_date,
         endDate: db.end_date,
@@ -531,7 +531,7 @@ export function dbRosterDaySummaryToFrontend(db: any): RosterDaySummary {
 /**
  * Convert RosterDay to GroupModeDepartment[] for GroupModeView
  */
-export function rosterDayToGroupMode(
+function rosterDayToGroupMode(
     rosterDay: RosterDay,
     dateKey: string
 ): GroupModeDepartment[] {
@@ -568,7 +568,7 @@ export function rosterDayToGroupMode(
 /**
  * Merge multiple RosterDays into GroupModeDepartment[] for multi-day view
  */
-export function mergeRosterDaysToGroupMode(
+function mergeRosterDaysToGroupMode(
     rosterDays: RosterDay[]
 ): GroupModeDepartment[] {
     if (rosterDays.length === 0) return [];
@@ -631,7 +631,7 @@ export function mergeRosterDaysToGroupMode(
  * Convert flattened view data (v_roster_shifts_with_live_state) to Frontend RosterDay
  * grouping it by Day -> Group -> SubGroup
  */
-export function flatRosterShiftsToRosterDay(
+function flatRosterShiftsToRosterDay(
     flatShifts: RosterShiftWithLiveState[],
     dateStr: string,
     organizationId: string
@@ -762,7 +762,7 @@ export function flatRosterShiftsToRosterDay(
 /**
  * Convert Date object to YYYY-MM-DD string
  */
-export function toDateString(date: Date): string {
+function toDateString(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');

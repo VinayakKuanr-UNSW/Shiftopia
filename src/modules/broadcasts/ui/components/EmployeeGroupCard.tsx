@@ -6,7 +6,7 @@ import { Card, cardTokens } from '@/modules/core/ui/primitives/card';
 import { GROUP_ACCENT, GROUP_ICONS_SM } from '../constants';
 import type { EmployeeBroadcastGroup } from '../../model/broadcast.types';
 
-export interface EmployeeGroupCardProps {
+interface EmployeeGroupCardProps {
   group: EmployeeBroadcastGroup;
   onClick: () => void;
   compact?: boolean;
@@ -63,4 +63,3 @@ export const EmployeeGroupCard: React.FC<EmployeeGroupCardProps> = ({ group, onC
   );
 };
 
-export default EmployeeGroupCard;

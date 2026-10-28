@@ -98,13 +98,13 @@ const log = (level: LogLevel, message: string, data?: any) => {
    HOOK INTERFACE
    ============================================================ */
 
-export interface FetchTemplatesOptions {
+interface FetchTemplatesOptions {
   organizationId?: string;
   departmentId?: string;
   subDepartmentId?: string;
 }
 
-export interface UseTemplatesReturn {
+interface UseTemplatesReturn {
   // State
   templates: Template[];
   currentTemplate: Template | null;
@@ -1395,5 +1395,4 @@ export function useTemplates(): UseTemplatesReturn {
   };
 }
 
-export default useTemplates;
 

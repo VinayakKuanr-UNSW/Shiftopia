@@ -62,7 +62,7 @@ export function durationMinutes(start: string, end: string): number {
 // AVAILABILITY RESULT TYPE
 // =============================================================================
 
-export interface AvailabilityResult {
+interface AvailabilityResult {
     slots: Array<{
         slot_date: string;
         start_time: string;

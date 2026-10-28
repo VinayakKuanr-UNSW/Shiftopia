@@ -126,4 +126,3 @@ export const KpiSmartInsights: React.FC<KpiSmartInsightsProps> = ({
     );
 };
 
-export default KpiSmartInsights;

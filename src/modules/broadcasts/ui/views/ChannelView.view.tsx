@@ -9,7 +9,7 @@ import { useEmployeeBroadcasts } from '../../state/useBroadcasts';
 import { MessageItem } from '../components/MessageItem';
 import { EmptyMessages } from '../components/EmptyStates';
 
-export interface ChannelViewProps {
+interface ChannelViewProps {
   channelId: string;
   channelName: string;
   channelDescription?: string;
@@ -160,4 +160,3 @@ export const ChannelView: React.FC<ChannelViewProps> = ({
   );
 };
 
-export default ChannelView;

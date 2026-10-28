@@ -9,7 +9,7 @@ import { Megaphone } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 
-export const BroadcastsManagerPage: React.FC = () => {
+const BroadcastsManagerPage: React.FC = () => {
   const breakpoint = useBreakpoint();
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 

@@ -21,7 +21,7 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 
-export interface EditingPresenceBadgeProps {
+interface EditingPresenceBadgeProps {
   editors: ShiftEditor[];
   className?: string;
 }

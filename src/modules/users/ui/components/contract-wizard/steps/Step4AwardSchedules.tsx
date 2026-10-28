@@ -6,7 +6,7 @@ import type { ContractWizardFormState } from '../../../hooks/useContractWizardFo
 
 const SWS_MIN_WEEKLY_PAY = 90;
 
-export interface Step4AwardSchedulesProps {
+interface Step4AwardSchedulesProps {
     formData: Pick<ContractWizardFormState,
         'is_apprentice' | 'apprentice_type' | 'apprentice_year' | 'has_completed_year_12' |
         'is_trainee' | 'trainee_category' | 'trainee_level' |
@@ -314,4 +314,3 @@ export const Step4AwardSchedules: React.FC<Step4AwardSchedulesProps> = ({ formDa
     );
 };
 
-export default Step4AwardSchedules;

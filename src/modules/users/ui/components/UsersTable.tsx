@@ -78,7 +78,7 @@ import {
     PageMenuTrigger,
 } from './PageMenu';
 
-export interface UsersTableProps {
+interface UsersTableProps {
     /** In scope and matching the search. */
     groups: readonly PersonGroup[];
     /** In scope before the search: "Showing 2 of 9 people". Defaults to `groups`. */
@@ -245,8 +245,8 @@ const STICKY_ACTIONS = 'sticky right-0 shadow-[-1px_0_0_hsl(var(--border))]';
 
 const SORT_WORDS: Record<UsersSort['direction'], string> = { ascending: 'ascending', descending: 'descending' };
 
-export const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100] as const;
-export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
+const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100] as const;
+type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
 
 // ── The table ────────────────────────────────────────────────────────────────
 
@@ -881,4 +881,3 @@ function revokeWords(person: PersonRef, c: ContractRow, today: string): string {
         + ' From tomorrow it shows as Expired. Shifts rostered under it after today must be reassigned or unassigned first.';
 }
 
-export default UsersTable;

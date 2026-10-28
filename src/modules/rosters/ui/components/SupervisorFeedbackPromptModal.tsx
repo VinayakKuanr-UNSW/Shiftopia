@@ -41,7 +41,7 @@ import { useSubmitFeedback } from '../../state/useSupervisorFeedback';
  * For multi-bucket feedback, render the modal multiple times.
  */
 
-export interface SupervisorFeedbackPromptModalProps {
+interface SupervisorFeedbackPromptModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** VenueOps event_id (text). Null is allowed for ad-hoc feedback. */

@@ -23,7 +23,7 @@ export type RPCErrorCode =
   | 'VALIDATION'        // Client-side input validation failed
   | 'UNKNOWN';          // Unclassified — should never be used in new code
 
-export interface StructuredError {
+interface StructuredError {
   code: RPCErrorCode;
   message: string;
   rpcName?: string;
@@ -132,7 +132,7 @@ export class PermissionError extends AppError {
 }
 
 /** Optimistic lock conflict — another actor updated the record */
-export class ConflictError extends AppError {
+class ConflictError extends AppError {
   constructor(resourceType: string, id: string) {
     super({
       code: 'CONFLICT',
@@ -148,13 +148,13 @@ export class ConflictError extends AppError {
 export const isAppError = (e: unknown): e is AppError =>
   e instanceof AppError;
 
-export const isComplianceError = (e: unknown): e is ComplianceError =>
+const isComplianceError = (e: unknown): e is ComplianceError =>
   e instanceof ComplianceError;
 
-export const isStateTransitionError = (e: unknown): e is StateTransitionError =>
+const isStateTransitionError = (e: unknown): e is StateTransitionError =>
   e instanceof StateTransitionError;
 
-export const isAuthError = (e: unknown): e is AuthenticationError =>
+const isAuthError = (e: unknown): e is AuthenticationError =>
   e instanceof AuthenticationError;
 
 /** Coerce any thrown value into an AppError for safe handling */

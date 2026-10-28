@@ -134,7 +134,7 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export interface PeopleProjectorContext {
+interface PeopleProjectorContext {
   employees?: WorkerEmployeeDTO[];
   contractedHoursMap?: Record<string, number>;
   nowIso?: string;

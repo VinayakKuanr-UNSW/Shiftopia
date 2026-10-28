@@ -1,5 +1,5 @@
 export type AccessLevel = 'alpha' | 'beta' | 'gamma' | 'delta' | 'epsilon' | 'zeta';
-export type CertificateType = 'X' | 'Y';
+type CertificateType = 'X' | 'Y';
 export type Role = 'admin' | 'manager' | 'teamlead' | 'member';
 
 export interface UserContract {
@@ -38,7 +38,7 @@ export interface AccessCertificate {
 // Scope Tree types (from resolve_user_permissions RPC)
 // =============================================
 
-export interface ScopeSubDept {
+interface ScopeSubDept {
     id: string;
     name: string;
 }
@@ -59,7 +59,7 @@ export interface ScopeTree {
     organizations: ScopeOrg[];
 }
 
-export interface PermissionCert {
+interface PermissionCert {
     id: string;
     level: AccessLevel;
     org_id: string;
@@ -111,7 +111,7 @@ export interface ScopeSelection {
 // Resolved Scope (output of Scope Resolution Engine)
 // =============================================
 
-export interface ResolvedScope {
+interface ResolvedScope {
     /** The scope tree of allowed options */
     allowedScopeTree: ScopeTree;
     /** Whether the organization field is locked (not selectable) */

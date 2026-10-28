@@ -104,7 +104,7 @@ export interface AvailabilityFormPayload {
  * @deprecated Use AvailabilityType instead
  * Keeping for backwards compatibility during migration
  */
-export type AvailabilityStatus =
+type AvailabilityStatus =
   | 'Available'
   | 'Unavailable'
   | 'Partial'
@@ -116,7 +116,7 @@ export type AvailabilityStatus =
 /**
  * @deprecated Legacy time slot type, use AvailabilitySlot instead
  */
-export interface TimeSlot {
+interface TimeSlot {
   id?: string;
   startTime: string;
   endTime: string;
@@ -128,7 +128,7 @@ export interface TimeSlot {
  * @deprecated Legacy day availability type
  * Being phased out in favor of AvailabilitySlot
  */
-export interface DayAvailability {
+interface DayAvailability {
   id: string;
   employeeId: string;
   date: string;
@@ -141,7 +141,7 @@ export interface DayAvailability {
  * @deprecated Presets should be handled differently
  * Consider moving to a separate presets module
  */
-export interface AvailabilityPreset {
+interface AvailabilityPreset {
   id: string;
   name: string;
   type: string;
@@ -163,7 +163,7 @@ export interface AvailabilityPreset {
 // UTILITY TYPE GUARDS
 // ============================================================================
 
-export function isFullDayRule(rule: AvailabilityRule): boolean {
+function isFullDayRule(rule: AvailabilityRule): boolean {
   // Can consider full day if times are 00:00:00 and 23:59:59 or similar convention, 
   // but DB schema requires times. For now, we check the strings.
   // Assuming '00:00:00' and '23:59:59' or similar. 
@@ -173,6 +173,6 @@ export function isFullDayRule(rule: AvailabilityRule): boolean {
   return rule.start_time === '00:00:00' && rule.end_time === '23:59:59';
 }
 
-export function isRecurringRule(rule: AvailabilityRule): boolean {
+function isRecurringRule(rule: AvailabilityRule): boolean {
   return rule.repeat_type !== 'none';
 }

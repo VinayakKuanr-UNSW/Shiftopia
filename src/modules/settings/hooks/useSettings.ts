@@ -9,9 +9,9 @@ export const SUPPORTED_LOCALES = [
     { code: 'fr-FR', label: 'French (FR)', flag: '🇫🇷' },
 ] as const;
 
-export type SupportedLocaleCode = typeof SUPPORTED_LOCALES[number]['code'];
+type SupportedLocaleCode = typeof SUPPORTED_LOCALES[number]['code'];
 
-export interface UseSettingsProps {
+interface UseSettingsProps {
     onSuccess?: () => void;
 }
 

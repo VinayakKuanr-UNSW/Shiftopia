@@ -92,7 +92,7 @@ export async function getAvailabilityRules(
 /**
  * Fetch a single availability rule by ID.
  */
-export async function getAvailabilityRule(
+async function getAvailabilityRule(
   ruleId: string
 ): Promise<AvailabilityRule | null> {
   const { data, error } = await supabase
@@ -155,7 +155,7 @@ export async function getAvailabilitySlots(
  * Direct updates are forbidden.
  * Editing MUST use delete + create.
  */
-export async function updateAvailabilityRule(): Promise<never> {
+async function updateAvailabilityRule(): Promise<never> {
   throw new Error(
     "Direct updates are not allowed. Use delete + create pattern."
   );
@@ -194,7 +194,7 @@ export async function deleteAvailabilityRule(ruleId: string): Promise<void> {
  * A REPEATING rule runs from `start_date` to `repeat_end_date`, and there a
  * null genuinely does mean open-ended.
  */
-export function ruleOverlapsRange(
+function ruleOverlapsRange(
   rule: Pick<AvailabilityRule, "start_date" | "repeat_type" | "repeat_end_date">,
   startDate: string,
   endDate: string

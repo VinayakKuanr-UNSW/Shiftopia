@@ -7,7 +7,7 @@
 import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface HorizontalBarItem {
+interface HorizontalBarItem {
     id: string;
     label: string;
     value: number; // percentage (0 - 100) or count
@@ -85,4 +85,3 @@ export const KpiHorizontalBars: React.FC<KpiHorizontalBarsProps> = ({
     );
 };
 
-export default KpiHorizontalBars;

@@ -27,7 +27,7 @@ export interface EmployeeLicense {
     };
 }
 
-export interface NewEmployeeLicense {
+interface NewEmployeeLicense {
     employee_id: string;
     license_id: string;
     issue_date?: string;
@@ -66,7 +66,7 @@ export const useEmployeeLicenses = (
 };
 
 // Hook to add employee license
-export const useAddEmployeeLicense = () => {
+const useAddEmployeeLicense = () => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 

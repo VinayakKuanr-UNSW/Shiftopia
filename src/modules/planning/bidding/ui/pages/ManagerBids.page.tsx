@@ -13,7 +13,7 @@ import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narr
 import { OpenBidsFunctionBar } from '../components/OpenBidsFunctionBar';
 import { computeRange, type ViewType, type DateRange } from '@/modules/rosters/domain/view-range';
 
-export const ManagerBidsPage: React.FC = () => {
+const ManagerBidsPage: React.FC = () => {
     const { activeContract, hasPermission } = useAuth();
     // Delta and epsilon see every open bid in scope but assign none (access suites).
     const canEdit = hasPermission('managerial-write');

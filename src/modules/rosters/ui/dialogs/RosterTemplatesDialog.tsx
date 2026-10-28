@@ -745,5 +745,4 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
     );
 };
 
-export default RosterTemplatesDialog;
 

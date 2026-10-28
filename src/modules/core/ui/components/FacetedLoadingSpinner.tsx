@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import ringImage from '@/assets/images/faceted-loading-ring.png';
 
-export interface FacetedLoadingSpinnerProps {
+interface FacetedLoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   ringClassName?: string;
@@ -55,4 +55,3 @@ export const FacetedLoadingSpinner: React.FC<FacetedLoadingSpinnerProps> = ({
   );
 };
 
-export default FacetedLoadingSpinner;

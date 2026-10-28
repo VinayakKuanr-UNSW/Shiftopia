@@ -36,13 +36,13 @@ import type { PeriodGrossPay, ShiftGrossPay, EarningsLine } from '../model/gross
 // ---------------------------------------------------------------------------
 
 /** Lifecycle of a persisted gross-pay record (independent of pay_periods.status). */
-export type GrossPayRecordStatus = 'draft' | 'final' | 'void';
+type GrossPayRecordStatus = 'draft' | 'final' | 'void';
 
 /** How a gross-pay record was produced. */
-export type GrossPayRecordSource = 'engine' | 'manual' | 'import';
+type GrossPayRecordSource = 'engine' | 'manual' | 'import';
 
 /** A row of public.gross_pay_records as returned by Supabase. */
-export interface GrossPayRecordRow {
+interface GrossPayRecordRow {
   id: string;
   pay_period_id: string;
   employee_id: string;
@@ -62,7 +62,7 @@ export interface GrossPayRecordRow {
 }
 
 /** Metadata that accompanies a persist call (provenance, not domain data). */
-export interface PersistGrossPayMeta {
+interface PersistGrossPayMeta {
   /**
    * The pay_periods.id this record belongs to. Required because
    * gross_pay_records.pay_period_id is NOT NULL + FK. If you only have period
@@ -105,7 +105,7 @@ export interface PersistGrossPayMeta {
  * @returns the persisted row.
  * @throws  on any Supabase/RLS error.
  */
-export async function persistPeriodGrossPay(
+async function persistPeriodGrossPay(
   record: PeriodGrossPay,
   meta: PersistGrossPayMeta,
 ): Promise<GrossPayRecordRow> {
@@ -157,7 +157,7 @@ export async function persistPeriodGrossPay(
  * @returns the persisted rows.
  * @throws  on any Supabase/RLS error.
  */
-export async function persistPeriodGrossPayBatch(
+async function persistPeriodGrossPayBatch(
   records: PeriodGrossPay[],
   meta: PersistGrossPayMeta,
 ): Promise<GrossPayRecordRow[]> {
@@ -221,7 +221,7 @@ export async function persistPeriodGrossPayBatch(
  *   priced upstream). `actualNetMinutes`, if omitted, is derived from
  *   (actualEnd - actualStart); if either bound is missing it is left null.
  */
-export interface ShiftPayrollActualInput {
+interface ShiftPayrollActualInput {
   /** shifts.id — the conflict key for shift_payroll_records (UNIQUE shift_id). */
   shiftId: string;
   /** ISO timestamptz of the actual/adjusted start that was priced. */
@@ -238,7 +238,7 @@ export interface ShiftPayrollActualInput {
  * A ShiftGrossPay paired with its raw actual timestamps, so the priced result
  * and the underlying actuals can be written together.
  */
-export interface ShiftGrossPayWithActuals {
+interface ShiftGrossPayWithActuals {
   grossPay: ShiftGrossPay;
   actuals: ShiftPayrollActualInput;
 }
@@ -265,7 +265,7 @@ export interface ShiftGrossPayWithActuals {
  * @returns number of rows written.
  * @throws  on any Supabase/RLS error.
  */
-export async function upsertShiftPayrollActuals(
+async function upsertShiftPayrollActuals(
   input: ShiftPayrollActualInput[] | ShiftGrossPayWithActuals[],
 ): Promise<number> {
   if (input.length === 0) return 0;
@@ -313,7 +313,7 @@ export async function upsertShiftPayrollActuals(
 // ---------------------------------------------------------------------------
 
 /** Period bounds for find-or-create. Dates are YYYY-MM-DD (inclusive). */
-export interface PayPeriodBounds {
+interface PayPeriodBounds {
   periodStartDate: string;
   periodEndDate: string;
   /**
@@ -341,7 +341,7 @@ export interface PayPeriodBounds {
  * @returns the existing-or-new pay_periods.id.
  * @throws  on any Supabase/RLS error.
  */
-export async function ensurePayPeriod(bounds: PayPeriodBounds): Promise<string> {
+async function ensurePayPeriod(bounds: PayPeriodBounds): Promise<string> {
   if (!bounds?.periodStartDate || !bounds?.periodEndDate) {
     throw new Error('ensurePayPeriod: periodStartDate and periodEndDate are required.');
   }

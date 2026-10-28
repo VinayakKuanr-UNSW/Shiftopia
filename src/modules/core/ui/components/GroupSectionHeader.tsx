@@ -36,4 +36,3 @@ export const GroupSectionHeader: React.FC<GroupSectionHeaderProps> = ({
     </div>
 );
 
-export default GroupSectionHeader;

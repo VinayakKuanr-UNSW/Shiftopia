@@ -32,7 +32,7 @@ export function shiftStartDate(s: V8Shift): string {
  * shifts on different dates compare correctly. Cross-midnight shifts get their
  * end pushed by a day (end > start always). Returns null for malformed shifts.
  */
-export function toAbsInterval(s: V8Shift): { startAbs: number; endAbs: number } | null {
+function toAbsInterval(s: V8Shift): { startAbs: number; endAbs: number } | null {
     const date = shiftStartDate(s);
     if (!date || !s.start_time || !s.end_time) return null;
     const dayMs = Date.parse(date + 'T00:00:00Z');
@@ -49,7 +49,7 @@ export function toAbsInterval(s: V8Shift): { startAbs: number; endAbs: number } 
  * the same calendar day. This — not the overnight boundary — is the correct
  * discriminator for clause 40 ("one day … the next day").
  */
-export function isSameStartDay(a: V8Shift, b: V8Shift): boolean {
+function isSameStartDay(a: V8Shift, b: V8Shift): boolean {
     const da = shiftStartDate(a);
     return da !== '' && da === shiftStartDate(b);
 }
@@ -59,7 +59,7 @@ export function pairInvolvesMultiHire(a: V8Shift, b: V8Shift): boolean {
     return a.shift_type === 'MULTI_HIRE' || b.shift_type === 'MULTI_HIRE';
 }
 
-export interface ConsecutivePair {
+interface ConsecutivePair {
     /** The earlier shift (by absolute start). */
     a: V8Shift;
     /** The later shift (by absolute start). */

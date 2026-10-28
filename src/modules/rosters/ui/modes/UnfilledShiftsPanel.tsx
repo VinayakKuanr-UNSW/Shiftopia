@@ -202,7 +202,7 @@ const ShiftCard: React.FC<{ shift: UnfilledShift; onClick: () => void; disabled?
 
 /* ── Main Panel ──────────────────────────────────────────────────────────────── */
 
-export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
+const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
   unfilledShifts,
   onPickShift,
 }) => {

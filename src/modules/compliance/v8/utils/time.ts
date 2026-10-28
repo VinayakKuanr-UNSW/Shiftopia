@@ -51,6 +51,6 @@ export function normalizedEndMinutes(start?: string | null, end?: string | null)
 /**
  * Compare two date strings (YYYY-MM-DD).
  */
-export function compareDates(a: string, b: string): number {
+function compareDates(a: string, b: string): number {
     return a.localeCompare(b);
 }

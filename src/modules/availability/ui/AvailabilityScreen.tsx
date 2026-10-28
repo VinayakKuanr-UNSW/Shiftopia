@@ -50,7 +50,7 @@ import { ConfigurePane } from './panes/ConfigurePane';
 import { UseAvailabilityResult } from '../state/useAvailability';
 import { UseAvailabilityEditingResult } from '../state/useAvailabilityEditing';
 
-export interface AvailabilityScreenProps {
+interface AvailabilityScreenProps {
   /**
    * Layout mode for responsive design
    * - 'desktop': Three panes side-by-side
@@ -439,4 +439,3 @@ export function AvailabilityScreen({
   );
 }
 
-export default AvailabilityScreen;

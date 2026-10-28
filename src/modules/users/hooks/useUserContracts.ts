@@ -5,11 +5,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 
-export function userContractsQueryKey(employeeId: string) {
+function userContractsQueryKey(employeeId: string) {
     return ['user_contracts', employeeId] as const;
 }
 
-export function useUserContracts(employeeId: string) {
+function useUserContracts(employeeId: string) {
     return useQuery({
         queryKey: userContractsQueryKey(employeeId),
         queryFn: async () => {

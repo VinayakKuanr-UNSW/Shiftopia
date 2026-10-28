@@ -42,7 +42,7 @@ import { supabase } from '@/platform/supabase/client';
 // PROPS
 // =============================================================================
 
-export interface DndAssignModalProps {
+interface DndAssignModalProps {
   open: boolean;
   onClose: () => void;
   onConfirm: (options: { ignoreWarnings: boolean }) => void;
@@ -416,4 +416,3 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   );
 };
 
-export default DndAssignModal;

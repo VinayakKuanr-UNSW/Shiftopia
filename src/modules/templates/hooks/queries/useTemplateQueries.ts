@@ -62,7 +62,7 @@ export function useAllTemplates() {
 /**
  * Fetch a single template by ID.
  */
-export function useTemplateById(id?: string) {
+function useTemplateById(id?: string) {
     return useQuery({
         queryKey: templateKeys.detail(id || ''),
         queryFn: async (): Promise<Template | null> => {
@@ -139,7 +139,7 @@ export function useTemplateHistory(id?: string) {
  * Create a new template.
  * Note: Default groups are seeded by database trigger.
  */
-export function useCreateTemplate() {
+function useCreateTemplate() {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -190,7 +190,7 @@ export function useCreateTemplate() {
  * Save template changes using the atomic RPC function.
  * CRITICAL: This is the only valid way to update template data.
  */
-export function useSaveTemplate() {
+function useSaveTemplate() {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -254,7 +254,7 @@ export function useSaveTemplate() {
 /**
  * Delete a template.
  */
-export function useDeleteTemplate() {
+function useDeleteTemplate() {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -284,7 +284,7 @@ export function useDeleteTemplate() {
 /**
  * Publish a template to a date range.
  */
-export function usePublishTemplate() {
+function usePublishTemplate() {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -341,7 +341,7 @@ export function usePublishTemplate() {
 /**
  * Validate template name uniqueness.
  */
-export function useValidateTemplateName() {
+function useValidateTemplateName() {
     return useMutation({
         mutationFn: async ({
             organizationId,
@@ -376,7 +376,7 @@ export function useValidateTemplateName() {
 /**
  * Check version conflict before saving.
  */
-export function useCheckVersion() {
+function useCheckVersion() {
     return useMutation({
         mutationFn: async ({
             templateId,

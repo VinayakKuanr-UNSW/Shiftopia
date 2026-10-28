@@ -15,7 +15,7 @@
 // mirror of that table and MUST stay in step with it.
 
 /** The DB's `public.employment_status` enum, verbatim. */
-export type EmploymentStatus =
+type EmploymentStatus =
     | 'Full-Time'
     | 'Part-Time'
     | 'Casual'

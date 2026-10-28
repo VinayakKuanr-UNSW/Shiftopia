@@ -5,24 +5,24 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface Organization {
+interface Organization {
     id: string;
     name: string;
 }
 
-export interface Department {
+interface Department {
     id: string;
     name: string;
     organizationId: string;
 }
 
-export interface SubDepartment {
+interface SubDepartment {
     id: string;
     name: string;
     departmentId: string;
 }
 
-export interface OrgHierarchyOutput {
+interface OrgHierarchyOutput {
     organizations: Organization[];
     departments: Department[];
     subDepartments: SubDepartment[];
@@ -31,7 +31,7 @@ export interface OrgHierarchyOutput {
 /**
  * Fetch all organizations
  */
-export async function getOrganizations(): Promise<Organization[]> {
+async function getOrganizations(): Promise<Organization[]> {
     const { data, error } = await (supabase as any)
         .schema('hr')
         .from('organizations')
@@ -49,7 +49,7 @@ export async function getOrganizations(): Promise<Organization[]> {
 /**
  * Fetch departments for an organization
  */
-export async function getDepartments(organizationId: string): Promise<Department[]> {
+async function getDepartments(organizationId: string): Promise<Department[]> {
     if (!organizationId) return [];
 
     const { data, error } = await (supabase as any)
@@ -74,7 +74,7 @@ export async function getDepartments(organizationId: string): Promise<Department
 /**
  * Fetch sub-departments for a department
  */
-export async function getSubDepartments(departmentId: string): Promise<SubDepartment[]> {
+async function getSubDepartments(departmentId: string): Promise<SubDepartment[]> {
     if (!departmentId) return [];
 
     const { data, error } = await (supabase as any)
@@ -99,7 +99,7 @@ export async function getSubDepartments(departmentId: string): Promise<SubDepart
 /**
  * Fetch complete hierarchy (for initial load)
  */
-export async function getFullOrgHierarchy(): Promise<OrgHierarchyOutput> {
+async function getFullOrgHierarchy(): Promise<OrgHierarchyOutput> {
     const [orgs, depts, subDepts] = await Promise.all([
         (supabase as any).schema('hr').from('organizations').select('id, name').order('name'),
         (supabase as any).schema('hr').from('departments').select('id, name, organization_id').order('name'),

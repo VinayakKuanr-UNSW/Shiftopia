@@ -31,5 +31,5 @@ export const DEPARTURE_VARIANCE_REASONS = [
     'Other',
 ] as const;
 
-export type ArrivalVarianceReason = (typeof ARRIVAL_VARIANCE_REASONS)[number];
-export type DepartureVarianceReason = (typeof DEPARTURE_VARIANCE_REASONS)[number];
+type ArrivalVarianceReason = (typeof ARRIVAL_VARIANCE_REASONS)[number];
+type DepartureVarianceReason = (typeof DEPARTURE_VARIANCE_REASONS)[number];

@@ -118,7 +118,7 @@ function QueryBar({ entry }: { entry: QueryPerfEntry }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function DevPerfOverlay() {
+function DevPerfOverlay() {
     injectCSS();
 
     const queryClient       = useQueryClient();

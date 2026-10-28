@@ -44,7 +44,7 @@ import {
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface ShiftAuditDialogProps {
+interface ShiftAuditDialogProps {
   shift: Shift | null;
   onOpenChange: (open: boolean) => void;
 }
@@ -421,4 +421,3 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
   );
 };
 
-export default ShiftAuditDialog;

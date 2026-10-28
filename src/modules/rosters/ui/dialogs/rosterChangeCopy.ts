@@ -27,13 +27,13 @@ export interface ChangeSummary {
   confirmLabel: string;
 }
 
-export const formatDay = (iso: string) => format(parseISO(iso), 'EEE d MMM');
+const formatDay = (iso: string) => format(parseISO(iso), 'EEE d MMM');
 
 export function formatRange(fromIso: string, toIso: string): string {
   return fromIso === toIso ? formatDay(fromIso) : `${formatDay(fromIso)} – ${formatDay(toIso)}`;
 }
 
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 function listDays(isoDates: string[]): string {
   const shown = isoDates.slice(0, 3).map(formatDay).join(', ');

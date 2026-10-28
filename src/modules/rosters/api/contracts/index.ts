@@ -19,46 +19,46 @@ import { z } from 'zod';
 // ── Primitives ─────────────────────────────────────────────────────────────
 
 export const UuidSchema = z.string().uuid();
-export const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
-export const TimeStringSchema = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Expected HH:MM[:SS]');
+const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+const TimeStringSchema = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Expected HH:MM[:SS]');
 
 // ── Enum schemas — exact mirror of DB enum values ──────────────────────────
 
-export const LifecycleStatusSchema = z.enum([
+const LifecycleStatusSchema = z.enum([
   'Draft', 'Published', 'InProgress', 'Completed', 'Cancelled',
 ]);
 
-export const AssignmentStatusSchema = z.enum(['assigned', 'unassigned']);
+const AssignmentStatusSchema = z.enum(['assigned', 'unassigned']);
 
 // assignment_outcome only ever holds NULL, 'confirmed', or 'no_show'.
 // All other values ('pending', 'offered', 'emergency_assigned', 'declined',
 // 'withdrawn', 'cancelled') are banned by the DB check constraint.
-export const AssignmentOutcomeSchema = z.enum([
+const AssignmentOutcomeSchema = z.enum([
   'confirmed', 'no_show',
 ]).nullable();
 
-export const BiddingStatusSchema = z.enum([
+const BiddingStatusSchema = z.enum([
   'not_on_bidding', 'on_bidding', 'on_bidding_normal', 'on_bidding_urgent', 'bidding_closed_no_winner',
 ]);
 
 // TradeApproved has no corresponding FSM state — the FSM uses TradeAccepted (S10)
 // as the manager-approval step. TradeApproved is retained here only for backward
 // compatibility with existing DB rows during migration; treat it as TradeAccepted.
-export const TradingStatusSchema = z.enum([
+const TradingStatusSchema = z.enum([
   'NoTrade', 'TradeRequested', 'TradeAccepted', 'TradeApproved',
 ]);
 
-export const AttendanceStatusSchema = z.enum([
+const AttendanceStatusSchema = z.enum([
   'unknown', 'checked_in', 'no_show', 'late', 'excused',
 ]);
 
-export const FulfillmentStatusSchema = z.enum([
+const FulfillmentStatusSchema = z.enum([
   'scheduled', 'bidding', 'offered', 'none',
 ]);
 
 // ── Shift state ID (resolved by shiftStateMachine) ────────────────────────
 
-export const ShiftStateIDSchema = z.enum([
+const ShiftStateIDSchema = z.enum([
   'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7',
   'S8', 'S9', 'S10', 'S11', 'S12', 'S13', 'S14', 'S15', 'UNKNOWN',
 ]);
@@ -67,7 +67,7 @@ export const ShiftStateIDSchema = z.enum([
 // Note: We use .passthrough() so that unknown columns (joined relations)
 // don't fail validation — they're just passed through as-is.
 
-export const ShiftCoreSchema = z.object({
+const ShiftCoreSchema = z.object({
   id: UuidSchema,
   roster_id: UuidSchema,
   organization_id: UuidSchema.nullable(),
@@ -121,7 +121,7 @@ export const ShiftCoreSchema = z.object({
   updated_at: z.string(),
 }).passthrough(); // allow joined relation fields through without failure
 
-export type ShiftCore = z.infer<typeof ShiftCoreSchema>;
+type ShiftCore = z.infer<typeof ShiftCoreSchema>;
 
 // ── RPC Response schemas ───────────────────────────────────────────────────
 
@@ -130,8 +130,8 @@ export type ShiftCore = z.infer<typeof ShiftCoreSchema>;
 // will fetch the full row to satisfy the Shift entity interface.
 export const CreateShiftResponseSchema = z.string().uuid();
 export const UpdateShiftResponseSchema = z.boolean();
-export type CreateShiftResponse = z.infer<typeof CreateShiftResponseSchema>;
-export type UpdateShiftResponse = z.infer<typeof UpdateShiftResponseSchema>;
+type CreateShiftResponse = z.infer<typeof CreateShiftResponseSchema>;
+type UpdateShiftResponse = z.infer<typeof UpdateShiftResponseSchema>;
 
 // sm_publish_shift
 export const PublishShiftResponseSchema = z.object({
@@ -140,7 +140,7 @@ export const PublishShiftResponseSchema = z.object({
   to_state: z.string().optional(),
   error: z.string().optional(),
 });
-export type PublishShiftResponse = z.infer<typeof PublishShiftResponseSchema>;
+type PublishShiftResponse = z.infer<typeof PublishShiftResponseSchema>;
 
 // sm_bulk_publish_shifts
 export const BulkPublishResponseSchema = z.object({
@@ -158,7 +158,7 @@ export const BulkPublishResponseSchema = z.object({
     reason: z.string(),
   })).optional(),
 }).passthrough();
-export type BulkPublishResponse = z.infer<typeof BulkPublishResponseSchema>;
+type BulkPublishResponse = z.infer<typeof BulkPublishResponseSchema>;
 
 
 
@@ -201,7 +201,7 @@ export const DeleteShiftResponseSchema = z.object({
   message: z.string().optional(),
   code: z.string().optional(),
 });
-export type DeleteShiftResponse = z.infer<typeof DeleteShiftResponseSchema>;
+type DeleteShiftResponse = z.infer<typeof DeleteShiftResponseSchema>;
 
 // sm_manager_cancel
 export const CancelShiftResponseSchema = z.object({
@@ -209,21 +209,21 @@ export const CancelShiftResponseSchema = z.object({
   new_status: z.string().optional(),
   message: z.string().optional(),
 });
-export type CancelShiftResponse = z.infer<typeof CancelShiftResponseSchema>;
+type CancelShiftResponse = z.infer<typeof CancelShiftResponseSchema>;
 
 // sm_accept_offer / sm_reject_offer / sm_decline_offer
 export const OfferActionResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),
 });
-export type OfferActionResponse = z.infer<typeof OfferActionResponseSchema>;
+type OfferActionResponse = z.infer<typeof OfferActionResponseSchema>;
 
 // sm_request_trade
 export const RequestTradeResponseSchema = z.object({
   success: z.boolean(),
   trade_id: z.string().optional(),
 });
-export type RequestTradeResponse = z.infer<typeof RequestTradeResponseSchema>;
+type RequestTradeResponse = z.infer<typeof RequestTradeResponseSchema>;
 
 // sm_employee_drop_shift
 export const EmployeeDropResponseSchema = z.object({
@@ -233,7 +233,7 @@ export const EmployeeDropResponseSchema = z.object({
   message: z.string().optional(),
   error: z.string().optional(),
 });
-export type EmployeeDropResponse = z.infer<typeof EmployeeDropResponseSchema>;
+type EmployeeDropResponse = z.infer<typeof EmployeeDropResponseSchema>;
 
 // sm_close_bidding
 export const CloseBiddingResponseSchema = z.object({
@@ -247,7 +247,7 @@ export const CloseBiddingResponseSchema = z.object({
 // Returns a jsonb envelope: ok + a discriminating `code`. The shape varies by
 // code (VERSION_CONFLICT carries current_version/server_row, WRITE_REJECTED a
 // note, etc.) so we keep most fields optional + passthrough.
-export const ApplyShiftOpCodeSchema = z.enum([
+const ApplyShiftOpCodeSchema = z.enum([
   'APPLIED',
   'IDEMPOTENT_REPLAY',
   'VERSION_CONFLICT',
@@ -273,19 +273,19 @@ export const ApplyShiftOpResponseSchema = z.object({
   current_state: z.string().optional(),
   attempted: z.string().optional(),
 }).passthrough();
-export type ApplyShiftOpResponse = z.infer<typeof ApplyShiftOpResponseSchema>;
+type ApplyShiftOpResponse = z.infer<typeof ApplyShiftOpResponseSchema>;
 
 // Compliance RPCs
-export const OverlapCheckSchema = z.boolean().nullable().transform(v => v ?? false);
-export const WeeklyHoursSchema = z.number().nullable().transform(v => v ?? 0);
-export const RestPeriodSchema = z.boolean().nullable().transform(v => v ?? true);
+const OverlapCheckSchema = z.boolean().nullable().transform(v => v ?? false);
+const WeeklyHoursSchema = z.number().nullable().transform(v => v ?? 0);
+const RestPeriodSchema = z.boolean().nullable().transform(v => v ?? true);
 
 // apply_template_to_date_range_v2
-export const ApplyTemplateResponseSchema = z.object({
+const ApplyTemplateResponseSchema = z.object({
   success: z.boolean(),
   shifts_created: z.number().int(),
   batch_id: UuidSchema.optional(),
   roster_id: UuidSchema.optional(),
   error: z.string().optional(),
 });
-export type ApplyTemplateResponse = z.infer<typeof ApplyTemplateResponseSchema>;
+type ApplyTemplateResponse = z.infer<typeof ApplyTemplateResponseSchema>;

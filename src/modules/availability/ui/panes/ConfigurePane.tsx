@@ -39,7 +39,7 @@ import { validateAvailabilityForm } from '../../utils/validation.utils';
 // TYPES
 // ============================================================================
 
-export interface ConfigurePaneProps {
+interface ConfigurePaneProps {
   mode: 'create' | 'edit' | null;
   ruleBeingEdited: AvailabilityRule | null;
   isSubmitting: boolean;
@@ -445,4 +445,3 @@ export function ConfigurePane({
   );
 }
 
-export default ConfigurePane;

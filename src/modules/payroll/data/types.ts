@@ -11,7 +11,7 @@
 import type { ShiftPayContract } from '../domain/shiftPayTerms';
 
 /** Timesheet row joined onto a shift (by shift_id). Only pay-relevant columns. */
-export interface GrossPayTimesheetRow {
+interface GrossPayTimesheetRow {
   id: string;
   shift_id: string | null;
   /** Manager-adjusted billable start — 'HH:MM[:SS]' or null (no manual edit). */

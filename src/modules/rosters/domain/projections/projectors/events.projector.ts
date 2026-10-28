@@ -122,7 +122,7 @@ function buildProjectedEvent(
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export interface EventsProjectorContext {
+interface EventsProjectorContext {
   events?: WorkerEventDTO[];
 }
 

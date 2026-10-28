@@ -57,7 +57,7 @@ interface UseShiftEditingPresenceResult {
 // HOOK
 // ============================================================================
 
-export function useShiftEditingPresence(
+function useShiftEditingPresence(
   args: UseShiftEditingPresenceArgs,
 ): UseShiftEditingPresenceResult {
   const { departmentId, shiftDate, actor } = args;

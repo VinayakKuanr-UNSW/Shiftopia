@@ -1,7 +1,7 @@
 import { supabase } from '@/platform/supabase/client';
 import { requireUser } from '@/platform/supabase/rpc/client';
 
-export interface SynthesisRunRow {
+interface SynthesisRunRow {
     id: string;
     organization_id: string;
     department_id: string;
@@ -19,7 +19,7 @@ export interface SynthesisRunRow {
     rolled_back_count: number | null;
 }
 
-export interface CreateRunInput {
+interface CreateRunInput {
     organization_id: string;
     department_id: string;
     sub_department_id: string | null;

@@ -39,7 +39,7 @@ export interface AssignedShiftInterval {
   lifecycle_status: string;
 }
 
-export interface AvailabilityViewResult {
+interface AvailabilityViewResult {
   declaredSlots: AvailabilitySlot[];
   assignedShifts: AssignedShiftInterval[];
 }
@@ -123,7 +123,7 @@ export async function getAvailabilityView(
 /**
  * Parse time string (HH:mm or HH:mm:ss) to minutes since midnight
  */
-export function timeToMinutes(time: string): number {
+function timeToMinutes(time: string): number {
   const parts = time.split(':').map(Number);
   return parts[0] * 60 + (parts[1] ?? 0);
 }
@@ -132,7 +132,7 @@ export function timeToMinutes(time: string): number {
  * Check if two time intervals overlap (end-exclusive comparison).
  * Both intervals are on the same date.
  */
-export function intervalsOverlap(
+function intervalsOverlap(
   aStart: string, aEnd: string,
   bStart: string, bEnd: string
 ): boolean {
@@ -147,7 +147,7 @@ export function intervalsOverlap(
  * Check if a candidate time range is covered by at least one declared slot.
  * Used for isUserAvailable() check.
  */
-export function isCoveredBySlots(
+function isCoveredBySlots(
   candidateStart: string,
   candidateEnd: string,
   slots: Array<{ start_time: string; end_time: string }>
@@ -174,7 +174,7 @@ export function isCoveredBySlots(
  * isUserAvailable — checks declared availability slots for a given date + time.
  * Returns true if the candidate shift is fully covered by declared availability.
  */
-export function isUserAvailable(
+function isUserAvailable(
   shiftDate: string,
   shiftStart: string,
   shiftEnd: string,
@@ -189,7 +189,7 @@ export function isUserAvailable(
  * hasOverlap — checks if a candidate shift overlaps with any already-assigned shift.
  * Returns the overlapping shift if found, null otherwise.
  */
-export function hasOverlap(
+function hasOverlap(
   shiftDate: string,
   shiftStart: string,
   shiftEnd: string,

@@ -27,7 +27,7 @@ import { type PassedRule, UI_VALIDATED_RULES } from './bucket-map';
 // TYPES
 // =============================================================================
 
-export interface CompliancePanelProps {
+interface CompliancePanelProps {
     hook:        UseCompliancePanelReturn;
     className?:  string;
     /** For swaps: labels for the two parties in the 3-column view */
@@ -646,4 +646,3 @@ function StatusBadge({ status }: { status: 'PASS' | 'FAIL' | 'WARN' }) {
     );
 }
 
-export default CompliancePanel;

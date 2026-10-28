@@ -6,7 +6,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { ACCESS_LEVELS, ACCESS_LEVEL_CONFIG, accessReach } from '@/platform/auth/constants';
 import type { AccessLevel } from '@/platform/auth/types';
 
-export interface AccessLevelPickerProps {
+interface AccessLevelPickerProps {
     /** Null: the saved contract records no access; nothing is selected. */
     value: AccessLevel | null;
     onChange: (level: AccessLevel) => void;
@@ -83,4 +83,3 @@ export const AccessLevelPicker: React.FC<AccessLevelPickerProps> = ({ value, onC
     </fieldset>
 );
 
-export default AccessLevelPicker;

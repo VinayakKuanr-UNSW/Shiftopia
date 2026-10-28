@@ -10,7 +10,7 @@ export const SWAP_GROUP_BY_OPTIONS: GroupBySelectorOption[] = [
   { value: 'group',  label: 'By Venue Group' },
 ];
 
-export interface SwapGroupableItem {
+interface SwapGroupableItem {
   id: string;
   status: string;
   requestor: {

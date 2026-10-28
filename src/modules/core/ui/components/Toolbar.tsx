@@ -88,7 +88,7 @@ export const toolbar = {
 
 /* ── Row ─────────────────────────────────────────────────────────────────── */
 
-export interface ToolbarRowProps {
+interface ToolbarRowProps {
   views?: React.ReactNode;
   modes?: React.ReactNode;
   actions?: React.ReactNode;
@@ -137,7 +137,7 @@ export interface ToolbarSegmentedOption<T extends string> {
   count?: number;
 }
 
-export interface ToolbarSegmentedProps<T extends string> {
+interface ToolbarSegmentedProps<T extends string> {
   value: T;
   onValueChange: (value: T) => void;
   options: ReadonlyArray<ToolbarSegmentedOption<T>>;
@@ -218,11 +218,11 @@ export function ToolbarSegmented<T extends string>({
 
 /* ── Zone 3: icon button ─────────────────────────────────────────────────── */
 
-export type ToolbarIconButtonVariant =
+type ToolbarIconButtonVariant =
   | 'default' | 'primary' | 'blue' | 'purple' | 'indigo' | 'emerald' | 'amber' | 'sky'
   | 'rose' | 'success' | 'warning' | 'danger' | 'ghost';
 
-export interface ToolbarIconButtonProps
+interface ToolbarIconButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'disabled'> {
   icon: React.ReactNode;
   /** Also the accessible name — the button has no visible text. */

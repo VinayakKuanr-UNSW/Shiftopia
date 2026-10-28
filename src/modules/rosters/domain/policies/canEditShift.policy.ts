@@ -5,7 +5,7 @@
 
 import { isShiftLocked as isShiftLockedUtil } from '../shift-locking.utils';
 
-export interface CanEditShiftInput {
+interface CanEditShiftInput {
     shiftId: string;
     isDraft: boolean;
     status: string;
@@ -18,7 +18,7 @@ export interface CanEditShiftInput {
     isEmergency?: boolean;
 }
 
-export interface CanEditShiftOutput {
+interface CanEditShiftOutput {
     canEdit: boolean;
     reason?: string;
     /** cl 38.2/38.3 — set when a shift-time change falls inside the required notice window. Advisory only: never blocks. */
@@ -30,7 +30,7 @@ const FTPT_CHANGE_NOTICE_HOURS = 48;
 /** cl 38.3 — casual start-time change notice; below this, a 3h minimum-payment obligation can be triggered if unreachable. */
 const CASUAL_CHANGE_NOTICE_HOURS = 2;
 
-export interface ShiftChangeNoticeInput {
+interface ShiftChangeNoticeInput {
     shiftDate: string;          // YYYY-MM-DD
     originalStartTime: string;  // 'HH:MM' or 'HH:MM:SS'
     employmentType?: string;

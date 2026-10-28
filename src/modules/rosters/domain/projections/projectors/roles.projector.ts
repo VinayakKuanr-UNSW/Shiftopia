@@ -140,7 +140,7 @@ function addShiftToRole(accum: RoleAccum, shift: WorkerShiftDTO, ps: ProjectedSh
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export interface RolesProjectorContext {
+interface RolesProjectorContext {
   roles?: WorkerRoleDTO[];
   levels?: WorkerLevelDTO[];
 }

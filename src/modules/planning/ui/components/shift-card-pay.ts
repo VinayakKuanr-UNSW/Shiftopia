@@ -38,7 +38,7 @@ import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShif
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import type { EarningsLine } from '@/modules/payroll/model/gross-pay.types';
 
-export interface ShiftCardPayProps {
+interface ShiftCardPayProps {
   estimatedPay?: string;
   estimatedPayBreakdown?: EarningsLine[];
 }

@@ -5,11 +5,11 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface PublishRosterInput {
+interface PublishRosterInput {
     rosterId: string;
 }
 
-export interface PublishRosterOutput {
+interface PublishRosterOutput {
     success: boolean;
     error?: string;
     publishedShiftCount?: number;
@@ -20,7 +20,7 @@ export interface PublishRosterOutput {
  * - Updates roster status to 'published'
  * - Marks all draft shifts as published
  */
-export async function executePublishRoster(
+async function executePublishRoster(
     input: PublishRosterInput
 ): Promise<PublishRosterOutput> {
     const { rosterId } = input;

@@ -32,7 +32,7 @@ import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ─── Tone ────────────────────────────────────────────────────────────────────
 
-export type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
+type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
 
 /**
  * Priority-ordered ring color for shift cards across all views.
@@ -44,11 +44,11 @@ export type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
  * orange  — Urgent: TTS ≤ 24h
  * blue    — Normal: everything else
  */
-export type RingColor = 'purple' | 'emerald' | 'yellow' | 'red' | 'orange' | 'blue' | null;
+type RingColor = 'purple' | 'emerald' | 'yellow' | 'red' | 'orange' | 'blue' | null;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface ShiftUIContextInput extends ShiftFSMInput {
+interface ShiftUIContextInput extends ShiftFSMInput {
     /** UTC timestamp of the shift start — used for TTS calculation */
     scheduled_start?: string | Date | null | undefined;
     /** UTC timestamp of the shift end — used to detect No Show */
@@ -74,19 +74,19 @@ export interface ShiftUIContext {
     ringColor: RingColor;
 }
 
-export interface ShiftBadge {
+interface ShiftBadge {
     label: string;
     tone: BadgeTone;
 }
 
-export interface ShiftLockState {
+interface ShiftLockState {
     /** All fields locked — offer sent, in progress, terminal */
     fullyLocked: boolean;
     /** Schedule locked but notes/comments still editable */
     partialLock: boolean;
 }
 
-export type ShiftAction =
+type ShiftAction =
     | 'PUBLISH' | 'UNPUBLISH' | 'DELETE'
     | 'ASSIGN' | 'UNASSIGN'
     | 'ACCEPT' | 'REJECT'
@@ -95,7 +95,7 @@ export type ShiftAction =
     | 'CLOCK_IN' | 'CLOCK_OUT' | 'MARK_NO_SHOW'
     | 'CANCEL';
 
-export interface ProtectionContext {
+interface ProtectionContext {
     status: 'LOCKED' | 'PROTECTED' | 'DRAFT';
     label: string;
     isLocked: boolean;
@@ -109,7 +109,7 @@ export interface ProtectionContext {
     }>;
 }
 
-export interface ShiftStatusIcon {
+interface ShiftStatusIcon {
     icon: React.ComponentType<{ className?: string; size?: string | number }>;
     tooltip: string;
     color: string;
@@ -535,19 +535,19 @@ function isShiftAttendanceFinished(shift: ShiftDotInput, start: number, end: num
     );
 }
 
-export type TimeRule = 'Standard' | 'Urgent' | 'Emergent' | 'Live' | 'Closed';
+type TimeRule = 'Standard' | 'Urgent' | 'Emergent' | 'Live' | 'Closed';
 
 /** Arrival half of the two-badge Live Rules model. */
-export type ArrivalRule =
+type ArrivalRule =
     | 'Scheduled' | 'Awaiting Check-In' | 'Missing' | 'No Show'
     | 'Early In' | 'On Time In' | 'Late In';
 
 /** Departure half of the two-badge Live Rules model. */
-export type DepartureRule =
+type DepartureRule =
     | 'Early Out' | 'On Time Out' | 'Late Out'
     | 'Working Overtime' | 'Missing';
 
-export type LiveRule = ArrivalRule | DepartureRule;
+type LiveRule = ArrivalRule | DepartureRule;
 
 export interface ShiftRuleBadge {
     label: TimeRule | LiveRule | string;
@@ -560,7 +560,7 @@ export interface ShiftRuleBadge {
  * been marked missing at 12.5h. A genuine No Show carries an arrival badge and no
  * departure.
  */
-export interface LiveRuleBadges {
+interface LiveRuleBadges {
     arrival: ShiftRuleBadge | null;
     departure: ShiftRuleBadge | null;
 }
@@ -693,12 +693,12 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
 }
 
 /** Arrival / departure halves of the Payroll Rules model — mirrors Live Rules labels. */
-export type PayrollArrivalRule = 'Early In' | 'On Time In' | 'Late In';
-export type PayrollDepartureRule = 'Early Out' | 'On Time Out' | 'Late Out';
-export type PayrollRule = PayrollArrivalRule | PayrollDepartureRule;
+type PayrollArrivalRule = 'Early In' | 'On Time In' | 'Late In';
+type PayrollDepartureRule = 'Early Out' | 'On Time Out' | 'Late Out';
+type PayrollRule = PayrollArrivalRule | PayrollDepartureRule;
 
 /** The two-badge Payroll Rules result — billable IN vs start, billable OUT vs end. */
-export interface PayrollRuleBadges {
+interface PayrollRuleBadges {
     arrival: ShiftRuleBadge | null;
     departure: ShiftRuleBadge | null;
 }

@@ -8,8 +8,8 @@
 import type { OrdinaryCycleWeeks } from '../ordinary-hours-cycle';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
-export type ComplianceCheckInput = any; // Legacy alias
-export type ComplianceResult = any;     // Legacy alias
+type ComplianceCheckInput = any; // Legacy alias
+type ComplianceResult = any;     // Legacy alias
 
 export type V8ShiftId = string;
 export type V8EmpId   = string;
@@ -32,7 +32,7 @@ export type V8RoleId  = string;
  * — the same separation `target_requires_flexible` uses for FPT.
  */
 export type V8ContractType = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'FLEXI_PART_TIME';
-export type V8Severity     = 'WARNING' | 'BLOCKING';
+type V8Severity     = 'WARNING' | 'BLOCKING';
 export type V8Status       = 'PASS' | 'WARNING' | 'BLOCKING';
 
 /** Unified shift representation for the V8 engine */

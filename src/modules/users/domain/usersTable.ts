@@ -224,7 +224,7 @@ export type UsersColumnId =
     | 'name' | 'email' | 'organization' | 'department' | 'subDepartment' | 'role' | 'employment'
     | 'remuneration' | 'access' | 'status' | 'startDate' | 'endDate' | 'skills' | 'licences' | 'workRights';
 
-export type SortDirection = 'ascending' | 'descending';
+type SortDirection = 'ascending' | 'descending';
 
 export interface UsersSort {
     column: UsersColumnId;
@@ -241,7 +241,7 @@ const STATUS_ORDER: Record<ContractStatus, number> = { active: 0, upcoming: 1, e
 const ONGOING = '9999-12-31';
 
 /** What a row sorts by in a column; null when the cell is empty (always sorted last). */
-export function sortValueOf(row: UsersRow, column: UsersColumnId, today: string): string | number | null {
+function sortValueOf(row: UsersRow, column: UsersColumnId, today: string): string | number | null {
     const { group: g, contract: c } = row;
     switch (column) {
         case 'name': return g.person.name;

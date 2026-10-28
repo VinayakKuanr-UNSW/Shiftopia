@@ -5,12 +5,12 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface CanPublishRosterInput {
+interface CanPublishRosterInput {
     rosterId: string;
     rosterStatus: 'draft' | 'published';
 }
 
-export interface CanPublishRosterOutput {
+interface CanPublishRosterOutput {
     canPublish: boolean;
     reason?: string;
     validationErrors?: string[];
@@ -53,7 +53,7 @@ export function checkRosterPublishNotice(
  * - Roster must have at least one shift
  * - All shifts must have required fields filled
  */
-export async function canPublishRoster(
+async function canPublishRoster(
     input: CanPublishRosterInput
 ): Promise<CanPublishRosterOutput> {
     const { rosterId, rosterStatus } = input;

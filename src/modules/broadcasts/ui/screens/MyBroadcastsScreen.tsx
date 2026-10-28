@@ -57,7 +57,7 @@ import { ChannelView } from '../views/ChannelView.view';
 // TYPES
 // ============================================================================
 
-export interface MyBroadcastsScreenProps {
+interface MyBroadcastsScreenProps {
   layout: 'desktop' | 'tablet' | 'mobile';
   scope?: import('@/platform/auth/types').ScopeSelection;
   searchQuery?: string;
@@ -457,4 +457,3 @@ export function MyBroadcastsScreen({
   );
 }
 
-export default MyBroadcastsScreen;

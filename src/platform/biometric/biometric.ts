@@ -95,7 +95,7 @@ export async function authenticateBiometric(
  * a device with no enrolled biometrics, it resolves `true` so a user is never
  * locked out of their own data.
  */
-export async function requireBiometricStepUp(reason: string): Promise<boolean> {
+async function requireBiometricStepUp(reason: string): Promise<boolean> {
   if (!isBiometricSupportedPlatform()) return true;
   const available = await checkBiometricAvailable();
   if (!available) return true;

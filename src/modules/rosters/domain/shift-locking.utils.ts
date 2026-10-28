@@ -79,7 +79,7 @@ export const isShiftCommenced = (
 };
 
 // Helper for policies
-export const canEditShiftPolicy = (shift: Shift): boolean => {
+const canEditShiftPolicy = (shift: Shift): boolean => {
     // Manager view - locked only if shift has started
     return !isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
 };

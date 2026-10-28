@@ -70,7 +70,7 @@ const AppCrossLogo: React.FC<{ className?: string }> = ({ className }) => (
 /* ============================================================
    TYPES FOR NAVIGATION TREE
    ============================================================ */
-export interface NavLeafItem {
+interface NavLeafItem {
   to: string;
   label: string;
   description?: string;
@@ -79,7 +79,7 @@ export interface NavLeafItem {
   onMouseEnter?: () => void;
 }
 
-export interface NavGroupSection {
+interface NavGroupSection {
   id: string;
   title: string;
   icon: LucideIcon;

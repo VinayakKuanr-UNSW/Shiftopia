@@ -21,14 +21,14 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface RosterTargetArgs {
+interface RosterTargetArgs {
     subDepartmentId: string;
     departmentId: string;
     organizationId: string;
     shiftDate: string;
 }
 
-export interface RosterTarget {
+interface RosterTarget {
     rosterId: string;
     rosterSubgroupId: string;
     /**
@@ -67,8 +67,8 @@ export interface RosterTarget {
  * Resolved by `external_id`, not by name: the id is the stable key and is what
  * `enforce_exactly_three_groups` itself checks.
  */
-export const OFFICE_GROUP_EXTERNAL_ID = 'office';
-export const OFFICE_SUBGROUP_NAME = 'Administration';
+const OFFICE_GROUP_EXTERNAL_ID = 'office';
+const OFFICE_SUBGROUP_NAME = 'Administration';
 
 /**
  * Resolve the draft roster covering `shiftDate` for this sub-department, and a
@@ -206,7 +206,7 @@ async function resolveSubgroup(
    Pre-flight
    ──────────────────────────────────────────────────────────────────────────── */
 
-export interface RosterCoverage {
+interface RosterCoverage {
     /** Dates in the window with a draft, unlocked roster — where Apply can write. */
     writable: Set<string>;
     /** Dates whose only covering roster is published or locked (cl 38.2). */

@@ -36,7 +36,7 @@ export interface AttendanceInput {
 }
 
 /** Per-shift classification flags. `worked` is the denominator for the in/out buckets. */
-export interface AttendanceFlags {
+interface AttendanceFlags {
   worked: boolean;
   noShow: boolean;
   autoClockOut: boolean;

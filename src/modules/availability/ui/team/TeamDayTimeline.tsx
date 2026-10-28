@@ -99,7 +99,7 @@ const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) =>
     );
 };
 
-export const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelectMember }) => {
+const TeamDayTimeline: React.FC<Props> = ({ members, date, cells, onSelectMember }) => {
     const { isDark } = useTheme();
 
     // Fixed 00:00 to 24:00 (00:00) 24-hour day grid with 1-hour steps

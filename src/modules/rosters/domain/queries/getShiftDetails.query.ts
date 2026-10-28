@@ -5,7 +5,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 
-export interface ShiftDetails {
+interface ShiftDetails {
     id: string;
     shiftDate: string;
     startTime: string;
@@ -76,7 +76,7 @@ interface ShiftQueryResult {
 /**
  * Fetch detailed shift information with related data
  */
-export async function getShiftDetails(
+async function getShiftDetails(
     shiftId: string
 ): Promise<ShiftDetails | null> {
     if (!shiftId) return null;

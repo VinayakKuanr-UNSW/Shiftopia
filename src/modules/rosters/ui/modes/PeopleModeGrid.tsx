@@ -72,7 +72,7 @@ import {
 
 // Re-export for backward compatibility if needed, or just use the imported ones
 export type EmployeeShift = PeopleModeShift;
-export type Employee = PeopleModeEmployee;
+type Employee = PeopleModeEmployee;
 
 // ── Module-scope no-op so that an absent onAssignShift prop doesn't bust
 //    referential equality on every render of every DroppableDateCell.
@@ -303,7 +303,7 @@ ShiftRowMenu.displayName = 'ShiftRowMenu';
 /* ============================================================
    MAIN COMPONENT
    ============================================================ */
-export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
+const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   employees,
   dates,
   canEdit,

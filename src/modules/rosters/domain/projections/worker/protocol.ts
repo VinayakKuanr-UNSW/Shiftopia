@@ -29,7 +29,7 @@ import type { ShiftCostBreakdown, ShiftPayTermsField } from '../utils/cost/types
 
 // ── Projection Modes ──────────────────────────────────────────────────────────
 
-export type ProjectionMode = 'group' | 'people' | 'events' | 'roles';
+type ProjectionMode = 'group' | 'people' | 'events' | 'roles';
 
 // ── Worker DTOs (Main Thread → Worker) ────────────────────────────────────────
 

@@ -44,7 +44,7 @@ export interface CopyShiftSource {
     subDepartmentId: string;
 }
 
-export interface CopyShiftFlowProps {
+interface CopyShiftFlowProps {
     /** The shift to copy; null keeps the dialog closed. */
     source: CopyShiftSource | null;
     /** Where the range starts out ending — typically the end of the visible week. */

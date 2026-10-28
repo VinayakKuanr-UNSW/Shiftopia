@@ -62,13 +62,13 @@ import {
 type EngineEmploymentType = NonNullable<CostCalculatorOptions['employmentType']>;
 
 /** A mapped input plus its provenance (returned by the *WithProvenance fetch). */
-export interface GrossPayInputWithProvenance {
+interface GrossPayInputWithProvenance {
   input: GrossPayShiftInput;
   provenance: GrossPayInputProvenance;
 }
 
 /** Scope + options for the period fetchers. */
-export interface GrossPayPeriodBounds extends PeriodBounds {
+interface GrossPayPeriodBounds extends PeriodBounds {
   organizationId?: string | null;
   departmentId?: string | null;
   subDepartmentId?: string | null;
@@ -77,7 +77,7 @@ export interface GrossPayPeriodBounds extends PeriodBounds {
   subDeptIds?: string[];
 }
 
-export interface GrossPayFetchOptions {
+interface GrossPayFetchOptions {
   /**
    * When true (default) only shifts whose timesheet is FINAL — status ∈
    * {approved, locked} — are priced. This is the pay-run mode. When false, every
@@ -161,7 +161,7 @@ function sameBasis(a: EngineEmploymentType | undefined, b: EngineEmploymentType 
  * person's own value — the linked contract, else the profile — only refines
  * Part-Time to Flexible Part-Time, or stands in when the shift has no target.
  */
-export function resolveRowEmploymentType(row: GrossPayShiftRow): EngineEmploymentType | undefined {
+function resolveRowEmploymentType(row: GrossPayShiftRow): EngineEmploymentType | undefined {
   const target = mapEmploymentType(row.target_employment_type);
   const personal = mapEmploymentType(row._payContract?.employmentStatus ?? row._employmentType);
   if (!target) return personal;
@@ -673,7 +673,7 @@ function passesApprovalGate(row: GrossPayShiftRow, approvedOnly: boolean): boole
  * With `approvedOnly` (default true) only FINAL (approved/locked/no-show)
  * timesheets are included — that is the pay-run set.
  */
-export async function getGrossPayInputsForPeriod(
+async function getGrossPayInputsForPeriod(
   bounds: GrossPayPeriodBounds,
   opts: GrossPayFetchOptions = {},
 ): Promise<GrossPayShiftInput[]> {
@@ -685,7 +685,7 @@ export async function getGrossPayInputsForPeriod(
  * Same as {@link getGrossPayInputsForPeriod} but returns each input paired with
  * its provenance (timesheet status, manager-edited flag, employment-type gap).
  */
-export async function getGrossPayInputsWithProvenance(
+async function getGrossPayInputsWithProvenance(
   bounds: GrossPayPeriodBounds,
   opts: GrossPayFetchOptions = {},
 ): Promise<GrossPayInputWithProvenance[]> {

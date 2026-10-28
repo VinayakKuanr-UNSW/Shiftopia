@@ -61,7 +61,7 @@ interface ShiftDetailsDialogProps {
 }
 
 // ── Cost Tooltip ──────────────────────────────────────────────────────────
-export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
+const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
   if (!breakdown) return null;
   const { totalCost, ordinaryCost, overtimeCost, allowanceCost, ordinaryHours, overtimeHours, breakdown: details } = breakdown;
   return (

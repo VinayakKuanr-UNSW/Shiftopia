@@ -69,7 +69,7 @@ export const BADGE_CODES: BadgeCodeItem[] = [
 // PROPS
 // ============================================================================
 
-export interface ShiftCardLegendProps {
+interface ShiftCardLegendProps {
     className?: string;
     defaultCollapsed?: boolean;
 }
@@ -170,4 +170,3 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
     );
 };
 
-export default ShiftCardLegend;

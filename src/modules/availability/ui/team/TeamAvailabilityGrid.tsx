@@ -53,7 +53,7 @@ import {
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 
-export type GridDensity = 'comfortable' | 'compact';
+type GridDensity = 'comfortable' | 'compact';
 
 const MemberContractsPopover: React.FC<{ member: TeamMember }> = ({ member }) => {
     const [open, setOpen] = React.useState(false);
@@ -403,7 +403,7 @@ const RowSummary: React.FC<{
     );
 };
 
-export const TeamAvailabilityGrid: React.FC<Props> = ({
+const TeamAvailabilityGrid: React.FC<Props> = ({
     members,
     dates,
     cells,

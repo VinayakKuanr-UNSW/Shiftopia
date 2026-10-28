@@ -52,7 +52,7 @@ export const calculateTimeRemaining = (deadlineISO: string): TimeRemaining => {
 /**
  * Get color classes for a group type
  */
-export const getGroupColors = (group: GroupType): { bg: string; accent: string; border: string } => {
+const getGroupColors = (group: GroupType): { bg: string; accent: string; border: string } => {
   const colors: Record<GroupType, { bg: string; accent: string; border: string }> = {
     convention: {
       bg: 'bg-purple-500',
@@ -87,7 +87,7 @@ export const getGroupColors = (group: GroupType): { bg: string; accent: string; 
 /**
  * Get color classes for fatigue risk level
  */
-export const getFatigueColors = (risk: string): { text: string; bg: string } => {
+const getFatigueColors = (risk: string): { text: string; bg: string } => {
   switch (risk) {
     case 'low':
       return { text: 'text-green-400', bg: 'bg-green-500/10' };
@@ -103,7 +103,7 @@ export const getFatigueColors = (risk: string): { text: string; bg: string } => 
 /**
  * Get status counts from shifts array
  */
-export const getStatusCounts = (shifts: OpenShift[]): StatusCounts => {
+const getStatusCounts = (shifts: OpenShift[]): StatusCounts => {
   return shifts.reduce(
     (acc, shift) => {
       acc[shift.status] = (acc[shift.status] || 0) + 1;
@@ -118,7 +118,7 @@ export const getStatusCounts = (shifts: OpenShift[]): StatusCounts => {
  * Hierarchy filtering is no longer done here — the global ScopeFilterBanner
  * controls which shifts are fetched from the API.
  */
-export const filterShifts = (
+const filterShifts = (
   shifts: OpenShift[],
   searchQuery: string,
   filters: FilterState

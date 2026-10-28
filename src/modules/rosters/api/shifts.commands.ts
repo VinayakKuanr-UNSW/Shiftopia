@@ -101,7 +101,7 @@ function complianceFailureReason(v: { status: string; violations: string[] }): s
 // ============================================================
 
 /** Publish — compliance checked per-shift, partial success supported. */
-export type BulkPublishPartialResult = {
+type BulkPublishPartialResult = {
     /** IDs that were fully published in the DB */
     publishedIds: string[];
     /** IDs that failed the client-side compliance pre-check */
@@ -111,13 +111,13 @@ export type BulkPublishPartialResult = {
 };
 
 /** Unpublish — per-shift via processInChunks, partial success supported. */
-export type BulkUnpublishPartialResult = {
+type BulkUnpublishPartialResult = {
     unpublishedIds: string[];
     failed: Array<{ id: string; reason: string }>;
 };
 
 /** Delete — per-item via processInChunks, partial success supported. */
-export type BulkDeletePartialResult = {
+type BulkDeletePartialResult = {
     deletedIds: string[];
     failed: Array<{ id: string; reason: string }>;
 };
@@ -126,7 +126,7 @@ export type BulkDeletePartialResult = {
  * Publish validation result — returned by validateBulkPublishCompliance.
  * Mirrors the shape expected by BulkActionsToolbar's onValidatePublish prop.
  */
-export type BulkPublishValidationResult = {
+type BulkPublishValidationResult = {
     eligible: string[];
     complianceFailed: Array<{ id: string; reason: string }>;
     skipped: Array<{ id: string; reason: string }>;

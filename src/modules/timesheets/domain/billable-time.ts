@@ -17,7 +17,7 @@
 import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 
-export type BillableSideSource = 'manual' | 'snapped' | 'missing';
+type BillableSideSource = 'manual' | 'snapped' | 'missing';
 
 export interface BillableSide {
   /** 'HH:MM' Sydney wall-clock, or null if not yet resolvable / genuinely missing. */
@@ -168,7 +168,7 @@ export function calculateNetMinutes(
 }
 
 /** Day-type + employment-context inputs the minimum-engagement PAYMENT floor needs. */
-export interface MinEngagementFloorInput {
+interface MinEngagementFloorInput {
   isTraining?: boolean;
   isSunday?: boolean;
   isPublicHoliday?: boolean;
@@ -185,7 +185,7 @@ export interface MinEngagementFloorInput {
   isSecurityRole?: boolean;
 }
 
-export interface FlooredNetMinutes {
+interface FlooredNetMinutes {
   /** The value every consumer (display + payroll) should actually use. */
   netMinutes: number;
   /** The EBA minimum that applied (0 when no floor applies, e.g. Full-Time). */

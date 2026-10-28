@@ -1,6 +1,6 @@
 import type { CostCalculatorOptions } from './types';
 
-export type ShiftAllowances = NonNullable<CostCalculatorOptions['allowances']>;
+type ShiftAllowances = NonNullable<CostCalculatorOptions['allowances']>;
 
 /**
  * The allowance flags the cost engines read, resolved from a shift row.

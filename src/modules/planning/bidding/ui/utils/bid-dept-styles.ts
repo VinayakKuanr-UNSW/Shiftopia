@@ -16,7 +16,7 @@ export function getDeptColor(groupType: string | null | undefined, dept: string)
     return 'dept-badge-default';
 }
 
-export function getCardBg(groupType: string | null | undefined, dept: string): string {
+function getCardBg(groupType: string | null | undefined, dept: string): string {
     const base = 'dept-card-base';
     const gt = (groupType || '').toLowerCase();
     const d = (dept || '').toLowerCase();

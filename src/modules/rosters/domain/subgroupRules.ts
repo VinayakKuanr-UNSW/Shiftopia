@@ -11,7 +11,7 @@
  * helpers let the UI not offer those actions in the first place.
  */
 
-export const OFFICE_GROUP_TYPE = 'office' as const;
+const OFFICE_GROUP_TYPE = 'office' as const;
 export const OFFICE_SUBGROUP_NAME = 'Administration';
 
 /**

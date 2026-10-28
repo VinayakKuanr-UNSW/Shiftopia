@@ -27,7 +27,7 @@ export const formatHours = (h: number): string => {
     return `${hours}h ${mins}m`;
 };
 
-export const formatTimeDisplay = (time: string): string => {
+const formatTimeDisplay = (time: string): string => {
     if (!time) return '—';
     const [h, m] = time.split(':').map(Number);
     const period = h >= 12 ? 'PM' : 'AM';

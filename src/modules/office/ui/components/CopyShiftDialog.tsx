@@ -59,7 +59,7 @@ const SECTIONS: readonly DaySection[] = [
     },
 ];
 
-export interface CopyShiftDialogProps {
+interface CopyShiftDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** Who and what is being copied, for the header. */
@@ -232,4 +232,3 @@ export const CopyShiftDialog: React.FC<CopyShiftDialogProps> = ({
     );
 };
 
-export default CopyShiftDialog;

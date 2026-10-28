@@ -47,7 +47,7 @@ export const ORD_CYCLE_WEEKS_DEFAULT = 4;
 export const ORD_CYCLE_ANCHOR_DEFAULT = '2024-01-01';
 
 /** cl 35.x(a) — the weekly basis the ladder is built from. */
-export const ORD_WEEKLY_LIMIT_DEFAULT = 38;
+const ORD_WEEKLY_LIMIT_DEFAULT = 38;
 
 export type OrdinaryCycleWeeks = 1 | 2 | 3 | 4;
 

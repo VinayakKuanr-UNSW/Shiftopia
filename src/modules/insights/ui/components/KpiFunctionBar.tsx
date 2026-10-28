@@ -127,4 +127,3 @@ export const KpiFunctionBar: React.FC<KpiFunctionBarProps> = ({
     );
 };
 
-export default KpiFunctionBar;

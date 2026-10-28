@@ -48,7 +48,7 @@ const unwrapChildren = (children: React.ReactNode): React.ReactNode[] => {
 /* ────────────────────────────────────────────────────────────────────────────
    MobileIconButton – 44×44 touch target (WCAG / ARIA compliant), 20×20 icon
    ──────────────────────────────────────────────────────────────────────────── */
-export const MobileIconButton = React.forwardRef<
+const MobileIconButton = React.forwardRef<
     HTMLButtonElement,
     {
         icon: React.ReactNode;

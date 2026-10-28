@@ -1341,4 +1341,3 @@ function getRuleIcon(ruleId: string) {
     }
 }
 
-export default ComplianceTabContent;

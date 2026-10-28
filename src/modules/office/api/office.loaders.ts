@@ -57,7 +57,7 @@ export interface EligibleEmployee {
     isSecurityRole: boolean;
 }
 
-export interface EligibilityLoad {
+interface EligibilityLoad {
     employees: EligibleEmployee[];
     findings: Finding[];
 }

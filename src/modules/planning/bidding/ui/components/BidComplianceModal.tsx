@@ -423,4 +423,3 @@ export function BidComplianceModal({
     );
 }
 
-export default BidComplianceModal;

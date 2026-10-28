@@ -192,7 +192,7 @@ interface ToggleRosterLockVariables {
   isLocked:        boolean;
 }
 
-export function useToggleRosterLock() {
+function useToggleRosterLock() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 
@@ -443,7 +443,7 @@ export function useApplyTemplate() {
 
 // ── useClearTemplate ──────────────────────────────────────────────────────────
 
-export function useClearTemplate() {
+function useClearTemplate() {
   const queryClient = useQueryClient();
   const { toast }   = useToast();
 

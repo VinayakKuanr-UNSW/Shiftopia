@@ -44,7 +44,7 @@ import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
 import { OPEN_BIDS_GROUP_BY_OPTIONS } from '../views/OpenBidsView/open-bids-grouping';
 import type { BidToggle, ToggleCounts } from '../views/OpenBidsView/types';
 
-export const OPEN_BIDS_STATUS_TABS: {
+const OPEN_BIDS_STATUS_TABS: {
   id: BidToggle;
   label: string;
   icon: typeof Flame;
@@ -207,7 +207,7 @@ const OPEN_BIDS_VIEWS: ReadonlyArray<ToolbarSegmentedOption<'card' | 'table'>> =
   { id: 'card', icon: <LayoutGrid className="h-3.5 w-3.5" />, label: 'Card' },
 ];
 
-export interface OpenBidsFunctionBarProps {
+interface OpenBidsFunctionBarProps {
   viewMode: 'card' | 'table';
   onViewModeChange: (mode: 'card' | 'table') => void;
   selectedDate: Date;
@@ -316,4 +316,3 @@ export const OpenBidsFunctionBar: React.FC<OpenBidsFunctionBarProps> = ({
   );
 };
 
-export default OpenBidsFunctionBar;

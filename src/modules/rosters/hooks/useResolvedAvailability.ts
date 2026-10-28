@@ -33,7 +33,7 @@ interface UseResolvedAvailabilityResult {
  *   Added in the sub-department scoping work; existing callers that omit it
  *   get the same behaviour as before.
  */
-export function useResolvedAvailability(
+function useResolvedAvailability(
     profileIds: string[],
     dates: Date[],
     enabled: boolean = true,
@@ -98,4 +98,3 @@ export function useResolvedAvailability(
     };
 }
 
-export default useResolvedAvailability;

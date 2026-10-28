@@ -8,7 +8,7 @@ import React from 'react';
  * Default groups seeded when a new template is created.
  * This must match the database trigger `trigger_seed_fixed_template_groups`.
  */
-export const DEFAULT_GROUPS = [
+const DEFAULT_GROUPS = [
     { name: 'Convention Centre', color: '#3b82f6', icon: 'building' },
     { name: 'Exhibition Centre', color: '#22c55e', icon: 'layout-grid' },
     { name: 'Theatre', color: '#ef4444', icon: 'theater' },
@@ -64,7 +64,7 @@ export const GROUP_CONFIG: Record<
 /**
  * Color map for group names (simpler version for ShiftCard etc.)
  */
-export const GROUP_COLOR_MAP: Record<string, string> = {
+const GROUP_COLOR_MAP: Record<string, string> = {
     'Convention Centre': 'blue',
     'Exhibition Centre': 'green',
     Theatre: 'red',
@@ -72,6 +72,6 @@ export const GROUP_COLOR_MAP: Record<string, string> = {
     Office: 'cyan',
 };
 
-export function getGroupColor(groupName: string): string {
+function getGroupColor(groupName: string): string {
     return GROUP_COLOR_MAP[groupName] || 'blue';
 }

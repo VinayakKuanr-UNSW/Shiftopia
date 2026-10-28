@@ -34,7 +34,7 @@ import type {
 } from './types';
 
 /** cl 35.x(a) — the weekly basis the ladder is built from. */
-export const DEFAULT_WEEKLY_HOURS = 38;
+const DEFAULT_WEEKLY_HOURS = 38;
 
 /**
  * Ordinary hours per weekday, from the contract: weekly hours spread over
@@ -67,7 +67,7 @@ export function attachLeaveCredit(
     }));
 }
 
-export interface RequirementInput {
+interface RequirementInput {
     facts: EmployeeContractFacts;
     /** Roster period, inclusive, `yyyy-MM-dd`. */
     periodStart: string;
@@ -90,7 +90,7 @@ export interface RequirementInput {
     patternHoursByWeekday: ReadonlyMap<IsoWeekday, number>;
 }
 
-export interface RequirementResult {
+interface RequirementResult {
     cycles: CycleRequirement[];
     findings: Finding[];
 }
@@ -103,7 +103,7 @@ export function isoWeekdayOf(dateISO: string): IsoWeekday {
 }
 
 /** Inclusive list of dates between two `yyyy-MM-dd` bounds. Empty if reversed. */
-export function datesBetween(startISO: string, endISO: string): string[] {
+function datesBetween(startISO: string, endISO: string): string[] {
     const a = toEpochDay(startISO);
     const b = toEpochDay(endISO);
     if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return [];
