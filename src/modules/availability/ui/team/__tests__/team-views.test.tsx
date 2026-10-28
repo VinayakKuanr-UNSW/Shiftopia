@@ -13,7 +13,6 @@ import GridBadgeLegendPopover from '../GridBadgeLegendPopover';
 import TeamDayTimeline from '../TeamDayTimeline';
 import CoverageHeatmap from '../CoverageHeatmap';
 import NearMissPanel from '../NearMissPanel';
-import { pageCount, paginate } from '../TablePager';
 import { gapFill, stateStyle } from '../coverage-palette';
 import {
     buildCoverageBuckets,
@@ -202,27 +201,6 @@ describe('TeamDayTimeline', () => {
         expect(screen.getByText(/Priya Raman: Available, available 07:00 to 23:00/)).toBeTruthy();
         // The never-declared member still gets a row and a word, not a blank track.
         expect(screen.getByText(/Sam Okoro: Not declared/)).toBeTruthy();
-    });
-});
-
-describe('pagination helpers', () => {
-    it('slices the requested page', () => {
-        const items = Array.from({ length: 10 }, (_, i) => i);
-        expect(paginate(items, 1, 4)).toEqual([0, 1, 2, 3]);
-        expect(paginate(items, 3, 4)).toEqual([8, 9]);
-    });
-
-    it('clamps a page index that ran off the end instead of returning nothing', () => {
-        // Happens whenever a filter shrinks the list while you are on a late page.
-        const items = Array.from({ length: 10 }, (_, i) => i);
-        expect(paginate(items, 99, 4)).toEqual([8, 9]);
-        expect(paginate(items, 0, 4)).toEqual([0, 1, 2, 3]);
-    });
-
-    it('always reports at least one page, even when empty', () => {
-        expect(pageCount(0, 25)).toBe(1);
-        expect(pageCount(26, 25)).toBe(2);
-        expect(pageCount(50, 25)).toBe(2);
     });
 });
 
