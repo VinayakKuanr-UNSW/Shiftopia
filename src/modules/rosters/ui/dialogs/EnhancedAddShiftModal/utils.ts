@@ -62,3 +62,22 @@ export const isShiftStarted = (date: Date | string | undefined, startTime: strin
         return false;
     }
 };
+
+/**
+ * Why a NEW roster shift cannot be saved at this start, or null. A start that
+ * has passed — an earlier day, or earlier today — is refused by the database
+ * (trg_shift_not_started). Editing an existing shift is governed by the
+ * read-only rules, and a template shift has a weekday rather than a date.
+ */
+export const newShiftStartRefusal = (input: {
+    editMode: boolean;
+    isTemplateMode: boolean;
+    date: Date | undefined;
+    startTime: string | undefined;
+    timezone?: string;
+}): string | null => {
+    if (input.editMode || input.isTemplateMode) return null;
+    const passed = isDateInPast(input.date, input.timezone)
+        || isShiftStarted(input.date, input.startTime, input.timezone);
+    return passed ? 'This start time has already passed' : null;
+};
