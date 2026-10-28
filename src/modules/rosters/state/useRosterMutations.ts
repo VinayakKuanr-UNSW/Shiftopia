@@ -18,7 +18,6 @@ import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { templateKeys } from '@/modules/templates/hooks/queries/useTemplateQueries';
 import { rostersApi } from '@/modules/rosters/api/rosters.api';
 import {
-  cloneRosterSubgroup,
   deleteRosterSubgroup,
   renameRosterSubgroup,
   type SubgroupScope,
@@ -351,7 +350,7 @@ export function useApplyTemplate() {
 // ── useClearTemplate ──────────────────────────────────────────────────────────
 
 
-// ── Sub-group changes: delete / rename / clone ────────────────────────────────
+// ── Sub-group changes: delete / rename ────────────────────────────────────────
 //
 // Each acts on ONE group of ONE sub-department's roster, from today to the end
 // of the range (days before today are never changed). The dialogs preview with
@@ -409,29 +408,6 @@ export function useRenameSubGroup() {
     onError: (err) => {
       console.error('[useRenameSubGroup]', err);
       toast({ title: 'Could not rename the subgroup', description: errorMessage(err, 'Failed to rename subgroup'), variant: 'destructive' });
-    },
-  });
-}
-
-export function useCloneSubGroup() {
-  const queryClient = useQueryClient();
-  const { toast }   = useToast();
-
-  return useMutation({
-    mutationFn: ({ scope, sourceName, newName }: { scope: SubgroupScope; sourceName: string; newName: string }) =>
-      cloneRosterSubgroup(scope, sourceName, newName, false),
-
-    onSuccess: (result, { newName }) => {
-      invalidateRosterContent(queryClient);
-      toast({
-        title: 'Subgroup cloned',
-        description: `“${newName}” created with ${result.shiftsCopied} shift${result.shiftsCopied !== 1 ? 's' : ''}.`,
-      });
-    },
-
-    onError: (err) => {
-      console.error('[useCloneSubGroup]', err);
-      toast({ title: 'Could not clone the subgroup', description: errorMessage(err, 'Failed to clone subgroup'), variant: 'destructive' });
     },
   });
 }

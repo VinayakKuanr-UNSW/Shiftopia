@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Users, AlertTriangle, Plus, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2, ShieldCheck, Layers } from 'lucide-react';
+import { Calendar, Users, AlertTriangle, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2, ShieldCheck, Layers } from 'lucide-react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Card } from '@/modules/core/ui/primitives/card';
 import { format, parseISO } from 'date-fns';
 import { Shift } from '@/modules/rosters/api/shifts.api';
-import { useEvents, useUnpublishShift, useCreateShift } from '@/modules/rosters/state/useRosterShifts';
+import { useEvents, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
 import { SmartShiftCard, ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
@@ -128,7 +128,6 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   canEdit = false,
 }) => {
   const { toast } = useToast();
-  const createShiftMutation = useCreateShift();
   const [collapsedEvents, setCollapsedEvents] = useState<Set<string>>(new Set());
 
   // Per-event "+N more" expansion (session-only), keyed by eventId.
@@ -169,51 +168,6 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     }
   };
 
-  const handleCloneShift = async (shift: Shift) => {
-    try {
-      const cloneData: any = {
-        roster_id: shift.roster_id,
-        department_id: shift.department_id,
-        sub_department_id: shift.sub_department_id,
-        shift_date: shift.shift_date,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        organization_id: shift.organization_id,
-        group_type: shift.group_type,
-        sub_group_name: shift.sub_group_name,
-        shift_group_id: (shift as any).shift_group_id,
-        shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
-        role_id: shift.role_id,
-        remuneration_level: shift.remuneration_level,
-        paid_break_minutes: shift.paid_break_minutes,
-        unpaid_break_minutes: shift.unpaid_break_minutes,
-        timezone: shift.timezone,
-        required_skills: shift.required_skills || [],
-        required_licenses: shift.required_licenses || [],
-        event_ids: shift.event_ids || [],
-        tags: shift.tags || [],
-        notes: shift.notes,
-        is_training: shift.is_training,
-        // Mandatory on every shift — without it every Clone failed with
-        // "target_employment_type is required" (fn_shift_inherit_template_row).
-        target_employment_type: (shift as any).target_employment_type,
-        target_requires_flexible: (shift as any).target_requires_flexible,
-      };
-
-      await createShiftMutation.mutateAsync(cloneData);
-      toast({
-        title: 'Shift Cloned',
-        description: 'A new draft replica has been created (unassigned).',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Clone Failed',
-        description: error.message || 'Could not clone shift.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const buildShiftMenu = (shift: any) => {
     const { isPast } = resolveShiftStatus(shift);
 
@@ -230,20 +184,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
         <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
           {canEdit && (
             <>
-              {/* 1. Clone */}
-              <DropdownMenuItem
-                disabled={isPast}
-                onClick={() => handleCloneShift(shift)}
-                className={cn(
-                  "text-popover-foreground hover:bg-accent cursor-pointer",
-                  isPast && "text-muted-foreground/50 cursor-not-allowed"
-                )}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Clone Shift {isPast && '(Locked)'}
-              </DropdownMenuItem>
-
-              {/* 2. Edit */}
+              {/* 1. Edit */}
               <DropdownMenuItem
                 disabled={isPast}
                 onClick={() => onEditShift?.(shift)}
@@ -258,7 +199,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
             </>
           )}
 
-          {/* 3. Audit */}
+          {/* 2. Audit */}
           <DropdownMenuItem
             onClick={() => setAuditedShift(shift)}
             className="text-popover-foreground hover:bg-accent cursor-pointer"
@@ -267,7 +208,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
             Audit Compliance
           </DropdownMenuItem>
 
-          {/* 4. More: Scheduled vs Actual vs Billable & Variance */}
+          {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
           <DropdownMenuItem
             onClick={() => setExpandedShift(shift)}
             className="text-popover-foreground hover:bg-accent cursor-pointer"

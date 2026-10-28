@@ -27,19 +27,6 @@ import type { OrdinaryCycleWeeks } from '@/modules/compliance/ordinary-hours-cyc
    Pattern — what a normal week looks like
    ──────────────────────────────────────────────────────────────────────────── */
 
-/**
- * ISO weekday. 1 = Monday … 7 = Sunday.
- *
- * Deliberately ISO rather than JavaScript's `Date#getDay()` (0 = Sunday):
- * cl 35.1(b) allows ordinary hours "Monday to Sunday inclusive", and every
- * cycle boundary in `ordinary-hours-cycle.ts` is anchored to a Monday. Using
- * the same origin as the clause and the anchor removes an off-by-one that
- * would otherwise sit between this module and every date it reasons about.
- */
-export type IsoWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-
-
-
 /* ────────────────────────────────────────────────────────────────────────────
    Requirement — what the contract owes
    ──────────────────────────────────────────────────────────────────────────── */
@@ -117,49 +104,6 @@ export interface ExistingShift {
      */
     rosterPublishedOrLocked: boolean;
 }
-
-/**
- * The requirement for ONE anchored work cycle.
- *
- * There is deliberately no "requirement for the roster period" type. cl 35.x(a)
- * caps a CYCLE, and the roster period is an unrelated calendar chosen by a
- * manager; a period of 15 Jul – 15 Aug against a four-week cycle anchored on
- * 2024-01-01 straddles two of them, and each is capped on its own. Producing a
- * single number for the period would be the averaging bug this whole module
- * exists to avoid.
- */
-export interface CycleRequirement {
-    cycleIndex: number;
-    /** `yyyy-MM-dd`, inclusive. */
-    start: string;
-    /** `yyyy-MM-dd`, inclusive. */
-    endInclusive: string;
-    /** Full ceiling for the cycle, before pro-rating. `weeklyHours × weeks`. */
-    ceilingHours: number;
-    /** Days of this cycle that lie inside BOTH the contract's life and the roster period. */
-    activeDays: number;
-    /** `weeks × 7`. */
-    cycleDays: number;
-    /** `ceilingHours × activeDays / cycleDays`. What the employee is owed. */
-    requiredHours: number;
-    /** Existing rostered hours in this cycle, across EVERY sub-department. */
-    existingHours: number;
-    /** Hours discharged by leave that credits. */
-    paidLeaveHours: number;
-    /** Hours discharged by public holidays under cl 56.4. */
-    publicHolidayCreditHours: number;
-    /** Dates nothing may be rostered on, and which discharge nothing. */
-    blockedDates: string[];
-    /** `max(0, required − existing − paidLeave − phCredit)`. */
-    deficitHours: number;
-    /**
-     * The same deficit computed under the OTHER reading of every 'ELECTION'
-     * leave day in this cycle. Equal to `deficitHours` when there are none.
-     * Both are shown; neither is chosen for the user.
-     */
-    deficitHoursIfElectionUnpaid: number;
-}
-
 
 /* ────────────────────────────────────────────────────────────────────────────
    Findings
