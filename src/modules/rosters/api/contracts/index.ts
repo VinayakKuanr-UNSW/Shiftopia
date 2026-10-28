@@ -198,7 +198,7 @@ export const CancelShiftResponseSchema = z.object({
   message: z.string().optional(),
 });
 
-// sm_accept_offer / sm_reject_offer / sm_decline_offer
+// sm_accept_offer / sm_reject_offer
 export const OfferActionResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),

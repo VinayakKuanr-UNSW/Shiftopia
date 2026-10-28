@@ -1515,17 +1515,6 @@ export const shiftsQueries = {
     },
 
     /**
-     * Decline a shift offer — delegates to the typed RPC client.
-     */
-    async declineOffer(shiftId: string) {
-        return callAuthenticatedRpc(
-            'sm_decline_offer',
-            (userId) => ({ p_shift_id: shiftId, p_user_id: userId }),
-            OfferActionResponseSchema,
-        );
-    },
-
-    /**
      * Get all open shifts available for bidding (S5/S6)
      * Enforces Access Control: Org -> Dept -> SubDept
      */

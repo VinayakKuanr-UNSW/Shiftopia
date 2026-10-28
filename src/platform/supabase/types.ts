@@ -6978,25 +6978,9 @@ export type Database = {
             Args: { p_actor_id?: string; p_reason: string; p_shift_id: string }
             Returns: Json
           }
-      check_daily_hours_limit: {
-        Args: {
-          p_additional_hours: number
-          p_date: string
-          p_employee_id: string
-        }
-        Returns: boolean
-      }
       check_in_shift: {
         Args: { p_lat: number; p_lon: number; p_shift_id: string }
         Returns: Json
-      }
-      check_monthly_hours_limit: {
-        Args: {
-          p_additional_hours: number
-          p_date: string
-          p_employee_id: string
-        }
-        Returns: boolean
       }
       check_rest_period: {
         Args: {
@@ -8035,10 +8019,6 @@ export type Database = {
         }
         Returns: Json
       }
-      sm_decline_offer: {
-        Args: { p_shift_id: string; p_user_id: string }
-        Returns: Json
-      }
       sm_delete_shift: {
         Args: {
           p_expected_version?: number
@@ -8126,19 +8106,14 @@ export type Database = {
             Returns: Json
           }
       sm_request_is_system: { Args: never; Returns: boolean }
-      sm_request_trade:
-        | {
-            Args: { p_shift_id: string; p_target_employee_id?: string }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_shift_id: string
-              p_target_employee_id?: string
-              p_user_id: string
-            }
-            Returns: Json
-          }
+      sm_request_trade: {
+        Args: {
+          p_shift_id: string
+          p_target_employee_id?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       sm_require_assignee_or: {
         Args: { p_actor: string; p_manager_action: string; p_shift_id: string }
         Returns: undefined
