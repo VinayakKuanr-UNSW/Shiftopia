@@ -764,7 +764,7 @@ export type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' |
  *  - cutaway:    AMBER    office:     CYAN
  *
  * There is NO fallback colour. The database allows exactly these five groups
- * (`enforce_exactly_three_groups`, `template_group_type`), so a shift that maps
+ * (`enforce_standard_roster_groups`, `template_group_type`), so a shift that maps
  * to none of them is a data or wiring bug: it renders neutral ('default') and
  * says so in the console during development, instead of being painted a
  * plausible-looking colour (it used to be purple, which is how Office shifts on

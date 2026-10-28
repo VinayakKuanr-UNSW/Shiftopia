@@ -215,7 +215,7 @@ describe('a second template adds on top', () => {
     }
     const apply = (templateId: string) => personaClient('G2').rpc('apply_template_to_date_range_v2', {
         p_template_id: templateId, p_start_date: F2, p_end_date: F2, p_user_id: personaId('G2'),
-        p_source: 'roster_modal', p_target_department_id: D1, p_target_sub_department_id: S2, p_force_stack: false,
+        p_source: 'roster_modal', p_target_department_id: D1, p_target_sub_department_id: S2,
     });
     const preview = (templateId: string) => personaClient('G2').rpc('preview_template_application', {
         p_template_id: templateId, p_start_date: F2, p_end_date: F2,

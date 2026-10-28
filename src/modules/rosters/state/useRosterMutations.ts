@@ -158,20 +158,6 @@ interface ApplyTemplateVariables {
   source:                 'templates_page' | 'roster_modal';
   targetDepartmentId?:    string;
   targetSubDepartmentId?: string;
-  /** When true, bypasses the "shift already started" temporal guard so managers can
-   *  re-apply templates to today or past dates without an exception. The per-shift
-   *  template_instance_id duplicate check still prevents actual duplicates.
-   *
-   *  Defaults to FALSE. It previously defaulted to true, which meant every template
-   *  apply from the roster modal silently created shifts in the past — directly
-   *  against the rule that shifts are never created, edited or updated in the past
-   *  (decision 2026-08-05). Past shifts are now soft-skipped and reported through
-   *  `shifts_skipped`. Callers that genuinely need to backfill must opt in.
-   *
-   *  Sent as the RPC's `p_force_stack`, a misleading name kept only because
-   *  renaming a parameter means dropping the function: it has nothing to do with
-   *  stacking. A template always adds on top of what is already there. */
-  includeStartedShifts?:  boolean;
 }
 
 /**
@@ -282,7 +268,6 @@ export function useApplyTemplate() {
         p_source:                   vars.source,
         p_target_department_id:     vars.targetDepartmentId,
         p_target_sub_department_id: vars.targetSubDepartmentId,
-        p_force_stack:              vars.includeStartedShifts ?? false,
       });
 
       if (error) throw error;

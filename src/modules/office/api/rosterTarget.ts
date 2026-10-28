@@ -60,12 +60,12 @@ interface RosterTarget {
  * and every client-side group→colour map.
  *
  * THIS MODULE NEVER INSERTS A GROUP. `roster_groups` carries a live BEFORE
- * INSERT trigger, `trigger_enforce_exactly_three_groups`, which RAISEs unless
+ * INSERT trigger, `trigger_enforce_standard_roster_groups`, which RAISEs unless
  * `external_id` is one of the five fixed groups — NULL included. A missing group
  * means a malformed roster, reported rather than repaired from here.
  *
  * Resolved by `external_id`, not by name: the id is the stable key and is what
- * `enforce_exactly_three_groups` itself checks.
+ * `enforce_standard_roster_groups` itself checks.
  */
 const OFFICE_GROUP_EXTERNAL_ID = 'office';
 const OFFICE_SUBGROUP_NAME = 'Administration';

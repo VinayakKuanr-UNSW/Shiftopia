@@ -6860,7 +6860,6 @@ export type Database = {
       apply_template_to_date_range_v2: {
         Args: {
           p_end_date: string
-          p_force_stack?: boolean
           p_source?: string
           p_start_date: string
           p_target_department_id?: string
