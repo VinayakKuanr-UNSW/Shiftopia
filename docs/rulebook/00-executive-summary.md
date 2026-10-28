@@ -20,7 +20,7 @@ A React/TypeScript SPA (957 files, 17 feature modules under `src/modules/`) talk
 
 ## Confirmed platform-wide gate mechanism
 
-Every protected page is gated by exactly one mechanism: a `FeatureGate` component (`src/router/AppRouter.tsx`) checking `useAuth().hasPermission(featureString)` against a hard-coded access-level threshold table. A second, older permission spec (`access.policy.ts`) and a second route guard (`ProtectedRoute.tsx`) still exist in the codebase but are **dead code** — confirmed via exhaustive grep, not merely absent from a sample. See Ch. 8.
+Every protected page is gated by exactly one mechanism: a `FeatureGate` component (`src/router/AppRouter.tsx`) checking `useAuth().hasPermission(featureString)` against a hard-coded access-level threshold table. A second, older permission spec (`access.policy.ts`) and a second route guard (`ProtectedRoute.tsx`) were dead code and have since been deleted (`ProtectedRoute.tsx` on 2026-10-28). See Ch. 8.
 
 ## Scale snapshot (as of 2026-07-30)
 
