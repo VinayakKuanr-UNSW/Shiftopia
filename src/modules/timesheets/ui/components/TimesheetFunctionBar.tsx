@@ -37,7 +37,7 @@ import type { TimesheetRow } from '../../model/timesheet.types';
    STATUS TABS CONFIGURATION
    ============================================================ */
 
-export const TIMESHEET_STATUS_TABS = [
+const TIMESHEET_STATUS_TABS = [
   { id: 'all', label: 'All', icon: Shield, accent: 'slate' },
   { id: 'pending', label: 'Pending', icon: Clock, accent: 'amber' },
   { id: 'auto_approved', label: 'Auto-Approved', icon: Bot, accent: 'emerald' },

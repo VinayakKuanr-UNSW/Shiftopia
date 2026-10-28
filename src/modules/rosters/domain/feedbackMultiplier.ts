@@ -36,7 +36,7 @@ const FEEDBACK_MULT_DEFAULTS = {
     minRowsForSignal: 3,
 } as const;
 
-export interface FeedbackMultiplierConfig {
+interface FeedbackMultiplierConfig {
     lambda?: number;
     underStep?: number;
     overStep?: number;
@@ -46,7 +46,7 @@ export interface FeedbackMultiplierConfig {
     minRowsForSignal?: number;
 }
 
-export interface FeedbackMultiplierResult {
+interface FeedbackMultiplierResult {
     multiplier: number;
     rowsConsidered: number;
     contributions: Array<{

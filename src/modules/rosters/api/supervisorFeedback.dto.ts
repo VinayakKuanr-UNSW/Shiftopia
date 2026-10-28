@@ -66,7 +66,7 @@ export interface CreateFeedbackInput {
     rule_version_at_event?: number | null;
 }
 
-export interface FeedbackBucketKey {
+interface FeedbackBucketKey {
     function_code: FunctionCode;
     level: number;
 }

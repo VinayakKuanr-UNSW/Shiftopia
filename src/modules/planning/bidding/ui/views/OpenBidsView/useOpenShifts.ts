@@ -154,4 +154,3 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
 }
 
 // Re-export for backward compat
-export { useManagerBidShifts as useOpenShifts };

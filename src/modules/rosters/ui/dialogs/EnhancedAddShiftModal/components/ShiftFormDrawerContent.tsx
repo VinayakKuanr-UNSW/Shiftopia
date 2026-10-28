@@ -72,7 +72,7 @@ const GROUP_LABEL: Record<string, string> = {
     office: 'Office',
 };
 
-export const STEP = {
+const STEP = {
     role: 1,
     requirements: 2,
     timings: 3,
@@ -80,7 +80,7 @@ export const STEP = {
     compliance: 5,
 } as const;
 
-export const STEP_META = [
+const STEP_META = [
     { n: 1, key: 'role', label: 'Role & Context', shortLabel: 'Role', icon: Briefcase },
     { n: 2, key: 'requirements', label: 'Requirements & Notes', shortLabel: 'Requirements', icon: GraduationCap },
     { n: 3, key: 'timings', label: 'Timings & Breaks', shortLabel: 'Timings', icon: Clock },

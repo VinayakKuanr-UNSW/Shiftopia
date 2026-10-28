@@ -49,7 +49,7 @@ import { evaluateShapeForRow }           from '@/modules/rosters/api/shift-shape
 // refused or vanished shift must not read as assigned.
 const NOT_CHANGED = "Nothing changed: you can't change this shift, or it no longer exists. Refresh and try again.";
 
-export type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
+type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
 
 interface AssignShiftInput {
     shiftId:   string;

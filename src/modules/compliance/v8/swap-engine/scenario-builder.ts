@@ -44,7 +44,7 @@ function withoutShift(roster: RosterShift[], shift: RosterShift): RosterShift[] 
  * The V8SwapEngine evaluates each pair separately.
  * A chain is only feasible if ALL pairs are feasible.
  */
-export interface ChainSwapScenario {
+interface ChainSwapScenario {
     /** Each adjacent pair in the chain. */
     pairs: SwapScenario[];
     /** All parties in order. */

@@ -66,7 +66,7 @@ interface RoleResult {
  * Must match ROLES in ml/predict.py. Any other role passed to buildDemandAnalysis
  * will throw — callers should filter to this set first.
  */
-export const ML_KNOWN_ROLES = ['Usher', 'Security', 'Food Staff', 'Supervisor'] as const;
+const ML_KNOWN_ROLES = ['Usher', 'Security', 'Food Staff', 'Supervisor'] as const;
 export type MLKnownRole = typeof ML_KNOWN_ROLES[number];
 
 

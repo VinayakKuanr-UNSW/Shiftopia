@@ -42,8 +42,6 @@ export * from './hooks/useMyRoster';
 export * from './hooks/useRosterView';
 
 // Pages
-export { default as RostersPlannerPage } from './pages/RostersPlannerPage';
-export { default as MyRosterPage } from './pages/MyRosterPage';
 
 // UI Components
 export { LazyEnhancedAddShiftModal as EnhancedAddShiftModal } from './ui/dialogs/EnhancedAddShiftModal/Lazy';

@@ -9,31 +9,7 @@
  */
 import type { ShiftPayTermsField } from '@/modules/rosters/domain/projections/utils/cost/types';
 
-export type TimesheetStatus =
-    | "DRAFT"
-    | "SUBMITTED"
-    | "APPROVED"
-    | "REJECTED"
-    | "LOCKED"
 
-/**
- * Core Timesheet Interface
- * Immutability and versioning are key for payroll safety.
- */
-export interface Timesheet {
-    id: string | number // Legacy uses number, new uses string
-    employeeId: string
-    periodStart: string // ISO Date
-    periodEnd: string   // ISO Date
-    status: TimesheetStatus | string // Legacy uses string
-    totalHours: number
-    totalPay?: number // From legacy
-    rosterId?: number | string // From legacy
-    groups?: any[] // From legacy
-    version: number
-    createdAt: string
-    updatedAt: string
-}
 
 /**
  * Legacy TimesheetRow / UI Entry
@@ -136,24 +112,4 @@ export interface TimesheetRow {
     isSecurityRole?: boolean;
 }
 
-/**
- * Individual entry within a timesheet (Domain Model)
- */
-export interface TimesheetEntry {
-    id: string
-    timesheetId: string
-    date: string
-    startTime: string
-    endTime: string
-    breakMinutes: number
-    totalHours: number
-    description?: string
-    isOvertime: boolean
-}
 
-/**
- * Extended Timesheet with entries
- */
-export interface TimesheetWithEntries extends Timesheet {
-    entries: TimesheetEntry[]
-}

@@ -3,15 +3,15 @@ import { AlertTriangle, Inbox, Loader2, type LucideIcon } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 
-export type PageStateKind = 'loading' | 'error' | 'empty';
-export type PageStateScope = 'page' | 'section' | 'inline';
+type PageStateKind = 'loading' | 'error' | 'empty';
+type PageStateScope = 'page' | 'section' | 'inline';
 
-export interface PageStateAction {
+interface PageStateAction {
   label: string;
   onClick: () => void;
 }
 
-export interface PageStateProps {
+interface PageStateProps {
   /** The request state to communicate. Render content separately once it is ready. */
   state: PageStateKind;
   /** `page` fills a page region; `section` and `inline` fit embedded data areas. */
@@ -123,4 +123,3 @@ export function PageState({
   );
 }
 
-export default PageState;

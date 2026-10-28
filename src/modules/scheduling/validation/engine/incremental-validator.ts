@@ -205,7 +205,7 @@ function checkQualificationExpiry(
 // VALIDATOR CLASS
 // =============================================================================
 
-export class IncrementalValidator {
+class IncrementalValidator {
     /**
      * Run rules 1–6 against a candidate shift.
      * Returns an array of violations (empty = all clear).

@@ -20,7 +20,6 @@ import {
 
 // Re-exported for existing external consumers (AttendancePage.tsx et al.) —
 // the canonical implementation now lives in ../domain/billable-time.
-export { snapToQuarterHour, isShiftFinished };
 
 
 export interface TimesheetShiftRow {

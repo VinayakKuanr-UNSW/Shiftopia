@@ -128,7 +128,7 @@ const ShiftCoreSchema = z.object({
 // Note: These return primitives in the DB, but the frontend command layer
 // will fetch the full row to satisfy the Shift entity interface.
 export const CreateShiftResponseSchema = z.string().uuid();
-export const UpdateShiftResponseSchema = z.boolean();
+const UpdateShiftResponseSchema = z.boolean();
 
 // sm_publish_shift
 export const PublishShiftResponseSchema = z.object({
@@ -186,7 +186,6 @@ export const BulkDeleteResponseSchema = z.object({
   failed: z.array(z.object({ id: z.string().uuid(), reason: z.string() })).optional(),
   error: z.string().optional(),
 });
-export type BulkDeleteResponse = z.infer<typeof BulkDeleteResponseSchema>;
 
 
 export const DeleteShiftResponseSchema = z.object({

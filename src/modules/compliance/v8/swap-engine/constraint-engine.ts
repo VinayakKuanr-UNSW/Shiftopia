@@ -5,7 +5,6 @@
 import { SwapScenario, SolverResult, ConstraintViolation, SolverConfig } from './types';
 import { v8Engine, V8Engine } from '../engine';
 import { V8ContractType, V8Employee, V8Shift } from '../types';
-import { ComplianceResult, ComplianceCalculation } from '../../types';
 
 /**
  * Map a party's employment status ('FT'|'PT'|'CASUAL'|null) onto the V8 engine's
@@ -136,34 +135,3 @@ export class V8SwapEngine {
     }
 }
 
-/**
- * Helper to convert SolverResult to legacy ComplianceResult map.
- */
-export function solverResultToComplianceResults(
-    result: SolverResult,
-    employeeId: string,
-): Record<string, ComplianceResult> {
-    const map: Record<string, ComplianceResult> = {};
-
-    for (const r of result.all_results) {
-        if (r.employee_id !== employeeId) continue;
-
-        map[r.id] = {
-            rule_id:   r.id,
-            rule_name: r.name,
-            status:    r.status as any,
-            summary:   r.summary,
-            details:   r.details,
-            blocking:  r.blocking,
-            calculation: {
-                existing_hours:   0,
-                candidate_hours:  0,
-                total_hours:      0,
-                limit:            0,
-                ...r.calculation,
-            } as ComplianceCalculation,
-        };
-    }
-
-    return map;
-}

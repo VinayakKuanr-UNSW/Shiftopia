@@ -99,17 +99,6 @@ export class ComplianceUnavailableError extends AppError {
   }
 }
 
-/** Attempted a state transition not allowed by the spec */
-export class StateTransitionError extends AppError {
-  constructor(fromState: string, action: string, reason?: string) {
-    super({
-      code: 'STATE_TRANSITION',
-      message: reason ?? `Cannot perform '${action}' from state '${fromState}'`,
-      details: { from: fromState, action },
-    });
-    this.name = 'StateTransitionError';
-  }
-}
 
 /** User is not authenticated */
 export class AuthenticationError extends AppError {
@@ -119,17 +108,6 @@ export class AuthenticationError extends AppError {
   }
 }
 
-/** User is authenticated but lacks permission */
-export class PermissionError extends AppError {
-  constructor(action: string) {
-    super({
-      code: 'PERMISSION_DENIED',
-      message: `You do not have permission to perform: ${action}`,
-      details: { action },
-    });
-    this.name = 'PermissionError';
-  }
-}
 
 
 // ── Type guards ────────────────────────────────────────────────────────────
@@ -140,9 +118,3 @@ export const isAppError = (e: unknown): e is AppError =>
 
 
 
-/** Coerce any thrown value into an AppError for safe handling */
-export function toAppError(e: unknown, rpcName?: string): AppError {
-  if (isAppError(e)) return e;
-  const message = e instanceof Error ? e.message : String(e);
-  return new AppError({ code: 'UNKNOWN', message, rpcName });
-}

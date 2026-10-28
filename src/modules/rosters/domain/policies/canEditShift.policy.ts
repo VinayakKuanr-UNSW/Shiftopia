@@ -3,7 +3,6 @@
  * Domain layer - determines if a shift can be edited
  */
 
-import { isShiftLocked as isShiftLockedUtil } from '../shift-locking.utils';
 
 interface CanEditShiftInput {
     shiftId: string;
@@ -124,26 +123,6 @@ export function canEditShift(input: CanEditShiftInput): CanEditShiftOutput {
     return { canEdit: true, noticeWarning };
 }
 
-/**
- * Check if a shift is locked due to time (Manager View - Start Time Lock)
- * @deprecated Use isShiftLocked from shift-locking.utils.ts with 'roster_management' context
- */
-export function isShiftLocked(shiftDate: string | Date, endTime: string): boolean {
-    if (!shiftDate || !endTime) return false;
-
-    try {
-        // Handle Date object
-        const dateStr = shiftDate instanceof Date
-            ? shiftDate.toISOString().split('T')[0]
-            : shiftDate;
-
-        // Use the main utility with roster_management context
-        return isShiftLockedUtil(dateStr, endTime, 'roster_management');
-    } catch (e) {
-        console.error('[isShiftLocked] Error:', e);
-        return false;
-    }
-}
 
 /**
  * Check if a shift can be deleted

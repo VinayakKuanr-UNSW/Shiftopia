@@ -36,7 +36,7 @@ import type { ContractRecordV2 } from '../types';
 // TYPES
 // =============================================================================
 
-export interface AssignmentEvaluationInput {
+interface AssignmentEvaluationInput {
     employee_id: string;
     name: string;
     /** Full roster for ±30 days around the candidate shift date. */
@@ -148,7 +148,7 @@ export function assignmentResultToComplianceResults(
 
 const engine = new V8SwapEngine();
 
-export class AssignmentEvaluator {
+class AssignmentEvaluator {
     /**
      * Evaluate whether the assignment / bid is compliant for the employee.
      *

@@ -26,7 +26,7 @@ import { format, addDays, subDays, parseISO } from 'date-fns';
 // TYPES
 // =============================================================================
 
-export interface ScenarioWindow {
+interface ScenarioWindow {
     /** Inclusive start date (YYYY-MM-DD). */
     start: string;
     /** Inclusive end date (YYYY-MM-DD). */
@@ -34,7 +34,7 @@ export interface ScenarioWindow {
 }
 
 // The maximum look-behind / look-ahead required by any constraint.
-export const SCENARIO_WINDOW_DAYS = 28 as const;
+const SCENARIO_WINDOW_DAYS = 28 as const;
 
 // =============================================================================
 // UTILITY

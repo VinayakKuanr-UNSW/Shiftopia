@@ -16,7 +16,6 @@ import type {
     BroadcastGroupWithStats,
     BroadcastGroupFull,
     EmployeeBroadcastGroup,
-    BroadcastChannelWithStats,
     BroadcastWithDetails,
     BroadcastAckStats,
     BroadcastNotification,
@@ -191,22 +190,6 @@ export const broadcastGroupQueries = {
 
 // ── Broadcast Channels ────────────────────────────────────────────────────────
 
-export const broadcastChannelQueries = {
-    /**
-     * Get channels for a group
-     */
-    async getByGroupId(groupId: string): Promise<BroadcastChannelWithStats[]> {
-        const { data, error } = await supabase
-            .from('v_channels_with_stats')
-            .select('*')
-            .eq('group_id', groupId)
-            .eq('is_active', true)
-            .order('name');
-
-        if (error) throw error;
-        return toCamelCase(data || []);
-    },
-};
 
 // ── Broadcasts ────────────────────────────────────────────────────────────────
 

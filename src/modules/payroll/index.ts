@@ -7,11 +7,7 @@
  * belong to a certified payroll provider (see model/gross-pay.types.ts).
  */
 export type {
-  EarningsCode,
-  EarningsLine,
-  ShiftGrossPay,
   PeriodGrossPay,
-  GrossPayHoursSource,
 } from './model/gross-pay.types';
 
 export { computeShiftGrossPay, type GrossPayShiftInput } from './domain/computeShiftGrossPay';
@@ -20,5 +16,4 @@ export {
   computeEmployeePeriodGrossPay,
   isoWeekKey,
   type PeriodBounds,
-  type PeriodConfig,
 } from './domain/aggregatePeriodGrossPay';

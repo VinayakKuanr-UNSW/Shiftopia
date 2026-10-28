@@ -215,7 +215,7 @@ export const broadcastCommands = {
 
 // ── Broadcast Attachments ─────────────────────────────────────────────────────
 
-export const broadcastAttachmentCommands = {
+const broadcastAttachmentCommands = {
     /**
      * Upload and create attachment
      */

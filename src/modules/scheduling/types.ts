@@ -328,14 +328,14 @@ export interface AuditRequest {
     target_shift_ids?: string[];
 }
 
-export interface AuditEmployeeRow {
+interface AuditEmployeeRow {
     employee_id: string;
     status: 'PASS' | 'FAIL';
     /** Reason codes (e.g. 'ROLE_MISMATCH', 'OUTSIDE_DECLARED_AVAILABILITY'). */
     rejection_reasons: string[];
 }
 
-export interface AuditShiftRow {
+interface AuditShiftRow {
     shift_id: string;
     /** Map of reason code → number of employees rejected for that reason. */
     rejection_summary: Record<string, number>;
@@ -444,7 +444,7 @@ export interface OptimizeResponse {
 // AUTO-SCHEDULER RESULT (after compliance validation)
 // =============================================================================
 
-export type ProposalValidationStatus = 'PASS' | 'WARN' | 'FAIL';
+type ProposalValidationStatus = 'PASS' | 'WARN' | 'FAIL';
 
 export interface ValidatedProposal {
     shiftId: string;

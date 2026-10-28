@@ -58,7 +58,7 @@ export function shiftEndMinutes(s: CandidateShift): number {
 // SORTER
 // =============================================================================
 
-export class ShiftSorter {
+class ShiftSorter {
     /**
      * Sort candidate shifts chronologically by shift_date + start_time.
      * Returns a NEW sorted array (does not mutate the input).

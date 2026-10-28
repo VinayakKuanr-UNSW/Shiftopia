@@ -7,13 +7,6 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 
-export function getDepartmentColor(department: string): string {
-  const lowerCaseDept = department.toLowerCase();
-  if (lowerCaseDept.includes('convention')) return 'blue';
-  if (lowerCaseDept.includes('exhibition')) return 'green';
-  if (lowerCaseDept.includes('theatre')) return 'red';
-  return 'purple'; // Default color
-}
 
 
 

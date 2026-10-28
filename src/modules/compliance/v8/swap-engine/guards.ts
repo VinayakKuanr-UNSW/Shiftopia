@@ -26,7 +26,7 @@ import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 // TYPES
 // =============================================================================
 
-export interface GuardViolation {
+interface GuardViolation {
     /** Machine-readable code for programmatic handling. */
     code: GuardViolationCode;
     message: string;
@@ -34,7 +34,7 @@ export interface GuardViolation {
     entity_id?: string;
 }
 
-export type GuardViolationCode =
+type GuardViolationCode =
     | 'SHIFT_NOT_FOUND'          // #16, #25
     | 'SHIFT_CANCELLED'          // #16
     | 'SHIFT_LOCKED'             // #20
@@ -43,12 +43,12 @@ export type GuardViolationCode =
     | 'EMPLOYEE_NOT_FOUND'       // #25
     | 'SCHEDULE_DRIFTED';        // #2  — shift changed since snapshot
 
-export interface GuardResult {
+interface GuardResult {
     passed: boolean;
     violations: GuardViolation[];
 }
 
-export interface SwapGuardInput {
+interface SwapGuardInput {
     /** Shift IDs involved in the swap (requester + offerer shifts). */
     shiftIds: string[];
     /** Employee IDs involved in the swap (requester + offerer). */

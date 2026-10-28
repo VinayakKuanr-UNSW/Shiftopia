@@ -124,12 +124,6 @@ export interface TemplateBatch {
   appliedAt: string;
 }
 
-export interface TemplateConflict {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-}
 
 /* ============================================================
       INPUT TYPES
@@ -157,12 +151,6 @@ export interface SaveTemplateResult {
   error_message: string | null;
 }
 
-export interface PublishTemplateResult {
-  success: boolean;
-  new_version: number | null;
-  error_message: string | null;
-  conflicts: TemplateConflict[] | null;
-}
 
 export interface VersionCheckResult {
   version_match: boolean;
@@ -171,10 +159,6 @@ export interface VersionCheckResult {
   last_edited_at: string | null;
 }
 
-export interface NameValidationResult {
-  is_valid: boolean;
-  error_message: string | null;
-}
 
 /* ============================================================
       VALIDATION TYPES
@@ -430,72 +414,7 @@ export function validateShift(shift: Partial<TemplateShift>): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
-export function validateDateRange(start: Date, end: Date): ValidationResult {
-  const errors: string[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
-  if (!(start instanceof Date) || isNaN(start.getTime())) {
-    errors.push('Invalid start date');
-  }
-
-  if (!(end instanceof Date) || isNaN(end.getTime())) {
-    errors.push('Invalid end date');
-  }
-
-  if (start && end && start > end) {
-    errors.push('Start date must be before end date');
-  }
-
-  if (start && start < today) {
-    errors.push('Start date cannot be in the past');
-  }
-
-  if (start && end) {
-    const daysDiff = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    if (daysDiff > 365) {
-      errors.push('Date range cannot exceed 1 year');
-    }
-  }
-
-  return { valid: errors.length === 0, errors };
-}
-
-export function validateTemplateForPublish(
-  template: Template
-): ValidationResult {
-  const errors: string[] = [];
-  const requiredGroups = ['Convention Centre', 'Exhibition Centre', 'Theatre'];
-
-  if (!template.name || template.name.trim().length === 0) {
-    errors.push('Template must have a name');
-  }
-
-  if (template.status === 'published') {
-    errors.push('Template is already published');
-  }
-
-  if (template.groups.length !== 3) {
-    errors.push('Template must have exactly 3 groups');
-  }
-
-  const templateGroupNames = template.groups.map((g) => g.name);
-  for (const required of requiredGroups) {
-    if (!templateGroupNames.includes(required)) {
-      errors.push(`Missing required group: ${required}`);
-    }
-  }
-
-  for (const group of template.groups) {
-    if (group.subGroups.length === 0) {
-      errors.push(`Group "${group.name}" must have at least one subgroup`);
-    }
-  }
-
-  return { valid: errors.length === 0, errors };
-}
 
 /* ============================================================
       UTILITY FUNCTIONS
@@ -544,9 +463,6 @@ export function calculateNetHours(
   return Math.round((netMins / 60) * 100) / 100;
 }
 
-export function formatDateForDb(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
 
 export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -554,7 +470,7 @@ export function deepClone<T>(obj: T): T {
 
 // NOTE: generateTempId and isTempId have been moved to utils/id-generator.ts
 // Re-export for backward compatibility
-export { generateTempId, isTempId } from '../utils/id-generator';
+export { generateTempId } from '../utils/id-generator';
 
 
 export function getTemplateStats(template: Template): {

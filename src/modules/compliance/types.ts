@@ -9,7 +9,7 @@
 // ACTION TYPES
 // =============================================================================
 
-export type ActionType = 'add' | 'assign' | 'swap' | 'bid';
+type ActionType = 'add' | 'assign' | 'swap' | 'bid';
 
 export type ComplianceStatus = 'pass' | 'fail' | 'warning';
 
@@ -133,51 +133,5 @@ export interface ComplianceCheckResult {
     blockers: ComplianceResult[];     // Only blocking failures
 }
 
-// =============================================================================
-// F10 – UNIFIED COMPLIANCE RESULT
-// Bridges the client-side rule results and the server-side aggregate result
-// into a single shape that callers can reason about consistently.
-// =============================================================================
 
-export type UnifiedComplianceStatus = 'passed' | 'violated' | 'warned' | 'unavailable';
 
-export interface UnifiedComplianceResult {
-    /** Canonical top-level status — never treat 'unavailable' as allowed */
-    status: UnifiedComplianceStatus;
-    /** Human-readable blocking violation messages (status === 'violated') */
-    violations: string[];
-    /** Human-readable non-blocking warning messages */
-    warnings: string[];
-    /** Per-rule detail — present when client-side engine ran */
-    ruleResults?: ComplianceResult[];
-    /** Projected hours in the current compliance window (from server-side checks) */
-    weeklyHours?: number;
-    /** Configured maximum for the above */
-    maxWeeklyHours?: number;
-    /** Which server-side checks completed successfully */
-    checksPerformed?: string[];
-    /** Which server-side checks could not reach the database */
-    checksSkipped?: string[];
-}
-
-/**
- * Promote a ComplianceCheckResult (client-side aggregate) into a
- * UnifiedComplianceResult so callers only deal with one result shape.
- */
-export function toUnifiedResult(result: ComplianceCheckResult): UnifiedComplianceResult {
-    const violations = result.blockers.map(b => b.summary);
-    const warnings = result.results
-        .filter(r => r.status === 'warning' || (r.status === 'fail' && !r.blocking))
-        .map(r => r.summary);
-
-    let status: UnifiedComplianceStatus;
-    if (result.hasBlockingFailure) {
-        status = 'violated';
-    } else if (result.hasWarnings || warnings.length > 0) {
-        status = 'warned';
-    } else {
-        status = 'passed';
-    }
-
-    return { status, violations, warnings, ruleResults: result.results };
-}

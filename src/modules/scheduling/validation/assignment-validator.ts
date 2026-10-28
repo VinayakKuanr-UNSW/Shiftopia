@@ -38,7 +38,7 @@ import type {
 // CONTROLLER
 // =============================================================================
 
-export class AssignmentValidator {
+class AssignmentValidator {
     /**
      * Validate every proposed (shift, employee) pair and build compliance results.
      * Does NOT write to the database.

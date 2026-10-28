@@ -169,5 +169,4 @@ const ResponsiveDialog = Object.assign(ResponsiveDialogRoot, {
   Body: ResponsiveDialogBody,
 });
 
-export { ResponsiveDialog, useResponsiveDialog };
-export type { ResponsiveDialogProps };
+export { ResponsiveDialog };

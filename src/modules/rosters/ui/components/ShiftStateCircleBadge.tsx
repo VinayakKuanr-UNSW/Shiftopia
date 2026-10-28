@@ -22,7 +22,7 @@ interface ShiftStateCircleBadgeProps {
   title?: string;
 }
 
-export const STATE_ICONS: Record<ShiftStateID, LucideIcon> = {
+const STATE_ICONS: Record<ShiftStateID, LucideIcon> = {
   S1: FileText,           // Draft: document
   S2: User,               // Draft (Assigned): single person
   S3: Send,               // Offered: paper airplane

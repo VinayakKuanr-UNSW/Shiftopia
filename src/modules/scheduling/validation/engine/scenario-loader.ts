@@ -17,13 +17,13 @@ import { getScenarioWindow } from '@/modules/compliance';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import type { CandidateShift, EmployeeInfo, InjectedSimulationData } from '../types';
 
-export interface LoadedScenario {
+interface LoadedScenario {
     candidateShifts: CandidateShift[];
     existingShifts: CandidateShift[];
     employee: EmployeeInfo;
 }
 
-export class ScenarioLoader {
+class ScenarioLoader {
     /**
      * Load all data needed to validate proposed assignments for a single employee.
      *

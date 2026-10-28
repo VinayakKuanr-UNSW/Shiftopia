@@ -11,7 +11,7 @@ import type { TargetEmploymentType } from '@/modules/core/model/employment.types
 
 export type V8ShiftId = string;
 export type V8EmpId   = string;
-export type V8RoleId  = string;
+type V8RoleId  = string;
 
 /**
  * The EMPLOYMENT axis, and only that.

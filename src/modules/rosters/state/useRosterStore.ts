@@ -33,7 +33,7 @@ import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 export type CalendarView = 'day' | '3day' | 'week' | 'month';
 export type RosterMode = 'group' | 'people' | 'events' | 'roles';
-export type ComplianceFilterStatus = 'all' | 'compliant' | 'warning' | 'violation';
+type ComplianceFilterStatus = 'all' | 'compliant' | 'warning' | 'violation';
 
 export interface AdvancedFilters {
   roleId: string | null;

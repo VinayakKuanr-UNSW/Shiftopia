@@ -43,13 +43,13 @@ interface ScopeSubDept {
     name: string;
 }
 
-export interface ScopeDept {
+interface ScopeDept {
     id: string;
     name: string;
     subdepartments: ScopeSubDept[];
 }
 
-export interface ScopeOrg {
+interface ScopeOrg {
     id: string;
     name: string;
     departments: ScopeDept[];

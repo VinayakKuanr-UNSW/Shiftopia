@@ -95,7 +95,7 @@ function getPeriodWeeks(periodStart: string, periodEnd: string): number {
   return Math.max(0, diffDays) / 7;
 }
 
-export interface SalariedContractConfig {
+interface SalariedContractConfig {
   annualSalary: number;
   contractedWeeklyHours?: number;
 }
@@ -205,7 +205,7 @@ export function aggregatePeriodGrossPay(
   };
 }
 
-export interface PeriodConfig {
+interface PeriodConfig {
   /** Minimum rest gap in minutes (default 600 = 10h, cl 40.1). */
   minRestGapMinutes?: number;
   /**

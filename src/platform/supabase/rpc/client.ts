@@ -110,7 +110,7 @@ export async function callAuthenticatedRpc<TOutput>(
 
 // ── Convenience: RPC returning void / boolean ──────────────────────────────
 
-export async function callVoidRpc(
+async function callVoidRpc(
   rpcName: string,
   params: Record<string, unknown>,
 ): Promise<void> {
@@ -131,5 +131,3 @@ export async function callAuthenticatedVoidRpc(
 
 // ── Re-exports ─────────────────────────────────────────────────────────────
 
-export type { AppError, RPCErrorCode };
-export { AppError as RPCError } from './errors';

@@ -1723,7 +1723,7 @@ export const shiftsQueries = {
 // ── Delta sync types ──────────────────────────────────────────────────────────
 
 /** Lightweight row returned by get_shift_delta — only changed fields */
-export interface ShiftDeltaRow {
+interface ShiftDeltaRow {
     id: string;
     updated_at: string;
     deleted_at: string | null;
