@@ -222,7 +222,7 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 | Domain | Key tables |
 |---|---|
 | RBAC / Org structure | `organizations`, `departments`, `sub_departments`, `profiles`, `app_access_certificates`, `role_levels`, `rbac_actions`, `rbac_permissions`, `hr.*` (parallel newer org/contract model) |
-| Scheduling / Shifts / Rosters | `shifts` (core FSM table), `shift_templates`, `shift_compliance_snapshots`, `shift_payroll_records`, `shift_events` (event-sourcing spine), `rosters`, `roster_groups/subgroups`, `roster_shift_assignments`, `roster_templates`, `autoschedule_sessions/assignments`, `assignment_runs/events/decisions`, `assignment_snapshots` (KPI spine), `work_rules`, `events` |
+| Scheduling / Shifts / Rosters | `shifts` (core FSM table), `shift_templates`, `shift_compliance_snapshots`, `shift_payroll_records`, `shift_events` (event-sourcing spine), `rosters`, `roster_groups/subgroups`, `roster_templates`, `autoschedule_sessions/assignments`, `assignment_runs/events/decisions`, `assignment_snapshots` (KPI spine), `work_rules`, `events` |
 | Marketplace — Bids | `shift_bids`, `shift_bid_windows`, `shift_offers`, `bid_approval_rules`, `bid_decisions`, `bid_audit_log`, `bid_review_queue` |
 | Marketplace — Swaps | `shift_swaps`, `swap_requests`, `swap_offers`, `swap_approvals`, `swap_approval_rules`, `swap_decisions`, `swap_audit_log` (immutable), `swap_review_queue`, `swap_validations`, `planning_requests/offers/periods` (newer unified model) |
 | Timesheets / Attendance / Payroll | `timesheets`, `attendance_records`, `pay_periods`, `gross_pay_records`, `eba_rate`/`eba_allowance`/`eba_trainee_schedule` (effective-dated), `department_budgets`, `timesheet_approval_rules/decisions/audit_log/review_queue` |

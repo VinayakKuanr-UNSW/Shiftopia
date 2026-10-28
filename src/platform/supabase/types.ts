@@ -3781,54 +3781,6 @@ export type Database = {
           },
         ]
       }
-      roster_shift_assignments: {
-        Row: {
-          assigned_at: string
-          assigned_by: string | null
-          confirmed_at: string | null
-          employee_id: string
-          id: string
-          notes: string | null
-          roster_shift_id: string
-          status: Database["public"]["Enums"]["assignment_status"]
-        }
-        Insert: {
-          assigned_at?: string
-          assigned_by?: string | null
-          confirmed_at?: string | null
-          employee_id: string
-          id?: string
-          notes?: string | null
-          roster_shift_id: string
-          status?: Database["public"]["Enums"]["assignment_status"]
-        }
-        Update: {
-          assigned_at?: string
-          assigned_by?: string | null
-          confirmed_at?: string | null
-          employee_id?: string
-          id?: string
-          notes?: string | null
-          roster_shift_id?: string
-          status?: Database["public"]["Enums"]["assignment_status"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "roster_shift_assignments_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "roster_shift_assignments_profile_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       roster_subgroups: {
         Row: {
           created_at: string | null
@@ -4825,7 +4777,6 @@ export type Database = {
           role_id: string | null
           roster_date: string | null
           roster_id: string
-          roster_shift_id: string | null
           roster_subgroup_id: string
           roster_template_id: string | null
           scheduled_end: string | null
@@ -4941,7 +4892,6 @@ export type Database = {
           role_id?: string | null
           roster_date?: string | null
           roster_id: string
-          roster_shift_id?: string | null
           roster_subgroup_id: string
           roster_template_id?: string | null
           scheduled_end?: string | null
@@ -5057,7 +5007,6 @@ export type Database = {
           role_id?: string | null
           roster_date?: string | null
           roster_id?: string
-          roster_shift_id?: string | null
           roster_subgroup_id?: string
           roster_template_id?: string | null
           scheduled_end?: string | null
@@ -8561,20 +8510,6 @@ export type Database = {
         Args: { p_batch_id: string; p_dry_run?: boolean; p_user_id?: string }
         Returns: Json
       }
-      unpublish_roster_shift: {
-        Args: {
-          p_reason: string
-          p_roster_shift_id: string
-          p_unpublished_by_user_id: string
-        }
-        Returns: Database["public"]["CompositeTypes"]["publish_shift_result"]
-        SetofOptions: {
-          from: "*"
-          to: "publish_shift_result"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       user_has_access_to_swap: {
         Args: { _requester_shift_id: string; _user_id: string }
         Returns: boolean
@@ -8785,16 +8720,6 @@ export type Database = {
         shifts_updated: number | null
         shifts_skipped: number | null
         errors: Json | null
-      }
-      publish_shift_result: {
-        success: boolean | null
-        shift_id: string | null
-        roster_shift_id: string | null
-        action: string | null
-        from_state: string | null
-        to_state: string | null
-        error_code: string | null
-        error_message: string | null
       }
       shift_validation_result: {
         is_valid: boolean | null
