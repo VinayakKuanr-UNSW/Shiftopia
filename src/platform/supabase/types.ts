@@ -6734,14 +6734,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      check_state_machine_invariants_v3: {
-        Args: never
-        Returns: {
-          check_name: string
-          status: string
-          violations: number
-        }[]
-      }
       check_template_version: {
         Args: { p_expected_version: number; p_template_id: string }
         Returns: {
@@ -7382,18 +7374,7 @@ export type Database = {
         }[]
       }
       get_shift_start_time: { Args: { p_shift_id: string }; Returns: string }
-      get_shift_state_id:
-        | {
-            Args: {
-              p_assignment: Database["public"]["Enums"]["shift_assignment_status"]
-              p_bidding: Database["public"]["Enums"]["shift_bidding_status"]
-              p_lifecycle: Database["public"]["Enums"]["shift_lifecycle"]
-              p_outcome: Database["public"]["Enums"]["shift_assignment_outcome"]
-              p_trading: Database["public"]["Enums"]["shift_trading"]
-            }
-            Returns: string
-          }
-        | { Args: { p_shift_id: string }; Returns: string }
+      get_shift_state_id: { Args: { p_shift_id: string }; Returns: string }
       get_time_category: {
         Args: { p_scheduled_start: string }
         Returns: string
@@ -7611,21 +7592,16 @@ export type Database = {
         Args: { p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
-      sm_accept_trade:
-        | {
-            Args: { p_accepting_employee_id: string; p_shift_id: string }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_compliance_snapshot?: Json
-              p_offer_id: string
-              p_offer_shift_id?: string
-              p_offerer_id: string
-              p_swap_id: string
-            }
-            Returns: Json
-          }
+      sm_accept_trade: {
+        Args: {
+          p_compliance_snapshot?: Json
+          p_offer_id: string
+          p_offer_shift_id?: string
+          p_offerer_id: string
+          p_swap_id: string
+        }
+        Returns: Json
+      }
       sm_all_active_contracts_ft_in: {
         Args: { p_profile_id: string; p_sub_department_id: string }
         Returns: boolean
