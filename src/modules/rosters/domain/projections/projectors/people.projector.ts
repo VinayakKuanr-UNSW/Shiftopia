@@ -14,23 +14,12 @@ import type {
   WorkerEmployeeDTO, 
   ProjectedShiftResult 
 } from '../worker/protocol';
-import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { UNASSIGNED_BUCKET_ID, dicebearUrl } from '../constants';
-import { minutesToHours } from '../utils/duration';
-import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
-import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
-import { determineShiftState } from '../../shift-state.utils';
 import { computeUtilizationPct, isOverContractedHours, periodContractedHours, computePeakFatigue } from '../utils/workload';
+import { resolveEmployeeName, toProjectedShift } from './shared';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function resolveEmployeeName(shift: WorkerShiftDTO): string | null {
-  if (shift.employeeFirstName || shift.employeeLastName) {
-    return `${shift.employeeFirstName ?? ''} ${shift.employeeLastName ?? ''}`.trim() || null;
-  }
-  if (shift.assignedEmployeeId) return 'Assigned';
-  return null;
-}
 
 function makeEmployee(
   id: string,
@@ -64,69 +53,6 @@ function makeEmployee(
   };
 }
 
-function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
-  const isAssigned = !!shift.assignedEmployeeId;
-  const netMinutes = shift.netLengthMinutes ?? shift.scheduledLengthMinutes;
-  
-  // Try to get cost from cache, default to zero if not computed (pipeline should compute it)
-  const key = makeCacheKey(shift.id, shift.updatedAtMs);
-  const detail = isAssigned ? (getCachedCost(key) ?? ZERO_COST_BREAKDOWN) : ZERO_COST_BREAKDOWN;
-  const estimatedCost = detail.totalCost;
-
-  const groupType = shift.groupType ?? null;
-
-  const stateId = determineShiftState({
-    lifecycle_status: shift.lifecycleStatus as any,
-    assignment_status: (shift.assignmentStatus ?? 'unassigned') as any,
-    assignment_outcome: shift.assignmentOutcome as any,
-    trading_status: shift.tradingStatus as any,
-    is_cancelled: shift.isCancelled,
-  });
-
-  return {
-    id: shift.id,
-    date: shift.shiftDate,
-    startTime: shift.startTime,
-    endTime: shift.endTime,
-    netMinutes,
-    unpaidBreakMinutes: shift.unpaidBreakMinutes ?? 0,
-    estimatedCost,
-    costBreakdown: {
-      base: detail.ordinaryCost,
-      penalty: detail.penaltyCost,
-      overtime: detail.overtimeCost,
-      allowance: detail.allowanceCost ?? 0,
-      leave: 0,
-    },
-    detailedCost: detail,
-    stateId,
-    roleName: shift.roleName ?? 'Shift',
-    roleId: shift.roleId,
-    levelName: shift.levelName ?? '',
-    levelNumber: shift.levelNumber ?? 0,
-    levelId: shift.remunerationLevel !== null && shift.remunerationLevel !== undefined ? shift.remunerationLevel.toString() : null,
-    groupType,
-    subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
-    groupColorKey: groupType ?? 'unassigned',
-    employeeName: resolveEmployeeName(shift),
-    employeeId: shift.assignedEmployeeId,
-    isLocked: shift.isLocked,
-    isUrgent: isOnBidding(shift.biddingStatus) && computeBiddingUrgency(shift.shiftDate, shift.startTime) === 'urgent',
-    isOnBidding: isOnBidding(shift.biddingStatus),
-    isTrading: !!shift.tradeRequestedAt,
-    isCancelled: shift.isCancelled,
-    isPublished: shift.isPublished,
-    isDraft: shift.isDraft,
-    
-    role: shift.roleName ?? 'Shift',
-    hours: minutesToHours(netMinutes),
-    pay: estimatedCost,
-    status: shift.isCancelled ? 'Draft' : (shift.assignedEmployeeId ? (shift.isDraft ? 'Draft' : 'Assigned') : 'Open'),
-    lifecycleStatus: shift.isPublished ? 'published' : 'draft',
-    assignmentStatus: shift.assignedEmployeeId ? 'assigned' : 'unassigned',
-    fulfillmentStatus: shift.fulfillmentStatus,
-  };
-}
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
