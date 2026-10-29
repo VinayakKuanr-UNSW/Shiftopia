@@ -74,6 +74,16 @@ The expected outcome is roughly 8–12 columns and 2–4 indexes. Each column is
 
 ### Phase 2 — `deleted_at` (mechanical, wide)
 
+**Progress (2026-10-30).**
+
+- **2a APPLIED** `20261029232549`: 36 functions lost their no-op filters. The live hash equals the file for every one; `plpgsql_check` is unchanged; four SQL tests pass.
+- **2b, still to do.** It covers the 6 functions that change only with the column:
+  - `get_shift_delta` returns `deleted_at`, and the app reads it;
+  - `sm_refresh_shift_snapshots` has a `'shift_deleted'` branch;
+  - the always-false checks in `fn_shift_not_started`, `fn_shift_office_is_ft_only`, `fn_shift_shape_day_typed_guard` and `internal.trg_shift_eba_compliance`.
+
+  It also covers the app half (22 files, all on `shifts` queries), the view `v_shift_assignment_episodes` (keep `security_invoker`), and the six indexes. The column, its CHECK and `idx_shifts_deleted_at` are dropped only after the app half is live.
+
 `CHECK shifts_no_soft_delete` keeps `deleted_at` NULL on every row, so every `deleted_at IS NULL` filter is a no-op. Today it is named by:
 
 - 43 database functions, 4 trigger functions and 1 view;
