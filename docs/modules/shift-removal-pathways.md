@@ -92,7 +92,7 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 |---|---|---|
 | **Archive** — `deleted_shifts` + `_archive_shift_before_delete` | Copy of a shift at deletion. Nothing in the app reads it. | **Yes.** Nothing reads it. |
 | **Shift History UI** — `ShiftHistoryTimeline` (card History toggle, Drill-down) + `get_shift_event_timeline` | The audit view over `shift_events`. | **Yes**, UI + read RPC. |
-| **`shift_events` capture** (`fn_capture_shift_event`, gateway envelopes) | The event ledger. **9 metric functions read it**: `get_marketplace_kpis`, `get_manager_scorecard`, `get_employee_metrics` (×2), `get_performance_trends`, `get_cancellation_reason_breakdown`, `get_employee_event_timeline`, `get_shift_lifecycle`, `sm_refresh_shift_snapshots`. | **No — not without breaking Performance, KPIs and Insights.** It is metrics data that the audit UI happened to sit on. |
+| **`shift_events` capture** (`fn_capture_shift_event`, gateway envelopes) | The event ledger. **4 metric functions read it** (live 2026-10-29): `get_marketplace_kpis`, `get_manager_scorecard`, `get_cancellation_reason_breakdown`, `sm_refresh_shift_snapshots`. | **No — not without breaking Performance, KPIs and Insights.** It is metrics data that the audit UI happened to sit on. |
 | Leave history — `leave_request_events`, `LeaveTimeline` (review dialog) | Leave audit trail. | Yes (UI); confirm. |
 | Timesheet audit — `timesheet_audit_log`, `timesheetAudit.api.ts` | Timesheet adjustments trail. | Confirm — payroll-adjacent. |
 

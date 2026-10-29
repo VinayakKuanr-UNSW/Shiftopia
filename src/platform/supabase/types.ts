@@ -6802,10 +6802,6 @@ export type Database = {
         Args: { p_shift: Database["public"]["Tables"]["shifts"]["Row"] }
         Returns: string
       }
-      aa_user_manages_org: {
-        Args: { p_org: string; p_user: string }
-        Returns: boolean
-      }
       access_level_label: {
         Args: { p_level: Database["public"]["Enums"]["access_level"] }
         Returns: string
@@ -6865,10 +6861,6 @@ export type Database = {
         Returns: boolean
       }
       auth_can_manage_templates: { Args: never; Returns: boolean }
-      calculate_weekly_hours: {
-        Args: { p_employee_id: string; p_week_start_date: string }
-        Returns: number
-      }
       can_act_in_dept: {
         Args: { p_action: string; p_department_id: string }
         Returns: boolean
@@ -6958,24 +6950,9 @@ export type Database = {
         Args: { p_cancelled_by?: string; p_reason?: string; p_shift_id: string }
         Returns: Json
       }
-      cancel_shift_v2:
-        | { Args: { p_reason: string; p_shift_id: string }; Returns: Json }
-        | {
-            Args: { p_actor_id?: string; p_reason: string; p_shift_id: string }
-            Returns: Json
-          }
       check_in_shift: {
         Args: { p_lat: number; p_lon: number; p_shift_id: string }
         Returns: Json
-      }
-      check_rest_period: {
-        Args: {
-          p_employee_id: string
-          p_end_time: string
-          p_shift_date: string
-          p_start_time: string
-        }
-        Returns: boolean
       }
       check_shift_overlap: {
         Args: {
@@ -7099,7 +7076,6 @@ export type Database = {
         Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
         Returns: number
       }
-      fn_is_shift_locked: { Args: { p_shift_id: string }; Returns: boolean }
       fn_normalize_employment_type: {
         Args: { p_value: string }
         Returns: string
@@ -7202,24 +7178,6 @@ export type Database = {
           shifts_total: number
         }[]
       }
-      get_employee_metrics:
-        | {
-            Args: {
-              p_employee_id: string
-              p_end_date?: string
-              p_start_date?: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_department_id?: string
-              p_employee_id: string
-              p_end_date?: string
-              p_start_date?: string
-            }
-            Returns: Json
-          }
       get_employee_quarterly_performance: {
         Args: { p_employee_id: string; p_quarter: number; p_year: number }
         Returns: {
@@ -7814,14 +7772,6 @@ export type Database = {
         Args: { p_as_of?: string; p_org_id: string }
         Returns: number
       }
-      resolve_audit_uuid_array: {
-        Args: { p_arr: Json; p_field: string }
-        Returns: Json
-      }
-      resolve_audit_uuid_name: {
-        Args: { p_field: string; p_uuid: string }
-        Returns: string
-      }
       resolve_user_permissions: { Args: never; Returns: Json }
       save_template_full: {
         Args: {
@@ -8090,10 +8040,6 @@ export type Database = {
         Args: { p_actor: string; p_manager_action: string; p_shift_id: string }
         Returns: undefined
       }
-      sm_require_roster_action: {
-        Args: { p_action: string; p_roster_id: string }
-        Returns: undefined
-      }
       sm_require_scope: {
         Args: {
           p_action: string
@@ -8103,7 +8049,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      sm_require_self: { Args: { p_actor: string }; Returns: undefined }
       sm_require_shift_action: {
         Args: { p_action: string; p_shift_id: string }
         Returns: undefined
