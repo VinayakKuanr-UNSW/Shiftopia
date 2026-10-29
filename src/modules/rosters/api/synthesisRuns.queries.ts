@@ -1,5 +1,6 @@
 import { supabase } from '@/platform/supabase/client';
 import { requireUser } from '@/platform/supabase/rpc/client';
+import { shiftsCommands } from './shifts.commands';
 
 interface SynthesisRunRow {
     id: string;
@@ -110,20 +111,15 @@ export const synthesisRunsQueries = {
             return { deletedCount: 0, skippedAssigned: 0, failedDeletes: [], orphaned: true, forecastsDeleted: 0 };
         }
 
-        // 2. Soft-delete via a direct UPDATE.
+        // 2. Delete through the roster's guarded bulk delete (sm_bulk_delete_shifts:
+        //    authority check; a started or worked shift refuses itself). A
+        //    soft-delete UPDATE cannot work: CHECK shifts_no_soft_delete refuses it.
         let deletedCount = 0;
         const failedDeletes: Array<{ id: string; reason: string }> = [];
         if (toDelete.length > 0) {
-            const { error: delErr, count } = await supabase
-                .from('shifts')
-                .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
-                .in('id', toDelete)
-                .is('deleted_at', null);
-            if (delErr) {
-                for (const id of toDelete) failedDeletes.push({ id, reason: delErr.message });
-            } else {
-                deletedCount = count ?? toDelete.length;
-            }
+            const { deletedIds, failed } = await shiftsCommands.bulkDeleteShiftsPerItem(toDelete);
+            deletedCount = deletedIds.length;
+            failedDeletes.push(...failed);
         }
 
         // 3. Hard-delete demand_forecasts rows for this run so stale predictions
