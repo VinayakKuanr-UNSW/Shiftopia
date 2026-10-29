@@ -241,7 +241,7 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 **Scheduling gateway:** `sm_apply_shift_op` (unified state-machine entry point — `assign`/`publish`/`unpublish`/`edit`/`delete`/`select_winner`/`approve_trade`/`reject_trade`/`unassign`, with optimistic concurrency + idempotency), `sm_move_shift`, `sm_unassign_shift`, `sm_emergency_assign`, `sm_finalize_planning_request`, `get_shift_lifecycle`.
 **Swaps:** `sm_accept_trade`, `sm_create_swap_request`, `sm_cancel_swap_request`, `sm_expire_offer_now`, `sm_swap_auto_revert`.
 **Bids:** `sm_select_bid_winner` (deprecated wrapper → `sm_apply_shift_op`), `sm_bid_auto_revert`, `withdraw_bid_rpc`.
-**Templates/Rosters:** `add/rename/delete/clone_roster_subgroup_v2`, `toggle_roster_lock_for_range`, `capture_roster_as_template`, `save_template_full`, `check_template_version`, `validate_template_name`, `publish_template_range`, `delete_template_shifts_cascade`, `undo_template_batch`.
+**Templates/Rosters:** `add/rename/delete_roster_subgroup_v2`, `toggle_roster_lock_for_range`, `capture_roster_as_template`, `save_template_full`, `check_template_version`, `validate_template_name`, `publish_template_range`, `delete_template_shifts_cascade`, `undo_template_batch`.
 **RBAC:** `resolve_user_permissions`, `delete_user_entirely`.
 **Insights:** `get_insights_summary/trend`, `get_dept_insights_breakdown`, `get_bidding_kpis`, `get_marketplace_kpis`, `get_manager_scorecard`, `get_metric_detailed_analysis`, `get_quarterly_performance_report`, `get_employee_quarterly_performance`.
 **Broadcasts:** `get_broadcast_ack_stats`, `get_broadcast_analytics`, `get_broadcast_group_role`.
