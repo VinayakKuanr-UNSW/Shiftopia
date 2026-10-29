@@ -19,9 +19,9 @@ import { describe, expect, it } from 'vitest';
 import { resolveComplianceBasis, type ContractBasisInput } from '@/modules/availability/domain/contract-basis';
 
 /**
- * The mapping performed by `office.loaders.ts#loadEligibleEmployees`.
- * Reproduced here because it is built inline inside a Supabase read; if it
- * drifts, this notices.
+ * The row → input mapping, as `team-availability.api.ts#toBasisInput` and
+ * `contract-basis.api.ts` write it. Reproduced here because both build it
+ * inline beside a Supabase read.
  */
 function toBasisInput(row: Record<string, unknown>): ContractBasisInput {
     return {
