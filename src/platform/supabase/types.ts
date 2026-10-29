@@ -7456,10 +7456,6 @@ export type Database = {
         Args: { p_jurisdiction?: string }
         Returns: string
       }
-      publish_shift: {
-        Args: { p_actor_id?: string; p_shift_id: string }
-        Returns: Json
-      }
       quarter_date_range: {
         Args: { p_quarter: number; p_year: number }
         Returns: Record<string, unknown>
@@ -7731,10 +7727,6 @@ export type Database = {
           p_sub_group_name?: string
           p_user_id?: string
         }
-        Returns: Json
-      }
-      sm_publish_shift: {
-        Args: { p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
       sm_refresh_shift_snapshots: {
