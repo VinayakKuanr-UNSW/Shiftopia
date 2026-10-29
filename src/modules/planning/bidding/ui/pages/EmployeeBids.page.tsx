@@ -7,7 +7,7 @@ import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
+import { SYDNEY_TZ, parseZonedDateTime, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
 import { validateCompliance, type ComplianceResult, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
@@ -91,8 +91,6 @@ const EmployeeBidsPage: React.FC = () => {
     const [showIneligible, setShowIneligible] = useState(false);
     const [showExpired, setShowExpired] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-    const todayStr = formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd');
 
     // Selection (for bulk bid on not_participated eligible shifts)
     const [selectedV8ShiftIds, setSelectedV8ShiftIds] = useState<any[]>([]);

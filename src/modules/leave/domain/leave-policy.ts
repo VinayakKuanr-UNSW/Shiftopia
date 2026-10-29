@@ -412,15 +412,6 @@ export function computeCertificateAdjacency(
   };
 }
 
-/**
- * Leave types that have a trackable balance (for display in the balance cards).
- */
-const BALANCE_TRACKED_TYPES: LeaveTypeCode[] = (
-  Object.values(LEAVE_POLICIES) as LeavePolicy[]
-)
-  .filter((p) => p.balanceTracked)
-  .map((p) => p.leaveType);
-
 
 /**
  * Resolve what a day of leave actually does to contracted ordinary hours.

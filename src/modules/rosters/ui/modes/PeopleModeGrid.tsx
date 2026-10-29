@@ -31,7 +31,6 @@ import type { RawLeaveDay } from '@/modules/office/domain/types';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
-import { useToast } from '@/modules/core/hooks/use-toast';
 import { 
   PeopleModeEmployee, 
   PeopleModeShift, 
@@ -307,7 +306,6 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     if (searchTerm) setIsSearchOpen(true);
   }, [searchTerm]);
 
-  const { toast } = useToast();
   const {
     bulkModeActive: globalBulkModeActive,
     toggleShiftSelection: globalToggleShiftSelection,
