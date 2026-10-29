@@ -58,6 +58,20 @@ Each phase gets its own branch.
 
 The expected outcome is roughly 8–12 columns and 2–4 indexes. Each column is dropped only after a full writer and reader check, including inserts made from the app.
 
+**Progress (2026-10-30).**
+
+- **1a APPLIED** `20261029224806`: `deleted_by`, `workflow_status`, `roster_template_id`, `bidding_enabled` (108 → 104 columns).
+- **1b, code half DONE** on `refactor/duplicate-implementations`. Nothing in the app or `get-roster-view` reads `currency` or `actual_hourly_rate` any more. Neither column is ever written: no app code or DB function sets them, every row is NULL or the default `AUD`.
+- **1b, drop PENDING.** Apply it only after that code is live **and** `get-roster-view` has been redeployed. The version of the app deployed now still selects both, and PostgREST fails the whole select on a missing column:
+
+  ```sql
+  ALTER TABLE public.shifts DROP COLUMN currency, DROP COLUMN actual_hourly_rate;
+  ```
+
+- **Moved.** The compliance trio goes to Phase 4, because `_sync_compliance_snapshot` copies them. `is_draft` goes with Phase 5's flags, because screens read it.
+- **Kept.** `synthesis_run_id`, `demand_source` and `demand_group_id` are provenance the shift synthesiser writes on purpose.
+- **Needs a decision.** `remuneration_rate` is never written, so every fallback that reads it is dead: Gross Pay's last-resort rate, the "priceable" check, the timesheets and labour-demand reads. Removing it deletes a pay rule ("an unlinked shift without a level is priced at its own rate"), so it is a pay decision, not tidying.
+
 ### Phase 2 — `deleted_at` (mechanical, wide)
 
 `CHECK shifts_no_soft_delete` keeps `deleted_at` NULL on every row, so every `deleted_at IS NULL` filter is a no-op. Today it is named by:

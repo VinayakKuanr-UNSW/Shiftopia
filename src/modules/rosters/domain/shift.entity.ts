@@ -65,8 +65,6 @@ export interface Shift {
      */
     my_shift_pay_terms?: ShiftPayTermsField | null;
     remuneration_rate: number | null;
-    actual_hourly_rate: number | null;
-    currency: string;
     start_time: string;
     end_time: string;
     scheduled_start: string | null;

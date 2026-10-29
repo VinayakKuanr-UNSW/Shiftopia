@@ -52,7 +52,6 @@ function dto(o: Partial<WorkerShiftDTO>): WorkerShiftDTO {
     // (decision 2026-10-08, same as the budget SQL and payroll).
     remunerationLevel: 4,
     remunerationRate: null,
-    actualHourlyRate: null,
     levelName: null,
     levelNumber: null,
     groupType: null,

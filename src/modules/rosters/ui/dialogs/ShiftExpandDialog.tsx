@@ -58,7 +58,7 @@ function formatDuration(mins: number): string {
  */
 export function isPriceable(shift: Record<string, unknown>): boolean {
     const level = shift.remuneration_level;
-    const rate = shift.remuneration_rate ?? shift.actual_hourly_rate;
+    const rate = shift.remuneration_rate;
     return (typeof level === 'number' && level > 0)
         || (rate != null && Number(rate) > 0);
 }

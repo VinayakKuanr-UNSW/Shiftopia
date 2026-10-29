@@ -116,8 +116,6 @@ const SHIFT_SELECT = `
   role_id,
   remuneration_level,
   remuneration_rate,
-  actual_hourly_rate,
-  currency,
   start_time,
   end_time,
   is_overnight,
