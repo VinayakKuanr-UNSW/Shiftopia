@@ -20,7 +20,8 @@ import {
     ChevronDown,
     ChevronUp,
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { parseISO } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/supabase/client';
 import { getScenarioWindow } from '@/modules/compliance';
@@ -168,7 +169,7 @@ function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
                 </div>
                 {ts && (
                     <span className="text-[11px] font-mono text-muted-foreground/40">
-                        {format(parseISO(ts), 'dd MMM yyyy HH:mm')}
+                        {formatInTimezone(parseISO(ts), SYDNEY_TZ, 'dd MMM yyyy HH:mm')}
                     </span>
                 )}
             </div>

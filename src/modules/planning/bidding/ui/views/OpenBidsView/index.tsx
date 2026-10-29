@@ -5,7 +5,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, addDays, subDays } from 'date-fns';
-import { formatCalendarDate } from '@/modules/core/lib/date.utils';
+import { formatCalendarDate, formatClockTime } from '@/modules/core/lib/date.utils';
 
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -460,15 +460,7 @@ interface BidderRowProps {
 const BidderRow: React.FC<BidderRowProps> = ({ bid, index, isSelected, isWinner, groupVariant, onSelect }) => {
   const theme = GROUP_THEME[groupVariant];
 
-  const formattedTime = useMemo(() => {
-    if (!bid.submittedAt) return '';
-    try {
-      const d = new Date(bid.submittedAt);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return '';
-    }
-  }, [bid.submittedAt]);
+  const formattedTime = useMemo(() => formatClockTime(bid.submittedAt, 'h:mm a', '') ?? '', [bid.submittedAt]);
 
   const sssColorCls = bid.sss >= 85
     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'

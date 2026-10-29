@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/modules/core
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { formatClockTime } from "@/modules/core/lib/date.utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ComposedChart,
@@ -220,10 +221,6 @@ interface EventsOnDatePanelProps {
   isLoading: boolean;
 }
 
-function formatEventTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Australia/Sydney' });
-}
 
 const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading }) => {
   if (isLoading) {
@@ -276,7 +273,7 @@ const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading
               </span>
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {formatEventTime(event.start_date_time)} → {formatEventTime(event.end_date_time)}
+                {formatClockTime(event.start_date_time, 'HH:mm', '')} → {formatClockTime(event.end_date_time, 'HH:mm', '')}
               </span>
               {(event.venue_name || event.room_name) && (
                 <span className="inline-flex items-center gap-1">
@@ -2517,7 +2514,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         )}
                       </Badge>
                       <span className="text-muted-foreground">
-                        {format(new Date(run.created_at), "HH:mm")}
+                        {formatClockTime(run.created_at, 'HH:mm', '')}
                       </span>
                       <button
                         onClick={() => handleRollback(run.id)}
