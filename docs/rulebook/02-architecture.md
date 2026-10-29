@@ -17,15 +17,12 @@ graph TB
         Tables["~139 tables (public) + 7 (hr)"]
         RPCs["~336 functions incl. sm_* gateway RPCs"]
         Triggers["92 triggers → audit/notify/derive"]
-        Cron["pg_cron: nightly_leave_accrual, shift-state-processor, …"]
+        Cron["pg_cron: shift-timer-sweep (every minute), nightly_leave_accrual, …"]
     end
 
     subgraph EdgeFn["Supabase Edge Functions"]
-        AutoSwap[auto-approve-swaps]
-        AutoBid[auto-assign-bids]
-        AutoTS[auto-verify-timesheets]
-        StateProc[shift-state-processor]
-        PartMgr[partition-manager]
+        RosterView[get-roster-view]
+        Push[send-push]
     end
 
     subgraph Optimizer["Optimizer microservice (FastAPI + OR-Tools CP-SAT)"]
@@ -41,7 +38,7 @@ graph TB
     RPCs --> Triggers
     Triggers --> Tables
     Cron --> RPCs
-    EdgeFn -- "claim/decide/complete via sm_*_queue_* RPCs" --> RPCs
+    EdgeFn -- "roster view reads, push delivery" --> RPCs
     UI -- "scheduling/auto-scheduler.controller.ts" --> OptAPI
     OptAPI -- "proposals validated by compliance/v8, committed via" --> RPCs
 ```

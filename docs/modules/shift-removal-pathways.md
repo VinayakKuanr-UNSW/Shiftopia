@@ -81,7 +81,7 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 |---|---|---|---|
 | Dead-shift cleanup | `*/10 * * * *` | `cleanup_dead_shifts_batch` | HARD + archive — **broken since 4 Aug (J)** |
 | Offer expiry | `*/5 * * * *` | `fn_process_offer_expirations` | → Draft |
-| Shift timers / state processor | every 1 / 15 min | `process_shift_timers`, `sm_run_state_processor` | state moves (bidding timeout, trade expiry) |
+| Shift timers | every minute | `process_shift_timers` | state moves (offer, bidding and swap expiry; start; complete; no-show; 12.5h auto clock-out) |
 | Test harness | manual | `test_*`, `cleanup_test_shifts` | HARD — **callable by any user (F)** |
 
 ---
