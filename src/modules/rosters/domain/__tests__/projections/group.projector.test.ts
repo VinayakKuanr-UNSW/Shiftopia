@@ -206,8 +206,8 @@ describe('projectGroup — stats', () => {
 
   it('group stats roll up from subgroup shifts', () => {
     const shifts = [
-      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 480, remuneration_rate: 30 }),
-      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 240, remuneration_rate: 30 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 480 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 240 }),
     ];
     const result = projectGroup(shifts as unknown as WorkerShiftDTO[]);
     const theatre = result.groups.find(g => g.type === 'theatre')!;

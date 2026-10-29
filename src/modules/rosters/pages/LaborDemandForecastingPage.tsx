@@ -1231,7 +1231,6 @@ const LaborDemandForecastingPage: React.FC = () => {
   // ── Computation: Budget ──────────────────────────────────────
   const budgetData = useMemo(() => {
     const getAvgRate = (shift: Shift): number => {
-      if (shift.remuneration_rate) return Number(shift.remuneration_rate);
       const lvlNum = shift.remuneration_level ?? (shift.remuneration_levels as any)?.level_number;
       if (lvlNum != null) {
         const rateSet = resolveRateSet(shift.shift_date || '2026-07-01');

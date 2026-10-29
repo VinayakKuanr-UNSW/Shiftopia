@@ -115,7 +115,6 @@ const SHIFT_SELECT = `
   roster_subgroup_id,
   role_id,
   remuneration_level,
-  remuneration_rate,
   start_time,
   end_time,
   is_overnight,

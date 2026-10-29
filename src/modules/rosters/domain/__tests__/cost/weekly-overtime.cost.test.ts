@@ -138,7 +138,6 @@ function dto(o: Partial<WorkerShiftDTO>): WorkerShiftDTO {
     // Priced on the stored level — per-shift rate overrides are ignored
     // (decision 2026-10-08, same as the budget SQL and payroll).
     remunerationLevel: 4,
-    remunerationRate: null,
     levelName: null,
     levelNumber: null,
     groupType: null,

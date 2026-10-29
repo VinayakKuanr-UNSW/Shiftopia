@@ -64,7 +64,6 @@ export interface Shift {
      * open bids; select it explicitly.
      */
     my_shift_pay_terms?: ShiftPayTermsField | null;
-    remuneration_rate: number | null;
     start_time: string;
     end_time: string;
     scheduled_start: string | null;

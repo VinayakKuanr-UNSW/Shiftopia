@@ -334,7 +334,7 @@ export const swapsApi = {
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
                     scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
-                    target_employment_type, remuneration_rate, remuneration_level,
+                    target_employment_type, remuneration_level,
                     roles(name),
                     remuneration_levels(level_number, level_name),
                     departments(name),
@@ -607,7 +607,7 @@ export const swapsApi = {
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
                     scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
-                    target_employment_type, remuneration_rate, remuneration_level,
+                    target_employment_type, remuneration_level,
                     roles(name),
                     remuneration_levels(level_number, level_name),
                     departments(name),
@@ -682,7 +682,7 @@ export const swapsApi = {
                         id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes,
                         net_length_minutes, scheduled_length_minutes, is_overnight, is_training, sub_group_name,
                         lifecycle_status, group_type,
-                        target_employment_type, remuneration_rate, remuneration_level,
+                        target_employment_type, remuneration_level,
                         user_contract_id, assigned_employee_id, shift_pay_terms,
                         roles(name),
                         departments(name),

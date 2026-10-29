@@ -121,7 +121,6 @@ const SHIFT_SELECT = `
   roster_subgroup_id,
   role_id,
   remuneration_level,
-  remuneration_rate,
   start_time,
   end_time,
   is_overnight,
@@ -700,7 +699,7 @@ export const shiftsQueries = {
      *     it can see a shift the person holds on another team that day.
      *
      * Uses SHIFT_SELECT, deliberately. A hand-rolled select here would drop
-     * `remuneration_level`/`remuneration_rate` and `roles(name)`, and the cost
+     * `remuneration_level` and `roles(name)`, and the cost
      * engine does not fail on their absence — it falls through to a flat default
      * rate. See `shift-card-pay.ts` for where that shipped.
      */

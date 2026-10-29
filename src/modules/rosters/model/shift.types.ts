@@ -35,7 +35,6 @@ export interface Shift {
     length: number;
     netLength: number;
     scheduledLength: number;
-    remunerationRate: number;
     complianceOverride: boolean;
     remunerationLevelId: string;
     assigned_employee_id?: string;

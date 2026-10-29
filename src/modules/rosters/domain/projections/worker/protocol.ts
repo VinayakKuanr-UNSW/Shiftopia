@@ -77,7 +77,6 @@ export interface WorkerShiftDTO {
   roleId: string | null;
   roleName: string | null;
   remunerationLevel: number | null;
-  remunerationRate: number | null;
   /** The linked contract's pay terms (shifts.shift_pay_terms) when visible. */
   payTerms?: ShiftPayTermsField | null;
 

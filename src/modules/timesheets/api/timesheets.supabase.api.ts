@@ -185,7 +185,6 @@ export async function getShiftsForTimesheet(
                 unpaid_break_minutes,
                 net_length_minutes,
                 scheduled_length_minutes,
-                remuneration_rate,
                 is_training,
                 target_employment_type,
                 user_contract_id,
