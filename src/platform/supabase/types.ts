@@ -5317,8 +5317,6 @@ export type Database = {
       }
       template_shifts: {
         Row: {
-          assigned_employee_id: string | null
-          assigned_employee_name: string | null
           break_end: string | null
           break_start: string | null
           created_at: string | null
@@ -5346,8 +5344,6 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          assigned_employee_id?: string | null
-          assigned_employee_name?: string | null
           break_end?: string | null
           break_start?: string | null
           created_at?: string | null
@@ -5375,8 +5371,6 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          assigned_employee_id?: string | null
-          assigned_employee_name?: string | null
           break_end?: string | null
           break_start?: string | null
           created_at?: string | null
@@ -5404,13 +5398,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "template_shifts_assigned_employee_id_fkey"
-            columns: ["assigned_employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "template_shifts_remuneration_level_fkey"
             columns: ["remuneration_level"]
@@ -7016,20 +7003,6 @@ export type Database = {
           last_edited_by: string
           version_match: boolean
         }[]
-      }
-      clone_roster_subgroup_v2: {
-        Args: {
-          p_dept_id: string
-          p_dry_run?: boolean
-          p_end_date: string
-          p_group_external_id: string
-          p_new_name: string
-          p_org_id: string
-          p_source_name: string
-          p_start_date: string
-          p_sub_dept_id: string
-        }
-        Returns: Json
       }
       compute_employee_quarter_metrics: {
         Args: { p_employee_id: string; p_quarter_year: string }
