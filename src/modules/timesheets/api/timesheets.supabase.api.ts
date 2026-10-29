@@ -205,7 +205,6 @@ export async function getShiftsForTimesheet(
             .gte('shift_date', startDate)
             .lte('shift_date', endDate || startDate)
             .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
-            .is('deleted_at', null)
             .order('start_time');
 
         // Apply filters

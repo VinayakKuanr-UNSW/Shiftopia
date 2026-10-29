@@ -528,7 +528,6 @@ async function fetchHydratedShiftRows(
     .gte('shift_date', bounds.periodStart)
     .lte('shift_date', bounds.periodEnd)
     .in('lifecycle_status', LIFECYCLE_PAYABLE)
-    .is('deleted_at', null)
     .not('assigned_employee_id', 'is', null)
     .order('shift_date');
 

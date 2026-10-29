@@ -77,12 +77,15 @@ The expected outcome is roughly 8–12 columns and 2–4 indexes. Each column is
 **Progress (2026-10-30).**
 
 - **2a APPLIED** `20261029232549`: 36 functions lost their no-op filters. The live hash equals the file for every one; `plpgsql_check` is unchanged; four SQL tests pass.
-- **2b, still to do.** It covers the 6 functions that change only with the column:
-  - `get_shift_delta` returns `deleted_at`, and the app reads it;
-  - `sm_refresh_shift_snapshots` has a `'shift_deleted'` branch;
-  - the always-false checks in `fn_shift_not_started`, `fn_shift_office_is_ft_only`, `fn_shift_shape_day_typed_guard` and `internal.trg_shift_eba_compliance`.
+- **2b, database half APPLIED** `20261029233740`: the always-false `deleted_at IS NOT NULL` checks are gone from `fn_shift_not_started`, `fn_shift_office_is_ft_only`, `fn_shift_shape_day_typed_guard` and `internal.trg_shift_eba_compliance`; the `'shift_deleted'` outcome is gone from `sm_refresh_shift_snapshots` and `v_shift_assignment_episodes` (still `security_invoker`); `idx_shifts_deleted_at` is dropped and the five partial indexes are rebuilt without the predicate. Live definitions equal the file. In a rolled-back dry run the view returned the same 20 rows before and after, and `plpgsql_check` was clean. Test: `supabase/tests/shifts_deleted_at_logic_removed.sql` (failed before, passes now).
+- **2b, app half DONE** on `refactor/duplicate-implementations`: no app file or deployed edge function names `deleted_at` (guard: `no-shifts-deleted-at.test.ts`, which failed on the 22 files). The delta sync patches rows and no longer looks for deleted ones.
+- **2c, PENDING:** only after that code is live **and** `get-roster-view` is redeployed (the deployed app still filters on the column and reads it from `get_shift_delta`). One migration: recreate `get_shift_delta` without the `deleted_at` output column (a changed return type needs DROP + CREATE, then re-grant EXECUTE as it is today), then
 
-  It also covers the app half (22 files, all on `shifts` queries), the view `v_shift_assignment_episodes` (keep `security_invoker`), and the six indexes. The column, its CHECK and `idx_shifts_deleted_at` are dropped only after the app half is live.
+  ```sql
+  ALTER TABLE public.shifts DROP CONSTRAINT shifts_no_soft_delete, DROP COLUMN deleted_at;
+  ```
+
+  and prune `deleted_at` from the generated `types.ts`. The `_retired` edge functions still name it, but they are not deployed (only `get-roster-view` is).
 
 `CHECK shifts_no_soft_delete` keeps `deleted_at` NULL on every row, so every `deleted_at IS NULL` filter is a no-op. Today it is named by:
 

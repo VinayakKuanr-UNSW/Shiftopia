@@ -86,7 +86,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     payroll_exported: false,
     last_modified_by: null,
     last_modified_reason: null,
-    deleted_at: null,
     notes: null,
     is_recurring: false,
     recurrence_rule: null,

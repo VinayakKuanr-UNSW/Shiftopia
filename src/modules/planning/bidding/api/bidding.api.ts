@@ -81,8 +81,7 @@ export const biddingApi = {
                 remuneration_levels(level_number, level_name)
             `)
             .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
-            .is('assigned_employee_id', null)
-            .is('deleted_at', null);
+            .is('assigned_employee_id', null);
 
         if (filters?.organizationId) {
             query = query.eq('organization_id', filters.organizationId);

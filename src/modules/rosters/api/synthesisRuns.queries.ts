@@ -98,8 +98,7 @@ export const synthesisRunsQueries = {
         const { data: shiftsForRun, error: fetchErr } = await supabase
             .from('shifts')
             .select('id, assigned_employee_id')
-            .eq('synthesis_run_id', runId)
-            .is('deleted_at', null);
+            .eq('synthesis_run_id', runId);
         if (fetchErr) throw new Error(`rollbackRun (fetch) failed: ${fetchErr.message}`);
 
         const matched = shiftsForRun ?? [];

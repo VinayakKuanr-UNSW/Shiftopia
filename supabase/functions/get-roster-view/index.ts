@@ -155,7 +155,6 @@ const SHIFT_SELECT = `
   is_first_aid_duty,
   published_at,
   cancelled_at,
-  deleted_at,
   target_employment_type,
   target_requires_flexible,
   user_contract_id,
@@ -324,8 +323,7 @@ Deno.serve(async (req: Request) => {
               .select(SHIFT_SELECT)
               .eq("organization_id", organization_id)
               .gte("shift_date", start_date)
-              .lte("shift_date", end_date)
-              .is("deleted_at", null);
+              .lte("shift_date", end_date);
 
             if (validDeptIds.length > 0)    q = q.in("department_id", validDeptIds) as typeof q;
             if (validSubDeptIds.length > 0) q = q.in("sub_department_id", validSubDeptIds) as typeof q;
