@@ -234,7 +234,7 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 
 ### 4.3 Notable views
 
-`v_shift_assignment_episodes` (reconstructs assignment episodes from `shift_events` — source for KPIs and quarterly performance), `employee_daily_metrics` (materialized), `v_template_full`, `hr.v_headcount_by_level`, `hr.v_org_chart`, `hr.v_promotion_ladder`. Several views (`v_group_all_participants`, `v_broadcast_groups_with_stats`, `v_unread_broadcasts_by_group`, `v_template_full`) were **dropped by the Oct-2025 re-baseline and had to be restored** in follow-up migrations — see §5.
+`v_shift_assignment_episodes` (reconstructs assignment episodes from `shift_events` — source for KPIs and quarterly performance), `v_template_full`. Several views (`v_group_all_participants`, `v_broadcast_groups_with_stats`, `v_unread_broadcasts_by_group`, `v_template_full`) were **dropped by the Oct-2025 re-baseline and had to be restored** in follow-up migrations — see §5.
 
 ### 4.4 App-facing RPCs (called from the frontend, confirmed via grep of `.rpc(`)
 

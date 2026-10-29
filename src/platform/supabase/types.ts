@@ -864,180 +864,6 @@ export type Database = {
         }
         Relationships: []
       }
-      baseline_ft_patterns: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          department_id: string
-          employee_id: string
-          end_time: string
-          id: string
-          iso_day_of_week: number
-          net_minutes: number
-          organization_id: string
-          paid_break_minutes: number
-          role_id: string
-          start_time: string
-          sub_department_id: string
-          unpaid_break_minutes: number
-          updated_at: string
-          updated_by: string | null
-          user_contract_id: string
-          week_in_cycle: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          department_id: string
-          employee_id: string
-          end_time: string
-          id?: string
-          iso_day_of_week: number
-          net_minutes: number
-          organization_id: string
-          paid_break_minutes?: number
-          role_id: string
-          start_time: string
-          sub_department_id: string
-          unpaid_break_minutes?: number
-          updated_at?: string
-          updated_by?: string | null
-          user_contract_id: string
-          week_in_cycle?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          department_id?: string
-          employee_id?: string
-          end_time?: string
-          id?: string
-          iso_day_of_week?: number
-          net_minutes?: number
-          organization_id?: string
-          paid_break_minutes?: number
-          role_id?: string
-          start_time?: string
-          sub_department_id?: string
-          unpaid_break_minutes?: number
-          updated_at?: string
-          updated_by?: string | null
-          user_contract_id?: string
-          week_in_cycle?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "baseline_ft_patterns_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baseline_ft_patterns_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baseline_ft_patterns_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baseline_ft_patterns_user_contract_id_fkey"
-            columns: ["user_contract_id"]
-            isOneToOne: false
-            referencedRelation: "user_contracts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      baseline_ft_runs: {
-        Row: {
-          applied_at: string | null
-          applied_by: string | null
-          applied_count: number
-          created_at: string
-          created_by: string
-          department_id: string
-          id: string
-          input_digest: string
-          organization_id: string
-          period_end: string
-          period_start: string
-          proposal: Json
-          skipped_count: number
-          snapshot_version: string
-          status: string
-          sub_department_id: string
-          template_id: string | null
-        }
-        Insert: {
-          applied_at?: string | null
-          applied_by?: string | null
-          applied_count?: number
-          created_at?: string
-          created_by: string
-          department_id: string
-          id?: string
-          input_digest: string
-          organization_id: string
-          period_end: string
-          period_start: string
-          proposal: Json
-          skipped_count?: number
-          snapshot_version: string
-          status?: string
-          sub_department_id: string
-          template_id?: string | null
-        }
-        Update: {
-          applied_at?: string | null
-          applied_by?: string | null
-          applied_count?: number
-          created_at?: string
-          created_by?: string
-          department_id?: string
-          id?: string
-          input_digest?: string
-          organization_id?: string
-          period_end?: string
-          period_start?: string
-          proposal?: Json
-          skipped_count?: number
-          snapshot_version?: string
-          status?: string
-          sub_department_id?: string
-          template_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "baseline_ft_runs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baseline_ft_runs_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "roster_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baseline_ft_runs_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "v_template_full"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       broadcast_acknowledgements: {
         Row: {
           acknowledged_at: string | null
@@ -4426,7 +4252,6 @@ export type Database = {
           assignment_status: Database["public"]["Enums"]["shift_assignment_status"]
           attendance_note: string | null
           attendance_status: Database["public"]["Enums"]["shift_attendance_status"]
-          baseline_run_id: string | null
           bidding_close_at: string | null
           bidding_enabled: boolean | null
           bidding_open_at: string | null
@@ -4541,7 +4366,6 @@ export type Database = {
           assignment_status?: Database["public"]["Enums"]["shift_assignment_status"]
           attendance_note?: string | null
           attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
-          baseline_run_id?: string | null
           bidding_close_at?: string | null
           bidding_enabled?: boolean | null
           bidding_open_at?: string | null
@@ -4656,7 +4480,6 @@ export type Database = {
           assignment_status?: Database["public"]["Enums"]["shift_assignment_status"]
           attendance_note?: string | null
           attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
-          baseline_run_id?: string | null
           bidding_close_at?: string | null
           bidding_enabled?: boolean | null
           bidding_open_at?: string | null
@@ -4770,13 +4593,6 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_baseline_run_id_fkey"
-            columns: ["baseline_run_id"]
-            isOneToOne: false
-            referencedRelation: "baseline_ft_runs"
             referencedColumns: ["id"]
           },
           {
@@ -6217,34 +6033,6 @@ export type Database = {
       }
     }
     Views: {
-      employee_daily_metrics: {
-        Row: {
-          accepted: number | null
-          assigned: number | null
-          cancelled: number | null
-          early_out: number | null
-          emergency: number | null
-          employee_id: string | null
-          event_date: string | null
-          ignored: number | null
-          late_cancelled: number | null
-          late_in: number | null
-          no_show: number | null
-          offered: number | null
-          rejected: number | null
-          swapped: number | null
-          worked: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shift_events_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       employee_leave_days: {
         Row: {
           employee_id: string | null
@@ -6600,15 +6388,6 @@ export type Database = {
           group_id: string | null
           is_explicit: boolean | null
           role: string | null
-        }
-        Relationships: []
-      }
-      v_performance_data_quality_alerts: {
-        Row: {
-          alert_type: string | null
-          details: string | null
-          employee_id: string | null
-          shift_id: string | null
         }
         Relationships: []
       }
