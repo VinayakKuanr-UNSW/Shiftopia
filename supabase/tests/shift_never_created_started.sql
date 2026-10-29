@@ -27,7 +27,7 @@ DECLARE
   v_passed  text := '';
 BEGIN
   SELECT * INTO v_src FROM public.shifts
-  WHERE deleted_at IS NULL AND target_employment_type <> 'FT'
+  WHERE target_employment_type <> 'FT'
     AND (shift_date + start_time) AT TIME ZONE 'Australia/Sydney' > now() + interval '1 day'
   ORDER BY shift_date, start_time LIMIT 1;
   IF v_src.id IS NULL THEN

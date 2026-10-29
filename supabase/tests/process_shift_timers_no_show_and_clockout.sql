@@ -23,7 +23,7 @@ DECLARE
 BEGIN
   SELECT array_agg(id ORDER BY id) INTO ids FROM (
     SELECT id FROM public.shifts
-    WHERE deleted_at IS NULL AND assigned_employee_id IS NOT NULL
+    WHERE assigned_employee_id IS NOT NULL
     ORDER BY id LIMIT 3) s;
   IF coalesce(array_length(ids, 1), 0) < 3 THEN
     RAISE EXCEPTION 'SKIPPED: need three assigned shifts';
