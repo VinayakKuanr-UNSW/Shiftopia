@@ -3178,32 +3178,23 @@ export type Database = {
       }
       public_holidays: {
         Row: {
-          applies_to_state: string | null
           created_at: string | null
           holiday_date: string
-          holiday_name: string | null
           id: string
-          is_national: boolean | null
           jurisdiction: string
           name: string
         }
         Insert: {
-          applies_to_state?: string | null
           created_at?: string | null
           holiday_date: string
-          holiday_name?: string | null
           id?: string
-          is_national?: boolean | null
           jurisdiction?: string
           name: string
         }
         Update: {
-          applies_to_state?: string | null
           created_at?: string | null
           holiday_date?: string
-          holiday_name?: string | null
           id?: string
-          is_national?: boolean | null
           jurisdiction?: string
           name?: string
         }
