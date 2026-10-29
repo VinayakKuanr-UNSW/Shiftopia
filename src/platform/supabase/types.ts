@@ -4244,7 +4244,6 @@ export type Database = {
           attendance_note: string | null
           attendance_status: Database["public"]["Enums"]["shift_attendance_status"]
           bidding_close_at: string | null
-          bidding_enabled: boolean | null
           bidding_open_at: string | null
           bidding_status: Database["public"]["Enums"]["shift_bidding_status"]
           break_end: string | null
@@ -4263,7 +4262,6 @@ export type Database = {
           creation_source: string | null
           currency: string | null
           deleted_at: string | null
-          deleted_by: string | null
           demand_group_id: string | null
           demand_source: string | null
           department_id: string
@@ -4310,7 +4308,6 @@ export type Database = {
           roster_date: string | null
           roster_id: string
           roster_subgroup_id: string
-          roster_template_id: string | null
           scheduled_end: string | null
           scheduled_length_minutes: number | null
           scheduled_start: string | null
@@ -4341,7 +4338,6 @@ export type Database = {
           updated_at: string | null
           user_contract_id: string | null
           version: number
-          workflow_status: string
         }
         Insert: {
           actual_end?: string | null
@@ -4358,7 +4354,6 @@ export type Database = {
           attendance_note?: string | null
           attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
           bidding_close_at?: string | null
-          bidding_enabled?: boolean | null
           bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
           break_end?: string | null
@@ -4377,7 +4372,6 @@ export type Database = {
           creation_source?: string | null
           currency?: string | null
           deleted_at?: string | null
-          deleted_by?: string | null
           demand_group_id?: string | null
           demand_source?: string | null
           department_id: string
@@ -4424,7 +4418,6 @@ export type Database = {
           roster_date?: string | null
           roster_id: string
           roster_subgroup_id: string
-          roster_template_id?: string | null
           scheduled_end?: string | null
           scheduled_length_minutes?: number | null
           scheduled_start?: string | null
@@ -4455,7 +4448,6 @@ export type Database = {
           updated_at?: string | null
           user_contract_id?: string | null
           version?: number
-          workflow_status?: string
         }
         Update: {
           actual_end?: string | null
@@ -4472,7 +4464,6 @@ export type Database = {
           attendance_note?: string | null
           attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
           bidding_close_at?: string | null
-          bidding_enabled?: boolean | null
           bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
           break_end?: string | null
@@ -4491,7 +4482,6 @@ export type Database = {
           creation_source?: string | null
           currency?: string | null
           deleted_at?: string | null
-          deleted_by?: string | null
           demand_group_id?: string | null
           demand_source?: string | null
           department_id?: string
@@ -4538,7 +4528,6 @@ export type Database = {
           roster_date?: string | null
           roster_id?: string
           roster_subgroup_id?: string
-          roster_template_id?: string | null
           scheduled_end?: string | null
           scheduled_length_minutes?: number | null
           scheduled_start?: string | null
@@ -4569,7 +4558,6 @@ export type Database = {
           updated_at?: string | null
           user_contract_id?: string | null
           version?: number
-          workflow_status?: string
         }
         Relationships: [
           {
@@ -4640,20 +4628,6 @@ export type Database = {
             columns: ["roster_subgroup_id"]
             isOneToOne: false
             referencedRelation: "roster_subgroups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_template_id_fkey"
-            columns: ["roster_template_id"]
-            isOneToOne: false
-            referencedRelation: "roster_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_template_id_fkey"
-            columns: ["roster_template_id"]
-            isOneToOne: false
-            referencedRelation: "v_template_full"
             referencedColumns: ["id"]
           },
           {

@@ -2,7 +2,6 @@
 // Roster & Shift Types
 // Extracted from src/api/models/types.ts
 
-import type { ShiftWorkflowStatus } from '@/modules/planning/unified/types';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
 
 type LifecycleStatus =
@@ -72,7 +71,6 @@ export interface Shift {
      * be named through the typed create path at all.
      */
     group_type?: TemplateGroupType;
-    workflow_status?: ShiftWorkflowStatus;
     last_dropped_by?: string;
     last_rejected_by?: string;
 }

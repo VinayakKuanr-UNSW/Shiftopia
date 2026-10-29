@@ -137,7 +137,6 @@ export interface Shift {
     last_modified_by: string | null;
     last_modified_reason: string | null;
     deleted_at: string | null;
-    deleted_by: string | null;
     notes: string | null;
     is_training: boolean;
     // Joined Timesheet Data
