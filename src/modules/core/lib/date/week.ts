@@ -22,10 +22,7 @@
 
 import {
   addDays,
-  eachDayOfInterval,
-  endOfMonth,
   endOfWeek,
-  startOfMonth,
   startOfWeek,
   type Day,
 } from 'date-fns';
@@ -52,54 +49,3 @@ export function getWeekDays(date: Date): Date[] {
   const start = startOfWeekAU(date);
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
-
-/**
- * The days of the month containing `date`, padded out to whole Mon–Sun weeks —
- * i.e. exactly what a month calendar renders, leading/trailing "outside" days
- * included.
- *
- * Length is 28, 35 or 42 depending on the month; it is NOT hard-coded to 42.
- * Several of the hand-rolled grids this replaces padded unconditionally to 42
- * and so rendered a phantom seventh week.
- */
-export function getMonthGridDays(date: Date): Date[] {
-  return eachDayOfInterval({
-    start: startOfWeekAU(startOfMonth(date)),
-    end: endOfWeekAU(endOfMonth(date)),
-  });
-}
-
-/** `getMonthGridDays` chunked into weeks — one inner array per rendered row. */
-export function getMonthGridWeeks(date: Date): Date[][] {
-  const days = getMonthGridDays(date);
-  const weeks: Date[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
-  return weeks;
-}
-
-/**
- * Weekday column labels, Mon→Sun, in the three lengths the UI uses.
- *
- * `narrow` collides (T/T, S/S) and is decorative only: render it with
- * `aria-hidden` alongside an `sr-only` `long` label, never on its own.
- */
-export const WEEKDAY_LABELS = {
-  narrow: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
-  short: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  long: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-} as const;
-
-
-/**
- * Column index (0 = Monday … 6 = Sunday) for a date.
- *
- * Replaces the `(getDay(d) + 6) % 7` incantation that was copy-pasted across
- * the hand-rolled grids to convert JS's Sunday-first `getDay()`.
- */
-export const getWeekdayIndexAU = (date: Date): number => (date.getDay() + 6) % 7;
-
-/** True for Saturday or Sunday. */
-export const isWeekend = (date: Date): boolean => {
-  const day = date.getDay();
-  return day === 0 || day === 6;
-};

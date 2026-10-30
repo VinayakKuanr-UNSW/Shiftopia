@@ -148,8 +148,7 @@ interface WeekUtilization {
 }
 
 /**
- * Bands from `fairness.ts:getUtilizationStatus`, restated rather than imported
- * only because that module's version cannot express "this person has no
+ * Utilisation bands (80 / 105 / 120%), plus 'none' for "this person has no
  * contract to measure against", which is a real state here (casuals with
  * `contracted_weekly_hours = 0`) and must not read as 0% under-utilized.
  */

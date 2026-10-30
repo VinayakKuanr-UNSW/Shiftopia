@@ -7,13 +7,9 @@ import type {
 import {
   buildAssignInput,
   buildBidInput,
-  buildDraftInput,
   buildSkeletonInput,
   buildSwapInputs,
-  deriveV8Stage,
-  resolveCandidateV8ShiftId,
 } from '../../compliance/input-builder';
-import type { PlanningOffer, PlanningRequest } from '../../types';
 
 const employeeContext = (
   employeeId: string,
@@ -55,55 +51,13 @@ const partyBShift = shift(
   '20:00',
 );
 
-const request = (
-  type: PlanningRequest['type'],
-  shiftId = 'shift-a',
-): PlanningRequest => ({
-  id: 'request-1',
-  type,
-  status: 'OPEN',
-  shift_id: shiftId,
-  initiated_by: 'emp-a',
-  target_employee_id: null,
-  reason: null,
-  compliance_snapshot: null,
-  compliance_evaluated_at: null,
-  manager_id: null,
-  manager_notes: null,
-  decided_at: null,
-  created_at: '2026-08-01T00:00:00.000Z',
-  updated_at: '2026-08-01T00:00:00.000Z',
-});
 
-const offer = (
-  offeredShiftId: string | null,
-): PlanningOffer => ({
-  id: 'offer-1',
-  request_id: 'request-1',
-  offered_by: 'emp-b',
-  offered_shift_id: offeredShiftId,
-  status: 'SUBMITTED',
-  created_at: '2026-08-01T00:00:00.000Z',
-  updated_at: '2026-08-01T00:00:00.000Z',
-});
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe('planning compliance input builders', () => {
-  it.each([
-    [{ lifecycle_status: 'draft' }, 'DRAFT'],
-    [{ lifecycle_status: 'UNPUBLISHED' }, 'DRAFT'],
-    [{ is_published: false }, 'DRAFT'],
-    [{ lifecycle_status: 'assigned' }, 'LIVE'],
-    [{ lifecycle_status: 'LIVE' }, 'LIVE'],
-    [{ lifecycle_status: 'confirmed' }, 'LIVE'],
-    [{ lifecycle_status: 'scheduled', is_published: true }, 'PUBLISH'],
-    [{}, 'PUBLISH'],
-  ] as const)('derives the stage from %o', (input, expected) => {
-    expect(deriveV8Stage(input)).toBe(expected);
-  });
 
   it('builds a bid input without mutating the current schedule', () => {
     const context = employeeContext('emp-a');
@@ -180,12 +134,6 @@ describe('planning compliance input builders', () => {
       availabilityData,
       removeShiftIds: [partyAShift.id],
     });
-    const draftInput = buildDraftInput({
-      employeeId: 'emp-a',
-      employeeContext: context,
-      existingShifts: [],
-      candidateShift: partyBShift,
-    });
     const skeletonInput = buildSkeletonInput({
       candidateShift: partyBShift,
       stage: 'PUBLISH',
@@ -196,8 +144,6 @@ describe('planning compliance input builders', () => {
     expect(assignInput.candidate_changes.remove_shifts).toEqual([
       partyAShift.id,
     ]);
-    expect(draftInput.stage).toBe('DRAFT');
-    expect(draftInput.operation_type).toBe('ASSIGN');
     expect(skeletonInput).toMatchObject({
       employee_id: 'skeleton',
       stage: 'PUBLISH',
@@ -207,20 +153,5 @@ describe('planning compliance input builders', () => {
       },
       existing_shifts: [],
     });
-  });
-
-  it('resolves candidate shifts and rejects malformed swap offers', () => {
-    expect(resolveCandidateV8ShiftId(
-      request('BID', 'bid-shift'),
-      offer(null),
-    )).toBe('bid-shift');
-    expect(resolveCandidateV8ShiftId(
-      request('SWAP'),
-      offer('offered-shift'),
-    )).toBe('offered-shift');
-    expect(() => resolveCandidateV8ShiftId(
-      request('SWAP'),
-      offer(null),
-    )).toThrow('missing offered_shift_id');
   });
 });

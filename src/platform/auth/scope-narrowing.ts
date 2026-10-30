@@ -85,16 +85,6 @@ export const soleDeptId = (scope: ScopeSelection | null | undefined): string | n
 export const soleSubDeptId = (scope: ScopeSelection | null | undefined): string | null =>
   sole(subDeptIds(scope));
 
-/**
- * True when a level holds MORE than one id, i.e. a single-id surface has to ask
- * the user which one rather than pick. Empty is not ambiguous — it is empty.
- */
-export const isOrgAmbiguous = (scope: ScopeSelection | null | undefined): boolean =>
-  orgIds(scope).length > 1;
-
-export const isDeptAmbiguous = (scope: ScopeSelection | null | undefined): boolean =>
-  deptIds(scope).length > 1;
-
 
 /**
  * The organisation a page may query with, or null until its own copy of the

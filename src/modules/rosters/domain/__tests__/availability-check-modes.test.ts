@@ -9,7 +9,6 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-    availabilityModeForEmploymentStatus,
     evaluateShiftAvailability,
     evaluateShiftAvailabilityFromSlots,
 } from '../availability-check';
@@ -29,27 +28,6 @@ function avail(partial: Partial<EmployeeAvailability>): EmployeeAvailability {
         ...partial,
     };
 }
-
-describe('availabilityModeForEmploymentStatus', () => {
-    it('puts contract-obligated staff on OPT_OUT in every spelling', () => {
-        for (const s of ['Full-Time', 'full time', 'FT', 'Part-Time', 'PT', 'Flexible Part-Time']) {
-            expect(availabilityModeForEmploymentStatus(s)).toBe('OPT_OUT');
-        }
-    });
-
-    it('puts casuals on OPT_IN, including the uppercase token the roster reader emits', () => {
-        expect(availabilityModeForEmploymentStatus('Casual')).toBe('OPT_IN');
-        expect(availabilityModeForEmploymentStatus('CASUAL')).toBe('OPT_IN');
-    });
-
-    // The strict reading is the safe one: it over-warns (visible, correctable)
-    // rather than silently suppressing a real warning.
-    it('falls back to OPT_IN for an unreadable status', () => {
-        expect(availabilityModeForEmploymentStatus(null)).toBe('OPT_IN');
-        expect(availabilityModeForEmploymentStatus('')).toBe('OPT_IN');
-        expect(availabilityModeForEmploymentStatus('Contractor')).toBe('OPT_IN');
-    });
-});
 
 describe('evaluateShiftAvailability — OPT_OUT (FT/PT)', () => {
     it('reads an absent declaration as contract-available, not as a warning', () => {

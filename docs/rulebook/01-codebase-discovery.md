@@ -75,7 +75,7 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 ### 2.7 `leave`
 **Purpose:** NES/EBA-compliant leave policies, balance accrual/projection, leave-request CRUD, approve/reject workflow, and leave↔shift conflict detection.
 **Structure:** `api/leave.api.ts`, `domain/` (`leave-policy.ts`, `leave-conflicts.ts` — pure business logic), `model/leave.types.ts`, `ui/pages/LeavePage.tsx`. No separate `state/` folder.
-**Entry points:** `api/leave.api.ts` (get/create/approve/reject/cancel, conflict detection/unassignment), `domain/leave-policy.ts` (`LEAVE_POLICIES`, `projectBalance`).
+**Entry points:** `api/leave.api.ts` (get/create/approve/reject/cancel, conflict detection/unassignment), `domain/leave-policy.ts` (`LEAVE_POLICIES`).
 **DB:** `leave_balances`, `leave_requests`, `profiles`, `roles`, `shifts`, `user_contracts`. No RPCs.
 **Depends on:** `core`, `rosters` (unassigns shifts conflicting with approved leave).
 **Core types:** `LeaveTypeCode`, `LeavePolicy`, `LeaveBalance`, `LeaveRequest(Status)`, `LeaveShiftConflict`.

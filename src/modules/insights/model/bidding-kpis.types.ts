@@ -33,55 +33,5 @@ export const EMPTY_BIDDING_KPIS: BiddingKpis = {
     unfilled_open_shift_rate: 0,
 };
 
-// ---------------------------------------------------------------------------
-// BiddingKpiKey — every field of BiddingKpis
-// ---------------------------------------------------------------------------
-type BiddingKpiKey = keyof BiddingKpis;
-
-// ---------------------------------------------------------------------------
-// BIDDING_THRESHOLDS — only the *rate* metrics carry good/warn thresholds.
-//
-// Direction is encoded by HIGHER_IS_BETTER below:
-//   • higher-is-better → value >= good ? good : value >= warn ? warn : critical
-//   • lower-is-better  → value <= good ? good : value <= warn ? warn : critical
-//
-// Counts and avg_bids_per_open_shift are intentionally NOT thresholded
-// (no universally-correct target), so getBiddingStatus returns 'good' for them.
-// ---------------------------------------------------------------------------
-export const BIDDING_THRESHOLDS: Partial<Record<BiddingKpiKey, { good: number; warn: number }>> = {
-    // ── higher-is-better ──────────────────────────────────────────────────
-    open_shift_fill_rate: { good: 80, warn: 60 },  // open shifts should mostly fill
-    bid_success_rate:     { good: 40, warn: 20 },  // a healthy share of bids should win
-
-    // ── lower-is-better ───────────────────────────────────────────────────
-    unfilled_open_shift_rate: { good: 15, warn: 30 },  // few open shifts left unfilled
-} as const;
 
 // Keys whose status improves as the number grows.
-const HIGHER_IS_BETTER: ReadonlySet<BiddingKpiKey> = new Set<BiddingKpiKey>([
-    'open_shift_fill_rate',
-    'bid_success_rate',
-]);
-
-// ---------------------------------------------------------------------------
-// getBiddingStatus — pure, deterministic good/warn/critical classification.
-// Keys without thresholds (counts, avg_bids_per_open_shift) return 'good'.
-// ---------------------------------------------------------------------------
-export const getBiddingStatus = (
-    key: BiddingKpiKey,
-    value: number,
-): 'good' | 'warn' | 'critical' => {
-    const thresholds = BIDDING_THRESHOLDS[key];
-    if (!thresholds) return 'good';
-
-    if (HIGHER_IS_BETTER.has(key)) {
-        if (value >= thresholds.good) return 'good';
-        if (value >= thresholds.warn) return 'warn';
-        return 'critical';
-    }
-
-    // lower-is-better
-    if (value <= thresholds.good) return 'good';
-    if (value <= thresholds.warn) return 'warn';
-    return 'critical';
-};

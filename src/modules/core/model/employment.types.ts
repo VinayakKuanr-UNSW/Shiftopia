@@ -200,14 +200,6 @@ export function isFullTimeEmployee(
     return resolveEmploymentType(employmentStatus, contractType) === 'FT';
 }
 
-/** Does this employee carry a contract obligation (FT/PT) rather than opt in? */
-export function hasContractObligation(
-    employmentStatus: string | null | undefined,
-    contractType: string | null | undefined,
-): boolean {
-    return resolveEmploymentType(employmentStatus, contractType) !== 'Casual';
-}
-
 /**
  * Whether a contract's employment status is a FLEXIBLE variant. Kept separate
  * from `toTargetEmploymentType` precisely because that function erases the

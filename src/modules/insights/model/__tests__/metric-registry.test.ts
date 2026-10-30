@@ -14,10 +14,6 @@ import {
     labelFor,
     formatMetric,
 } from '../metric-registry';
-import { REPORT_THRESHOLDS, METRIC_THRESHOLDS } from '@/modules/users/hooks/usePerformanceMetrics';
-import { KPI_THRESHOLDS } from '../marketplace-kpis.types';
-import { BIDDING_THRESHOLDS } from '../bidding-kpis.types';
-import { SCORECARD_THRESHOLDS } from '../manager-scorecard.types';
 
 describe('statusFor — direction', () => {
     it('grades higher-is-better metrics up the scale', () => {
@@ -66,7 +62,6 @@ describe('resolved threshold disagreements', () => {
     it('acceptance_rate keeps the REPORT bands (70/40)', () => {
         expect(METRIC_REGISTRY.acceptance_rate.good).toBe(70);
         expect(METRIC_REGISTRY.acceptance_rate.warn).toBe(40);
-        expect(METRIC_THRESHOLDS.acceptance_rate.good).toBe(80); // the value NOT chosen
         expect(statusFor('acceptance_rate', 75)).toBe('good');   // would be 'warn' under 80/50
     });
 
@@ -80,40 +75,8 @@ describe('resolved threshold disagreements', () => {
 });
 
 describe('registry agrees with the tables it absorbed', () => {
-    const check = (
-        table: Record<string, { good: number; warn: number } | undefined>,
-        name: string,
-        skip: string[] = [],
-    ) => {
-        for (const [key, bands] of Object.entries(table)) {
-            if (!bands || skip.includes(key)) continue;
-            const entry = METRIC_REGISTRY[key];
-            expect(entry, `${name}.${key} is missing from METRIC_REGISTRY`).toBeDefined();
-            expect(
-                { good: entry.good, warn: entry.warn },
-                `${name}.${key} bands drifted`,
-            ).toEqual({ good: bands.good, warn: bands.warn });
-        }
-    };
-
-    it('matches REPORT_THRESHOLDS', () => {
-        // acceptance_rate and reliability_score agree with REPORT by decision;
-        // drop_rate and late_cancel_rate were folded into the two-kind
-        // standard/urgent model and are asserted separately below.
-        check(REPORT_THRESHOLDS as never, 'REPORT_THRESHOLDS', ['drop_rate', 'late_cancel_rate']);
-    });
-
-    it('matches BIDDING_THRESHOLDS', () => {
-        // bid_success_rate is deliberately NOT shared — see below.
-        check(BIDDING_THRESHOLDS as never, 'BIDDING_THRESHOLDS', ['bid_success_rate']);
-    });
 
     it('separates the org-level and per-employee bid success metrics', () => {
-        // One name, two metrics. The org-level figure is winners / ALL bids and
-        // is bounded by 1 / avg bids per shift; the per-employee figure is one
-        // person's hit rate. Grading the org number against the employee bands
-        // painted a healthy marketplace critical.
-        expect(BIDDING_THRESHOLDS.bid_success_rate).toEqual({ good: 40, warn: 20 });
         expect({
             good: METRIC_REGISTRY.bid_win_rate.good,
             warn: METRIC_REGISTRY.bid_win_rate.warn,
@@ -127,14 +90,6 @@ describe('registry agrees with the tables it absorbed', () => {
         // employee. The split is the whole point.
         expect(statusFor('bid_win_rate', 25)).toBe('warn');
         expect(statusFor('bid_success_rate', 25)).toBe('critical');
-    });
-
-    it('matches KPI_THRESHOLDS (marketplace)', () => {
-        check(KPI_THRESHOLDS as never, 'KPI_THRESHOLDS');
-    });
-
-    it('matches SCORECARD_THRESHOLDS', () => {
-        check(SCORECARD_THRESHOLDS as never, 'SCORECARD_THRESHOLDS');
     });
 });
 
@@ -220,13 +175,5 @@ describe('the legacy status functions delegate here', () => {
     it('folds neutral into good, because the legacy colour maps have no neutral slot', () => {
         // New code should call statusFor and handle 'neutral' properly.
         expect(statusFor('total_bids', 5)).toBe('neutral');
-    });
-
-    it('covers every key both legacy tables define', () => {
-        for (const table of [METRIC_THRESHOLDS, REPORT_THRESHOLDS]) {
-            for (const key of Object.keys(table)) {
-                expect(METRIC_REGISTRY[key], `${key} has no registry entry`).toBeDefined();
-            }
-        }
     });
 });

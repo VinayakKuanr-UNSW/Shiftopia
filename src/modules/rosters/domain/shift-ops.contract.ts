@@ -23,11 +23,17 @@
  *   GONE / FORBIDDEN / ERROR    → { ok:false, code, error? }
  */
 
-// The operation vocabulary is owned by the sibling legality module.
-import type { ShiftOp } from './shift-op-legality';
-
-// Re-export so downstream consumers can reference `ShiftOp` from one import.
-export type { ShiftOp };
+/** Manager operations the gateway accepts; `sm_apply_shift_op` checks each one's legality. */
+export type ShiftOp =
+    | 'assign'
+    | 'unassign'
+    | 'publish'
+    | 'unpublish'
+    | 'select_winner'
+    | 'approve_trade'
+    | 'reject_trade'
+    | 'delete'
+    | 'edit';
 
 /** Result codes returned by `sm_apply_shift_op`, 1:1 with the RPC. */
 export type ShiftOpCode =

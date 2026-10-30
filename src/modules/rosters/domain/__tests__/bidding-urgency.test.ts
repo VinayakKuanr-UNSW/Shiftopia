@@ -13,7 +13,6 @@ import {
   computeShiftUrgency,
   computeTTS,
   isOnBidding,
-  isBiddingUrgent,
 } from '../bidding-urgency';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
@@ -158,24 +157,5 @@ describe('isOnBidding', () => {
 
   it('returns false for bidding_closed_no_winner', () => {
     expect(isOnBidding('bidding_closed_no_winner')).toBe(false);
-  });
-});
-
-// ── isBiddingUrgent ───────────────────────────────────────────────────────────
-
-describe('isBiddingUrgent', () => {
-  it('returns true when TTS is in urgent window', () => {
-    mockNowBefore(SHIFT_DATE, START_TIME, 12 * 60 * 60 * 1000);
-    expect(isBiddingUrgent(SHIFT_DATE, START_TIME)).toBe(true);
-  });
-
-  it('returns false in normal window', () => {
-    mockNowBefore(SHIFT_DATE, START_TIME, 25 * 60 * 60 * 1000);
-    expect(isBiddingUrgent(SHIFT_DATE, START_TIME)).toBe(false);
-  });
-
-  it('returns false in locked window (TTS ≤ 4h)', () => {
-    mockNowBefore(SHIFT_DATE, START_TIME, 2 * 60 * 60 * 1000);
-    expect(isBiddingUrgent(SHIFT_DATE, START_TIME)).toBe(false);
   });
 });
