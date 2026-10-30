@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   orgIds, deptIds, subDeptIds,
   soleOrgId, soleDeptId, soleSubDeptId,
-  isOrgAmbiguous, isDeptAmbiguous, 
   orgIdOnceSynced,
 } from '../scope-narrowing';
 import type { ScopeSelection } from '../types';
@@ -59,7 +58,6 @@ describe('non-UUIDs are filtered out before they reach a query', () => {
     const s = scope({ org_ids: ['nope', 'also-nope'] });
     expect(orgIds(s)).toEqual([]);
     expect(soleOrgId(s)).toBeNull();
-    expect(isOrgAmbiguous(s)).toBe(false);
   });
 });
 
@@ -89,11 +87,6 @@ describe('sole* narrows ONLY when unambiguous', () => {
 });
 
 describe('ambiguity is distinct from emptiness', () => {
-  it('is false for zero and one, true for many', () => {
-    expect(isOrgAmbiguous(scope({ org_ids: [] }))).toBe(false);
-    expect(isOrgAmbiguous(scope({ org_ids: [A] }))).toBe(false);
-    expect(isOrgAmbiguous(scope({ org_ids: [A, B] }))).toBe(true);
-  });
 
   it('lets a caller tell "pick one" from "nothing to pick"', () => {
     // A page showing "choose a department" must not show it when the manager
@@ -102,8 +95,6 @@ describe('ambiguity is distinct from emptiness', () => {
     const many = scope({ dept_ids: [A, B] });
     expect(soleDeptId(none)).toBeNull();
     expect(soleDeptId(many)).toBeNull();
-    expect(isDeptAmbiguous(none)).toBe(false);
-    expect(isDeptAmbiguous(many)).toBe(true);
   });
 
   it('matches the real production shape: one org, eleven departments', () => {
@@ -111,9 +102,7 @@ describe('ambiguity is distinct from emptiness', () => {
     // org. `dept_ids[0]` shows them one of eleven; this must report ambiguous.
     const real = scope({ org_ids: [A], dept_ids: Array.from({ length: 11 }, (_, i) => U(i === 0 ? 9 : i)) });
     expect(soleOrgId(real)).toBe(A);
-    expect(isOrgAmbiguous(real)).toBe(false);
     expect(soleDeptId(real)).toBeNull();
-    expect(isDeptAmbiguous(real)).toBe(true);
   });
 });
 

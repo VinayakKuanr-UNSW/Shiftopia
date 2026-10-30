@@ -48,7 +48,7 @@ export const FT_AVAILABILITY_ERROR =
  * only fired inside the create would delete an FT's rules and then throw —
  * destroying data on the path whose whole purpose is to refuse the write.
  *
- * FAILS OPEN, DELIBERATELY. `fetchContractBasis` returns the empty basis on a
+ * FAILS OPEN, DELIBERATELY. `fetchScopedContractBasis` returns the empty basis on a
  * read error, and that basis is not Full-Time — so a transient contract-read
  * failure lets the write through to
  * `trg_prevent_ft_availability_rule` (20260817120000), which is the real
@@ -108,7 +108,7 @@ export async function createAvailabilityFromForm(
  *
  * Split out so the batch path can check the contract ONCE. It used to call
  * `createAvailabilityFromForm` per day, which re-resolved the profile and re-read
- * the contract on every iteration — and `fetchContractBasis` may itself issue two
+ * the contract on every iteration — and `fetchScopedContractBasis` may itself issue two
  * selects (the envelope columns, then a base-column retry). A 90-day preset ran
  * ~360 queries to perform 90 inserts.
  */

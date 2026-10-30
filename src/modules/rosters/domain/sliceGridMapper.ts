@@ -48,19 +48,6 @@ export function sliceIdxToSynthSlot(sliceIdx: number): number | null {
     return slotIdx;
 }
 
-/**
- * Convert a synthesizer slot index (0..39, 06:00-anchored) to the
- * corresponding midnight-anchored L3 slice index (0..47).
- * Returns null for post-midnight synthesizer slots (slot index ≥ 36,
- * i.e., after 24:00).
- */
-export function synthSlotToSliceIdx(slotIdx: number): number | null {
-    if (slotIdx < 0 || slotIdx >= SLOT_MINUTES.length) return null;
-    const midnightMinutes = SLOT_MINUTES[slotIdx]; // already midnight-anchored for slots 0..35
-    if (midnightMinutes >= 48 * 30) return null; // beyond 23:30
-    return Math.floor(midnightMinutes / 30);
-}
-
 interface SynthSlotHeadcount {
     /** Synthesizer slot index (0..39). */
     slotIdx: number;
@@ -136,21 +123,4 @@ export function l3CellsToSynthSlots(
     });
 
     return { slots, droppedPreDawn };
-}
-
-/**
- * Inverse helper: given headcount per synthesizer slot, produce a sparse
- * headcount map keyed by L3 slice_idx. Used when writing back to demand_tensor.
- */
-export function synthSlotsToSliceCounts(
-    slots: readonly SynthSlotHeadcount[],
-): Map<number, number> {
-    const out = new Map<number, number>();
-    for (const s of slots) {
-        if (s.headcount === 0) continue; // sparse — skip zero-demand slots
-        const sliceIdx = synthSlotToSliceIdx(s.slotIdx);
-        if (sliceIdx === null) continue;
-        out.set(sliceIdx, (out.get(sliceIdx) ?? 0) + s.headcount);
-    }
-    return out;
 }

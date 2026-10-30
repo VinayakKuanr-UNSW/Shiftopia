@@ -6,14 +6,11 @@
  * Covers:
  *   - buildClusterKey: pax band boundaries, room band boundaries, null handling,
  *     deterministic output for identical inputs.
- *   - computeMedian: odd count, even count, single element, all-same, sorted
- *     output independence (caller array not mutated).
  */
 
 import { describe, it, expect } from 'vitest';
 import {
     buildClusterKey,
-    computeMedian,
     classifyPaxBand,
     classifyRoomBand,
 } from '../templateBuilder.service';
@@ -83,42 +80,5 @@ describe('buildClusterKey — deterministic output', () => {
     it('large event → 1500+ pax band', () => {
         const key = buildClusterKey({ event_type: 'Concert', pax: 5000, service_type: null, alcohol: true, room_count: 1 });
         expect(key.pax_band).toBe('1500+');
-    });
-});
-
-// ─── computeMedian ───────────────────────────────────────────────────────────
-
-describe('computeMedian — correctness', () => {
-    it('single element → that element', () => expect(computeMedian([7])).toBe(7));
-
-    it('all same values → that value', () => expect(computeMedian([4, 4, 4, 4])).toBe(4));
-
-    it('odd count → middle element after sort', () => {
-        // [1, 3, 5, 7, 9] → median = 5
-        expect(computeMedian([9, 1, 5, 3, 7])).toBe(5);
-    });
-
-    it('even count → average of two middle elements', () => {
-        // sorted [2, 4, 6, 8] → (4+6)/2 = 5
-        expect(computeMedian([8, 2, 6, 4])).toBe(5);
-    });
-
-    it('even count with fractional midpoint', () => {
-        // sorted [1, 2] → 1.5
-        expect(computeMedian([2, 1])).toBe(1.5);
-    });
-
-    it('does not mutate the caller array', () => {
-        const arr = [5, 1, 3];
-        computeMedian(arr);
-        expect(arr).toEqual([5, 1, 3]);
-    });
-
-    it('throws on empty array', () => {
-        expect(() => computeMedian([])).toThrow();
-    });
-
-    it('two-element even count', () => {
-        expect(computeMedian([10, 20])).toBe(15);
     });
 });

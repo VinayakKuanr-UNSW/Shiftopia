@@ -33,7 +33,6 @@
  */
 
 import type { EmployeeAvailability } from './availabilityResolution.types';
-import { toTargetEmploymentType } from '@/modules/core/model/employment.types';
 
 type AvailabilityVerdict =
   | 'available'
@@ -51,22 +50,6 @@ type AvailabilityVerdict =
  * solver's `EmployeeInput.availability_mode`.
  */
 export type AvailabilityMode = 'OPT_IN' | 'OPT_OUT';
-
-/**
- * Resolve the mode from a contract's employment status.
- *
- * Delegates the token normalisation to `toTargetEmploymentType` so there is ONE
- * alias table in the frontend for 'Full-Time' / 'full time' / 'FT' /
- * 'Flexible Part-Time' — the same one the solver payload is built from. Note
- * that helper's documented posture: anything unrecognised collapses to 'Casual',
- * so an unreadable status lands on the strict OPT_IN here, matching
- * `resolveComplianceBasis`.
- */
-export function availabilityModeForEmploymentStatus(
-  employmentStatus: string | null | undefined,
-): AvailabilityMode {
-  return toTargetEmploymentType(employmentStatus) === 'Casual' ? 'OPT_IN' : 'OPT_OUT';
-}
 
 interface ShiftAvailabilityResult {
   verdict: AvailabilityVerdict;

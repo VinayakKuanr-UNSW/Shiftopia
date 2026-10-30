@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { execSync } from 'node:child_process';
-import { isSecurityRoleName, securityRoleIdSet } from '../security-role';
+import { isSecurityRoleName } from '../security-role';
 
 /**
  * One owner for "is this a Security role?".
@@ -52,18 +52,6 @@ describe('isSecurityRoleName', () => {
             expect(isSecurityRoleName(absent)).toBe(false);
             expect(isSecurityRoleName(absent)).not.toBeUndefined();
         }
-    });
-});
-
-describe('securityRoleIdSet', () => {
-    it('keeps only Security rows, and only those with an id', () => {
-        const set = securityRoleIdSet([
-            { id: 'a', name: 'Security Officer' },
-            { id: 'b', name: 'Team Member' },
-            { id: null, name: 'Security Manager' },
-            { id: 'd', name: null },
-        ]);
-        expect([...set]).toEqual(['a']);
     });
 });
 

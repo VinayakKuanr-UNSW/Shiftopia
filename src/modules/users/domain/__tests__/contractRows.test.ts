@@ -7,7 +7,6 @@ import { describe, expect, it } from 'vitest';
 import {
     accessOf,
     contractStatus,
-    accessReachOf,
     employmentText,
     remunerationText,
     sortContracts,
@@ -45,24 +44,10 @@ describe('employment and remuneration, in words', () => {
     });
 });
 
-describe('where access reaches, from the row', () => {
-    it.each([
-        ['alpha', 'Event Setup'],
-        ['beta', 'Event Setup'],
-        ['gamma', 'Event Setup'],
-        ['delta', 'All of Events'],
-        ['epsilon', 'All of ICC Sydney'],
-        ['zeta', 'Everywhere'],
-    ] as const)('%s → %s', (level, reach) => {
-        expect(accessReachOf(row({ access_level: level }))).toBe(reach);
-    });
-});
-
 describe('access that is not recorded', () => {
     it('is none — never Employee', () => {
         const c = row({ access_level: null });
         expect(accessOf(c)).toBeNull();
-        expect(accessReachOf(c)).toBeNull();
     });
 });
 

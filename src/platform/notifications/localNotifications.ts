@@ -111,15 +111,6 @@ export function presentLocalNotification(input: LocalNotificationInput): Promise
   return presentNotificationWithPolicy({ input, requireDeviceOptIn: true });
 }
 
-/**
- * Present an explicitly requested demo notification. The button click itself is
- * the opt-in intent, so this path requests OS permission without requiring the
- * persistent device-notifications toggle. Event delivery policy still applies.
- */
-export function presentLocalDemoNotification(input: LocalNotificationInput): Promise<LocalNotificationPresentation> {
-  return presentNotificationWithPolicy({ input, requireDeviceOptIn: false });
-}
-
 async function presentNotificationWithPolicy(
   options: NotificationPresentationOptions,
 ): Promise<LocalNotificationPresentation> {

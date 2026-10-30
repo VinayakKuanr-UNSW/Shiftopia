@@ -16,7 +16,6 @@ import { join, resolve } from 'node:path';
 import { Constants } from '@/platform/supabase/types';
 import { ALL_GROUP_TYPES, GROUP_COLORS, GROUP_DISPLAY_NAMES } from '../projections/constants';
 import { groupVariantFor, resolveGroupVariant } from '../shift-ui';
-import { getDefaultGroups } from '../queries/getGroupsModeGrid.query';
 import { resolveGroupType } from '../../utils/roster-utils';
 
 describe('the client knows every group the database does', () => {
@@ -34,13 +33,6 @@ describe('the client knows every group the database does', () => {
 });
 
 describe('the planner draws an Office row, named Office', () => {
-    it('getDefaultGroups names every group by its own name', () => {
-        // The name was a ternary ending in `: 'Theatre'`.
-        const groups = getDefaultGroups();
-        expect(groups.map(g => g.type)).toEqual(ALL_GROUP_TYPES);
-        expect(groups.find(g => g.type === 'office')?.name).toBe('Office');
-        expect(new Set(groups.map(g => g.name)).size).toBe(groups.length);
-    });
 
     it('a cyan card resolves back to the Office group', () => {
         expect(resolveGroupType({ groupColor: 'cyan' })).toBe('office');

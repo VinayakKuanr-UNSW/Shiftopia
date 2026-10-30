@@ -114,7 +114,7 @@ H1.)
 
 | Component | Purpose |
 |---|---|
-| `core/lib/date/week.ts` | `startOfWeekAU`, `endOfWeekAU`, `getWeekDays`, `getMonthGridDays`, `getMonthGridWeeks`, `getWeekdayIndexAU`, `isWeekend`, `WEEKDAY_LABELS`, `WEEK_STARTS_ON`, `AU_WEEK_OPTIONS`. No options parameter, so there is nothing to forget. |
+| `core/lib/date/week.ts` | `startOfWeekAU`, `endOfWeekAU`, `getWeekDays`, `WEEK_STARTS_ON`, `AU_WEEK_OPTIONS`. No options parameter, so there is nothing to forget. |
 | `core/ui/calendar/MonthGrid.tsx` | Month view with `renderDay` / `renderOverlay` / `dayLabel` / `dayModifiers` slots. |
 | `core/ui/calendar/DatePicker.tsx` | Single-date popover. Supports a custom trigger, caption dropdowns, and modifier passthrough. |
 | `core/ui/calendar/DateRangePicker.tsx` | One `mode="range"` grid, optional presets sidebar, responsive 1↔2 months. |

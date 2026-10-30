@@ -27,22 +27,3 @@ export function groupKeyOf(nameOrType: string | null | undefined): string {
 export function hasFixedSubgroup(nameOrType: string | null | undefined): boolean {
   return groupKeyOf(nameOrType) === OFFICE_GROUP_TYPE;
 }
-
-/** Two sub-group names are the same sub-group. */
-export function sameSubgroupName(a: string | null | undefined, b: string | null | undefined): boolean {
-  return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
-}
-
-/**
- * `"<base> (Copy)"`, or `"(Copy 2)"`, `"(Copy 3)"` … — the first that no
- * existing name in the group already uses.
- */
-export function uniqueCopyName(base: string, existing: readonly string[]): string {
-  const taken = (name: string) => existing.some(e => sameSubgroupName(e, name));
-  const first = `${base.trim()} (Copy)`;
-  if (!taken(first)) return first;
-  for (let i = 2; ; i++) {
-    const candidate = `${base.trim()} (Copy ${i})`;
-    if (!taken(candidate)) return candidate;
-  }
-}

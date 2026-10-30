@@ -193,22 +193,3 @@ export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
     );
     return 'UNKNOWN';
 }
-
-// ─── Convenience helpers ──────────────────────────────────────────────────────
-
-
-/** True if the shift is in any terminal state (no further transitions possible). */
-export function isShiftTerminal(shift: ShiftFSMInput): boolean {
-    const state = getShiftFSMState(shift);
-    return state === 'S13' || state === 'S15';
-}
-
-/** True if the shift currently has an open bidding window. */
-export function isShiftOnBidding(shift: ShiftFSMInput): boolean {
-    return getShiftFSMState(shift) === 'S5';
-}
-
-/** True if the shift is waiting for an offer response. */
-export function isShiftOffered(shift: ShiftFSMInput): boolean {
-    return getShiftFSMState(shift) === 'S3';
-}
