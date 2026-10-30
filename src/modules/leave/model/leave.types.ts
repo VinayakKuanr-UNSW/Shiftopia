@@ -87,7 +87,7 @@ export interface LeavePolicy {
   /**
    * NES Div 11 semantics: the full entitlement is AVAILABLE UP FRONT and
    * resets on the service anniversary — it does not accrue progressively.
-   * projectBalance must not add daily accrual for these types.
+   * Balances must not add daily accrual for these types.
    *
    * FDV is the only type this describes. Religious/cultural and
    * gender-affirmation leave used to carry it, on the strength of dedicated

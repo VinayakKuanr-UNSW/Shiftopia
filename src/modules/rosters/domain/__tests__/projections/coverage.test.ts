@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { coverageHealth, coverageVariant } from '../../projections/utils/coverage';
+import { coverageHealth } from '../../projections/utils/coverage';
 
 describe('coverageHealth', () => {
   it('returns No Shifts sentinel when total is zero', () => {
@@ -42,29 +42,5 @@ describe('coverageHealth', () => {
     const h = coverageHealth(6, 5);
     expect(h.label).toBe('Fully Staffed');
     expect(h.ratio).toBeCloseTo(1.2);
-  });
-});
-
-describe('coverageVariant', () => {
-  it('maps Fully Staffed → default', () => {
-    expect(coverageVariant(coverageHealth(5, 5))).toBe('default');
-  });
-
-  it('maps Nearly Staffed → secondary', () => {
-    expect(coverageVariant(coverageHealth(4, 5))).toBe('secondary');
-  });
-
-  // coverageVariant uses ratio thresholds (≥1 default, ≥0.8 secondary, else destructive)
-  // Both Low Coverage (60%) and Critical (<50%) map to 'destructive'
-  it('maps Low Coverage (60%) → destructive', () => {
-    expect(coverageVariant(coverageHealth(3, 5))).toBe('destructive');
-  });
-
-  it('maps Critical (<50%) → destructive', () => {
-    expect(coverageVariant(coverageHealth(1, 5))).toBe('destructive');
-  });
-
-  it('maps No Shifts sentinel → default (ratio is 1)', () => {
-    expect(coverageVariant(coverageHealth(0, 0))).toBe('default');
   });
 });

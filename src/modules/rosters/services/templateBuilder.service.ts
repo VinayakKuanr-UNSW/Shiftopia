@@ -40,21 +40,6 @@ export function classifyRoomBand(roomCount: number): RoomBand {
     return '4+';
 }
 
-// ─── Median helper ────────────────────────────────────────────────────────────
-
-/**
- * Compute the median of a non-empty number array.
- * Input array is copied before sorting — caller's order is not mutated.
- * Exported for unit testing.
- */
-export function computeMedian(values: number[]): number {
-    if (values.length === 0) throw new Error('computeMedian: empty input');
-    const sorted = [...values].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    if (sorted.length % 2 === 1) return sorted[mid];
-    return (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
 // ─── Cluster key builder ──────────────────────────────────────────────────────
 
 interface EventClusterInput {

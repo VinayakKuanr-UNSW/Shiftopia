@@ -2,7 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import type { EnhancedAddShiftModalProps } from './types';
 
 // Lazy-load the heavy modal chunk
-const EnhancedAddShiftModal = lazy(() => import('./index'));
+const EnhancedAddShiftModal = lazy(() => import('./index').then((m) => ({ default: m.EnhancedAddShiftModal })));
 
 /**
  * A wrapper for EnhancedAddShiftModal that lazy-loads the actual modal

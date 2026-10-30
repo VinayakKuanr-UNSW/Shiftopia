@@ -122,14 +122,6 @@ export interface EmployeeBroadcastGroup extends BroadcastGroup {
 }
 
 
-export interface BroadcastAcknowledgement {
-    id: string;
-    broadcastId: string;
-    employeeId: string;
-    acknowledgedAt: string;
-}
-
-
 export interface BroadcastAckStats {
     total: number;
     acknowledged: number;

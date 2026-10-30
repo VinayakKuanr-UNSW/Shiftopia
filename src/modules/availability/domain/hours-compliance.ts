@@ -41,7 +41,6 @@ import {
 import { calculateMinutesBetweenTimes } from '@/modules/rosters/domain/shift.entity';
 import type {
     RawTeamShift,
-    TeamContractType,
     TeamMember,
 } from '../model/team-availability.types';
 
@@ -226,7 +225,6 @@ export function computeEmpComp(
     byWeek: Record<string, number>,
     byDate: Record<string, ShiftHours[]>,
     sortedWeekKeys: string[],
-    contractType: TeamContractType,
     contractedWeeklyHours?: number,
     cycleWeeks: number = ORD_CYCLE_WEEKS_DEFAULT,
     cycleAnchor: string = ORD_CYCLE_ANCHOR_DEFAULT,

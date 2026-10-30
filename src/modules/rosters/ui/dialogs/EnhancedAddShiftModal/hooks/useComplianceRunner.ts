@@ -1,8 +1,7 @@
-import { useState, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import {
     ComplianceResult,
     ComplianceCheckInput,
-    HardValidationResult,
     assignmentEvaluator,
     assignmentResultToComplianceResults,
 } from '@/modules/compliance';
@@ -10,10 +9,7 @@ import { validateCompliance } from '@/modules/rosters/services/compliance.servic
 
 interface UseComplianceRunnerProps {
     buildComplianceInput: () => ComplianceCheckInput;
-    hardValidation: HardValidationResult;
     setComplianceResults: (results: Record<string, ComplianceResult | null>) => void;
-    needsRerun: boolean;
-    setNeedsRerun: (needs: boolean) => void;
     setHasRun: (hasRun: boolean) => void;
     /** The shift ID (UUID) — required for qualification compliance check */
     shiftId?: string;
@@ -30,14 +26,10 @@ function calcNetMinutes(s: { start_time: string; end_time: string; unpaid_break_
 
 export function useComplianceRunner({
     buildComplianceInput,
-    hardValidation,
     setComplianceResults,
-    needsRerun,
-    setNeedsRerun,
     setHasRun,
     shiftId
 }: UseComplianceRunnerProps) {
-    const [isRunning, setIsRunning] = useState(false);
     // Monotonically-increasing counter. Each call to runChecks captures its
     // own runId. After any async work, we check whether this is still the
     // most-recent invocation before committing state — cancelling stale runs.
@@ -45,7 +37,6 @@ export function useComplianceRunner({
 
     const runChecks = useCallback(async (overrideEmployeeId?: string) => {
         const runId = ++runIdRef.current;
-        setIsRunning(true);
         await new Promise(resolve => setTimeout(resolve, 10));
 
         try {
@@ -183,23 +174,18 @@ export function useComplianceRunner({
 
             setComplianceResults(newResults);
             setHasRun(true);
-            setNeedsRerun(false);
         } catch (error) {
             console.error('[useComplianceRunner] Error running checks:', error);
-        } finally {
-            if (runId === runIdRef.current) setIsRunning(false);
         }
-    }, [buildComplianceInput, setComplianceResults, setHasRun, setNeedsRerun, shiftId]);
+    }, [buildComplianceInput, setComplianceResults, setHasRun, shiftId]);
 
     const clearResults = useCallback(() => {
         setComplianceResults({});
         setHasRun(false);
-        setNeedsRerun(false);
-    }, [setComplianceResults, setHasRun, setNeedsRerun]);
+    }, [setComplianceResults, setHasRun]);
 
     return {
         runChecks,
-        clearResults,
-        isRunning
+        clearResults
     };
 }

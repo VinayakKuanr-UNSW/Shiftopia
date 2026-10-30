@@ -15,8 +15,6 @@ import {
 
 interface RosterMetricsFooterProps {
   totalShifts: number;
-  assignedShifts?: number;
-  unfilledShifts?: number;
   stateCounts?: Record<string, number>;
   selectedState?: string | null;
   onSelectState?: (stateId: string | null) => void;
@@ -134,8 +132,6 @@ function formatNetMinutes(minutes: number): string {
  */
 export const RosterMetricsFooter: React.FC<RosterMetricsFooterProps> = ({
   totalShifts,
-  assignedShifts,
-  unfilledShifts,
   stateCounts,
   selectedState,
   onSelectState,

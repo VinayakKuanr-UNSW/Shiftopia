@@ -74,7 +74,7 @@ vi.mock('@/platform/supabase/client', () => ({
     supabase: { from: h.from },
 }));
 
-const { fetchAvailabilityScopes, fetchScopedContractBasis, fetchContractBasis } =
+const { fetchAvailabilityScopes, fetchScopedContractBasis } =
     await import('../contract-basis.api');
 
 // ── fixtures ────────────────────────────────────────────────────────────────
@@ -219,10 +219,6 @@ describe('fetchAvailabilityScopes', () => {
 
 describe('fetchScopedContractBasis', () => {
     it('answers per job, where the person-wide read cannot', async () => {
-        // The defect, stated against the API rather than the domain: the
-        // person-wide read is what hid the editor from this employee.
-        expect((await fetchContractBasis('emp-1')).isFullTime).toBe(true);
-
         expect((await fetchScopedContractBasis('emp-1', {
             subDepartmentId: SETUP, departmentId: D_EVENT,
         })).isFullTime).toBe(false);
@@ -232,10 +228,11 @@ describe('fetchScopedContractBasis', () => {
         })).isFullTime).toBe(true);
     });
 
-    // The invariant that lets every pre-existing caller keep its meaning.
+    // Person-wide, this employee holds a Full-Time contract (Security), even
+    // though their Set-up job is casual.
     it('a null sub-department is the person-wide basis', async () => {
-        expect(await fetchScopedContractBasis('emp-1', { subDepartmentId: null }))
-            .toEqual(await fetchContractBasis('emp-1'));
+        expect((await fetchScopedContractBasis('emp-1', { subDepartmentId: null })).isFullTime)
+            .toBe(true);
     });
 
     // roleIds feeds the Schedule 3 security check, which asks whether someone

@@ -1,6 +1,20 @@
 import type { TemplateGroupType } from "./shift.entity";
 import type { TargetEmploymentType } from "@/modules/core/model/employment.types";
-export { timeToMinutes, minutesToTime } from "./availabilityResolution";
+
+/** Convert "HH:MM" or "HH:MM:SS" to minutes from midnight. */
+export function timeToMinutes(time: string): number {
+  const parts = time.split(":");
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1] || "0", 10);
+  return hours * 60 + minutes;
+}
+
+/** Convert minutes from midnight to "HH:MM". */
+export function minutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+}
 
 const MIN_SHIFT_MINUTES = 180; // 3 hrs min
 const MAX_SHIFT_MINUTES = 720; // 12 hrs max

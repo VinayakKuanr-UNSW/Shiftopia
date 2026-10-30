@@ -7,7 +7,6 @@
  * No dollar figures here: money lives in Gross Pay only.
  */
 import type { AccessLevel } from '@/platform/auth/types';
-import { accessReach } from '@/platform/auth/constants';
 
 interface Named { name: string }
 
@@ -84,11 +83,6 @@ export function remunerationText(c: ContractRow): string {
     return scheme ? `${base} · ${scheme}` : base;
 }
 
-const placeOf = (c: ContractRow) => ({
-    organization: c.organizations?.name ?? null,
-    department: c.departments?.name ?? null,
-    subDepartment: c.sub_departments?.name ?? null,
-});
 
 /**
  * The access this contract records — or null when it records none. A database
@@ -97,12 +91,6 @@ const placeOf = (c: ContractRow) => ({
  * "Employee" for an Administrator).
  */
 export const accessOf = (c: ContractRow): AccessLevel | null => c.access_level ?? null;
-
-/** Where this contract's access reaches: "Event Setup", "All of Events", "Everywhere". */
-export const accessReachOf = (c: ContractRow): string | null => {
-    const level = accessOf(c);
-    return level ? accessReach(level, placeOf(c)) : null;
-};
 
 const ACCESS_RANK: Record<AccessLevel, number> = { zeta: 0, epsilon: 1, delta: 2, gamma: 3, beta: 4, alpha: 5 };
 const rankOf = (c: ContractRow) => { const l = accessOf(c); return l ? ACCESS_RANK[l] : 6; };

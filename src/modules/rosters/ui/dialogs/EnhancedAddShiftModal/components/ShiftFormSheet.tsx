@@ -160,7 +160,6 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     shiftLength,
     netLength,
     hardValidation,
-    minShiftHours,
     shape,
     shapeBlockers,
     compliancePanel,

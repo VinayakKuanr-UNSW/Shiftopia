@@ -106,7 +106,7 @@ export async function createAvailabilityException(
     input: CreateExceptionInput,
 ): Promise<AvailabilityException> {
     // `resolveProfileId` FIRST: callers pass the 'current-user' sentinel here as
-    // well as real uuids, and `fetchContractBasis('current-user')` returns the
+    // well as real uuids, and `fetchScopedContractBasis('current-user', …)` returns the
     // empty basis (not Full-Time), which would wave an FT straight through.
     // The DB-level guard landed in 20260821090100; this stays as the courtesy
     // that produces a readable message instead of a check_violation.

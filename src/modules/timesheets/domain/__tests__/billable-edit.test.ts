@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateBillableEdit, billableVarianceVsRoster } from '../billable-edit';
+import { validateBillableEdit } from '../billable-edit';
 
 const sched = { scheduledStart: '09:00', scheduledEnd: '17:00' };
 const clean = {
@@ -164,24 +164,5 @@ describe('validateBillableEdit', () => {
             expect(r.hasBreakVarianceFlag).toBe(true);
             expect(r.breakVarianceMinutes).toBe(120);
         });
-    });
-});
-
-describe('billableVarianceVsRoster (approval gate)', () => {
-    it('flags a billable window that varies from roster', () => {
-        expect(billableVarianceVsRoster('09:00', '17:45', '09:00', '17:00'))
-            .toEqual({ arrival: false, departure: true });
-        expect(billableVarianceVsRoster('08:30', '17:00', '09:00', '17:00'))
-            .toEqual({ arrival: true, departure: false });
-    });
-
-    it('is clean when on-roster within grace', () => {
-        expect(billableVarianceVsRoster('09:03', '16:58', '09:00', '17:00'))
-            .toEqual({ arrival: false, departure: false });
-    });
-
-    it('yields no variance for a missing billable side', () => {
-        expect(billableVarianceVsRoster('09:00', null, '09:00', '17:00'))
-            .toEqual({ arrival: false, departure: false });
     });
 });

@@ -10,7 +10,6 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    isWeekendShift,
     isNightShift,
     classifyShift,
     computeDebts,
@@ -25,33 +24,6 @@ import {
     type ShiftFairnessFlags,
     type ShiftForFairness,
 } from '../fairness-ledger';
-
-// ─── isWeekendShift ─────────────────────────────────────────────────────────────
-
-describe('isWeekendShift', () => {
-    it('returns true for Saturday', () => {
-        // 2026-06-13 is a Saturday
-        expect(isWeekendShift('2026-06-13')).toBe(true);
-    });
-
-    it('returns true for Sunday', () => {
-        // 2026-06-14 is a Sunday
-        expect(isWeekendShift('2026-06-14')).toBe(true);
-    });
-
-    it('returns false for Monday–Friday', () => {
-        // 2026-06-15 is Monday
-        expect(isWeekendShift('2026-06-15')).toBe(false);
-        // 2026-06-16 is Tuesday
-        expect(isWeekendShift('2026-06-16')).toBe(false);
-        // 2026-06-17 is Wednesday
-        expect(isWeekendShift('2026-06-17')).toBe(false);
-        // 2026-06-18 is Thursday
-        expect(isWeekendShift('2026-06-18')).toBe(false);
-        // 2026-06-19 is Friday
-        expect(isWeekendShift('2026-06-19')).toBe(false);
-    });
-});
 
 // ─── isNightShift ───────────────────────────────────────────────────────────────
 

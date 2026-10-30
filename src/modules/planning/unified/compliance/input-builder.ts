@@ -8,8 +8,6 @@
  * Architecture:
  *   buildBidInput()   — builds input for a single employee bidding on a shift
  *   buildSwapInputs() — builds inputs for BOTH swap parties simultaneously
- *   deriveV8Stage()     — maps shift lifecycle state to the engine's V8Stage type
- *   resolveCandidateV8ShiftId() — extracts the correct shift ID per request type
  */
 
 import { ORD_CYCLE_ANCHOR_DEFAULT, ORD_CYCLE_WEEKS_DEFAULT } from '@/modules/compliance/ordinary-hours-cycle';
@@ -22,41 +20,6 @@ import type {
   V8AvailabilityData,
 } from '@/modules/compliance/v8/orchestrator/types';
 
-import type { PlanningRequest, PlanningOffer } from '../types';
-
-// =============================================================================
-// STAGE DERIVATION
-// =============================================================================
-
-/**
- * Maps a shift's lifecycle/published state to the compliance engine's V8Stage type.
- *
- * V8Stage semantics:
- *   DRAFT   — shift is unpublished; softer severity thresholds apply
- *   LIVE    — shift is assigned and published; strictest enforcement
- *   PUBLISH — shift is published but not yet assigned (intermediate state)
- *
- * This controls the severity normalization matrix inside the engine.
- */
-export function deriveV8Stage(shift: {
-  lifecycle_status?: string | null;
-  is_published?: boolean | null;
-}): V8Stage {
-  const lifecycle = shift.lifecycle_status?.toLowerCase() ?? '';
-
-  // Explicitly unpublished drafts get DRAFT stage
-  if (lifecycle === 'draft' || lifecycle === 'unpublished' || shift.is_published === false) {
-    return 'DRAFT';
-  }
-
-  // Assigned and published shifts are LIVE — highest enforcement
-  if (lifecycle === 'assigned' || lifecycle === 'live' || lifecycle === 'confirmed') {
-    return 'LIVE';
-  }
-
-  // Published but not yet assigned (open shifts for bidding)
-  return 'PUBLISH';
-}
 
 // =============================================================================
 // BID INPUT BUILDER
@@ -168,43 +131,6 @@ export function buildSwapInputs(params: {
 }
 
 // =============================================================================
-// CANDIDATE SHIFT ID RESOLUTION
-// =============================================================================
-
-/**
- * Determine which shift ID is the "candidate" (the shift being added to
- * the evaluating employee's schedule) based on request type.
- *
- * BID:  candidateV8ShiftId = request.shift_id
- *       (the open shift the bidder wants to acquire)
- *
- * SWAP: candidateV8ShiftId = offer.offered_shift_id
- *       (the shift the offerer is proposing to trade away — which the
- *        initiator will gain — or the initiator's shift for party B's check)
- *
- * The service layer calls this to decide which shift to fetch and pass
- * to the input builders.
- */
-export function resolveCandidateV8ShiftId(
-  request: PlanningRequest,
-  offer: PlanningOffer,
-): string {
-  if (request.type === 'BID') {
-    return request.shift_id;
-  }
-
-  // SWAP: the candidate for the initiator is what the offerer proposes
-  if (!offer.offered_shift_id) {
-    throw new Error(
-      `SWAP offer ${offer.id} is missing offered_shift_id. ` +
-      'All SWAP offers must reference a shift to trade.',
-    );
-  }
-
-  return offer.offered_shift_id;
-}
-
-// =============================================================================
 // ASSIGN / DRAFT / SKELETON INPUT BUILDERS
 // =============================================================================
 
@@ -251,24 +177,6 @@ export function buildAssignInput(params: {
 
   if (availabilityData) input.availability_data = availabilityData;
   return input;
-}
-
-/**
- * Build the V8OrchestratorInput for the DRAFT-stage form preview in the
- * EnhancedAddShiftModal (no commit yet, softer severity thresholds).
- *
- * operation_type: 'ASSIGN'
- * mode:           'SIMULATED'
- * stage:          'DRAFT' (always)
- */
-export function buildDraftInput(params: {
-  employeeId: string;
-  employeeContext: V8EmployeeContext;
-  existingShifts: V8OrchestratorShift[];
-  candidateShift: V8OrchestratorShift;
-  availabilityData?: V8AvailabilityData;
-}): V8OrchestratorInput {
-  return buildAssignInput({ ...params, stage: 'DRAFT' });
 }
 
 /**

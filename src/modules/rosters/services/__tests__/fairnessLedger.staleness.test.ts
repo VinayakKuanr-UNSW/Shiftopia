@@ -68,7 +68,7 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
     it('reports `unavailable` — not silent zeros — when the ledger has never been computed', async () => {
         ctx.rows = [];
 
-        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], undefined, AS_OF);
+        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], AS_OF);
 
         expect(read.status).toBe('unavailable');
         expect(read.debts).toEqual([]);
@@ -79,7 +79,7 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
     it('queries by as-of date, not by exact window_end equality', async () => {
         ctx.rows = rowsAt('2026-08-01');
 
-        await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], undefined, AS_OF);
+        await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], AS_OF);
 
         // The RPC filters `window_end <= p_as_of`; the service must pass the
         // as-of date through unchanged rather than pre-narrowing to one day.
@@ -90,7 +90,7 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
     it('uses a recent-but-not-today window and reports it as ok', async () => {
         ctx.rows = rowsAt('2026-08-02');   // 2 days old
 
-        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], undefined, AS_OF);
+        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], AS_OF);
 
         // Pre-fix this returned [] because window_end !== today.
         expect(read.status).toBe('ok');
@@ -102,7 +102,7 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
     it('still returns the debts when stale — stale debts beat no debts', async () => {
         ctx.rows = rowsAt('2026-07-01');   // 34 days old
 
-        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], undefined, AS_OF);
+        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], AS_OF);
 
         expect(read.status).toBe('stale');
         expect(read.ageDays).toBe(34);
@@ -120,12 +120,12 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
         const pastLimit = format(subDays(AS_OF, LEDGER_STALE_AFTER_DAYS + 1), 'yyyy-MM-dd');
 
         ctx.rows = rowsAt(atLimit);
-        const at = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], undefined, AS_OF);
+        const at = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], AS_OF);
         expect(at.ageDays).toBe(LEDGER_STALE_AFTER_DAYS);
         expect(at.status).toBe('ok');
 
         ctx.rows = rowsAt(pastLimit);
-        const past = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], undefined, AS_OF);
+        const past = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1'], AS_OF);
         expect(past.ageDays).toBe(LEDGER_STALE_AFTER_DAYS + 1);
         expect(past.status).toBe('stale');
     });
@@ -133,7 +133,7 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
     it('ages against the FRESHEST window when employees straddle recomputes', async () => {
         ctx.rows = [...rowsAt('2026-06-01', 'e1'), ...rowsAt('2026-08-03', 'e2')];
 
-        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1', 'e2'], undefined, AS_OF);
+        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, ['e1', 'e2'], AS_OF);
 
         expect(read.windowEnd).toBe('2026-08-03');
         expect(read.ageDays).toBe(1);
@@ -141,7 +141,7 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
     });
 
     it('short-circuits on an empty employee list without reporting a fault', async () => {
-        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, [], undefined, AS_OF);
+        const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(ORG, [], AS_OF);
 
         expect(read.status).toBe('ok');   // nothing asked for is not a degradation
         expect(read.debts).toEqual([]);
@@ -151,7 +151,7 @@ describe('F-04: fairness ledger read resilience + staleness', () => {
     it('getEmployeeDebts stays a thin debts-only wrapper', async () => {
         ctx.rows = rowsAt('2026-08-02');
 
-        const debts = await fairnessLedgerService.getEmployeeDebts(ORG, ['e1'], undefined, AS_OF);
+        const debts = await fairnessLedgerService.getEmployeeDebts(ORG, ['e1'], AS_OF);
 
         expect(debts).toHaveLength(ALL_FAIRNESS_METRICS.length);
         expect(debts[0]).toMatchObject({ employeeId: 'e1', debt: 2 });

@@ -31,7 +31,6 @@ interface CacheEntry {
 const CACHE_TTL_MS = 5 * 60 * 1000;   // 5 minutes
 const _contextCache = new Map<string, CacheEntry>();
 
-/** Invalidate the in-memory cache for a specific employee (call on profile update). */
 /**
  * Contract columns for the V8 context.
  *
@@ -43,11 +42,7 @@ const CONTRACT_COLUMNS_BASE =
 const CONTRACT_COLUMNS_WITH_CYCLE =
     `${CONTRACT_COLUMNS_BASE}, ordinary_hours_cycle_weeks, ordinary_hours_cycle_anchor`;
 
-export function invalidateEmployeeContextCache(employeeId: string): void {
-    _contextCache.delete(employeeId);
-}
-
-/** Wipe the entire cache (e.g. on logout). */
+/** Wipe the entire cache. Test seam: entries expire on their own after CACHE_TTL_MS. */
 export function clearEmployeeContextCache(): void {
     _contextCache.clear();
 }

@@ -422,7 +422,6 @@ function buildOptimisticShift(
     department_id: data.department_id,
     sub_department_id: data.sub_department_id ?? null,
     shift_date: data.shift_date,
-    roster_date: data.shift_date,
     start_time: data.start_time,
     end_time: data.end_time,
     start_at: data.start_at ?? null,
@@ -1128,85 +1127,6 @@ export function useDeclineOffer() {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
-    },
-  });
-}
-
-/** Cancel a shift. Marks lifecycle_status + is_cancelled in all list views. */
-export function useCancelShift() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ shiftId, reason }: { shiftId: string; reason: string }) =>
-      shiftsCommands.cancelShift(shiftId, reason),
-
-    onMutate: async ({ shiftId }) => {
-      await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
-      const snapshot = snapshotLists(queryClient);
-
-      const shiftDate =
-        queryClient.getQueryData<Shift>(shiftKeys.detail(shiftId))?.shift_date ??
-        findShiftDateInLists(queryClient, shiftId);
-      const predicate = shiftDate ? dateInRange(shiftDate) : undefined;
-
-      patchLists(
-        queryClient,
-        (old) =>
-          old.map(s =>
-            s.id === shiftId
-              ? { ...s, lifecycle_status: 'Cancelled' as const, is_cancelled: true }
-              : s,
-          ),
-        predicate,
-      );
-
-      return { snapshot };
-    },
-
-    onError: (_err, _vars, context) => {
-      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
-    },
-
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
-      invalidateShiftAggregates(queryClient);
-    },
-  });
-}
-
-/** Request a trade for a shift. Sets trading_status to TradeRequested. */
-export function useRequestTrade() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (shiftId: string) => shiftsCommands.requestTrade(shiftId),
-
-    onMutate: async (shiftId) => {
-      const snapshot = snapshotLists(queryClient);
-      const shiftDate =
-        queryClient.getQueryData<Shift>(shiftKeys.detail(shiftId))?.shift_date ??
-        findShiftDateInLists(queryClient, shiftId);
-      const predicate = shiftDate ? dateInRange(shiftDate) : undefined;
-
-      patchLists(
-        queryClient,
-        (old) =>
-          old.map(s =>
-            s.id === shiftId
-              ? { ...s, trading_status: 'TradeRequested' as const, is_trade_requested: true }
-              : s,
-          ),
-        predicate,
-      );
-      return { snapshot };
-    },
-
-    onError: (_err, _id, context) => {
-      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
-    },
-
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
     },
   });
 }

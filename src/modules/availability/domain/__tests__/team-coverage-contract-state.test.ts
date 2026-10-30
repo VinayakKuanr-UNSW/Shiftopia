@@ -232,20 +232,20 @@ describe('summary', () => {
         // `hasDeclared: false` is true of the FT too — they have no rows.
         i.members[0].hasDeclared = false;
 
-        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i), DATE);
+        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i));
         expect(s.unsetCount).toBe(1);
     });
 
     it('counts contract staff as declared, so the tile can reach 100%', () => {
         const i = inputs({ members: [ft('ft1')] });
-        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i), DATE);
+        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i));
         expect(s.declaredCount).toBe(1);
         expect(s.memberCount).toBe(1);
     });
 
     it('counts contract staff in the weekday/weekend availability averages', () => {
         const i = inputs({ members: [ft('ft1')], dates: [DATE, '2026-08-15'] }); // Mon + Sat
-        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i), DATE);
+        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i));
         expect(s.avgWeekdayAvailable).toBe(1);
         expect(s.avgWeekendAvailable).toBe(1);
     });
@@ -255,7 +255,7 @@ describe('summary', () => {
     // them here is the false reassurance this page exists to remove.
     it('does not count an undeclared multi-hired member as supply', () => {
         const i = inputs({ members: [multiHired('mixed')], dates: [DATE, '2026-08-15'] });
-        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i), DATE);
+        const s = summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i));
         expect(s.avgWeekdayAvailable).toBe(0);
         expect(s.avgWeekendAvailable).toBe(0);
         expect(s.declaredCount).toBe(0);

@@ -37,7 +37,6 @@ function employee(id: string): EmployeeMeta {
         id, name: `Emp-${id}`,
         contract_type: 'FT',
         contracted_weekly_hours: 38,
-        remuneration_rate: 25,
     };
 }
 

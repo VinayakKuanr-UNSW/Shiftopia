@@ -11,9 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     sliceIdxToSynthSlot,
-    synthSlotToSliceIdx,
     l3CellsToSynthSlots,
-    synthSlotsToSliceCounts,
 } from '../sliceGridMapper';
 import type { RuleBaselineCell } from '../ruleEngine.types';
 import { SLOT_MINUTES } from '../shiftSynthesizer.policy';
@@ -43,33 +41,6 @@ describe('sliceIdxToSynthSlot', () => {
     it('slice 32 (16:00) maps to synth slot 20 = 16:00', () => {
         // 360 + 20*30 = 960 min = 16:00; slice 32 = 32*30 = 960 min ✓
         expect(sliceIdxToSynthSlot(32)).toBe(20);
-    });
-});
-
-describe('synthSlotToSliceIdx', () => {
-    it('synth slot 0 (06:00) maps to slice 12', () => {
-        expect(synthSlotToSliceIdx(0)).toBe(12);
-    });
-
-    it('synth slot 1 (06:30) maps to slice 13', () => {
-        expect(synthSlotToSliceIdx(1)).toBe(13);
-    });
-
-    it('synth slot 35 (23:30) maps to slice 47', () => {
-        expect(synthSlotToSliceIdx(35)).toBe(47);
-    });
-
-    it('synth slot 36 (24:00 = midnight+) returns null', () => {
-        // SLOT_MINUTES[36] = 360 + 36*30 = 1440 min ≥ 48*30 = 1440
-        expect(synthSlotToSliceIdx(36)).toBeNull();
-    });
-
-    it('out-of-range negative returns null', () => {
-        expect(synthSlotToSliceIdx(-1)).toBeNull();
-    });
-
-    it('out-of-range beyond SLOT_MINUTES returns null', () => {
-        expect(synthSlotToSliceIdx(SLOT_MINUTES.length)).toBeNull();
     });
 });
 
@@ -139,29 +110,5 @@ describe('l3CellsToSynthSlots', () => {
         const cells = [cell(32, 'F&B', 1, 10)];
         const { slots } = l3CellsToSynthSlots(cells, 'F&B', 1);
         expect(slots[20].explanation).toContain('rule:r1 +10');
-    });
-});
-
-describe('synthSlotsToSliceCounts', () => {
-    it('maps synth slot 20 → slice 32 correctly', () => {
-        const { slots } = l3CellsToSynthSlots([cell(32, 'F&B', 1, 10)], 'F&B', 1);
-        const counts = synthSlotsToSliceCounts(slots);
-        expect(counts.get(32)).toBe(10);
-    });
-
-    it('returns empty map for all-zero slots', () => {
-        const { slots } = l3CellsToSynthSlots([], 'F&B', 1);
-        const counts = synthSlotsToSliceCounts(slots);
-        expect(counts.size).toBe(0);
-    });
-
-    it('does not include post-midnight synth slots (null sliceIdx)', () => {
-        // Synthetically inject a headcount at synth slot 37 (post-midnight)
-        const { slots } = l3CellsToSynthSlots([], 'F&B', 1);
-        slots[37].headcount = 5;
-        const counts = synthSlotsToSliceCounts(slots);
-        // sliceIdx should be null for 37 — no entry in the map
-        expect(counts.has(48)).toBe(false);
-        expect(counts.has(49)).toBe(false);
     });
 });

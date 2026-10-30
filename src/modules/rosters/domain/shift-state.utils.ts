@@ -1,5 +1,5 @@
 import { Shift } from '../api/shifts.api';
-import { getShiftFSMState, FSM_STATE_META, type ShiftStateID as FSMStateID } from './shift-fsm';
+import { getShiftFSMState, type ShiftStateID as FSMStateID } from './shift-fsm';
 
 /**
  * The canonical IDs from shift-fsm.ts, plus 'Unknown' for a row too partial to read.
@@ -27,26 +27,4 @@ export function determineShiftState(shift: Partial<Shift>): ShiftStateID {
     } catch {
         return 'Unknown';
     }
-}
-
-export function getShiftStateDebugString(shift: Partial<Shift>) {
-    const stateId = determineShiftState(shift);
-
-    const format = (s?: string | null) =>
-        s ? s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '-';
-
-    const meta = stateId !== 'Unknown' && stateId in FSM_STATE_META
-        ? FSM_STATE_META[stateId as FSMStateID]
-        : null;
-
-    return {
-        id:        stateId,
-        label:     meta?.label ?? stateId,
-        lifecycle: format(shift.lifecycle_status),
-        assignment: format(shift.assignment_status),
-        outcome:   format(shift.assignment_outcome),
-        trading:   shift.trading_status && shift.trading_status !== 'NoTrade'
-                       ? format(shift.trading_status)
-                       : 'No',
-    };
 }

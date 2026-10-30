@@ -53,12 +53,6 @@ export interface UseAvailabilityEditingResult {
     profileId: string,
     payload: AvailabilityFormPayload
   ) => Promise<{ success: boolean; errors?: string[] }>;
-
-  // Validation
-  validateForm: (payload: AvailabilityFormPayload) => {
-    valid: boolean;
-    errors: string[];
-  };
 }
 
 // ============================================================================
@@ -176,16 +170,6 @@ export function useAvailabilityEditing(): UseAvailabilityEditingResult {
     [editState.mode, editState.ruleBeingEdited]
   );
 
-  /**
-   * Validate form without submitting
-   * Useful for real-time validation in forms
-   */
-  const validateForm = useCallback(
-    (payload: AvailabilityFormPayload) => {
-      return validateAvailabilityForm(payload);
-    },
-    []
-  );
 
   return {
     editState,
@@ -193,6 +177,5 @@ export function useAvailabilityEditing(): UseAvailabilityEditingResult {
     startEdit,
     cancelEdit,
     submitEdit,
-    validateForm,
   };
 }

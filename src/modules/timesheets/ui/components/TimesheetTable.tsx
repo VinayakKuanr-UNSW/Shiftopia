@@ -236,10 +236,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
             <div className="block md:hidden">
                 <TimesheetMobileView
                     entries={entries}
-                    selectedDate={selectedDate}
                     readOnly={readOnly}
                     searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
                     appliedFilters={appliedFilters}
                     onApplyFilters={setAppliedFilters}
                     activeFilterCount={activeFilterCount}
@@ -247,10 +245,6 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                     onSaveEntry={onSaveEntry}
                     onBulkAction={onBulkAction}
                     onMarkNoShow={onMarkNoShow}
-                    onDateChange={onDateChange}
-                    onRefresh={onRefresh}
-                    isRefreshing={isRefreshing}
-                    onExportPDF={handleExportPDF}
                     onExportSpreadsheet={handleExportXLSX}
                 />
             </div>

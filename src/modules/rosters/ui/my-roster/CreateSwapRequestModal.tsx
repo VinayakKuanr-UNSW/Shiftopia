@@ -188,5 +188,3 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
     </Drawer>
   );
 };
-
-export default CreateSwapRequestModal;

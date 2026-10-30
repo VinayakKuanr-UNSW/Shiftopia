@@ -73,7 +73,6 @@ const ShiftFormPage: React.FC = () => {
 
         // Statuses
         isAssignmentEnabled,
-        minShiftHours,
         shape,
         shapeBlockers,
 
@@ -88,8 +87,6 @@ const ShiftFormPage: React.FC = () => {
         isEmployeeLocked,
 
         // Read-only
-        isPast,
-        isStarted,
         isPublished,
         isReadOnly,
 
@@ -211,8 +208,6 @@ const ShiftFormPage: React.FC = () => {
                     <ShiftFormDrawerContent
                         form={form}
                         isReadOnly={isReadOnly}
-                        isPast={isPast}
-                        isStarted={isStarted}
                         isPublished={isPublished}
                         isTemplateMode={isTemplateMode}
                         editMode={editMode}
@@ -235,13 +230,10 @@ const ShiftFormPage: React.FC = () => {
                         netLength={netLength}
                         hardValidation={hardValidation}
                         isAssignmentEnabled={isAssignmentEnabled}
-                        minShiftHours={minShiftHours}
                         shape={shape}
                         shapeBlockers={shapeBlockers}
                         compliancePanel={compliancePanel}
                         runV2Compliance={runChecks}
-                        onUnpublish={handleUnpublish}
-                        canUnpublish={canUnpublish}
                         isGroupLocked={isGroupLocked}
                         isSubGroupLocked={isSubGroupLocked}
                         isRoleLocked={isRoleLocked}

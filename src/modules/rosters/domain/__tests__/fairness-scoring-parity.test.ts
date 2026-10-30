@@ -24,7 +24,6 @@ import { describe, expect, it } from 'vitest';
 import {
     classifyShift,
     isNightShift,
-    isWeekendShift,
     shiftFairnessPenaltyCents,
     debtToObjectiveCoeff,
     strategyMult,
@@ -44,16 +43,6 @@ describe('F-11: one classifier', () => {
         expect(isNightShift('23:00', '02:00')).toBe(true);
         expect(isNightShift('05:00', '13:00')).toBe(true);
         expect(isNightShift('00:00', '08:00')).toBe(true);
-    });
-
-    it('weekend classification is timezone-independent', () => {
-        // 2026-05-16 is a Saturday, 2026-05-17 a Sunday. Parsed at local noon,
-        // these hold in every timezone; `new Date('2026-05-16')` would report
-        // Friday anywhere west of UTC.
-        expect(isWeekendShift('2026-05-16')).toBe(true);
-        expect(isWeekendShift('2026-05-17')).toBe(true);
-        expect(isWeekendShift('2026-05-15')).toBe(false);
-        expect(isWeekendShift('2026-05-18')).toBe(false);
     });
 });
 

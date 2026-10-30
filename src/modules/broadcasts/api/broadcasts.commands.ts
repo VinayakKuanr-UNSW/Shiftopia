@@ -10,7 +10,6 @@ import type {
     BroadcastChannel,
     BroadcastAttachment,
     GroupParticipant,
-    BroadcastParticipantRole,
     CreateBroadcastGroupRequest,
     UpdateBroadcastGroupRequest,
     CreateBroadcastChannelRequest,
@@ -297,28 +296,6 @@ export const groupParticipantCommands = {
 
         if (error) throw error;
         return toCamelCase(participant);
-    },
-
-    /**
-     * Update participant role
-     */
-    async updateRole(
-        groupId: string,
-        employeeId: string,
-        role: BroadcastParticipantRole
-    ): Promise<void> {
-        if (role !== 'admin' && role !== 'broadcaster' && role !== 'member') {
-            throw new Error('Invalid role');
-        }
-
-        const result = await supabase
-            .from('group_participants')
-            .update({ role: role as 'admin' | 'broadcaster' | 'member' }, { count: 'exact' })
-            .eq('group_id', groupId)
-            .eq('employee_id', employeeId);
-
-        if (result.error) throw result.error;
-        assertWrote(result, "change this member's role");
     },
 
     /**

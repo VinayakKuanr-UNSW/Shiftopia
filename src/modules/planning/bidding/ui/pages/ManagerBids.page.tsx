@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { OpenBidsView } from '../views/OpenBidsView';
-import type { BidToggle, ToggleCounts, ManagerBidShift } from '../views/OpenBidsView/types';
+import type { BidToggle, ToggleCounts } from '../views/OpenBidsView/types';
 import { useAuth } from '@/platform/auth/useAuth';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
@@ -23,20 +23,17 @@ const ManagerBidsPage: React.FC = () => {
     const [groupBy, setGroupBy] = useState<RowGroupBy>('none');
     const [activeToggle, setActiveToggle] = useState<BidToggle>('urgent');
     const [counts, setCounts] = useState<ToggleCounts>({ standard: 0, urgent: 0, resolved: 0, expired: 0 });
-    const [, setShifts] = useState<ManagerBidShift[]>([]);
     const [autoAssign, setAutoAssign] = useState<{ run: () => void; isRunning: boolean }>({ run: () => {}, isRunning: false });
 
     // Period / Date navigation: defaults to current month (matches forward-looking open bids)
     const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
     const [viewType, setViewType] = useState<ViewType>('month');
-    const [, setRange] = useState<DateRange>(() => computeRange(new Date(), 'month'));
     const [startDate, setStartDate] = useState<Date>(() => computeRange(new Date(), 'month').start);
     const [endDate, setEndDate] = useState<Date>(() => computeRange(new Date(), 'month').end);
 
     const handleDateChange = useCallback((date: Date, newRange?: DateRange) => {
         setSelectedDate(date);
         const r = newRange ?? computeRange(date, viewType);
-        setRange(r);
         setStartDate(r.start);
         setEndDate(r.end);
     }, [viewType]);
@@ -44,7 +41,6 @@ const ManagerBidsPage: React.FC = () => {
     const handleViewTypeChange = useCallback((newView: ViewType) => {
         setViewType(newView);
         const r = computeRange(selectedDate, newView);
-        setRange(r);
         setStartDate(r.start);
         setEndDate(r.end);
     }, [selectedDate]);
@@ -83,7 +79,6 @@ const ManagerBidsPage: React.FC = () => {
                         onDateChange={handleDateChange}
                         onViewTypeChange={handleViewTypeChange}
                         onRangeChange={(r) => {
-                            setRange(r);
                             setStartDate(r.start);
                             setEndDate(r.end);
                         }}
@@ -119,7 +114,6 @@ const ManagerBidsPage: React.FC = () => {
                         activeToggle={activeToggle}
                         onToggleChange={setActiveToggle}
                         onCountsChange={setCounts}
-                        onShiftsChange={setShifts}
                         onAutoAssignReady={handleAutoAssignReady}
                         readOnly={!canEdit}
                         startDate={startDate}

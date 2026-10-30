@@ -13,7 +13,6 @@
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { fairnessLedgerQueries } from '../api/fairnessLedger.queries';
 import {
-    DEFAULT_WINDOW_DAYS,
     type FairnessDebt,
     type ShiftForFairness,
 } from '../domain/fairness-ledger';
@@ -62,13 +61,11 @@ export const fairnessLedgerService = {
      *
      * @param organizationId  The org ID.
      * @param employeeIds     The employees to fetch.
-     * @param windowDays      Length of the rolling window (default 91).
      * @param asOfDate        The date to consider "today" (defaults to current date).
      */
     async getEmployeeDebtsWithStatus(
         organizationId: string,
         employeeIds: string[],
-        windowDays = DEFAULT_WINDOW_DAYS,
         asOfDate = new Date(),
     ): Promise<FairnessLedgerRead> {
         if (employeeIds.length === 0) {
@@ -123,11 +120,10 @@ export const fairnessLedgerService = {
     async getEmployeeDebts(
         organizationId: string,
         employeeIds: string[],
-        windowDays = DEFAULT_WINDOW_DAYS,
         asOfDate = new Date(),
     ): Promise<FairnessDebt[]> {
         const { debts } = await this.getEmployeeDebtsWithStatus(
-            organizationId, employeeIds, windowDays, asOfDate,
+            organizationId, employeeIds, asOfDate,
         );
         return debts;
     },
@@ -154,22 +150,14 @@ export const fairnessLedgerService = {
      * cannot rebuild another org's ledger by passing its uuid.
      *
      * @param organizationId  The org ID.
-     * @param windowEnd       End date of the rolling window.
-     * @param departmentId    Unused — the ledger is org-scoped so the team
-     *                        average matches the solver's org-wide read (see
-     *                        audit F-14). Kept for call-site compatibility.
-     * @param windowDays      Unused here; the window length is the SQL
-     *                        function's own default (91) so both paths cannot
-     *                        disagree about the window.
+     * @param windowEnd       End date of the rolling window. The ledger is
+     *                        org-scoped (audit F-14), and the window length is
+     *                        the SQL function's own default, so both paths agree.
      */
     async recomputeLedger(
         organizationId: string,
         windowEnd: Date,
-        departmentId?: string,
-        windowDays = DEFAULT_WINDOW_DAYS,
     ): Promise<void> {
-        void departmentId;
-        void windowDays;
         const windowEndStr = format(windowEnd, 'yyyy-MM-dd');
         const rows = await fairnessLedgerQueries.requestRecompute(organizationId, windowEndStr);
         console.info('[FairnessLedger] Recomputed %d rows for org %s (window_end=%s).',

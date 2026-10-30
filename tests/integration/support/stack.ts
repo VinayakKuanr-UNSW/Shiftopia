@@ -23,7 +23,7 @@ export const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', 'kong', 'host.docker.internal']);
 
 /** Throws unless `apiUrl` is a local stack. Production must never be the target. */
-export function assertLocal(apiUrl: string): void {
+function assertLocal(apiUrl: string): void {
     const host = new URL(apiUrl).hostname;
     if (!LOCAL_HOSTS.has(host)) {
         throw new Error(

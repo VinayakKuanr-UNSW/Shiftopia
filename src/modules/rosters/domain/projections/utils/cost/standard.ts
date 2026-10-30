@@ -705,7 +705,3 @@ export function estimateDetailedShiftCost(
   };
 }
 
-export function estimateShiftCost(options: CostCalculatorOptions, ctx?: AwardContext): number {
-  return estimateDetailedShiftCost(options, ctx).totalCost;
-}
-

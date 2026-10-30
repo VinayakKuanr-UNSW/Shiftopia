@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ScopeTree, ScopeSelection } from '@/platform/auth/types';
-import type { ScopeMode } from '@/platform/auth/scope-selection';
 import { ChevronDown, Lock, Building2, Layers, Users2, Filter, Check, Settings2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
@@ -46,8 +45,6 @@ interface GlobalScopeFilterProps {
     onScopeChange: (scope: ScopeSelection) => void;
     /** Optional: hide the filter entirely (e.g. for Gamma managerial) */
     hidden?: boolean;
-    /** Optional: mode label */
-    mode?: ScopeMode;
     /** Enable multi-select (checkboxes + select all). Default true for personal, false for managerial */
     multiSelect?: boolean;
     /**
@@ -342,7 +339,6 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     defaultSelection,
     onScopeChange,
     hidden = false,
-    mode,
     multiSelect = true,
     singleSelectLevels,
     className,

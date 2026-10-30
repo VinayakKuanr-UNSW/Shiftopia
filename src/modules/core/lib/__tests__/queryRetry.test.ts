@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import { PostgrestError } from '@supabase/postgrest-js';
+import { PostgrestError } from '@supabase/supabase-js';
 import { AppError } from '@/platform/supabase/rpc/errors';
 import { shouldRetry } from '../queryRetry';
 

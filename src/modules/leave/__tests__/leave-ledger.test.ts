@@ -3,9 +3,7 @@
  * cell, so each pins a rule from the Agreement or from the 2026-09-30 decisions.
  */
 import { describe, expect, it } from 'vitest';
-import { buildLedger, CASUAL_REQUESTABLE, dailyHoursFor, employmentYearStart, entitlementWarnings, lslPosition, LEDGER_TYPES, requestableLeaveTypes, type BuildLedgerInput } from '../domain/leave-ledger';
-import { readMigrationFile } from '@/test/migrations';
-import { LEAVE_TYPE_LABELS, type LeaveTypeCode } from '../model/leave.types';
+import { buildLedger, dailyHoursFor, employmentYearStart, entitlementWarnings, lslPosition, LEDGER_TYPES, type BuildLedgerInput } from '../domain/leave-ledger';
 import type { LeaveRequest } from '../model/leave.types';
 
 type R = BuildLedgerInput['requests'][number];
@@ -137,29 +135,6 @@ describe('gender affirmation — one allowance for the whole of employment', () 
     it('leaves cl 55 counted per calendar year', () => {
         const l = ledger({ tenureRequests: [r({ leaveType: 'religious_cultural', startDate: '2024-01-01' })] });
         expect(entry(l, 'religious_cultural').usedHours).toBe(0);
-    });
-});
-
-describe('requestableLeaveTypes — what a casual may ask for (cl 12.5(b))', () => {
-    const all = Object.keys(LEAVE_TYPE_LABELS) as LeaveTypeCode[];
-
-    it('offers a casual only FDV, unpaid carer\'s, unpaid compassionate, community service and LSL', () => {
-        expect(requestableLeaveTypes(all, true).sort())
-            .toEqual(['carer', 'community_service', 'compassionate', 'fdv', 'long_service']);
-    });
-
-    it('offers a permanent every type', () => {
-        expect(requestableLeaveTypes(all, false)).toEqual(all);
-    });
-
-    it('agrees with the database trigger: every type the trigger refuses is withheld from casuals', () => {
-        const sql = readMigrationFile('20261001120000_leave_type_eligibility_casuals.sql');
-        const list = sql.match(/NEW\.leave_type NOT IN \(([^)]*)\)/)![1];
-        const refused = [...list.matchAll(/'([a-z_]+)'/g)].map(m => m[1]);
-        expect(refused.length).toBeGreaterThan(0);
-        // Refused ∪ casual-requestable = every type, and they never overlap.
-        expect(new Set([...refused, ...CASUAL_REQUESTABLE])).toEqual(new Set(all));
-        for (const t of refused) expect(CASUAL_REQUESTABLE).not.toContain(t);
     });
 });
 

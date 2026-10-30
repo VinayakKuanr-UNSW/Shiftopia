@@ -4304,9 +4304,7 @@ export type Database = {
           roster_date: string | null
           roster_id: string
           roster_subgroup_id: string
-          scheduled_end: string | null
           scheduled_length_minutes: number | null
-          scheduled_start: string | null
           shift_date: string
           shift_group_id: string | null
           start_at: string | null
@@ -4410,9 +4408,7 @@ export type Database = {
           roster_date?: string | null
           roster_id: string
           roster_subgroup_id: string
-          scheduled_end?: string | null
           scheduled_length_minutes?: number | null
-          scheduled_start?: string | null
           shift_date: string
           shift_group_id?: string | null
           start_at?: string | null
@@ -4516,9 +4512,7 @@ export type Database = {
           roster_date?: string | null
           roster_id?: string
           roster_subgroup_id?: string
-          scheduled_end?: string | null
           scheduled_length_minutes?: number | null
-          scheduled_start?: string | null
           shift_date?: string
           shift_group_id?: string | null
           start_at?: string | null
@@ -6678,23 +6672,9 @@ export type Database = {
         }
         Returns: boolean
       }
-      cancel_shift: {
-        Args: { p_cancelled_by?: string; p_reason?: string; p_shift_id: string }
-        Returns: Json
-      }
       check_in_shift: {
         Args: { p_lat: number; p_lon: number; p_shift_id: string }
         Returns: Json
-      }
-      check_shift_overlap: {
-        Args: {
-          p_employee_id: string
-          p_end_time: string
-          p_exclude_shift_id?: string
-          p_shift_date: string
-          p_start_time: string
-        }
-        Returns: boolean
       }
       check_template_version: {
         Args: { p_expected_version: number; p_template_id: string }
@@ -6704,10 +6684,6 @@ export type Database = {
           last_edited_by: string
           version_match: boolean
         }[]
-      }
-      compute_employee_quarter_metrics: {
-        Args: { p_employee_id: string; p_quarter_year: string }
-        Returns: undefined
       }
       delete_roster_subgroup_v2: {
         Args: {
@@ -6788,9 +6764,7 @@ export type Database = {
       }
       fn_eba_resolve_shift_rate: {
         Args: {
-          p_actual_hourly_rate?: number
           p_remuneration_level: number
-          p_remuneration_rate?: number
           p_shift_date: string
           p_target_employment_type: string
         }
@@ -6811,17 +6785,6 @@ export type Database = {
           res_shift_id: string
           to_state: string
         }[]
-      }
-      fn_shift_state: {
-        Args: {
-          p_assignment_outcome: string
-          p_assignment_status: string
-          p_bidding_status: string
-          p_is_cancelled: boolean
-          p_lifecycle_status: string
-          p_trading_status: string
-        }
-        Returns: string
       }
       fsm_op_is_legal: {
         Args: { p_op: string; p_state: string }
@@ -7628,10 +7591,6 @@ export type Database = {
         }
         Returns: Json
       }
-      sm_close_bidding: {
-        Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
-        Returns: Json
-      }
       sm_create_shift: {
         Args: { p_shift_data: Json; p_user_id: string }
         Returns: string
@@ -7692,10 +7651,6 @@ export type Database = {
         Returns: boolean
       }
       sm_legacy_manager: { Args: { p_user?: string }; Returns: boolean }
-      sm_manager_cancel: {
-        Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
-        Returns: Json
-      }
       sm_materialize_contract_envelope: {
         Args: { p_from?: string; p_profile_ids?: string[]; p_to?: string }
         Returns: {
@@ -7727,14 +7682,6 @@ export type Database = {
             Returns: Json
           }
       sm_request_is_system: { Args: never; Returns: boolean }
-      sm_request_trade: {
-        Args: {
-          p_shift_id: string
-          p_target_employee_id?: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
       sm_require_assignee_or: {
         Args: { p_actor: string; p_manager_action: string; p_shift_id: string }
         Returns: undefined

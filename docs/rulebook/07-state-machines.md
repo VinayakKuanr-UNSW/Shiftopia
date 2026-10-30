@@ -100,7 +100,7 @@ Window is uniformly **T-4h before shift start** across bidding, direct offers, a
 
 **Confirmed: there really are two lineages, and the divergence is intentional and self-documented, not a hidden bug.** `src/modules/rosters/domain/shift-fsm.ts`'s `getShiftFSMState()` mirrors the DB function on 10 of its states, explicitly omitting S6/S7/S8/S12/S14 — a sibling file (`shift-op-legality.ts`) states outright: *"This slim lineage deliberately has NO S7 and NO S8 ... We do NOT invent them here."* Because S6/S7/S8/S12/S14 are dead on the DB side too (§1.1), the client's simplification and the DB's actually-reachable state set now agree, even though they arrived at that agreement independently. `getShiftStateDisplay()` maps the canonical ID to a gapless UI-facing `displayId` (S9→"S6", S10→"S7", S11→"S8", S13→"S9", S15→"S10") — this is the mechanism behind the "canonical ID is the contract, display ID is cosmetic" rule referenced elsewhere in project history.
 
-The client's legality matrix (`OP_LEGALITY` in `shift-op-legality.ts`) is a **hand-pinned copy** of the DB matrix, checked by a test comment "fetched from prod 2026-07-02" — there is no automated parity test that calls the real DB function to catch future drift between the two copies.
+> **2026-10-30:** the client's legality matrix (`OP_LEGALITY` / `isShiftOpLegal` in `shift-op-legality.ts`) was deleted: nothing in the app called it, only its tests. `public.fsm_op_is_legal`, checked by `sm_apply_shift_op`, is the one legality matrix. `ShiftOp` now lives in `shift-ops.contract.ts`.
 
 ### 1.5 Audit / notification side effects
 

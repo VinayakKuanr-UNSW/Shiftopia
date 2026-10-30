@@ -34,7 +34,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
-import type { AccessCertificate, AccessLevel } from './types';
+import type { AccessLevel } from './types';
 
 export type Persona = 'employee' | 'employer' | 'admin';
 
@@ -238,9 +238,6 @@ interface PersonaContextValue {
     canAccessAdmin: boolean;
     /** All personas available to this user */
     availablePersonas: Persona[];
-    /** The certificate backing each persona, when one exists. */
-    employeeCertificate: AccessCertificate | null;
-    employerCertificate: AccessCertificate | null;
     /**
      * The level to badge for the CURRENT persona. Null only when the employer
      * persona is active and nothing grants a level — which `canSwitch` prevents
@@ -423,8 +420,6 @@ export function usePersona(): PersonaContextValue {
         canSwitch: false,
         canAccessAdmin: false,
         availablePersonas: ['employee'],
-        employeeCertificate: null,
-        employerCertificate: null,
         displayLevel: 'alpha',
     };
 }

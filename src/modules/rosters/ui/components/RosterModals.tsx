@@ -55,8 +55,6 @@ interface RosterModalsProps {
         /** Active contracted role_ids — drives role-set eligibility in the solver. */
         contracted_role_ids?: string[];
     }>;
-    /** Called when a shift is created or saved successfully. */
-    onShiftSaved: () => void;
     /** Called after auto-scheduler finishes. */
     onAutoScheduleComplete: () => void;
     /** Org scope forwarded to the auto-scheduler for the F1 fairness ledger. */
@@ -82,7 +80,6 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
     {
         autoSchedulerShifts,
         autoSchedulerEmployees,
-        onShiftSaved,
         onAutoScheduleComplete,
         organizationId,
         queryFilters,

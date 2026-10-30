@@ -54,7 +54,6 @@ interface ComplianceTabContentProps {
     ruleResults: Record<string, ComplianceResult | null>;
     /** Granular callback — parent merges result into its own state. */
     onRuleResult: (ruleId: string, result: ComplianceResult | null) => void;
-    needsRerun?: boolean;
     onChecksComplete?: () => void;
     /** The shift ID (UUID) — required for server-side qualification compliance check */
     shiftId?: string;
@@ -109,7 +108,6 @@ export function ComplianceTabContent({
     buildComplianceInput,
     ruleResults,
     onRuleResult,
-    needsRerun = false,
     onChecksComplete,
     shiftId,
     onRunAll: onRunAllOverride
@@ -269,19 +267,6 @@ export function ComplianceTabContent({
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            {needsRerun && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-4 backdrop-blur-md">
-                    <div className="p-2 bg-amber-500/20 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500" />
-                    </div>
-                    <div>
-                        <h4 className="text-[13px] font-bold text-amber-700 dark:text-amber-500">Inputs Changed</h4>
-                        <p className="text-[13px] text-muted-foreground mt-1">
-                            Shift details have been modified. Re-run compliance checks to ensure validity.
-                        </p>
-                    </div>
-                </div>
-            )}
 
             {/* Header Banner */}
             <div className={cn(
@@ -400,7 +385,6 @@ export function ComplianceTabContent({
                             {bucketServerRules.map(serverRule => (
                                 <ServerRuleCard
                                     key={serverRule.id}
-                                    ruleId={serverRule.id}
                                     ruleName={serverRule.name}
                                     ruleDescription={serverRule.description}
                                     ruleIcon={serverRule.icon}
@@ -610,9 +594,8 @@ function ComplianceRuleCard({
 // =============================================================================
 
 function ServerRuleCard({
-    ruleId, ruleName, ruleDescription, ruleIcon, result, onRunAll, isRunningAll
+    ruleName, ruleDescription, ruleIcon, result, onRunAll, isRunningAll
 }: {
-    ruleId: string;
     ruleName: string;
     ruleDescription: string;
     ruleIcon: React.ReactNode;

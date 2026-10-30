@@ -6,7 +6,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     HIDEABLE_COLUMNS,
-    hiddenColumnCount,
     isColumnShown,
     readColumnVisibility,
     writeColumnVisibility,
@@ -29,7 +28,6 @@ describe('users table columns', () => {
         expect(isColumnShown(undefined, 'email')).toBe(false);
         expect(isColumnShown(null, 'organization')).toBe(true);
         expect(isColumnShown(undefined, 'name')).toBe(true);
-        expect(hiddenColumnCount(undefined)).toBe(1);
     });
 
     it('remembers the choice in this browser', () => {

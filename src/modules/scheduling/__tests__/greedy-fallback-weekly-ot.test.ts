@@ -39,7 +39,9 @@ vi.mock('@/modules/scheduling/audit/auditor', () => ({
     auditor: { audit: vi.fn() },
 }));
 
-import { buildGreedyFallbackPriorOrdinaryMap } from '../auto-scheduler.controller';
+import { buildGreedyFallbackPriorOrdinaryMap, estimateGreedyFallbackCost } from '../auto-scheduler.controller';
+import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
+import type { EmployeeMeta, ShiftMeta } from '../optimizer/solution-parser';
 import type { ValidatedProposal } from '../types';
 import type { ExistingShiftRef } from '../types';
 
@@ -140,5 +142,23 @@ describe('buildGreedyFallbackPriorOrdinaryMap', () => {
 
     expect(prior.get('s1')).toBe(7.5);   // Monday: 8h − 30m
     expect(prior.get('s2')).toBe(14.5);  // + Tuesday: 8h − 60m
+  });
+});
+
+// The fallback once priced every shift at a flat $25/h: it passed
+// `employee.remuneration_rate ?? 25`, nothing ever set remuneration_rate, and a
+// supplied rate wins over the classification level in the cost engine.
+describe('estimateGreedyFallbackCost', () => {
+  const shift = { id: 's1', shift_date: '2026-07-07', start_time: '09:00', end_time: '17:00',
+                  unpaid_break_minutes: 0, roleName: 'Usher' } as ShiftMeta;
+  const casual = { id: 'e1', name: 'Test', contract_type: 'CASUAL' } as EmployeeMeta;
+
+  it('prices from the employee\'s classification level, not a flat rate', () => {
+    const level1 = estimateGreedyFallbackCost(shift, casual, { level: 1 }, 0);
+    const level5 = estimateGreedyFallbackCost(shift, casual, { level: 5 }, 0);
+
+    expect(level5).toBeGreaterThan(level1);
+    // A Tuesday 09:00–17:00 has no penalty or allowance: 8 h at the casual rate.
+    expect(level5).toBeCloseTo(8 * resolveRateSet('2026-07-07').wageRates.LEVEL_5.casual, 2);
   });
 });

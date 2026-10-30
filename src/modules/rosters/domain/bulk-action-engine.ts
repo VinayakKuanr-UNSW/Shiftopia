@@ -336,9 +336,6 @@ export function planPublishRoster(
  */
 export const DEFAULT_CHUNK_CONCURRENCY = 5;
 
-/** Default batch payload size for bulk network calls: 200 items per request. */
-export const DEFAULT_BATCH_PAYLOAD_SIZE = 200;
-
 /**
  * Process IDs in sequential chunks.
  *
@@ -372,31 +369,5 @@ export async function processInChunks<T>(
         }
     }
 
-    return results;
-}
-
-/**
- * Process items in batched payloads (e.g. 200 items per request payload)
- * with a bounded concurrency pool (e.g. 5 parallel batch requests in flight).
- */
-export async function processInBatches<TItem, TResult>(
-    items: TItem[],
-    batchFn: (batch: TItem[]) => Promise<TResult[]>,
-    batchSize = DEFAULT_BATCH_PAYLOAD_SIZE,
-    concurrency = DEFAULT_CHUNK_CONCURRENCY,
-): Promise<TResult[]> {
-    const batches: TItem[][] = [];
-    for (let i = 0; i < items.length; i += batchSize) {
-        batches.push(items.slice(i, i + batchSize));
-    }
-
-    const results: TResult[] = [];
-    for (let i = 0; i < batches.length; i += concurrency) {
-        const activeBatches = batches.slice(i, i + concurrency);
-        const batchResults = await Promise.all(activeBatches.map(batchFn));
-        for (const res of batchResults) {
-            results.push(...res);
-        }
-    }
     return results;
 }

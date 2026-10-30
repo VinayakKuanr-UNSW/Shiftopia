@@ -9,7 +9,6 @@
 import { describe, expect, it } from 'vitest';
 import {
     ORD_CYCLE_ANCHOR_DEFAULT,
-    ORD_CYCLE_CEILINGS,
     ORD_CYCLE_WEEKS_DEFAULT,
     cycleBoundsFor,
     cycleCeilingHours,
@@ -174,12 +173,6 @@ describe('timezone independence', () => {
 });
 
 describe('cycleCeilingHours', () => {
-    it('reproduces the ladder in cl 35.x(a) at the 38h basis', () => {
-        for (const weeks of [1, 2, 3, 4] as OrdinaryCycleWeeks[]) {
-            expect(cycleCeilingHours(weeks, 38)).toBe(ORD_CYCLE_CEILINGS[weeks]);
-            expect(cycleCeilingHours(weeks, null)).toBe(ORD_CYCLE_CEILINGS[weeks]);
-        }
-    });
 
     it('scales to a part-timer’s contracted basis — 20h/wk is a 40h fortnight', () => {
         expect(cycleCeilingHours(2, 20)).toBe(40);

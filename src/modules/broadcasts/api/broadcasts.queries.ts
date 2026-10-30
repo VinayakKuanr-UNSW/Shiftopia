@@ -19,7 +19,6 @@ import type {
     BroadcastWithDetails,
     BroadcastAckStats,
     BroadcastNotification,
-    GroupParticipantWithDetails,
     BroadcastParticipantRole,
     BroadcastFilters,
     PaginationOptions,
@@ -403,40 +402,12 @@ export const broadcastQueries = {
 // ── Group Participants ────────────────────────────────────────────────────────
 
 export const groupParticipantQueries = {
-    /**
-     * Get participants for a group.
-     * Uses a single relational select instead of N profile lookups.
-     */
-    async getByGroupId(groupId: string): Promise<GroupParticipantWithDetails[]> {
-        const { data, error } = await supabase
-            .from('group_participants')
-            .select('*, profiles(id, first_name, last_name, email)')
-            .eq('group_id', groupId)
-            .order('role')
-            .order('joined_at');
-
-        if (error) throw error;
-
-        const rows = (data || []).map((p: any) => ({
-            ...p,
-            employee: p.profiles
-                ? {
-                    id:    p.profiles.id,
-                    name:  `${p.profiles.first_name} ${p.profiles.last_name}`,
-                    email: p.profiles.email,
-                }
-                : null,
-        }));
-
-        return toCamelCase(rows);
-    },
 
     /**
      * Get user's role in a group
      */
     async getUserRole(
         groupId: string,
-        employeeId: string
     ): Promise<BroadcastParticipantRole | null> {
         // Use the RPC for hierarchy-aware role resolution
         const { data, error } = await supabase
@@ -511,19 +482,5 @@ export const broadcastNotificationQueries = {
                 isRead: row.is_read ?? false,
             }];
         });
-    },
-
-    /**
-     * Get unread count
-     */
-    async getUnreadCount(employeeId: string): Promise<number> {
-        const { count, error } = await supabase
-            .from('broadcast_notifications')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', employeeId)
-            .eq('is_read', false);
-
-        if (error) throw error;
-        return count || 0;
     },
 };

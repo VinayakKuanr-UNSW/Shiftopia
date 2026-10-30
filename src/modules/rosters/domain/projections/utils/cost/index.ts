@@ -259,63 +259,6 @@ export function estimateDetailedShiftCost(
   return StandardEngine.estimateDetailedShiftCost(options, ctx);
 }
 
-function estimateShiftCost(
-  options: CostCalculatorOptions & { isSecurityRole?: boolean },
-  ctx?: AwardContext,
-): number {
-  if (isSecurityShift(options)) {
-    return SecurityEngine.estimateShiftCost(options, ctx);
-  }
-  return StandardEngine.estimateShiftCost(options, ctx);
-}
-
-// Legacy wrappers to maintain compatibility with existing call sites
-export function estimateCostFromShift(shift: any, netMinutesOverride?: number): number {
-  // No trailing `?? 0`: when neither an override nor a stored net-length is
-  // available, `mins` must stay `undefined` so estimateShiftCost's own
-  // start/end-time fallback runs — coercing to a synthetic 0 here would read
-  // as "genuinely zero minutes worked" and zero out the estimate.
-  const mins = netMinutesOverride ?? shift.net_length_minutes;
-  const pay = resolveShiftPayInputs({
-    payTerms: shift.shift_pay_terms,
-    remunerationLevel: shift.remuneration_level,
-    targetEmploymentType: shift.target_employment_type,
-    roleName: shift.roles?.name,
-    higherDutiesLevel: shift.higherDutiesLevel,
-  });
-  if (pay.salaryHourlyRate !== undefined) {
-    return salariedShiftBreakdown(mins, pay.salaryHourlyRate, shift).totalCost;
-  }
-  return estimateShiftCost({
-    netMinutes: mins,
-    start_time: shift.start_time,
-    end_time: shift.end_time,
-    rate: null,
-    scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
-    is_overnight: shift.is_overnight,
-    is_cancelled: shift.is_cancelled,
-    shift_date: shift.shift_date,
-    allowances: resolveShiftAllowances(shift),
-    isAnnualLeave: shift.isAnnualLeave,
-    isPersonalLeave: shift.isPersonalLeave,
-    isCarerLeave: shift.isCarerLeave,
-    previousWage: shift.previousWage,
-    // cl 36.1 — the engine's start/end fallback can only net out the unpaid meal
-    // break if it is told about it. Omitting this key silently PAID the break on
-    // every caller that relies on that fallback.
-    unpaid_break_minutes: shift.unpaid_break_minutes,
-    // cl 41 / 43 attach to hours WORKED — where the break sits moves them.
-    break_start: shift.break_start,
-    employmentType: pay.employmentType,
-    isSecurityRole: pay.isSecurityRole,
-    classificationLevel: pay.classificationLevel,
-    // cl 42 weekly OT is cross-shift context this single-shift wrapper can't
-    // derive; pass it through only if a caller has already computed it. Undefined
-    // ⇒ no weekly OT (unchanged legacy behaviour).
-    priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,
-    higherDutiesLevel: pay.higherDutiesLevel,
-  } as any);
-}
 
 /**
  * Simple in-memory cache for cost calculations.

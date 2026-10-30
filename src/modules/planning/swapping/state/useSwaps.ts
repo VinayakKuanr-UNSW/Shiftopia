@@ -63,19 +63,6 @@ export const useSwaps = (
     });
 
     // Query: Get pending manager approvals (locked to org hierarchy)
-    const pendingApprovalsQuery = useQuery({
-        queryKey: ['pendingSwapApprovals', hierarchy.organizationId, hierarchy.departmentId, hierarchy.subDepartmentId],
-        queryFn: () => hierarchy.organizationId
-            ? swapsApi.fetchSwapRequests({
-                status: 'MANAGER_PENDING',
-                organizationId: hierarchy.organizationId,
-                departmentId: hierarchy.departmentId || undefined,
-                subDepartmentId: hierarchy.subDepartmentId || undefined
-            })
-            : Promise.resolve([]),
-        enabled: queriesEnabled && !!hierarchy.organizationId,
-        staleTime: 60_000, // 1 minute staleTime
-    });
 
     // Query: Get full offer details for the current user's active offers (locked shifts)
     const myActiveOfferDetailsQuery = useQuery({
@@ -159,7 +146,7 @@ export const useSwaps = (
     const acceptOfferMutation = useMutation({
         mutationFn: ({ swapId, offerId, offererId, offeredV8ShiftId }: { swapId: string; offerId: string; offererId: string; offeredV8ShiftId?: string }) =>
             swapsApi.acceptTrade(swapId, offerId, offererId, offeredV8ShiftId),
-        onSuccess: async (_, variables) => {
+        onSuccess: async () => {
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['mySwapRequests'] }),
                 queryClient.invalidateQueries({ queryKey: ['pendingSwapApprovals'] }),
@@ -226,58 +213,8 @@ export const useSwaps = (
     });
 
     // Mutation: Manager approves swap
-    const approveSwapMutation = useMutation({
-        mutationFn: (swapId: string) => swapsApi.approveSwapRequest(swapId),
-        onSuccess: async () => {
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['pendingSwapApprovals'] }),
-                queryClient.invalidateQueries({ queryKey: ['mySwapRequests'] }),
-                queryClient.invalidateQueries({ queryKey: ['availableSwaps'] }),
-                queryClient.invalidateQueries({ queryKey: ['swapOffers'] }),
-                // MAJOR FIX: Invalidate Roster using unified keys
-                queryClient.invalidateQueries({ queryKey: shiftKeys.all }),
-            ]);
-            toast({
-                title: 'Swap Approved',
-                description: 'The shifts have been reassigned.',
-            });
-        },
-        onError: (error) => {
-            toast({
-                title: 'Error',
-                description: 'Failed to approve swap.',
-                variant: 'destructive',
-            });
-            console.error('Approve swap error:', error);
-        },
-    });
 
     // Mutation: Manager rejects swap
-    const rejectSwapMutation = useMutation({
-        mutationFn: ({ swapId, reason }: { swapId: string; reason: string }) =>
-            swapsApi.rejectSwapRequest(swapId, reason),
-        onSuccess: async () => {
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: ['pendingSwapApprovals'] }),
-                queryClient.invalidateQueries({ queryKey: ['mySwapRequests'] }),
-                queryClient.invalidateQueries({ queryKey: ['availableSwaps'] }),
-                // Unified Invalidation
-                queryClient.invalidateQueries({ queryKey: shiftKeys.all }),
-            ]);
-            toast({
-                title: 'Swap Rejected',
-                description: 'The swap request has been rejected.',
-            });
-        },
-        onError: (error) => {
-            toast({
-                title: 'Error',
-                description: 'Failed to reject swap.',
-                variant: 'destructive',
-            });
-            console.error('Reject swap error:', error);
-        },
-    });
 
     // Realtime: refresh swap lists live when shift_swaps / swap_offers change
     // (RLS-scoped, so only rows this user may read trigger an invalidation).
@@ -299,36 +236,20 @@ export const useSwaps = (
         // Queries
         mySwapRequests: mySwapRequestsQuery.data || [],
         availableSwaps: availableSwapsQuery.data || [],
-        pendingApprovals: pendingApprovalsQuery.data || [],
         myActiveOfferSwapIds: myActiveOffersQuery.data || new Set<string>(),
         myActiveOfferDetails: myActiveOfferDetailsQuery.data || [],
         isLoadingOfferDetails: myActiveOfferDetailsQuery.isLoading,
         isLoading: mySwapRequestsQuery.isLoading || availableSwapsQuery.isLoading,
-        isLoadingApprovals: pendingApprovalsQuery.isLoading,
-        error: mySwapRequestsQuery.error || availableSwapsQuery.error,
-
-        // Mutations
         createSwap: createSwapMutation.mutate,
         makeOffer: makeOfferMutation.mutate,
         acceptOffer: acceptOfferMutation.mutate,
         declineOffer: declineOfferMutation.mutate,
         cancelSwap: cancelSwapMutation.mutate,
-        approveSwap: approveSwapMutation.mutate,
-        rejectSwap: rejectSwapMutation.mutate,
-
-        // Mutation states
-        isCreating: createSwapMutation.isPending,
         isMakingOffer: makeOfferMutation.isPending,
         isAccepting: acceptOfferMutation.isPending,
         isDeclining: declineOfferMutation.isPending,
         isCancelling: cancelSwapMutation.isPending,
-        isApproving: approveSwapMutation.isPending,
-        isRejecting: rejectSwapMutation.isPending,
-
-        // Refetch functions
         refetchMySwaps: mySwapRequestsQuery.refetch,
-        refetchAvailable: availableSwapsQuery.refetch,
-        refetchApprovals: pendingApprovalsQuery.refetch,
         userId,
     };
 };

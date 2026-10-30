@@ -55,7 +55,6 @@ const formatFileSizeLocal = (bytes: number): string => {
 };
 
 interface ComposeSectionProps {
-    channelId: string;
     channelName: string;
     groupName: string;
     totalRecipients: number;
@@ -64,7 +63,6 @@ interface ComposeSectionProps {
 }
 
 export const ComposeSection: React.FC<ComposeSectionProps> = ({
-    channelId,
     channelName,
     groupName,
     totalRecipients,

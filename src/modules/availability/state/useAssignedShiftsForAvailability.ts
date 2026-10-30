@@ -43,7 +43,6 @@ const assignedShiftsQueryKey = (
 
 interface UseAssignedShiftsForAvailabilityResult {
   assignedShifts: AssignedShiftInterval[];
-  isLoading: boolean;
 }
 
 /**
@@ -69,7 +68,7 @@ export function useAssignedShiftsForAvailability(
   const channelRef  = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // ── Query ──────────────────────────────────────────────────────────────────
-  const { data: assignedShifts = [], isLoading } = useQuery({
+  const { data: assignedShifts = [] } = useQuery({
     queryKey: assignedShiftsQueryKey(profileId, startDate, endDate),
     queryFn: async () => {
       const resolvedId = await resolveProfileId(profileId);
@@ -126,5 +125,5 @@ export function useAssignedShiftsForAvailability(
     };
   }, [profileId, startDate, endDate, queryClient]);
 
-  return { assignedShifts, isLoading };
+  return { assignedShifts };
 }

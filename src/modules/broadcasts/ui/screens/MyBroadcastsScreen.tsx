@@ -87,7 +87,6 @@ export function MyBroadcastsScreen({
   // Use hoisted search for group filtering, internal search for channel filtering
   const effectiveGroupSearch = hoistedSearchQuery;
 
-  const [, setIsOnline] = useState(navigator.onLine);
   const [channelSheetOpen, setChannelSheetOpen] = useState(false);
 
   // Data
@@ -97,12 +96,10 @@ export function MyBroadcastsScreen({
   // Online/Offline detection
   useEffect(() => {
     const handleOnline = () => {
-      setIsOnline(true);
       toast({ title: 'Back online', description: 'Connection restored' });
       refetch();
     };
     const handleOffline = () => {
-      setIsOnline(false);
       toast({
         title: 'Offline',
         description: 'You are now offline. Some features may be unavailable.',

@@ -74,18 +74,6 @@ export interface Shift {
     last_rejected_by?: string;
 }
 
-export interface Roster {
-    id: string;
-    name: string;
-    startDate: string;
-    endDate: string;
-    status: string;
-    createdBy: string;
-    publishedAt?: string;
-    isLocked?: boolean;
-    createdAt: string;
-    updatedAt: string;
-}
 
 /* ============================================================
    LIFECYCLE CONFIGS

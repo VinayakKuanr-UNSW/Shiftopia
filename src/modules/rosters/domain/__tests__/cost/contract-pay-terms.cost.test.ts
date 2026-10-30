@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   estimateDetailedCostFromShift,
-  estimateCostFromShift,
   resolveShiftPayInputs,
 } from '../../projections/utils/cost/index';
 import type { ShiftPayTermsField } from '../../projections/utils/cost/types';
@@ -81,12 +80,6 @@ describe('card estimates on the linked contract’s terms', () => {
     }));
     expect(b.totalCost).toBe(436.68);
   });
-
-  it('the legacy total-only wrapper agrees', () => {
-    expect(estimateCostFromShift(shift({
-      shift_pay_terms: terms({ substantive_level: 7, paid_level: 7, base_rate: 44.92 }),
-    }))).toBe(134.76);
-  });
 });
 
 describe('without contract terms: the shift’s own level, never a guess or an override', () => {
@@ -99,12 +92,6 @@ describe('without contract terms: the shift’s own level, never a guess or an o
   it('Level 0 is the Introductory (TRAINEE) rate', () => {
     expect(resolveShiftPayInputs({ remunerationLevel: 0, roleName: 'Supervisor' }).classificationLevel).toBe('TRAINEE');
     expect(resolveShiftPayInputs({ remunerationLevel: null, roleName: 'Supervisor' }).classificationLevel).toBe('LEVEL_5');
-  });
-
-  it('ignores per-shift rate overrides', () => {
-    const plain = estimateDetailedCostFromShift(shift({}));
-    const overridden = estimateDetailedCostFromShift(shift({ remuneration_rate: 99 }));
-    expect(overridden.totalCost).toBe(plain.totalCost);
   });
 });
 
