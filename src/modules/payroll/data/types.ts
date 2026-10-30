@@ -11,7 +11,7 @@
 import type { ShiftPayContract } from '../domain/shiftPayTerms';
 
 /** Timesheet row joined onto a shift (by shift_id). Only pay-relevant columns. */
-export interface GrossPayTimesheetRow {
+interface GrossPayTimesheetRow {
   id: string;
   shift_id: string | null;
   /** Manager-adjusted billable start — 'HH:MM[:SS]' or null (no manual edit). */
@@ -19,6 +19,8 @@ export interface GrossPayTimesheetRow {
   /** Manager-adjusted billable end — 'HH:MM[:SS]' or null. */
   end_time: string | null;
   unpaid_break_minutes: number | null;
+  /** When the meal break was actually taken — 'HH:MM[:SS]' or null (not recorded). */
+  actual_break_start?: string | null;
   /** timesheet_status enum: 'draft'|'submitted'|'approved'|'rejected'|'no_show'. */
   status: string | null;
 }
@@ -60,10 +62,11 @@ export interface GrossPayShiftRow {
   actual_end?: string | null;
   paid_break_minutes?: number | null;
   unpaid_break_minutes?: number | null;
+  /** The rostered meal-break start — 'HH:MM[:SS]' or null. */
+  break_start?: string | null;
   net_length_minutes?: number | null;
   scheduled_length_minutes?: number | null;
   remuneration_level?: number | null;
-  remuneration_rate?: number | null;
   /** 'FT' | 'PT' | 'Casual' — the shift's own employment basis. */
   target_employment_type?: string | null;
   /** The assignee's contract this shift is worked under (set by trg_shift_z_link_contract). */

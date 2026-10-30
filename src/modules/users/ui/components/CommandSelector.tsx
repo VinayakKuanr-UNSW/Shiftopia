@@ -13,7 +13,7 @@ import { Check, ChevronDown, Lock } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
-export interface CommandSelectorOption {
+interface CommandSelectorOption {
     id: string;
     name: string;
     description?: string;
@@ -274,4 +274,3 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
     );
 };
 
-export default CommandSelector;

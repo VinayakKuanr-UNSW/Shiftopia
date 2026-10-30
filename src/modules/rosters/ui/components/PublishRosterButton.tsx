@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { Button } from '@/modules/core/ui/primitives/button';
+import React, { useEffect, useId, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,6 +9,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/modules/core/ui/primitives/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 import { Send, Loader2, Calendar } from 'lucide-react';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
@@ -26,16 +31,24 @@ interface PublishRosterButtonProps {
   /** Disables the trigger (e.g. no edit permission or no org selected). */
   disabled?: boolean;
   /**
+   * Why it is disabled. Shown on hover and focus and read as the button's
+   * description. The button stays focusable (aria-disabled, not `disabled`)
+   * so a keyboard user can reach the explanation at all.
+   */
+  disabledReason?: string;
+  /**
    * Loads the current roster and partitions it into the publish plan. Called
-   * when the button is clicked — runs a (cached) fetch so it works in every
-   * view, including the default Group Bucket View where the grid renders
-   * summary cells only and no per-shift list is loaded.
+   * when the button is clicked — a fresh, strict read (it throws rather than
+   * plan from a partial roster) so it works in every view, including the
+   * default Group Bucket View where the grid renders summary cells only and no
+   * per-shift list is loaded.
    */
   loadPlan: () => Promise<PublishRosterPlan>;
   /** Executes the plan: publishes the drafts. Started shifts are never deleted. */
   execute: (plan: PublishRosterPlan) => Promise<PublishRosterResult>;
   selectedViewType?: string;
   selectedViewRange?: string;
+  className?: string;
 }
 
 /**
@@ -55,19 +68,51 @@ type State =
  * started are reported and left alone: a started shift is never deleted.
  * Always confirms first — the action broadcasts to employees.
  */
+/**
+ * Group skip reasons for the result toast: most common first, a count when a
+ * reason repeats, the rest summarised. Without it the toast said "3 skipped"
+ * and the manager could not tell a compliance block from a timeout.
+ */
+function summariseReasons(reasons: readonly string[], max = 2): string {
+  const counts = new Map<string, number>();
+  for (const r of reasons) {
+    if (!r) continue;
+    counts.set(r, (counts.get(r) ?? 0) + 1);
+  }
+  const sorted = [...counts].sort((a, b) => b[1] - a[1]);
+  const shown = sorted.slice(0, max).map(([r, n]) => (n > 1 ? `${r} (×${n})` : r));
+  const rest = sorted.length - shown.length;
+  return shown.join(' · ') + (rest > 0 ? ` · and ${rest} other reason${rest > 1 ? 's' : ''}` : '');
+}
+
 export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   disabled,
+  disabledReason,
   loadPlan,
   execute,
   selectedViewType,
   selectedViewRange,
+  className,
 }) => {
   const [state, setState] = useState<State>({ type: 'idle' });
   const { toast } = useToast();
+  const reasonId = useId();
 
   const isLoading = state.type === 'loading';
   const isExecuting = state.type === 'executing';
   const dialogOpen = state.type === 'confirming' || state.type === 'executing';
+
+  // Closing the tab mid-publish leaves the manager without the result (and the
+  // emergency shifts, published one by one, half done), so the browser asks first.
+  useEffect(() => {
+    if (!isExecuting) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isExecuting]);
 
   const plan =
     state.type === 'confirming' || state.type === 'executing' ? state.plan : null;
@@ -79,6 +124,8 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   const fullTimeCount = plan?.fullTimeIds.length ?? 0;
   const fullTimeUnassignedCount = plan?.fullTimeUnassignedIds.length ?? 0;
   const onLeaveCount = plan?.onLeaveIds?.length ?? 0;
+  const pastCount = plan?.pastIds?.length ?? 0;
+  const noPermissionCount = plan?.noPermissionIds?.length ?? 0;
   const alreadyPublishedCount = plan?.alreadyPublishedCount ?? 0;
 
   // What the Confirm button will actually change: publishes (X + Y + A).
@@ -89,8 +136,10 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   // The plan considered no shifts at all → nothing to show.
   const consideredCount =
     actionableCount + emergentUnassignedCount + alreadyPublishedCount + deadCount + fullTimeUnassignedCount
-    + onLeaveCount;
+    + onLeaveCount + pastCount + noPermissionCount;
   const nothingToDo = plan !== null && consideredCount === 0;
+  // Drafts exist, but every one is a skip: Confirm would change nothing.
+  const nothingPublishable = plan !== null && !nothingToDo && actionableCount === 0;
 
   // The calculations shown in the confirm dialog, in order.
   const steps: Array<{
@@ -128,6 +177,18 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
       title: `${onLeaveCount} On approved leave`,
       desc: 'The assignee is on approved leave that day — reassign or remove the shift (skipped)',
       tone: 'warning',
+    },
+    {
+      count: noPermissionCount,
+      title: `${noPermissionCount} Where you can only view`,
+      desc: 'You do not have publish rights in that department — skipped',
+      tone: 'warning',
+    },
+    {
+      count: pastCount,
+      title: `${pastCount} Already started or finished`,
+      desc: 'Too late to publish — skipped',
+      tone: 'muted',
     },
     {
       count: emergentAssignedCount,
@@ -171,15 +232,25 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
     danger: '✗',
   };
 
+  // Only checks that hit a shift get a row; the rest collapse to one line.
+  const activeSteps = steps.filter((s) => s.count > 0);
+  const emptyStepLabels = steps
+    .filter((s) => s.count === 0)
+    .map((s) => s.title.replace(/^0 /, ''));
+
   const handleClick = async () => {
+    // aria-disabled, not `disabled`: the button stays focusable, so guard here.
+    if (disabled || state.type !== 'idle') return;
     setState({ type: 'loading' });
     try {
       const loaded = await loadPlan();
       setState({ type: 'confirming', plan: loaded });
-    } catch {
+    } catch (e) {
+      // No dialog on a failed or incomplete read: a plan built from part of the
+      // roster would publish part of it. Say why (e.g. a view over the row cap).
       toast({
         title: 'Could not prepare publish',
-        description: 'Failed to load the roster. Try again.',
+        description: e instanceof Error && e.message ? e.message : 'Failed to load the roster. Try again.',
         variant: 'destructive',
       });
       setState({ type: 'idle' });
@@ -195,9 +266,10 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
       const parts: string[] = [];
       if (result.published) parts.push(`${result.published} published`);
       if (result.failed) parts.push(`${result.failed} skipped`);
+      const why = result.failed ? summariseReasons(result.failedReasons ?? []) : '';
       toast({
         title: result.failed ? 'Roster published — with skips' : 'Roster published',
-        description: parts.length ? parts.join(' · ') : 'Nothing to publish.',
+        description: (parts.length ? parts.join(' · ') : 'Nothing to publish.') + (why ? ` — ${why}` : ''),
         variant: result.failed ? 'destructive' : 'default',
       });
       setState({ type: 'idle' });
@@ -213,24 +285,49 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
 
   return (
     <>
-      <Button
-        size="sm"
-        onClick={handleClick}
-        disabled={disabled || isLoading}
-        aria-label="Publish roster — send offers, open bidding"
-        className={cn(
-          'h-10 min-h-[44px] sm:min-h-[36px] sm:h-9 gap-2 rounded-xl px-4 text-xs font-extrabold uppercase tracking-wider shadow-md transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950',
-          'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95',
-        )}
-        title="Publish roster — send offers, open bidding"
-      >
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
-        ) : (
-          <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
-        )}
-        Publish
-      </Button>
+      {(() => {
+        const inert = disabled || isLoading;
+        const explain = disabled && disabledReason ? disabledReason : undefined;
+        const trigger = (
+          <button
+            type="button"
+            onClick={handleClick}
+            // aria-disabled, not `disabled`: a natively disabled button leaves
+            // the tab order, so a keyboard user could never reach the reason.
+            aria-disabled={inert || undefined}
+            aria-describedby={explain ? reasonId : undefined}
+            aria-label="Publish roster — send offers, open bidding"
+            className={cn(
+              'h-10 w-10 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950',
+              'text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/20 active:scale-95',
+              disabled && 'opacity-40 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent text-slate-400 dark:text-slate-600 active:scale-100',
+              className,
+            )}
+            title={explain ? undefined : 'Publish roster — send offers, open bidding'}
+          >
+            {isLoading ? (
+              <Loader2 className="h-5 w-5 animate-spin shrink-0" aria-hidden="true" />
+            ) : (
+              <Send className="h-5 w-5 shrink-0" aria-hidden="true" />
+            )}
+            {explain && <span id={reasonId} className="sr-only">{explain}</span>}
+          </button>
+        );
+
+        return (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                className="text-[11px] uppercase font-extrabold tracking-wider bg-slate-900 border border-slate-700 text-white shadow-xl px-2.5 py-1 rounded-md max-w-xs"
+              >
+                {explain || 'Publish roster — send offers, open bidding'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      })()}
 
       <AlertDialog
         open={dialogOpen}
@@ -238,109 +335,88 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
           if (!open && !isExecuting) setState({ type: 'idle' });
         }}
       >
-        <AlertDialogContent className="max-w-xl rounded-2xl border border-slate-200 dark:border-white/10 p-8 bg-white dark:bg-slate-950 shadow-2xl">
-          <AlertDialogHeader className="space-y-5">
-            <AlertDialogTitle className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5">
-              Confirm Publish
-            </AlertDialogTitle>
-            
-            {/* VIEW SELECTED Card */}
-            <div className="flex items-center gap-4 p-5 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-2xl shadow-sm">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-500">
-                <Calendar className="h-6 w-6" />
+        {/* Header and footer pinned, the checklist scrolls: the dialog never
+            outgrows the viewport however many skip reasons apply. */}
+        <AlertDialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden border-slate-200 bg-white p-0 dark:bg-slate-950">
+          <AlertDialogHeader className="space-y-3 border-b border-slate-100 px-5 pb-4 pt-5 text-left dark:border-white/10">
+            <AlertDialogTitle>Confirm Publish</AlertDialogTitle>
+            {(selectedViewType || selectedViewRange) && (
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-600 dark:text-white/70">
+                <Calendar className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden="true" />
+                <span>{[selectedViewType, selectedViewRange].filter(Boolean).join(' · ')}</span>
               </div>
-              <div className="flex flex-col text-left">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-white/40">
-                  VIEW SELECTED
-                </span>
-                <span className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {selectedViewType || 'Week'}
-                </span>
-                <span className="text-sm text-slate-500 dark:text-white/60 font-semibold mt-0.5">
-                  {selectedViewRange || '6 Jul - 12 Jul'}
-                </span>
-              </div>
-            </div>
-
-            <AlertDialogDescription asChild>
-              <div className="space-y-6 text-sm">
-                {nothingToDo ? (
-                  <p className="text-muted-foreground text-center py-6 text-base font-medium">
-                    No draft shifts in the current view — nothing to publish.
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-slate-600 dark:text-slate-400 text-left text-sm font-semibold">
-                      The following will be applied to every draft shift in the current view:
-                    </p>
-
-                    {/* Stepper / Timeline Checklist — every calculation */}
-                    <div className="relative pl-8 space-y-6 text-left before:absolute before:left-[13px] before:top-2.5 before:bottom-2.5 before:w-[2px] before:bg-slate-100 dark:before:bg-white/10">
-                      {steps.map((step, i) => {
-                        const active = step.count > 0;
-                        return (
-                          <div key={i} className="relative flex items-start gap-4">
-                            <div
-                              className={cn(
-                                'absolute left-[-25px] flex items-center justify-center w-7 h-7 rounded-full border bg-white dark:bg-slate-950 text-xs font-black transition-colors',
-                                active
-                                  ? TONE_NODE[step.tone]
-                                  : 'border-slate-200 dark:border-white/10 text-slate-400',
-                              )}
-                            >
-                              {active ? (
-                                <span>{TONE_GLYPH[step.tone]}</span>
-                              ) : (
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/20" />
-                              )}
-                            </div>
-                            <div className="flex flex-col">
-                              <span
-                                className={cn(
-                                  'text-base font-bold',
-                                  active
-                                    ? 'text-slate-900 dark:text-white'
-                                    : 'text-slate-400 dark:text-white/40',
-                                )}
-                              >
-                                {step.title}
-                              </span>
-                              <span
-                                className={cn(
-                                  'text-sm',
-                                  active && step.tone === 'danger'
-                                    ? 'text-red-500 font-semibold'
-                                    : active && step.tone === 'warning'
-                                      ? 'text-amber-600 dark:text-amber-400 font-semibold'
-                                      : 'text-slate-500 dark:text-white/60 font-medium',
-                                )}
-                              >
-                                {step.desc}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            </AlertDialogDescription>
+            )}
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
-            <AlertDialogCancel 
+
+          <AlertDialogDescription asChild>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 text-left text-[13px]">
+              {nothingToDo ? (
+                <p className="py-6 text-center text-[14px] font-medium text-muted-foreground">
+                  No draft shifts in the current view — nothing to publish.
+                </p>
+              ) : (
+                <>
+                  <p className="mb-3 font-semibold text-slate-600 dark:text-slate-400">
+                    {nothingPublishable
+                      ? 'Nothing in this view can be published — every draft is skipped for a reason below.'
+                      : 'Applied to every draft shift in the current view:'}
+                  </p>
+                  <ul className="space-y-2">
+                    {activeSteps.map((step) => (
+                      <li
+                        key={step.title}
+                        className="flex items-start gap-3 rounded-xl border border-slate-100 px-3 py-2.5 dark:border-white/10"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-black',
+                            TONE_NODE[step.tone],
+                          )}
+                        >
+                          {TONE_GLYPH[step.tone]}
+                        </span>
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-[14px] font-bold text-slate-900 dark:text-white">
+                            {step.title}
+                          </span>
+                          <span
+                            className={cn(
+                              step.tone === 'warning'
+                                ? 'font-semibold text-amber-600 dark:text-amber-400'
+                                : 'font-medium text-slate-500 dark:text-white/60',
+                            )}
+                          >
+                            {step.desc}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {emptyStepLabels.length > 0 && (
+                    <p className="mt-3 text-[11px] font-medium text-slate-400 dark:text-white/40">
+                      None: {emptyStepLabels.join(' · ')}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          </AlertDialogDescription>
+
+          <AlertDialogFooter className="gap-2 border-t border-slate-100 px-5 py-4 dark:border-white/10">
+            <AlertDialogCancel
               disabled={isExecuting}
-              className="w-full sm:w-auto rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 py-6 h-12 font-bold transition-all text-sm"
+              className="mt-0 w-full border border-slate-200 font-bold text-[13px] hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5 sm:w-auto"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              className="w-full sm:w-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white/90 font-bold rounded-xl py-6 h-12 shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+              className="w-full sm:w-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white/90 font-bold shadow-md flex items-center justify-center gap-2 text-[13px]"
               onClick={(e) => {
                 e.preventDefault();
                 handleConfirm();
               }}
-              disabled={isExecuting || nothingToDo}
+              disabled={isExecuting || nothingToDo || nothingPublishable}
             >
               {isExecuting ? (
                 <>
@@ -361,4 +437,3 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   );
 };
 
-export default PublishRosterButton;

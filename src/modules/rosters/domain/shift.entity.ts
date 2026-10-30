@@ -16,26 +16,11 @@ export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | '
 
 export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre' | 'the_cutaway' | 'office';
 
-export type AssignmentStatusText =
+type AssignmentStatusText =
     | 'unassigned'
     | 'assigned'
     | 'pending'
     | 'declined';
-export type AssignmentMethodText =
-    | 'manual'
-    | 'template'
-    | 'bid'
-    | 'trade'
-    | 'auto';
-export type CancellationTypeText = 'standard' | 'late' | 'critical' | 'no_show';
-export type BiddingPriorityText = 'normal' | 'urgent' | 'critical';
-export type ComplianceStatusText =
-    | 'compliant'
-    | 'warning'
-    | 'violation'
-    | 'pending'
-    | 'overridden';
-export type LockReasonText = 'published' | 'timesheet' | 'admin' | 'payroll';
 
 /* ============================================================
    INTERFACES
@@ -79,9 +64,6 @@ export interface Shift {
      * open bids; select it explicitly.
      */
     my_shift_pay_terms?: ShiftPayTermsField | null;
-    remuneration_rate: number | null;
-    actual_hourly_rate: number | null;
-    currency: string;
     start_time: string;
     end_time: string;
     scheduled_start: string | null;
@@ -89,8 +71,13 @@ export interface Shift {
     is_overnight: boolean;
     scheduled_length_minutes: number | null;
     break_minutes: number;
+    /** The paid rest pauses (cl 37) only. */
     paid_break_minutes: number;
+    /** The meal-break window's length, or 0 where the meal break is paid (security). */
     unpaid_break_minutes: number;
+    /** Rostered meal-break start, `HH:mm:ss`, resolved against `start_time` across midnight. */
+    break_start?: string | null;
+    break_end?: string | null;
     net_length_minutes: number | null;
     total_hours: number | null;
     timezone: string;
@@ -146,8 +133,6 @@ export interface Shift {
     payroll_exported: boolean;
     last_modified_by: string | null;
     last_modified_reason: string | null;
-    deleted_at: string | null;
-    deleted_by: string | null;
     notes: string | null;
     is_training: boolean;
     // Joined Timesheet Data
@@ -279,7 +264,7 @@ export function calculateMinutesBetweenTimes(
     const [startHour, startMin] = startTime.split(':').map(Number);
     const [endHour, endMin] = endTime.split(':').map(Number);
 
-    let startMinutes = startHour * 60 + startMin;
+    const startMinutes = startHour * 60 + startMin;
     let endMinutes = endHour * 60 + endMin;
 
     if (endMinutes <= startMinutes) {

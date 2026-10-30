@@ -16,18 +16,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { migrationPath } from '@/test/migrations';
 import {
   TRAINEE_RATE_SCHEDULE,
   type TraineeRateMatrix,
 } from '../../projections/utils/cost/trainee_matrix';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATION_PATH = resolve(
-  __dirname,
-  '../../../../../../supabase/migrations/20260711120000_eba_trainee_schedule.sql',
-);
+const MIGRATION_PATH = migrationPath('20260711120000_eba_trainee_schedule.sql');
 
 /** Pull the single dollar-quoted JSON matrix out of the migration and parse it. */
 function matrixFromMigration(): TraineeRateMatrix {

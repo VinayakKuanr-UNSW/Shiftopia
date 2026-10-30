@@ -183,4 +183,3 @@ export const insightsApi = {
 };
 
 // Re-export for convenience
-export type { InsightsFilters };

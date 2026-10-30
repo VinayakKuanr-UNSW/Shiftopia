@@ -11,7 +11,7 @@ import { resolveNotificationLink } from './deepLink';
  * the send-push Edge Function) is configured.
  */
 
-export function isPushCapable(): boolean {
+function isPushCapable(): boolean {
   return Capacitor.isNativePlatform();
 }
 

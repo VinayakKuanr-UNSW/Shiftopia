@@ -9,4 +9,3 @@ export function NotificationBridge(): null {
   return null;
 }
 
-export default NotificationBridge;

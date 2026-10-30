@@ -53,7 +53,9 @@ services:
       - '8000:8000'
     environment:
       - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+      # Server-side reads and writes (features, forecasts, prediction log). Never
+      # the anon key: it ships in the web bundle and RLS gives it nothing here.
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     restart: unless-stopped
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
@@ -65,12 +67,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      # Build args, not runtime env: the container serves a static bundle and
+      # Vite bakes VITE_* in at build time. Supabase values come from .env.
+      args:
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - VITE_OPTIMIZER_URL=http://localhost:5005
+        - VITE_ML_URL=http://localhost:8000
     container_name: superman-web
     ports:
       - '8080:80'
-    environment:
-      - VITE_OPTIMIZER_URL=http://localhost:5005
-      - VITE_ML_URL=http://localhost:8000
     depends_on:
       optimizer:
         condition: service_healthy

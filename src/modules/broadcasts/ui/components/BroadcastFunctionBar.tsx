@@ -1,9 +1,6 @@
 import React from 'react';
 import { Plus, Search } from 'lucide-react';
-import { Button } from '@/modules/core/ui/primitives/button';
-import { Input } from '@/modules/core/ui/primitives/input';
-import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
 
 interface BroadcastFunctionBarProps {
   onSearchChange: (query: string) => void;
@@ -27,36 +24,29 @@ export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
   isLoading,
   className,
 }) => {
-  const { isDark } = useTheme();
-
+  // No views or modes: search and create are zone-3 actions.
   return (
-    <div className={cn("flex flex-wrap items-center justify-between gap-4 w-full", className)}>
-      <div className="flex flex-1 items-center gap-3 min-w-[240px] max-w-md">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-          <Input
+    <ToolbarRow
+      className={className}
+      actions={<>
+        <label className={toolbar.search}>
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <input
+            type="search"
+            aria-label="Search groups"
             placeholder="Search groups..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className={cn(
-              "min-h-[44px] border-none bg-transparent pl-10 text-sm font-medium placeholder:text-muted-foreground/40 focus-visible:ring-0",
-              isDark ? "bg-white/5" : "bg-slate-900/5"
-            )}
+            className={toolbar.searchInput}
           />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
+        </label>
         {canCreateGroup && (
-          <Button
-            onClick={onCreateGroup}
-            className="min-h-[44px] gap-2 rounded-xl bg-primary px-4 text-[10px] font-black uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98] lg:px-6"
-          >
-            <Plus className="h-4 w-4" />
+          <button type="button" onClick={onCreateGroup} className={toolbar.primaryAction}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
             Create Group
-          </Button>
+          </button>
         )}
-      </div>
-    </div>
+      </>}
+    />
   );
 };

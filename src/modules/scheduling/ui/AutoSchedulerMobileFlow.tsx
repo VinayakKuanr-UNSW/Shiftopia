@@ -288,7 +288,7 @@ const Metric: React.FC<{ label: string; value: string; className?: string }> = (
     className,
 }) => (
     <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
             {label}
         </p>
         <p className={cn('mt-0.5 truncate text-[15px] font-bold tabular-nums text-foreground', className)}>
@@ -342,7 +342,7 @@ const StaffCard: React.FC<{ group: EmployeeGroup }> = ({ group }) => {
 
             <div className="grid grid-cols-3 gap-3 border-t border-border/60 px-3 py-2.5">
                 <div className="min-w-0">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
                         Utilisation
                     </p>
                     <p className="mt-0.5 text-[15px] font-bold tabular-nums text-foreground">
@@ -362,7 +362,7 @@ const StaffCard: React.FC<{ group: EmployeeGroup }> = ({ group }) => {
             {expanded && (
                 <div className="space-y-3 border-t border-border/60 px-3 py-3">
                     <div>
-                        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
                             Compliance
                         </p>
                         <p className="text-[13px] text-foreground">
@@ -377,7 +377,7 @@ const StaffCard: React.FC<{ group: EmployeeGroup }> = ({ group }) => {
                     </div>
 
                     <div>
-                        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
                             Shifts by role
                         </p>
                         {group.roleDistribution.length === 0 ? (
@@ -448,8 +448,6 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
         [employeeGroups, sortField, sortDirection],
     );
 
-    const stepIndex = phase === 'idle' ? 0 : phase === 'optimizing' || phase === 'validating' ? 1 : 2;
-    const steps = ['Set up', 'Optimising', 'Review'];
 
     const progressPct = Math.min(
         98,
@@ -693,18 +691,18 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
                             >
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="rounded-xl border border-border bg-card p-3">
-                                        <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                                        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
                                             Shifts to fill
                                         </p>
-                                        <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                                        <p className="mt-1 text-[20px] font-bold tabular-nums text-foreground">
                                             {shiftsInScope}
                                         </p>
                                     </div>
                                     <div className="rounded-xl border border-border bg-card p-3">
-                                        <p className="text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
+                                        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground/70">
                                             Staff available
                                         </p>
-                                        <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                                        <p className="mt-1 text-[20px] font-bold tabular-nums text-foreground">
                                             {staffCount}
                                         </p>
                                     </div>
@@ -1081,4 +1079,3 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
     );
 };
 
-export default AutoSchedulerMobileFlow;

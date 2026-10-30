@@ -72,7 +72,7 @@ export const EMPTY_KPIS: MarketplaceKpis = {
 // ---------------------------------------------------------------------------
 // MarketplaceKpiKey — every field of MarketplaceKpis
 // ---------------------------------------------------------------------------
-export type MarketplaceKpiKey = keyof MarketplaceKpis;
+type MarketplaceKpiKey = keyof MarketplaceKpis;
 
 // ---------------------------------------------------------------------------
 // KPI_THRESHOLDS — only the *rate* metrics carry good/warn thresholds.

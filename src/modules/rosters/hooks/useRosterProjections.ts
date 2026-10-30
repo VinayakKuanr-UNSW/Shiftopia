@@ -17,6 +17,7 @@ import type {
   RolesProjection 
 } from '../domain/projections/types';
 import { ProjectionWorkerPool } from '../domain/projections/worker/projection.worker.pool';
+import { runProjectionPipeline } from '../domain/projections/pipeline/runProjectionPipeline';
 import { 
   shiftsToDTO, 
   employeesToDTO, 
@@ -155,7 +156,7 @@ export function useRosterProjections(input: ProjectionInput): ProjectionResult {
     if (activeMode === 'group') rosterStructureDTOs = rosterStructuresToDTO(rosterStructures);
 
     // 2. Setup callback
-    pool.onResult = (result: WorkerResult) => {
+    const applyResult = (result: WorkerResult) => {
       // Worker results trigger a cascade of state updates that reconcile the
       // entire grid (~1.4k cells in a week view). Mark as a transition so
       // React can interrupt this work to handle user input — the previous
@@ -256,7 +257,7 @@ export function useRosterProjections(input: ProjectionInput): ProjectionResult {
       nowMinuteRef.current = { iso: new Date().toISOString(), minute: currentMinute };
     }
 
-    pool.requestProjection({
+    const request = {
       mode: activeMode,
       shifts: shiftDTOs,
       employees: employeeDTOs,
@@ -267,7 +268,18 @@ export function useRosterProjections(input: ProjectionInput): ProjectionResult {
       filters: filterDTOs,
       nowIso: nowMinuteRef.current.iso,
       rangeDays,
-    });
+    };
+
+    pool.onResult = applyResult;
+    // If the worker can't run (failed to load, crashed), project on the main
+    // thread instead of leaving every worker-powered view empty.
+    pool.onError = ({ requestId, message }) => {
+      console.error('[useRosterProjections] Worker failed, projecting on main thread:', message);
+      const result = runProjectionPipeline({ ...request, requestId });
+      if (result) applyResult(result);
+    };
+
+    pool.requestProjection(request);
 
   }, [shifts, employees, roles, levels, events, rosterStructures, advancedFilters, activeMode, rangeDays, pool]);
 

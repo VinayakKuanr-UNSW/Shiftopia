@@ -332,3 +332,7 @@ Recommend **global** — "I am working as a manager right now" is one mental sta
 | Registry drifts from `AppRouter` as routes are added | Medium | The phase-0 invariant tests; they fail loudly on drift |
 | Persona in `localStorage` desyncs across tabs | Low | `storage` event listener in `PersonaContext`, or accept it — the URL always wins for what's on screen |
 | Mobile Row-1 compaction changes every page's header, not just paired ones | Medium | It's a genuine improvement, but it is a wide blast radius. Land it as its own commit so it can be reverted independently |
+
+## Addendum 2026-10-14 — three hats, one per suite
+
+The access suites (`docs/architecture/access-suites-plan.md`) add a third persona, **admin**, for the Admin suite (Labor Demand, Compliance Rejections, Users), and tie every hat to a suite: employee needs a Type X certificate or an active contract, employer any managerial page (beta's read-only Timesheets included), admin a zeta certificate. A hat the person does not hold is never reported, but a stored choice is kept while permissions load — the same rule the 2026-08-26 persistence fix established. The badge shows the level of the persona actually reported.

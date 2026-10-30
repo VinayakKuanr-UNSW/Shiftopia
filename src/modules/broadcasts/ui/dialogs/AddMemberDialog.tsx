@@ -4,7 +4,7 @@ import { EmployeeSelector } from '@/modules/core/ui/components/EmployeeSelector'
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { BroadcastParticipantRole } from '../../model/broadcast.types';
 
-export interface AddMemberDialogProps {
+interface AddMemberDialogProps {
     isOpen: boolean;
     onClose: () => void;
     addParticipant: (employeeId: string, role?: BroadcastParticipantRole) => Promise<void>;

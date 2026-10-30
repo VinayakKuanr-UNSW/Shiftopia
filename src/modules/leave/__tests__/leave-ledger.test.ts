@@ -4,8 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildLedger, CASUAL_REQUESTABLE, dailyHoursFor, employmentYearStart, entitlementWarnings, lslPosition, LEDGER_TYPES, requestableLeaveTypes, type BuildLedgerInput } from '../domain/leave-ledger';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readMigrationFile } from '@/test/migrations';
 import { LEAVE_TYPE_LABELS, type LeaveTypeCode } from '../model/leave.types';
 import type { LeaveRequest } from '../model/leave.types';
 
@@ -154,8 +153,7 @@ describe('requestableLeaveTypes — what a casual may ask for (cl 12.5(b))', () 
     });
 
     it('agrees with the database trigger: every type the trigger refuses is withheld from casuals', () => {
-        const sql = readFileSync(resolve(process.cwd(),
-            'supabase/migrations/20261001120000_leave_type_eligibility_casuals.sql'), 'utf8');
+        const sql = readMigrationFile('20261001120000_leave_type_eligibility_casuals.sql');
         const list = sql.match(/NEW\.leave_type NOT IN \(([^)]*)\)/)![1];
         const refused = [...list.matchAll(/'([a-z_]+)'/g)].map(m => m[1]);
         expect(refused.length).toBeGreaterThan(0);

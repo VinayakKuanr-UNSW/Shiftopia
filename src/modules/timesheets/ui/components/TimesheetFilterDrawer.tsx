@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Filter, Check } from 'lucide-react';
+import { X, Filter, Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import {
     Drawer,
@@ -27,6 +27,16 @@ import {
 import {
     Popover, PopoverContent, PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
+import { ToolbarIconButton } from '@/modules/core/ui/components/Toolbar';
+import {
+    Command,
+    CommandInput,
+    CommandList,
+    CommandEmpty,
+    CommandGroup,
+    CommandItem,
+    CommandShortcut,
+} from '@/modules/core/ui/primitives/command';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import type { TimesheetRow } from '../../model/timesheet.types';
 
@@ -125,7 +135,7 @@ const ChipRow: React.FC<{
     empty?: string;
 }> = ({ label, selected, options, onToggle, empty }) => (
     <fieldset className="space-y-2 border-none p-0 m-0" role="group" aria-label={`Filter by ${label}`}>
-        <legend className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/75 mb-1.5 p-0">
+        <legend className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground/75 mb-1.5 p-0">
             {label}
         </legend>
         {options.length === 0 ? (
@@ -274,90 +284,9 @@ export const FilterContent: React.FC<FilterContentProps> = ({
     );
 };
 
-/**
- * The filter body on its own, with no trigger and no chrome.
- *
- * `TimesheetFilterDrawer` owns a button, a Popover and a Drawer, which was
- * right when each page hung its own filter control off the function bar.
- * `EmployeeFunctionBar` now supplies all three of those, so what it needs is
- * the contents — the categorical chips plus, where a page has one, the status
- * choice that used to sit in a separate tab row.
- */
-export const TimesheetFilterPanel: React.FC<{
-    entries: TimesheetRow[];
-    appliedFilters: ActiveFilters;
-    onApply: (f: ActiveFilters) => void;
-    statusFilter?: string;
-    onStatusFilterChange?: (status: string) => void;
-    statusCounts?: Record<string, number>;
-    statusOptions?: { id: string; label: string }[];
-    statusSectionLabel?: string;
-}> = ({
-    entries,
-    appliedFilters,
-    onApply,
-    statusFilter,
-    onStatusFilterChange,
-    statusCounts,
-    statusOptions = DEFAULT_STATUS_OPTIONS,
-    statusSectionLabel = 'Status',
-}) => {
-    const [draftFilters, setDraftFilters] = useState<ActiveFilters>(appliedFilters);
-
-    // Re-seed the draft whenever the applied set changes underneath (a Reset
-    // elsewhere, a scope change) so the panel never shows a stale draft.
-    useEffect(() => setDraftFilters(appliedFilters), [appliedFilters]);
-
-    return (
-        <div className="flex flex-col gap-4">
-            {statusFilter && onStatusFilterChange && statusCounts && (
-                <fieldset className="m-0 border-none p-0" role="radiogroup" aria-label={`Filter by ${statusSectionLabel.toLowerCase()}`}>
-                    <legend className="mb-2 p-0 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                        {statusSectionLabel}
-                    </legend>
-                    <div className="flex flex-wrap gap-1.5">
-                        {statusOptions.map(tab => {
-                            const isActive = statusFilter === tab.id;
-                            const count = statusCounts[tab.id] ?? 0;
-                            return (
-                                <button
-                                    key={tab.id}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={isActive}
-                                    aria-label={`${statusSectionLabel}: ${tab.label}, ${count} shifts`}
-                                    onClick={() => onStatusFilterChange(tab.id)}
-                                    className={cn(
-                                        'flex min-h-11 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors active:scale-95 touch-manipulation',
-                                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                                        isActive
-                                            ? 'border-primary bg-primary/15 text-primary'
-                                            : 'border-border/60 bg-muted/40 text-muted-foreground hover:text-foreground',
-                                    )}
-                                >
-                                    {isActive && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
-                                    <span>{tab.label}</span>
-                                    <span className="text-[11px] font-bold tabular-nums opacity-70" aria-hidden="true">{count}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </fieldset>
-            )}
-
-            <FilterContent
-                draftFilters={draftFilters}
-                setDraftFilters={setDraftFilters}
-                entries={entries}
-                onApply={onApply}
-                onReset={() => setDraftFilters(EMPTY_FILTERS)}
-                compact
-            />
-        </div>
-    );
-};
 
 // ── Mobile bottom drawer ──────────────────────────────────────────────────────
+
 
 interface TimesheetFilterDrawerProps {
     /** Raw (unfiltered) entries for deriving available options. */
@@ -373,6 +302,7 @@ interface TimesheetFilterDrawerProps {
     statusOptions?: { id: string; label: string }[];
     statusSectionLabel?: string;
     /** View type selector (folded into drawer on mobile) */
+    triggerVariant?: 'dropdown' | 'icon' | 'default';
 }
 
 const DEFAULT_STATUS_OPTIONS = [
@@ -394,16 +324,32 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
     statusCounts,
     statusOptions = DEFAULT_STATUS_OPTIONS,
     statusSectionLabel = 'Shift Status',
+    triggerVariant = 'default',
 }) => {
     const isMobile = useBreakpoint() === 'mobile';
     const [open, setOpen] = useState(false);
     const [draftFilters, setDraftFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
 
-    // Badge = categorical filter count + active status (if not 'all') — status
-    // only folds into the badge on mobile, where it has no other home. On
-    // desktop, status already has its own tab row, so this popover only ever
-    // carries the categorical (Group/Sub-Group/Role) count.
-    const badgeCount = activeCount + (isMobile && statusFilter && statusFilter !== 'all' ? 1 : 0);
+    // Badge = categorical filter count + active status (if not 'all')
+    const isStatusActive = Boolean(statusFilter && statusFilter !== 'all');
+    const badgeCount = activeCount + (isStatusActive ? 1 : 0);
+
+    const availableGroups = useMemo(() => {
+        const filtered = GROUP_OPTIONS.filter(g => entries.some(e => normalizeGroupKey(e.group) === g.v));
+        return filtered.length > 0 ? filtered : GROUP_OPTIONS;
+    }, [entries]);
+
+    const availableSubGroups = useMemo(() => {
+        const source = appliedFilters.groupTypes.length > 0
+            ? entries.filter(e => appliedFilters.groupTypes.includes(normalizeGroupKey(e.group)))
+            : entries;
+        return [...new Set(source.map(e => e.subGroup).filter(Boolean))].sort() as string[];
+    }, [entries, appliedFilters.groupTypes]);
+
+    const availableRoles = useMemo(
+        () => [...new Set(entries.map(e => e.role).filter(Boolean))].sort() as string[],
+        [entries],
+    );
 
     // Sync draft state when open
     useEffect(() => {
@@ -416,59 +362,266 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
         setOpen(false);
     };
 
-    // ── Desktop: compact anchored popover — categorical chips only. View
-    // range and status already have their own controls on desktop (the
-    // navigator + tab row), so repeating them here would be redundant. ──────
+    // ── Desktop: Global Scope UI floating popover with detached search + options cards ──
     if (!isMobile) {
+        const desktopTrigger = triggerVariant === 'icon' ? (
+            <PopoverTrigger asChild>
+                <ToolbarIconButton
+                    icon={<Filter />}
+                    tooltip={badgeCount > 0 ? `Filters (${badgeCount} active)` : 'Filters'}
+                    aria-pressed={undefined}
+                    variant="amber"
+                    isActive={open || badgeCount > 0}
+                    badge={badgeCount}
+                    badgeClassName="bg-orange-500 text-white"
+                />
+            </PopoverTrigger>
+        ) : triggerVariant === 'dropdown' ? (
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    aria-label={`Filter options${badgeCount > 0 ? `, ${badgeCount} filters active` : ''}`}
+                    aria-expanded={open}
+                    className={cn(
+                        "relative flex items-center justify-between gap-2.5 h-11 md:h-10 px-3 md:px-3.5 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all duration-300",
+                        "hover:scale-[1.02] active:scale-[0.98]",
+                        open || badgeCount > 0
+                            ? "ring-2 ring-amber-500/30 bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 shadow-sm"
+                            : "bg-slate-100 dark:bg-[#111827]/60 border-slate-200/50 dark:border-white/5 text-muted-foreground hover:text-foreground hover:bg-slate-200 dark:hover:bg-[#111827]/80",
+                    )}
+                >
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Filter className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+                        <div className="flex flex-col items-start gap-0.5 min-w-0 text-left">
+                            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/40 leading-none">
+                                Filters
+                            </span>
+                            <span className="truncate max-w-[120px] text-[11px] font-semibold">
+                                {badgeCount > 0 ? `${badgeCount} Active` : 'All'}
+                            </span>
+                        </div>
+                    </div>
+                    <ChevronDown className={cn(
+                        "h-3 w-3 opacity-60 shrink-0 transition-transform duration-300",
+                        open && "rotate-180"
+                    )} aria-hidden="true" />
+                </button>
+            </PopoverTrigger>
+        ) : (
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    aria-label={`Filter options${badgeCount > 0 ? `, ${badgeCount} filters active` : ''}`}
+                    aria-expanded={open}
+                    className={cn(
+                        'flex items-center gap-1.5 h-9 px-3 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all shrink-0',
+                        open || badgeCount > 0
+                            ? 'bg-amber-500/15 border-amber-500/40 text-amber-600 dark:text-amber-400'
+                            : 'bg-muted/30 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60',
+                    )}
+                >
+                    <Filter className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>Filters</span>
+                    {badgeCount > 0 && (
+                        <span
+                            className="h-4 w-4 rounded-full bg-amber-500 text-white text-[11px] font-black flex items-center justify-center leading-none"
+                            aria-hidden="true"
+                        >
+                            {badgeCount}
+                        </span>
+                    )}
+                </button>
+            </PopoverTrigger>
+        );
+
         return (
             <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>
-                    <button
-                        type="button"
-                        aria-label={`Filter options${badgeCount > 0 ? `, ${badgeCount} filters active` : ''}`}
-                        aria-expanded={open}
-                        className={cn(
-                            'flex items-center gap-1.5 h-9 px-3 rounded-xl border text-[11px] font-black uppercase tracking-wider transition-all shrink-0',
-                            open || badgeCount > 0
-                                ? 'bg-primary/10 border-primary/30 text-primary'
-                                : 'bg-muted/30 border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/60',
-                        )}
+                {desktopTrigger}
+                <PopoverContent
+                    className="w-[340px] sm:w-[380px] border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
+                    sideOffset={10}
+                    align="end"
+                >
+                    <Command
+                        className="bg-transparent overflow-visible w-full outline-none"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                                setOpen(false);
+                                e.preventDefault();
+                            }
+                        }}
                     >
-                        <Filter className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        <span>Filters</span>
-                        {badgeCount > 0 && (
-                            <span
-                                className="h-4 w-4 rounded-full bg-primary text-primary-foreground text-[9px] font-black flex items-center justify-center leading-none"
-                                aria-hidden="true"
-                            >
-                                {badgeCount}
-                            </span>
-                        )}
-                    </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-4 bg-popover border-border rounded-2xl shadow-2xl" align="end">
-                    <div className="flex items-center justify-between mb-3">
-                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground/60">
-                            Filters
-                        </p>
-                        {activeCount > 0 && (
-                            <button
-                                type="button"
-                                onClick={() => { onApply(EMPTY_FILTERS); setOpen(false); }}
-                                className="text-[10px] font-black uppercase tracking-widest text-destructive hover:text-destructive/80 transition-colors"
-                            >
-                                Clear all
-                            </button>
-                        )}
-                    </div>
-                    <FilterContent
-                        draftFilters={draftFilters}
-                        setDraftFilters={setDraftFilters}
-                        entries={entries}
-                        onApply={handleApply}
-                        onReset={() => setDraftFilters(EMPTY_FILTERS)}
-                        compact
-                    />
+                        <div className="flex flex-col gap-1.5 w-full">
+                            {/* 1. Search Bar Container */}
+                            <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 dark:border-white/10 overflow-hidden [&_[cmdk-input-wrapper]]:border-b-0">
+                                <CommandInput
+                                    placeholder="Search filters (status, group, role)..."
+                                    className="h-14 text-[14px] border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
+                                    autoFocus
+                                />
+                            </div>
+
+                            {/* 2. Results Container */}
+                            <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
+                                <CommandList className="max-h-[55vh] p-1.5 scrollbar-none overflow-x-hidden">
+                                    <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-[13px]">
+                                        No filters found.
+                                    </CommandEmpty>
+
+                                    {/* Status Section */}
+                                    {statusOptions && statusOptions.length > 0 && (
+                                        <CommandGroup heading={statusSectionLabel || "Status"} className="px-1">
+                                            {statusOptions.map((opt) => {
+                                                const isSelected = (statusFilter ?? 'all') === opt.id;
+                                                const count = statusCounts?.[opt.id];
+                                                return (
+                                                    <CommandItem
+                                                        key={`status-${opt.id}`}
+                                                        value={`status ${opt.label}`}
+                                                        onSelect={() => {
+                                                            onStatusFilterChange?.(opt.id);
+                                                        }}
+                                                        className="flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
+                                                    >
+                                                        <div className={cn(
+                                                            "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                                            isSelected
+                                                                ? "bg-primary border-primary text-primary-foreground group-aria-selected:bg-white group-aria-selected:text-primary group-aria-selected:border-white"
+                                                                : "border-muted-foreground/30 group-aria-selected:border-white/40"
+                                                        )}>
+                                                            {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                                        </div>
+                                                        <div className="flex items-center justify-between flex-1 min-w-0">
+                                                            <span className="font-semibold text-[13px] capitalize truncate">{opt.label}</span>
+                                                            {typeof count === 'number' && (
+                                                                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-muted group-aria-selected:bg-white/20 text-muted-foreground group-aria-selected:text-white ml-2 shrink-0">
+                                                                    {count}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <CommandShortcut className="group-aria-selected:text-white/60">↵</CommandShortcut>
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    )}
+
+                                    {/* Group Type Section */}
+                                    <CommandGroup heading="Group Type" className="px-1">
+                                        {availableGroups.map((opt) => {
+                                            const isSelected = appliedFilters.groupTypes.includes(opt.v);
+                                            return (
+                                                <CommandItem
+                                                    key={`group-${opt.v}`}
+                                                    value={`group ${opt.l}`}
+                                                    onSelect={() => {
+                                                        const next = toggleItem(appliedFilters.groupTypes, opt.v);
+                                                        onApply({ ...appliedFilters, groupTypes: next });
+                                                    }}
+                                                    className="flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
+                                                >
+                                                    <div className={cn(
+                                                        "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                                        isSelected
+                                                            ? "bg-primary border-primary text-primary-foreground group-aria-selected:bg-white group-aria-selected:text-primary group-aria-selected:border-white"
+                                                            : "border-muted-foreground/30 group-aria-selected:border-white/40"
+                                                    )}>
+                                                        {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                                    </div>
+                                                    <span className="font-semibold text-[13px] capitalize truncate">{opt.l}</span>
+                                                    <CommandShortcut className="group-aria-selected:text-white/60">↵</CommandShortcut>
+                                                </CommandItem>
+                                            );
+                                        })}
+                                    </CommandGroup>
+
+                                    {/* Sub-Group Section */}
+                                    {availableSubGroups.length > 0 && (
+                                        <CommandGroup heading="Sub-Group" className="px-1">
+                                            {availableSubGroups.map((sg) => {
+                                                const isSelected = appliedFilters.subGroups.includes(sg);
+                                                return (
+                                                    <CommandItem
+                                                        key={`subgroup-${sg}`}
+                                                        value={`subgroup ${sg}`}
+                                                        onSelect={() => {
+                                                            const next = toggleItem(appliedFilters.subGroups, sg);
+                                                            onApply({ ...appliedFilters, subGroups: next });
+                                                        }}
+                                                        className="flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
+                                                    >
+                                                        <div className={cn(
+                                                            "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                                            isSelected
+                                                                ? "bg-primary border-primary text-primary-foreground group-aria-selected:bg-white group-aria-selected:text-primary group-aria-selected:border-white"
+                                                                : "border-muted-foreground/30 group-aria-selected:border-white/40"
+                                                        )}>
+                                                            {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                                        </div>
+                                                        <span className="font-semibold text-[13px] truncate">{sg}</span>
+                                                        <CommandShortcut className="group-aria-selected:text-white/60">↵</CommandShortcut>
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    )}
+
+                                    {/* Role Section */}
+                                    {availableRoles.length > 0 && (
+                                        <CommandGroup heading="Role" className="px-1">
+                                            {availableRoles.map((r) => {
+                                                const isSelected = appliedFilters.roles.includes(r);
+                                                return (
+                                                    <CommandItem
+                                                        key={`role-${r}`}
+                                                        value={`role ${r}`}
+                                                        onSelect={() => {
+                                                            const next = toggleItem(appliedFilters.roles, r);
+                                                            onApply({ ...appliedFilters, roles: next });
+                                                        }}
+                                                        className="flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
+                                                    >
+                                                        <div className={cn(
+                                                            "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                                                            isSelected
+                                                                ? "bg-primary border-primary text-primary-foreground group-aria-selected:bg-white group-aria-selected:text-primary group-aria-selected:border-white"
+                                                                : "border-muted-foreground/30 group-aria-selected:border-white/40"
+                                                        )}>
+                                                            {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                                        </div>
+                                                        <span className="font-semibold text-[13px] truncate">{r}</span>
+                                                        <CommandShortcut className="group-aria-selected:text-white/60">↵</CommandShortcut>
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    )}
+                                </CommandList>
+
+                                {/* Keyboard & Action footer */}
+                                <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50">
+                                    <div className="flex items-center gap-4">
+                                        <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">↑↓</kbd> Nav</span>
+                                        <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">↵</kbd> Select</span>
+                                    </div>
+                                    {badgeCount > 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onApply(EMPTY_FILTERS);
+                                                if (onStatusFilterChange) onStatusFilterChange('all');
+                                            }}
+                                            className="text-[11px] font-black uppercase tracking-wider text-amber-500 hover:text-amber-600 transition-colors cursor-pointer"
+                                        >
+                                            Clear all ({badgeCount})
+                                        </button>
+                                    ) : (
+                                        <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">esc</kbd> Close</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </Command>
                 </PopoverContent>
             </Popover>
         );
@@ -501,7 +654,7 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
                     <Filter className="h-4 w-4" aria-hidden="true" />
                     {badgeCount > 0 && (
                         <span 
-                            className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[9px] font-black flex items-center justify-center leading-none pointer-events-none"
+                            className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-primary text-primary-foreground text-[11px] font-black flex items-center justify-center leading-none pointer-events-none"
                             aria-hidden="true"
                         >
                             {badgeCount}
@@ -513,7 +666,7 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
             <DrawerContent className="max-h-[88dvh] bg-background border-border flex flex-col">
                 {/* Header row: title + close */}
                 <DrawerHeader className="flex flex-row items-center justify-between px-5 pb-0 shrink-0">
-                    <DrawerTitle className="text-[15px] font-black tracking-tight text-foreground">
+                    <DrawerTitle>
                         Filters
                     </DrawerTitle>
                     <DrawerDescription className="sr-only">Filter timesheet entries by group, role, or status</DrawerDescription>
@@ -533,7 +686,7 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
                     {/* Quick Status Filter (folded from status tabs) */}
                     {statusFilter && onStatusFilterChange && statusCounts && (
                         <fieldset className="mb-5 pb-4 border-b border-border/20 border-none p-0 m-0" role="radiogroup" aria-label={`Filter by ${statusSectionLabel.toLowerCase()}`}>
-                            <legend className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/75 mb-2 p-0">
+                            <legend className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground/75 mb-2 p-0">
                                 {statusSectionLabel}
                             </legend>
                             <div className="flex flex-wrap gap-1.5">
@@ -559,7 +712,7 @@ export const TimesheetFilterDrawer: React.FC<TimesheetFilterDrawerProps> = ({
                                             <span>{tab.label}</span>
                                             <span 
                                                 className={cn(
-                                                    'text-[10px] font-black',
+                                                    'text-[11px] font-black',
                                                     isActive ? 'text-primary/90' : 'text-muted-foreground/60'
                                                 )}
                                                 aria-hidden="true"

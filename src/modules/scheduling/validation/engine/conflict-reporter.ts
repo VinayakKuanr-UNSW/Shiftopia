@@ -8,7 +8,7 @@
 
 import type { CandidateShift, ShiftAssignmentResult, ShiftAssignmentStatus, ShiftViolation } from '../types';
 
-export class ConflictReporter {
+class ConflictReporter {
     /**
      * Build a ShiftAssignmentResult for one candidate shift.
      *

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { useEmployeeLicenses, useRemoveEmployeeLicense } from '@/modules/users/hooks/useEmployeeLicenses';
 import { Shield, CheckCircle, XCircle, AlertTriangle, AlertOctagon, Loader2, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { AddLicenseDialog } from './AddLicenseDialog';
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -34,12 +35,13 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
 
         setIsToggling(true);
         try {
-            const { error } = await supabase
+            const updated = await supabase
                 .from('employee_licenses')
-                .update({ has_restricted_work_limit: checked })
+                .update({ has_restricted_work_limit: checked }, { count: 'exact' })
                 .eq('id', workRight.id);
 
-            if (error) throw error;
+            if (updated.error) throw updated.error;
+            assertWrote(updated, 'change this work right');
 
             queryClient.invalidateQueries({ queryKey: ['employee_licenses', employeeId] });
             toast({
@@ -70,8 +72,8 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                         <div>
                             <p className="font-medium">VEVO Verified</p>
                             {workRight.last_checked_at && (
-                                <p className="text-xs text-muted-foreground">
-                                    Last checked: {format(parseISO(workRight.last_checked_at), 'MMM d, yyyy HH:mm')}
+                                <p className="text-[11px] text-muted-foreground">
+                                    Last checked: {formatInTimezone(parseISO(workRight.last_checked_at), SYDNEY_TZ, 'MMM d, yyyy HH:mm')}
                                 </p>
                             )}
                         </div>
@@ -106,7 +108,7 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
             {/* Header */}
             <div className="px-5 py-3.5 border-b border-border/20 bg-card flex items-center justify-between shrink-0">
                 <div className="space-y-0.5">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                    <h3 className="text-[13px] font-black uppercase tracking-wider text-foreground flex items-center gap-2">
                         <Shield className="w-4 h-4 text-primary" aria-hidden="true" />
                         Work Rights
                     </h3>
@@ -125,28 +127,28 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
             <div className="p-4 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-full">
-                        <p className="text-muted-foreground text-xs font-medium animate-pulse">Loading work rights...</p>
+                        <p className="text-muted-foreground text-[11px] font-medium animate-pulse">Loading work rights...</p>
                     </div>
                 ) : !workRight ? (
                     <div className="flex flex-col items-center justify-center h-full py-8 text-center text-muted-foreground">
                         <Shield className="w-8 h-8 mx-auto mb-2 opacity-20" aria-hidden="true" />
-                        <p className="text-xs font-bold">No work rights recorded</p>
+                        <p className="text-[11px] font-bold">No work rights recorded</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
                         <div className="bg-muted/30 hover:bg-muted/60 rounded-xl border border-border/20 p-3.5 transition-colors group">
                             <div className="flex items-start justify-between gap-2 mb-2">
                                 <div className="min-w-0 flex-1">
-                                    <h4 className="font-bold text-xs text-foreground truncate">{workRight.license?.name || 'Work Rights'}</h4>
+                                    <h4 className="font-bold text-[11px] text-foreground truncate">{workRight.license?.name || 'Work Rights'}</h4>
                                     {workRight.license?.description && (
-                                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">{workRight.license.description}</p>
+                                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">{workRight.license.description}</p>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                     <Badge className={
                                         workRight.status === 'Active'
-                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-[9px] uppercase shadow-none'
-                                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-[9px] uppercase shadow-none'
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-[11px] uppercase shadow-none'
+                                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-[11px] uppercase shadow-none'
                                     }>
                                         {workRight.status}
                                     </Badge>
@@ -161,7 +163,7 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                                     </button>
                                 </div>
                             </div>
-                            <div className="flex flex-wrap gap-3 text-[9px] font-semibold text-muted-foreground mt-2">
+                            <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-muted-foreground mt-2">
                                 {workRight.issue_date && (
                                     <span>Issued: {format(parseISO(workRight.issue_date), 'MMM d, yyyy')}</span>
                                 )}
@@ -179,11 +181,11 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                             <div className="bg-amber-500/10 p-3.5 rounded-xl border border-amber-500/30 space-y-2">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="space-y-0.5">
-                                        <Label className="text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center gap-1.5">
+                                        <Label className="text-amber-600 dark:text-amber-400 font-bold text-[11px] flex items-center gap-1.5">
                                             <AlertOctagon className="w-3.5 h-3.5" aria-hidden="true" />
                                             Student Visa (Subclass 500)
                                         </Label>
-                                        <p className="text-[10px] text-amber-600/90 dark:text-amber-400/90 font-medium">
+                                        <p className="text-[11px] text-amber-600/90 dark:text-amber-400/90 font-medium">
                                             Fortnightly work hours limit
                                         </p>
                                     </div>
@@ -199,7 +201,7 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                                 </div>
 
                                 {workRight.has_restricted_work_limit && (
-                                    <div className="p-2.5 bg-amber-500/15 rounded-lg border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-medium">
+                                    <div className="p-2.5 bg-amber-500/15 rounded-lg border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-medium">
                                         <strong>Restriction Active:</strong> Limited to 48 hours per fortnight while study session is active.
                                     </div>
                                 )}

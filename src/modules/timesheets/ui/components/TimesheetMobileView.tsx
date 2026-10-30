@@ -2,25 +2,13 @@ import React, { useState, useMemo } from 'react';
 import {
     CheckCircle,
     XCircle,
-    CheckSquare,
-    X,
-    ChevronRight,
     AlertTriangle,
     Clock,
-    Search,
-    ChevronLeft,
-    Download,
-    RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, addDays, subDays } from 'date-fns';
-import { todayISO } from '@/modules/core/lib/date.utils';
-import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Input } from '@/modules/core/ui/primitives/input';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { TimesheetMobileCard } from './TimesheetMobileCard';
-import { TimesheetFilterDrawer } from './TimesheetFilterDrawer';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import type { ActiveFilters } from './TimesheetFilterDrawer';
 import { applyTimesheetFilters } from './TimesheetFilterDrawer';
@@ -104,12 +92,6 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
 
     const handleClearSelection = () => setSelectedIds([]);
 
-    const handleToggleSelectMode = () => {
-        setIsSelectMode(v => {
-            if (v) setSelectedIds([]);
-            return !v;
-        });
-    };
 
     const handleBulkApprove = () => {
         if (selectedIds.length === 0) return;
@@ -197,24 +179,24 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                     return (
                         <div className="mb-4 flex items-center gap-2 px-3 py-2.5 rounded-2xl bg-amber-500/[0.04] border border-amber-500/15 flex-wrap" role="status" aria-label="Attendance flags summary">
                             <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-hidden="true" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mr-1">Flags</span>
+                            <span className="text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mr-1">Flags</span>
                             {lateCount > 0 && (
-                                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10">
+                                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10">
                                     {lateCount} Late
                                 </span>
                             )}
                             {noShowCount > 0 && (
-                                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10">
+                                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10">
                                     {noShowCount} No-Show
                                 </span>
                             )}
                             {overrideLabels.map(([label, count]) => (
-                                <span key={label} className="text-[9px] font-black px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/10">
+                                <span key={label} className="text-[11px] font-black px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/10">
                                     {count} {label}
                                 </span>
                             ))}
                             {missingCount > 0 && (
-                                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10">
+                                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10">
                                     {missingCount} Missing Clock-In
                                 </span>
                             )}
@@ -241,7 +223,7 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                                 <Clock className="h-11 w-11 text-primary/30" aria-hidden="true" />
                             </div>
                         </div>
-                        <h3 className="font-black text-2xl text-foreground mb-3">No entries found</h3>
+                        <h3 className="font-black text-[20px] text-foreground mb-3">No entries found</h3>
                         <p className="text-[14px] text-muted-foreground/80 max-w-[260px] leading-relaxed mx-auto font-medium">
                             {activeFilterCount > 0
                                 ? 'No entries match the current filters.'
@@ -253,7 +235,7 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                                     type="button"
                                     onClick={() => onApplyFilters({ groupTypes: [], subGroups: [], roles: [] })}
                                     aria-label="Clear all active filters"
-                                    className="rounded-full px-10 h-14 font-black text-xs uppercase tracking-widest bg-primary shadow-[0_8px_25px_rgba(var(--primary-rgb),0.25)] transition-all active:scale-95 touch-manipulation"
+                                    className="rounded-full px-10 h-14 font-black text-[11px] uppercase tracking-widest bg-primary shadow-[0_8px_25px_rgba(var(--primary-rgb),0.25)] transition-all active:scale-95 touch-manipulation"
                                 >
                                     Clear All Filters
                                 </Button>
@@ -307,7 +289,7 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                             <div className="flex items-center justify-between mb-4 px-2">
                                 <div className="flex items-center gap-2.5">
                                     <div className="h-2 w-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
-                                    <span className="text-sm font-black text-foreground tracking-tight">
+                                    <span className="text-[13px] font-black text-foreground tracking-tight">
                                         <span className="text-primary">{selectedIds.length}</span>
                                         {' '}Actionable Selection
                                     </span>
@@ -316,7 +298,7 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                                     type="button"
                                     onClick={handleClearSelection}
                                     aria-label="Clear active selections"
-                                    className="px-3.5 py-2 rounded-full bg-muted/50 text-[10px] font-black text-muted-foreground uppercase tracking-wider hover:text-foreground hover:bg-muted transition-all active:scale-90 touch-manipulation"
+                                    className="px-3.5 py-2 rounded-full bg-muted/50 text-[11px] font-black text-muted-foreground uppercase tracking-wider hover:text-foreground hover:bg-muted transition-all active:scale-90 touch-manipulation"
                                 >
                                     Clear
                                 </button>

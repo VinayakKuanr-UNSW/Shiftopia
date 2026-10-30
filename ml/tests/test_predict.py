@@ -225,7 +225,7 @@ def test_verify_manifest_hashes_no_op_when_disabled(patched_predict, monkeypatch
 def test_verify_manifest_hashes_passes_with_matching_hash(patched_predict, fake_models_dir, mock_supabase_client, monkeypatch):
     monkeypatch.setenv('ML_VERIFY_MANIFEST_HASHES', 'true')
     monkeypatch.setenv('VITE_SUPABASE_URL', 'http://fake')
-    monkeypatch.setenv('VITE_SUPABASE_ANON_KEY', 'fake-key')
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', 'fake-key')
 
     expected = {role: _sha256(os.path.join(str(fake_models_dir), f'{role}.pkl'))
                 for role in ('Usher', 'Security', 'Food Staff', 'Supervisor')}
@@ -240,7 +240,7 @@ def test_verify_manifest_hashes_passes_with_matching_hash(patched_predict, fake_
 def test_verify_manifest_hashes_fails_on_mismatch(patched_predict, fake_models_dir, mock_supabase_client, monkeypatch):
     monkeypatch.setenv('ML_VERIFY_MANIFEST_HASHES', 'true')
     monkeypatch.setenv('VITE_SUPABASE_URL', 'http://fake')
-    monkeypatch.setenv('VITE_SUPABASE_ANON_KEY', 'fake-key')
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', 'fake-key')
 
     bogus = {role: 'deadbeef' * 8 for role in ('Usher',)}
     mock_supabase_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
@@ -255,7 +255,7 @@ def test_verify_manifest_hashes_fails_on_mismatch(patched_predict, fake_models_d
 def test_verify_manifest_hashes_fails_when_no_active_row(patched_predict, mock_supabase_client, monkeypatch):
     monkeypatch.setenv('ML_VERIFY_MANIFEST_HASHES', 'true')
     monkeypatch.setenv('VITE_SUPABASE_URL', 'http://fake')
-    monkeypatch.setenv('VITE_SUPABASE_ANON_KEY', 'fake-key')
+    monkeypatch.setenv('SUPABASE_SERVICE_ROLE_KEY', 'fake-key')
     mock_supabase_client.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
     monkeypatch.setattr(patched_predict, 'create_client', lambda *a, **kw: mock_supabase_client)
 

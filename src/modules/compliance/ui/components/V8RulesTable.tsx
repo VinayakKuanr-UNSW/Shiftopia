@@ -1,3 +1,5 @@
+import { Table, tableTokens, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
+import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import React, { useMemo, useState } from 'react';
 import {
   ShieldAlert,
@@ -12,13 +14,7 @@ import {
   Info,
   SlidersHorizontal,
   Lock,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   X,
-  Target,
-  Sparkles,
-  Zap,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -27,7 +23,6 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
@@ -35,7 +30,7 @@ import { RULE_REGISTRY } from '@/modules/compliance/registry/rules';
 import type { RuleSpec, RuleCategory, RuleTier } from '@/modules/compliance/registry/types';
 import { ComplianceArchitectureDiagram } from './ComplianceArchitectureDiagram';
 
-export interface TechnicalRuleData {
+interface TechnicalRuleData {
   id: string;
   name: string;
   category: RuleCategory;
@@ -740,6 +735,9 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
     }
   };
 
+  const currentSort = { key: sortField, direction: sortDirection };
+  const onSort = (key: string) => handleSort(key as SortField);
+
   const v8LabourCount = allTechnicalRules.filter((r) => r.layer === 'LABOUR').length;
   const shapeCount = allTechnicalRules.filter((r) => r.layer === 'SHAPE').length;
   const solverMacroCount = allTechnicalRules.filter((r) => r.layer === 'SOLVER').length;
@@ -756,7 +754,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
           <button
             onClick={() => setViewFilter('V8_LABOUR')}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-xs sm:text-[13px] font-bold transition-all',
+              'rounded-lg px-3 py-1.5 text-[11px] sm:text-[13px] font-bold transition-all',
               viewFilter === 'V8_LABOUR'
                 ? 'bg-primary text-primary-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',
@@ -767,7 +765,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
           <button
             onClick={() => setViewFilter('SHAPE')}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-xs sm:text-[13px] font-bold transition-all',
+              'rounded-lg px-3 py-1.5 text-[11px] sm:text-[13px] font-bold transition-all',
               viewFilter === 'SHAPE'
                 ? 'bg-primary text-primary-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',
@@ -778,7 +776,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
           <button
             onClick={() => setViewFilter('SOLVER_MACRO')}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-xs sm:text-[13px] font-bold transition-all',
+              'rounded-lg px-3 py-1.5 text-[11px] sm:text-[13px] font-bold transition-all',
               viewFilter === 'SOLVER_MACRO'
                 ? 'bg-primary text-primary-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',
@@ -789,7 +787,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
           <button
             onClick={() => setViewFilter('ALL')}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-xs sm:text-[13px] font-bold transition-all',
+              'rounded-lg px-3 py-1.5 text-[11px] sm:text-[13px] font-bold transition-all',
               viewFilter === 'ALL'
                 ? 'bg-primary text-primary-foreground shadow-xs'
                 : 'text-muted-foreground hover:text-foreground',
@@ -824,185 +822,77 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
         {sortedRules.length === 0 ? (
           <div className="p-12 text-center">
             <SlidersHorizontal className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
-            <h3 className="text-base font-bold text-foreground">No compliance rules match your filter</h3>
-            <p className="mt-1.5 text-sm text-muted-foreground">
+            <h3 className="text-[14px] font-bold text-foreground">No compliance rules match your filter</h3>
+            <p className="mt-1.5 text-[13px] text-muted-foreground">
               Try adjusting your search query or resetting the layer filter.
             </p>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setSearchQuery('')}
-              className="mt-5 text-sm font-medium"
+              className="mt-5 text-[13px] font-medium"
             >
               Clear Search
             </Button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1100px]">
+            <Table className="min-w-[1100px]">
               {/* Sticky Table Header */}
-              <thead className="sticky top-0 z-20 bg-muted/60 dark:bg-slate-800/90 backdrop-blur border-b border-border/70 dark:border-white/10 text-xs font-bold uppercase tracking-wider text-muted-foreground select-none">
-                <tr>
+              <TableHeader sticky>
+                <TableRow>
                   {/* Rule Name Column (Sticky left) */}
-                  <th
-                    onClick={() => handleSort('name')}
-                    className="sticky left-0 z-30 bg-muted/90 dark:bg-slate-800/95 py-3.5 px-4 cursor-pointer hover:text-foreground transition-colors min-w-[240px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Rule</span>
-                      {sortField === 'name' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="name" currentSort={currentSort} onSort={onSort} className={cn('sticky left-0 z-30 min-w-[240px]', tableTokens.stickyHeadCell)}>Rule</SortableTableHeader>
 
                   {/* Rule ID Column */}
-                  <th
-                    onClick={() => handleSort('id')}
-                    className="py-3.5 px-3.5 cursor-pointer hover:text-foreground transition-colors min-w-[180px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Rule ID</span>
-                      {sortField === 'id' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="id" currentSort={currentSort} onSort={onSort} className="min-w-[180px]">Rule ID</SortableTableHeader>
 
                   {/* Category Column */}
-                  <th
-                    onClick={() => handleSort('category')}
-                    className="py-3.5 px-3 cursor-pointer hover:text-foreground transition-colors min-w-[150px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Category</span>
-                      {sortField === 'category' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="category" currentSort={currentSort} onSort={onSort} className="min-w-[150px]">Category</SortableTableHeader>
 
                   {/* Status Column */}
-                  <th
-                    onClick={() => handleSort('tier')}
-                    className="py-3.5 px-3 cursor-pointer hover:text-foreground transition-colors min-w-[130px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Status</span>
-                      {sortField === 'tier' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="tier" currentSort={currentSort} onSort={onSort} className="min-w-[130px]">Status</SortableTableHeader>
 
                   {/* HC Column */}
-                  <th
-                    onClick={() => handleSort('hc')}
-                    className="py-3.5 px-3 cursor-pointer hover:text-foreground transition-colors min-w-[110px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>HC</span>
-                      {sortField === 'hc' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="hc" currentSort={currentSort} onSort={onSort} className="min-w-[110px]">HC</SortableTableHeader>
 
                   {/* SC Column */}
-                  <th
-                    onClick={() => handleSort('sc')}
-                    className="py-3.5 px-3 cursor-pointer hover:text-foreground transition-colors min-w-[130px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>SC</span>
-                      {sortField === 'sc' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="sc" currentSort={currentSort} onSort={onSort} className="min-w-[130px]">SC</SortableTableHeader>
 
                   {/* Authority Column */}
-                  <th
-                    onClick={() => handleSort('authority')}
-                    className="py-3.5 px-3.5 cursor-pointer hover:text-foreground transition-colors min-w-[180px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Authority</span>
-                      {sortField === 'authority' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="authority" currentSort={currentSort} onSort={onSort} className="min-w-[180px]">Authority</SortableTableHeader>
 
                   {/* Scope Column */}
-                  <th
-                    onClick={() => handleSort('scope')}
-                    className="py-3.5 px-3 cursor-pointer hover:text-foreground transition-colors min-w-[130px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Scope</span>
-                      {sortField === 'scope' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="scope" currentSort={currentSort} onSort={onSort} className="min-w-[130px]">Scope</SortableTableHeader>
 
                   {/* Layer Column */}
-                  <th
-                    onClick={() => handleSort('layer')}
-                    className="py-3.5 px-3 cursor-pointer hover:text-foreground transition-colors min-w-[100px]"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span>Layer</span>
-                      {sortField === 'layer' ? (
-                        sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-                      ) : (
-                        <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                      )}
-                    </div>
-                  </th>
+                  <SortableTableHeader sortKey="layer" currentSort={currentSort} onSort={onSort} className="min-w-[100px]">Layer</SortableTableHeader>
 
                   {/* Solver Interpretation Column */}
-                  <th className="py-3.5 px-4 min-w-[320px]">
+                  <TableHead className="min-w-[320px]">
                     <span>Solver Interpretation</span>
-                  </th>
-                </tr>
-              </thead>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
 
               {/* Table Body */}
-              <tbody className="divide-y divide-border/60 dark:divide-white/10 text-[14px]">
+              <TableBody>
                 {sortedRules.map((rule) => {
                   const catConfig = CATEGORY_CONFIG[rule.category] || CATEGORY_CONFIG.TIME;
                   const CatIcon = catConfig.icon;
                   const isBlocking = rule.tier === 'BLOCKING';
 
                   return (
-                    <tr
+                    <TableRow
                       key={rule.id}
                       onClick={() => {
                         setActiveInspectorRule(rule);
                         onSelectRule?.(rule.id);
                       }}
-                      className="group hover:bg-muted/40 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                      className="group cursor-pointer"
                     >
                       {/* 1. Rule Name + ⓘ Inspector button (Sticky left) */}
-                      <td className="sticky left-0 z-10 bg-card/95 dark:bg-[#161d2d]/95 group-hover:bg-muted/80 dark:group-hover:bg-slate-800/90 py-3.5 px-4 border-r border-border/40 shadow-xs">
+                      <TableCell className={cn(tableTokens.cell, 'sticky left-0 z-10 shadow-[1px_0_0_hsl(var(--border))]', tableTokens.stickyCell)}>
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-bold text-foreground group-hover:text-primary transition-colors">
                             {rule.name}
@@ -1018,17 +908,17 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                             <Info className="h-4 w-4" />
                           </button>
                         </div>
-                      </td>
+                      </TableCell>
 
                       {/* 2. Rule ID */}
-                      <td className="py-3.5 px-3.5">
+                      <TableCell>
                         <code className="font-mono text-[12.5px] font-medium text-foreground/80 bg-muted/60 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-border/40 whitespace-nowrap">
                           {rule.id}
                         </code>
-                      </td>
+                      </TableCell>
 
                       {/* 3. Category */}
-                      <td className="py-3.5 px-3">
+                      <TableCell>
                         <span
                           className={cn(
                             'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] font-semibold border whitespace-nowrap',
@@ -1038,10 +928,10 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                           <CatIcon className="h-3.5 w-3.5" />
                           {catConfig.label}
                         </span>
-                      </td>
+                      </TableCell>
 
                       {/* 4. Status */}
-                      <td className="py-3.5 px-3">
+                      <TableCell>
                         <span
                           className={cn(
                             'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold border tracking-wide uppercase whitespace-nowrap',
@@ -1062,10 +952,10 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                             </>
                           )}
                         </span>
-                      </td>
+                      </TableCell>
 
                       {/* 5. HC */}
-                      <td className="py-3.5 px-3 font-mono">
+                      <TableCell className="font-mono">
                         {rule.hc ? (
                           <span
                             onClick={(e) => {
@@ -1078,12 +968,12 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                             {rule.hc}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground/50 text-xs">—</span>
+                          <span className="text-muted-foreground/50 text-[11px]">—</span>
                         )}
-                      </td>
+                      </TableCell>
 
                       {/* 6. SC */}
-                      <td className="py-3.5 px-3 font-mono">
+                      <TableCell className="font-mono">
                         {rule.sc ? (
                           <span
                             onClick={(e) => {
@@ -1095,38 +985,38 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                             {rule.sc}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground/50 text-xs">—</span>
+                          <span className="text-muted-foreground/50 text-[11px]">—</span>
                         )}
-                      </td>
+                      </TableCell>
 
                       {/* 7. Authority */}
-                      <td className="py-3.5 px-3.5 text-[13px] font-medium text-foreground/90">
+                      <TableCell className="font-medium text-foreground/90">
                         {formatAuthority(rule.authority)}
-                      </td>
+                      </TableCell>
 
                       {/* 8. Scope */}
-                      <td className="py-3.5 px-3 text-[13px] font-medium text-foreground/80 whitespace-nowrap">
+                      <TableCell className="font-medium text-foreground/80 whitespace-nowrap">
                         {formatEmploymentScope(rule.employment)}
-                      </td>
+                      </TableCell>
 
                       {/* 9. Layer */}
-                      <td className="py-3.5 px-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                      <TableCell className="font-mono text-muted-foreground whitespace-nowrap">
                         <Badge variant="outline" className="font-mono text-[11px] py-0 px-2">
                           {rule.layer}
                         </Badge>
-                      </td>
+                      </TableCell>
 
                       {/* 10. Solver Interpretation */}
-                      <td className="py-3.5 px-4 font-mono text-[12.5px] text-foreground/80 leading-relaxed">
+                      <TableCell className="font-mono text-foreground/80 leading-relaxed">
                         <code className="text-foreground/90 bg-muted/40 dark:bg-slate-900/60 px-2 py-1 rounded border border-border/40 block max-w-fit truncate">
                           {rule.formula}
                         </code>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
@@ -1136,7 +1026,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
         open={Boolean(activeInspectorRule)}
         onOpenChange={(open) => !open && setActiveInspectorRule(null)}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-8 rounded-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:p-8" size="lg">
           {activeInspectorRule && (
             <div className="space-y-6">
               {/* Header Title & Badges */}
@@ -1179,20 +1069,20 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                   </span>
                 </div>
 
-                <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">
+                <DialogTitle>
                   {activeInspectorRule.name}
                 </DialogTitle>
-                <DialogDescription className="text-sm text-muted-foreground mt-1">
+                <DialogDescription className="mt-1">
                   Canonical Solver Constraint & Compliance Specification
                 </DialogDescription>
               </div>
 
               {/* Mathematical Constraint Box */}
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
                   Mathematical Constraint Expression
                 </span>
-                <pre className="font-mono text-sm sm:text-[14.5px] font-bold text-foreground bg-background/80 p-3 rounded-lg border border-border/60 overflow-x-auto whitespace-pre-wrap">
+                <pre className="font-mono text-[13px] sm:text-[14.5px] font-bold text-foreground bg-background/80 p-3 rounded-lg border border-border/60 overflow-x-auto whitespace-pre-wrap">
                   {activeInspectorRule.formula}
                 </pre>
               </div>
@@ -1200,7 +1090,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
               {/* Technical Definition & Evaluation */}
               <div className="space-y-4 text-[14px]">
                 <div className="space-y-1">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     Operational Definition
                   </h4>
                   <p className="text-foreground/90 leading-relaxed font-normal">
@@ -1209,7 +1099,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     Solver Evaluation Procedure
                   </h4>
                   <p className="text-foreground/90 leading-relaxed font-normal">
@@ -1221,7 +1111,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
               {/* Technical Parameters Matrix */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-border/70 dark:border-white/10 bg-muted/20 p-4 text-[13px]">
                 <div>
-                  <span className="text-xs font-semibold text-muted-foreground block">
+                  <span className="text-[11px] font-semibold text-muted-foreground block">
                     Evaluation Threshold
                   </span>
                   <span className="font-semibold text-foreground font-mono">
@@ -1230,7 +1120,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                 </div>
 
                 <div>
-                  <span className="text-xs font-semibold text-muted-foreground block">
+                  <span className="text-[11px] font-semibold text-muted-foreground block">
                     Temporal Window
                   </span>
                   <span className="font-semibold text-foreground">
@@ -1239,7 +1129,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                 </div>
 
                 <div>
-                  <span className="text-xs font-semibold text-muted-foreground block">
+                  <span className="text-[11px] font-semibold text-muted-foreground block">
                     Legal / EBA Authority
                   </span>
                   <span className="font-semibold text-foreground">
@@ -1248,7 +1138,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                 </div>
 
                 <div>
-                  <span className="text-xs font-semibold text-muted-foreground block">
+                  <span className="text-[11px] font-semibold text-muted-foreground block">
                     Employee Scope
                   </span>
                   <span className="font-semibold text-foreground">
@@ -1257,7 +1147,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                 </div>
 
                 <div>
-                  <span className="text-xs font-semibold text-muted-foreground block">
+                  <span className="text-[11px] font-semibold text-muted-foreground block">
                     CP-SAT Solver Mapping
                   </span>
                   <span className="font-mono font-bold text-sky-600 dark:text-sky-400">
@@ -1266,7 +1156,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
                 </div>
 
                 <div>
-                  <span className="text-xs font-semibold text-muted-foreground block">
+                  <span className="text-[11px] font-semibold text-muted-foreground block">
                     Soft Constraint ID
                   </span>
                   <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
@@ -1277,14 +1167,14 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
 
               {/* Input Variables */}
               <div className="space-y-1.5">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   Evaluation Inputs & Variables
                 </h4>
                 <div className="flex flex-wrap gap-2">
                   {activeInspectorRule.inputs.map((inp, idx) => (
                     <code
                       key={idx}
-                      className="font-mono text-xs bg-muted/60 px-2 py-1 rounded border border-border/50 text-foreground"
+                      className="font-mono text-[11px] bg-muted/60 px-2 py-1 rounded border border-border/50 text-foreground"
                     >
                       {inp}
                     </code>
@@ -1296,7 +1186,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
               {activeInspectorRule.knownGap && (
                 <div className="rounded-xl bg-amber-500/10 border border-amber-500/25 p-3.5 flex items-start gap-2.5">
                   <Info className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="space-y-1 text-xs text-amber-800 dark:text-amber-200">
+                  <div className="space-y-1 text-[11px] text-amber-800 dark:text-amber-200">
                     <span className="font-bold block">Recorded Implementation Nuance:</span>
                     <p className="leading-relaxed">{activeInspectorRule.knownGap}</p>
                   </div>
@@ -1304,7 +1194,7 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
               )}
 
               {/* Solver Source Reference */}
-              <div className="pt-3 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground font-mono">
+              <div className="pt-3 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground font-mono">
                 <span>Source: {activeInspectorRule.solverRef}</span>
                 <span>Engine Layer: {activeInspectorRule.layer}</span>
               </div>
@@ -1316,4 +1206,3 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
   );
 };
 
-export default V8RulesTable;

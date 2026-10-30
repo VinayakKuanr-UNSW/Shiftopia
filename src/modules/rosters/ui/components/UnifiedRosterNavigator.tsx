@@ -25,88 +25,30 @@
  */
 
 import React, { startTransition, useMemo } from 'react';
-import {
-  format,
-  addDays, subDays,
-  addMonths, subMonths,
-  startOfMonth, endOfMonth,
-  isWithinInterval, startOfDay,
-} from 'date-fns';
+import { startOfMonth, isWithinInterval, startOfDay } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { toolbar } from '@/modules/core/ui/components/Toolbar';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 import { DatePicker } from '@/modules/core/ui/calendar';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
+import {
+  computeRange,
+  navigateDate,
+  formatRangeLabel,
+  type ViewType,
+  type DateRange,
+} from '@/modules/rosters/domain/view-range';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export type ViewType = 'day' | '3day' | 'week' | 'month';
-
-export interface DateRange {
-  start: Date;
-  end: Date;
-}
-
-// ─── Pure utilities ───────────────────────────────────────────────────────────
-
-/**
- * Compute the inclusive date range for an anchor date + view type.
- * Week starts on Monday. Month range = full calendar month.
- */
-export function computeRange(date: Date, viewType: ViewType): DateRange {
-  switch (viewType) {
-    case 'day':
-      return { start: date, end: date };
-    case '3day':
-      return { start: date, end: addDays(date, 2) };
-    case 'week':
-      return { start: startOfWeekAU(date), end: endOfWeekAU(date) };
-    case 'month':
-      return { start: startOfMonth(date), end: endOfMonth(date) };
-  }
-}
-
-/**
- * Move an anchor date by one period in the given direction.
- * dir = 1 → forward, dir = -1 → backward.
- */
-export function navigateDate(date: Date, viewType: ViewType, dir: -1 | 1): Date {
-  switch (viewType) {
-    case 'day':   return dir === 1 ? addDays(date, 1)    : subDays(date, 1);
-    case '3day':  return dir === 1 ? addDays(date, 3)    : subDays(date, 3);
-    case 'week':  return dir === 1 ? addDays(date, 7)    : subDays(date, 7);
-    case 'month': return dir === 1 ? addMonths(date, 1)  : subMonths(date, 1);
-  }
-}
-
-/**
- * Human-readable range label.
- *
- *   day   → Mon, 21 Apr
- *   3day  → 21 Apr – 23 Apr
- *   week  → 21 – 27 Apr  (or  28 Apr – 4 May  across month boundary)
- *   month → April 2026
- */
-export function formatRangeLabel(range: DateRange, viewType: ViewType): string {
-  const { start, end } = range;
-  switch (viewType) {
-    case 'day':
-      return format(start, 'EEE, d MMM');
-    case '3day':
-      return `${format(start, 'd MMM')} – ${format(end, 'd MMM')}`;
-    case 'week':
-      return start.getMonth() === end.getMonth()
-        ? `${format(start, 'd')} – ${format(end, 'd MMM')}`
-        : `${format(start, 'd MMM')} – ${format(end, 'd MMM')}`;
-    case 'month':
-      return format(start, 'MMMM yyyy');
-  }
-}
+// The pure range utilities live in domain/view-range so the Publish plan can
+// share them; re-exported here so existing imports keep working.
+export { computeRange, navigateDate, formatRangeLabel };
+export type { ViewType, DateRange };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export interface UnifiedRosterNavigatorProps {
+interface UnifiedRosterNavigatorProps {
   date: Date;
   viewType: ViewType;
   /**
@@ -204,6 +146,14 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
     [range.start, range.end],
   );
 
+  const isTodayActive = useMemo(() => {
+    const today = new Date();
+    return isWithinInterval(startOfDay(today), {
+      start: startOfDay(range.start),
+      end: startOfDay(range.end),
+    });
+  }, [range.start, range.end]);
+
   const picker = (
     <DatePicker
       value={date}
@@ -223,9 +173,9 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         type="button"
         variant="ghost"
         aria-label={`Change date. Currently showing ${label}`}
-        className="h-8 gap-2 whitespace-nowrap px-2 font-mono text-xs font-bold text-foreground"
+        className={toolbar.stepperLabel}
       >
-        <CalendarIcon className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+        <CalendarIcon className="h-3.5 w-3.5 text-slate-700 dark:text-muted-foreground opacity-90" aria-hidden="true" />
         {label}
       </Button>
     </DatePicker>
@@ -233,7 +183,27 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
 
   const handlePrev  = () => fire(navigateDate(date, viewType, -1));
   const handleNext  = () => fire(navigateDate(date, viewType,  1));
-  const handleToday = () => fire(new Date());
+  const handleToday = () => {
+    fire(new Date());
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const todayEls = document.querySelectorAll('[data-today="true"]');
+        if (todayEls.length === 0) return;
+        todayEls.forEach((el) => {
+          const scrollParent = el.closest('.overflow-auto') || el.closest('[data-scroll-container]');
+          if (scrollParent) {
+            const parentRect = scrollParent.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            const currentScrollLeft = scrollParent.scrollLeft;
+            const targetScrollLeft = currentScrollLeft + (elRect.left - parentRect.left) - (parentRect.width / 2) + (elRect.width / 2);
+            scrollParent.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+          } else {
+            el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }
+        });
+      }, 50);
+    });
+  };
 
   // Disable arrows at bounds
   const prevDisabled = useMemo(() => {
@@ -249,11 +219,13 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
   // ── Full variant (desktop manager bar) ─────────────────────────────────────
   if (variant === 'full') {
     return (
-      <div className={cn('flex items-center gap-4', className)}>
+      // Wraps on a phone: the mode pill, TODAY and the stepper are ~470px
+      // side by side, wider than a 390px screen.
+      <div className={cn('flex flex-wrap items-center justify-center gap-2 md:flex-nowrap md:gap-3', className)}>
         {/* View type — ToggleGroup. The whole pill box goes, not just the
             control inside it, or a single-view page carries an empty one. */}
         {showSwitcher && (
-        <div className="flex-shrink-0 flex items-center bg-slate-100/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm">
+        <div className={toolbar.control}>
           <ToggleGroup
             type="single"
             value={viewType}
@@ -264,7 +236,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
               <ToggleGroupItem
                 key={v.value}
                 value={v.value}
-                className="px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all h-8 min-w-[36px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 border-none shadow-none"
+                className={cn(toolbar.controlItem, toolbar.modeOff, toolbar.modeOnByState)}
               >
                 {v.label}
               </ToggleGroupItem>
@@ -273,39 +245,47 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         </div>
         )}
 
-        {/* Date navigation */}
-        <div className="flex-shrink-0 flex items-center gap-1 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
-          <button
-            onClick={handlePrev}
-            disabled={prevDisabled}
-            aria-label="Previous date period"
-            className="h-8 w-8 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg transition-all text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </button>
+        {/* Date navigation cluster: Today + Stepper/Picker */}
+        <div className="flex-shrink-0 flex items-center gap-2">
+          {showToday && (
+            <div className={toolbar.control}>
+              <button
+                type="button"
+                onClick={handleToday}
+                aria-label="Snap to today"
+                className={cn(
+                  toolbar.controlItem,
+                  'active:scale-95 cursor-pointer',
+                  isTodayActive ? toolbar.modeOn : toolbar.modeOff,
+                )}
+              >
+                Today
+              </button>
+            </div>
+          )}
 
-          {picker}
+          <div className={toolbar.stepper}>
+            <button
+              onClick={handlePrev}
+              disabled={prevDisabled}
+              aria-label="Previous date period"
+              className={toolbar.stepperButton}
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
 
-          <button
-            onClick={handleNext}
-            disabled={nextDisabled}
-            aria-label="Next date period"
-            className="h-8 w-8 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg transition-all text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </button>
+            {picker}
+
+            <button
+              onClick={handleNext}
+              disabled={nextDisabled}
+              aria-label="Next date period"
+              className={toolbar.stepperButton}
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-
-        {showToday && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleToday}
-            className="h-8 px-3 text-xs font-bold rounded-lg"
-          >
-            Today
-          </Button>
-        )}
       </div>
     );
   }
@@ -321,7 +301,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
             key={opt.value}
             onClick={() => onViewTypeChange(opt.value)}
             className={cn(
-              'px-3 py-1 rounded-md text-xs font-black transition-all',
+              'px-3 py-1 rounded-md text-[11px] font-black transition-all',
               viewType === opt.value
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -349,7 +329,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         {showPicker ? (
           picker
         ) : (
-          <span className="text-xs font-bold text-foreground font-mono whitespace-nowrap min-w-[130px] text-center">
+          <span className="text-[11px] font-bold text-foreground whitespace-nowrap min-w-[130px] text-center">
             {label}
           </span>
         )}
@@ -366,17 +346,21 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
       </div>
 
       {showToday && (
-        <Button
-          variant="outline"
-          size="sm"
+        <button
+          type="button"
           onClick={handleToday}
-          className="h-7 px-2 text-xs font-bold rounded-lg flex-shrink-0 hidden sm:flex"
+          aria-label="Snap to today"
+          className={cn(
+            'px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all h-7 flex-shrink-0 cursor-pointer',
+            isTodayActive
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/30',
+          )}
         >
           Today
-        </Button>
+        </button>
       )}
     </div>
   );
 };
 
-export default UnifiedRosterNavigator;

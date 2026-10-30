@@ -31,23 +31,21 @@ import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/ros
 import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOpResult } from '@/modules/rosters/domain/shift-ops.contract';
-import { formatInTimezone, isPastInTimezone, parseZonedDateTime, todayISO } from '@/modules/core/lib/date.utils';
+import { formatInTimezone, parseZonedDateTime, todayISO } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
-import { calculateShiftLength, defaultShiftLevel, isDateInPast, isShiftStarted } from '../utils';
+import { calculateShiftLength, defaultShiftLevel, isDateInPast, isShiftStarted, newShiftStartRefusal } from '../utils';
 import { formSchema, FormValues, EnhancedAddShiftModalProps, ShiftContext } from '../types';
 import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
 import { useComplianceRunner } from './useComplianceRunner';
-import { runV8Orchestrator } from '@/modules/compliance/v8';
-import { buildAssignInput, buildSkeletonInput } from '@/modules/planning/unified/compliance/input-builder';
-import type { V8OrchestratorInput, V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
-import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG } from '@/modules/compliance/shape';
+import type { V8OrchestratorInput } from '@/modules/compliance/v8/orchestrator/types';
+import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG, mealBreakWindow } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { initialTargetEmploymentType } from '@/modules/core/model/employment.types';
+import { daysFromTemplateDay } from '../components/TemplateDaySelect';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
-import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { getAvailabilityView } from '@/modules/availability/api/availability-view.api';
 
@@ -106,7 +104,8 @@ export function useShiftFormOrchestrator({
         resolver: zodResolver(formSchema),
         defaultValues: {
             paid_break_minutes: undefined,
-            unpaid_break_minutes: undefined,
+            break_start: undefined,
+            break_end: undefined,
             timezone: SYDNEY_TZ,
             assigned_employee_id: safeContext.employeeId || null,
             required_skills: [],
@@ -133,7 +132,8 @@ export function useShiftFormOrchestrator({
     // ── Watchers ─────────────────────────────────────────────────────────────
     const watchStart = form.watch('start_time');
     const watchEnd = form.watch('end_time');
-    const watchUnpaidBreak = form.watch('unpaid_break_minutes');
+    const watchBreakStart = form.watch('break_start');
+    const watchBreakEnd = form.watch('break_end');
     const watchPaidBreak = form.watch('paid_break_minutes');
     const watchV8RoleId = form.watch('role_id');
     const watchDayOfWeek = form.watch('day_of_week');
@@ -267,10 +267,14 @@ export function useShiftFormOrchestrator({
         [watchStart, watchEnd],
     );
 
-    const netLength = useMemo(() => {
-        const unpaid = watchUnpaidBreak || 0;
-        return Math.max(0, shiftLength - unpaid / 60);
-    }, [shiftLength, watchUnpaidBreak]);
+    // The unpaid minutes are DERIVED, never typed: the meal-break window's
+    // length, or nothing where Schedule 3 makes the meal break paid (security).
+    // A typed total could disagree with the window it is meant to measure.
+    const isSecurityShift = isSecurityRoleName(roles.find(r => r.id === watchV8RoleId)?.name);
+    const mealWindow = mealBreakWindow(watchStart, watchBreakStart, watchBreakEnd);
+    const unpaidBreak = isSecurityShift || !mealWindow || mealWindow.minutes <= 0 ? 0 : mealWindow.minutes;
+
+    const netLength = Math.max(0, shiftLength - unpaidBreak / 60);
 
     const selectedRemLevel = remunerationLevels.find(r => r.level_number === watchRemLevel);
 
@@ -286,8 +290,10 @@ export function useShiftFormOrchestrator({
         shift_date: watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : todayISO(),
         start_time: watchStart || '',
         end_time:   watchEnd || '',
-        unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
+        unpaid_break_minutes: unpaidBreak,
         paid_break_minutes:   Number(watchPaidBreak) || 0,
+        break_start: watchBreakStart ?? null,
+        break_end:   watchBreakEnd ?? null,
         is_training: watchIsTraining || false,
         target_employment_type: watchTargetEmploymentType || 'Casual',
         // The second employment axis. Without it the layer cannot tell plain
@@ -295,14 +301,12 @@ export function useShiftFormOrchestrator({
         // training and Sunday concessions that only FPT and casual are owed.
         target_requires_flexible: watchTargetRequiresFlexible ?? false,
         // EBA Schedule 3. Security meal breaks are PAID (§3.2(a), §5.3(a),(c)),
-        // so a compliant security shift carries 30m in `paid_break_minutes` and
-        // nothing in `unpaid_break_minutes`. Read without this flag that looks
-        // like a shift with no meal break at all, and the form refuses to save a
-        // lawful roster. The role is the only signal the schema carries for it.
-        is_security: isSecurityRoleName(roles.find(r => r.id === watchV8RoleId)?.name),
+        // so a compliant security shift has its window and deducts nothing.
+        // The role is the only signal the schema carries for it.
+        is_security: isSecurityShift,
     }), [
-        watchShiftDate, watchStart, watchEnd,
-        watchUnpaidBreak, watchPaidBreak, watchIsTraining,
+        watchShiftDate, watchStart, watchEnd, watchBreakStart, watchBreakEnd, isSecurityShift,
+        unpaidBreak, watchPaidBreak, watchIsTraining,
         watchTargetEmploymentType, watchTargetRequiresFlexible,
         watchV8RoleId, roles,
     ]);
@@ -332,13 +336,6 @@ export function useShiftFormOrchestrator({
 
     // Both gates now read the same source. Times must be present before a shape
     // verdict means anything — an empty form is "incomplete", not "invalid".
-    const isEvaluable = shape.status !== 'INCOMPLETE';
-    const isMinLengthValid = isEvaluable && !shape.hits.some(
-        h => h.rule_id === 'SHAPE_MIN_ENGAGEMENT'
-          || h.rule_id === 'SHAPE_MIN_ENGAGEMENT_PH'
-          || h.rule_id === 'SHAPE_FT_MIN_DAY',
-    );
-    const isNetLengthValid = isEvaluable && shape.passed;
 
     // ── Read-only checks ─────────────────────────────────────────────────────
     const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
@@ -390,8 +387,6 @@ export function useShiftFormOrchestrator({
     const derivedRosterId = selectedRosterId || safeContext.rosterId || (editMode ? existingShift?.roster_id : null);
     const hasRoster = !!derivedRosterId;
 
-    const selectedRoster = useMemo(() => rosters.find(r => r.id === derivedRosterId), [rosters, derivedRosterId]);
-    const isRosterActive = isTemplateMode || selectedRoster?.status === 'published' || selectedRoster?.status === 'draft';
 
     const isContextInherited = isGridLaunch || isEditModeSource;
 
@@ -446,7 +441,7 @@ export function useShiftFormOrchestrator({
         watchStart, watchEnd,
         watchShiftDate?.toISOString(),
         watchV8RoleId, watchEmployeeId,
-        watchUnpaidBreak, watchPaidBreak,
+        unpaidBreak, watchPaidBreak,
         watchIsTraining,
         // stringify to avoid object identity issues
         JSON.stringify(watchSkills),
@@ -482,6 +477,16 @@ export function useShiftFormOrchestrator({
         if (!isOpen) return;
 
         if (editMode && existingShift) {
+            // Roster shifts arrive snake_cased, TEMPLATE shifts camelCased --
+            // the same split that blanked target_employment_type on edit.
+            // We check !== undefined explicitly because null is the legitimate
+            // "every day" choice, and `null ?? undefined` would turn null into undefined.
+            const existingDay: number | null | undefined =
+                existingShift.day_of_week !== undefined
+                    ? existingShift.day_of_week
+                    : existingShift.dayOfWeek !== undefined
+                        ? existingShift.dayOfWeek
+                        : undefined;
             form.reset({
                 group_type: (existingShift.group_type || existingShift.groupName?.toLowerCase().replace(/\s+/g, '_') || safeContext.group_type || safeContext.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'] || undefined,
                 sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || safeContext.sub_group_name || safeContext.subGroupName || '',
@@ -491,7 +496,10 @@ export function useShiftFormOrchestrator({
                 start_time: existingShift.start_time || existingShift.startTime || '',
                 end_time: existingShift.end_time || existingShift.endTime || '',
                 paid_break_minutes: existingShift.paid_break_minutes ?? existingShift.paidBreakDuration ?? undefined,
-                unpaid_break_minutes: existingShift.unpaid_break_minutes ?? existingShift.unpaidBreakDuration ?? undefined,
+                // Roster rows carry `HH:mm:ss`; the time input wants `HH:mm`.
+                // Template rows arrive camelCased, like everything else here.
+                break_start: (existingShift.break_start ?? existingShift.breakStart)?.slice(0, 5) || undefined,
+                break_end: (existingShift.break_end ?? existingShift.breakEnd)?.slice(0, 5) || undefined,
                 timezone: existingShift.timezone || SYDNEY_TZ,
                 assigned_employee_id: existingShift.assigned_employee_id || existingShift.assignedEmployeeId || null,
                 required_skills: (existingShift.required_skills || existingShift.skills || []).map((s: any) => typeof s === 'object' && s ? s.id : s),
@@ -515,16 +523,8 @@ export function useShiftFormOrchestrator({
                     existingShift.target_requires_flexible
                     ?? existingShift.targetRequiresFlexible
                     ?? false,
-                // Roster shifts arrive snake_cased, TEMPLATE shifts camelCased --
-                // the same split that blanked target_employment_type on edit.
-                // `?? undefined` rather than `?? null`: a stored null means the
-                // author chose "every day", but a row that predates the control
-                // has no choice recorded, and both read back as null here. The
-                // template branch below re-supplies null explicitly on save.
-                day_of_week:
-                    existingShift.day_of_week
-                    ?? existingShift.dayOfWeek
-                    ?? undefined,
+                day_of_week: existingDay,
+                days_of_week: daysFromTemplateDay(existingDay),
             });
             if (!selectedRosterId && existingShift.roster_id) {
                 setSelectedRosterId(existingShift.roster_id);
@@ -539,7 +539,8 @@ export function useShiftFormOrchestrator({
                 start_time: context?.eventStartTime || '',
                 end_time: context?.eventEndTime || '',
                 paid_break_minutes: undefined,
-                unpaid_break_minutes: undefined,
+                break_start: undefined,
+                break_end: undefined,
                 timezone: SYDNEY_TZ,
                 assigned_employee_id: isTemplateMode ? null : (context?.employeeId || null),
                 required_skills: [],
@@ -564,7 +565,7 @@ export function useShiftFormOrchestrator({
             shift_date: isTemplateMode
                 ? formatInTimezone(new Date(), watchTimezone, 'yyyy-MM-dd')
                 : (watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : formatInTimezone(new Date(), watchTimezone, 'yyyy-MM-dd')),
-            unpaid_break_minutes: watchUnpaidBreak || 0,
+            unpaid_break_minutes: unpaidBreak || 0,
             paid_break_minutes: watchPaidBreak || 0,
         },
         existing_shifts: employeeExistingShifts,
@@ -578,13 +579,11 @@ export function useShiftFormOrchestrator({
         rest_gap_hours: restGapAgreement8h ? 8 : 10,
         // Contract type hydrates split-shift (PT/flexi) + ord-hours rules.
         employee_context: { contract_type: contractType },
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, watchPaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement, restGapAgreement8h, contractType]);
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, unpaidBreak, watchPaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement, restGapAgreement8h, contractType]);
 
     const {
         runChecks,
-        clearResults,
-        isRunning: isComplianceRunning
-    } = useComplianceRunner({
+        clearResults    } = useComplianceRunner({
         buildComplianceInput,
         hardValidation,
         setComplianceResults: setComplianceResultsWithGuard,
@@ -665,7 +664,7 @@ export function useShiftFormOrchestrator({
                     required_qualifications: [],
                     is_training: watchIsTraining || false,
                     break_minutes:     0,
-                    unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
+                    unpaid_break_minutes: Number(unpaidBreak) || 0,
                     paid_break_minutes: Number(watchPaidBreak) || 0,
                 }],
                 remove_shifts: existingShift?.id ? [existingShift.id] : [],
@@ -676,7 +675,7 @@ export function useShiftFormOrchestrator({
             // config: min_shift_hours is not a V8Config field; omit to avoid type error
             config: {},
         };
-    }, [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchV8RoleId, watchUnpaidBreak, watchPaidBreak, employeeExistingShifts, existingShift, resolvedContext, minShiftHours]);
+    }, [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchV8RoleId, unpaidBreak, watchPaidBreak, employeeExistingShifts, existingShift, resolvedContext, minShiftHours]);
 
     const compliancePanel = useCompliancePanel({
         buildInputs: useCallback(async () => {
@@ -710,7 +709,7 @@ export function useShiftFormOrchestrator({
                             role_id: watchV8RoleId || 'unassigned',
                             is_training: watchIsTraining || false,
                             break_minutes: 0,
-                            unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
+                            unpaid_break_minutes: Number(unpaidBreak) || 0,
                             paid_break_minutes: Number(watchPaidBreak) || 0,
                             required_qualifications: [],
                         }],
@@ -753,7 +752,7 @@ export function useShiftFormOrchestrator({
             }
 
             return [{ ...input, employee_context: employeeCtx, availability_data: availabilityData }] as [V8OrchestratorInput];
-        }, [buildV2ComplianceInput, watchStart, watchEnd, watchShiftDate, watchV8RoleId, watchUnpaidBreak, watchPaidBreak, existingShift?.id, minShiftHours, isLoadingShifts]),
+        }, [buildV2ComplianceInput, watchStart, watchEnd, watchShiftDate, watchV8RoleId, unpaidBreak, watchPaidBreak, existingShift?.id, minShiftHours, isLoadingShifts]),
         stage: 'DRAFT',
     });
 
@@ -794,6 +793,12 @@ export function useShiftFormOrchestrator({
         // Keyed on the shape verdict, not on the fields being non-empty, so a
         // half-typed time counts as "not set yet" rather than as a real shift.
         if (shape.status === 'INCOMPLETE')        return { ok: false, reason: 'Set a start and end time' };
+        // A new shift may not start in the past, earlier today included —
+        // trg_shift_not_started refuses it, so say so before the round trip.
+        const startRefusal = newShiftStartRefusal({
+            editMode, isTemplateMode, date: watchShiftDate, startTime: watchStart, timezone: watchTimezone,
+        });
+        if (startRefusal) return { ok: false, reason: startRefusal };
         if (!hasDepartment)                       return { ok: false, reason: 'Department not resolved — check the context header' };
 
         if (!hardValidation.passed) {
@@ -847,7 +852,7 @@ export function useShiftFormOrchestrator({
         }
         return { ok: true, reason: null };
     }, [
-        isReadOnly, isPublished, watchV8RoleId, watchShiftDate, watchStart, watchEnd,
+        isReadOnly, isPublished, watchTimezone, watchV8RoleId, watchShiftDate, watchStart, watchEnd,
         hasDepartment, isTemplateMode, watchDayOfWeek, watchEmployeeId, hardValidation,
         shape.status, shape.blocking, shapeBlockers, compliancePanel.status, compliancePanel.canProceed,
         compliancePanel.result, editMode, existingShift,
@@ -860,93 +865,8 @@ export function useShiftFormOrchestrator({
     // v2-powered "Run All" — replaces v1 rule runners in ComplianceTabContent.
     // Maps v2 V8Hit[] results back to the v1 ComplianceResult format so
     // existing rule card visualizations continue to work unchanged.
-    const runV2Compliance = useCallback(async (): Promise<void> => {
-        const v2Input = buildV2ComplianceInput();
-        if (!v2Input) return;
-
-        const v2Result = runV8Orchestrator(v2Input, { stage: 'DRAFT' }) as V8OrchestratorResult;
-        const hits = v2Result.hits;
-        const hitMap = new Map(hits.map(h => [h.rule_id.toUpperCase(), h]));
-
-        // Map v2 rule IDs → v1 rule IDs used by ComplianceTabContent cards
-        // R02 removed (duration validated in Step 1; training exemption handled there)
-        // R09 removed (R04 is the authoritative work-pattern limit)
-        // R12 removed (merged into R11 — single "qualifications" rule)
-        const V2_TO_V1: Record<string, string> = {
-            'R01_NO_OVERLAP':          'NO_OVERLAP',
-            'R03_MAX_DAILY_HOURS':     'MAX_DAILY_HOURS',
-            'R04_MAX_WORKING_DAYS':    'WORKING_DAYS_CAP',
-            'R05_STUDENT_VISA':        'STUDENT_VISA_48H',
-            'R06_ORD_HOURS_AVG':       'AVG_FOUR_WEEK_CYCLE',
-            'R07_REST_GAP':            'MIN_REST_GAP',
-            'R10_ROLE_CONTRACT_MATCH': 'ROLE_CONTRACT_MATCH',
-            'R11_QUALIFICATIONS':      'QUALIFICATION_MATCH',
-        };
-
-        const delta = v2Result.delta_explanation;
-
-        // Build a full v1 results map — one entry per mapped v1 rule ID.
-        const newResults: Record<string, any> = {};
-
-        Object.entries(V2_TO_V1).forEach(([v2Id, v1Id]) => {
-            const hit = hitMap.get(v2Id);
-
-            if (!hit) {
-                // Rule passed — mark as pass with a minimal valid calculation
-                newResults[v1Id] = {
-                    rule_id: v1Id,
-                    rule_name: v1Id.replace(/_/g, ' '),
-                    status: 'pass',
-                    summary: 'Check passed',
-                    details: '',
-                    calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
-                    blocking: false,
-                };
-            } else {
-                // Rule fired — map severity to v1 status
-                const isBlocking = hit.status === 'BLOCKING';
-
-                // Build calculation object enriched for specific rule visualizations
-                const calculation: Record<string, unknown> = {
-                    existing_hours: delta?.before?.peak_daily_hours ?? 0,
-                    candidate_hours: 0,
-                    total_hours: delta?.after?.peak_daily_hours ?? 0,
-                    limit: 12,
-                };
-
-                if (v1Id === 'WORKING_DAYS_CAP' && delta) {
-                    calculation.days_worked = delta.after.working_days_28d;
-                    calculation.limit = 20;
-                    calculation.period_days = 28;
-                } else if (v1Id === 'AVG_FOUR_WEEK_CYCLE' && delta) {
-                    calculation.total_hours = delta.after.total_hours_28d;
-                    calculation.limit = 38 * 4;
-                    calculation.average_weekly_hours = delta.after.total_hours_28d / 4;
-                }
-
-                newResults[v1Id] = {
-                    rule_id: v1Id,
-                    rule_name: v1Id.replace(/_/g, ' '),
-                    status: isBlocking ? 'fail' : 'warning',
-                    summary: hit.summary,
-                    details: hit.details || hit.summary,
-                    calculation,
-                    blocking: isBlocking,
-                };
-            }
-        });
-
-        // Commit all results atomically
-        setComplianceResultsWithGuard(newResults);
-        setComplianceHasRun(true);
-        setComplianceNeedsRerun(false);
-    }, [buildV2ComplianceInput, setComplianceResultsWithGuard, setComplianceHasRun, setComplianceNeedsRerun]);
 
     // ── Handlers ─────────────────────────────────────────────────────────────
-    const handleComplianceComplete = useCallback(() => {
-        setComplianceHasRun(true);
-        setComplianceNeedsRerun(false);
-    }, []);
 
     const handleCancel = useCallback(() => {
         if (form.formState.isDirty) {
@@ -1024,11 +944,12 @@ export function useShiftFormOrchestrator({
         // update path still sends it so the shift keeps its container.
         const rosterId = selectedRosterId || resolvedContext.rosterId || existingShift?.roster_id;
 
-        if (!isTemplateMode && values.shift_date && !editMode) {
-            if (isPastInTimezone(values.shift_date, watchTimezone)) {
-                toast({ title: 'Invalid Date', description: 'Cannot create shifts on past dates.', variant: 'destructive' });
-                return;
-            }
+        const startRefusal = newShiftStartRefusal({
+            editMode, isTemplateMode, date: values.shift_date, startTime: values.start_time, timezone: watchTimezone,
+        });
+        if (startRefusal) {
+            toast({ title: 'Invalid Start', description: startRefusal, variant: 'destructive' });
+            return;
         }
 
         const onMutationSuccess = () => {
@@ -1060,9 +981,8 @@ export function useShiftFormOrchestrator({
             if (isTemplateMode && onShiftCreated) {
                 const role = roles.find(r => r.id === values.role_id);
                 const remLevel = remunerationLevels.find(r => r.level_number === values.remuneration_level);
-                const assignedEmployee = employees.find(e => e.id === values.assigned_employee_id);
 
-                onShiftCreated({
+                const templateShift = {
                     name: role?.name || 'Shift',
                     role_id: values.role_id,
                     roleId: values.role_id,
@@ -1077,15 +997,16 @@ export function useShiftFormOrchestrator({
                     endTime: values.end_time,
                     paid_break_minutes: values.paid_break_minutes || 0,
                     paidBreakDuration: values.paid_break_minutes || 0,
-                    unpaid_break_minutes: values.unpaid_break_minutes || 0,
-                    unpaidBreakDuration: values.unpaid_break_minutes || 0,
+                    unpaid_break_minutes: unpaidBreak,
+                    unpaidBreakDuration: unpaidBreak,
+                    break_start: values.break_start || null,
+                    breakStart: values.break_start || null,
+                    break_end: values.break_end || null,
+                    breakEnd: values.break_end || null,
                     skills: values.required_skills || [],
                     licenses: values.required_licenses || [],
                     notes: values.notes,
                     netLength,
-                    assigned_employee_id: values.assigned_employee_id || null,
-                    assignedEmployeeId: values.assigned_employee_id || null,
-                    assignedEmployeeName: assignedEmployee?.profiles?.full_name || assignedEmployee?.full_name || null,
                     // Groups/SubGroups are inherited by TemplateEditor but we pass them for completeness/UI
                     group_type: values.group_type,
                     sub_group_name: values.sub_group_name,
@@ -1112,9 +1033,18 @@ export function useShiftFormOrchestrator({
                     // Both spellings, because TemplateEditor accepts either.
                     day_of_week: values.day_of_week ?? null,
                     dayOfWeek: values.day_of_week ?? null,
-                });
+                };
 
-                toast({ title: 'Shift Added' });
+                // A template row holds ONE weekday, so several picked days save
+                // one shift per day. Editing and "every day" (null) stay one row.
+                const days = !editMode && values.days_of_week && values.days_of_week.length > 1
+                    ? values.days_of_week
+                    : [templateShift.day_of_week];
+                for (const day of days) {
+                    onShiftCreated({ ...templateShift, day_of_week: day, dayOfWeek: day });
+                }
+
+                toast({ title: days.length > 1 ? `${days.length} Shifts Added` : 'Shift Added' });
                 onSuccess?.();
                 form.reset();
                 onClose();
@@ -1134,7 +1064,10 @@ export function useShiftFormOrchestrator({
                     role_id: values.role_id || null,
                     remuneration_level: values.remuneration_level || null,
                     paid_break_minutes: values.paid_break_minutes || 0,
-                    unpaid_break_minutes: values.unpaid_break_minutes || 0,
+                    unpaid_break_minutes: unpaidBreak,
+                    // null, not '', so an edit that removes the break clears it.
+                    break_start: values.break_start || null,
+                    break_end: values.break_end || null,
                     timezone: values.timezone,
                     assigned_employee_id: values.assigned_employee_id || null,
                     required_skills: values.required_skills || [],
@@ -1176,10 +1109,10 @@ export function useShiftFormOrchestrator({
                 const [sh, sm] = values.start_time.split(':').map(Number);
                 const [eh, em] = values.end_time.split(':').map(Number);
                 const startMin = sh * 60 + sm;
-                let endMin = eh * 60 + em;
+                const endMin = eh * 60 + em;
                 const isOvernight = endMin <= startMin;
 
-                let endAtDate = parseZonedDateTime(shiftDateStr, values.end_time, tzone);
+                const endAtDate = parseZonedDateTime(shiftDateStr, values.end_time, tzone);
                 if (isOvernight) {
                     endAtDate.setDate(endAtDate.getDate() + 1);
                 }
@@ -1210,6 +1143,8 @@ export function useShiftFormOrchestrator({
                             // Breaks
                             paid_break_minutes: basePayloadWithUtc.paid_break_minutes,
                             unpaid_break_minutes: basePayloadWithUtc.unpaid_break_minutes,
+                            break_start: basePayloadWithUtc.break_start,
+                            break_end: basePayloadWithUtc.break_end,
                             // References
                             role_id: basePayloadWithUtc.role_id || '',
                             sub_department_id: basePayloadWithUtc.sub_department_id || '',

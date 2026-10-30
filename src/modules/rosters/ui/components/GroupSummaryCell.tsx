@@ -2,8 +2,10 @@ import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { RosterSummaryCellDTO } from '../../api/rosterSummary.queries';
-import { AlertCircle, Maximize2, Plus } from 'lucide-react';
+import { AlertCircle, Maximize2 } from 'lucide-react';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
+import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { RosterCellAddButton } from './RosterCellAddButton';
 
 interface GroupSummaryCellProps {
   date: Date;
@@ -11,6 +13,7 @@ interface GroupSummaryCellProps {
   summary: RosterSummaryCellDTO | undefined;
   accent: string; // 'blue' | 'emerald' | 'red' | 'gray' | 'amber' | 'cyan'
   onClick: () => void;
+  canEdit?: boolean;
   isBulkMode?: boolean;
   selectionState?: 'all' | 'some' | 'none';
   selectableCount?: number;
@@ -27,6 +30,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   summary,
   accent,
   onClick,
+  canEdit = true,
   isBulkMode = false,
   selectionState = 'none',
   selectableCount = 0,
@@ -34,12 +38,12 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   isLoading = false,
 }) => {
   const colorMap: Record<string, { bg: string; text: string; bar: string; border: string; hover: string }> = {
-    blue: { bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-400', bar: 'bg-blue-400', border: 'border-blue-500/20', hover: 'hover:bg-blue-500/15 hover:border-blue-500/30' },
-    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', bar: 'bg-emerald-400', border: 'border-emerald-500/20', hover: 'hover:bg-emerald-500/15 hover:border-emerald-500/30' },
-    red: { bg: 'bg-red-500/10', text: 'text-red-700 dark:text-red-400', bar: 'bg-red-400', border: 'border-red-500/20', hover: 'hover:bg-red-500/15 hover:border-red-500/30' },
-    amber: { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', bar: 'bg-amber-400', border: 'border-amber-500/20', hover: 'hover:bg-amber-500/15 hover:border-amber-500/30' },
-    cyan: { bg: 'bg-cyan-500/10', text: 'text-cyan-700 dark:text-cyan-400', bar: 'bg-cyan-400', border: 'border-cyan-500/20', hover: 'hover:bg-cyan-500/15 hover:border-cyan-500/30' },
-    gray: { bg: 'bg-slate-500/10', text: 'text-slate-700 dark:text-slate-400', bar: 'bg-slate-400', border: 'border-slate-500/20', hover: 'hover:bg-slate-500/15 hover:border-slate-500/30' },
+    blue: { bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-400', bar: 'bg-blue-500', border: 'border-blue-400/40 dark:border-blue-500/20', hover: 'hover:bg-blue-500/15 hover:border-blue-500/40' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-400', bar: 'bg-emerald-500', border: 'border-emerald-400/40 dark:border-emerald-500/20', hover: 'hover:bg-emerald-500/15 hover:border-emerald-500/40' },
+    red: { bg: 'bg-red-500/10', text: 'text-red-700 dark:text-red-400', bar: 'bg-red-500', border: 'border-red-400/40 dark:border-red-500/20', hover: 'hover:bg-red-500/15 hover:border-red-500/40' },
+    amber: { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', bar: 'bg-amber-500', border: 'border-amber-400/40 dark:border-amber-500/20', hover: 'hover:bg-amber-500/15 hover:border-amber-500/40' },
+    cyan: { bg: 'bg-cyan-500/10', text: 'text-cyan-700 dark:text-cyan-400', bar: 'bg-cyan-500', border: 'border-cyan-400/40 dark:border-cyan-500/20', hover: 'hover:bg-cyan-500/15 hover:border-cyan-500/40' },
+    gray: { bg: 'bg-slate-500/10', text: 'text-slate-700 dark:text-slate-400', bar: 'bg-slate-500', border: 'border-slate-400/40 dark:border-slate-500/20', hover: 'hover:bg-slate-500/15 hover:border-slate-500/40' },
   };
 
   const colors = colorMap[accent] || colorMap.gray;
@@ -48,27 +52,21 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   // is icons and abbreviations, none of which identifies the group or the date it belongs to.
   const dateLabel = format(date, 'd MMMM yyyy');
 
+  const isPast = isSydneyPast(date);
+
   if (!summary || summary.total_shifts === 0) {
-    const Component = isBulkMode ? 'div' : 'button';
+    if (isBulkMode || isPast || !canEdit) {
+      return <div className="w-full h-full min-h-[60px]" />;
+    }
     return (
-      <Component
-        onClick={isBulkMode ? undefined : onClick}
-        aria-label={`Open ${groupName} roster details for ${dateLabel}: no shifts`}
-        className={cn(
-          "w-full h-[68px] rounded-xl border border-dashed flex flex-col items-center justify-center transition-colors group",
-          holidayName
-            ? "border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 hover:border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-            : "border-border/50 bg-muted/20 hover:bg-muted/40 hover:border-border/80",
-          !isBulkMode && "cursor-pointer"
-        )}
-      >
-        <Plus className={cn(
-          "w-5 h-5 transition-all duration-200",
-          holidayName
-            ? "text-amber-400 group-hover:text-amber-300 group-hover:scale-110"
-            : "text-purple-500/80 group-hover:text-purple-400 group-hover:scale-110"
-        )} />
-      </Component>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <RosterCellAddButton
+          onClick={onClick}
+          hasShifts={false}
+          holidayName={holidayName}
+          title={`Open ${groupName} roster details for ${dateLabel}: no shifts`}
+        />
+      </div>
     );
   }
 
@@ -93,7 +91,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       className={cn(
         "w-full rounded-xl border p-3 flex flex-col gap-2.5 transition-all group relative text-left",
         colors.bg,
-        holidayName ? "border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.15)]" : colors.border,
+        holidayName ? "border-amber-500/40" : colors.border,
         !isBulkMode && colors.hover,
         !isBulkMode && "cursor-pointer",
         isBulkMode && !isLoading && selectableCount > 0 && "cursor-pointer hover:shadow-sm",
@@ -127,7 +125,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
             </div>
           ) : (
             <div className="w-4 h-4 rounded border border-muted/50 bg-muted/20 flex items-center justify-center" title="No selectable shifts in this bucket">
-              <span className="text-[9px] text-muted-foreground">🚫</span>
+              <span className="text-[11px] text-muted-foreground">🚫</span>
             </div>
           )
         ) : (
@@ -140,12 +138,12 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       {/* Row 1: Badges */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-200/80 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-200/80 text-slate-700 dark:bg-slate-800/90 dark:text-slate-200">
             {total_shifts} shift{total_shifts !== 1 ? 's' : ''}
           </span>
           
           {open_shifts > 0 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
               <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-600 dark:text-red-400" />
               {open_shifts} open
             </span>
@@ -156,11 +154,11 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       {/* Row 2: Coverage & Bar */}
       <div className="space-y-1.5 w-full">
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
             COVERAGE
           </span>
           <span className={cn(
-            "text-2xl sm:text-3xl font-black tracking-tight",
+            "text-[20px] sm:text-[24px] font-black tracking-tight",
             coveragePct === 0
               ? "text-red-600 dark:text-red-400"
               : coveragePct < 50
@@ -190,7 +188,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
       </div>
 
       {/* Row 3: Meta */}
-      <div className="flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-300 pt-0.5">
+      <div className="flex items-center justify-between text-[11px] font-medium text-slate-600 dark:text-slate-300 pt-0.5">
         <span>Published {published_shifts}/{total_shifts}</span>
         <span className="font-semibold text-slate-700 dark:text-slate-200">Total {(total_net_minutes / 60).toFixed(1)}h</span>
       </div>
@@ -223,6 +221,7 @@ export const GroupSummaryCell = React.memo(GroupSummaryCellImpl, (prev, next) =>
     prev.groupName === next.groupName &&
     prev.summary === next.summary &&
     prev.accent === next.accent &&
+    prev.canEdit === next.canEdit &&
     prev.isBulkMode === next.isBulkMode &&
     prev.selectionState === next.selectionState &&
     prev.selectableCount === next.selectableCount &&

@@ -36,7 +36,6 @@ import type {
   ProjectionRequest,
   ProjectionResult,
   ProjectionStatsResult,
-  WorkerShiftDTO,
   WorkerInboundMessage,
   WorkerOutboundMessage,
 } from './protocol';
@@ -420,15 +419,23 @@ export class ProjectionWorkerPool {
   private ensureWorkers(): Worker[] {
     if (this.workers.length === 0) {
       for (let i = 0; i < this.poolSize; i++) {
+        // Keep `new URL(` directly after `new Worker(`: Vite only bundles a
+        // worker when its regex sees that exact shape. A comment in between
+        // made production inline the raw .ts as a `data:video/mp2t` URL.
         const worker = new Worker(
-          // @ts-ignore: Vite worker syntax
           new URL('./projection.worker.ts', import.meta.url),
           { type: 'module' },
         );
         worker.onmessage = (event: MessageEvent<WorkerOutboundMessage>) =>
           this.handleWorkerMessage(event, i);
-        worker.onerror = (e) =>
+        worker.onerror = (e) => {
           console.error(`[ProjectionWorkerPool] Worker ${i} error:`, e);
+          // A worker that fails to load never answers, so fail the in-flight
+          // request (once, not per worker) and let the caller recover.
+          const requestId = this.lastSentRequestId;
+          if (!this.pendingPartials.delete(requestId)) return;
+          this.onError?.({ requestId, message: e.message || `Worker ${i} failed to load` });
+        };
         this.workers.push(worker);
       }
     }

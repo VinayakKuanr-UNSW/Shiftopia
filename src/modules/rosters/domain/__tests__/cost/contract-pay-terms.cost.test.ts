@@ -103,7 +103,7 @@ describe('without contract terms: the shift’s own level, never a guess or an o
 
   it('ignores per-shift rate overrides', () => {
     const plain = estimateDetailedCostFromShift(shift({}));
-    const overridden = estimateDetailedCostFromShift(shift({ remuneration_rate: 99, actual_hourly_rate: 99 }));
+    const overridden = estimateDetailedCostFromShift(shift({ remuneration_rate: 99 }));
     expect(overridden.totalCost).toBe(plain.totalCost);
   });
 });
@@ -117,7 +117,7 @@ describe('roster projection pipeline', () => {
     lifecycleStatus: 'Published', isCancelled: false, isLocked: false, isPublished: true, isDraft: false,
     biddingStatus: 'not_on_bidding', tradeRequestedAt: null, tradingStatus: null,
     organizationId: null, departmentId: 'd1', subDepartmentId: null, roleId: null,
-    roleName: 'F&B Team Member', remunerationLevel: 4, remunerationRate: null, actualHourlyRate: null,
+    roleName: 'F&B Team Member', remunerationLevel: 4, remunerationRate: null,
     levelName: null, levelNumber: null, groupType: null, subGroupName: null,
     employeeFirstName: 'T', employeeLastName: 'U', eventIds: [], targetEmploymentType: 'Casual',
     allowances: null, rosterSubgroupId: null, rosterSubgroupName: null, rosterGroupName: null,

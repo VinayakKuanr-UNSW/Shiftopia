@@ -117,26 +117,28 @@ describe('dailyMealBreakRule', () => {
         expect(hits).toHaveLength(1);
     });
 
-    it('reads the PAID allotment for security, whose break is paid', () => {
+    it('reads the meal-break WINDOW for security, whose break is paid', () => {
         resetIdCounter();
-        // Sch 3 §5.3(a). An unpaid break of 0 with a paid 30 satisfies them,
-        // and would not satisfy anyone else.
-        const shifts = [
-            shift('08:00', '11:00', { paid_break_minutes: 30 }),
+        // Sch 3 §5.3(a). Their unpaid minutes are 0; the window is the break.
+        const withWindow = [
+            shift('08:00', '11:00', { break_start: '09:30', break_end: '10:00', paid_break_minutes: 10 }),
             shift('11:00', '14:00'),
         ];
-        expect(dailyMealBreakRule(ctx(shifts, { is_security_role: true }))).toEqual([]);
-        expect(dailyMealBreakRule(ctx(shifts))).toHaveLength(1);
+        expect(dailyMealBreakRule(ctx(withWindow, { is_security_role: true }))).toEqual([]);
+
+        // The rest pauses are not a meal break, however long, even when paid.
+        resetIdCounter();
+        const pausesOnly = [shift('08:00', '11:00', { paid_break_minutes: 30 }), shift('11:00', '14:00')];
+        expect(dailyMealBreakRule(ctx(pausesOnly, { is_security_role: true }))).toHaveLength(1);
     });
 
-    it('caps the pooled paid allotment at the meal-break ceiling', () => {
+    it('credits a security window the caller did not hydrate when the shape gate guarantees one', () => {
         resetIdCounter();
-        // `paid_break_minutes` pools the meal break with cl 37 rest pauses.
-        // 75m on a long security day is 30m meal + 45m pauses, and only the
-        // meal-break part answers cl 36.1 — but 60 is still ≥ 30, so this
-        // passes either way. The assertion is on the recorded figure.
+        // A shift over five hours cannot be saved without a 30-minute window
+        // (SHAPE_BREAK_WINDOW), so a 6h security shift has one even when the
+        // caller passed only the pause minutes.
         const hits = dailyMealBreakRule(ctx(
-            [shift('08:00', '11:00', { paid_break_minutes: 75 }), shift('11:00', '14:00')],
+            [shift('08:00', '14:00', { paid_break_minutes: 10 }), shift('14:00', '17:00')],
             { is_security_role: true },
         ));
         expect(hits).toEqual([]);

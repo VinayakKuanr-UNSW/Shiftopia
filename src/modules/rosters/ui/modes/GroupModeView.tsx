@@ -1,28 +1,21 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/platform/supabase/client';
-import { getSydneyNow, isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
-  Plus,
-  Check,
   Loader2,
   MoreHorizontal,
+  MoreVertical,
   Edit2,
   Trash2,
-  Gavel,
   Send,
   Undo2,
   Ban,
-  ArrowLeftRight,
   ChevronDown,
   ChevronRight,
   Zap,
-  Lock,
-  Wand2,
   Users,
-  Sparkles,
-  CopyPlus,
-  Maximize2,
+  Layers,
+  ShieldCheck,
 } from 'lucide-react';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -36,8 +29,8 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes, parse } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { format, addDays, isToday, isBefore, startOfDay, differenceInHours, parse } from 'date-fns';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import {
   ShiftContext,
@@ -47,49 +40,50 @@ import { useAllTemplates } from '@/modules/templates/hooks/queries/useTemplateQu
 
 import {
   RenameSubGroupDialog,
-  CloneSubGroupDialog,
   DeleteSubGroupDialog
 } from '@/modules/rosters/ui/dialogs/SubGroupActionsDialogs';
+import {
+  describeSubgroupDeletion,
+  describeSubgroupRename,
+  formatRange,
+} from '@/modules/rosters/ui/dialogs/rosterChangeCopy';
+import {
+  deleteRosterSubgroup,
+  renameRosterSubgroup,
+  type SubgroupScope,
+} from '@/modules/rosters/api/rosterSubgroups.api';
+import { hasFixedSubgroup } from '@/modules/rosters/domain/subgroupRules';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
 // Named import, not `import * as`: react-refresh cannot reliably re-bind a
 // React.memo() const through a namespace object, so on hot update the member
 // read back as undefined and React threw "type is invalid ... got: undefined"
 // at the call site below.
-import { GroupSummaryCell } from '@/modules/rosters/ui/components/GroupSummaryCell';
+import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
 import { GroupStatsSummary } from '@/modules/rosters/ui/components/GroupStatsSummary';
-import { ShiftCardLegend } from '@/modules/rosters/ui/components/ShiftCardLegend';
+import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import {
   Shift,
   TemplateGroupType,
 } from '@/modules/rosters/api/shifts.api';
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
-import { RosterStructure, RosterGroupStructure, RosterSubGroupStructure } from '@/modules/rosters/model/roster.types';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
   useDeleteShift,
-  useUpdateShift,
-  useBulkDeleteShifts,
-  useBulkPublishShifts,
-  useBulkUnpublishShifts,
   usePublishShift,
   useUnpublishShift,
-  useCreateShift,
   useEmployees,
   snapshotLists,
   rollbackLists,
   patchLists,
 } from '@/modules/rosters/state/useRosterShifts';
 import {
-  useAddSubGroup,
-  useAddSubGroupRange,
   useDeleteSubGroup,
   useRenameSubGroup,
-  useCloneSubGroup
 } from '@/modules/rosters/state/useRosterMutations';
-import { computeShiftUrgency, computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
+import { computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
-import { startOfMonth, endOfMonth, endOfWeek } from 'date-fns';
+import { startOfMonth, endOfMonth } from 'date-fns';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -105,27 +99,23 @@ import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShif
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import {
-  PeopleModeEmployee,
-  PeopleModeShift,
   DND_SHIFT_TYPE,
   DND_EMPLOYEE_TYPE,
   EmployeeDragItem,
   ShiftDragItem,
 } from './people-mode.types';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
-import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
+import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 // complianceService and calculateMinutesBetweenTimes removed — handleShiftDrop now
 // routes through executeAssignShift which encapsulates all compliance logic.
 
 import { canDragShift, canDropOnTarget } from '@/modules/rosters/utils/dnd.utils';
 import { ToastAction } from '@/modules/core/ui/primitives/toast';
-import type { GroupProjection } from '@/modules/rosters/domain/projections/types';
 import { ALL_GROUP_TYPES } from '@/modules/rosters/domain/projections/constants';
-import { CopyShiftFlow, type CopyShiftSource } from '@/modules/office/ui/components/CopyShiftFlow';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
+import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 
 // ============================================================================
 // DRAG & DROP TYPE
@@ -543,53 +533,46 @@ const GLASS_STYLES: Record<TemplateGroupType, {
   accent: string;
 }> = {
   convention_centre: {
-    container: 'bg-blue-500/5 dark:bg-blue-500/5 backdrop-blur-xl border border-blue-500/20 dark:border-blue-500/20 shadow-[0_8px_32px_rgba(59,130,246,0.15)]',
-    header: 'bg-gradient-to-r from-blue-600/90 to-blue-500/80 dark:from-blue-600/90 dark:to-blue-500/80 backdrop-blur-md border-b border-blue-400/30',
-    headerText: 'text-white drop-shadow-lg',
+    container: 'bg-white dark:bg-blue-500/5 backdrop-blur-xl border border-blue-200 dark:border-blue-500/20 shadow-sm',
+    header: 'bg-gradient-to-r from-blue-700 to-blue-600 dark:from-blue-600/90 dark:to-blue-500/80 backdrop-blur-md border-b border-blue-400/30',
+    headerText: 'text-white',
     accent: 'blue',
   },
   exhibition_centre: {
-    container: 'bg-emerald-500/5 dark:bg-emerald-500/5 backdrop-blur-xl border border-emerald-500/20 dark:border-emerald-500/20 shadow-[0_8px_32px_rgba(16,185,129,0.15)]',
-    header: 'bg-gradient-to-r from-emerald-600/90 to-emerald-500/80 dark:from-emerald-600/90 dark:to-emerald-500/80 backdrop-blur-md border-b border-emerald-400/30',
-    headerText: 'text-white drop-shadow-lg',
+    container: 'bg-white dark:bg-emerald-500/5 backdrop-blur-xl border border-emerald-200 dark:border-emerald-500/20 shadow-sm',
+    header: 'bg-gradient-to-r from-emerald-700 to-emerald-600 dark:from-emerald-600/90 dark:to-emerald-500/80 backdrop-blur-md border-b border-emerald-400/30',
+    headerText: 'text-white',
     accent: 'emerald',
   },
   theatre: {
-    container: 'bg-red-500/5 dark:bg-red-500/5 backdrop-blur-xl border border-red-500/20 dark:border-red-500/20 shadow-[0_8px_32px_rgba(239,68,68,0.15)]',
-    header: 'bg-gradient-to-r from-red-600/90 to-red-500/80 dark:from-red-600/90 dark:to-red-500/80 backdrop-blur-md border-b border-red-400/30',
-    headerText: 'text-white drop-shadow-lg',
+    container: 'bg-white dark:bg-red-500/5 backdrop-blur-xl border border-red-200 dark:border-red-500/20 shadow-sm',
+    header: 'bg-gradient-to-r from-red-700 to-red-600 dark:from-red-600/90 dark:to-red-500/80 backdrop-blur-md border-b border-red-400/30',
+    headerText: 'text-white',
     accent: 'red',
   },
   the_cutaway: {
-    container: 'bg-amber-500/5 dark:bg-amber-500/5 backdrop-blur-xl border border-amber-500/20 dark:border-amber-500/20 shadow-[0_8px_32px_rgba(245,158,11,0.15)]',
-    header: 'bg-gradient-to-r from-amber-600/90 to-amber-500/80 dark:from-amber-600/90 dark:to-amber-500/80 backdrop-blur-md border-b border-amber-400/30',
-    headerText: 'text-white drop-shadow-lg',
+    container: 'bg-white dark:bg-amber-500/5 backdrop-blur-xl border border-amber-200 dark:border-amber-500/20 shadow-sm',
+    header: 'bg-gradient-to-r from-amber-700 to-amber-600 dark:from-amber-600/90 dark:to-amber-500/80 backdrop-blur-md border-b border-amber-400/30',
+    headerText: 'text-white',
     accent: 'amber',
   },
   office: {
-    container: 'bg-cyan-500/5 dark:bg-cyan-500/5 backdrop-blur-xl border border-cyan-500/20 dark:border-cyan-500/20 shadow-[0_8px_32px_rgba(6,182,212,0.15)]',
-    header: 'bg-gradient-to-r from-cyan-600/90 to-cyan-500/80 dark:from-cyan-600/90 dark:to-cyan-500/80 backdrop-blur-md border-b border-cyan-400/30',
-    headerText: 'text-white drop-shadow-lg',
+    container: 'bg-white dark:bg-cyan-500/5 backdrop-blur-xl border border-cyan-200 dark:border-cyan-500/20 shadow-sm',
+    header: 'bg-gradient-to-r from-cyan-800 to-cyan-700 dark:from-cyan-600/90 dark:to-cyan-500/80 backdrop-blur-md border-b border-cyan-400/30',
+    headerText: 'text-white',
     accent: 'cyan',
   },
 };
 
 // Unassigned group style (separate to avoid type conflicts)
 const UNASSIGNED_GLASS_STYLE = {
-  container: 'bg-muted/50 dark:bg-gray-500/5 backdrop-blur-xl border border-border dark:border-gray-500/30 border-dashed shadow-[0_8px_32px_rgba(107,114,128,0.15)]',
-  header: 'bg-gradient-to-r from-slate-600/90 to-slate-500/80 dark:from-gray-600/90 dark:to-gray-500/80 backdrop-blur-md border-b border-slate-400/30 dark:border-gray-400/30',
-  headerText: 'text-white drop-shadow-lg',
+  container: 'bg-white dark:bg-gray-500/5 backdrop-blur-xl border border-slate-300 dark:border-gray-500/30 border-dashed shadow-sm',
+  header: 'bg-gradient-to-r from-slate-700 to-slate-600 dark:from-gray-600/90 dark:to-gray-500/80 backdrop-blur-md border-b border-slate-400/30 dark:border-gray-400/30',
+  headerText: 'text-white',
   accent: 'gray',
 };
 
 // Default sub-groups per group type - Empty by default, populated by templates
-const DEFAULT_SUB_GROUPS_MAP: Record<TemplateGroupType, string[]> = {
-  convention_centre: [],
-  exhibition_centre: [],
-  theatre: [],
-  the_cutaway: [],
-  office: [],
-};
 
 // Human-readable group names
 const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
@@ -605,111 +588,10 @@ const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
    COVERAGE SIGNAL BAR — segmented LED strip for group headers
    ============================================================ */
 
-/** `420` → `7h 0m`; used as each cost panel's supporting hours figure. */
-const formatNetMinutes = (mins: number): string => {
-  const safe = Math.max(0, Math.round(mins));
-  return `${Math.floor(safe / 60)}h ${safe % 60}m`;
-};
 
-interface CostPanelProps {
-  label: string;
-  amount: number;
-  minutes: number;
-  /** Denominator line — what the amount is actually over. */
-  countLabel: string;
-  /** Amber tint: some shifts in scope resolved no rate, so the total is short. */
-  warn?: boolean;
-  /** Dim the amount when it is a structural zero rather than a real $0. */
-  muted?: boolean;
-  tone: 'planned' | 'actual';
-}
 
-/**
- * One cost total for the CURRENT view, with its own denominator.
- *
- * The denominator is the point: a bare "$0.00" cannot distinguish "nothing has
- * been worked yet" from "nothing could be priced" from "genuinely free". The
- * previous single Est. Cost read $0.00 across a fully-costed 156-shift roster
- * because it silently counted only ASSIGNED shifts.
- */
-const CostPanel: React.FC<CostPanelProps> = ({
-  label, amount, minutes, countLabel, warn = false, muted = false, tone,
-}) => (
-  <div
-    className={cn(
-      'rounded-lg border px-3 py-1.5 min-w-[132px]',
-      tone === 'planned'
-        ? 'border-blue-400/25 bg-blue-400/[0.06]'
-        : 'border-emerald-400/25 bg-emerald-400/[0.06]',
-    )}
-  >
-    <div className="flex items-baseline justify-between gap-3">
-      <span
-        className={cn(
-          'text-[10px] font-bold uppercase tracking-wider',
-          tone === 'planned' ? 'text-blue-300/80' : 'text-emerald-300/80',
-        )}
-      >
-        {label}
-      </span>
-      <span className="text-[10px] text-muted-foreground/60 tabular-nums">
-        {formatNetMinutes(minutes)}
-      </span>
-    </div>
-    <div
-      className={cn(
-        'font-semibold tabular-nums leading-tight',
-        muted ? 'text-muted-foreground/50' : 'text-foreground',
-      )}
-    >
-      ${amount.toFixed(2)}
-    </div>
-    <div
-      className={cn(
-        'text-[10px] leading-tight',
-        warn ? 'text-amber-400' : 'text-muted-foreground/50',
-      )}
-      title={warn ? 'Some shifts in view have no resolvable pay rate and contribute $0 to this total.' : undefined}
-    >
-      {countLabel}
-    </div>
-  </div>
-);
 
-interface CoverageSignalBarProps {
-  pct: number;      // 0-100
-  accent: string;   // 'blue' | 'emerald' | 'red' | 'amber' | 'cyan' | 'gray'
-  segments?: number;
-}
 
-const CoverageSignalBar: React.FC<CoverageSignalBarProps> = ({ pct, accent, segments = 10 }) => {
-  const filled = Math.round((pct / 100) * segments);
-  const colorMap: Record<string, string> = {
-    blue: 'bg-blue-400',
-    emerald: 'bg-emerald-400',
-    red: 'bg-red-400',
-    amber: 'bg-amber-400',
-    cyan: 'bg-cyan-400',
-    gray: 'bg-slate-400',
-  };
-  const barColor = colorMap[accent] ?? 'bg-white/40';
-  return (
-    <div className="flex items-center gap-[2px]" aria-label={`${pct}% staffed`}>
-      {Array.from({ length: segments }).map((_, i) => (
-        <div
-          key={i}
-          style={{ animationDelay: `${i * 40}ms` }}
-          className={cn(
-            'h-[5px] w-[14px] rounded-sm transition-all duration-300',
-            i < filled
-              ? cn(barColor, 'opacity-90 animate-[signalFill_0.3s_ease_forwards]')
-              : 'bg-muted-foreground/10 dark:bg-white/10'
-          )}
-        />
-      ))}
-    </div>
-  );
-};
 
 /* ============================================================
    SUBGROUP BODY
@@ -725,17 +607,11 @@ const CoverageSignalBar: React.FC<CoverageSignalBarProps> = ({ pct, accent, segm
 // columns can never drift. This is the structural fix that replaced the old
 // <table>: its rows left the table's column model and the grid lines
 // misaligned. With CSS grid there are no per-cell widths to forget.
-const GROUP_COL_SUB_W = 160; // px — sticky sub-group label column
+const GROUP_COL_SUB_W = 240; // px — sticky sub-group label column (standardized across modes)
 const GROUP_COL_DAY_W = 280; // px — per-day column
 const groupGridCols = (dayCount: number) =>
   `${GROUP_COL_SUB_W}px repeat(${dayCount}, minmax(${GROUP_COL_DAY_W}px, 1fr))`;
 
-// Per-cell card cap. At high shift volume a single (subgroup, date) cell can
-// hold dozens of shifts; rendering them all is the dominant DOM-node multiplier
-// in week/month views (cells × cards, each SmartShiftCard being ~15-20 nodes).
-// We render the first N and collapse the rest behind a "+N more" toggle, the
-// same way mature calendars do. Bucket view is exempt — it already condenses.
-const MAX_CARDS_PER_CELL = 4;
 
 // Month view is bounded to the selected month ± this many days (calendar
 // continuity buffer). Must match RostersPlannerPage's fetch window so the
@@ -795,10 +671,8 @@ const VirtualizedSubGroupBody: React.FC<VirtualizedSubGroupBodyProps> = ({
 /* ============================================================
    GROUP CELL SHIFT LIST
    ------------------------------------------------------------
-   Renders a single cell's shift cards, capped at MAX_CARDS_PER_CELL with a
-   local "+N more" toggle. Expansion state lives HERE (not in GroupModeView), so
-   clicking "+N more" re-renders only this one cell instead of the whole grid —
-   the grid-level Set version cost ~200ms INP per click.
+   Renders a single cell's shift bucket container, always showing all
+   shifts in the compact bucket layout.
    ============================================================ */
 interface GroupCellShiftListProps {
   shifts: ShiftDisplay[];
@@ -806,20 +680,21 @@ interface GroupCellShiftListProps {
 }
 
 const GroupCellShiftList: React.FC<GroupCellShiftListProps> = ({ shifts, renderItem }) => {
-  const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? shifts : shifts.slice(0, MAX_CARDS_PER_CELL);
+  if (!shifts || shifts.length === 0) return null;
+
+  // Always ensure shifts in the container of a cell are sorted chronologically by start time
+  const sortedShifts = [...shifts].sort((a, b) => {
+    const timeA = a.startTime || a.rawShift?.start_time || '';
+    const timeB = b.startTime || b.rawShift?.start_time || '';
+    return timeA.localeCompare(timeB);
+  });
+
   return (
-    <>
-      {visible.map((shift, idx) => renderItem(shift, idx))}
-      {shifts.length > MAX_CARDS_PER_CELL && (
-        <button
-          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
-          className="relative z-10 w-full text-[11px] font-semibold text-primary/80 hover:text-primary bg-primary/5 hover:bg-primary/10 border border-primary/20 rounded-md px-2 py-1 transition-colors"
-        >
-          {expanded ? 'Show less' : `+${shifts.length - MAX_CARDS_PER_CELL} more`}
-        </button>
-      )}
-    </>
+    <div className="w-full">
+      <div className="rounded-xl border border-white/10 dark:border-white/10 bg-slate-900/60 dark:bg-slate-900/60 overflow-hidden divide-y divide-white/[0.06] dark:divide-white/[0.06] shadow-sm w-full">
+        {sortedShifts.map((shift, idx) => renderItem(shift, idx))}
+      </div>
+    </div>
   );
 };
 
@@ -831,10 +706,6 @@ interface GroupSectionProps {
   isBulkMode: boolean;
   externalShifts: Shift[];
   isDateInTemplate: (date: Date) => boolean;
-  shiftsByBucketKey: Map<string, Shift[]>;
-  selectedV8ShiftIdsSet: Set<string>;
-  onDeselectShiftIds?: (ids: string[]) => void;
-  onSelectShiftIds?: (ids: string[]) => void;
   isDnDModeActive: boolean;
   summaryData: any;
   onDrillDown?: (dateKey: string, groupType: string, subGroupName: string) => void;
@@ -850,9 +721,10 @@ interface GroupSectionProps {
   handleEmployeeDrop: (shiftId: string, dragItem: EmployeeDragItem) => void;
   setActiveSubGroup: (subGroup: { id: string; name: string; groupExternalId: string } | null) => void;
   setIsRenameOpen: (open: boolean) => void;
-  setIsCloneOpen: (open: boolean) => void;
   setIsDeleteOpen: (open: boolean) => void;
   getSubGroupTemplateLabel: (subGroup: VisualSubGroup) => string | null;
+  /** Why Rename / Delete are unavailable right now, or null when they are. */
+  subGroupActionsBlockedReason: string | null;
 
   // Persisted collapse props
   isInitiallyCollapsed: boolean;
@@ -867,10 +739,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   isBulkMode,
   externalShifts,
   isDateInTemplate,
-  shiftsByBucketKey,
-  selectedV8ShiftIdsSet,
-  onDeselectShiftIds,
-  onSelectShiftIds,
   isDnDModeActive,
   summaryData,
   onDrillDown,
@@ -881,9 +749,9 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   handleEmployeeDrop,
   setActiveSubGroup,
   setIsRenameOpen,
-  setIsCloneOpen,
   setIsDeleteOpen,
   getSubGroupTemplateLabel,
+  subGroupActionsBlockedReason,
   isInitiallyCollapsed,
   onToggleCollapse,
 }) => {
@@ -945,7 +813,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
     return 0;
   }, [summaryData, summaryCellsForGroup]);
 
-  const coveragePct = totalShifts > 0 ? Math.min(100, Math.round((assignedShifts / totalShifts) * 100)) : 100;
 
   const filteredShiftsForStats = useMemo(() =>
     externalShifts.filter(s => s.group_type === group.type),
@@ -971,8 +838,9 @@ const GroupSection: React.FC<GroupSectionProps> = ({
             {/* Collapse Toggle Button */}
             <button
               onClick={handleToggle}
-              className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/20 transition-colors"
-              aria-label={isCollapsed ? 'Expand group' : 'Collapse group'}
+              className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label={isCollapsed ? `Expand ${group.name} group` : `Collapse ${group.name} group`}
+              aria-expanded={!isCollapsed}
             >
               {isCollapsed ? (
                 <ChevronRight className="h-4 w-4 text-white" />
@@ -980,9 +848,9 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                 <ChevronDown className="h-4 w-4 text-white" />
               )}
             </button>
-            <div className="w-3 h-3 rounded-full bg-white/80 shadow-lg" />
+            <div className="w-3 h-3 rounded-full bg-white shadow-sm" />
             <div>
-              <h3 className={cn('text-lg font-bold tracking-wide leading-tight', glassStyle.headerText)}>
+              <h3 className={cn('text-[15px] font-bold tracking-wide leading-tight drop-shadow-sm', glassStyle.headerText)}>
                 {group.name}
               </h3>
             </div>
@@ -990,11 +858,11 @@ const GroupSection: React.FC<GroupSectionProps> = ({
           <div className="flex items-center gap-3">
             {/* Inline Group Stats */}
             {summaryData ? (
-              <div className="flex items-center gap-3 text-xs text-white/70">
-                <span className="text-emerald-400 font-medium">{totalHours.toFixed(0)}h</span>
-                <span className="text-white/40">|</span>
-                <span className="text-white/70">
-                  <Users className="h-3 w-3 inline mr-1 text-white/60" />
+              <div className="flex items-center gap-3 text-[11px] text-white/95 font-medium">
+                <span className="text-emerald-200 dark:text-emerald-400 font-bold">{totalHours.toFixed(0)}h</span>
+                <span className="text-white/60">|</span>
+                <span className="text-white/95">
+                  <Users className="h-3.5 w-3.5 inline mr-1 text-white/90" />
                   {uniqueEmployeesCount} employee{uniqueEmployeesCount !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -1002,10 +870,10 @@ const GroupSection: React.FC<GroupSectionProps> = ({
               <GroupStatsSummary
                 shifts={filteredShiftsForStats}
                 compact
-                className="text-white/70"
+                className="text-white/95 font-medium"
               />
             )}
-            <Badge className="bg-white/20 border-white/30 text-white backdrop-blur-sm font-mono tabular-nums">
+            <Badge className="bg-white/25 border-white/40 text-white backdrop-blur-sm text-[11px] font-bold font-mono tabular-nums px-2.5 py-0.5 shadow-sm">
               {assignedShifts}/{totalShifts} filled
             </Badge>
 
@@ -1017,9 +885,9 @@ const GroupSection: React.FC<GroupSectionProps> = ({
       {!isCollapsed && (
         <div className="overflow-auto">
           <div role="table" className="relative" style={{ width: 'max-content', minWidth: '100%' }}>
-            <div role="row" className="grid sticky top-0 z-20 bg-muted/30" style={{ gridTemplateColumns: groupGridCols(dates.length) }}>
-              <div role="columnheader" className="sticky left-0 z-10 flex items-center backdrop-blur-sm border-r border-b border-border px-4 py-3 text-left bg-muted/30">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Sub-Group</span>
+            <div role="row" className="grid sticky top-0 z-20 bg-slate-100/95 dark:bg-muted/80 backdrop-blur-md border-b border-slate-300 dark:border-border" style={{ gridTemplateColumns: groupGridCols(dates.length) }}>
+              <div role="columnheader" className="sticky left-0 z-30 flex items-center border-r border-b border-slate-300 dark:border-border px-3 py-2 text-left sticky-subgroup-header shadow-[2px_0_6px_-2px_rgba(0,0,0,0.15)]">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-muted-foreground uppercase tracking-[0.14em] font-mono">Sub-Group</span>
               </div>
               {dates.map((date, idx) => {
                 const dateIsToday = isToday(date);
@@ -1031,63 +899,34 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                   <div
                     role="columnheader"
                     key={idx}
+                    data-today={!isGhost && dateIsToday ? "true" : undefined}
                     className={cn(
-                      'px-3 py-2.5 text-center bg-muted/30 border-b transition-colors',
-                      idx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-border'),
-                      // Public holiday highlight styling
-                      holidayName && 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30',
+                      'sticky top-0 z-20 bg-slate-100/95 dark:bg-muted/80 backdrop-blur-md px-3 py-2.5 text-center transition-colors',
+                      idx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-slate-300 dark:border-border'),
+                      // Public holiday highlight styling (no bottom border between header and holiday cell)
+                      holidayName
+                        ? 'bg-amber-500/15 dark:bg-amber-500/15 border-b-0'
+                        : 'border-b border-slate-300 dark:border-border',
                       // Ghost cell styling
                       isGhost && 'bg-muted/40 border-dashed border-border opacity-50',
                       // Today highlighting (only if not ghost and not holiday)
-                      !isGhost && dateIsToday && !holidayName && 'bg-primary/5',
+                      !isGhost && dateIsToday && !holidayName && 'bg-primary/10 dark:bg-primary/5',
                       // Past date styling (only if not ghost and not today and not holiday)
-                      !isGhost && dateIsPast && !dateIsToday && !holidayName && 'opacity-50'
+                      !isGhost && dateIsPast && !dateIsToday && !holidayName && 'opacity-60'
                     )}
                   >
-                    <div className="flex flex-col items-center gap-1 pt-0.5">
-                      <div className={cn(
-                        "text-[10px] font-bold uppercase tracking-[0.12em] font-mono leading-tight",
-                        holidayName
-                          ? 'text-amber-400 dark:text-amber-300 font-extrabold'
-                          : isGhost
-                            ? 'text-muted-foreground/30'
-                            : dateIsToday
-                              ? 'text-primary'
-                              : 'text-muted-foreground'
-                      )}>
-                        {format(date, 'EEE')}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className={cn(
-                          "text-sm font-mono tabular-nums font-medium leading-none",
-                          holidayName
-                            ? 'text-amber-300 dark:text-amber-200 font-bold'
-                            : isGhost
-                              ? 'text-muted-foreground/30'
-                              : dateIsToday
-                                ? 'text-primary font-bold'
-                                : 'text-muted-foreground/50'
-                        )}>
-                          {format(date, 'MMM d')}
-                        </div>
-
-                        {/* The per-day "roster active" ⚡ badge lived here. Removed
-                            2026-08-05 with manual activation: a roster is now created
-                            the moment anything is scheduled on a day, so the badge lit
-                            up on every day that had ever been touched and distinguished
-                            nothing. The date column itself already carries the states
-                            that still matter — today, past, ghost, public holiday. */}
-                      </div>
-
-                      {/* ANZ Public Holiday Name beneath Date, Day */}
+                    <div className={cn("text-[11px] font-bold uppercase tracking-[0.12em] font-mono leading-tight", holidayName ? "text-amber-800 dark:text-amber-400 font-extrabold" : dateIsToday ? "text-primary font-bold" : "text-slate-700 dark:text-muted-foreground")}>{format(date, 'EEE')}</div>
+                    <div className="flex items-center justify-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className={cn("text-[13px] font-mono tabular-nums leading-none", holidayName ? "text-amber-800 dark:text-amber-300 font-bold" : dateIsToday ? "text-primary font-bold" : "text-slate-800 dark:text-muted-foreground font-semibold")}>
+                        {format(date, 'MMM d')}
+                      </span>
                       {holidayName && (
-                        <div
-                          className="mt-0.5 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 dark:text-amber-300 text-[9px] font-black uppercase tracking-wider truncate max-w-[240px] shadow-sm flex items-center justify-center gap-1"
+                        <span
+                          className="text-[11px] italic font-medium text-amber-800 dark:text-amber-300 truncate max-w-[140px]"
                           title={`ANZ Public Holiday: ${holidayName}`}
                         >
-                          <Sparkles className="h-2.5 w-2.5 shrink-0 text-amber-400" />
-                          <span className="truncate">{holidayName}</span>
-                        </div>
+                          {holidayName}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -1114,7 +953,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                       )}
                       style={{ gridTemplateColumns: groupGridCols(dates.length) }}
                     >
-                      <div className="sticky left-0 z-10 bg-card border-r border-border px-4 py-3">
+                      <div className="sticky left-0 z-20 sticky-subgroup-cell border-r border-border px-4 py-3 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.15)]">
                         <div className="h-4 w-24 rounded bg-muted/50" />
                       </div>
                       {dates.map((_, dateIdx) => (
@@ -1136,30 +975,41 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                 const templateLabel = getSubGroupTemplateLabel(subGroup);
                 return (
                   <>
-                    <div role="cell" className="sticky left-0 z-10 backdrop-blur-sm border-r border-border px-4 py-3 bg-card group-hover:bg-accent/30 transition-colors group">
+                    <div role="cell" className="sticky left-0 z-20 border-r border-slate-300 dark:border-border px-4 py-3 sticky-subgroup-cell shadow-[2px_0_6px_-2px_rgba(0,0,0,0.15)] transition-colors group">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors overflow-hidden text-ellipsis whitespace-nowrap">
+                          <span className="text-[13px] font-semibold text-slate-800 dark:text-foreground/90 group-hover:text-slate-950 dark:group-hover:text-foreground transition-colors overflow-hidden text-ellipsis whitespace-nowrap">
                             {subGroup.name}
                           </span>
                           {templateLabel && (
                             <span
-                              className="text-[10px] font-normal italic text-muted-foreground/70 dark:text-slate-400/70 truncate max-w-[130px] leading-tight mt-0.5"
+                              className="text-[11px] font-normal italic text-slate-600 dark:text-slate-400/70 truncate max-w-[130px] leading-tight mt-0.5"
                               title={`Source Template: ${templateLabel}`}
                             >
                               {templateLabel}
                             </span>
                           )}
                         </div>
+                        {/* Office has one fixed sub-group (Administration): nothing to rename, clone or delete. */}
+                        {!hasFixedSubgroup(group.type) && (
                         <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-9 w-9 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Actions for subgroup ${subGroup.name}`}
+                            className="h-9 w-9 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-48 bg-gray-900 border-gray-800">
+                        <DropdownMenuContent align="start" className="w-56 bg-gray-900 border-gray-800">
+                          {subGroupActionsBlockedReason && (
+                            <p className="px-2 py-1.5 text-[11px] text-gray-400 leading-snug">{subGroupActionsBlockedReason}</p>
+                          )}
                           <DropdownMenuItem
                             className="gap-2 focus:bg-white/5 cursor-pointer"
+                            disabled={!!subGroupActionsBlockedReason}
                             onClick={() => {
                               setActiveSubGroup({
                                 id: subGroup.id,
@@ -1172,23 +1022,10 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                             <Edit2 className="h-3.5 w-3.5" />
                             Rename
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="gap-2 focus:bg-white/5 cursor-pointer"
-                            onClick={() => {
-                              setActiveSubGroup({
-                                id: subGroup.id,
-                                name: subGroup.name,
-                                groupExternalId: group.type || ''
-                              });
-                              setIsCloneOpen(true);
-                            }}
-                          >
-                            <ArrowLeftRight className="h-3.5 w-3.5" />
-                            Clone
-                          </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-white/10" />
                           <DropdownMenuItem
                             className="gap-2 text-red-500 focus:text-red-500 focus:bg-red-500/10 cursor-pointer"
+                            disabled={!!subGroupActionsBlockedReason}
                             onClick={() => {
                               setActiveSubGroup({
                                 id: subGroup.id,
@@ -1203,66 +1040,46 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                        )}
                     </div>
                   </div>
 
                   {dates.map((date, dateIdx) => {
                     const dateKey = format(date, 'yyyy-MM-dd');
-                    const cellShifts = subGroup.shifts[dateKey] || [];
+                    const rawCellShifts = subGroup.shifts[dateKey] || [];
+                    const cellShifts = [...rawCellShifts].sort((a, b) => {
+                      const timeA = a.startTime || a.rawShift?.start_time || '';
+                      const timeB = b.startTime || b.rawShift?.start_time || '';
+                      return timeA.localeCompare(timeB);
+                    });
                     const cellIsToday = isToday(date);
                     const cellIsPast = isSydneyPast(date);
                     const isGhost = !isDateInTemplate(date);
                     const holidayName = getPublicHolidayName(date);
 
-                    const bucketKey = `${dateKey}::${group.type}::${subGroup.name}`;
-                    const bucketShifts = shiftsByBucketKey.get(bucketKey) || [];
-                    const eligibleIds = bucketShifts
-                      .filter(s => !isShiftLocked(s.shift_date, s.start_time, 'roster_management'))
-                      .map(s => s.id);
-                    const selectableCount = eligibleIds.length;
-                    
-                    let cellSelectionState: 'all' | 'some' | 'none' = 'none';
-                    if (selectableCount > 0) {
-                      const selectedCount = eligibleIds.filter(id => selectedV8ShiftIdsSet.has(id)).length;
-                      if (selectedCount === selectableCount) {
-                        cellSelectionState = 'all';
-                      } else if (selectedCount > 0) {
-                        cellSelectionState = 'some';
-                      }
-                    }
-
-                    const handleToggleSelect = () => {
-                      if (selectableCount === 0) return;
-                      const selectedCount = eligibleIds.filter(id => selectedV8ShiftIdsSet.has(id)).length;
-                      if (selectedCount === selectableCount) {
-                        onDeselectShiftIds?.(eligibleIds);
-                      } else {
-                        onSelectShiftIds?.(eligibleIds);
-                      }
-                    };
 
                     return (
                       <div
                         role="cell"
                         key={dateIdx}
                         className={cn(
-                          'px-2 py-3 min-h-[100px] relative group transition-colors',
-                          dateIdx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-border'),
+                          'px-3 py-3 align-top min-h-[80px] relative group/cell transition-colors border-b border-slate-300 dark:border-border',
+                          dateIdx < dates.length - 1 && (holidayName ? 'border-r border-amber-500/20' : 'border-r border-slate-300 dark:border-border'),
                           // Public holiday highlight styling (fully golden, matching header)
                           !isGhost && holidayName && 'bg-amber-500/10 dark:bg-amber-500/15',
                           // Ghost cell styling
-                          isGhost && 'bg-muted/30 border-dashed border-border cursor-pointer hover:bg-muted/50',
-                          // Today highlighting (only if not ghost and not holiday)
+                          isGhost && 'bg-muted/30 border-dashed border-slate-300 dark:border-border cursor-pointer hover:bg-muted/50',
+                          // Today highlighting (only if convention, not ghost and not holiday)
                           !isGhost && cellIsToday && !holidayName && 'bg-primary/5',
                           // Past date styling (only if not ghost and not today and not holiday)
-                          !isGhost && cellIsPast && !cellIsToday && !holidayName && 'opacity-50'
+                          !isGhost && cellIsPast && !cellIsToday && !holidayName && 'opacity-60'
                         )}
                         onClick={isGhost && onNavigateToMonth ? () => onNavigateToMonth(date) : undefined}
                       >
                         {isGhost ? (
                           // Ghost Cell Content - "Go to [Month]" link
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-muted-foreground text-sm font-medium hover:text-foreground transition-colors">
+                            <span className="text-slate-600 dark:text-muted-foreground text-[13px] font-medium hover:text-slate-900 dark:hover:text-foreground transition-colors">
                               Go to {format(date, 'MMMM')} →
                             </span>
                           </div>
@@ -1277,99 +1094,71 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                             date={dateKey}
                             onDrop={handleShiftDrop}
                             disabled={isBulkMode || !canEdit || cellIsPast || !isDnDModeActive}
-                            className="grid grid-cols-1 gap-1.5 min-h-[60px]"
+                            className="flex flex-col gap-1.5 min-h-[80px] h-full relative"
                           >
-                            {/* Bucket View (summary cell + drill-down) is the default
-                                for all non-day views. DnD Mode swaps to the card grid. */}
-                            {(!isDnDModeActive && summaryData) ? (
-                              <div className="w-full h-full flex flex-col items-center justify-center min-h-[60px] p-1">
-                                <GroupSummaryCell
-                                  date={date}
-                                  groupName={subGroup.name}
-                                  summary={summaryData.get(`${dateKey}::${group.type}::${subGroup.name}`)}
-                                  accent={group.color?.startsWith('#')
-                                    ? group.color
-                                    : (group.color === 'blue' ? 'blue' :
-                                      group.color === 'emerald' ? 'emerald' :
-                                        group.color === 'red' ? 'red' :
-                                          group.color === 'amber' ? 'amber' :
-                                            group.color === 'cyan' ? 'cyan' : 'gray')}
-                                  onClick={() => onDrillDown?.(dateKey, group.type, subGroup.name)}
-                                  isBulkMode={isBulkMode}
-                                  selectionState={cellSelectionState}
-                                  selectableCount={selectableCount}
-                                  onToggleSelect={handleToggleSelect}
-                                  isLoading={isShiftsLoading}
+                            <GroupCellShiftList
+                              shifts={cellShifts}
+                              renderItem={(shift, shiftIdx) => (
+                              <div
+                                key={shift.id}
+                                style={{ '--i': shiftIdx, animationDelay: `calc(${shiftIdx} * 40ms)` } as React.CSSProperties}
+                                className="animate-[slideUpFade_0.25s_ease_forwards]"
+                              >
+                                <DraggableShiftCard
+                                  active={isDnDModeActive}
+                                  shift={shift}
+                                  groupType={group.type}
+                                  subGroupName={subGroup.name}
+                                  disabled={
+                                    isBulkMode ||
+                                    cellIsPast ||
+                                    isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) ||
+                                    !canEdit ||
+                                    !isDnDModeActive ||
+                                    (isDnDModeActive && !shift.isDraft)
+                                  }
+                                >
+                                  {(isDnDModeActive && canEdit && !cellIsPast && !isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) && shift.isDraft) ? (
+                                    <DroppableShiftAssign
+                                      shiftId={shift.id}
+                                      shiftRole={shift.role}
+                                      canAccept={!shift.isLocked}
+                                      onAssign={handleEmployeeDrop}
+                                    >
+                                      {renderShiftCard(shift, group, subGroup, date)}
+                                    </DroppableShiftAssign>
+                                  ) : (
+                                    renderShiftCard(shift, group, subGroup, date)
+                                  )}
+                                </DraggableShiftCard>
+                              </div>
+                              )}
+                            />
+
+                            {/* For cells WITH shifts: Reserved row with + at the bottom right */}
+                            {!isBulkMode && canEdit && !cellIsPast && cellShifts.length > 0 && (
+                              <div className="flex items-center justify-end w-full pt-1 mt-auto">
+                                <RosterCellAddButton
+                                  onClick={(e) => {
+                                    e?.stopPropagation();
+                                    handleAddShift(group, subGroup, date);
+                                  }}
+                                  hasShifts={true}
+                                  holidayName={holidayName}
+                                  title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
                                 />
                               </div>
-                            ) : (
-                              <GroupCellShiftList
-                                shifts={cellShifts}
-                                renderItem={(shift, shiftIdx) => (
-                                <div
-                                  key={shift.id}
-                                  style={{ '--i': shiftIdx, animationDelay: `calc(${shiftIdx} * 40ms)` } as React.CSSProperties}
-                                  className="animate-[slideUpFade_0.25s_ease_forwards]"
-                                >
-                                  <DraggableShiftCard
-                                    active={isDnDModeActive}
-                                    shift={shift}
-                                    groupType={group.type}
-                                    subGroupName={subGroup.name}
-                                    disabled={
-                                      isBulkMode ||
-                                      cellIsPast ||
-                                      isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) ||
-                                      !canEdit ||
-                                      !isDnDModeActive ||
-                                      (isDnDModeActive && !shift.isDraft)
-                                    }
-                                  >
-                                    {(isDnDModeActive && canEdit && !cellIsPast && !isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) && shift.isDraft) ? (
-                                      <DroppableShiftAssign
-                                        shiftId={shift.id}
-                                        shiftRole={shift.role}
-                                        canAccept={!shift.isLocked}
-                                        onAssign={handleEmployeeDrop}
-                                      >
-                                        {renderShiftCard(shift, group, subGroup, date)}
-                                      </DroppableShiftAssign>
-                                    ) : (
-                                      renderShiftCard(shift, group, subGroup, date)
-                                    )}
-                                  </DraggableShiftCard>
-                                </div>
-                                )}
-                              />
                             )}
 
-                            {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}
-                            {!isBulkMode && canEdit && !cellIsPast && (
-                              <div className={cn(
-                                "absolute inset-0 flex pointer-events-none z-10",
-                                cellShifts.length > 0 ? "items-end justify-end p-2" : "items-center justify-center"
-                              )}>
-                                <button
+                            {/* For EMPTY cells: Centered add button */}
+                            {!isBulkMode && canEdit && !cellIsPast && cellShifts.length === 0 && (
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                                <RosterCellAddButton
                                   onClick={() => handleAddShift(group, subGroup, date)}
-                                  className={cn(
-                                    "flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
-                                    holidayName
-                                      ? "bg-amber-500/30 text-amber-400 dark:text-amber-300 border border-amber-500/40 backdrop-blur-md hover:bg-amber-500/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(245,158,11,0.3)]"
-                                      : "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
-                                    cellShifts.length > 0
-                                      ? "w-9 h-9 opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100"
-                                      : "w-9 h-9 opacity-40 scale-90 hover:opacity-100 [@media(hover:none)]:opacity-100",
-                                    "group/add",
-                                    (!isDnDModeActive && summaryData) ? "hidden" : ""
-                                  )}
+                                  hasShifts={false}
+                                  holidayName={holidayName}
                                   title={holidayName ? `Add Shift (${holidayName})` : "Add Shift"}
-                                >
-                                  <Plus className={cn(
-                                    cellShifts.length > 0 ? "h-4 w-4" : "h-5 w-5",
-                                    "transition-transform group-hover/add:rotate-90",
-                                    holidayName ? "text-amber-400 dark:text-amber-300" : "text-primary"
-                                  )} />
-                                </button>
+                                />
                               </div>
                             )}
                           </DroppableCell>
@@ -1427,11 +1216,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   showBudget = false,
 }) => {
   const { toast } = useToast();
-  const { isDark } = useTheme();
+  useTheme();
   // Get enhanced filters and selection state from context
   const {
     advancedFilters,
-    hasActiveFilters,
   } = useRosterUI();
 
   const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
@@ -1447,24 +1235,12 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     [selectedV8ShiftIds],
   );
 
-  // Index shifts by key: `${shift_date}::${group_type||'unassigned'}::${sub_group_name||'General'}`
-  const shiftsByBucketKey = React.useMemo(() => {
-    const map = new Map<string, Shift[]>();
-    if (!externalShifts) return map;
-    
-    externalShifts.forEach(shift => {
-      const dateKey = shift.shift_date;
-      const groupKey = shift.group_type || 'unassigned';
-      const subGroupKey = shift.sub_group_name || 'General';
-      const key = `${dateKey}::${groupKey}::${subGroupKey}`;
-      
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-      map.get(key)!.push(shift);
-    });
-    return map;
-  }, [externalShifts]);
+  // The shifts the toolbar filters let through — the same rule every view uses.
+  // The legacy branch reads this, so it never shows shifts the filter is hiding.
+  const visibleShifts = React.useMemo(
+    () => (externalShifts ? applyAdvancedFilters(externalShifts, advancedFilters) : externalShifts),
+    [externalShifts, advancedFilters],
+  );
 
   // Collapsible group state (persisted to localStorage)
   const [collapsedGroups, toggleGroupCollapse] = useCollapsedGroups();
@@ -1497,15 +1273,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // TanStack Query mutation hooks (auto-invalidate caches on success)
   const deleteShiftMutation = useDeleteShift();
-  const updateShiftMutation = useUpdateShift(); // For DnD group changes
-  const bulkDeleteMutation = useBulkDeleteShifts();
-  const bulkPublishMutation = useBulkPublishShifts();
-  const bulkUnpublishMutation = useBulkUnpublishShifts();
   const publishShiftMutation = usePublishShift();
   const unpublishShiftMutation = useUnpublishShift();
-  const createShiftMutation = useCreateShift();
-  const addSubGroupMutation = useAddSubGroup();
-  const addSubGroupRangeMutation = useAddSubGroupRange();
   const queryClient = useQueryClient();
 
   // ==================== UNDO HANDLER ====================
@@ -1781,10 +1550,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // ==================== DELETE CONFIRMATION ====================
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [shiftToDelete, setShiftToDelete] = useState<ShiftDisplay | null>(null);
-  /** A full-time shift being copied onto a range (the Office page's Copy, shared). */
-  const [copySource, setCopySource] = useState<CopyShiftSource | null>(null);
   /** A full-time shift shown expanded: Scheduled · Actual · Payroll · Variance. */
   const [expandedShift, setExpandedShift] = useState<Shift | null>(null);
+  /** A shift being audited for ICC Sydney EBA compliance. */
+  const [auditedShift, setAuditedShift] = useState<Shift | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // ==================== PUBLISH/UNPUBLISH CONFIRMATION ====================
@@ -1799,17 +1568,15 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // ==================== EMERGENCY ALERT STATE ====================
   const [isEmergencyAlertOpen, setIsEmergencyAlertOpen] = useState(false);
-  const [emergencyAlertMessage, setEmergencyAlertMessage] = useState('');
+  const [emergencyAlertMessage] = useState('');
 
   // ==================== SUB-GROUP ACTIONS STATE ====================
   const [activeSubGroup, setActiveSubGroup] = useState<{ id: string, name: string, groupExternalId: string } | null>(null);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
-  const [isCloneOpen, setIsCloneOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const deleteSubGroupMutation = useDeleteSubGroup();
   const renameSubGroupMutation = useRenameSubGroup();
-  const cloneSubGroupMutation = useCloneSubGroup();
 
 
 
@@ -1838,10 +1605,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       case '3day':
         for (let i = 0; i < 3; i++) result.push(addDays(selectedDate, i));
         break;
-      case 'week':
+      case 'week': {
         const weekStart = startOfWeekAU(selectedDate);
         for (let i = 0; i < 7; i++) result.push(addDays(weekStart, i));
         break;
+      }
       case 'month': {
         // Bound to the selected month ± a small buffer (matches the parent
         // fetch window in RostersPlannerPage). Previously this extended to
@@ -1887,6 +1655,33 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       subDepartmentIds: selectedSubDepartmentIds,
     }
   );
+
+  // Sub-group Rename / Delete act on ONE sub-department's roster. With
+  // several in scope the grid merges their rows, and acting on "the first" would
+  // quietly change one team and not the others — so the actions ask for one.
+  const singleSubDepartmentId = selectedSubDepartmentIds.length === 1 ? selectedSubDepartmentIds[0] : null;
+  const subGroupActionsBlockedReason = useMemo((): string | null => {
+    if (!organizationId || !departmentId || selectedDepartmentIds.length > 1) {
+      return 'Choose one department to change its sub-groups.';
+    }
+    if (!singleSubDepartmentId) {
+      return 'Choose one sub-department in the scope filter to change its sub-groups.';
+    }
+    if (!dateRangeStart || !dateRangeEnd) return 'There are no days in view.';
+    return null;
+  }, [organizationId, departmentId, selectedDepartmentIds.length, singleSubDepartmentId, dateRangeStart, dateRangeEnd]);
+
+  const subGroupScopeFor = (groupExternalId: string): SubgroupScope | null =>
+    subGroupActionsBlockedReason || !organizationId || !departmentId || !singleSubDepartmentId || !dateRangeStart || !dateRangeEnd
+      ? null
+      : {
+          organizationId,
+          departmentId,
+          subDepartmentId: singleSubDepartmentId,
+          groupExternalId,
+          startDate: dateRangeStart,
+          endDate: dateRangeEnd,
+        };
 
   // Surface only roster fetch errors to the console. Earlier diagnostic logs
   // here mapped over the entire roster structures array on every effect run,
@@ -2109,19 +1904,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     return 'Open';
   };
 
-  const getDefaultGroups = (): VisualGroup[] => {
-    return ALL_GROUP_TYPES.map((type) => ({
-      id: type,
-      name: GROUP_DISPLAY_NAMES[type],
-      type,
-      color: GLASS_STYLES[type].accent,
-      subGroups: DEFAULT_SUB_GROUPS_MAP[type].map((name) => ({
-        id: `${type}-${name}`,
-        name,
-        shifts: {},
-      })),
-    }));
-  };
 
   // ==================== BUILD VISUAL GROUPS (BUCKET VIEW / SUMMARY) ====================
   // Scalability path: in the Group-mode default Bucket View the grid renders
@@ -2133,112 +1915,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // templates always render even when empty. Per-cell totals still resolve via
   // the existing `summaryData.get(`${dateKey}::${group.type}::${subGroup.name}`)`
   // lookup in the render path; rows just need to exist without shift data.
-  const buildVisualGroupsFromSummary = (
-    summary: Map<string, import('@/modules/rosters/api/rosterSummary.queries').RosterSummaryCellDTO>,
-  ): VisualGroup[] => {
-    // Start from the three default template groups (guaranteed to render).
-    const base = getDefaultGroups();
-    const byType = new Map<string, VisualGroup>(base.map(g => [g.type, g]));
-
-    // Track subgroup names already present per group so we don't duplicate.
-    const subNamesByType = new Map<string, Set<string>>();
-    for (const g of base) {
-      subNamesByType.set(g.type, new Set(g.subGroups.map(sg => sg.name)));
-    }
-
-    // Populate subgroups from database structure (rosterStructures) first
-    // so empty subgroups render in the summary bucket view.
-    rosterStructures.forEach(roster => {
-      roster.groups.forEach(group => {
-        const type = (group.externalId || 'unassigned') as TemplateGroupType | 'unassigned';
-        let groupEntry = byType.get(type);
-        if (!groupEntry) {
-          const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
-          groupEntry = {
-            id: group.id || type,
-            name: GROUP_DISPLAY_NAMES[type] ?? group.name ?? type,
-            type,
-            color: isTemplate
-              ? GLASS_STYLES[type as TemplateGroupType].accent
-              : UNASSIGNED_GLASS_STYLE.accent,
-            subGroups: [],
-          };
-          byType.set(type, groupEntry);
-          subNamesByType.set(type, new Set());
-        }
-
-        group.subGroups.forEach(sg => {
-          const existingNames = subNamesByType.get(type)!;
-          if (!existingNames.has(sg.name)) {
-            existingNames.add(sg.name);
-            groupEntry.subGroups.push({
-              id: sg.id,
-              name: sg.name,
-              shifts: {},
-            });
-          }
-        });
-      });
-    });
-
-    // Collect distinct (group_type, sub_group_name) pairs from the summary.
-    for (const cell of summary.values()) {
-      const type = (cell.group_type || 'unassigned') as TemplateGroupType | 'unassigned';
-      const subName = cell.sub_group_name || 'General';
-
-      let group = byType.get(type);
-      if (!group) {
-        // A group present in the summary but not in the default templates
-        // (e.g. an ad-hoc / unassigned bucket). Create it so its rows render.
-        const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
-        group = {
-          id: type,
-          name: GROUP_DISPLAY_NAMES[type] ?? type,
-          type,
-          color: isTemplate
-            ? GLASS_STYLES[type as TemplateGroupType].accent
-            : UNASSIGNED_GLASS_STYLE.accent,
-          subGroups: [],
-        };
-        byType.set(type, group);
-        subNamesByType.set(type, new Set());
-      }
-
-      const existingNames = subNamesByType.get(type)!;
-      if (!existingNames.has(subName)) {
-        existingNames.add(subName);
-        group.subGroups.push({
-          id: `summary-${type}-${subName}`,
-          name: subName,
-          shifts: {}, // Bucket View renders aggregate cells — no per-shift data.
-        });
-      }
-    }
-
-    // Stable ordering: templates first (in canonical order), then any extras.
-    const order: Record<string, number> = {
-      convention_centre: 0,
-      exhibition_centre: 1,
-      theatre: 2,
-      the_cutaway: 3,
-      office: 4,
-    };
-    const groups = Array.from(byType.values()).sort(
-      (a, b) => (order[a.type] ?? 99) - (order[b.type] ?? 99),
-    );
-    groups.forEach(g => g.subGroups.sort((a, b) => a.name.localeCompare(b.name)));
-    return groups;
-  };
 
   // ==================== DERIVE VISUAL GROUPS VIA MEMO ====================
   const visualGroups = useMemo((): VisualGroup[] => {
     // Bucket View: build rows from the aggregate summary (no shift fetch).
-    // This branch takes priority over `projection`/`shifts` precisely because
-    // in this mode the parent intentionally did not fetch shifts.
-    if (!isDnDModeActive && summaryData) {
-      return buildVisualGroupsFromSummary(summaryData);
-    }
-
     // Phase-2: when projection snapshot is available, map directly from it.
     // Filtering is already applied upstream by useRosterProjections/applyAdvancedFilters.
     if (projection) {
@@ -2282,35 +1962,12 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       }));
     }
 
-    // Legacy fallback (unchanged) — used when projection is not yet available
-    if (!externalShifts) return buildVisualGroupsFromShifts([]);
-
-    const filteredShifts = externalShifts.filter(shift => {
-      if (!hasActiveFilters) return true;
-      if (advancedFilters.stateId && advancedFilters.stateId !== 'all') {
-        if (determineShiftState(shift) !== advancedFilters.stateId) return false;
-      }
-      if (advancedFilters.lifecycleStatus !== 'all') {
-        if (shift.lifecycle_status?.toLowerCase() !== advancedFilters.lifecycleStatus.toLowerCase()) return false;
-      }
-      if (advancedFilters.assignmentStatus !== 'all') {
-        if ((shift.assignment_status || 'unassigned') !== advancedFilters.assignmentStatus) return false;
-      }
-      if (advancedFilters.assignmentOutcome !== 'all') {
-        // outcome is null (S3 — offered, awaiting acceptance), 'confirmed' (S4), 'no_show', or null for unassigned
-        const outcome = shift.assignment_outcome ?? 'none';
-        if (advancedFilters.assignmentOutcome === 'none') {
-          if (outcome !== 'none' && outcome !== null) return false;
-        } else if (outcome !== advancedFilters.assignmentOutcome) return false;
-      }
-      if (advancedFilters.biddingStatus !== 'all') {
-        if ((shift.bidding_status || 'not_on_bidding') !== advancedFilters.biddingStatus) return false;
-      }
-      return true;
-    });
-
-    return buildVisualGroupsFromShifts(filteredShifts);
-  }, [projection, externalShifts, rosterStructures, advancedFilters, hasActiveFilters, profileMap, summaryData, isDnDModeActive]);
+    // Legacy fallback — used when projection is not yet available. Filtered by
+    // the shared applyAdvancedFilters (its inline copy skipped trading, role and
+    // search, so this branch filtered differently from every other view).
+    if (!visibleShifts) return buildVisualGroupsFromShifts([]);
+    return buildVisualGroupsFromShifts(visibleShifts);
+  }, [projection, visibleShifts, rosterStructures, profileMap, summaryData, isDnDModeActive]);
 
   // ==================== AUTO-COLLAPSE PAST GROUPS ====================
   // A group is "all-past" when every date in the current view window falls
@@ -2481,76 +2138,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }
   };
 
-  /**
-   * Copy a full-time shift onto a range of dates — offered only on an assigned
-   * FT shift. The flow checks leave, existing shifts, writable rosters and the
-   * employee's cycle ceiling (cl 35.1(a)) for the range, and writes into
-   * Office / Administration.
-   */
-  const openCopyShift = (shift: ShiftDisplay) => {
-    const raw = shift.rawShift;
-    if (raw.target_employment_type !== 'FT' || !raw.assigned_employee_id
-      || !raw.role_id || !raw.organization_id || !raw.department_id || !raw.sub_department_id) return;
-    setCopySource({
-      employeeId: raw.assigned_employee_id,
-      employeeName: shift.employeeName ?? '',
-      dateKey: raw.shift_date,
-      shift: raw,
-      roleId: raw.role_id,
-      organizationId: raw.organization_id,
-      departmentId: raw.department_id,
-      subDepartmentId: raw.sub_department_id,
-    });
-  };
-
-  const handleCloneShift = async (shift: ShiftDisplay) => {
-    try {
-      const { rawShift } = shift;
-      const cloneData: any = {
-        roster_id: rawShift.roster_id,
-        department_id: rawShift.department_id,
-        sub_department_id: rawShift.sub_department_id,
-        shift_date: rawShift.shift_date,
-        start_time: rawShift.start_time,
-        end_time: rawShift.end_time,
-        organization_id: rawShift.organization_id,
-        group_type: rawShift.group_type,
-        sub_group_name: rawShift.sub_group_name,
-        shift_group_id: (rawShift as any).shift_group_id,
-        shift_subgroup_id: (rawShift as any).shift_subgroup_id || (rawShift as any).roster_subgroup_id,
-        role_id: rawShift.role_id,
-        remuneration_level: rawShift.remuneration_level,
-        paid_break_minutes: rawShift.paid_break_minutes,
-        unpaid_break_minutes: rawShift.unpaid_break_minutes,
-        timezone: rawShift.timezone,
-        required_skills: rawShift.required_skills || [],
-        required_licenses: rawShift.required_licenses || [],
-        event_ids: rawShift.event_ids || [],
-        tags: rawShift.tags || [],
-        notes: rawShift.notes,
-        is_training: rawShift.is_training,
-        // Mandatory on every shift (fn_shift_inherit_template_row raises 23502
-        // without it), and the clone is for the same people as its source.
-        // Omitted, every Clone failed with "target_employment_type is required".
-        target_employment_type: (rawShift as any).target_employment_type,
-        target_requires_flexible: (rawShift as any).target_requires_flexible,
-        // assigned_employee_id is NOT copied as per refined requirements
-      };
-
-      await createShiftMutation.mutateAsync(cloneData);
-      toast({
-        title: 'Shift Cloned',
-        description: 'A new draft replica has been created (unassigned).',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Clone Failed',
-        description: error.message || 'Could not clone shift.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   // Push to Bidding - marks shift as available for bidding
   // Bidding window auto-closes 4 hours before shift start
   const handleRequestPublish = (shift: ShiftDisplay) => {
@@ -2666,7 +2253,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
     const now = new Date();
     const hoursToStart = differenceInHours(shiftStart, now);
-    const minutesToStart = differenceInMinutes(shiftStart, now);
     const isEmergency = hoursToStart < 4;
 
     // DEBUG: Log calculation for shifts starting soon
@@ -2677,149 +2263,110 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const groupConfig = GROUP_COLORS[shift.groupColor as TemplateGroupType] || GROUP_COLORS.convention_centre;
     const accentColor = groupConfig.accent === 'emerald' ? 'green' : groupConfig.accent;
 
-    const lifecycleStatus = shift.isPublished ? 'published' : shift.isDraft ? 'draft' : 'draft';
 
     const menu = (
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <button
-            className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
+            className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
             onClick={(e) => e.stopPropagation()}
-            disabled={isLocked && false} // Allow menu to open even if locked, to show delete/locked status
+            disabled={isLocked && false}
           >
-            <MoreHorizontal className={cn("h-3 w-3", isLocked ? "text-muted-foreground/40" : "text-foreground")} />
+            <MoreVertical className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
+        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
           {(() => {
             const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
 
             return (
               <>
+                {/* 1. Edit */}
                 <DropdownMenuItem
-                  disabled={hasStarted}
-                  onClick={() => handleCloneShift(shift)}
+                  disabled={hasStarted || !canEdit}
+                  onClick={() => handleEditShift(shift, group, subGroup, date)}
                   className={cn(
                     "text-popover-foreground hover:bg-accent cursor-pointer",
-                    hasStarted && "text-muted-foreground/50 cursor-not-allowed"
+                    (hasStarted || !canEdit) && "text-muted-foreground/50 cursor-not-allowed"
                   )}
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Clone Shift {hasStarted && '(Locked)'}
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Edit Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
                 </DropdownMenuItem>
 
+                {/* 2. Audit */}
+                <DropdownMenuItem
+                  onClick={() => setAuditedShift(shift.rawShift)}
+                  className="text-popover-foreground hover:bg-accent cursor-pointer"
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
+                  Audit Compliance
+                </DropdownMenuItem>
+
+                {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
                 {shift.rawShift.target_employment_type === 'FT' && (
                   <DropdownMenuItem
                     onClick={() => setExpandedShift(shift.rawShift)}
                     className="text-popover-foreground hover:bg-accent cursor-pointer"
                   >
-                    <Maximize2 className="h-4 w-4 mr-2" />
-                    Expand
+                    <Layers className="h-4 w-4 mr-2 text-cyan-500" />
+                    More (Variance & Pay)
                   </DropdownMenuItem>
                 )}
-
-                {/* Copy a full-time shift onto a range — available on a started
-                    shift too, since it writes only from today onward. */}
-                {shift.rawShift.target_employment_type === 'FT' && shift.rawShift.assigned_employee_id && (
+                {shift.rawShift.target_employment_type !== 'FT' && (
                   <DropdownMenuItem
-                    onClick={() => openCopyShift(shift)}
+                    onClick={() => setExpandedShift(shift.rawShift)}
                     className="text-popover-foreground hover:bg-accent cursor-pointer"
                   >
-                    <CopyPlus className="h-4 w-4 mr-2" />
-                    Copy to…
+                    <Layers className="h-4 w-4 mr-2 text-cyan-500" />
+                    More (Variance & Pay)
                   </DropdownMenuItem>
                 )}
 
-                {hasStarted ? (
-                  <>
-                    <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
-                      <Lock className="h-4 w-4 mr-2" />
-                      Edit Shift (Locked)
-                    </DropdownMenuItem>
-
-                    <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
-                      <Lock className="h-4 w-4 mr-2" />
-                      Publish (Locked)
-                    </DropdownMenuItem>
-
-                    <DropdownMenuSeparator className="bg-border" />
-
-                    {/* A started shift is never deleted (D4) — the database
-                        refuses it (SHIFT_STARTED), so it is not offered. */}
-                    <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
-                      <Lock className="h-4 w-4 mr-2" />
-                      Delete (Started)
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    {isLocked ? (
-                      <DropdownMenuItem
-                        onClick={() => handleDeleteShift(shift)}
-                        className="text-destructive hover:bg-destructive/10 cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Shift (Locked)
-                      </DropdownMenuItem>
-                    ) : (
-                      <>
-                        {shift.isDraft && (
-                          <DropdownMenuItem
-                            onClick={() => handleEditShift(shift, group, subGroup, date)}
-                            className="text-popover-foreground hover:bg-accent cursor-pointer"
-                          >
-                            <Edit2 className="h-4 w-4 mr-2" />
-                            Edit Shift
-                          </DropdownMenuItem>
-                        )}
-
-                        {shift.isDraft && !shift.isPublished && (
-                          <DropdownMenuItem
-                            disabled={isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')}
-                            onClick={() => handleRequestPublish(shift)}
-                            className={cn(
-                              "text-popover-foreground hover:bg-accent cursor-pointer",
-                              isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') && "opacity-50 cursor-not-allowed"
-                            )}
-                          >
-                            <Send className="h-4 w-4 mr-2" />
-                            {isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')
-                              ? 'Publish (Assign Required)'
-                              : 'Publish Shift'}
-                          </DropdownMenuItem>
-                        )}
-
-                        {shift.rawShift.lifecycle_status === 'Published' && (
-                          <DropdownMenuItem
-                            onClick={() => handleRequestUnpublish(shift)}
-                            className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-                          >
-                            <Undo2 className="h-4 w-4 mr-2" />
-                            {shift.rawShift.lifecycle_status === 'Published' &&
-                              shift.rawShift.assignment_status === 'assigned' &&
-                              !shift.rawShift.assignment_outcome
-                              ? 'Retract Offer & Move to Draft'
-                              : 'Unpublish Shift'}
-                          </DropdownMenuItem>
-                        )}
-
-                        <DropdownMenuSeparator className="bg-border" />
-
-                        <DropdownMenuItem
-                          onClick={() => handleDeleteShift(shift)}
-                          className="text-destructive hover:bg-destructive/10 cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Shift
-                        </DropdownMenuItem>
-                      </>
+                {/* Publish / Unpublish where applicable */}
+                {!hasStarted && canEdit && shift.isDraft && !shift.isPublished && (
+                  <DropdownMenuItem
+                    disabled={isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')}
+                    onClick={() => handleRequestPublish(shift)}
+                    className={cn(
+                      "text-popover-foreground hover:bg-accent cursor-pointer",
+                      isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') && "opacity-50 cursor-not-allowed"
                     )}
-                  </>
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')
+                      ? 'Publish (Assign Required)'
+                      : 'Publish Shift'}
+                  </DropdownMenuItem>
                 )}
+
+                {!hasStarted && canEdit && shift.rawShift.lifecycle_status === 'Published' && (
+                  <DropdownMenuItem
+                    onClick={() => handleRequestUnpublish(shift)}
+                    className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                  >
+                    <Undo2 className="h-4 w-4 mr-2" />
+                    Unpublish Shift
+                  </DropdownMenuItem>
+                )}
+
+                <DropdownMenuSeparator className="bg-border" />
+
+                {/* 4. Delete */}
+                <DropdownMenuItem
+                  disabled={hasStarted || !canEdit}
+                  onClick={() => handleDeleteShift(shift)}
+                  className={cn(
+                    "text-destructive hover:bg-destructive/10 cursor-pointer",
+                    (hasStarted || !canEdit) && "text-muted-foreground/50 cursor-not-allowed"
+                  )}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
+                </DropdownMenuItem>
               </>
             );
           })()}
-
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -2846,11 +2393,14 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         }}
       >
         <SmartShiftCard
-          shift={shift.rawShift}
+          shift={{
+            ...shift.rawShift,
+            employeeName: shift.employeeName,
+          } as Shift}
           variant="compact"
           groupColor={accentColor}
           compliance={complianceMap?.[shift.id]}
-          headerAction={canEdit && !isBulkMode ? menu : undefined}
+          headerAction={!isBulkMode ? menu : undefined}
           isSelected={isBulkMode && selectedV8ShiftIdsSet.has(shift.id)}
           isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
           isPast={isPastDate}
@@ -2874,15 +2424,21 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // gives the browser an LCP candidate within the first React commit.
   // The parent page already overlays a "Loading shifts…" indicator on top.
 
+  const activeSubGroupScope = activeSubGroup ? subGroupScopeFor(activeSubGroup.groupExternalId) : null;
+  const activeSubGroupScopeLabel = activeSubGroupScope
+    ? `${GROUP_DISPLAY_NAMES[activeSubGroupScope.groupExternalId as TemplateGroupType] ?? activeSubGroupScope.groupExternalId} · ` +
+      formatRange(activeSubGroupScope.startDate, activeSubGroupScope.endDate)
+    : '';
+
   // ==================== MAIN RENDER ====================
   return (
     <>
       <div className="flex flex-col h-full transition-colors bg-background relative overflow-hidden">
         {/* DnD Mode Indicator */}
         {isDnDModeActive && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-500">
-            <Badge className="px-6 py-2 bg-emerald-500/90 text-white backdrop-blur-md border border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center gap-2 text-sm font-medium rounded-full">
-              <Zap className="h-4 w-4 animate-pulse" />
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+            <Badge className="px-4 py-1.5 bg-emerald-600 text-white border border-emerald-500/40 shadow-sm flex items-center gap-2 text-[11px] font-semibold rounded-full">
+              <Zap className="h-3.5 w-3.5" />
               DnD Mode Active
             </Badge>
           </div>
@@ -2890,93 +2446,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
         {/* Main Content (day / 3-day / week / month grid) */}
         <ScrollArea ref={scrollAreaRef} className="flex-1">
-            {/* Shift Card Legend (collapsible) */}
-            {showLegend && (
-              <div className="px-4 pt-4 space-y-3">
-                <ShiftCardLegend />
-                {footerStats && (
-                  <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white/40 dark:bg-black/20 backdrop-blur-xl px-5 py-3 overflow-hidden">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between text-xs gap-3">
-                      <div className="flex items-center gap-6">
-                        <div>
-                          <span className="text-muted-foreground/60 font-medium">Total Shifts:</span>
-                          <span className="ml-2 font-semibold text-foreground">{footerStats.totalShifts}</span>
-                        </div>
-                        <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 hidden md:block" />
-                        <div>
-                          <span className="text-muted-foreground/60 font-medium">Assigned:</span>
-                          <span className="ml-2 font-semibold text-emerald-400">{footerStats.assignedShifts}</span>
-                        </div>
-                        <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 hidden md:block" />
-                        <div>
-                          <span className="text-muted-foreground/60 font-medium">Unfilled:</span>
-                          <span className="ml-2 font-semibold text-amber-400">{footerStats.unfilledShifts}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4">
-                        {/* Two cost panels, both scoped to the CURRENT view (the
-                            stats RPC takes the same org/date/department filters
-                            as the grid). Scheduled = the plan; Actual = what was
-                            worked. Each carries its own denominator so a $0.00
-                            can't be mistaken for "free" when it means "nothing
-                            worked yet" or "nothing priced". */}
-                        <CostPanel
-                          label="Scheduled"
-                          amount={footerStats.scheduledCost}
-                          minutes={footerStats.scheduledNetMinutes}
-                          countLabel={
-                            footerStats.uncostedShifts > 0
-                              ? `${footerStats.costedShifts} of ${footerStats.totalShifts} priced`
-                              : `${footerStats.totalShifts} shift${footerStats.totalShifts === 1 ? '' : 's'}`
-                          }
-                          warn={footerStats.uncostedShifts > 0}
-                          tone="planned"
-                        />
-                        <CostPanel
-                          label="Actual"
-                          amount={footerStats.actualCost}
-                          minutes={footerStats.actualNetMinutes}
-                          countLabel={
-                            footerStats.actualShifts === 0
-                              ? 'none worked yet'
-                              : `${footerStats.actualShifts} of ${footerStats.totalShifts} worked`
-                          }
-                          muted={footerStats.actualShifts === 0}
-                          tone="actual"
-                        />
-                        {/* Budget / Remaining hidden until a real budget source
-                            (e.g. planning_periods) is wired — the current budget
-                            is a hardcoded placeholder yielding a fake negative. */}
-                        {showBudget && (
-                          <>
-                            <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 hidden md:block" />
-                            <div>
-                              <span className="text-muted-foreground/60 font-medium">Budget:</span>
-                              <span className="ml-2 font-semibold text-foreground">${footerStats.budget.toFixed(2)}</span>
-                            </div>
-                            <div className="w-[1px] h-4 bg-slate-200 dark:bg-white/10 hidden md:block" />
-                            <div>
-                              <span className="text-muted-foreground/60 font-medium">Remaining:</span>
-                              <span
-                                className={cn(
-                                  'ml-2 font-semibold',
-                                  footerStats.remainingBudget >= 0 ? 'text-emerald-400' : 'text-red-400'
-                                )}
-                              >
-                                ${footerStats.remainingBudget.toFixed(2)}
-                              </span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="p-4 space-y-6">
+            <div className="p-4 md:p-5 space-y-6">
               {visualGroups.map((group) => (
                 <GroupSection
                   key={group.type}
@@ -2987,10 +2457,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   isBulkMode={isBulkMode}
                   externalShifts={externalShifts}
                   isDateInTemplate={isDateInTemplate}
-                  shiftsByBucketKey={shiftsByBucketKey}
-                  selectedV8ShiftIdsSet={selectedV8ShiftIdsSet}
-                  onDeselectShiftIds={onDeselectShiftIds}
-                  onSelectShiftIds={onSelectShiftIds}
                   isDnDModeActive={isDnDModeActive}
                   summaryData={summaryData}
                   onDrillDown={onDrillDown}
@@ -3001,36 +2467,34 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   handleEmployeeDrop={handleEmployeeDrop}
                   setActiveSubGroup={setActiveSubGroup}
                   setIsRenameOpen={setIsRenameOpen}
-                  setIsCloneOpen={setIsCloneOpen}
                   setIsDeleteOpen={setIsDeleteOpen}
                   getSubGroupTemplateLabel={getSubGroupTemplateLabel}
+                  subGroupActionsBlockedReason={subGroupActionsBlockedReason}
                   isInitiallyCollapsed={effectiveCollapsed.has(group.id)}
                   onToggleCollapse={handleToggleGroupCollapse}
                 />
               ))}
+
+              {visualGroups.length === 0 && !isShiftsLoading && (
+                <RosterEmptyState
+                  icon={Layers}
+                  title="No groups found"
+                  description="No roster groups or sub-groups have been configured for this department."
+                />
+              )}
             </div>
           </ScrollArea>
 
         <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
-
-        {/* Copy a full-time shift onto a range */}
-        <CopyShiftFlow
-          source={copySource}
-          defaultEndDate={copySource
-            ? format(endOfWeek(parseISO(copySource.dateKey), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-            : ''}
-          referenceDate={format(getSydneyNow(), 'yyyy-MM-dd')}
-          onClose={() => setCopySource(null)}
-          onCopied={() => { void queryClient.invalidateQueries({ queryKey: shiftKeys.all }); }}
-        />
+        <ShiftAuditDialog shift={auditedShift} onOpenChange={(o) => { if (!o) setAuditedShift(null); }} />
 
         {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent className="bg-background border-border">
+          <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-foreground">Delete Shift?</AlertDialogTitle>
+              <AlertDialogTitle>Delete Shift?</AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="space-y-2 text-sm text-muted-foreground">
+                <div className="space-y-2 text-[13px] text-muted-foreground">
                   <p>
                     This action cannot be undone. The shift "{shiftToDelete?.role}" will be permanently removed.
                   </p>
@@ -3081,13 +2545,13 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
       {/* Confirmation Dialog */}
       <AlertDialog open={confirmActionOpen} onOpenChange={setConfirmActionOpen}>
-        <AlertDialogContent className="bg-background border-border">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2">
               {pendingAction?.type === 'publish' && 'Publish Shift'}
               {pendingAction?.type === 'unpublish' && 'Unpublish Shift'}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
+            <AlertDialogDescription>
               {pendingAction?.type === 'publish' && (
                 pendingAction.shift.rawShift.assigned_employee_id
                   ? "This shift is assigned. Publishing will send a job offer to the employee. They must accept it to confirm."
@@ -3125,13 +2589,13 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
       {/* Emergency Cover Alert */}
       <AlertDialog open={isEmergencyAlertOpen} onOpenChange={setIsEmergencyAlertOpen}>
-        <AlertDialogContent className="bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-500/50 backdrop-blur-xl">
+        <AlertDialogContent className="bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-500/50">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
               <Ban className="h-5 w-5" />
               Emergency Cover Required
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-700 dark:text-white/90 text-base">
+            <AlertDialogDescription>
               {emergencyAlertMessage}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -3143,60 +2607,37 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
 
 
-      {/* SubGroup Actions Dialogs */}
-      {activeSubGroup && (
+      {/* SubGroup Actions Dialogs — each previews the change (dry run) before making it */}
+      {activeSubGroup && activeSubGroupScope && (
         <>
           <RenameSubGroupDialog
-            subgroupId={activeSubGroup.id}
             currentName={activeSubGroup.name}
+            scopeLabel={activeSubGroupScopeLabel}
             isOpen={isRenameOpen}
             onOpenChange={setIsRenameOpen}
+            onPreview={async (newName) =>
+              describeSubgroupRename(
+                await renameRosterSubgroup(activeSubGroupScope, activeSubGroup.name, newName, true),
+                activeSubGroup.name,
+                newName,
+              )}
             onRename={async (newName) => {
-              await renameSubGroupMutation.mutateAsync({
-                orgId: organizationId || '',
-                deptId: departmentId || '',
-                groupExternalId: activeSubGroup.groupExternalId,
-                oldName: activeSubGroup.name,
-                newName,
-                startDate: dateRangeStart || '',
-                endDate: dateRangeEnd || ''
-              });
-            }}
-          />
-          <CloneSubGroupDialog
-            subgroupId={activeSubGroup.id}
-            currentName={activeSubGroup.name}
-            isOpen={isCloneOpen}
-            onOpenChange={setIsCloneOpen}
-            onClone={async (newName) => {
-              await cloneSubGroupMutation.mutateAsync({
-                orgId: organizationId || '',
-                deptId: departmentId || '',
-                groupExternalId: activeSubGroup.groupExternalId,
-                sourceName: activeSubGroup.name,
-                newName,
-                startDate: dateRangeStart || '',
-                endDate: dateRangeEnd || ''
-              });
+              await renameSubGroupMutation.mutateAsync({ scope: activeSubGroupScope, oldName: activeSubGroup.name, newName });
             }}
           />
           <DeleteSubGroupDialog
-            subgroupId={activeSubGroup.id}
             subGroupName={activeSubGroup.name}
+            scopeLabel={activeSubGroupScopeLabel}
             isOpen={isDeleteOpen}
             onOpenChange={setIsDeleteOpen}
+            onPreview={async () =>
+              describeSubgroupDeletion(
+                await deleteRosterSubgroup(activeSubGroupScope, activeSubGroup.name, true),
+                activeSubGroup.name,
+              )}
             onConfirm={async () => {
-              await deleteSubGroupMutation.mutateAsync({
-                orgId: organizationId || '',
-                deptId: departmentId || '',
-                groupExternalId: activeSubGroup.groupExternalId,
-                name: activeSubGroup.name,
-                startDate: dateRangeStart || '',
-                endDate: dateRangeEnd || ''
-              });
-              setIsDeleteOpen(false);
+              await deleteSubGroupMutation.mutateAsync({ scope: activeSubGroupScope, name: activeSubGroup.name });
             }}
-            isDeleting={deleteSubGroupMutation.isPending}
           />
         </>
       )}
@@ -3221,4 +2662,3 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   );
 };
 
-export default GroupModeView;

@@ -21,10 +21,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { analysisHref as analysisHrefSync } from '../metric-registry';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
-
-const MIGRATIONS = join(process.cwd(), 'supabase', 'migrations');
+import { readFileSync } from 'node:fs';
+import { allMigrationFiles, findMigrationByName } from '@/test/migrations';
 
 /** Strip `--` line comments so a comment can never satisfy a match. */
 function stripSqlComments(sql: string): string {
@@ -35,9 +33,7 @@ function stripSqlComments(sql: string): string {
 }
 
 function readMigration(fragment: string): string {
-    const file = readdirSync(MIGRATIONS).find((f) => f.includes(fragment) && f.endsWith('.sql'));
-    if (!file) throw new Error(`no migration matching "${fragment}"`);
-    return stripSqlComments(readFileSync(join(MIGRATIONS, file), 'utf8'));
+    return stripSqlComments(readFileSync(findMigrationByName(fragment), 'utf8'));
 }
 
 /**
@@ -209,9 +205,8 @@ describe('every drill-down link points at a branch that exists', () => {
     const analysisSql = [
         readMigration('metric_analysis_branches_for_kpi_tabs'),
         // The four original branches live in an earlier migration.
-        ...readdirSync(MIGRATIONS)
-            .filter((f) => f.endsWith('.sql'))
-            .map((f) => stripSqlComments(readFileSync(join(MIGRATIONS, f), 'utf8')))
+        ...allMigrationFiles()
+            .map((m) => stripSqlComments(readFileSync(m.path, 'utf8')))
             .filter((sql) => sql.includes("p_metric_id = 'shift-fill-rate'")),
     ].join('\n');
 
@@ -230,7 +225,7 @@ describe('every drill-down link points at a branch that exists', () => {
     });
 
     it('every metric the UI links from resolves to a real branch', async () => {
-        const { analysisMetricId, analysisHref } = await import('../metric-registry');
+        const { analysisMetricId } = await import('../metric-registry');
 
         // The registry ids the tabs actually pass to analysisHref.
         const linked = [

@@ -25,7 +25,7 @@ interface ApprenticeCardProps {
 
 const ApprenticeCard: React.FC<ApprenticeCardProps> = ({ title, subtitle, years, accent }) => (
   <div className={cn(
-    'rounded-xl border border-border/60 bg-card/40 backdrop-blur-sm p-6',
+    'rounded-2xl border border-border/60 bg-card p-4 shadow-sm',
     'transition-all hover:border-primary/30 hover:bg-card/60 shadow-sm',
     'flex flex-col gap-4 justify-between',
   )}
@@ -38,8 +38,8 @@ const ApprenticeCard: React.FC<ApprenticeCardProps> = ({ title, subtitle, years,
           <Wrench className={cn('h-5 w-5', accent ? 'text-inherit' : 'text-primary')} aria-hidden="true" />
         </div>
         <div>
-          <p className="text-base font-bold text-foreground">{title}</p>
-          <p className="text-xs text-muted-foreground font-medium">{subtitle}</p>
+          <p className="text-[15px] font-bold text-foreground">{title}</p>
+          <p className="text-[11px] text-muted-foreground font-medium">{subtitle}</p>
         </div>
       </div>
 
@@ -50,23 +50,23 @@ const ApprenticeCard: React.FC<ApprenticeCardProps> = ({ title, subtitle, years,
             className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0"
             role="listitem"
           >
-            <span className="text-sm font-medium text-muted-foreground">Year {year}</span>
+            <span className="text-[13px] font-medium text-muted-foreground">Year {year}</span>
             {value != null ? (
               <span className={cn(
-                'text-base font-bold tabular-nums',
+                'text-[15px] font-bold tabular-nums',
                 value >= 1 ? 'text-emerald-400' : 'text-foreground',
               )}>
                 {pct(value)}
               </span>
             ) : (
-              <span className="text-sm text-muted-foreground font-semibold">—</span>
+              <span className="text-[13px] text-muted-foreground font-semibold">—</span>
             )}
           </div>
         ))}
       </div>
     </div>
 
-    <p className="text-xs font-semibold text-muted-foreground pt-2 border-t border-border/40 mt-1">
+    <p className="text-[11px] font-semibold text-muted-foreground pt-2 border-t border-border/40 mt-1">
       % of Level 4 rate
     </p>
   </div>
@@ -125,8 +125,8 @@ const ApprenticeCards: React.FC = () => {
         <div className="flex items-center gap-3 mb-6">
           <Wrench className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           <div>
-            <h3 className="text-xl font-bold text-foreground">Apprentices (Schedule 4)</h3>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h3 className="text-[17px] font-bold text-foreground">Apprentices (Schedule 4)</h3>
+            <p className="text-[13px] text-muted-foreground mt-1">
               Percentage of Level 4 rate · tracks CPI automatically via Level 4
             </p>
           </div>
@@ -144,8 +144,8 @@ const ApprenticeCards: React.FC = () => {
         <div className="flex items-center gap-2 mb-4">
           <HeartHandshake className="h-4 w-4 text-muted-foreground" />
           <div>
-            <h3 className="text-base font-semibold text-foreground">Supported Wage System (Schedule 6)</h3>
-            <p className="text-xs text-muted-foreground">
+            <h3 className="text-[15px] font-semibold text-foreground">Supported Wage System (Schedule 6)</h3>
+            <p className="text-[11px] text-muted-foreground">
               Assessed capacity maps 1:1 to % of the relevant minimum wage · tracks CPI automatically
             </p>
           </div>
@@ -157,8 +157,8 @@ const ApprenticeCards: React.FC = () => {
               key={s}
               className="rounded-xl border border-border/60 bg-card/40 px-4 py-3 text-center min-w-[80px] transition-all hover:border-primary/30"
             >
-              <span className="text-lg font-bold text-foreground tabular-nums">{s}%</span>
-              <p className="text-[10px] text-muted-foreground mt-0.5">capacity</p>
+              <span className="text-[15px] font-bold text-foreground tabular-nums">{s}%</span>
+              <p className="text-[11px] text-muted-foreground mt-0.5">capacity</p>
             </div>
           ))}
         </div>

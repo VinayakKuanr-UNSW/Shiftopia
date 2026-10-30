@@ -23,7 +23,7 @@ export type RPCErrorCode =
   | 'VALIDATION'        // Client-side input validation failed
   | 'UNKNOWN';          // Unclassified — should never be used in new code
 
-export interface StructuredError {
+interface StructuredError {
   code: RPCErrorCode;
   message: string;
   rpcName?: string;
@@ -99,17 +99,6 @@ export class ComplianceUnavailableError extends AppError {
   }
 }
 
-/** Attempted a state transition not allowed by the spec */
-export class StateTransitionError extends AppError {
-  constructor(fromState: string, action: string, reason?: string) {
-    super({
-      code: 'STATE_TRANSITION',
-      message: reason ?? `Cannot perform '${action}' from state '${fromState}'`,
-      details: { from: fromState, action },
-    });
-    this.name = 'StateTransitionError';
-  }
-}
 
 /** User is not authenticated */
 export class AuthenticationError extends AppError {
@@ -119,47 +108,13 @@ export class AuthenticationError extends AppError {
   }
 }
 
-/** User is authenticated but lacks permission */
-export class PermissionError extends AppError {
-  constructor(action: string) {
-    super({
-      code: 'PERMISSION_DENIED',
-      message: `You do not have permission to perform: ${action}`,
-      details: { action },
-    });
-    this.name = 'PermissionError';
-  }
-}
 
-/** Optimistic lock conflict — another actor updated the record */
-export class ConflictError extends AppError {
-  constructor(resourceType: string, id: string) {
-    super({
-      code: 'CONFLICT',
-      message: `${resourceType} was modified by another user. Please refresh and try again.`,
-      details: { resourceType, id },
-    });
-    this.name = 'ConflictError';
-  }
-}
 
 // ── Type guards ────────────────────────────────────────────────────────────
 
 export const isAppError = (e: unknown): e is AppError =>
   e instanceof AppError;
 
-export const isComplianceError = (e: unknown): e is ComplianceError =>
-  e instanceof ComplianceError;
 
-export const isStateTransitionError = (e: unknown): e is StateTransitionError =>
-  e instanceof StateTransitionError;
 
-export const isAuthError = (e: unknown): e is AuthenticationError =>
-  e instanceof AuthenticationError;
 
-/** Coerce any thrown value into an AppError for safe handling */
-export function toAppError(e: unknown, rpcName?: string): AppError {
-  if (isAppError(e)) return e;
-  const message = e instanceof Error ? e.message : String(e);
-  return new AppError({ code: 'UNKNOWN', message, rpcName });
-}

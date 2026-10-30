@@ -19,7 +19,9 @@ from supabase import create_client
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 SUPABASE_URL = os.getenv('VITE_SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('VITE_SUPABASE_ANON_KEY')
+# Server-side only. The anon key reads nothing these scripts need (RLS), so
+# there is deliberately no fallback to it: a missing key fails loudly.
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +65,3 @@ class CorrectionEngine:
         """
         factor = self.factors.get((event_type, role), 1.0)
         return predicted * factor, factor
-
-    def get_factor(self, event_type: str, role: str) -> float:
-        """Get the correction factor for a given event type and role."""
-        return self.factors.get((event_type, role), 1.0)
-
-    def all_factors(self) -> dict[tuple[str, str], float]:
-        """Return a copy of all loaded factors for inspection."""
-        return dict(self.factors)

@@ -6,11 +6,10 @@
  */
 
 import React from 'react';
-import { ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { text } from '@/modules/core/ui/typography';
 
 export interface FunnelStep {
     id: string;
@@ -22,7 +21,7 @@ export interface FunnelStep {
     color?: string;
 }
 
-export interface KpiFunnelCardProps {
+interface KpiFunnelCardProps {
     title: string;
     badgeText?: string;
     subtitle?: string;
@@ -59,17 +58,17 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3 pb-5 border-b border-border/40">
                 <div>
                     <div className="flex items-center gap-2.5">
-                        <h3 className="text-lg font-bold tracking-tight text-foreground">{title}</h3>
+                        <h3 className="text-[15px] font-bold tracking-tight text-foreground">{title}</h3>
                         {badgeText && (
-                            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 font-semibold text-xs border-0">
+                            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 font-semibold text-[11px] border-0">
                                 {badgeText}
                             </Badge>
                         )}
                     </div>
-                    {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+                    {subtitle && <p className="text-[11px] text-muted-foreground mt-1">{subtitle}</p>}
                 </div>
                 {onViewDetails && (
-                    <Button variant="outline" size="sm" onClick={onViewDetails} className="h-8 text-xs font-semibold rounded-lg">
+                    <Button variant="outline" size="sm" onClick={onViewDetails} className="h-8 text-[11px] font-semibold rounded-lg">
                         View Pipeline
                     </Button>
                 )}
@@ -82,13 +81,13 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
                     <div className="grid grid-cols-5 gap-2 mb-4">
                         {steps.map((s, idx) => (
                             <div key={s.id} className="flex flex-col">
-                                <p className="text-xs font-semibold text-muted-foreground truncate">
+                                <p className="text-[11px] font-semibold text-muted-foreground truncate">
                                     {s.stepNumber}. {s.title}
                                 </p>
-                                <p className="text-2xl font-bold tracking-tight text-foreground mt-1 tabular-nums">
+                                <p className="text-[20px] font-bold tracking-tight text-foreground mt-1 tabular-nums">
                                     {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
                                 </p>
-                                <p className="text-xs font-medium text-muted-foreground mt-0.5">
+                                <p className="text-[11px] font-medium text-muted-foreground mt-0.5">
                                     {s.conversionRate}%
                                 </p>
                             </div>
@@ -129,12 +128,12 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
             <div className="mt-auto pt-4 border-t border-border/40 grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
                 <div>
                     <p className="text-[11px] font-semibold text-muted-foreground">Overall Completion Rate</p>
-                    <p className="text-xl font-bold text-primary tabular-nums mt-0.5">{overallRate}</p>
+                    <p className="text-[17px] font-bold text-primary tabular-nums mt-0.5">{overallRate}</p>
                 </div>
 
                 <div>
                     <p className="text-[11px] font-semibold text-muted-foreground">Total Drop-offs</p>
-                    <p className="text-xl font-bold text-foreground tabular-nums mt-0.5">
+                    <p className="text-[17px] font-bold text-foreground tabular-nums mt-0.5">
                         {typeof totalDropOffs === 'number' ? totalDropOffs.toLocaleString() : totalDropOffs}
                     </p>
                 </div>
@@ -142,7 +141,7 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
                 {biggestDropOff && (
                     <div>
                         <p className="text-[11px] font-semibold text-muted-foreground">Largest Drop-off</p>
-                        <p className="text-xs font-bold text-rose-600 dark:text-rose-400 mt-0.5 truncate">
+                        <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 mt-0.5 truncate">
                             {biggestDropOff.fromStep} → {biggestDropOff.toStep} ({biggestDropOff.count})
                         </p>
                     </div>
@@ -152,14 +151,14 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
                     <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                             <p className="text-[11px] font-semibold text-muted-foreground">Improvement Point</p>
-                            <p className="text-xs font-medium text-foreground truncate mt-0.5">{opportunityText}</p>
+                            <p className="text-[11px] font-medium text-foreground truncate mt-0.5">{opportunityText}</p>
                         </div>
                         {onViewInsights && (
                             <Button
                                 size="sm"
                                 variant="secondary"
                                 onClick={onViewInsights}
-                                className="h-7 px-2.5 text-xs font-semibold rounded-lg bg-primary/10 text-primary hover:bg-primary/20 shrink-0"
+                                className="h-7 px-2.5 text-[11px] font-semibold rounded-lg bg-primary/10 text-primary hover:bg-primary/20 shrink-0"
                             >
                                 <Sparkles className="h-3 w-3 mr-1" />
                                 Insights
@@ -172,4 +171,3 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
     );
 };
 
-export default KpiFunnelCard;

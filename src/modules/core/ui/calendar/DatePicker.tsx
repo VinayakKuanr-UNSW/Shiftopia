@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primi
  * this, so the trigger label, the Monday-start grid, the focus behaviour and the
  * accessible name are identical everywhere.
  */
-export interface DatePickerProps {
+interface DatePickerProps {
   value: Date | undefined;
   onChange: (date: Date) => void;
 

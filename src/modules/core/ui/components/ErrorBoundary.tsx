@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import { logger } from '@/modules/core/lib/logger';
 import { captureException } from '@/platform/observability/sentry';
 
@@ -116,10 +116,10 @@ function IncidentFallback({
                     </div>
 
                     <div>
-                        <p className="text-[10px] font-mono tracking-[0.18em] uppercase text-amber-400/50 leading-none mb-1">
+                        <p className="text-[11px] font-mono tracking-[0.18em] uppercase text-amber-400/50 leading-none mb-1">
                             System Incident
                         </p>
-                        <p className="text-sm font-mono font-semibold text-amber-400 leading-none">
+                        <p className="text-[13px] font-mono font-semibold text-amber-400 leading-none">
                             {code}
                         </p>
                     </div>
@@ -129,10 +129,10 @@ function IncidentFallback({
                 <div className="h-px bg-gradient-to-r from-amber-500/60 via-amber-400/30 to-transparent mb-5" />
 
                 {/* ── Message ── */}
-                <h3 className="text-sm font-medium text-white mb-1.5">
+                <h3 className="text-[13px] font-medium text-white mb-1.5">
                     Component render failure
                 </h3>
-                <p className="text-xs text-slate-400 leading-relaxed mb-5">
+                <p className="text-[11px] text-slate-400 leading-relaxed mb-5">
                     An unexpected error interrupted this view. Your data is safe —
                     the rest of the application is still running normally.
                 </p>
@@ -140,11 +140,11 @@ function IncidentFallback({
                 {/* ── Dev trace ── */}
                 {isDev && error && (
                     <details className="mb-5 group">
-                        <summary className="text-[10px] font-mono text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors list-none flex items-center gap-1.5">
+                        <summary className="text-[11px] font-mono text-slate-500 cursor-pointer select-none hover:text-slate-300 transition-colors list-none flex items-center gap-1.5">
                             <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                             stack trace
                         </summary>
-                        <pre className="mt-2 p-3 text-[10px] font-mono bg-black/50 border border-white/5 rounded text-slate-400 overflow-auto max-h-28 leading-relaxed whitespace-pre-wrap break-all">
+                        <pre className="mt-2 p-3 text-[11px] font-mono bg-black/50 border border-white/5 rounded text-slate-400 overflow-auto max-h-28 leading-relaxed whitespace-pre-wrap break-all">
                             {error.message}{'\n'}{error.stack?.split('\n').slice(1, 5).join('\n')}
                         </pre>
                     </details>
@@ -163,12 +163,12 @@ function IncidentFallback({
                             style={{ borderColor: ok ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.25)' }}
                         >
                             <span
-                                className="text-[9px] font-mono tracking-widest uppercase"
+                                className="text-[11px] font-mono tracking-widest uppercase"
                                 style={{ color: ok ? 'rgb(134,239,172)' : 'rgb(252,211,77)' }}
                             >
                                 {ok ? '● OK' : '○ FAIL'}
                             </span>
-                            <span className="text-[9px] font-mono text-slate-500">{label}</span>
+                            <span className="text-[11px] font-mono text-slate-500">{label}</span>
                         </div>
                     ))}
                 </div>
@@ -177,13 +177,13 @@ function IncidentFallback({
                 <div className="flex gap-2">
                     <button
                         onClick={onRetry}
-                        className="flex-1 px-3 py-2 text-[10px] font-mono font-semibold tracking-widest uppercase rounded border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/70 transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-400"
+                        className="flex-1 px-3 py-2 text-[11px] font-mono font-semibold tracking-widest uppercase rounded border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/70 transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-400"
                     >
                         ↻&nbsp;&nbsp;Retry
                     </button>
                     <button
                         onClick={() => window.location.reload()}
-                        className="px-3 py-2 text-[10px] font-mono font-semibold tracking-widest uppercase rounded border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+                        className="px-3 py-2 text-[11px] font-mono font-semibold tracking-widest uppercase rounded border border-white/10 text-slate-400 hover:text-white hover:border-white/20 transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
                     >
                         Reload
                     </button>
@@ -255,4 +255,3 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     }
 }
 
-export default ErrorBoundary;

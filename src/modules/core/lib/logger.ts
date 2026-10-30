@@ -3,9 +3,9 @@
  * Provides consistent logging format across the application
  */
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-export interface LogContext {
+interface LogContext {
     module: string;
     operation: string;
     correlationId?: string;
@@ -13,7 +13,7 @@ export interface LogContext {
     [key: string]: unknown;
 }
 
-export interface LogEntry extends LogContext {
+interface LogEntry extends LogContext {
     level: LogLevel;
     message: string;
     timestamp: string;
@@ -93,12 +93,6 @@ export const logger = {
     },
 };
 
-/**
- * Generate a correlation ID for request tracing
- */
-export function generateCorrelationId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
 
 /**
  * Create a scoped logger for a specific module

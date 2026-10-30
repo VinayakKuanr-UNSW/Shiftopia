@@ -12,7 +12,6 @@
 
 import type { Shift } from './shift.entity';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { getTimeRule } from './shift-ui';
 
 // ============================================================
 // TYPES
@@ -23,20 +22,12 @@ import { getTimeRule } from './shift-ui';
  * `blocked`  = shifts that CANNOT be processed (will be skipped).
  * `warned`   = shifts that WILL be processed but carry a risk/side-effect.
  */
-export interface BulkPreflightSummary {
+interface BulkPreflightSummary {
     eligibleIds: string[];
     blocked: Array<{ id: string; reason: string }>;
     warned: Array<{ id: string; reason: string }>;
 }
 
-/**
- * Structured result returned by every bulk execution.
- * Enables partial-success UX — never treat a partial failure as total failure.
- */
-export interface BulkExecutionResult {
-    successIds: string[];
-    failed: Array<{ id: string; reason: string }>;
-}
 
 // ============================================================
 // PRE-FLIGHT VALIDATORS (sync — no network calls)
@@ -189,12 +180,28 @@ export interface PublishRosterPlan {
      * `sm_bulk_publish_shifts` skips them; this says so before the manager confirms.
      */
     onLeaveIds: string[];
+    /**
+     * T — drafts whose start has passed (assigned and started, or already
+     * ended): too late to publish, skipped. Unassigned drafts still inside their
+     * window are W (`deadIds`) instead.
+     */
+    pastIds: string[];
+    /**
+     * P — drafts in a place where this manager may only view (e.g. delta there,
+     * gamma elsewhere): skipped. Sending one would make the server refuse the
+     * WHOLE batch.
+     */
+    noPermissionIds: string[];
     /** Z — already-published shifts in the view: skipped (informational). */
     alreadyPublishedCount: number;
 }
 
-/** Emergency window — a shift that starts within this horizon is "emergent". */
-const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
+/**
+ * Emergency window — a shift that starts within this horizon is "emergent".
+ * Inclusive (TTS ≤ 4h), matching SQL `get_time_category` (`<= 4` → EMERGENCY)
+ * and shifts.commands' emergency routing.
+ */
+export const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 /**
  * Compute the {@link PublishRosterPlan} from a set of shifts (typically the
@@ -203,14 +210,17 @@ const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
  * cancelled and deleted shifts are left untouched.
  *
  * Every draft shift falls into exactly one bucket:
- *   assigned future (X) · unassigned future (Y) · emergent assigned (A) ·
- *   emergent unassigned (B) · dead unassigned-live (W). Already-published shifts
- *   are only counted (Z).
+ *   no permission (P) · dead unassigned-live (W) · too late (T) · on leave (L) ·
+ *   full-time (F / F0) · emergent assigned (A) · emergent unassigned (B) ·
+ *   assigned future (X) · unassigned future (Y). Already-published shifts are
+ *   only counted (Z).
  */
 export function planPublishRoster(
     shifts: Shift[],
     /** Is this employee on approved leave on this `yyyy-MM-dd`? Omitted ⇒ nobody is. */
     isOnApprovedLeave?: (employeeId: string, dateKey: string) => boolean,
+    /** May this manager publish this shift where it sits? Omitted ⇒ everywhere. */
+    canPublish?: (shift: Shift) => boolean,
 ): PublishRosterPlan {
     const assignedIds: string[] = [];
     const unassignedIds: string[] = [];
@@ -220,6 +230,8 @@ export function planPublishRoster(
     const fullTimeIds: string[] = [];
     const fullTimeUnassignedIds: string[] = [];
     const onLeaveIds: string[] = [];
+    const pastIds: string[] = [];
+    const noPermissionIds: string[] = [];
     let alreadyPublishedCount = 0;
 
     // Real epoch for absolute-instant math. getSydneyNow().getTime() would be a
@@ -228,7 +240,7 @@ export function planPublishRoster(
     const nowMs = Date.now();
 
     for (const s of shifts) {
-        if (!s.deleted_at && !s.is_cancelled && s.lifecycle_status === 'Published') {
+        if (!s.is_cancelled && s.lifecycle_status === 'Published') {
             alreadyPublishedCount++;
         }
 
@@ -239,7 +251,14 @@ export function planPublishRoster(
             s.lifecycle_status === 'Cancelled';
 
         // Only DRAFT shifts are in scope.
-        if (s.deleted_at || s.is_cancelled || isPublishedOrTerminal) continue;
+        if (s.is_cancelled || isPublishedOrTerminal) continue;
+
+        // Not this manager's to publish: reported, never sent (the server would
+        // refuse the whole batch for it).
+        if (canPublish && !canPublish(s)) {
+            noPermissionIds.push(s.id);
+            continue;
+        }
 
         const startMs = s.start_at
             ? new Date(s.start_at).getTime()
@@ -256,7 +275,11 @@ export function planPublishRoster(
             deadIds.push(s.id);
             continue;
         }
-        if (!Number.isFinite(startMs) || startMs <= nowMs) continue;
+        if (!Number.isFinite(startMs)) continue;
+        if (startMs <= nowMs) {
+            pastIds.push(s.id);
+            continue;
+        }
 
         // Approved leave beats every other bucket: the shift cannot be published
         // to this person at all, whatever its type or time-to-start.
@@ -296,6 +319,8 @@ export function planPublishRoster(
         fullTimeIds,
         fullTimeUnassignedIds,
         onLeaveIds,
+        pastIds,
+        noPermissionIds,
         alreadyPublishedCount,
     };
 }
@@ -305,18 +330,28 @@ export function planPublishRoster(
 // ============================================================
 
 /**
+ * Concurrency limit for bulk shift operations: 5 parallel requests.
+ * Eliminates HTTP connection pool exhaustion, socket starvation, and 503 gateway
+ * errors when calling Edge Functions and PostgREST during large bulk operations (F-06).
+ */
+export const DEFAULT_CHUNK_CONCURRENCY = 5;
+
+/** Default batch payload size for bulk network calls: 200 items per request. */
+export const DEFAULT_BATCH_PAYLOAD_SIZE = 200;
+
+/**
  * Process IDs in sequential chunks.
  *
  * Within each chunk, requests run in parallel (Promise.allSettled).
- * Chunks are processed sequentially — this prevents flooding the DB with
- * hundreds of simultaneous requests on large selections.
+ * Chunks are processed sequentially — this prevents flooding the DB and
+ * edge function HTTP gateway with hundreds of simultaneous requests on large selections.
  *
- * Default chunk size: 20 (safe for Postgres connection pool limits).
+ * Default chunk size (concurrency): 5 (safe for Edge Function socket pools & Postgres).
  */
 export async function processInChunks<T>(
     ids: string[],
     fn: (id: string) => Promise<T>,
-    chunkSize = 20,
+    chunkSize = DEFAULT_CHUNK_CONCURRENCY,
 ): Promise<Array<{ id: string } & ({ ok: true; value: T } | { ok: false; error: string })>> {
     const results: Array<{ id: string } & ({ ok: true; value: T } | { ok: false; error: string })> = [];
 
@@ -337,5 +372,31 @@ export async function processInChunks<T>(
         }
     }
 
+    return results;
+}
+
+/**
+ * Process items in batched payloads (e.g. 200 items per request payload)
+ * with a bounded concurrency pool (e.g. 5 parallel batch requests in flight).
+ */
+export async function processInBatches<TItem, TResult>(
+    items: TItem[],
+    batchFn: (batch: TItem[]) => Promise<TResult[]>,
+    batchSize = DEFAULT_BATCH_PAYLOAD_SIZE,
+    concurrency = DEFAULT_CHUNK_CONCURRENCY,
+): Promise<TResult[]> {
+    const batches: TItem[][] = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+        batches.push(items.slice(i, i + batchSize));
+    }
+
+    const results: TResult[] = [];
+    for (let i = 0; i < batches.length; i += concurrency) {
+        const activeBatches = batches.slice(i, i + concurrency);
+        const batchResults = await Promise.all(activeBatches.map(batchFn));
+        for (const res of batchResults) {
+            results.push(...res);
+        }
+    }
     return results;
 }

@@ -29,9 +29,9 @@ import type { RuleSpec } from '../registry/types';
 /** The five categories this projection can express. `STRUCTURE` is shape-only. */
 const V8_CATEGORIES = ['TIME', 'LEGAL', 'CONTRACT', 'SKILL', 'AVAILABILITY'] as const;
 
-export type V8RuleCategory = (typeof V8_CATEGORIES)[number];
+type V8RuleCategory = (typeof V8_CATEGORIES)[number];
 
-export interface V8RuleMeta {
+interface V8RuleMeta {
     id:          string;
     name:        string;
     category:    V8RuleCategory;

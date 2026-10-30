@@ -3,7 +3,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { BroadcastGroupFormFields } from './BroadcastGroupFormFields';
 
-export interface CreateGroupDialogProps {
+interface CreateGroupDialogProps {
     isOpen: boolean;
     onClose: () => void;
     initialOrganizationId?: string | null;
@@ -54,7 +54,7 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({
     };
 
     return (
-        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()} dialogClassName="sm:max-w-[500px]">
+        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()} size="md">
             <ResponsiveDialog.Header>
                 <ResponsiveDialog.Title>Create New Broadcast Group</ResponsiveDialog.Title>
                 <ResponsiveDialog.Description>

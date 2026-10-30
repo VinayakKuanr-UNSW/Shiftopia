@@ -65,17 +65,17 @@ export type RuleCategory =
  * with flexibility on a second axis, and the solver says `PT` + `is_flexible`.
  * The agreement itself distinguishes four, so the registry does too.
  */
-export type EmploymentType = 'FT' | 'PT' | 'FPT' | 'CASUAL';
+type EmploymentType = 'FT' | 'PT' | 'FPT' | 'CASUAL';
 
 /** `'ALL'` where the rule genuinely applies to every type — not as a default. */
-export type EmploymentScope = 'ALL' | readonly EmploymentType[];
+type EmploymentScope = 'ALL' | readonly EmploymentType[];
 
 /**
  * Where the obligation comes from. Anything not traceable to the agreement says
  * so, so that a house policy cannot quietly acquire a clause number — which is
  * exactly what happened to the spread cap.
  */
-export interface RuleAuthority {
+interface RuleAuthority {
     source: 'eba' | 'statute' | 'policy' | 'operational';
     /** Clause references, e.g. ['cl 35.1(e)', 'cl 35.4(e)']. Empty for non-EBA. */
     clauses: readonly string[];
@@ -92,7 +92,7 @@ export interface RuleAuthority {
  * then rejects, which is the failure mode the whole consolidation exists to
  * prevent. `solverCoverageGaps()` reports them.
  */
-export interface RuleEngines {
+interface RuleEngines {
     /** Raised by `compliance/shape/evaluate.ts`. */
     shape: boolean;
     /** Raised by a rule in `compliance/v8/rules/`. */

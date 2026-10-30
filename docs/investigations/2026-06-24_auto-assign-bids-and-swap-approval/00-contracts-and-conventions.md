@@ -101,6 +101,6 @@ Any engine/guard exception ⇒ never auto-approve / never auto-assign that item;
 ## 8. Conventions
 
 - Migrations: **expand/contract**, additive first, never destructive in the same deploy. New columns nullable or defaulted. Drafts live under `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/migrations-draft/` and are **never** placed in `supabase/migrations/` by an agent (prod is live — humans promote drafts).
-- All new RPCs are `SECURITY DEFINER`, `SET search_path = public, pg_catalog`, and authorize the caller explicitly (cert-based; `is_manager_or_above()` is BROKEN in prod — use `app_access_certificates` with `access_level` + `is_active = true`, manager column is `user_id`).
+- All new RPCs are `SECURITY DEFINER`, `SET search_path = public, pg_catalog`, and authorize the caller explicitly (cert-based; `is_manager_or_above()` is BROKEN in prod — use `app_access_certificates` with `access_level` + `is_active = true`, manager column is `user_id`). *Correction 2026-10-14: true when written; the function was fixed on 2026-06-15 and gates nothing since the access suites. Today, authorise with `user_has_action_in_scope(action, org, dept, sub)` or the `can_act_on_*` helpers — see `docs/rulebook/08-rbac-matrix.md`.*
 - Priority ranks: **P0** = correctness/safety blockers (must ship before any auto action is trusted), **P1** = SSoT convergence + audit + scale, **P2** = optimization/fancy fairness/queue fan-out.
 - Engine version stamping: every decision row records `engine_version` (git short sha or semver const) and `policy_version`.

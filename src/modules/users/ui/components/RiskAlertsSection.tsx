@@ -1,6 +1,4 @@
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/primitives/card';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { usePerformanceMetrics, EMPTY_METRICS } from '@/modules/users/hooks/usePerformanceMetrics';
 import { useEmployeeSkills } from '@/modules/users/hooks/useEmployeeSkills';
 import { useEmployeeLicenses } from '@/modules/users/hooks/useEmployeeLicenses';
@@ -69,7 +67,7 @@ const RiskAlertsSection: React.FC<RiskAlertsSectionProps> = ({ employeeId, quart
     return (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
             <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <h3 className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-slate-500" />
                     Risk & Alerts
                 </h3>
@@ -78,14 +76,14 @@ const RiskAlertsSection: React.FC<RiskAlertsSectionProps> = ({ employeeId, quart
                 {riskIndicators.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full py-8 text-center text-slate-400">
                         <CheckCircle className="w-8 h-8 mx-auto mb-3 text-emerald-500/50" />
-                        <p className="text-sm font-medium">All metrics within normal range</p>
+                        <p className="text-[13px] font-medium">All metrics within normal range</p>
                     </div>
                 ) : (
                     <div className="space-y-2">
                         {riskIndicators.map((indicator, idx) => (
                             <div
                                 key={idx}
-                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-sm font-medium ${indicator.type === 'success'
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-[13px] font-medium ${indicator.type === 'success'
                                         ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20'
                                         : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-500/20'
                                     }`}

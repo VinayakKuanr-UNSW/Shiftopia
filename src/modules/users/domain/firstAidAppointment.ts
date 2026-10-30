@@ -31,7 +31,7 @@ export interface FirstAidAppointment {
   appointer?: { first_name: string | null; last_name: string | null } | null;
 }
 
-export type AppointmentStatus = 'scheduled' | 'current' | 'ended';
+type AppointmentStatus = 'scheduled' | 'current' | 'ended';
 
 const OPEN_END = '9999-12-31';
 
@@ -50,7 +50,7 @@ export function previousDay(isoDate: string): string {
   return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
 }
 
-export interface AppointmentActions {
+interface AppointmentActions {
   /** May its end date be set or moved? */
   canEnd: boolean;
   /** May it be removed outright? Only before it has started. */

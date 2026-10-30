@@ -15,7 +15,7 @@ import React from 'react';
 import type { PeriodGrossPay, EarningsLine } from '../model/gross-pay.types';
 import { formatCost } from '../../rosters/domain/projections/utils/cost';
 
-export interface EarningsLinesTableProps {
+interface EarningsLinesTableProps {
   period: PeriodGrossPay;
   /** Optional extra classes on the wrapping <table>. */
   className?: string;
@@ -38,7 +38,7 @@ export const EarningsLinesTable: React.FC<EarningsLinesTableProps> = ({ period, 
   return (
     <table
       className={
-        'w-full text-sm border-collapse ' + (className ?? '')
+        'w-full text-[13px] border-collapse ' + (className ?? '')
       }
       aria-label="Gross earnings breakdown"
     >
@@ -116,4 +116,3 @@ export const EarningsLinesTable: React.FC<EarningsLinesTableProps> = ({ period, 
   );
 };
 
-export default EarningsLinesTable;

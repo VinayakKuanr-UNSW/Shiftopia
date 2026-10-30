@@ -8,6 +8,15 @@ RUN npm ci
 
 COPY . .
 
+# Vite inlines VITE_* at build time; .env files are excluded from the context
+# (.dockerignore), so the values arrive as build args.
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_OPTIMIZER_URL
+ARG VITE_ML_URL
+RUN test -n "$VITE_SUPABASE_URL" && test -n "$VITE_SUPABASE_ANON_KEY" \
+    || (echo "VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY build args are required" >&2 && exit 1)
+
 # Build step outputs static files to /app/dist
 RUN npm run build
 

@@ -1,7 +1,8 @@
 import { supabase } from '@/platform/supabase/client';
 import { requireUser } from '@/platform/supabase/rpc/client';
+import { shiftsCommands } from './shifts.commands';
 
-export interface SynthesisRunRow {
+interface SynthesisRunRow {
     id: string;
     organization_id: string;
     department_id: string;
@@ -19,7 +20,7 @@ export interface SynthesisRunRow {
     rolled_back_count: number | null;
 }
 
-export interface CreateRunInput {
+interface CreateRunInput {
     organization_id: string;
     department_id: string;
     sub_department_id: string | null;
@@ -97,8 +98,7 @@ export const synthesisRunsQueries = {
         const { data: shiftsForRun, error: fetchErr } = await supabase
             .from('shifts')
             .select('id, assigned_employee_id')
-            .eq('synthesis_run_id', runId)
-            .is('deleted_at', null);
+            .eq('synthesis_run_id', runId);
         if (fetchErr) throw new Error(`rollbackRun (fetch) failed: ${fetchErr.message}`);
 
         const matched = shiftsForRun ?? [];
@@ -110,20 +110,15 @@ export const synthesisRunsQueries = {
             return { deletedCount: 0, skippedAssigned: 0, failedDeletes: [], orphaned: true, forecastsDeleted: 0 };
         }
 
-        // 2. Soft-delete via a direct UPDATE.
+        // 2. Delete through the roster's guarded bulk delete (sm_bulk_delete_shifts:
+        //    authority check; a started or worked shift refuses itself). A
+        //    soft-delete UPDATE cannot work: CHECK shifts_no_soft_delete refuses it.
         let deletedCount = 0;
         const failedDeletes: Array<{ id: string; reason: string }> = [];
         if (toDelete.length > 0) {
-            const { error: delErr, count } = await supabase
-                .from('shifts')
-                .update({ deleted_at: new Date().toISOString() }, { count: 'exact' })
-                .in('id', toDelete)
-                .is('deleted_at', null);
-            if (delErr) {
-                for (const id of toDelete) failedDeletes.push({ id, reason: delErr.message });
-            } else {
-                deletedCount = count ?? toDelete.length;
-            }
+            const { deletedIds, failed } = await shiftsCommands.bulkDeleteShiftsPerItem(toDelete);
+            deletedCount = deletedIds.length;
+            failedDeletes.push(...failed);
         }
 
         // 3. Hard-delete demand_forecasts rows for this run so stale predictions

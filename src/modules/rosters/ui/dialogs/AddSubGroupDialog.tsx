@@ -109,7 +109,8 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
           "Missing `Description` or `aria-describedby={undefined}`" console warning
           this dialog was logging on every open. */}
       <DialogContent
-        className="w-[calc(100vw-2rem)] sm:max-w-[460px] p-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border bg-background text-foreground shadow-2xl backdrop-blur-xl ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+        className="w-[calc(100vw-2rem)] p-0 overflow-hidden text-foreground ring-1 ring-border/50 max-h-[calc(100dvh-3rem)] flex flex-col"
+        size="md"
       >
         {/* Header */}
         <div className="relative p-6 sm:p-7 pb-5 border-b border-border bg-muted/30 dark:bg-muted/10">
@@ -119,10 +120,10 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
                 <FolderPlus className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                <DialogTitle>
                   Add New Subgroup
                 </DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5 leading-relaxed">
+                <DialogDescription className="mt-0.5">
                   Create a new subgroup for organizing shifts.
                 </DialogDescription>
               </div>
@@ -130,7 +131,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
 
             {/* Department Context Badge */}
             {groupName && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 dark:bg-muted/40 border border-border text-xs font-medium text-foreground w-fit max-w-full">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 dark:bg-muted/40 border border-border text-[11px] font-medium text-foreground w-fit max-w-full">
                 <Building2 className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden="true" />
                 <span className="text-muted-foreground text-[11px] uppercase tracking-wider font-bold shrink-0">Department:</span>
                 <span className="font-semibold text-foreground truncate">{groupName}</span>
@@ -154,7 +155,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
                   <FormItem className="space-y-2">
                     <FormLabel 
                       htmlFor="subgroup-name-input"
-                      className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between"
+                      className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between"
                     >
                       <span>
                         Subgroup Name <span className="text-destructive" aria-hidden="true">*</span>
@@ -166,7 +167,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
                     <FormControl>
                       <Input
                         id="subgroup-name-input"
-                        className="h-12 px-4 rounded-xl border border-input bg-background dark:bg-muted/20 text-foreground placeholder:text-muted-foreground/60 text-base sm:text-sm shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50"
+                        className="h-12 px-4 rounded-xl border border-input bg-background dark:bg-muted/20 text-foreground placeholder:text-muted-foreground/60 text-[14px] sm:text-[13px] shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-primary disabled:opacity-50"
                         placeholder="e.g., Morning Shift, Logistics Team"
                         maxLength={50}
                         autoFocus
@@ -176,10 +177,10 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
                         {...field}
                       />
                     </FormControl>
-                    <p id="subgroup-name-hint" className="text-xs text-muted-foreground leading-normal">
+                    <p id="subgroup-name-hint" className="text-[11px] text-muted-foreground leading-normal">
                       Subgroups help segment rosters into distinct teams or shift categories.
                     </p>
-                    <FormMessage role="alert" className="text-xs font-medium text-destructive" />
+                    <FormMessage role="alert" className="text-[11px] font-medium text-destructive" />
                   </FormItem>
                 )}
               />
@@ -192,7 +193,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
                 variant="outline" 
                 onClick={() => setOpen?.(false)} 
                 disabled={isSubmitting}
-                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-sm transition-all active:scale-[0.98]"
+                className="w-full sm:w-auto h-11 px-5 rounded-xl border border-border text-foreground hover:bg-muted font-semibold text-[13px] transition-all active:scale-[0.98]"
                 aria-label="Cancel and close dialog"
               >
                 Cancel
@@ -200,7 +201,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
               <Button 
                 type="submit" 
                 disabled={isSubmitting || !nameValue.trim()}
-                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-sm shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                className="w-full sm:w-auto h-11 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-[13px] shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 aria-label={isSubmitting ? "Adding subgroup..." : "Add Subgroup"}
                 aria-busy={isSubmitting}
               >
@@ -225,4 +226,3 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
   );
 };
 
-export default AddSubGroupDialog;

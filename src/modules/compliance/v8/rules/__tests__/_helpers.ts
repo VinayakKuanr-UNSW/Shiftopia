@@ -14,7 +14,7 @@ import { DEFAULT_V8_CONFIG } from '../../types';
 let shiftCounter = 0;
 
 /** Generate a stable unique shift ID for each test invocation */
-export function nextId(prefix = 'shift'): string {
+function nextId(prefix = 'shift'): string {
     return `${prefix}-${++shiftCounter}`;
 }
 

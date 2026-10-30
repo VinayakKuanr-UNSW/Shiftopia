@@ -5,7 +5,10 @@ import { listItemSpring } from '@/modules/core/ui/motion/presets';
 import { cn } from '@/modules/core/lib/utils';
 import { text } from '@/modules/core/ui/typography';
 import { isTodayInTimezone } from '@/modules/core/lib/date.utils';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
+import { useNavigate } from 'react-router-dom';
+import { CalendarX2 } from 'lucide-react';
+import { PageState } from '@/modules/core/ui/components/PageState';
 import { MobileShiftCard } from './MobileShiftCard';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import './MobileRosterAgendaView.css';
@@ -29,14 +32,16 @@ const SYDNEY_TZ = 'Australia/Sydney';
  * single centred "No shifts scheduled" panel, which meant an empty week lost
  * its structure entirely: no dates, no today marker, nothing to orient
  * against or scroll through — just a lone icon where a calendar should be.
- * The per-day empty row below already says "No shifts" once per date, which is
- * the same information without discarding the grid.
+ * An empty day is just its date row reading "No shifts" — it used to add a
+ * dashed placeholder box too, so an empty week was a stack of seven boxes.
+ * When the whole range is empty one PageState says so, with the next step.
  */
 const MobileRosterAgendaView: React.FC<MobileRosterAgendaViewProps> = ({
   days,
   getShiftsForDate,
   includeContinuations,
 }) => {
+  const navigate = useNavigate();
   const [selectedShift, setSelectedShift] = useState<{
     data: ShiftWithDetails;
     date: Date;
@@ -62,6 +67,18 @@ const MobileRosterAgendaView: React.FC<MobileRosterAgendaViewProps> = ({
           : `${totalShifts} ${totalShifts === 1 ? 'shift' : 'shifts'} across ${dayGroups.length} ${dayGroups.length === 1 ? 'day' : 'days'}.`}
       </p>
 
+      {totalShifts === 0 && (
+        <PageState
+          state="empty"
+          scope="inline"
+          icon={CalendarX2}
+          title="No shifts in this range"
+          description="Open shifts you can bid on are listed in My Bids."
+          action={{ label: 'Find open shifts', onClick: () => navigate('/my-bids') }}
+          className="mb-4"
+        />
+      )}
+
       <div className="space-y-4">
         {dayGroups.map(({ day, shifts }) => {
           const isToday = isTodayInTimezone(day, SYDNEY_TZ);
@@ -80,8 +97,8 @@ const MobileRosterAgendaView: React.FC<MobileRosterAgendaViewProps> = ({
                     <p className={cn(text.overlineBare, 'mt-0.5')}>Today</p>
                   )}
                 </div>
-                <span className={cn(text.overline, isToday && 'text-primary')}>
-                  {shifts.length} {shifts.length === 1 ? 'shift' : 'shifts'}
+                <span className={cn(text.overline, isToday ? 'text-primary' : shifts.length === 0 && 'text-muted-foreground')}>
+                  {shifts.length === 0 ? 'No shifts' : `${shifts.length} ${shifts.length === 1 ? 'shift' : 'shifts'}`}
                 </span>
               </div>
 
@@ -101,15 +118,7 @@ const MobileRosterAgendaView: React.FC<MobileRosterAgendaViewProps> = ({
                       </motion.div>
                     ))}
                   </div>
-                ) : (
-                  <motion.div
-                    key={`${day.toISOString()}-empty`}
-                    {...listItemSpring}
-                    className="rounded-2xl border border-dashed border-border/60 px-4 py-5 text-center"
-                  >
-                    <p className={text.overline}>No shifts</p>
-                  </motion.div>
-                )}
+                ) : null}
               </AnimatePresence>
             </section>
           );

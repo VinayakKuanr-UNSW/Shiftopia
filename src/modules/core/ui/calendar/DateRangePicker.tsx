@@ -22,15 +22,14 @@ import { Separator } from '@/modules/core/ui/primitives/separator';
  * highlights the whole span — which none of the four previously did.
  */
 
-export type { DateRange };
 
-export interface DateRangePreset {
+interface DateRangePreset {
   label: string;
   /** Resolved when the preset is clicked, so "this week" is always current. */
   getRange: () => DateRange;
 }
 
-export interface DateRangePickerProps {
+interface DateRangePickerProps {
   value: DateRange | undefined;
   onChange: (range: DateRange | undefined) => void;
 
@@ -130,7 +129,7 @@ export function DateRangePicker({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="justify-start whitespace-nowrap text-xs font-medium"
+                    className="justify-start whitespace-nowrap text-[11px] font-medium"
                     onClick={() => {
                       onChange(preset.getRange());
                       setOpen(false);

@@ -42,7 +42,7 @@ interface HoverState {
 
 const TIME_COL = 80;
 
-export const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
+const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
     const { isDark } = useTheme();
     const [hover, setHover] = React.useState<HoverState | null>(null);
 
@@ -69,10 +69,10 @@ export const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
     if (buckets.length === 0) {
         return (
             <div className="py-12 text-center border rounded-2xl bg-muted/10">
-                <p className="text-xs font-semibold text-muted-foreground">
+                <p className="text-[11px] font-semibold text-muted-foreground">
                     No coverage data for this range.
                 </p>
-                <p className="text-[10px] text-muted-foreground/70 mt-1">
+                <p className="text-[11px] text-muted-foreground/70 mt-1">
                     Select a date range with required or assigned shifts.
                 </p>
             </div>
@@ -93,7 +93,7 @@ export const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
                             <th
                                 scope="col"
                                 className={cn(
-                                    'sticky left-0 top-0 z-30 text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground py-3 px-2 border-b border-r border-slate-200/60 dark:border-white/5 shadow-xs',
+                                    'sticky left-0 top-0 z-30 text-center text-[11px] font-black uppercase tracking-widest text-muted-foreground py-3 px-2 border-b border-r border-slate-200/60 dark:border-white/5 shadow-xs',
                                     stickyBg,
                                 )}
                                 style={{ width: TIME_COL, minWidth: TIME_COL }}
@@ -113,12 +113,12 @@ export const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
                                         width: dates.length <= 7 ? `${100 / dates.length}%` : 32,
                                     }}
                                 >
-                                    <span className="block text-[10px] font-black uppercase tracking-wider leading-none">
+                                    <span className="block text-[11px] font-black uppercase tracking-wider leading-none">
                                         {dates.length <= 7
                                             ? format(parseISO(d), 'EEE')
                                             : format(parseISO(d), 'EEE')}
                                     </span>
-                                    <span className="block text-xs font-black tabular-nums mt-0.5 leading-none">
+                                    <span className="block text-[11px] font-black tabular-nums mt-0.5 leading-none">
                                         {dates.length <= 7
                                             ? format(parseISO(d), 'd MMM')
                                             : format(parseISO(d), 'd')}
@@ -186,7 +186,7 @@ export const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
                                                     onMouseLeave={() => setHover(null)}
                                                     onFocus={(e) => showTooltip(e.currentTarget, bucket)}
                                                     onBlur={() => setHover(null)}
-                                                    className="w-full h-full min-h-[30px] flex items-center justify-center rounded-xl transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:scale-[1.02] text-[10px] font-black tabular-nums shadow-xs"
+                                                    className="w-full h-full min-h-[30px] flex items-center justify-center rounded-xl transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:scale-[1.02] text-[11px] font-black tabular-nums shadow-xs"
                                                     style={{
                                                         backgroundColor: fill,
                                                         color:
@@ -225,12 +225,12 @@ export const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
                 >
                     <div className="bg-popover/95 backdrop-blur-md text-popover-foreground border border-border/80 rounded-2xl p-3 shadow-2xl min-w-[200px] space-y-1.5">
                         <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-1.5">
-                            <p className="text-xs font-black text-foreground">
+                            <p className="text-[11px] font-black text-foreground">
                                 {format(parseISO(hover.bucket.date), 'EEE d MMM')} ·{' '}
                                 {String(hover.bucket.hour).padStart(2, '0')}:00
                             </p>
                         </div>
-                        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-semibold tabular-nums">
+                        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-semibold tabular-nums">
                             <dt className="text-muted-foreground">Required</dt>
                             <dd className="text-right text-foreground font-black">{hover.bucket.required}</dd>
                             <dt className="text-muted-foreground">Available</dt>
@@ -280,10 +280,10 @@ const CollapsibleCoverageLegend: React.FC<{ isDark: boolean }> = ({ isDark }) =>
                         <HelpCircle className="h-3.5 w-3.5" />
                     </div>
                     <div className="text-left">
-                        <p className="text-[10px] font-black tracking-wider uppercase text-foreground leading-none">
+                        <p className="text-[11px] font-black tracking-wider uppercase text-foreground leading-none">
                             COVERAGE LEGEND
                         </p>
-                        <p className="text-[9px] text-muted-foreground font-medium mt-0.5 leading-none">
+                        <p className="text-[11px] text-muted-foreground font-medium mt-0.5 leading-none">
                             GAP SCALE & UNFILLABLE REFERENCE
                         </p>
                     </div>
@@ -313,7 +313,7 @@ const Legend: React.FC<{ isDark: boolean }> = ({ isDark }) => {
     return (
         <div className="flex flex-wrap items-center gap-3 py-1">
             <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                     Over
                 </span>
                 <div className="flex gap-[3px]">
@@ -328,7 +328,7 @@ const Legend: React.FC<{ isDark: boolean }> = ({ isDark }) => {
                         <span key={c} className="h-3.5 w-3.5 rounded-md border border-white/10 shadow-2xs" style={{ backgroundColor: c }} />
                     ))}
                 </div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                     Short
                 </span>
             </div>
@@ -343,7 +343,7 @@ const Legend: React.FC<{ isDark: boolean }> = ({ isDark }) => {
                         boxShadow: `inset 0 0 0 2px ${isDark ? '#ffffff' : '#090d16'}`,
                     }}
                 />
-                <span className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                     Unfillable
                 </span>
             </div>

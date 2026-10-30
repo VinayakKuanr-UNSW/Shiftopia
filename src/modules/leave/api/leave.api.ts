@@ -18,7 +18,6 @@ import type {
 } from '../model/leave.types';
 import { LEAVE_POLICIES } from '../domain/leave-policy';
 import type { EmployeeUnit } from '../domain/leave-approval';
-import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ── Balances ─────────────────────────────────────────────────────────────────
@@ -81,7 +80,7 @@ function mapBalanceRow(row: any): LeaveBalance {
 
 // ── Requests ─────────────────────────────────────────────────────────────────
 
-export interface LeaveRequestFilters {
+interface LeaveRequestFilters {
   status?: LeaveRequestStatus | LeaveRequestStatus[];
   leaveType?: LeaveTypeCode;
   startAfter?: string; // YYYY-MM-DD
@@ -213,7 +212,7 @@ export interface LeaveShiftConflict {
  * clock-in and timesheet that payroll pays from, and deleting it would erase
  * hours the person really worked.
  */
-export function isWorkedShift(s: { actualStart: string | null; lifecycleStatus: string | null }): boolean {
+function isWorkedShift(s: { actualStart: string | null; lifecycleStatus: string | null }): boolean {
   return s.actualStart != null || s.lifecycleStatus === 'InProgress' || s.lifecycleStatus === 'Completed';
 }
 
@@ -244,7 +243,6 @@ export async function getLeaveShiftConflicts(
     .gte('shift_date', startDate)
     .lte('shift_date', endDate)
     .neq('lifecycle_status', 'Cancelled')
-    .is('deleted_at', null)
     .order('shift_date', { ascending: true });
 
   if (error) {
@@ -268,7 +266,7 @@ export async function getLeaveShiftConflicts(
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-export interface MutationResult<T = void> {
+interface MutationResult<T = void> {
   data?: T;
   error?: string;
 }
@@ -405,7 +403,9 @@ export async function approveLeaveRequest(
 
   if (updateErr) return { error: updateErr.message };
   if (!updatedRows || updatedRows.length === 0) {
-    return { error: 'This request is no longer pending (it may have just been actioned by someone else).' };
+    // Zero rows: someone else decided it first, OR row-level security refused this
+    // caller (no leave.approve where the employee works) — RLS never says which.
+    return { error: 'Nothing changed: this request is no longer pending, or deciding it is outside your access. Refresh and try again.' };
   }
 
   // The DB trigger `trg_leave_balance_deduction` will atomically deduct the balance.
@@ -479,7 +479,9 @@ export async function rejectLeaveRequest(
 
   if (error) return { error: error.message };
   if (!data || data.length === 0) {
-    return { error: 'This request is no longer pending (it may have just been actioned by someone else).' };
+    // Zero rows: someone else decided it first, OR row-level security refused this
+    // caller (no leave.approve where the employee works) — RLS never says which.
+    return { error: 'Nothing changed: this request is no longer pending, or deciding it is outside your access. Refresh and try again.' };
   }
   return {};
 }
@@ -515,7 +517,7 @@ export async function revokeLeaveRequest(
 
   if (error) return { error: error.message };
   if (!data || data.length === 0) {
-    return { error: 'Only approved leave that has not yet ended can be revoked.' };
+    return { error: 'Nothing changed: only approved leave that has not yet ended can be revoked, by a manager whose access covers it.' };
   }
   return {};
 }
@@ -524,17 +526,23 @@ export async function revokeLeaveRequest(
  * Cancel a leave request (only if still pending).
  */
 export async function cancelLeaveRequest(requestId: string): Promise<MutationResult> {
-  const { error } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from('leave_requests')
     .update({ status: 'cancelled' })
     .eq('id', requestId)
-    .eq('status', 'pending');
+    .eq('status', 'pending')
+    .select('id');
 
   if (error) return { error: error.message };
+  // Zero rows used to read as success: a request a manager had just approved
+  // looked cancelled to the employee until the next refresh.
+  if (!data || data.length === 0) {
+    return { error: 'Nothing changed: this request is no longer pending, so it can no longer be cancelled. Refresh to see its status.' };
+  }
   return {};
 }
 
-export interface UnassignConflictsResult {
+interface UnassignConflictsResult {
   /** How many shift IDs were submitted for unassignment. */
   attempted: number;
   /** How many actually transitioned to unassigned (the rest were skipped). */

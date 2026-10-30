@@ -44,11 +44,12 @@ interface RosterViewPayload {
         event_type: string; venue: string | null;
         start_date: string; end_date: string; status: string;
     }[];
+    truncated?: boolean;
 }
 
 // ── BFF query key factory ─────────────────────────────────────────────────────
 
-export const rosterViewBffKey = (
+const rosterViewBffKey = (
     orgId: string | null,
     startDate: string | null,
     endDate: string | null,
@@ -125,10 +126,15 @@ export function useRosterViewPrefetch({
         if (!data || !orgId || !startDate || !endDate) return;
 
         // Shift list — same key as useShiftsByDateRange
-        queryClient.setQueryData<Shift[]>(
-            shiftKeys.byDateRange(orgId, startDate, endDate, shiftFilters),
-            data.shifts,
-        );
+        // Only seed if the payload was not truncated by server guardrail
+        if (!data.truncated) {
+            queryClient.setQueryData<Shift[]>(
+                shiftKeys.byDateRange(orgId, startDate, endDate, shiftFilters),
+                data.shifts,
+            );
+        } else {
+            console.warn('[useRosterViewPrefetch] Shift payload was truncated by server; skipping cache seed');
+        }
 
         // Reference data — same keys as useEmployees / useRoles / etc.
         const primaryDeptId   = deptIds[0];

@@ -4,6 +4,7 @@ import AppLayout from '@/modules/core/ui/layout/AppLayout';
 import { useAuth } from '@/platform/auth/useAuth';
 import { MobileAccessGuard } from '@/modules/core/ui/components/MobileAccessGuard';
 import { ErrorBoundary } from '@/modules/core';
+import { isCanvasRoute } from './layoutRoutes';
 
 /* =======================
    EAGER LOADED PAGES
@@ -67,15 +68,12 @@ const PageLoader: React.FC = () => (
     <div className="flex items-center justify-center h-screen">
         <div className="flex flex-col items-center gap-4">
             <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted-foreground text-sm">Loading...</p>
+            <p className="text-muted-foreground text-[13px]">Loading...</p>
         </div>
     </div>
 );
 
-/* =======================
-   ROUTES WHERE MAIN AREA HAS NO PADDING (fullscreen canvas pages)
-   ======================= */
-const NO_PADDING_ROUTES = new Set(['/rosters', '/rosters/shift/new', '/settings']);
+/* Main-area padding is opt-in; see ./layoutRoutes.ts */
 
 /* =======================
    PERSISTENT AUTH LAYOUT
@@ -85,14 +83,14 @@ const NO_PADDING_ROUTES = new Set(['/rosters', '/rosters/shift/new', '/settings'
 const AuthLayout: React.FC = () => {
     const { user, isAuthenticated, isLoading, hasActiveContracts } = useAuth();
     const location = useLocation();
-    const noPadding = NO_PADDING_ROUTES.has(location.pathname);
+    const noPadding = isCanvasRoute(location.pathname);
 
     if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-4">
                     <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                    <p className="text-muted-foreground text-sm">Loading...</p>
+                    <p className="text-muted-foreground text-[13px]">Loading...</p>
                 </div>
             </div>
         );
@@ -181,11 +179,16 @@ const AppRouter: React.FC = () => {
 
                     <Route element={<FeatureGate feature="rosters" />}>
                         <Route path="/rosters" element={<RostersPlannerPage />} />
-                        {/* The Office page was retired 2026-10-04: full-time
-                            shifts live on the Rosters page, in the Office group.
-                            Old links land there rather than on a 404. */}
-                        <Route path="/office" element={<Navigate to="/rosters" replace />} />
+                    </Route>
+
+                    {/* Creating a shift is a managerial write: view-only levels
+                        (delta, epsilon) can open the Roster but not this form. */}
+                    <Route element={<FeatureGate feature="create" />}>
                         <Route path="/rosters/shift/new" element={<ShiftFormPage />} />
+                    </Route>
+
+                    {/* ── Admin suite (zeta only) ── */}
+                    <Route element={<FeatureGate feature="labor-demand" />}>
                         <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
                     </Route>
 
@@ -240,7 +243,7 @@ const AppRouter: React.FC = () => {
                         2026-08-19 — readable by any authenticated user — and had no
                         sidebar entry, so the exposure was invisible from both sides.
                         Gated with the rest of Management, and surfaced in the nav. */}
-                    <Route element={<FeatureGate feature="management" />}>
+                    <Route element={<FeatureGate feature="compliance" />}>
                         <Route path="/compliance/rejections" element={<ComplianceRejectionsPage />} />
                     </Route>
 

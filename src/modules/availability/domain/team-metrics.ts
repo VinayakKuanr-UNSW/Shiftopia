@@ -55,7 +55,7 @@ import type { RawTeamShift, TeamMember } from '../model/team-availability.types'
 // FATIGUE — per (member, day)
 // ============================================================================
 
-export interface DayFatigue {
+interface DayFatigue {
     /** Peak fatigue reached on this day. */
     score: number;
     band: FatigueBand;
@@ -142,7 +142,7 @@ export function buildFatigueByEmployee(
 
 export type UtilizationStatus = 'none' | 'under' | 'ideal' | 'over' | 'critical';
 
-export interface WeekUtilization {
+interface WeekUtilization {
     pct: number;
     status: UtilizationStatus;
 }
@@ -276,7 +276,7 @@ export function unsociableDebt(standing: FairnessStanding | undefined): number |
     return seen > 0 ? Math.round(total * 10) / 10 : null;
 }
 
-export type FairnessBand = 'over' | 'balanced' | 'under';
+type FairnessBand = 'over' | 'balanced' | 'under';
 
 /**
  * A debt of exactly zero is the ideal, so the band has to be a tolerance rather

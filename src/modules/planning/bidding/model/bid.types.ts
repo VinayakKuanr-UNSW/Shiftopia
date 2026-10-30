@@ -38,4 +38,3 @@ export interface Bid {
     employee_name?: string; // Virtual field for UI
 }
 
-export interface ShiftBid extends Bid { } // Alias for backward compatibility if needed

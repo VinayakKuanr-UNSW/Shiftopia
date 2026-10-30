@@ -4,7 +4,6 @@
  */
 
 // Domain Layer - Commands (Write Operations)
-export * from './domain/commands/createShift.command';
 export * from './domain/commands/updateShift.command';
 export * from './domain/commands/assignShift.command';
 export * from './domain/commands/publishRoster.command';
@@ -43,9 +42,6 @@ export * from './hooks/useMyRoster';
 export * from './hooks/useRosterView';
 
 // Pages
-export { default as RostersPlannerPage } from './pages/RostersPlannerPage';
-export { default as MyRosterPage } from './pages/MyRosterPage';
 
 // UI Components
-export { default as RosterGroup } from './ui/components/RosterGroup';
 export { LazyEnhancedAddShiftModal as EnhancedAddShiftModal } from './ui/dialogs/EnhancedAddShiftModal/Lazy';

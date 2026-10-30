@@ -41,7 +41,7 @@ Both are exactly the kind of gap Phase 17 (Production Audit) is meant to surface
 - **UI/RLS gate mismatch**: the contract-management UI only renders for Epsilon/Zeta, but the underlying RLS policy (`contracts_manage_delta`) only requires Delta — a Delta manager could write `hr.user_contracts` directly via the API even though the button is hidden from them.
 - **No offboarding workflow exists**, despite `hr.user_contracts.status` supporting `Active/Inactive/Terminated` and `profiles` having a `termination_date` column — no UI ever sets either. The only "removal" actions are hard-deleting a contract row or `delete_user_entirely()` (full account wipe, including nulling FK references across shifts/timesheets/rosters). There is no graceful "terminate effective [date], revoke access, retain history" path.
 - **Bootstrap gap**: the very first admin account has no in-app path to get `legacy_system_role='admin'` or an initial Epsilon/Zeta certificate — must be set via raw SQL outside the application.
-- Dead code found along the way: a second, unused `AuthContext.tsx`; an orphaned `hr.employees` table with no FK to `auth.users` and zero live callers; `create_profile_for_user()`.
+- Dead code found along the way: a second, unused `AuthContext.tsx` (deleted 2026-10-28); an orphaned `hr.employees` table with no FK to `auth.users` and zero live callers; `create_profile_for_user()` (dropped 2026-10-28).
 
 ---
 

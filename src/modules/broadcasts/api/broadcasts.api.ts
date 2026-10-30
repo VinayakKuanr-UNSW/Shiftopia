@@ -12,19 +12,10 @@
 // ============================================================
 
 // ── DTO helpers ───────────────────────────────────────────────────────────────
-export {
-    toCamelCase,
-    toSnakeCase,
-    getFileTypeFromName,
-    normalizeAuthor,
-    normalizeBroadcastRow,
-    BroadcastDbClient,
-} from './broadcasts.dto';
 
 // ── Read operations ───────────────────────────────────────────────────────────
 export {
     broadcastGroupQueries,
-    broadcastChannelQueries,
     broadcastQueries,
     groupParticipantQueries,
     broadcastNotificationQueries,
@@ -35,7 +26,6 @@ export {
     broadcastGroupCommands,
     broadcastChannelCommands,
     broadcastCommands,
-    broadcastAttachmentCommands,
     groupParticipantCommands,
     broadcastNotificationCommands,
 } from './broadcasts.commands';
@@ -45,8 +35,7 @@ export {
 // existed before the split so that all callers (useBroadcasts.ts, etc.) work
 // without any changes.
 
-import { broadcastGroupQueries, broadcastChannelQueries, broadcastQueries, groupParticipantQueries, broadcastNotificationQueries } from './broadcasts.queries';
-import { broadcastGroupCommands, broadcastChannelCommands, broadcastCommands, broadcastAttachmentCommands, groupParticipantCommands, broadcastNotificationCommands } from './broadcasts.commands';
+import { broadcastNotificationQueries } from './broadcasts.queries';
 import { toCamelCase } from './broadcasts.dto';
 import { supabase } from '@/platform/supabase/client';
 import type {
@@ -55,34 +44,11 @@ import type {
     BroadcastNotification,
 } from '../model/broadcast.types';
 
-export const broadcastGroupService = {
-    ...broadcastGroupQueries,
-    ...broadcastGroupCommands,
-};
 
-export const broadcastChannelService = {
-    ...broadcastChannelQueries,
-    ...broadcastChannelCommands,
-};
 
-export const broadcastService = {
-    ...broadcastQueries,
-    ...broadcastCommands,
-};
 
-export const broadcastAttachmentService = {
-    ...broadcastAttachmentCommands,
-};
 
-export const groupParticipantService = {
-    ...groupParticipantQueries,
-    ...groupParticipantCommands,
-};
 
-export const broadcastNotificationService = {
-    ...broadcastNotificationQueries,
-    ...broadcastNotificationCommands,
-};
 
 // ── Real-time subscriptions ───────────────────────────────────────────────────
 // Kept inline here: realtime helpers are thin wrappers around supabase.channel()
@@ -163,7 +129,15 @@ export const broadcastRealtimeService = {
                     table: 'broadcast_notifications',
                     filter: `employee_id=eq.${employeeId}`,
                 },
-                (payload) => onInsert(toCamelCase(payload.new))
+                // The INSERT row has no subject/author/group; hydrate it first.
+                (payload) => {
+                    broadcastNotificationQueries
+                        .hydrate([payload.new as any])
+                        .then(([notification]) => notification && onInsert(notification))
+                        .catch((error) =>
+                            console.error('[broadcasts] Failed to load new notification:', error)
+                        );
+                }
             )
             .subscribe();
     },
@@ -182,14 +156,4 @@ export const broadcastRealtimeService = {
 
 // ── Aggregate service object (original default export shape) ──────────────────
 
-export const broadcastServices = {
-    groups:        broadcastGroupService,
-    channels:      broadcastChannelService,
-    broadcasts:    broadcastService,
-    attachments:   broadcastAttachmentService,
-    participants:  groupParticipantService,
-    notifications: broadcastNotificationService,
-    realtime:      broadcastRealtimeService,
-};
 
-export default broadcastServices;

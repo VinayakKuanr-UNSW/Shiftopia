@@ -70,14 +70,15 @@ const h = vi.hoisted(() => {
         applyShiftOp: { fn: null as any },
         evaluate: { fn: null as any },
         runSwapGuards: { fn: null as any },
-        getEmployeeShifts: { fn: null as any },
+        fetchHistory: { fn: null as any },
     };
 });
 
 vi.mock('@/platform/supabase/client', () => ({ supabase: h.supabase }));
 
-vi.mock('@/modules/rosters', () => ({
-    shiftsApi: { getEmployeeShifts: (...a: unknown[]) => h.getEmployeeShifts.fn(...a) },
+vi.mock('@/modules/compliance/employee-context', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/modules/compliance/employee-context')>()),
+    fetchEmployeeShiftsV2: (...a: unknown[]) => h.fetchHistory.fn(...a),
 }));
 
 vi.mock('@/modules/rosters/api/shifts.api', () => ({
@@ -125,7 +126,7 @@ beforeEach(() => {
     h.evaluate.fn         = vi.fn(() => ({ feasible: true, violations: [] }));
     h.runSwapGuards.fn    = vi.fn(async () => ({ passed: true }));
     h.applyShiftOp.fn     = vi.fn(async () => ({ ok: true, code: 'APPLIED', version: 8, state: 'S4' }));
-    h.getEmployeeShifts.fn = vi.fn(async () => []);
+    h.fetchHistory.fn     = vi.fn(async () => []);
     h.rpc.fn              = vi.fn(async () => ({ data: { success: true }, error: null }));
 });
 
@@ -266,11 +267,21 @@ describe('requester accepts a peer offer — acceptTrade', () => {
             { data: futureShiftB, error: null },  // offered shift fetch
         );
 
+        const offererShift = { id: 'b-hist', date: FUTURE_DATE, start_time: '06:00', end_time: '09:00', unpaid_break_minutes: 0 };
+        h.fetchHistory.fn = vi.fn(async (id: string) => (id === EMP_B ? [offererShift] : []));
+
         await swapsApi.acceptTrade(SWAP_ID, OFFER_ID, EMP_B, SHIFT_B);
 
-        // Both parties' rosters were pulled for the solver
-        expect(h.getEmployeeShifts.fn).toHaveBeenCalledWith(EMP_A, expect.any(String), expect.any(String));
-        expect(h.getEmployeeShifts.fn).toHaveBeenCalledWith(EMP_B, expect.any(String), expect.any(String));
+        // Both parties' history comes from the shift-window RPC (an RLS shifts
+        // read shows the requester almost none of the offerer's roster)...
+        expect(h.fetchHistory.fn).toHaveBeenCalledWith(EMP_A, FUTURE_DATE, 30);
+        expect(h.fetchHistory.fn).toHaveBeenCalledWith(EMP_B, FUTURE_DATE, 30);
+        // ...and the offerer's history actually reaches the solver.
+        expect(h.evaluate.fn).toHaveBeenCalledWith(expect.objectContaining({
+            partyB: expect.objectContaining({
+                current_shifts: [expect.objectContaining({ id: 'b-hist', shift_date: FUTURE_DATE, start_time: '06:00' })],
+            }),
+        }));
 
         // Atomic transition delegated to the RPC (FOR UPDATE anti-race)
         expect(h.rpc.fn).toHaveBeenCalledWith('sm_accept_trade', expect.objectContaining({
@@ -302,6 +313,24 @@ describe('requester accepts a peer offer — acceptTrade', () => {
         await expect(swapsApi.acceptTrade(SWAP_ID, OFFER_ID, EMP_B, SHIFT_B))
             .rejects.toThrow(/Compliance violation.*Rest gap/);
         expect(h.rpc.fn).not.toHaveBeenCalled(); // no state transition on failure
+    });
+
+    it('fails closed when a party\'s history cannot be read', async () => {
+        // An unreadable history used to come back as [], which passes every
+        // cumulative rule. Now it stops the accept before any state changes.
+        h.fetchHistory.fn = vi.fn(async (id: string) => {
+            if (id === EMP_B) throw new Error(`Could not load the shift history for ${EMP_B}`);
+            return [];
+        });
+        h.enqueue(
+            { data: openSwapRow, error: null },
+            { data: futureShiftB, error: null },
+        );
+
+        await expect(swapsApi.acceptTrade(SWAP_ID, OFFER_ID, EMP_B, SHIFT_B))
+            .rejects.toThrow(/shift history/);
+        expect(h.evaluate.fn).not.toHaveBeenCalled();
+        expect(h.rpc.fn).not.toHaveBeenCalled();
     });
 
     it('surfaces an RPC-level failure (e.g. lost the double-accept race)', async () => {

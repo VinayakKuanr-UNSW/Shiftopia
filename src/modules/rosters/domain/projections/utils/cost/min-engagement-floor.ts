@@ -16,7 +16,7 @@
  *     priced dollars can never disagree.
  */
 
-export interface PaymentMinEngagementInput {
+interface PaymentMinEngagementInput {
   employmentType?: string | null;
   /**
    * Selects between the general award (cl 12.x) and Security Schedule 3

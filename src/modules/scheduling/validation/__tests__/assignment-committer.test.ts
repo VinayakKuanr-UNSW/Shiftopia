@@ -141,17 +141,17 @@ describe('AssignmentCommitter.commitAtomic', () => {
         expect(result.message).toContain('Not authorized');
     });
 
-    it('forwards the idempotency key to the RPC call', async () => {
+    it('forwards the expected shift versions to the RPC call', async () => {
         mockBulkAssignAtomic.mockResolvedValueOnce(atomicOk(1, [
             { employee_id: 'e1', committed: 1, conflicts: [] },
         ]));
 
-        const key = 'aaaaaaaa-0000-4000-8000-bbbbbbbbbbbb';
-        await committer.commitAtomic([pair('e1', 's1')], key);
+        const versions = { s1: 3 };
+        await committer.commitAtomic([pair('e1', 's1')], versions);
 
         expect(mockBulkAssignAtomic).toHaveBeenCalledWith(
             [{ employeeId: 'e1', shiftIds: ['s1'] }],
-            key,
+            versions,
         );
     });
 });

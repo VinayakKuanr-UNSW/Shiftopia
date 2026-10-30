@@ -1,7 +1,6 @@
-import { useShiftFormModalStore, type OpenShiftFormOptions } from '../state/useShiftFormModalStore';
+import { useShiftFormModalStore } from '../state/useShiftFormModalStore';
 
 // Re-exported for back-compat — callers historically imported this type from here.
-export type { OpenShiftFormOptions };
 
 /**
  * Open the Add/Edit Shift wizard as a centered modal pop-up ON TOP of the roster

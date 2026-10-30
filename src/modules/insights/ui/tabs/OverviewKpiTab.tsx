@@ -8,9 +8,8 @@
  *  - Department cost distribution & detail breakdown
  */
 
-import React from 'react';
 import {
-    ChartBar, DollarSign, CheckCircle2, Clock, Users, Zap, TrendingUp, AlertTriangle, ShieldCheck,
+    ChartBar, DollarSign, CheckCircle2, Users,
 } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
@@ -18,7 +17,7 @@ import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { useInsightsSummary } from '../../hooks/useInsightsSummary';
 import { useInsightsTrend } from '../../hooks/useInsightsTrend';
 import { useDeptBreakdown } from '../../hooks/useDeptBreakdown';
-import { statusFor, formatMetric, analysisHref } from '../../model/metric-registry';
+import { statusFor, analysisHref } from '../../model/metric-registry';
 import { computeDelta, type KpiFilters } from '../../hooks/useKpiFilters';
 import { KpiTrendChart, SERIES_COLORS } from '../components/KpiTrendChart';
 import { KpiBand, CountStrip } from '../components/KpiBand';
@@ -293,7 +292,7 @@ export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) 
                     ) : depts.isLoading ? (
                         <Skeleton className="h-[260px] w-full rounded-2xl" />
                     ) : deptRows.length === 0 ? (
-                        <p className={cn(text.bodyMuted, 'rounded-2xl border border-border bg-muted/30 p-5 text-center text-xs')}>
+                        <p className={cn(text.bodyMuted, 'rounded-2xl border border-border bg-muted/30 p-5 text-center text-[11px]')}>
                             No department data for {period.label}.
                         </p>
                     ) : (

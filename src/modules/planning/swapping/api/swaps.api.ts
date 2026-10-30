@@ -1,14 +1,22 @@
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { SwapRequestWithDetails } from '../model/swap.types';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
-import { shiftsApi } from '@/modules/rosters';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx } from '@/modules/rosters/domain/shift-ops.contract';
 import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/modules/compliance';
-import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
+import { fetchV8EmployeeContext, fetchEmployeeShiftsV2 } from '@/modules/compliance/employee-context';
 import type { V8ContractType } from '@/modules/compliance/v8/types';
-import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
+import type { V8OrchestratorShift } from '@/modules/compliance/v8/orchestrator/types';
+import { differenceInHours } from 'date-fns';
+
+// Embedded profile columns for swap participants. Never `*`: contact and
+// personal columns (phone, date of birth, emergency contacts) are not
+// readable by other users, and `*` would make PostgREST fail the whole query.
+/** Days either side of the requester's shift that both parties' history spans. */
+const SWAP_HISTORY_WINDOW_DAYS = 30;
+const SWAP_PROFILE_COLUMNS = 'id, first_name, last_name, full_name, email, avatar_url, employment_type';
 
 // Audit C-4: the swap engine's SwapPartyInput.contract_type uses the
 // shorthand 'FT' | 'PT' | 'CASUAL' union; fetchV8EmployeeContext (the
@@ -88,18 +96,20 @@ const validateSwapCompliance = async (
     offeredShift: any,
     options: { swapId?: string; shiftSnapshot?: Array<{ id: string; shift_date: string; start_time: string; end_time: string }> } = {}
 ) => {
-    const dateRef = parse(requesterShift.shift_date, 'yyyy-MM-dd', new Date());
-    const start = format(subDays(dateRef, 30), 'yyyy-MM-dd');
-    const end = format(addDays(dateRef, 30), 'yyyy-MM-dd');
-
-    // Fetch rosters AND real employment context for BOTH parties (cross-
-    // department — no department filter). Audit C-4: this compliance
-    // check previously never fetched contract_type/contracted_weekly_hours/
-    // leave_days at all, so every swap silently ran through the engine as
-    // if both parties were CASUAL regardless of their real employment type.
+    // Fetch rosters AND real employment context for BOTH parties. Audit C-4:
+    // this compliance check previously never fetched contract_type/
+    // contracted_weekly_hours/leave_days at all, so every swap silently ran
+    // through the engine as if both parties were CASUAL.
+    //
+    // History comes from get_employee_shift_window, not a shifts SELECT: RLS
+    // lets an employee see only their own shifts plus the swapped ones, so the
+    // requester saw almost none of the offerer's roster and the offerer's
+    // cumulative rules passed on an empty history. The RPC lets the two
+    // parties to a live swap read each other (20261028060930), crosses
+    // departments, and rejects rather than returning [] when it cannot read.
     const [requesterRoster, offererRoster, requesterCtx, offererCtx] = await Promise.all([
-        shiftsApi.getEmployeeShifts(requesterId, start, end),
-        shiftsApi.getEmployeeShifts(offererId, start, end),
+        fetchEmployeeShiftsV2(requesterId, requesterShift.shift_date, SWAP_HISTORY_WINDOW_DAYS),
+        fetchEmployeeShiftsV2(offererId, requesterShift.shift_date, SWAP_HISTORY_WINDOW_DAYS),
         fetchV8EmployeeContext(requesterId),
         fetchV8EmployeeContext(offererId),
     ]);
@@ -121,13 +131,20 @@ const validateSwapCompliance = async (
         end_time: s.end_time,
         unpaid_break_minutes: s.unpaid_break_minutes || 0,
     });
+    const historyRange = (s: V8OrchestratorShift) => ({
+        shift_date: s.date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+        id: s.id,
+    });
 
     // Run the constraint solver — all 8 constraints simultaneously on both parties
     const solverResult = swapEvaluator.evaluate({
         partyA: {
             employee_id: requesterId,
             name: 'Requester',
-            current_shifts: requesterRoster.map(s => ({ ...toTimeRange(s), id: s.id })) as any,
+            current_shifts: requesterRoster.map(historyRange) as any,
             shift_to_give: { ...toTimeRange(requesterShift), id: requesterShift.id } as any,
             contract_type: toSwapEngineContractType(requesterCtx.contract_type),
             contracted_weekly_hours: requesterCtx.contracted_weekly_hours || undefined,
@@ -141,7 +158,7 @@ const validateSwapCompliance = async (
         partyB: {
             employee_id: offererId,
             name: 'Offerer',
-            current_shifts: offererRoster.map(s => ({ ...toTimeRange(s), id: s.id })) as any,
+            current_shifts: offererRoster.map(historyRange) as any,
             shift_to_give: { ...toTimeRange(offeredShift), id: offeredShift?.id } as any,
             contract_type: toSwapEngineContractType(offererCtx.contract_type),
             contracted_weekly_hours: offererCtx.contracted_weekly_hours || undefined,
@@ -184,7 +201,7 @@ export interface CreateSwapData {
 }
 
 // Extended interface with relations
-export interface ShiftSwapRelations extends ShiftSwap {
+interface ShiftSwapRelations extends ShiftSwap {
     requester_shift?: any; // Was original_shift
     target_shift?: any;   // Was offered_shift
     requested_by?: any; // profile
@@ -284,8 +301,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*)
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
             `)
             .eq('requester_id', employeeId);
 
@@ -311,13 +328,13 @@ export const swapsApi = {
                         sub_departments(name),
                         organizations(name)
                     ),
-                    requested_by:profiles!requester_id(*),
-                    swap_with:profiles!target_id(*)
+                    requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                    swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
                 ),
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
                     scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
-                    target_employment_type, remuneration_rate, remuneration_level,
+                    target_employment_type, remuneration_level,
                     roles(name),
                     remuneration_levels(level_number, level_name),
                     departments(name),
@@ -405,8 +422,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*)
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
             `)
             .eq('status', 'OPEN')
             .is('target_id', null)
@@ -461,8 +478,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*)
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS})
             `)
             .eq('id', swapId)
             .single();
@@ -586,11 +603,11 @@ export const swapsApi = {
             .from('swap_offers')
             .select(`
                 *,
-                offerer:profiles!offerer_id(*),
+                offerer:profiles!offerer_id(${SWAP_PROFILE_COLUMNS}),
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
                     scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
-                    target_employment_type, remuneration_rate, remuneration_level,
+                    target_employment_type, remuneration_level,
                     roles(name),
                     remuneration_levels(level_number, level_name),
                     departments(name),
@@ -653,8 +670,8 @@ export const swapsApi = {
                     sub_departments(name),
                     organizations(name)
                 ),
-                requested_by:profiles!requester_id(*),
-                swap_with:profiles!target_id(*),
+                requested_by:profiles!requester_id(${SWAP_PROFILE_COLUMNS}),
+                swap_with:profiles!target_id(${SWAP_PROFILE_COLUMNS}),
                 swap_offers (
                     id,
                     status,
@@ -665,7 +682,7 @@ export const swapsApi = {
                         id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes,
                         net_length_minutes, scheduled_length_minutes, is_overnight, is_training, sub_group_name,
                         lifecycle_status, group_type,
-                        target_employment_type, remuneration_rate, remuneration_level,
+                        target_employment_type, remuneration_level,
                         user_contract_id, assigned_employee_id, shift_pay_terms,
                         roles(name),
                         departments(name),
@@ -938,12 +955,13 @@ export const swapsApi = {
     async rejectTrade(offerId: string): Promise<void> {
         console.log('[API] Rejecting trade offer:', offerId);
 
-        const { error } = await db
+        const rejected = await db
             .from('swap_offers')
-            .update({ status: 'REJECTED' })
+            .update({ status: 'REJECTED' }, { count: 'exact' })
             .eq('id', offerId);
 
-        if (error) throw error;
+        if (rejected.error) throw rejected.error;
+        assertWrote(rejected, 'decline this offer');
     }
 };
 

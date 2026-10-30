@@ -4,6 +4,7 @@
 // ============================================================
 
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import type {
     BroadcastGroup,
     BroadcastChannel,
@@ -90,6 +91,8 @@ export const broadcastGroupCommands = {
             .select()
             .single();
 
+        // PGRST116 = no row came back: row-level security refused the update.
+        if (error?.code === 'PGRST116') throw new WriteRefusedError('change this group');
         if (error) throw error;
         return toCamelCase(group);
     },
@@ -98,12 +101,13 @@ export const broadcastGroupCommands = {
      * Delete group (soft delete)
      */
     async delete(groupId: string): Promise<void> {
-        const { error } = await supabase
+        const result = await supabase
             .from('broadcast_groups')
-            .update({ is_active: false })
+            .update({ is_active: false }, { count: 'exact' })
             .eq('id', groupId);
 
-        if (error) throw error;
+        if (result.error) throw result.error;
+        assertWrote(result, 'archive this group');
     },
 };
 
@@ -132,12 +136,13 @@ export const broadcastChannelCommands = {
      * Delete channel (soft delete)
      */
     async delete(channelId: string): Promise<void> {
-        const { error } = await supabase
+        const result = await supabase
             .from('broadcast_channels')
-            .update({ is_active: false })
+            .update({ is_active: false }, { count: 'exact' })
             .eq('id', channelId);
 
-        if (error) throw error;
+        if (result.error) throw result.error;
+        assertWrote(result, 'archive this channel');
     },
 };
 
@@ -185,30 +190,32 @@ export const broadcastCommands = {
      * Delete broadcast
      */
     async delete(broadcastId: string): Promise<void> {
-        const { error } = await supabase
+        const result = await supabase
             .from('broadcasts')
-            .delete()
+            .delete({ count: 'exact' })
             .eq('id', broadcastId);
 
-        if (error) throw error;
+        if (result.error) throw result.error;
+        assertWrote(result, 'delete this broadcast');
     },
 
     /**
      * Pin / Unpin broadcast
      */
     async togglePin(broadcastId: string, isPinned: boolean): Promise<void> {
-        const { error } = await supabase
+        const result = await supabase
             .from('broadcasts')
-            .update({ is_pinned: isPinned })
+            .update({ is_pinned: isPinned }, { count: 'exact' })
             .eq('id', broadcastId);
 
-        if (error) throw error;
+        if (result.error) throw result.error;
+        assertWrote(result, 'pin or unpin this broadcast');
     },
 };
 
 // ── Broadcast Attachments ─────────────────────────────────────────────────────
 
-export const broadcastAttachmentCommands = {
+const broadcastAttachmentCommands = {
     /**
      * Upload and create attachment
      */
@@ -261,12 +268,13 @@ export const broadcastAttachmentCommands = {
                 .remove([attachment.storage_path]);
         }
 
-        const { error } = await supabase
+        const result = await supabase
             .from('broadcast_attachments')
-            .delete()
+            .delete({ count: 'exact' })
             .eq('id', attachmentId);
 
-        if (error) throw error;
+        if (result.error) throw result.error;
+        assertWrote(result, 'delete this attachment');
     },
 };
 
@@ -303,26 +311,28 @@ export const groupParticipantCommands = {
             throw new Error('Invalid role');
         }
 
-        const { error } = await supabase
+        const result = await supabase
             .from('group_participants')
-            .update({ role: role as 'admin' | 'broadcaster' | 'member' })
+            .update({ role: role as 'admin' | 'broadcaster' | 'member' }, { count: 'exact' })
             .eq('group_id', groupId)
             .eq('employee_id', employeeId);
 
-        if (error) throw error;
+        if (result.error) throw result.error;
+        assertWrote(result, "change this member's role");
     },
 
     /**
      * Remove participant from group
      */
     async remove(groupId: string, employeeId: string): Promise<void> {
-        const { error } = await supabase
+        const result = await supabase
             .from('group_participants')
-            .delete()
+            .delete({ count: 'exact' })
             .eq('group_id', groupId)
             .eq('employee_id', employeeId);
 
-        if (error) throw error;
+        if (result.error) throw result.error;
+        assertWrote(result, 'remove this member');
     },
 };
 

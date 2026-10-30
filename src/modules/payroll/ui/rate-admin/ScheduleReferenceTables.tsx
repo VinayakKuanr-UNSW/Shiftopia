@@ -11,6 +11,7 @@
  * charged.
  */
 
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import React from 'react';
 import { GraduationCap } from 'lucide-react';
 import type { TraineeRateSet } from '../../data/ebaRates.read.api';
@@ -23,8 +24,8 @@ const SectionHeader: React.FC<{ Icon: React.ElementType; title: string; sub: str
   <div className="flex items-center gap-3 mb-4">
     <Icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
     <div>
-      <h3 className="text-lg font-bold text-foreground">{title}</h3>
-      <p className="text-sm text-muted-foreground">{sub}</p>
+      <h3 className="text-[15px] font-bold text-foreground">{title}</h3>
+      <p className="text-[13px] text-muted-foreground">{sub}</p>
     </div>
   </div>
 );
@@ -36,30 +37,30 @@ const TraineeMatrixTable: React.FC<{
   suffix?: string;
 }> = ({ title, matrix, suffix }) => (
   <div className="space-y-2">
-    <p className="text-sm font-bold text-foreground/80">{title}</p>
+    <p className="text-[13px] font-bold text-foreground/80">{title}</p>
     <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
-      <table className="w-full text-sm" aria-label={title}>
-        <thead>
-          <tr className="text-muted-foreground border-b border-border bg-muted/40">
-            <th scope="col" className="text-left font-bold py-3 px-4">Experience</th>
+      <Table aria-label={title}>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">Experience</TableHead>
             {SCHOOL_YEARS.map((y) => (
-              <th scope="col" key={y} className="text-right font-bold py-3 px-4">Year {y}</th>
+              <TableHead scope="col" key={y} className="text-right">Year {y}</TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody className="text-foreground font-semibold">
+          </TableRow>
+        </TableHeader>
+        <TableBody className="text-foreground">
           {EXPERIENCE.map((label, i) => (
-            <tr key={label} className="border-b border-border/50 last:border-0 hover:bg-muted/10 transition-colors">
-              <td className="py-3 px-4 font-medium">{label}</td>
+            <TableRow key={label} className="last:border-0">
+              <TableCell className="font-medium">{label}</TableCell>
               {SCHOOL_YEARS.map((y) => (
-                <td key={y} className="text-right py-3 px-4 tabular-nums text-muted-foreground font-medium">
+                <TableCell key={y} className="text-right tabular-nums text-muted-foreground font-medium">
                   {money(matrix[y][i])}{suffix}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   </div>
 );
@@ -80,7 +81,7 @@ export const ScheduleReferenceTables: React.FC<{ traineeSet: TraineeRateSet }> =
           <TraineeMatrixTable title="Part-time hourly — Wage Level A (cl 1.5.1)" matrix={traineeSet.hourlyLevelA} suffix="/hr" />
           <TraineeMatrixTable title="Part-time hourly — Wage Level B (cl 1.5.2)" matrix={traineeSet.hourlyLevelB} suffix="/hr" />
         </div>
-        <div className="mt-6 flex flex-wrap gap-3 text-sm font-semibold" role="list" aria-label="Trainee wage conditions">
+        <div className="mt-6 flex flex-wrap gap-3 text-[13px] font-semibold" role="list" aria-label="Trainee wage conditions">
           <span role="listitem" className="rounded-lg border border-border bg-muted/40 px-3.5 py-1.5 text-foreground/80">
             Adult Cert IV FT/wk — A: <span className="font-extrabold tabular-nums text-foreground">{money(traineeSet.adult.ftWeekly.A[0])} → {money(traineeSet.adult.ftWeekly.A[1])}</span>, B: <span className="font-extrabold tabular-nums text-foreground">{money(traineeSet.adult.ftWeekly.B[0])} → {money(traineeSet.adult.ftWeekly.B[1])}</span>
           </span>
@@ -99,4 +100,3 @@ export const ScheduleReferenceTables: React.FC<{ traineeSet: TraineeRateSet }> =
   );
 };
 
-export default ScheduleReferenceTables;

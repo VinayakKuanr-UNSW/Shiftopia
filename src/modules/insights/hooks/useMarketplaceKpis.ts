@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ScopeSelection } from '@/platform/auth/types';
 import { insightsApi } from '../api/insights.api';
-import type { MarketplaceKpis } from '../model/marketplace-kpis.types';
 
-export type { MarketplaceKpis };
 
 /** Org-level marketplace KPIs: coverage, churn, offers and trades. */
 export const useMarketplaceKpis = (from: string, to: string, scope: ScopeSelection) =>

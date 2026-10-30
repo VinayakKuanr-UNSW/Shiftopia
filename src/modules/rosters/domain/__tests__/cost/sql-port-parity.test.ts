@@ -92,7 +92,6 @@ const priceHigherDuties = (c: typeof HIGHER_DUTIES_CASES[number]) =>
     net_length_minutes: c.net,
     scheduled_length_minutes: c.net,
     remuneration_rate: null,
-    actual_hourly_rate: null,
     remuneration_level: 4,
     higherDutiesLevel: 'LEVEL_6',
     target_employment_type: c.emp,
@@ -109,7 +108,6 @@ const price = (c: typeof CASES[number], firstAid = false) =>
     net_length_minutes: c.net,
     scheduled_length_minutes: c.sched,
     remuneration_rate: null,
-    actual_hourly_rate: null,
     remuneration_level: c.lvl,
     target_employment_type: c.emp,
     unpaid_break_minutes: 0,
@@ -182,5 +180,29 @@ describe('EBA engine — golden figures mirrored by the SQL port', () => {
     // must be in it, or the lines fall short of the total.
     const b = priceHigherDuties(HIGHER_DUTIES_CASES.find(c => c.id === 'hd-casual-2h-sat')!);
     expect(b.penaltyBreakdown?.satHours).toBe(4);
+  });
+
+  it('prices meal break window in parity with SQL fn_eba_estimate_shift_cost', () => {
+    // Thu 14:00–22:30, 8h worked, 30m unpaid break.
+    // At 22:00 (end): 0 night hours -> 259.12 (8h x $32.39 Level 5 FT)
+    // At 18:00 (mid): 0.5 night hours -> 262.36 (+0.5h x $32.39 x 20% = +$3.24)
+    // Verified against live SQL fn_eba_estimate_shift_cost(..., 32.39, 'Full-Time', ..., '22:00'/'18:00', 30) -> 259.12 / 262.36
+    const priceWithBreak = (breakStart: string) => estimateDetailedCostFromShift({
+      shift_date: '2026-08-06',
+      start_time: '14:00:00',
+      end_time: '22:30:00',
+      break_start: breakStart,
+      break_end: null,
+      net_length_minutes: 480,
+      scheduled_length_minutes: 510,
+      unpaid_break_minutes: 30,
+      remuneration_rate: 30,
+      remuneration_level: 5,
+      target_employment_type: 'FT',
+      roles: { name: 'Team Member' },
+    } as never).totalCost;
+
+    expect(Number(priceWithBreak('22:00:00').toFixed(2))).toBe(259.12);
+    expect(Number(priceWithBreak('18:00:00').toFixed(2))).toBe(262.36);
   });
 });

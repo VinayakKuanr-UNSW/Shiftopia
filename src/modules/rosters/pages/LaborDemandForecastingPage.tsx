@@ -16,8 +16,11 @@
  *   4. Confirm & Inject: publishes proposed shifts for roster filling
  */
 
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/modules/core/ui/primitives/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { formatClockTime } from "@/modules/core/lib/date.utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ComposedChart,
@@ -30,7 +33,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 // Domain
@@ -47,7 +50,8 @@ import { soleOrgId, soleDeptId, soleSubDeptId, deptIds, subDeptIds } from '@/pla
 
 // Layout
 import { PageLayout } from "@/modules/core/ui/layout/PageLayout";
-import { PersonalPageHeader } from "@/modules/core/ui/components/PersonalPageHeader";
+import { GoldStandardHeader } from "@/modules/core/ui/components/GoldStandardHeader";
+import { ToolbarRow, ToolbarSegmented, ToolbarIconButton, toolbar } from "@/modules/core/ui/components/Toolbar";
 
 // UI Primitives
 import { Badge } from "@/modules/core/ui/primitives/badge";
@@ -59,13 +63,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/modules/core/ui/primitives/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/modules/core/ui/primitives/select";
 import {
   Tooltip,
   TooltipContent,
@@ -87,18 +84,12 @@ import {
   AlertTriangle,
   AlertCircle,
   ArrowRightLeft,
-  Award,
-  Building2,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   Database,
   DollarSign,
   Eye,
-  GitBranch,
   Info,
-  Layers,
-  Lock,
   Layout,
   Minus,
   Plus,
@@ -123,7 +114,6 @@ import {
   buildScopeDemand,
   type ScopeDemandResult,
 } from "../services/demandTensorBuilder.service";
-import { synthesizeShifts } from "../services/shiftSynthesizer.service";
 import {
   ConfirmGenerationModal,
   type GenerationOptions,
@@ -152,7 +142,7 @@ const BucketBadge = ({ bucket }: { bucket?: string }) => {
   }[bucket || "static"] || "bg-muted/10 text-muted-foreground border-border/20";
   
   return (
-    <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-tight", styles)}>
+    <span className={cn("text-[11px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-tight", styles)}>
       {bucket?.replace("_", "-") || "static"}
     </span>
   );
@@ -231,10 +221,6 @@ interface EventsOnDatePanelProps {
   isLoading: boolean;
 }
 
-function formatEventTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Australia/Sydney' });
-}
 
 const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading }) => {
   if (isLoading) {
@@ -251,8 +237,8 @@ const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
         <CalendarX className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-amber-400">No events scheduled on this date</p>
-          <p className="text-xs text-amber-400/80 mt-0.5">Shift generation will produce no demand.</p>
+          <p className="text-[13px] font-semibold text-amber-400">No events scheduled on this date</p>
+          <p className="text-[11px] text-amber-400/80 mt-0.5">Shift generation will produce no demand.</p>
         </div>
       </div>
     );
@@ -262,8 +248,8 @@ const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading
     <div className="bg-card border border-border/60 rounded-xl p-4">
       <div className="flex items-center gap-2 mb-3">
         <Calendar className="h-4 w-4 text-fuchsia-400" />
-        <span className="font-semibold text-sm">Events on this date</span>
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+        <span className="font-semibold text-[13px]">Events on this date</span>
+        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
           {events.length}
         </span>
       </div>
@@ -272,22 +258,22 @@ const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading
         {events.map(event => (
           <div key={event.event_id} className="bg-muted/30 border border-border/40 rounded-lg px-3 py-2.5">
             <div className="flex items-start justify-between gap-2 mb-1.5">
-              <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{event.name}</p>
+              <p className="text-[13px] font-semibold text-foreground leading-snug line-clamp-2">{event.name}</p>
               {event.event_type_name && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25 shrink-0 uppercase tracking-wide">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25 shrink-0 uppercase tracking-wide">
                   {event.event_type_name}
                 </span>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Users className="h-3 w-3" />
                 {event.estimated_total_attendance.toLocaleString('en-AU')} attendees
               </span>
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {formatEventTime(event.start_date_time)} → {formatEventTime(event.end_date_time)}
+                {formatClockTime(event.start_date_time, 'HH:mm', '')} → {formatClockTime(event.end_date_time, 'HH:mm', '')}
               </span>
               {(event.venue_name || event.room_name) && (
                 <span className="inline-flex items-center gap-1">
@@ -322,8 +308,8 @@ const CustomTooltip = ({
   const gap = req - (ex + injection);
 
   return (
-    <div className="bg-card/95 backdrop-blur border border-border rounded-xl p-3 shadow-2xl text-sm min-w-[170px]">
-      <p className="text-muted-foreground font-medium mb-2 text-xs uppercase tracking-wide">
+    <div className="bg-card/95 backdrop-blur border border-border rounded-xl p-3 shadow-2xl text-[13px] min-w-[170px]">
+      <p className="text-muted-foreground font-medium mb-2 text-[11px] uppercase tracking-wide">
         {label}
       </p>
       <div className="space-y-1.5">
@@ -408,7 +394,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
   return (
     <div className="bg-card border border-border/60 rounded-xl p-4 flex flex-col gap-2 hover:border-border transition-colors">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold leading-tight">
+        <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold leading-tight">
           {label}
         </p>
         <div className="flex items-center gap-1">
@@ -420,7 +406,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
       </div>
       <p
         className={cn(
-          "text-3xl font-bold tracking-tight",
+          "text-[24px] font-bold tracking-tight",
           valueColor ?? defaultColor,
         )}
       >
@@ -452,7 +438,7 @@ const StatusBadge: React.FC<{ status: "under" | "at-risk" | "optimized" }> = ({
   }[status];
   return (
     <span
-      className={cn("text-xs font-semibold px-2.5 py-1 rounded-full", cfg.cls)}
+      className={cn("text-[11px] font-semibold px-2.5 py-1 rounded-full", cfg.cls)}
     >
       {cfg.label}
     </span>
@@ -471,7 +457,7 @@ const TogglePill: React.FC<{
   <button
     onClick={onClick}
     className={cn(
-      "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
+      "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all border",
       active
         ? "border-transparent"
         : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border",
@@ -527,11 +513,11 @@ const ConfigCheckbox: React.FC<{
         </svg>
       )}
     </div>
-    <span className="text-sm font-medium text-foreground">{label}</span>
+    <span className="text-[13px] font-medium text-foreground">{label}</span>
     {badge && (
       <span
         className={cn(
-          "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+          "text-[11px] font-semibold px-2 py-0.5 rounded-full",
           badgeVariant === "warn"
             ? "bg-amber-500/15 text-amber-400 border border-amber-500/30"
             : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
@@ -575,7 +561,7 @@ const OptSlider: React.FC<{
   return (
     <div className="space-y-1.5">
       {/* Header row */}
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between text-[11px]">
         <span className="text-muted-foreground font-medium">{label}</span>
         <div className="flex items-center gap-2">
           <span className="font-bold" style={{ color }}>
@@ -614,8 +600,8 @@ const OptSlider: React.FC<{
 const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
     <Activity className="h-10 w-10 opacity-20" />
-    <p className="text-sm font-medium">{message}</p>
-    <p className="text-xs opacity-60">
+    <p className="text-[13px] font-medium">{message}</p>
+    <p className="text-[11px] opacity-60">
       Select a different date or check the scope filter above
     </p>
   </div>
@@ -628,49 +614,31 @@ const DetailsModal: React.FC<{
   data: TimelinePoint[];
   onClose: () => void;
 }> = ({ data, onClose }) => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-    onClick={onClose}
-  >
-    <motion.div
-      initial={{ scale: 0.95, y: 12 }}
-      animate={{ scale: 1, y: 0 }}
-      exit={{ scale: 0.95, y: 12 }}
-      className="bg-card border border-border rounded-2xl p-6 w-full max-w-2xl shadow-2xl"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-lg font-bold">Per-Timeslice Breakdown</h3>
-        <button
-          onClick={onClose}
-          className="text-muted-foreground hover:text-foreground text-xl leading-none"
-        >
-          ×
-        </button>
-      </div>
+  <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <DialogContent size="lg">
+      <DialogHeader>
+        <DialogTitle>Per-Timeslice Breakdown</DialogTitle>
+      </DialogHeader>
       <div className="overflow-auto max-h-[60vh]">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
               {["Time", "Required", "Existing", "Gap"].map((h) => (
-                <th
+                <TableHead
                   key={h}
                   className={cn(
-                    "py-2 pr-4 text-xs uppercase tracking-wide text-muted-foreground font-medium",
+                    "py-2 pr-4 text-[11px] uppercase tracking-wide text-muted-foreground font-medium",
                     h !== "Time" && "text-right",
                   )}
                 >
                   {h}
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {data.map((row, i) => (
-              <tr
+              <TableRow
                 key={i}
                 className={cn(
                   "border-b border-border/30 hover:bg-muted/20 transition-colors",
@@ -679,16 +647,16 @@ const DetailsModal: React.FC<{
                     "bg-red-500/5",
                 )}
               >
-                <td className="py-2 pr-4 font-mono text-muted-foreground">
+                <TableCell className="font-mono text-muted-foreground">
                   {row.time}
-                </td>
-                <td className="py-2 pr-4 text-right font-semibold">
+                </TableCell>
+                <TableCell className="text-right font-semibold">
                   {row.required}
-                </td>
-                <td className="py-2 pr-4 text-right font-semibold text-emerald-400">
+                </TableCell>
+                <TableCell className="text-right font-semibold text-emerald-400">
                   {row.existing}
-                </td>
-                <td
+                </TableCell>
+                <TableCell
                   className={cn(
                     "py-2 text-right font-bold",
                     row.residual > 0 ? "text-red-400" : "text-muted-foreground",
@@ -698,18 +666,18 @@ const DetailsModal: React.FC<{
                   {row.residual > 0 &&
                     row.residual ===
                       Math.max(...data.map((d) => d.residual)) && (
-                      <span className="ml-2 text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
+                      <span className="ml-2 text-[11px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
                         PEAK
                       </span>
                     )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
-    </motion.div>
-  </motion.div>
+    </DialogContent>
+  </Dialog>
 );
 
 /* =============================================================
@@ -724,14 +692,14 @@ const RawDataPanel: React.FC<{
   <motion.div
     initial={{ opacity: 0, y: 8 }}
     animate={{ opacity: 1, y: 0 }}
-    className="bg-card border border-border/60 rounded-xl p-6 font-mono text-xs space-y-4"
+    className="bg-card border border-border/60 rounded-xl p-6 font-mono text-[11px] space-y-4"
   >
     <div className="flex items-center gap-2 mb-4">
       <Database className="h-4 w-4 text-fuchsia-400" />
-      <span className="text-fuchsia-400 font-semibold text-sm">
+      <span className="text-fuchsia-400 font-semibold text-[13px]">
         Raw Engine Tensors
       </span>
-      <Badge className="ml-2 text-[10px] bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30">
+      <Badge className="ml-2 text-[11px] bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30">
         {shiftCount} shifts · {date}
       </Badge>
     </div>
@@ -754,7 +722,7 @@ const RawDataPanel: React.FC<{
         },
       ].map(({ label, color, values }) => (
         <div key={label}>
-          <p className="text-muted-foreground mb-2 text-[10px] uppercase tracking-widest">
+          <p className="text-muted-foreground mb-2 text-[11px] uppercase tracking-widest">
             {label}
           </p>
           <div
@@ -768,13 +736,13 @@ const RawDataPanel: React.FC<{
         </div>
       ))}
       <div>
-        <p className="text-muted-foreground mb-2 text-[10px] uppercase tracking-widest">
+        <p className="text-muted-foreground mb-2 text-[11px] uppercase tracking-widest">
           solver_meta
         </p>
         <div className="bg-background/60 rounded-lg p-3 border border-border/40 text-amber-400 space-y-1 leading-relaxed">
           <div>
             organization_id:{" "}
-            <span className="text-foreground text-[10px] break-all">
+            <span className="text-foreground text-[11px] break-all">
               {orgId}
             </span>
           </div>
@@ -818,7 +786,6 @@ const LaborDemandForecastingPage: React.FC = () => {
     setScope,
     scopeKey,
     isGammaLocked,
-    isLoading: isScopeLoading,
   } = useScopeFilter("managerial");
 
   // Multi-department derived IDs
@@ -835,7 +802,6 @@ const LaborDemandForecastingPage: React.FC = () => {
   // Use the first selected dept name if available (simple fallback)
   const departmentName = departmentId ? "Selected Department" : null; 
   const subDepartmentName = subDepartmentId ? "Selected Sub-Department" : null;
-  const hasCompleteSelection = scope.org_ids.length > 0 && scope.dept_ids.length > 0;
 
   // ── Local state ─────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState(() =>
@@ -1265,7 +1231,6 @@ const LaborDemandForecastingPage: React.FC = () => {
   // ── Computation: Budget ──────────────────────────────────────
   const budgetData = useMemo(() => {
     const getAvgRate = (shift: Shift): number => {
-      if (shift.remuneration_rate) return Number(shift.remuneration_rate);
       const lvlNum = shift.remuneration_level ?? (shift.remuneration_levels as any)?.level_number;
       if (lvlNum != null) {
         const rateSet = resolveRateSet(shift.shift_date || '2026-07-01');
@@ -1499,110 +1464,83 @@ const LaborDemandForecastingPage: React.FC = () => {
   return (
     <>
     <PageLayout>
-      <PageLayout.Header>
-        <PersonalPageHeader
-          title="Labor Demand Forecasting"
-          Icon={Activity}
-          scope={scope}
-          setScope={setScope}
-          isGammaLocked={isGammaLocked}
-          mode="managerial"
-        />
-
-        {/* ── Function Bar ────────────────────────────────────────────── */}
-        <div className="mt-4 lg:mt-6 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            {/* Date Picker */}
-            <div className="flex items-center gap-2 bg-background/50 px-3 py-1.5 rounded-xl border border-border/60">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-sm font-medium focus:outline-none"
+      <GoldStandardHeader
+        title="Labor Demand Forecasting"
+        Icon={Activity}
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        mode="managerial"
+        functionBar={
+          <ToolbarRow
+            views={
+              <ToolbarSegmented<ViewMode>
+                value={viewMode}
+                onValueChange={setViewMode}
+                options={[
+                  { id: 'preview', label: 'Preview', icon: <Eye className="h-3.5 w-3.5" aria-hidden="true" /> },
+                  { id: 'raw', label: 'Raw Data', icon: <Database className="h-3.5 w-3.5" aria-hidden="true" /> },
+                ]}
               />
-              {!eventsLoading && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className={cn(
-                        "ml-1 h-2 w-2 rounded-full cursor-help",
-                        eventsOnDate.length === 0
-                          ? "bg-amber-400"
-                          : "bg-emerald-400",
-                      )}
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {eventsOnDate.length === 0
-                      ? "No events scheduled for this date"
-                      : `${eventsOnDate.length} events scheduled`}
-                  </TooltipContent>
-                </Tooltip>
+            }
+            modes={
+              <label className={toolbar.field}>
+                <Calendar className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                <input
+                  type="date"
+                  aria-label="Forecast date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-transparent text-[16px] md:text-[11px] font-bold focus:outline-none"
+                />
+                {!eventsLoading && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full cursor-help",
+                          eventsOnDate.length === 0 ? "bg-amber-400" : "bg-emerald-400",
+                        )}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {eventsOnDate.length === 0
+                        ? "No events scheduled for this date"
+                        : `${eventsOnDate.length} events scheduled`}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </label>
+            }
+            actions={<>
+              {isFetching && !isLoading && (
+                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground" role="status">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  Syncing shifts…
+                </span>
               )}
-            </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="button" onClick={() => setShowFeedbackModal(true)} className={toolbar.secondaryAction}>
+                    <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                    Give feedback
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Tell us how staffing went for a past event</TooltipContent>
+              </Tooltip>
+              <ToolbarIconButton
+                icon={<RefreshCw />}
+                tooltip="Refresh shifts"
+                onClick={() => queryClient.invalidateQueries({ queryKey: shiftKeys.lists })}
+                isLoading={isFetching}
+                variant="blue"
+              />
+            </>}
+          />
+        }
+      />
 
-            <div className="h-6 w-px bg-border/40 mx-1" />
-
-            {/* View Mode Toggle */}
-            <div className="flex items-center border border-border/60 rounded-xl overflow-hidden bg-background/50">
-              {(["preview", "raw"] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all capitalize",
-                    viewMode === mode
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                  )}
-                >
-                  {mode === "preview" ? (
-                    <Eye className="h-3.5 w-3.5" />
-                  ) : (
-                    <Database className="h-3.5 w-3.5" />
-                  )}
-                  {mode === "preview" ? "Preview" : "Raw Data"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {isFetching && !isLoading && (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                <span>Syncing shifts...</span>
-              </div>
-            )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowFeedbackModal(true)}
-                  className="h-9 gap-2 text-muted-foreground hover:text-foreground"
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  Give feedback
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Tell us how staffing went for a past event</TooltipContent>
-            </Tooltip>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => queryClient.invalidateQueries({ queryKey: shiftKeys.lists })}
-              className="h-9 gap-2"
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </PageLayout.Header>
-
-      <PageLayout.Body bare className="space-y-5 scrollbar-none">
+      <PageLayout.Body className="space-y-5">
         {/* ===================== EVENTS ON THIS DATE ===================== */}
         <motion.div
           initial={{ opacity: 0, y: -4 }}
@@ -1688,8 +1626,8 @@ const LaborDemandForecastingPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="bg-card border border-border/60 rounded-xl p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Baseline Requirement</p>
-                      <p className="text-xl font-bold text-blue-400">{Math.round(metrics.baselineHours)}h</p>
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Baseline Requirement</p>
+                      <p className="text-[17px] font-bold text-blue-400">{Math.round(metrics.baselineHours)}h</p>
                     </div>
                     <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
                       <Layout className="h-5 w-5 text-blue-400" />
@@ -1697,8 +1635,8 @@ const LaborDemandForecastingPage: React.FC = () => {
                   </div>
                   <div className="bg-card border border-border/60 rounded-xl p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">ML Surge Demand</p>
-                      <p className="text-xl font-bold text-fuchsia-400">+{Math.round(metrics.surgeHours)}h</p>
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">ML Surge Demand</p>
+                      <p className="text-[17px] font-bold text-fuchsia-400">+{Math.round(metrics.surgeHours)}h</p>
                     </div>
                     <div className="h-10 w-10 rounded-lg bg-fuchsia-500/10 flex items-center justify-center">
                       <Zap className="h-5 w-5 text-fuchsia-400" />
@@ -1706,8 +1644,8 @@ const LaborDemandForecastingPage: React.FC = () => {
                   </div>
                   <div className="bg-card border border-border/60 rounded-xl p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Derived Supervision</p>
-                      <p className="text-xl font-bold text-amber-400">+{Math.round(metrics.derivedHours)}h</p>
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Derived Supervision</p>
+                      <p className="text-[17px] font-bold text-amber-400">+{Math.round(metrics.derivedHours)}h</p>
                     </div>
                     <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
                       <ShieldCheck className="h-5 w-5 text-amber-400" />
@@ -1721,11 +1659,11 @@ const LaborDemandForecastingPage: React.FC = () => {
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <div className="flex items-center gap-2">
                     <Activity className="h-4 w-4 text-fuchsia-400" />
-                    <span className="font-semibold text-sm">
+                    <span className="font-semibold text-[13px]">
                       Demand vs Coverage Timeline
                     </span>
                     {hasShifts && (
-                      <Badge className="bg-muted/60 text-muted-foreground border border-border/40 text-[10px]">
+                      <Badge className="bg-muted/60 text-muted-foreground border border-border/40 text-[11px]">
                         {selectedDate} · {shifts.length} shifts
                       </Badge>
                     )}
@@ -1926,7 +1864,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                     {/* Peak Gap annotation */}
                     {metrics.peakGap > 0 && (
                       <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none">
-                        <div className="bg-red-500/90 text-white text-sm font-black px-3 py-1 rounded-lg shadow-lg whitespace-nowrap">
+                        <div className="bg-red-500/90 text-white text-[13px] font-black px-3 py-1 rounded-lg shadow-lg whitespace-nowrap">
                           Peak Gap: {metrics.peakGap} @ {metrics.peakGapTime}
                         </div>
                       </div>
@@ -1942,13 +1880,13 @@ const LaborDemandForecastingPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Activity className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">
+                      <span className="font-semibold text-[13px]">
                         Coverage Scan
                       </span>
                     </div>
                     <button
                       onClick={() => setShowDetailsModal(true)}
-                      className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                      className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
                     >
                       View Details
                     </button>
@@ -1961,13 +1899,13 @@ const LaborDemandForecastingPage: React.FC = () => {
                       ))}
                     </div>
                   ) : !hasShifts ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">
+                    <p className="text-[13px] text-muted-foreground text-center py-6">
                       No shift data available
                     </p>
                   ) : (
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-border/40">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
                           {[
                             "Role",
                             "Bucket",
@@ -1976,49 +1914,49 @@ const LaborDemandForecastingPage: React.FC = () => {
                             "Gap",
                             "Status",
                           ].map((h, i) => (
-                            <th
+                            <TableHead
                               key={h}
                               className={cn(
-                                "pb-2 text-xs uppercase tracking-wide text-muted-foreground font-medium",
+                                "pb-2 text-[11px] uppercase tracking-wide text-muted-foreground font-medium",
                                 i > 0 ? "text-right" : "text-left",
                               )}
                             >
                               {h}
-                            </th>
+                            </TableHead>
                           ))}
-                        </tr>
-                      </thead>
-                      <tbody>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {roleCoverageData.length === 0 ? (
-                          <tr>
-                            <td
+                          <TableRow>
+                            <TableCell
                               colSpan={6}
-                              className="py-4 text-center text-sm text-muted-foreground"
+                              className="text-center text-muted-foreground"
                             >
                               No role data
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ) : (
                           roleCoverageData.map((row, i) => (
-                            <tr
+                            <TableRow
                               key={i}
-                              className="border-b border-border/20 last:border-0"
+                              className="last:border-0"
                             >
-                              <td className="py-3 text-sm font-medium">
+                              <TableCell className="font-medium">
                                 {row.role}
-                              </td>
-                              <td className="py-3">
+                              </TableCell>
+                              <TableCell>
                                 <BucketBadge bucket={row.bucket} />
-                              </td>
-                              <td className="py-3 text-sm text-right text-muted-foreground">
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
                                 {row.reqHours}h
-                              </td>
-                              <td className="py-3 text-sm text-right text-muted-foreground">
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
                                 {row.existing}h
-                              </td>
-                              <td
+                              </TableCell>
+                              <TableCell
                                 className={cn(
-                                  "py-3 text-sm text-right font-bold",
+                                  "py-3 text-[13px] text-right font-bold",
                                   row.gap < -3
                                     ? "text-red-400"
                                     : row.gap < 0
@@ -2027,15 +1965,15 @@ const LaborDemandForecastingPage: React.FC = () => {
                                 )}
                               >
                                 {row.gap === 0 ? "0" : `${row.gap}h`}
-                              </td>
-                              <td className="py-3 text-right">
+                              </TableCell>
+                              <TableCell className="text-right">
                                 <StatusBadge status={row.status} />
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))
                         )}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   )}
                 </div>
 
@@ -2044,18 +1982,18 @@ const LaborDemandForecastingPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-4 shrink-0">
                     <div className="flex items-center gap-2">
                       <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">
+                      <span className="font-semibold text-[13px]">
                         Proposed Adjustments
                       </span>
                     </div>
                     <div className="flex gap-1.5">
                       {totalDeletedShifts > 0 && (
-                        <Badge className="bg-red-500/15 text-red-500 border border-red-500/30 text-[10px] font-semibold px-1.5">
+                        <Badge className="bg-red-500/15 text-red-500 border border-red-500/30 text-[11px] font-semibold px-1.5">
                           -{totalDeletedShifts} Shifts
                         </Badge>
                       )}
                       {totalProposedShifts > 0 && (
-                        <Badge className="bg-primary/15 text-primary border border-primary/30 text-[10px] font-semibold px-1.5">
+                        <Badge className="bg-primary/15 text-primary border border-primary/30 text-[11px] font-semibold px-1.5">
                           +{totalProposedShifts} Shifts
                         </Badge>
                       )}
@@ -2072,10 +2010,10 @@ const LaborDemandForecastingPage: React.FC = () => {
                     proposedDeletions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
                       <CheckCircle2 className="h-8 w-8 text-emerald-400/50" />
-                      <p className="text-sm font-medium text-emerald-400">
+                      <p className="text-[13px] font-medium text-emerald-400">
                         Optimized
                       </p>
-                      <p className="text-xs">
+                      <p className="text-[11px]">
                         No shift additions or deletions needed
                       </p>
                     </div>
@@ -2089,7 +2027,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className="text-sm font-semibold text-emerald-400 flex items-center gap-1.5">
+                              <p className="text-[13px] font-semibold text-emerald-400 flex items-center gap-1.5">
                                 <Plus className="h-3 w-3" /> {g.roleName}
                               </p>
                               <p className="text-[11px] text-muted-foreground mt-0.5 mb-1.5">
@@ -2099,22 +2037,22 @@ const LaborDemandForecastingPage: React.FC = () => {
                                 <div className="flex gap-2">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Badge className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/30 text-[9px] cursor-help transition-colors">
+                                      <Badge className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/30 text-[11px] cursor-help transition-colors">
                                         <Sparkles className="h-2.5 w-2.5 mr-1" />
                                         Why?
                                       </Badge>
                                     </TooltipTrigger>
                                     <TooltipContent side="right" className="bg-indigo-950 text-indigo-50 border-indigo-800 p-2 max-w-[250px] space-y-1 z-[100]">
-                                      <p className="font-semibold text-xs mb-1.5 text-indigo-300">Generated Requirements</p>
+                                      <p className="font-semibold text-[11px] mb-1.5 text-indigo-300">Generated Requirements</p>
                                       {g.reasons.map((r, idx) => (
-                                        <p key={idx} className="text-[10px] leading-tight opacity-90">• {r}</p>
+                                        <p key={idx} className="text-[11px] leading-tight opacity-90">• {r}</p>
                                       ))}
                                     </TooltipContent>
                                   </Tooltip>
 
                                   <Sheet>
                                     <SheetTrigger asChild>
-                                      <Badge className="bg-muted text-muted-foreground hover:bg-muted/80 border border-border text-[9px] cursor-pointer transition-colors">
+                                      <Badge className="bg-muted text-muted-foreground hover:bg-muted/80 border border-border text-[11px] cursor-pointer transition-colors">
                                         <BarChart3 className="h-2.5 w-2.5 mr-1" />
                                         Full Audit
                                       </Badge>
@@ -2125,7 +2063,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                                           <ShieldCheck className="h-5 w-5 text-indigo-400" />
                                           Demand Engine Audit
                                         </SheetTitle>
-                                        <SheetDescription className="text-xs">
+                                        <SheetDescription>
                                           Layer-by-layer breakdown for <strong>{g.roleName}</strong> on {selectedDate}
                                         </SheetDescription>
                                       </SheetHeader>
@@ -2134,10 +2072,10 @@ const LaborDemandForecastingPage: React.FC = () => {
                                         {/* Audit Content Implementation */}
                                         <div className="space-y-4">
                                           <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L3 - Baseline Demand</h4>
+                                            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">L3 - Baseline Demand</h4>
                                             <div className="space-y-2">
                                               {g.reasons.filter(r => r.startsWith('rule:')).map((r, i) => (
-                                                <div key={i} className="flex justify-between text-xs">
+                                                <div key={i} className="flex justify-between text-[11px]">
                                                   <span className="text-muted-foreground">{r.split(' ')[0]}</span>
                                                   <span className="font-mono text-indigo-400">{r.split(' ')[1]}</span>
                                                 </div>
@@ -2146,10 +2084,10 @@ const LaborDemandForecastingPage: React.FC = () => {
                                           </div>
 
                                           <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L4 - Timecard Adjustment</h4>
+                                            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">L4 - Timecard Adjustment</h4>
                                             <div className="space-y-2">
                                               {g.reasons.filter(r => r.startsWith('timecard_mult:')).map((r, i) => (
-                                                <div key={i} className="flex justify-between text-xs">
+                                                <div key={i} className="flex justify-between text-[11px]">
                                                   <span className="text-muted-foreground">Historical Attendance Ratio</span>
                                                   <span className="font-mono text-blue-400">{r.replace('timecard_mult:', '')}x</span>
                                                 </div>
@@ -2158,10 +2096,10 @@ const LaborDemandForecastingPage: React.FC = () => {
                                           </div>
 
                                           <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L5 - Supervisor Feedback</h4>
+                                            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">L5 - Supervisor Feedback</h4>
                                             <div className="space-y-2">
                                               {g.reasons.filter(r => r.startsWith('feedback_mult:')).map((r, i) => (
-                                                <div key={i} className="flex justify-between text-xs">
+                                                <div key={i} className="flex justify-between text-[11px]">
                                                   <span className="text-muted-foreground">Feedback Multiplier</span>
                                                   <span className="font-mono text-emerald-400">{r.replace('feedback_mult:', '')}</span>
                                                 </div>
@@ -2170,30 +2108,30 @@ const LaborDemandForecastingPage: React.FC = () => {
                                           </div>
 
                                           <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L6 - Operational Constraints</h4>
+                                            <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3">L6 - Operational Constraints</h4>
                                             <div className="space-y-2">
                                               {g.reasons.filter(r => r.startsWith('constraint_floor:') || r.startsWith('global_floor:')).map((r, i) => (
-                                                <div key={i} className="flex justify-between text-xs">
+                                                <div key={i} className="flex justify-between text-[11px]">
                                                   <span className="text-muted-foreground">Binding Floor</span>
                                                   <span className="font-mono text-amber-400">{r.split(' ')[0].split(':')[1]}</span>
                                                 </div>
                                               ))}
                                               {g.reasons.filter(r => r.startsWith('constraint_floor:') || r.startsWith('global_floor:')).length === 0 && (
-                                                <p className="text-[10px] text-muted-foreground italic">No L6 floors binding for this role.</p>
+                                                <p className="text-[11px] text-muted-foreground italic">No L6 floors binding for this role.</p>
                                               )}
                                             </div>
                                           </div>
 
                                           <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-3">L7 - Final Finalization</h4>
+                                            <h4 className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-3">L7 - Final Finalization</h4>
                                             <div className="flex justify-between items-end">
                                               <div>
-                                                <p className="text-[10px] text-muted-foreground">Final Staff Count</p>
-                                                <p className="text-2xl font-bold text-white">{g.count} <span className="text-xs font-normal text-muted-foreground">Shifts</span></p>
+                                                <p className="text-[11px] text-muted-foreground">Final Staff Count</p>
+                                                <p className="text-[20px] font-bold text-white">{g.count} <span className="text-[11px] font-normal text-muted-foreground">Shifts</span></p>
                                               </div>
                                               <div className="text-right">
-                                                <p className="text-[10px] text-muted-foreground">Total Labor</p>
-                                                <p className="text-lg font-semibold text-indigo-300">{g.totalHours}h</p>
+                                                <p className="text-[11px] text-muted-foreground">Total Labor</p>
+                                                <p className="text-[15px] font-semibold text-indigo-300">{g.totalHours}h</p>
                                               </div>
                                             </div>
                                           </div>
@@ -2201,9 +2139,9 @@ const LaborDemandForecastingPage: React.FC = () => {
                                           <div className="pt-4 border-t border-border/40 mt-6">
                                             <div className="flex items-center gap-2 mb-2">
                                               <Database className="h-3 w-3 text-muted-foreground" />
-                                              <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Determinism Snapshot</h4>
+                                              <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Determinism Snapshot</h4>
                                             </div>
-                                            <p className="text-[9px] text-muted-foreground leading-relaxed">
+                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
                                               This demand record is historically frozen. The ratios and multipliers shown above were snapshotted into the 
                                               <code className="text-indigo-300 mx-1">demand_tensor</code> at the moment of generation to ensure 100% audit-grade reproducibility.
                                             </p>
@@ -2216,7 +2154,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                               )}
                             </div>
                             <div className="text-right shrink-0">
-                              <p className="text-sm font-bold text-emerald-400">
+                              <p className="text-[13px] font-bold text-emerald-400">
                                 +{g.count} Shifts
                               </p>
                               <p className="text-[11px] text-muted-foreground">
@@ -2235,7 +2173,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <p className="text-sm font-semibold text-red-400 flex items-center gap-1.5">
+                              <p className="text-[13px] font-semibold text-red-400 flex items-center gap-1.5">
                                 <Minus className="h-3 w-3" /> {g.roleName}
                               </p>
                               <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -2243,7 +2181,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                               </p>
                             </div>
                             <div className="text-right shrink-0">
-                              <p className="text-sm font-bold text-red-400">
+                              <p className="text-[13px] font-bold text-red-400">
                                 -{g.count} Shifts
                               </p>
                               <p className="text-[11px] text-muted-foreground">
@@ -2255,7 +2193,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                       ))}
 
                       <div className="pt-3 mt-2 border-t border-border/40 space-y-1.5 shrink-0">
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-[13px]">
                           <span className="text-muted-foreground">
                             Net Hours Change
                           </span>
@@ -2269,7 +2207,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                             Hrs
                           </span>
                         </div>
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-[13px]">
                           <span className="text-muted-foreground">
                             Projected Cost Add.
                           </span>
@@ -2289,7 +2227,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                 <div className="bg-card border border-border/60 rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-5">
                     <Settings2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-sm">
+                    <span className="font-semibold text-[13px]">
                       Configuration & Rules
                     </span>
                   </div>
@@ -2331,7 +2269,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">
+                      <span className="font-semibold text-[13px]">
                         Optimization Strategy
                       </span>
                     </div>
@@ -2340,7 +2278,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs gap-1.5 h-8"
+                          className="text-[11px] gap-1.5 h-8"
                         >
                           {strategyLabel}
                           <ChevronDown className="h-3.5 w-3.5" />
@@ -2386,7 +2324,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                     />
                     {/* C2 — coverage confidence (service level) for demand buffering */}
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center justify-between text-[11px]">
                         <span className="text-muted-foreground font-medium">
                           Coverage Confidence
                         </span>
@@ -2407,7 +2345,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         step={5}
                         className="w-full"
                       />
-                      <p className="text-[10px] text-muted-foreground/70">
+                      <p className="text-[11px] text-muted-foreground/70">
                         Staff so demand is covered ~{coverageConfidence}% of the time.
                         50% = median (no buffer).
                       </p>
@@ -2422,7 +2360,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                 <div className="bg-card border border-border/60 rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-sm">
+                    <span className="font-semibold text-[13px]">
                       Compliance Preview
                     </span>
                   </div>
@@ -2444,7 +2382,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                     <div>
                       <p
                         className={cn(
-                          "font-semibold text-base",
+                          "font-semibold text-[14px]",
                           enforceCompliance
                             ? "text-emerald-400"
                             : "text-amber-400",
@@ -2454,13 +2392,13 @@ const LaborDemandForecastingPage: React.FC = () => {
                           ? "No violations detected"
                           : "Soft compliance mode"}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-[11px] text-muted-foreground mt-1">
                         {enforceCompliance
                           ? "Checked against Union Agreement v2.4"
                           : "Violations may be permitted — enable Enforce Compliance for strict mode"}
                       </p>
                       {preventOvertime && (
-                        <p className="text-xs text-emerald-400 mt-1.5">
+                        <p className="text-[11px] text-emerald-400 mt-1.5">
                           Overtime guard active ✓
                         </p>
                       )}
@@ -2473,13 +2411,13 @@ const LaborDemandForecastingPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">
+                      <span className="font-semibold text-[13px]">
                         Budget Impact
                       </span>
                     </div>
                     <span
                       className={cn(
-                        "text-xs font-semibold px-2.5 py-1 rounded-full border",
+                        "text-[11px] font-semibold px-2.5 py-1 rounded-full border",
                         budgetData.withinBudget
                           ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                           : "bg-red-500/15 text-red-400 border-red-500/30",
@@ -2516,10 +2454,10 @@ const LaborDemandForecastingPage: React.FC = () => {
                           },
                         ].map(({ label, value, color }) => (
                           <div key={label}>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
                               {label}
                             </p>
-                            <p className={cn("text-xl font-bold", color)}>
+                            <p className={cn("text-[17px] font-bold", color)}>
                               {value}
                             </p>
                           </div>
@@ -2536,7 +2474,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                           style={{ width: `${budgetData.pct}%` }}
                         />
                       </div>
-                      <p className="text-[10px] text-muted-foreground mt-1.5">
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
                         {budgetData.pct.toFixed(1)}% of{" "}
                         {formatCurrency(budgetData.budgetCap)} budget cap
                       </p>
@@ -2548,13 +2486,13 @@ const LaborDemandForecastingPage: React.FC = () => {
               {/* ===================== RECENT GENERATIONS (rollback) ===================== */}
               {recentRuns.length > 0 && (
                 <div className="bg-card border border-border/60 rounded-xl px-5 py-3 flex items-center gap-3 flex-wrap">
-                  <span className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">
+                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">
                     Recent Generations
                   </span>
                   {recentRuns.map((run) => (
                     <div
                       key={run.id}
-                      className="flex items-center gap-2 text-xs"
+                      className="flex items-center gap-2 text-[11px]"
                     >
                       <Badge className="bg-background border border-border/40 gap-1 px-2 py-0.5 text-[11px]">
                         {run.created_count > 0 && (
@@ -2575,7 +2513,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         )}
                       </Badge>
                       <span className="text-muted-foreground">
-                        {format(new Date(run.created_at), "HH:mm")}
+                        {formatClockTime(run.created_at, 'HH:mm', '')}
                       </span>
                       <button
                         onClick={() => handleRollback(run.id)}
@@ -2591,7 +2529,7 @@ const LaborDemandForecastingPage: React.FC = () => {
 
               {/* ===================== FOOTER ACTION BAR ===================== */}
               <div className="flex items-center justify-between gap-4 flex-wrap bg-card border border-border/60 rounded-xl px-5 py-4">
-                <div className="flex items-start gap-2.5 text-xs text-muted-foreground max-w-[520px]">
+                <div className="flex items-start gap-2.5 text-[11px] text-muted-foreground max-w-[520px]">
                   <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                   <span>
                     This generation applies only to{" "}
@@ -2634,13 +2572,13 @@ const LaborDemandForecastingPage: React.FC = () => {
                           ? "Confirm & Adjust"
                           : "Confirm & Inject"}
                         {totalProposedShifts > 0 && (
-                          <Badge className="ml-1 bg-primary-foreground/20 text-primary-foreground border-0 text-xs">
+                          <Badge className="ml-1 bg-primary-foreground/20 text-primary-foreground border-0 text-[11px]">
                             {totalProposedShifts}
                           </Badge>
                         )}
                         {totalProposedShifts === 0 &&
                           totalDeletedShifts > 0 && (
-                            <Badge className="ml-1 bg-primary-foreground/20 text-primary-foreground border-0 text-xs">
+                            <Badge className="ml-1 bg-primary-foreground/20 text-primary-foreground border-0 text-[11px]">
                               {totalDeletedShifts}
                             </Badge>
                           )}

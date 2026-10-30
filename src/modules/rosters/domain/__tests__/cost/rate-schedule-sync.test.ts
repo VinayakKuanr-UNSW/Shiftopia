@@ -19,20 +19,15 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { migrationPath } from '@/test/migrations';
 import { resolveRateSet } from '../../projections/utils/cost/rate-schedule';
 import {
   deriveRateSetFromMigration,
   BASELINE_EFFECTIVE_FROM,
 } from '../../../../../../scripts/gen-eba-rate-schedule.mjs';
 
-// Resolve the migration path relative to this test file (independent of cwd).
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIGRATION_PATH = resolve(
-  __dirname,
-  '../../../../../../supabase/migrations/20260709000000_eba_rate_allowance_effective_dated.sql',
-);
+// Wherever the migration lives now: supabase/migrations or a re-baseline archive.
+const MIGRATION_PATH = migrationPath('20260709000000_eba_rate_allowance_effective_dated.sql');
 
 const sql = readFileSync(MIGRATION_PATH, 'utf8');
 const fromDb = deriveRateSetFromMigration(sql);

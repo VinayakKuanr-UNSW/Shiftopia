@@ -40,6 +40,9 @@ function shift(over: Partial<ShapeInput> = {}): ShapeInput {
 
 const has = (r: ShapeResult, id: string) => r.hits.some(h => h.rule_id === id);
 
+/** A 30-minute meal break at noon. */
+const window = { break_start: '12:00', break_end: '12:30' };
+
 describe('minimum engagement is scoped to the employment type', () => {
     it('gives plain part-time a flat 3h with no training concession', () => {
         // cl 12.3(e) has no exceptions of any kind.
@@ -120,27 +123,29 @@ describe('security meal breaks are paid (EBA Schedule 3)', () => {
         // 09:00–17:00 with a 30m break. For non-security that is 7.5h net; for
         // security the break is paid, so the shift is 8h of working time.
         const civilian = evaluateShiftShape(shift({
-            end_time: '17:00', unpaid_break_minutes: 30,
+            end_time: '17:00', ...window, unpaid_break_minutes: 30,
         }));
         expect(civilian.net_minutes).toBe(450);
 
         const security = evaluateShiftShape(shift({
-            end_time: '17:00', paid_break_minutes: 30, is_security: true,
+            end_time: '17:00', ...window, is_security: true,
         }));
         expect(security.net_minutes).toBe(480);
     });
 
-    it('satisfies the meal-break requirement from the paid field', () => {
+    it('satisfies the meal-break requirement from the window, deducting nothing', () => {
         const r = evaluateShiftShape(shift({
-            end_time: '17:00', paid_break_minutes: 30, is_security: true,
+            end_time: '17:00', ...window, paid_break_minutes: 30, is_security: true,
         }));
         expect(has(r, 'SHAPE_MEAL_BREAK')).toBe(false);
+        expect(has(r, 'SHAPE_BREAK_WINDOW')).toBe(false);
+        expect(r.passed).toBe(true);
     });
 
-    it('still requires one when no paid break is allotted', () => {
+    it('still requires a window when none is set', () => {
         const r = evaluateShiftShape(shift({ end_time: '17:00', is_security: true }));
         const hit = r.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK')!;
-        expect(hit.field).toBe('paid_break_minutes');
+        expect(hit.field).toBe('break_start');
         expect(hit.details).toContain('paid meal break');
     });
 
@@ -148,32 +153,30 @@ describe('security meal breaks are paid (EBA Schedule 3)', () => {
         // Schedule 3 makes the break paid, so an unpaid one is both a breach and
         // a silent mis-measurement — net ignores it.
         const r = evaluateShiftShape(shift({
-            end_time: '17:00', unpaid_break_minutes: 30, paid_break_minutes: 30,
+            end_time: '17:00', ...window, unpaid_break_minutes: 30, paid_break_minutes: 30,
             is_security: true,
         }));
         expect(has(r, 'SHAPE_SECURITY_PAID_BREAK')).toBe(true);
         expect(r.passed).toBe(false);
     });
 
-    it('counts rest pauses on top of the paid meal break, not inside it', () => {
-        // A 9h security shift owes 30m meal (Sch 3) plus 30m of rest pauses
-        // (cl 37.1 + 37.2) — 60 paid minutes in total, not 30.
+    it('keeps the rest pauses in the paid field and the meal break in the window', () => {
+        // The paid field used to be a POOL — meal break plus pauses — that the
+        // evaluator had to split. A 9h security shift now owes 30m of pauses in
+        // the paid field (cl 37.1 + 37.2) and its meal break in the window.
         const short = evaluateShiftShape(shift({
-            start_time: '08:00', end_time: '17:00', paid_break_minutes: 30, is_security: true,
+            start_time: '08:00', end_time: '17:00', ...window, paid_break_minutes: 15, is_security: true,
         }));
         expect(has(short, 'SHAPE_REST_PAUSE_2')).toBe(true);
 
         const full = evaluateShiftShape(shift({
-            start_time: '08:00', end_time: '17:00', paid_break_minutes: 60, is_security: true,
+            start_time: '08:00', end_time: '17:00', ...window, paid_break_minutes: 30, is_security: true,
         }));
         expect(has(full, 'SHAPE_REST_PAUSE_2')).toBe(false);
         expect(has(full, 'SHAPE_MEAL_BREAK')).toBe(false);
     });
 
-    it('reserves nothing for a meal on a shift too short to owe one', () => {
-        // 4h net is under the cl 36.1 threshold, so the whole 15m is the
-        // cl 37.1 rest pause. Reserving a meal allowance here would leave 0m
-        // for the pause and fail a compliant shift.
+    it('needs no meal break on a shift too short to owe one', () => {
         const r = evaluateShiftShape(shift({
             start_time: '08:00', end_time: '12:00', paid_break_minutes: 15, is_security: true,
         }));
@@ -187,12 +190,18 @@ describe('Schedule 3 sets two meal-break entitlements, not one', () => {
     it('gives full-time security a flat 30 minutes (§3.2(a))', () => {
         // "shall be entitled to a paid meal break of 30 minutes" — one number,
         // not a range. The 12-hour continuous roster of §3.1(a) is built on it.
-        const r = evaluateShiftShape(shift({
+        const ok = evaluateShiftShape(shift({
             target_employment_type: 'FT', is_security: true,
-            start_time: '06:00', end_time: '18:00', paid_break_minutes: 60,
+            start_time: '06:00', end_time: '18:00', break_start: '11:00', break_end: '11:30', paid_break_minutes: 30,
         }));
-        expect(r.passed).toBe(true);
-        expect(r.net_minutes).toBe(720);   // a lawful 12h security shift
+        expect(ok.hits.filter(h => h.blocking)).toEqual([]);
+        expect(ok.net_minutes).toBe(720);   // a lawful 12h security shift
+
+        const long = evaluateShiftShape(shift({
+            target_employment_type: 'FT', is_security: true,
+            start_time: '06:00', end_time: '18:00', break_start: '11:00', break_end: '11:45', paid_break_minutes: 30,
+        }));
+        expect(long.hits.find(h => h.rule_id === 'SHAPE_MEAL_BREAK_CEILING')?.summary).toContain('30m maximum');
     });
 
     it('names §3.2(a) for full-time security and §5.3(a) for event security', () => {
@@ -215,23 +224,21 @@ describe('Schedule 3 sets two meal-break entitlements, not one', () => {
             .toContain('not less than 30 and not more than 60');
     });
 
-    it('never trips the cl 36.1 ceiling on a pooled paid field', () => {
-        // Security draws the meal break AND the rest pauses from one field, so a
-        // total over 60 says nothing about the meal break — far more likely a
-        // correct meal plus generous pauses. 75m on a 12h shift is 30m meal
-        // (§3.2(a)) plus 45m of pauses; the old reading called it an over-long
-        // meal break and refused the shift.
+    it('never mistakes generous rest pauses for an over-long meal break', () => {
+        // While the paid field pooled meal and pauses, 75m on a 12h shift (30m
+        // meal + 45m of pauses) read as an over-long meal break. The window is
+        // the meal break alone, so the pauses cannot be counted against it.
         const r = evaluateShiftShape(shift({
             target_employment_type: 'FT', is_security: true,
-            start_time: '06:00', end_time: '18:00', paid_break_minutes: 75,
+            start_time: '06:00', end_time: '18:00', break_start: '11:00', break_end: '11:30', paid_break_minutes: 75,
         }));
         expect(r.hits.map(h => h.rule_id)).not.toContain('SHAPE_MEAL_BREAK_CEILING');
         expect(r.passed).toBe(true);
     });
 
-    it('still caps an UNPAID meal break at 60 minutes (cl 36.1)', () => {
+    it('caps an unpaid meal break at 60 minutes (cl 36.1)', () => {
         const r = evaluateShiftShape(shift({
-            end_time: '18:00', unpaid_break_minutes: 90, paid_break_minutes: 30,
+            end_time: '18:00', break_start: '12:00', break_end: '13:30', unpaid_break_minutes: 90, paid_break_minutes: 30,
         }));
         expect(r.hits.map(h => h.rule_id)).toContain('SHAPE_MEAL_BREAK_CEILING');
     });
@@ -242,7 +249,7 @@ describe('Schedule 3 sets two meal-break entitlements, not one', () => {
         // pattern would be unbuildable.
         const r = evaluateShiftShape(shift({
             target_employment_type: 'FT', is_security: true,
-            start_time: '18:00', end_time: '06:00', paid_break_minutes: 60,
+            start_time: '18:00', end_time: '06:00', break_start: '23:00', break_end: '23:30', paid_break_minutes: 30,
         }));
         expect(r.net_minutes).toBe(720);
         expect(r.hits.map(h => h.rule_id)).not.toContain('SHAPE_MAX_DURATION');

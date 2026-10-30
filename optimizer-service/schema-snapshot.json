@@ -36,6 +36,8 @@
     "min_contract_minutes",
     "name",
     "ordinary_days",
+    "ordinary_hours_cycle_anchor",
+    "ordinary_hours_cycle_weeks",
     "ordinary_span_end",
     "ordinary_span_start",
     "preferred_shift_ids",
@@ -48,6 +50,7 @@
     "duration_minutes",
     "end_time",
     "id",
+    "paid_break_minutes",
     "shift_date",
     "start_time",
     "unpaid_break_minutes"

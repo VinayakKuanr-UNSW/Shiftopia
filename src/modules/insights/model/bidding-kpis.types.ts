@@ -36,7 +36,7 @@ export const EMPTY_BIDDING_KPIS: BiddingKpis = {
 // ---------------------------------------------------------------------------
 // BiddingKpiKey — every field of BiddingKpis
 // ---------------------------------------------------------------------------
-export type BiddingKpiKey = keyof BiddingKpis;
+type BiddingKpiKey = keyof BiddingKpis;
 
 // ---------------------------------------------------------------------------
 // BIDDING_THRESHOLDS — only the *rate* metrics carry good/warn thresholds.

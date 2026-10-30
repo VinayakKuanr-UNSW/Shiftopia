@@ -10,7 +10,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
     CheckCircle2,
-    XCircle,
     AlertTriangle,
     Circle,
     Play,
@@ -25,9 +24,7 @@ import {
     Layers,
     Server,
     FileCheck,
-    BadgeCheck,
-    Timer
-} from 'lucide-react';
+    BadgeCheck} from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -39,7 +36,6 @@ import {
     ComplianceRule
 } from '@/modules/compliance';
 import { validateCompliance } from '@/modules/rosters/services/compliance.service';
-import { format, parseISO } from 'date-fns';
 
 function calcNetMinutes(s: { start_time: string; end_time: string; unpaid_break_minutes?: number }): number {
     const parse = (t: string) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + (m || 0); };
@@ -229,8 +225,6 @@ export function ComplianceTabContent({
                         const roleViolations = allViolations.filter(v => v.type === 'ROLE_MISMATCH');
                         const missingViolations = allViolations.filter(v =>
                             v.type === 'LICENSE_MISSING' || v.type === 'SKILL_MISSING');
-                        const expiredViolations = allViolations.filter(v =>
-                            v.type === 'LICENSE_EXPIRED' || v.type === 'SKILL_EXPIRED');
 
                         newResults['ROLE_CONTRACT_MATCH'] = {
                             rule_id: 'ROLE_CONTRACT_MATCH',
@@ -281,8 +275,8 @@ export function ComplianceTabContent({
                         <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500" />
                     </div>
                     <div>
-                        <h4 className="text-sm font-bold text-amber-700 dark:text-amber-500">Inputs Changed</h4>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <h4 className="text-[13px] font-bold text-amber-700 dark:text-amber-500">Inputs Changed</h4>
+                        <p className="text-[13px] text-muted-foreground mt-1">
                             Shift details have been modified. Re-run compliance checks to ensure validity.
                         </p>
                     </div>
@@ -317,7 +311,7 @@ export function ComplianceTabContent({
                         </div>
                         <div>
                             <h3 className={cn(
-                                "text-xl font-black tracking-tight uppercase",
+                                "text-[17px] font-black tracking-tight uppercase",
                                 canProceed ? "text-emerald-700 dark:text-emerald-400"
                                     : summaryStats.blockingFails > 0 ? "text-red-700 dark:text-red-400"
                                         : "text-foreground"
@@ -326,7 +320,7 @@ export function ComplianceTabContent({
                                     : summaryStats.blockingFails > 0 ? "Compliance Failed"
                                         : "Validation Required"}
                             </h3>
-                            <p className="text-sm text-muted-foreground mt-1 font-medium">
+                            <p className="text-[13px] text-muted-foreground mt-1 font-medium">
                                 {summaryStats.blockingFails > 0
                                     ? `${summaryStats.blockingFails} blocking issue${summaryStats.blockingFails > 1 ? 's' : ''} prevents saving`
                                     : summaryStats.notRun > 0
@@ -359,25 +353,25 @@ export function ComplianceTabContent({
                 {/* Stats pills */}
                 <div className="relative mt-6 flex gap-3 flex-wrap">
                     {summaryStats.blockingFails > 0 && (
-                        <div className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-300">
+                        <div className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-red-600 dark:text-red-300">
                             <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
                             {summaryStats.blockingFails} Blocking
                         </div>
                     )}
                     {summaryStats.warnings > 0 && (
-                        <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-300">
+                        <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-300">
                             <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             {summaryStats.warnings} Warning{summaryStats.warnings > 1 ? 's' : ''}
                         </div>
                     )}
                     {summaryStats.passed > 0 && (
-                        <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300">
+                        <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300">
                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             {summaryStats.passed} Passed
                         </div>
                     )}
                     {summaryStats.notRun > 0 && (
-                        <div className="px-3 py-1.5 rounded-lg bg-muted border border-border flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        <div className="px-3 py-1.5 rounded-lg bg-muted border border-border flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-muted-foreground">
                             <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
                             {summaryStats.notRun} Pending
                         </div>
@@ -457,39 +451,6 @@ export function ComplianceTabContent({
 // HARD VALIDATION CARD
 // =============================================================================
 
-function HardValidationCard({ result }: { result: HardValidationResult }) {
-    const [expanded, setExpanded] = useState(!result.passed);
-    return (
-        <div className="rounded-xl overflow-hidden border border-red-500/30 bg-red-500/5 dark:bg-red-950/20 shadow-lg transition-all duration-300">
-            <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-red-500/5 dark:hover:bg-white/5 transition-colors" onClick={() => setExpanded(!expanded)}>
-                <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400 border border-red-500/20">
-                        <XCircle className="h-5 w-5" />
-                    </div>
-                    <div>
-                        <div className="font-black text-red-900 dark:text-white flex items-center gap-2 tracking-tight uppercase text-sm">
-                            Scheduling Conflict
-                            <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest bg-red-600 text-white border border-red-600 shadow-sm">
-                                BLOCKING
-                            </span>
-                        </div>
-                        <div className="text-xs text-red-700/70 dark:text-red-200/60 mt-0.5 font-medium">Critical scheduling error detected</div>
-                    </div>
-                </div>
-                <ChevronDown className={cn("h-5 w-5 text-red-900/30 dark:text-white/40 transition-transform duration-300", expanded && "rotate-180")} />
-            </div>
-            {expanded && (
-                <div className="border-t border-red-500/20 bg-white/50 dark:bg-red-950/30 p-5 space-y-4">
-                    {result.errors.map((err, idx) => (
-                        <div key={idx} className="p-4 bg-red-500/5 dark:bg-red-500/10 rounded-xl border border-red-500/10 text-sm text-red-800 dark:text-red-200 font-medium leading-relaxed">
-                            {err.message}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
 
 // =============================================================================
 // COMPLIANCE RULE CARD (CLIENT-SIDE)
@@ -527,14 +488,14 @@ function ComplianceRuleCard({
                         {status === 'pass' && !isStale ? <CheckCircle2 className="h-5 w-5" /> : getRuleIcon(rule.id)}
                     </div>
                     <div>
-                        <div className="font-bold text-foreground dark:text-white flex items-center gap-2 uppercase tracking-tight text-sm flex-wrap">
+                        <div className="font-bold text-foreground dark:text-white flex items-center gap-2 uppercase tracking-tight text-[13px] flex-wrap">
                             {rule.name}
                             {isStale ? (
-                                <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                                <span className="text-[11px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
                                     STALE
                                 </span>
                             ) : (
-                                <span className={cn("text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm", styles.badge)}>
+                                <span className={cn("text-[11px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm", styles.badge)}>
                                     {status === 'not-run' ? 'PENDING'
                                         : status === 'fail' && !result?.blocking ? 'WARNING'
                                             : status.toUpperCase()}
@@ -543,7 +504,7 @@ function ComplianceRuleCard({
                             {/* Toggle indicator pill */}
                             {toggle && (
                                 <span className={cn(
-                                    "text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm",
+                                    "text-[11px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm",
                                     toggle.readOnly ? "cursor-default" : "cursor-pointer",
                                     toggle.enabled
                                         ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
@@ -559,7 +520,7 @@ function ComplianceRuleCard({
                                 </span>
                             )}
                         </div>
-                        <div className={cn("text-xs mt-0.5 font-medium", styles.text)}>
+                        <div className={cn("text-[11px] mt-0.5 font-medium", styles.text)}>
                             {result?.summary || rule.description}
                         </div>
                     </div>
@@ -584,14 +545,14 @@ function ComplianceRuleCard({
                     {isStale && (
                         <div className="flex items-center gap-3 p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
                             <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                            <div className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                            <div className="text-[11px] text-amber-700 dark:text-amber-300 font-medium">
                                 Settings changed — re-run to see updated result
                             </div>
                             <Button
                                 type="button"
                                 size="sm"
                                 variant="ghost"
-                                className="ml-auto h-6 px-2 text-[10px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-500/20"
+                                className="ml-auto h-6 px-2 text-[11px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-500/20"
                                 onClick={e => { e.stopPropagation(); onRun(); }}
                             >
                                 Re-run
@@ -602,7 +563,7 @@ function ComplianceRuleCard({
                     {toggle && !toggle.readOnly && (
                         <div className="flex items-center justify-between p-3 bg-indigo-500/5 rounded-lg border border-indigo-500/20">
                             <div>
-                                <div className="text-xs font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">{toggle.label}</div>
+                                <div className="text-[11px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300">{toggle.label}</div>
                                 <div className="text-[11px] text-muted-foreground mt-0.5">{toggle.description}</div>
                             </div>
                             <button
@@ -624,11 +585,11 @@ function ComplianceRuleCard({
                     {toggle?.readOnly && (
                         <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
                             <div>
-                                <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">{toggle.label}</div>
+                                <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">{toggle.label}</div>
                                 <div className="text-[11px] text-muted-foreground/70 mt-0.5">{toggle.description}</div>
                             </div>
                             <span className={cn(
-                                "text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border",
+                                "text-[11px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border",
                                 toggle.enabled
                                     ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
                                     : "bg-muted text-muted-foreground border-border"
@@ -675,16 +636,16 @@ function ServerRuleCard({
                         {status === 'pass' ? <CheckCircle2 className="h-5 w-5" /> : ruleIcon}
                     </div>
                     <div>
-                        <div className="font-bold text-foreground dark:text-white flex items-center gap-2 uppercase tracking-tight text-sm">
+                        <div className="font-bold text-foreground dark:text-white flex items-center gap-2 uppercase tracking-tight text-[13px]">
                             {ruleName}
-                            <span className={cn("text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm", styles.badge)}>
+                            <span className={cn("text-[11px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm", styles.badge)}>
                                 {status === 'not-run' ? 'PENDING' : status.toUpperCase()}
                             </span>
-                            <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest bg-slate-500/10 text-slate-500 border border-slate-500/20 flex items-center gap-1">
+                            <span className="text-[11px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest bg-slate-500/10 text-slate-500 border border-slate-500/20 flex items-center gap-1">
                                 <Server className="h-2.5 w-2.5" />SERVER
                             </span>
                         </div>
-                        <div className={cn("text-xs mt-0.5 font-medium", styles.text)}>
+                        <div className={cn("text-[11px] mt-0.5 font-medium", styles.text)}>
                             {status === 'not-run'
                                 ? ruleDescription
                                 : result?.summary}
@@ -697,7 +658,7 @@ function ServerRuleCard({
                             type="button"
                             size="sm"
                             variant="ghost"
-                            className="h-8 px-3 text-xs text-muted-foreground/60 hover:text-indigo-600 hover:bg-indigo-500/10"
+                            className="h-8 px-3 text-[11px] text-muted-foreground/60 hover:text-indigo-600 hover:bg-indigo-500/10"
                             onClick={e => { e.stopPropagation(); onRunAll(); }}
                             disabled={isRunningAll}
                         >
@@ -712,7 +673,7 @@ function ServerRuleCard({
 
             {isExpanded && result && violations.length > 0 && (
                 <div className="border-t border-border dark:border-white/5 bg-muted/30 dark:bg-black/20 p-6 animate-in slide-in-from-top-2 duration-300 space-y-3">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
+                    <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
                         <Shield className="h-3 w-3" />
                         {violations.length} violation{violations.length > 1 ? 's' : ''} found
                     </div>
@@ -723,12 +684,12 @@ function ServerRuleCard({
                         )}>
                             <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                             <div className="flex-1">
-                                <div className="text-xs font-black uppercase tracking-widest mb-1">
+                                <div className="text-[11px] font-black uppercase tracking-widest mb-1">
                                     {v.type?.replace(/_/g, ' ')}
                                 </div>
-                                <div className="text-sm font-medium opacity-80">{v.message}</div>
+                                <div className="text-[13px] font-medium opacity-80">{v.message}</div>
                                 {v.expiration_date && (
-                                    <div className="text-xs mt-1 opacity-60">Expired: {v.expiration_date}</div>
+                                    <div className="text-[11px] mt-1 opacity-60">Expired: {v.expiration_date}</div>
                                 )}
                             </div>
                         </div>
@@ -740,7 +701,7 @@ function ServerRuleCard({
                 <div className="border-t border-border dark:border-white/5 bg-muted/30 dark:bg-black/20 p-6 animate-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center gap-3 p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                         <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                        <div className="text-sm text-emerald-700 dark:text-emerald-200">{result.details}</div>
+                        <div className="text-[13px] text-emerald-700 dark:text-emerald-200">{result.details}</div>
                     </div>
                 </div>
             )}
@@ -772,7 +733,7 @@ function OverlapViz({ result }: { result: ComplianceResult }) {
         return (
             <div className="flex items-center gap-3 p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                 <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                <div className="text-sm text-emerald-700 dark:text-emerald-200">No overlapping shifts found. The employee is available during this time.</div>
+                <div className="text-[13px] text-emerald-700 dark:text-emerald-200">No overlapping shifts found. The employee is available during this time.</div>
             </div>
         );
     }
@@ -785,7 +746,7 @@ function OverlapViz({ result }: { result: ComplianceResult }) {
             <div className="space-y-6">
                 {calc.requester_calc && (
                     <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 ml-1">Requester Conflict</div>
+                        <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40 ml-1">Requester Conflict</div>
                         <OverlapVisualization 
                             error={{ 
                                 message: result.details.split('\n')[0] || result.details,
@@ -801,7 +762,7 @@ function OverlapViz({ result }: { result: ComplianceResult }) {
                 )}
                 {calc.offerer_calc && (
                     <div className="space-y-2">
-                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 ml-1">Your Conflict (Offerer)</div>
+                        <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40 ml-1">Your Conflict (Offerer)</div>
                         <OverlapVisualization 
                             error={{ 
                                 message: result.details.split('\n').pop() || result.details,
@@ -875,14 +836,14 @@ function OverlapVisualization({ error }: { error: { message: string; context?: {
     if (!existingStart || !existingEnd || !newStart || !newEnd) {
         return (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 backdrop-blur-md">
-                <div className="flex items-center gap-2 font-bold mb-1 uppercase tracking-tight text-xs">
+                <div className="flex items-center gap-2 font-bold mb-1 uppercase tracking-tight text-[11px]">
                     <Layers className="h-4 w-4" /> Shift Overlap Detected
                 </div>
-                <div className="text-sm font-medium opacity-90 leading-relaxed">
+                <div className="text-[13px] font-medium opacity-90 leading-relaxed">
                     {error.message || 'The employee has another shift assigned during this time.'}
                 </div>
                 {(existingStart && existingEnd) && (
-                    <div className="mt-2 text-[10px] font-black uppercase tracking-widest bg-red-500/10 p-2 rounded-lg border border-red-500/20 flex items-center gap-2">
+                    <div className="mt-2 text-[11px] font-black uppercase tracking-widest bg-red-500/10 p-2 rounded-lg border border-red-500/20 flex items-center gap-2">
                         <Clock className="h-3 w-3" /> Conflicting Shift: {norm(existingStart)} - {norm(existingEnd)}
                     </div>
                 )}
@@ -900,10 +861,12 @@ function OverlapVisualization({ error }: { error: { message: string; context?: {
     };
     
     // Normalize times for percentage calculation (handle day wrap)
-    let s1 = toP(existingStart), e1 = toP(existingEnd);
+    const s1 = toP(existingStart);
+    let e1 = toP(existingEnd);
     if (e1 <= s1) e1 += 100;
-    
-    let s2 = toP(newStart), e2 = toP(newEnd);
+
+    const s2 = toP(newStart);
+    let e2 = toP(newEnd);
     if (e2 <= s2) e2 += 100;
     
     // Viewport window (zoom into the relevant 8-hour block around the overlap)
@@ -919,13 +882,13 @@ function OverlapVisualization({ error }: { error: { message: string; context?: {
 
     return (
         <div className="space-y-4">
-            <div className="text-sm font-bold text-red-700 dark:text-red-300 flex items-center gap-2 uppercase tracking-tight">
+            <div className="text-[13px] font-bold text-red-700 dark:text-red-300 flex items-center gap-2 uppercase tracking-tight">
                 <Layers className="h-4 w-4" /> Shift Conflict Breakdown
             </div>
             <div className="flex gap-4">
                 <div className="w-16 relative h-28 border-r border-border/50 pr-2 shrink-0">
-                    <div className="absolute top-4 right-2 h-8 flex items-center text-[9px] uppercase font-black tracking-widest text-muted-foreground/40 text-right leading-none">Existing</div>
-                    <div className="absolute bottom-4 right-2 h-8 flex items-center text-[9px] uppercase font-black tracking-widest text-indigo-600 dark:text-indigo-400 text-right leading-none">New</div>
+                    <div className="absolute top-4 right-2 h-8 flex items-center text-[11px] uppercase font-black tracking-widest text-muted-foreground/40 text-right leading-none">Existing</div>
+                    <div className="absolute bottom-4 right-2 h-8 flex items-center text-[11px] uppercase font-black tracking-widest text-indigo-600 dark:text-indigo-400 text-right leading-none">New</div>
                 </div>
                 <div className="flex-1 relative h-28 bg-muted/50 rounded-xl border border-border/50 overflow-hidden shadow-inner">
                     <div className="absolute inset-0 flex">
@@ -946,7 +909,7 @@ function OverlapVisualization({ error }: { error: { message: string; context?: {
                     {/* Existing Shift */}
                     <div className="absolute top-4 h-8 rounded-lg bg-slate-600 dark:bg-slate-400 shadow-sm flex items-center px-2 border border-black/10 z-20 group" 
                          style={{ left: `${exS}%`, width: `${Math.max(exW, 5)}%`, minWidth: '60px' }}>
-                        <span className="text-[10px] text-white font-black font-mono truncate">{nExS} - {nExE}</span>
+                        <span className="text-[11px] text-white font-black font-mono truncate">{nExS} - {nExE}</span>
                     </div>
                     
                     {/* Candidate Shift */}
@@ -957,11 +920,11 @@ function OverlapVisualization({ error }: { error: { message: string; context?: {
                              minWidth: '60px',
                              background: 'repeating-linear-gradient(45deg, rgba(79,70,229,.1), rgba(79,70,229,.1) 5px, rgba(79,70,229,.05) 5px, rgba(79,70,229,.05) 10px)'
                          }}>
-                        <span className="text-[10px] text-indigo-700 dark:text-indigo-300 font-black font-mono truncate">{nNwS} - {nNwE}</span>
+                        <span className="text-[11px] text-indigo-700 dark:text-indigo-300 font-black font-mono truncate">{nNwS} - {nNwE}</span>
                     </div>
                 </div>
             </div>
-            <div className="text-[10px] text-muted-foreground/60 italic px-1">
+            <div className="text-[11px] text-muted-foreground/60 italic px-1">
                 Note: Overlap confirmed by server security layer.
             </div>
         </div>
@@ -978,27 +941,27 @@ function MaxDailyHoursViz({ result }: { result: ComplianceResult }) {
     const overflowPct = Math.max(0, totalPct - 100);
     return (
         <div className="space-y-6">
-            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
+            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
                 <Clock className="h-3 w-3" />{result.status === 'fail' ? `Daily cap reached (${limit}h limit)` : `Daily projection: Within ${limit}h limit`}
             </div>
             <div className="relative pt-6">
-                <div className="absolute right-0 top-0 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground/40"><Shield className="h-2.5 w-2.5" /><span>Limit {limit}h</span></div>
+                <div className="absolute right-0 top-0 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest text-muted-foreground/40"><Shield className="h-2.5 w-2.5" /><span>Limit {limit}h</span></div>
                 <div className="h-16 bg-muted rounded-xl border border-border overflow-visible relative shadow-inner">
                     <div className="absolute top-0 bottom-0 bg-muted-foreground/40 dark:bg-slate-600 rounded-l-xl flex items-center justify-center transition-all duration-500" style={{ width: `${Math.min(existingPct, 100)}%` }}>
-                        {existingPct > 20 && <div className="text-center px-2"><span className="text-xs text-white font-black uppercase tracking-tighter">{existingHours}h</span><div className="text-[8px] text-white/60 font-black uppercase leading-none">Existing</div></div>}
+                        {existingPct > 20 && <div className="text-center px-2"><span className="text-[11px] text-white font-black uppercase tracking-tighter">{existingHours}h</span><div className="text-[11px] text-white/60 font-black uppercase leading-none">Existing</div></div>}
                     </div>
                     <div className={cn("absolute top-0 bottom-0 flex items-center justify-center transition-all duration-500 shadow-lg", result.status === 'fail' ? "bg-red-500" : "bg-indigo-500", totalPct >= 99 ? "rounded-r-xl" : "")} style={{ left: `${Math.min(existingPct, 100)}%`, width: `${Math.min(candidatePct, 100 - Math.min(existingPct, 100))}%` }}>
-                        {candidatePct > 15 && <div className="text-center px-2"><span className="text-xs text-white font-black uppercase tracking-tighter">+{candidateHours}h</span><div className="text-[8px] text-white/80 font-black uppercase leading-none">New</div></div>}
+                        {candidatePct > 15 && <div className="text-center px-2"><span className="text-[11px] text-white font-black uppercase tracking-tighter">+{candidateHours}h</span><div className="text-[11px] text-white/80 font-black uppercase leading-none">New</div></div>}
                     </div>
                     {overflowPct > 0 && <div className="absolute top-0 bottom-0 right-0 bg-red-600 rounded-r-xl flex items-center justify-center border-l-2 border-white/30" style={{ width: `${Math.min(overflowPct, 25)}%`, transform: 'translateX(100%)' }}><AlertTriangle className="h-5 w-5 text-white animate-pulse" /></div>}
                     <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-red-500/50 dark:bg-white/60 z-20" />
                 </div>
             </div>
             <div className={cn("flex items-center justify-between p-4 rounded-xl border border-border shadow-sm", result.status === 'fail' ? "bg-red-500/5" : "bg-emerald-500/5")}>
-                <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">Total Projected</div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Total Projected</div>
                 <div className={cn("flex items-baseline gap-1", result.status === 'fail' ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
-                    <span className="text-3xl font-black tracking-tighter">{totalHours}</span>
-                    <span className="text-sm font-bold uppercase tracking-widest opacity-60">Hours</span>
+                    <span className="text-[24px] font-black tracking-tighter">{totalHours}</span>
+                    <span className="text-[13px] font-bold uppercase tracking-widest opacity-60">Hours</span>
                 </div>
             </div>
         </div>
@@ -1018,24 +981,24 @@ function MinShiftLengthViz({ result }: { result: ComplianceResult }) {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <div className={cn("text-4xl font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
-                        {duration.toFixed(1)}<span className="text-lg opacity-40 ml-1">h</span>
+                    <div className={cn("text-[28px] font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+                        {duration.toFixed(1)}<span className="text-[15px] opacity-40 ml-1">h</span>
                     </div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mt-1">Shift Duration</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 mt-1">Shift Duration</div>
                 </div>
                 <div className="text-right">
-                    <div className="text-2xl font-black text-muted-foreground/20">{limit}h</div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Min Required</div>
+                    <div className="text-[20px] font-black text-muted-foreground/20">{limit}h</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40">Min Required</div>
                 </div>
             </div>
-            <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 border border-border font-medium">
+            <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 border border-border font-medium">
                 Context: <span className="font-black text-foreground">{contextLabel}</span>
             </div>
             <div className="h-4 bg-muted rounded-full border border-border overflow-hidden relative shadow-inner">
                 <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/50 dark:bg-white/40 z-10" style={{ left: `${(limit / 10) * 100}%` }} />
                 <div className={cn("h-full rounded-full transition-all duration-700 shadow-lg", isFail ? "bg-red-500" : "bg-emerald-500")} style={{ width: `${Math.min((duration / 10) * 100, 100)}%` }} />
             </div>
-            <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 flex justify-between px-1"><span>0h</span><span>10h+</span></div>
+            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40 flex justify-between px-1"><span>0h</span><span>10h+</span></div>
         </div>
     );
 }
@@ -1052,14 +1015,14 @@ function WorkingDaysCapViz({ result }: { result: ComplianceResult }) {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <div className={cn("text-4xl font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
-                        {count}<span className="text-lg opacity-40 font-bold uppercase tracking-widest ml-1">days</span>
+                    <div className={cn("text-[28px] font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
+                        {count}<span className="text-[15px] opacity-40 font-bold uppercase tracking-widest ml-1">days</span>
                     </div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mt-1">Worked in last {period} days</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 mt-1">Worked in last {period} days</div>
                 </div>
                 <div className="text-right">
-                    <div className="text-2xl font-black text-muted-foreground/20">{limit}</div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Max Allowed</div>
+                    <div className="text-[20px] font-black text-muted-foreground/20">{limit}</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/40">Max Allowed</div>
                 </div>
             </div>
             <div className="h-4 bg-muted rounded-full border border-border overflow-hidden shadow-inner">
@@ -1092,7 +1055,7 @@ function AvgFourWeekCycleViz({ result }: { result: ComplianceResult }) {
 
     return (
         <div className="space-y-4">
-            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
+            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
                 <Clock className="h-3 w-3" />All Cycle Windows · Max {weeklyLimit}h/wk avg
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1107,17 +1070,17 @@ function AvgFourWeekCycleViz({ result }: { result: ComplianceResult }) {
                             isActive && "ring-2 ring-indigo-500/30"
                         )}>
                             {isActive && (
-                                <div className="absolute top-2 right-2 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                                <div className="absolute top-2 right-2 text-[11px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
                                     Active
                                 </div>
                             )}
-                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">
+                            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">
                                 {CYCLE_LABELS[cycle.weeks] || `${cycle.weeks}-Week`}
                             </div>
-                            <div className={cn("text-2xl font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
-                                {cycle.total_hours.toFixed(1)}<span className="text-xs opacity-40 ml-0.5">h</span>
+                            <div className={cn("text-[20px] font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
+                                {cycle.total_hours.toFixed(1)}<span className="text-[11px] opacity-40 ml-0.5">h</span>
                             </div>
-                            <div className="mt-1 text-[9px] text-muted-foreground/50 font-bold">
+                            <div className="mt-1 text-[11px] text-muted-foreground/50 font-bold">
                                 avg {cycle.average_weekly_hours.toFixed(1)}h/wk · limit {cycle.limit}h
                             </div>
                             <div className="mt-3 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -1145,28 +1108,28 @@ function MinRestGapViz({ result }: { result: ComplianceResult }) {
 
     const GapCard = ({ label, value, isViolation }: { label: string; value: number | null; isViolation: boolean }) => (
         <div className={cn("p-5 rounded-2xl border shadow-sm overflow-hidden relative", isViolation ? "bg-red-500/5 border-red-500/20" : value != null ? "bg-emerald-500/5 border-emerald-500/20" : "bg-muted border-border")}>
-            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-3">{label}</div>
+            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60 mb-3">{label}</div>
             {value != null ? (
                 <>
-                    <div className={cn("text-3xl font-black tracking-tighter", isViolation ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
-                        {value.toFixed(1)}<span className="text-xs opacity-40 ml-1">h</span>
+                    <div className={cn("text-[24px] font-black tracking-tighter", isViolation ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+                        {value.toFixed(1)}<span className="text-[11px] opacity-40 ml-1">h</span>
                     </div>
                     <div className="mt-4 h-2 bg-muted-foreground/10 dark:bg-slate-900 rounded-full overflow-hidden shadow-inner">
                         <div className={cn("h-full rounded-full transition-all duration-700 shadow-lg", isViolation ? "bg-red-500" : "bg-emerald-500")} style={{ width: `${Math.min((value / (limit * 1.5)) * 100, 100)}%` }} />
                     </div>
-                    <div className="text-[9px] font-black uppercase tracking-widest mt-2 opacity-50">{isViolation ? `Below ${limit}h min` : `Above ${limit}h min`}</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest mt-2 opacity-50">{isViolation ? `Below ${limit}h min` : `Above ${limit}h min`}</div>
                 </>
             ) : (
-                <div className="text-muted-foreground/30 text-lg font-black uppercase tracking-widest py-2">No shift</div>
+                <div className="text-muted-foreground/30 text-[15px] font-black uppercase tracking-widest py-2">No shift</div>
             )}
         </div>
     );
 
     return (
         <div className="space-y-4">
-            <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 border border-border font-medium">
+            <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 border border-border font-medium">
                 Minimum rest gap: <span className="font-black text-foreground">{limit}h</span>
-                {mode === 'relaxed' && <span className="ml-2 text-[9px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-black uppercase tracking-widest">RELAXED MODE</span>}
+                {mode === 'relaxed' && <span className="ml-2 text-[11px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-black uppercase tracking-widest">RELAXED MODE</span>}
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <GapCard label="Gap from Previous Day" value={prevGap} isViolation={prevGap != null && prevGap < limit} />
@@ -1200,8 +1163,8 @@ function StudentVisaViz({ result }: { result: ComplianceResult }) {
                 <div className="text-[11px] font-medium text-muted-foreground leading-relaxed p-4 bg-muted/30 rounded-xl border border-border">
                     Cannot work more than <span className="font-black text-foreground">{limit} hours</span> in any rolling fortnight.
                     {isEnforced
-                        ? <span className="ml-1 text-[9px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-black uppercase tracking-widest">ENFORCEMENT ON</span>
-                        : <span className="ml-1 text-[9px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border font-black uppercase tracking-widest">WARNING ONLY</span>}
+                        ? <span className="ml-1 text-[11px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 font-black uppercase tracking-widest">ENFORCEMENT ON</span>
+                        : <span className="ml-1 text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border font-black uppercase tracking-widest">WARNING ONLY</span>}
                     {isFail && <span className="text-red-600 dark:text-red-400 font-black uppercase tracking-tight ml-1"> Limit exceeded.</span>}
                 </div>
                 <div className="space-y-4 max-h-56 overflow-y-auto pr-3">
@@ -1214,16 +1177,16 @@ function StudentVisaViz({ result }: { result: ComplianceResult }) {
                             <div key={`${weekKey}-${idx}`}>
                                 <div className="flex items-center gap-5 mb-1.5">
                                     <div className="w-24 flex-shrink-0">
-                                        <div className={cn("text-xs font-black uppercase tracking-widest", isViolating ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>{weekLabel}</div>
-                                        <div className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-tighter">{weekData.dates}</div>
+                                        <div className={cn("text-[11px] font-black uppercase tracking-widest", isViolating ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>{weekLabel}</div>
+                                        <div className="text-[11px] font-bold text-muted-foreground/40 uppercase tracking-tighter">{weekData.dates}</div>
                                     </div>
                                     <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden shadow-inner">
                                         <div className={cn("h-full transition-all duration-700 rounded-full relative shadow-sm", isViolating ? "bg-gradient-to-r from-red-600 to-red-400" : "bg-muted-foreground/30 dark:bg-slate-600")} style={{ width: `${barWidth}%` }}>
                                             {isViolating && <div className="absolute inset-0 bg-white/20 animate-pulse" />}
                                         </div>
                                     </div>
-                                    <div className={cn("w-12 text-right text-xs font-black tracking-tight", isViolating ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
-                                        {weekData.hours}<span className="text-[10px] opacity-40">h</span>
+                                    <div className={cn("w-12 text-right text-[11px] font-black tracking-tight", isViolating ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
+                                        {weekData.hours}<span className="text-[11px] opacity-40">h</span>
                                     </div>
                                 </div>
                             </div>
@@ -1236,15 +1199,15 @@ function StudentVisaViz({ result }: { result: ComplianceResult }) {
                             <Clock className="h-5 w-5" />
                         </div>
                         <div>
-                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Fortnight Peak</div>
+                            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/60">Fortnight Peak</div>
                             <div className="text-[11px] font-bold text-foreground truncate max-w-[140px]">{worstWindow ? `${worstWindow.weeks[0]} + ${worstWindow.weeks[1]}` : 'No peak window'}</div>
                         </div>
                     </div>
                     <div className="flex items-baseline gap-2">
-                        <span className={cn("text-4xl font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
-                            {worstWindow?.hours || 0}<span className="text-base opacity-40 ml-0.5">h</span>
+                        <span className={cn("text-[28px] font-black tracking-tighter", isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
+                            {worstWindow?.hours || 0}<span className="text-[14px] opacity-40 ml-0.5">h</span>
                         </span>
-                        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/30">/ {limit}h</span>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/30">/ {limit}h</span>
                     </div>
                 </div>
             </div>
@@ -1274,7 +1237,7 @@ function DefaultViz({ result }: { result: ComplianceResult }) {
     return (
         <div className="space-y-4">
             {result.details && (
-                <div className="text-sm font-medium text-muted-foreground leading-relaxed italic">{result.details}</div>
+                <div className="text-[13px] font-medium text-muted-foreground leading-relaxed italic">{result.details}</div>
             )}
             {pills.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -1283,14 +1246,14 @@ function DefaultViz({ result }: { result: ComplianceResult }) {
                             'px-3 py-1.5 rounded-lg border text-center min-w-[72px]',
                             p.highlight ? 'bg-red-500/5 border-red-500/20' : 'bg-muted/50 border-border'
                         )}>
-                            <div className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/50">{p.label}</div>
-                            <div className={cn('text-sm font-black mt-0.5', p.highlight ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>{p.value}</div>
+                            <div className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">{p.label}</div>
+                            <div className={cn('text-[13px] font-black mt-0.5', p.highlight ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>{p.value}</div>
                         </div>
                     ))}
                 </div>
             )}
             {pills.length === 0 && !result.details && (
-                <p className="text-xs text-muted-foreground/50 italic">No additional details available.</p>
+                <p className="text-[11px] text-muted-foreground/50 italic">No additional details available.</p>
             )}
         </div>
     );
@@ -1341,4 +1304,3 @@ function getRuleIcon(ruleId: string) {
     }
 }
 
-export default ComplianceTabContent;

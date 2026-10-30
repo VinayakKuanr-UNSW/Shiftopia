@@ -1,6 +1,3 @@
-// src/modules/planning/bidding/ui/views/OpenBidsView/types.ts
-
-export type GroupType = 'convention' | 'exhibition' | 'concert' | 'sports' | 'corporate';
 
 export interface OpenShift extends ManagerBidShift {
   location: string;
@@ -19,18 +16,9 @@ export interface OpenShift extends ManagerBidShift {
   status: ShiftStatus;
 }
 
-export type ShiftStatus = 'all' | 'urgent' | 'pending' | 'resolved';
+type ShiftStatus = 'all' | 'urgent' | 'pending' | 'resolved';
 
-export interface FilterState {
-  status: ShiftStatus;
-}
 
-export interface StatusCounts {
-  all: number;
-  urgent: number;
-  pending: number;
-  resolved: number;
-}
 
 export interface ManagerBidShift {
   id: string;
@@ -63,7 +51,6 @@ export interface ManagerBidShift {
 
 // Real SSS breakdown (sourced from get_quarterly_performance_report + skill match).
 // See utils/sss.ts for the composition + weights.
-export type { SssBreakdown as SSSBreakdown, SssFlag } from '../../utils/sss';
 
 /** Per-shift qualification/eligibility of a bidder. */
 export type BidEligibility = 'pass' | 'warning' | 'blocked';
@@ -87,13 +74,7 @@ export interface EmployeeBid {
   eligibility?: BidEligibility;
 }
 
-export type BidSortField = 'timestamp' | 'sss';
-export type BidSortDirection = 'asc' | 'desc';
 
-export interface BidSortOption {
-  field: BidSortField;
-  direction: BidSortDirection;
-}
 
 
 

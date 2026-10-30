@@ -65,7 +65,7 @@ describe('Role & Context is locked in BOTH renderings of the modal', () => {
             const at = src.indexOf('name="target_employment_type"');
             expect(at, 'target field exists').toBeGreaterThan(-1);
             // The field's own disabled prop, within its render block.
-            const block = src.slice(at, at + 2500);
+            const block = src.slice(at, at + 3500);
             expect(block).toMatch(/disabled=\{isReadOnly \|\| isTargetTypeLocked\}/);
         });
     }

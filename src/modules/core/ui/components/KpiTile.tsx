@@ -22,7 +22,7 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import type { MetricStatus } from '@/modules/insights/model/metric-registry';
 
-export interface KpiDelta {
+interface KpiDelta {
     /** Signed movement against the comparison period. */
     value: number;
     /** 'points' for rate metrics (absolute pp), 'percent' for counts. */
@@ -33,7 +33,7 @@ export interface KpiDelta {
     suppressedReason?: string;
 }
 
-export interface KpiTileProps {
+interface KpiTileProps {
     /** Overline/title. Sentence case. */
     label: string;
     /** Pre-formatted display value, or null/undefined for missing data. */
@@ -122,7 +122,7 @@ function DeltaBadge({ delta, goodDirection }: { delta: KpiDelta; goodDirection: 
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <span className={cn(text.subtle, 'cursor-help text-xs')}>—</span>
+                    <span className={cn(text.subtle, 'cursor-help text-[11px]')}>—</span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[220px]">
                     {delta.suppressedReason}
@@ -144,7 +144,7 @@ function DeltaBadge({ delta, goodDirection }: { delta: KpiDelta; goodDirection: 
             <TooltipTrigger asChild>
                 <span
                     className={cn(
-                        'inline-flex items-center gap-1 text-xs font-semibold tabular-nums cursor-help',
+                        'inline-flex items-center gap-1 text-[11px] font-semibold tabular-nums cursor-help',
                         isGood ? 'text-emerald-600 dark:text-emerald-400' :
                         isBad  ? 'text-rose-600 dark:text-rose-400' :
                                  'text-muted-foreground',
@@ -198,7 +198,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
             {/* Top row: Label + Tooltip / Icon */}
             <div className="flex items-center justify-between gap-2 z-10">
                 <div className="flex items-center gap-1.5 min-w-0">
-                    <p className="text-xs font-semibold text-muted-foreground truncate">{label}</p>
+                    <p className="text-[11px] font-semibold text-muted-foreground truncate">{label}</p>
                     {tooltip && (
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -216,7 +216,7 @@ export const KpiTile: React.FC<KpiTileProps> = ({
                 {loading ? (
                     <Skeleton className="h-8 w-24" />
                 ) : (
-                    <div className={cn('text-2xl font-bold tracking-tight tabular-nums', missing ? 'text-muted-foreground' : STATUS_VALUE[status])}>
+                    <div className={cn('text-[20px] font-bold tracking-tight tabular-nums', missing ? 'text-muted-foreground' : STATUS_VALUE[status])}>
                         {shown}
                     </div>
                 )}
@@ -256,4 +256,3 @@ export const KpiTile: React.FC<KpiTileProps> = ({
     return <div>{body}</div>;
 };
 
-export default KpiTile;

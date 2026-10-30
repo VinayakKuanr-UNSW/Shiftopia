@@ -75,7 +75,7 @@ const FairnessRow: React.FC<{ metric: FairnessMetric; impact: FairnessImpact }> 
             <span className={cn('font-mono tabular-nums', tone)} title="fairness debt vs team average (before → after)">
                 {signed(before.debt)} → {signed(after.debt)}
             </span>
-            <span className={cn('text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0',
+            <span className={cn('text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0',
                 aboveShare ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300')}>
                 {aboveShare ? 'above share' : 'below share'}
             </span>
@@ -102,7 +102,7 @@ export const BidLedgerImpact: React.FC<{ impact: BidLedgerImpactData | null; cla
         <div className={cn('rounded-xl border border-border/40 bg-muted/10 p-3 flex flex-col gap-3', className)}>
             <div className="flex items-center gap-2">
                 <Scale className="h-3.5 w-3.5 text-primary/70" />
-                <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/80">
+                <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground/80">
                     Ledger impact if assigned
                 </span>
             </div>
@@ -119,7 +119,7 @@ export const BidLedgerImpact: React.FC<{ impact: BidLedgerImpactData | null; cla
                     </span>
                     <span className="text-muted-foreground/50 font-mono tabular-nums">({signed(fatigue.projected - fatigue.current)})</span>
                     <span className="flex-1" />
-                    <span className={cn('text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full', BAND[fatigue.band].chip)}>
+                    <span className={cn('text-[11px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full', BAND[fatigue.band].chip)}>
                         {BAND[fatigue.band].label}
                     </span>
                 </div>
@@ -129,14 +129,14 @@ export const BidLedgerImpact: React.FC<{ impact: BidLedgerImpactData | null; cla
             {fairness && changed.length > 0 ? (
                 <div className="flex flex-col gap-1.5 pt-1 border-t border-border/30">
                     {changed.map(m => <FairnessRow key={m} metric={m} impact={fairness} />)}
-                    <p className="text-[10px] leading-snug text-muted-foreground/70 italic pt-0.5">{fairnessSummary(fairness)}</p>
+                    <p className="text-[11px] leading-snug text-muted-foreground/70 italic pt-0.5">{fairnessSummary(fairness)}</p>
                 </div>
             ) : fairness ? (
-                <p className="text-[10px] text-muted-foreground/60 italic pt-1 border-t border-border/30">
+                <p className="text-[11px] text-muted-foreground/60 italic pt-1 border-t border-border/30">
                     No change to weekend / night / holiday / hours balance.
                 </p>
             ) : (
-                <p className="text-[10px] text-muted-foreground/50 italic pt-1 border-t border-border/30">
+                <p className="text-[11px] text-muted-foreground/50 italic pt-1 border-t border-border/30">
                     No team fairness baseline yet — fatigue shown above.
                 </p>
             )}

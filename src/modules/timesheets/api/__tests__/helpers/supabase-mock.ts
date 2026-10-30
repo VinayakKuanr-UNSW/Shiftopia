@@ -6,7 +6,7 @@
 
 import { vi } from 'vitest';
 
-export type MockResult = { data?: unknown; error?: { message: string } | null };
+type MockResult = { data?: unknown; error?: { message: string } | null };
 
 export function createSupabaseMock() {
   const queue: MockResult[] = [];

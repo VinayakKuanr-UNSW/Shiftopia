@@ -45,9 +45,13 @@ import type { V8AvailabilityData } from '@/modules/compliance/v8/orchestrator/ty
 import type { V8OrchestratorShift, V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
 import { evaluateShapeForRow }           from '@/modules/rosters/api/shift-shape-gate';
 
-export type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
+// Row-level security refuses an UPDATE silently (0 rows, no error), so a
+// refused or vanished shift must not read as assigned.
+const NOT_CHANGED = "Nothing changed: you can't change this shift, or it no longer exists. Refresh and try again.";
 
-export interface AssignShiftInput {
+type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
+
+interface AssignShiftInput {
     shiftId:   string;
     employeeId: string | null;
     /** Assignment context — controls availability enforcement. Default: 'MANUAL' */
@@ -62,7 +66,7 @@ export interface AssignShiftInput {
     ignoreWarnings?: boolean;
 }
 
-export interface AssignShiftOutput {
+interface AssignShiftOutput {
     success:    boolean;
     error?:     string;
     /** Non-blocking warnings surfaced to caller */
@@ -359,14 +363,15 @@ export async function executeAssignShift(
                 metadataPayload.updated_at = new Date().toISOString();
                 metadataPayload.last_modified_by = userId;
 
-                const { error: updateError } = await supabase
+                const { error: updateError, count: updated } = await supabase
                     .from('shifts')
-                    .update(metadataPayload)
+                    .update(metadataPayload, { count: 'exact' })
                     .eq('id', shiftId);
 
                 if (updateError) {
                     return { success: false, error: updateError.message };
                 }
+                if (updated === 0) return { success: false, error: NOT_CHANGED };
             }
             return { success: true, advisories };
         }
@@ -382,11 +387,12 @@ export async function executeAssignShift(
             if (Object.keys(metadataPayload).length > 0) {
                 metadataPayload.updated_at = new Date().toISOString();
                 metadataPayload.last_modified_by = userId;
-                const { error: dateUpdateError } = await supabase
+                const { error: dateUpdateError, count: moved } = await supabase
                     .from('shifts')
-                    .update(metadataPayload)
+                    .update(metadataPayload, { count: 'exact' })
                     .eq('id', shiftId);
                 if (dateUpdateError) return { success: false, error: dateUpdateError.message };
+                if (moved === 0) return { success: false, error: NOT_CHANGED };
             }
 
             const { data: rpcResult, error: rpcError } = await (supabase as any)
@@ -415,14 +421,15 @@ export async function executeAssignShift(
             updatePayload.assignment_source = 'manual';
         }
 
-        const { error: updateError } = await supabase
+        const { error: updateError, count: assigned } = await supabase
             .from('shifts')
-            .update(updatePayload)
+            .update(updatePayload, { count: 'exact' })
             .eq('id', shiftId);
 
         if (updateError) {
             return { success: false, error: updateError.message };
         }
+        if (assigned === 0) return { success: false, error: NOT_CHANGED };
 
         return { success: true, advisories };
     } catch (err: unknown) {
@@ -435,12 +442,3 @@ export async function executeAssignShift(
     }
 }
 
-/**
- * Execute unassign shift command.
- * No compliance checks required for unassignment.
- */
-export async function executeUnassignShift(
-    shiftId: string,
-): Promise<AssignShiftOutput> {
-    return executeAssignShift({ shiftId, employeeId: null });
-}

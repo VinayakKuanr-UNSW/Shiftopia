@@ -16,19 +16,21 @@
  */
 
 import React from 'react';
-import { Activity, Gavel, ArrowLeftRight, CalendarX, TrendingUp, UserCircle } from 'lucide-react';
+import { Activity, ArrowLeftRight, CalendarX, TrendingUp, UserCircle } from 'lucide-react';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-import { text, touch } from '@/modules/core/ui/typography';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
+import { text } from '@/modules/core/ui/typography';
 import { usePerformanceMetrics } from '@/modules/users/hooks/usePerformanceMetrics';
 import { recentQuarters, type QuarterRef } from '../hooks/useKpiFilters';
 import { statusFor, formatMetric, labelFor, METRIC_REGISTRY } from '../model/metric-registry';
@@ -36,7 +38,6 @@ import { KpiBand, KpiTileGrid, CountStrip } from '../ui/components/KpiBand';
 
 const PerformancePage: React.FC = () => {
     const { user } = useAuth();
-    const { isDark } = useTheme();
     const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
     const quarters = React.useMemo(() => recentQuarters(5), []);
     const [period, setPeriod] = React.useState<QuarterRef>(quarters[0]);
@@ -45,6 +46,7 @@ const PerformancePage: React.FC = () => {
     const quarterKey = `Q${period.quarter}_${period.year}`;
     const { data: m, isLoading, isError, error, refetch } = usePerformanceMetrics(user?.id ?? '', quarterKey);
 
+    // The quarter is this page's period, so it is a zone-2 control like every other date.
     const periodPicker = (
         <div className="flex items-center gap-2">
             <label className={cn(text.overline, 'hidden sm:inline')} htmlFor="perf-period">Quarter</label>
@@ -52,7 +54,7 @@ const PerformancePage: React.FC = () => {
                 value={period.label}
                 onValueChange={(label) => setPeriod(quarters.find((q) => q.label === label) ?? quarters[0])}
             >
-                <SelectTrigger id="perf-period" className={cn('w-[132px] rounded-xl', touch.targetY)}>
+                <SelectTrigger id="perf-period" className={cn(toolbar.field, 'w-[132px] justify-between')}>
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -64,7 +66,7 @@ const PerformancePage: React.FC = () => {
 
     return (
         <TooltipProvider delayDuration={200}>
-            <div className="h-full flex flex-col overflow-hidden bg-background">
+            <PageLayout>
                 <GoldStandardHeader
                     title="My Performance"
                     Icon={TrendingUp}
@@ -72,15 +74,14 @@ const PerformancePage: React.FC = () => {
                     setScope={setScope}
                     isGammaLocked={isGammaLocked}
                     mode="personal"
-                    rightActions={periodPicker}
+                    functionBar={<ToolbarRow modes={periodPicker} />}
                 />
 
                 <div
                     className={cn(
-                        'mx-4 lg:mx-6 mb-4 lg:mb-6 custom-scrollbar min-h-0 flex-1 overflow-y-auto rounded-[32px] border p-4 transition-all lg:p-8',
-                        isDark
-                            ? 'border-white/5 bg-[#1c2333]/40 shadow-2xl shadow-black/20'
-                            : 'border-white bg-white/70 shadow-xl shadow-slate-200/50 backdrop-blur-md',
+                        'custom-scrollbar min-h-0 flex-1 overflow-y-auto',
+                        page.bodyInset,
+                        surface.bodyCard,
                     )}
                 >
                     {isError ? (
@@ -228,7 +229,7 @@ const PerformancePage: React.FC = () => {
                         </div>
                     )}
                 </div>
-            </div>
+            </PageLayout>
         </TooltipProvider>
     );
 };

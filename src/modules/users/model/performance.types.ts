@@ -3,9 +3,9 @@
  * Includes Explainability, Behavioral Indicators, and Performance Flags.
  */
 
-export type PerformanceFlag = 'OK' | 'WARN' | 'CRITICAL' | 'INSUFFICIENT_DATA';
+type PerformanceFlag = 'OK' | 'WARN' | 'CRITICAL' | 'INSUFFICIENT_DATA';
 
-export type PerformanceMetrics = {
+type PerformanceMetrics = {
     // Raw Counts
     total_offers: number;
     accepted: number;
@@ -79,33 +79,5 @@ export type EmployeePerformanceRow = {
     employee_name: string;
 } & PerformanceMetrics;
 
-export interface PerformanceFilters {
-    startDate: string; // ISO Date
-    endDate: string;   // ISO Date
-    orgIds?: string[];
-    deptIds?: string[];
-    subdeptIds?: string[];
-}
 
-/**
- * Trend Data for Charting
- */
-export interface PerformanceTrendPoint {
-    period_start: string;
-    reliability_score: number;
-    cancel_rate: number;
-    worked_count: number;
-}
 
-/**
- * Event Timeline Item (Audit/Debug)
- */
-export interface PerformanceEventTimelineItem {
-    event_id: string;
-    event_type: string;
-    event_time: string;
-    shift_id: string;
-    shift_date: string;
-    shift_label: string;
-    metadata: any;
-}

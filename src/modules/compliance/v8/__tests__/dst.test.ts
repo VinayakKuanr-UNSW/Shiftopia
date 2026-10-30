@@ -1,39 +1,18 @@
 /**
- * DST / timezone test suite for V8 time helpers and rules.
+ * DST / timezone test suite for V8 rules.
  *
  * Australian DST in 2026:
  *   Spring forward: 2026-10-04 (2 AM → 3 AM)
  *   Fall back:      2026-04-05 (3 AM → 2 AM)
  *
- * The V8 engine works in YYYY-MM-DD strings and HH:mm strings. Internal time
- * math in windows.ts uses `new Date(dateStr + 'T00:00:00Z')` (epoch ms, UTC).
- * This suite documents the engine's current behaviour around DST boundaries
+ * The V8 engine works in YYYY-MM-DD strings and HH:mm strings. This suite documents the engine's current behaviour around DST boundaries
  * and pins assumptions that future refactors must preserve.
  */
 
 import { describe, it, expect } from 'vitest';
-import { dateToMs, addDays } from '../orchestrator/windows';
 import { minRestGapRule } from '../rules/rest-requirements';
 import { maxDailyHoursRule } from '../rules/daily-limits';
 import { buildContext, buildShift } from '../rules/__tests__/_helpers';
-
-describe('DST — date helpers', () => {
-  it('addDays produces correct calendar dates across the spring-forward boundary', () => {
-    expect(addDays('2026-10-03', 1)).toBe('2026-10-04');
-    expect(addDays('2026-10-03', 2)).toBe('2026-10-05');
-  });
-
-  it('addDays produces correct calendar dates across the fall-back boundary', () => {
-    expect(addDays('2026-04-04', 1)).toBe('2026-04-05');
-    expect(addDays('2026-04-04', 2)).toBe('2026-04-06');
-  });
-
-  it('dateToMs is exactly 24 hours apart for consecutive UTC-midnight days', () => {
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    expect(dateToMs('2026-10-04') - dateToMs('2026-10-03')).toBe(oneDayMs);
-    expect(dateToMs('2026-04-05') - dateToMs('2026-04-04')).toBe(oneDayMs);
-  });
-});
 
 describe('DST — rest gap rule', () => {
   it('reports the calendar-day rest gap unchanged across spring forward', () => {

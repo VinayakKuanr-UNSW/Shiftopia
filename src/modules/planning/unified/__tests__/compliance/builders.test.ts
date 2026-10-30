@@ -13,17 +13,7 @@ import {
   deriveV8Stage,
   resolveCandidateV8ShiftId,
 } from '../../compliance/input-builder';
-import {
-  buildBidSnapshot,
-  buildSwapSnapshot,
-  combinedStatus,
-  extractBlockingHits,
-} from '../../compliance/snapshot-builder';
 import type { PlanningOffer, PlanningRequest } from '../../types';
-import {
-  makeV8Hit,
-  makeV8Result,
-} from '../helpers/fixtures';
 
 const employeeContext = (
   employeeId: string,
@@ -232,100 +222,5 @@ describe('planning compliance input builders', () => {
       request('SWAP'),
       offer(null),
     )).toThrow('missing offered_shift_id');
-  });
-});
-
-describe('planning compliance snapshot builders', () => {
-  it.each([
-    ['PASS', 'PASS', 'PASS'],
-    ['PASS', 'WARNING', 'WARNING'],
-    ['WARNING', 'PASS', 'WARNING'],
-    ['WARNING', 'BLOCKING', 'BLOCKING'],
-    ['BLOCKING', 'PASS', 'BLOCKING'],
-  ] as const)('combines %s and %s as %s', (a, b, expected) => {
-    expect(combinedStatus(a, b)).toBe(expected);
-  });
-
-  it('stamps bid and swap snapshots at a deterministic evaluation time', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-01T12:34:56.000Z'));
-
-    const bidResult = makeV8Result('PASS');
-    const bidSnapshot = buildBidSnapshot({
-      result: bidResult,
-      shiftUpdatedAt: '2026-08-01T10:00:00.000Z',
-    });
-    const swapSnapshot = buildSwapSnapshot({
-      resultA: makeV8Result('WARNING'),
-      resultB: makeV8Result('BLOCKING'),
-      shiftUpdatedAt: '2026-08-01T10:00:00.000Z',
-      targetShiftUpdatedAt: '2026-08-01T11:00:00.000Z',
-    });
-
-    expect(bidSnapshot).toMatchObject({
-      ...bidResult,
-      shift_updated_at: '2026-08-01T10:00:00.000Z',
-      evaluated_at: '2026-08-01T12:34:56.000Z',
-    });
-    expect(swapSnapshot).toMatchObject({
-      combined_status: 'BLOCKING',
-      shift_updated_at: '2026-08-01T10:00:00.000Z',
-      target_shift_updated_at: '2026-08-01T11:00:00.000Z',
-      evaluated_at: '2026-08-01T12:34:56.000Z',
-    });
-  });
-
-  it('extracts only blocking bid hits and labels them as party A', () => {
-    const snapshot = buildBidSnapshot({
-      result: makeV8Result('BLOCKING', [
-        makeV8Hit('R_BLOCK', 'BLOCKING', 'Blocking hit'),
-        makeV8Hit('R_WARN', 'WARNING', 'Warning hit'),
-      ]),
-      shiftUpdatedAt: '2026-08-01T10:00:00.000Z',
-    });
-
-    expect(extractBlockingHits(snapshot)).toEqual([{
-      rule_id: 'R_BLOCK',
-      summary: 'Blocking hit',
-      party: 'A',
-      severity: 'BLOCKING',
-    }]);
-  });
-
-  it('deduplicates shared swap rules and identifies party-specific hits', () => {
-    const snapshot = buildSwapSnapshot({
-      resultA: makeV8Result('BLOCKING', [
-        makeV8Hit('R_SHARED', 'BLOCKING', 'Shared issue'),
-        makeV8Hit('R_A', 'BLOCKING', 'Party A issue'),
-      ]),
-      resultB: makeV8Result('BLOCKING', [
-        makeV8Hit('R_SHARED', 'BLOCKING', 'Shared issue from B'),
-        makeV8Hit('R_B', 'BLOCKING', 'Party B issue'),
-        makeV8Hit('R_WARNING', 'WARNING', 'Warning'),
-      ]),
-      shiftUpdatedAt: '2026-08-01T10:00:00.000Z',
-      targetShiftUpdatedAt: '2026-08-01T11:00:00.000Z',
-    });
-
-    expect(extractBlockingHits(snapshot)).toEqual([
-      {
-        rule_id: 'R_SHARED',
-        summary: '[Both parties] Shared issue',
-        party: 'BOTH',
-        severity: 'BLOCKING',
-      },
-      {
-        rule_id: 'R_A',
-        summary: 'Party A issue',
-        party: 'A',
-        severity: 'BLOCKING',
-      },
-      {
-        rule_id: 'R_B',
-        summary: 'Party B issue',
-        party: 'B',
-        severity: 'BLOCKING',
-      },
-    ]);
   });
 });

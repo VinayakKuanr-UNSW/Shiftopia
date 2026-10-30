@@ -1,22 +1,21 @@
 // src/platform/auth/AuthProvider.tsx
 // Certificate-driven auth with Type X/Y permission model
 
-import React, { createContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/platform/supabase/client';
 import { User, AccessLevel, Role, UserContract, AccessCertificate, PermissionObject } from './types';
 import { authService, AuthSessionError, isRejectedCredential } from './auth.service';
-import { hasAccess as checkAccess } from './access.policy';
+import { setSentryUser } from '@/platform/observability/sentry';
 
 // Re-export types for backward compatibility with existing imports
-export type { User, AccessLevel, Role };
-export type { UserContract, AccessCertificate, PermissionObject } from './types';
+export type { Role };
 
 /**
  * AccessScope represents the organizational boundaries derived from the user's
  * Access Certificate (NOT Position Contract). This determines what data the user
  * can view/edit across the application.
  */
-export interface AccessScope {
+interface AccessScope {
   organizationId: string | null;
   organizationName: string;
   departmentId: string | null;
@@ -38,7 +37,6 @@ interface AuthContextType {
   hasActiveContracts: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  hasAccess: (feature: string, subDeptId?: string) => boolean;
   activeContractId: string | null;
   activeContract: UserContract | null;
   setActiveContractId: (id: string | null) => void;
@@ -54,6 +52,12 @@ interface AuthContextType {
   permissionObject: PermissionObject | null;
   /** Whether permissions are still loading */
   isPermissionsLoading: boolean;
+  /**
+   * Re-reads the permission object without a loading state, keeping the old one
+   * when nothing changed. Call after a contract write: the scope trees are built
+   * from the signed-in user's contracts.
+   */
+  refreshPermissions: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(
@@ -166,13 +170,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  /**
-   * Centralized feature access check
-   * Delegates to AccessPolicy
-   */
-  const hasAccess = (feature: string, subDeptId?: string): boolean => {
-    return checkAccess(user, feature, activeContract, activeCertificate);
-  };
+  // No loading flag: the scope filter unmounts while permissions load, and a
+  // contract edit should not make it flicker. Same content ⇒ same object, so
+  // nothing keyed on the permission object re-runs.
+  const refreshPermissions = useCallback(async () => {
+    try {
+      const permissions = await authService.fetchPermissions();
+      if (!permissions) return;
+      setPermissionObject((prev) =>
+        prev && JSON.stringify(prev) === JSON.stringify(permissions) ? prev : permissions);
+    } catch (e: any) {
+      console.error('[Auth] Permission refresh error:', e.message);
+      if (e instanceof AuthSessionError) {
+        await endRejectedSession();
+      }
+    }
+  }, []);
+
+  // Tag Sentry events with who hit them (id only, no PII).
+  useEffect(() => {
+    setSentryUser(user ? { id: user.id } : null);
+  }, [user?.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -378,9 +396,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const accessScope: AccessScope | null = React.useMemo(() => {
     // 1. Primary source: Active Certificate
     if (activeCertificate) {
+      // A zeta certificate carries no organization (it spans them all). Resolve
+      // it to the organization in the user's scope tree — the app serves one
+      // organization, ICC Sydney — so pickers keyed on an org still load.
+      const treeOrg = permissionObject?.allowed_scope_tree?.organizations?.[0];
+      const globalCert = activeCertificate.organizationId === null && !!treeOrg;
       return {
-        organizationId: activeCertificate.organizationId,
-        organizationName: activeCertificate.organizationName || 'Organization',
+        organizationId: globalCert ? treeOrg.id : activeCertificate.organizationId,
+        organizationName: globalCert ? treeOrg.name : (activeCertificate.organizationName || 'Organization'),
         departmentId: activeCertificate.departmentId,
         departmentName: activeCertificate.departmentName || null,
         subDepartmentId: activeCertificate.subDepartmentId,
@@ -423,7 +446,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         hasActiveContracts,
         login,
         logout,
-        hasAccess,
         activeContractId,
         activeContract,
         setActiveContractId,
@@ -433,6 +455,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         accessScope,
         permissionObject,
         isPermissionsLoading,
+        refreshPermissions,
       }}
     >
       {children}

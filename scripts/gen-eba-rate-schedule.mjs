@@ -29,17 +29,28 @@
  * exported `deriveRateSetFromMigration()` — keep that export stable.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** Absolute path to the effective-dated seed migration. */
-export const MIGRATION_PATH = resolve(
-  __dirname,
-  '../supabase/migrations/20260709000000_eba_rate_allowance_effective_dated.sql',
-);
+/**
+ * Absolute path to the effective-dated seed migration — in supabase/migrations,
+ * or in the archive a re-baseline moved it to (docs/operations/database-baseline.md).
+ */
+export const MIGRATION_PATH = locateMigration('20260709000000_eba_rate_allowance_effective_dated.sql');
+
+function locateMigration(name) {
+  const supabaseDir = resolve(__dirname, '../supabase');
+  const dirs = ['migrations', ...readdirSync(supabaseDir)
+    .filter((d) => d.startsWith('migrations_archive_pre_baseline_')).sort().reverse()];
+  for (const d of dirs) {
+    const p = resolve(supabaseDir, d, name);
+    if (existsSync(p)) return p;
+  }
+  throw new Error(`${name} is not in supabase/migrations or any archive`);
+}
 
 /** The baseline effective row this dataset represents (EA 2025 commencement). */
 export const BASELINE_EFFECTIVE_FROM = '2025-01-01';

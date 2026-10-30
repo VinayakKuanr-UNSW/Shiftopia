@@ -10,7 +10,7 @@ import {
 } from '../../domain/shift-ui';
 import type { ShiftStateDisplay } from '../../domain/shift-fsm';
 
-export interface ShiftRuleHeaderProps {
+interface ShiftRuleHeaderProps {
     /** Minimal schedule + attendance fields needed to derive both rules. */
     shift: ShiftDotInput;
     /** `compact` (dense grids) tightens type/padding; `detailed` is roomier. */
@@ -50,7 +50,7 @@ const RuleRow: React.FC<{ label: string; variant: 'compact' | 'detailed'; childr
         );
     }
     return (
-        <div className="flex items-center justify-between gap-2 text-[9px] leading-none">
+        <div className="flex items-center justify-between gap-2 text-[11px] leading-none">
             <span className="font-black text-muted-foreground/40 uppercase tracking-widest shrink-0">
                 {label}
             </span>
@@ -65,7 +65,7 @@ const LiveBadges: React.FC<{ badges: { arrival: ShiftRuleBadge | null; departure
     if (!arrival && !departure) return null;
     const textCls = size === 'detailed'
         ? 'tabular-nums tracking-tight font-black font-mono text-[12px] uppercase'
-        : 'font-black font-mono tracking-tight text-[10px] uppercase leading-none';
+        : 'font-black font-mono tracking-tight text-[11px] uppercase leading-none';
     return (
         <div className="flex items-center gap-1.5 justify-end flex-wrap">
             {arrival && <span className={textCls} style={{ color: arrival.color }}>{arrival.label}</span>}
@@ -112,8 +112,8 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
         const showLiveBand = isDraft || (isAssigned ? !!(live.arrival || live.departure) : liveRulesUnassigned === 'na');
         if (!state && !time && !showLiveBand) return null;
 
-        const labelCls = 'text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0';
-        const valueBandCls = 'text-xs font-semibold text-right truncate min-w-0';
+        const labelCls = 'text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0';
+        const valueBandCls = 'text-[11px] font-semibold text-right truncate min-w-0';
 
         return (
             <div className={cn('mt-3 rounded-xl border-t border-slate-200/70 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.04] px-3 py-2 space-y-1', className)}>
@@ -141,7 +141,7 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
                         <span className={labelCls}>Live Rules</span>
                         <span className={valueBandCls}>
                             {isDraft ? (
-                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-xs uppercase">N/A</span>
+                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-[11px] uppercase">N/A</span>
                             ) : isAssigned ? (
                                 <span className="inline-flex items-center gap-1.5 justify-end">
                                     {live.arrival && (
@@ -156,7 +156,7 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
                                     )}
                                 </span>
                             ) : (
-                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-xs uppercase">N/A</span>
+                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-[11px] uppercase">N/A</span>
                             )}
                         </span>
                     </div>
@@ -189,7 +189,7 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
     const isDetailed = variant === 'detailed';
     const valueCls = isDetailed
         ? 'tabular-nums tracking-tight font-black font-mono text-[12px] uppercase text-right truncate min-w-0'
-        : 'font-black font-mono tracking-tight text-[10px] uppercase text-right leading-none truncate min-w-0';
+        : 'font-black font-mono tracking-tight text-[11px] uppercase text-right leading-none truncate min-w-0';
 
     return (
         <div className={cn(isDetailed ? 'flex flex-col w-full' : 'flex flex-col gap-1.5 w-full', className)}>
@@ -206,7 +206,7 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
             {showLive && (
                 <RuleRow label="Live Rules" variant={variant}>
                     {isDraft ? (
-                        <span className={cn("font-semibold uppercase text-slate-400 dark:text-slate-500", isDetailed ? "text-xs" : "text-[10px]")}>
+                        <span className={cn("font-semibold uppercase text-slate-400 dark:text-slate-500", isDetailed ? "text-[11px]" : "text-[11px]")}>
                             N/A
                         </span>
                     ) : (
@@ -225,4 +225,3 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
 
 export const ShiftRuleHeader = React.memo(ShiftRuleHeaderImpl);
 
-export default ShiftRuleHeader;

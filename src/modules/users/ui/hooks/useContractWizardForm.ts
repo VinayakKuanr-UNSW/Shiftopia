@@ -17,13 +17,19 @@ import {
     type PayEvaluation,
     type RoleBand,
 } from '../../domain/contractPayTerms';
-import { FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from './useContractForm';
+import { assertWrote } from '@/platform/supabase/writes';
+import { todayISO } from '@/modules/core/lib/date.utils';
+import type { AccessLevel } from '@/platform/auth/types';
 
-/** Step 1 — Contract Class. Class 2 (Casual) has no fixed hours. */
-export type ContractClass = 1 | 2;
+/** Flexible Part-Time is engaged for 624–1,976 ordinary hours a year (EBA cl 12.4(a), 35.3(a)). */
+export const FLEXIBLE_PT_ANNUAL_HOURS_MIN = 624;
+export const FLEXIBLE_PT_ANNUAL_HOURS_MAX = 1976;
+
+/** The four EBA employment types (cl 12.1); step 1 of the wizard picks one. */
+export const EMPLOYMENT_TYPES = ['Full-Time', 'Part-Time', 'Flexible Part-Time', 'Casual'] as const;
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 
 export interface ContractWizardFormState {
-    contractClass: ContractClass | null;
     organization_id: string;
     department_id: string;
     sub_department_id: string;
@@ -60,10 +66,23 @@ export interface ContractWizardFormState {
     sws_capacity_percentage: number;
     is_sws_trial: boolean;
     sws_trial_start_date: string;
+    /**
+     * The access this position gives, reaching the contract's own place
+     * (contracts carry access, 2026-10-15). Set by the Admin suite only.
+     * Null when a saved contract records none (a database without that
+     * migration): shown as "not set", and left alone unless changed.
+     */
+    access_level: AccessLevel | null;
+    /**
+     * When the contract runs (contract dates drive the contract, 2026-10-16).
+     * The start may be in the past (recorded late) or ahead (Upcoming); the last
+     * day is inclusive and optional — empty for an ongoing contract.
+     */
+    start_date: string;
+    end_date: string;
 }
 
 const INITIAL_STATE: ContractWizardFormState = {
-    contractClass: null,
     organization_id: '',
     department_id: '',
     sub_department_id: '',
@@ -94,7 +113,51 @@ const INITIAL_STATE: ContractWizardFormState = {
     sws_capacity_percentage: 50,
     is_sws_trial: false,
     sws_trial_start_date: '',
+    access_level: 'alpha',
+    start_date: '',
+    end_date: '',
 };
+
+const num = (v: unknown): number => (v == null || v === '' ? 0 : Number(v) || 0);
+
+/** A saved contract row, as the form edits it. */
+function formStateFromContract(c: Record<string, any>): ContractWizardFormState {
+    return {
+        ...INITIAL_STATE,
+        organization_id: c.organization_id ?? '',
+        department_id: c.department_id ?? '',
+        sub_department_id: c.sub_department_id ?? '',
+        role_id: c.role_id ?? '',
+        employment_status: c.employment_status ?? '',
+        contracted_weekly_hours: num(c.contracted_weekly_hours),
+        annual_guaranteed_hours: num(c.annual_guaranteed_hours),
+        pay_basis: (c.pay_basis ?? 'eba_level') as PayBasis,
+        remuneration_level: c.remuneration_level == null ? '' : Number(c.remuneration_level),
+        annual_salary: num(c.annual_salary),
+        eba_exclusion_reason: (c.eba_exclusion_reason ?? '') as EbaExclusionReason | '',
+        multi_hire_request_ref: c.multi_hire_request_ref ?? '',
+        is_apprentice: !!c.is_apprentice,
+        apprentice_type: c.apprentice_type ?? INITIAL_STATE.apprentice_type,
+        apprentice_year: c.apprentice_year ?? INITIAL_STATE.apprentice_year,
+        has_completed_year_12: !!c.has_completed_year_12,
+        is_trainee: !!c.is_trainee,
+        trainee_category: c.trainee_category ?? INITIAL_STATE.trainee_category,
+        trainee_level: c.trainee_level ?? INITIAL_STATE.trainee_level,
+        trainee_exit_year: c.trainee_exit_year ?? INITIAL_STATE.trainee_exit_year,
+        trainee_years_out: c.trainee_years_out ?? INITIAL_STATE.trainee_years_out,
+        trainee_aqf_level: c.trainee_aqf_level ?? INITIAL_STATE.trainee_aqf_level,
+        trainee_year: c.trainee_year ?? INITIAL_STATE.trainee_year,
+        is_training_on_job: !!c.is_training_on_job,
+        prefers_sba_loading: !!c.prefers_sba_loading,
+        is_sws: !!c.is_sws,
+        sws_capacity_percentage: c.sws_capacity_percentage ?? INITIAL_STATE.sws_capacity_percentage,
+        is_sws_trial: !!c.is_sws_trial,
+        sws_trial_start_date: c.sws_trial_start_date ?? '',
+        access_level: (c.access_level ?? null) as AccessLevel | null,
+        start_date: c.start_date ?? '',
+        end_date: c.end_date ?? '',
+    };
+}
 
 /**
  * Fields that change with the pay basis. Salaried: no level, no EA wage
@@ -122,7 +185,7 @@ function onPayBasis(state: ContractWizardFormState, basis: PayBasis): Partial<Co
     };
 }
 
-/** Hours a status implies when first set — mirrors useContractForm's defaultTermsFor. */
+/** Hours a status implies when first set (EBA cl 12.2–12.5). */
 const defaultHoursFor = (status: string) => {
     if (status === 'Full-Time') return { contracted_weekly_hours: 38, annual_guaranteed_hours: 0 };
     if (status === 'Part-Time') return { contracted_weekly_hours: 20, annual_guaranteed_hours: 0 };
@@ -150,7 +213,7 @@ export interface HoursRule {
  *   Flexible Part-Time — 624–1,976 h/year            (cl 12.4(a), 35.3(a))
  * Null for Casual or an unchosen type: neither carries contracted hours.
  */
-export function evaluateHoursRule(status: string, weekly: number, annual: number): HoursRule | null {
+function evaluateHoursRule(status: string, weekly: number, annual: number): HoursRule | null {
     if (status === 'Full-Time') {
         return {
             valid: weekly === FULL_TIME_WEEKLY_HOURS,
@@ -188,7 +251,7 @@ export function evaluateHoursRule(status: string, weekly: number, annual: number
 }
 
 /** Rule text copied verbatim from AddContractDialog.tsx's mixedPermanentConflict. */
-export const MIXED_PERMANENT_MESSAGE =
+const MIXED_PERMANENT_MESSAGE =
     'A Full-Time engagement is 38 hours and cannot be combined with another permanent (PT/FPT) engagement. Make additional roles Casual.';
 
 /**
@@ -215,9 +278,9 @@ export interface WizardPayContext {
     eaTopAnnualRate: number | null;
 }
 
-export const NO_PAY_CONTEXT: WizardPayContext = { band: null, isSecurityRole: false, eaTopAnnualRate: null };
+const NO_PAY_CONTEXT: WizardPayContext = { band: null, isSecurityRole: false, eaTopAnnualRate: null };
 
-export interface WizardTermsEvaluation {
+interface WizardTermsEvaluation {
     pay: PayEvaluation;
     engagement: EngagementEvaluation;
 }
@@ -259,9 +322,25 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [formData, setFormData] = useState<ContractWizardFormState>(INITIAL_STATE);
+    const [formData, setFormData] = useState<ContractWizardFormState>(() => ({ ...INITIAL_STATE, start_date: todayISO() }));
+    /** The contract being edited, or null when adding one. */
+    const [editingId, setEditingId] = useState<string | null>(null);
+    /** The access the edited contract had when loaded — sent again only if changed. */
+    const [loadedAccess, setLoadedAccess] = useState<AccessLevel | null>(null);
 
-    const reset = () => setFormData(INITIAL_STATE);
+    const reset = () => {
+        // A new contract starts today unless told otherwise (Sydney date).
+        setFormData({ ...INITIAL_STATE, start_date: todayISO() });
+        setEditingId(null);
+        setLoadedAccess(null);
+    };
+
+    /** Start editing a saved contract: the form takes its values as they are. */
+    const loadContract = (contract: Record<string, any>) => {
+        setFormData(formStateFromContract(contract));
+        setEditingId(contract.id ?? null);
+        setLoadedAccess((contract.access_level ?? null) as AccessLevel | null);
+    };
 
     const updateField = <K extends keyof ContractWizardFormState>(field: K, value: ContractWizardFormState[K]) => {
         setFormData(prev => {
@@ -281,20 +360,6 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
                 || field === 'sub_department_id' || field === 'role_id') {
                 // The note explains a level against ONE role's band.
                 next.level_note = '';
-            }
-
-            if (field === 'contractClass') {
-                if (value === 2) {
-                    next.employment_status = 'Casual';
-                    next.contracted_weekly_hours = 0;
-                    next.annual_guaranteed_hours = 0;
-                    // A casual is always on a level (Sch 2 §1).
-                    Object.assign(next, onPayBasis(next, 'eba_level'));
-                } else if (value === 1 && prev.contractClass === 2) {
-                    next.employment_status = '';
-                    next.contracted_weekly_hours = 0;
-                    next.annual_guaranteed_hours = 0;
-                }
             }
 
             if (field === 'employment_status') {
@@ -344,12 +409,16 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
     /** Pay and engagement rules are passed in so submit() checks exactly what the dialog showed. */
     const validate = (terms?: WizardTermsEvaluation): string[] => {
         const missing: string[] = [];
-        if (!formData.contractClass) missing.push('Contract Class');
         if (!formData.organization_id) missing.push('Organization');
         if (!formData.department_id) missing.push('Department');
         if (!formData.sub_department_id) missing.push('Sub-Department');
         if (!formData.role_id) missing.push('Role');
         if (!formData.employment_status) missing.push('Employment Type');
+        if (!formData.start_date) missing.push('Start date');
+        if (formData.end_date && formData.start_date && formData.end_date < formData.start_date) {
+            missing.push('A last day on or after the start date');
+        }
+
         if (hoursRule && !hoursRule.valid) missing.push(hoursRule.message);
         for (const issue of [...(terms?.pay.errors ?? []), ...(terms?.engagement.errors ?? [])]) {
             missing.push(`${issue.message} (${issue.clause})`);
@@ -401,9 +470,7 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
             const isSalary = formData.pay_basis === 'salary';
             const isMultiHire = terms.engagement.kind === 'multi_hire';
             const levelNote = formData.level_note.trim();
-            const row = {
-                user_id: employeeId,
-                position_id: crypto.randomUUID(),
+            const fields = {
                 organization_id: formData.organization_id,
                 department_id: formData.department_id,
                 sub_department_id: formData.sub_department_id,
@@ -437,21 +504,52 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
                 sws_capacity_percentage: formData.sws_capacity_percentage,
                 is_sws_trial: !isSalary && formData.is_sws_trial,
                 sws_trial_start_date: formData.sws_trial_start_date || null,
+                // The database sets the status from these (Upcoming / Active / Expired).
+                start_date: formData.start_date,
+                end_date: formData.end_date || null,
+                // Access only when it says something: a new contract above
+                // Employee (the database defaults to Employee), or a change on
+                // an edited one. Untouched, it is left exactly as stored.
+                ...(formData.access_level && (editingId
+                    ? formData.access_level !== loadedAccess
+                    : formData.access_level !== 'alpha')
+                    ? { access_level: formData.access_level }
+                    : {}),
             };
 
-            const { error } = await (supabase as any)
-                .schema('hr').from('user_contracts').insert([row]);
+            if (editingId) {
+                // Keep the saved note unless a new band explanation was given.
+                const { notes, ...rest } = fields;
+                const updated = await (supabase as any)
+                    .schema('hr').from('user_contracts')
+                    .update(notes ? fields : rest, { count: 'exact' })
+                    .eq('id', editingId);
+                if (updated.error) throw updated.error;
+                assertWrote(updated, 'change this contract');
+            } else {
+                const { error } = await (supabase as any)
+                    .schema('hr').from('user_contracts')
+                    .insert([{ ...fields, user_id: employeeId, position_id: crypto.randomUUID() }]);
+                if (error) throw error;
+            }
 
-            if (error) throw error;
-
-            toast({ title: 'Success', description: 'Contract added successfully' });
+            toast({ title: editingId ? 'Contract saved' : 'Contract added' });
             queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
             reset();
             if (onSuccess) onSuccess();
             return true;
         } catch (error: any) {
-            console.error('Error adding contract:', error);
-            toast({ title: 'Error', description: error.message || 'Failed to add contract', variant: 'destructive' });
+            console.error('Error saving contract:', error);
+            // A database without the contracts-carry-access migration still pins
+            // contract access to empty; say that rather than the constraint name.
+            const notYet = /user_contracts_no_access_level/.test(error?.message ?? '');
+            toast({
+                title: editingId ? 'Contract not saved' : 'Contract not added',
+                description: notYet
+                    ? "Access can't be set on contracts until the pending database update is applied. Save without changing the access, or apply the update first."
+                    : error.message || 'Something stopped the save. Check the details and try again.',
+                variant: 'destructive',
+            });
             return false;
         } finally {
             setIsSubmitting(false);
@@ -461,6 +559,8 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
     return {
         formData,
         setFormData,
+        editingId,
+        loadContract,
         isSubmitting,
         updateField,
         reset,

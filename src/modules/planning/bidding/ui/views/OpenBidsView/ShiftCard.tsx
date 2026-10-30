@@ -1,27 +1,19 @@
 import React from 'react';
 import {
-  Calendar,
   Clock,
-  Coffee,
-  Megaphone,
-  UserPlus,
   UserCheck as LucideUserCheck,
-  Circle,
-  Gavel,
-  Flame,
-  Minus,
   CheckSquare,
   Square,
   Users,
 } from 'lucide-react';
 import { SharedShiftCard } from '../../../../ui/components/SharedShiftCard';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 
 import type { ManagerBidShift, OpenShift, TimeRemaining } from './types';
 import { formatTimeRemaining } from './utils';
 import { buildShiftCardPay } from '../../../../ui/components/shift-card-pay';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 interface ShiftCardProps {
   /** `group.items` is `ManagerBidShift[]`; this card only reads `group` and
@@ -53,16 +45,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   if (durationMins < 0) durationMins += 24 * 60;
   const netMins = durationMins - shift.unpaidBreak;
 
-  // Venue-inherited card theming (mirrors index.tsx getGroupVariant)
-  const g = (shift.groupType || shift.group || '').toLowerCase();
-  const d = (shift.department || '').toLowerCase();
-  const groupVariant =
-    g === 'office' ? 'office' :
-    g.includes('convention') || d.includes('convention') ? 'convention' :
-    g.includes('exhibition') || d.includes('exhibition') ? 'exhibition' :
-    g.includes('theatre') || g.includes('theater') || d.includes('theatre') || d.includes('theater') ? 'theatre' :
-    g.includes('cutaway') || d.includes('cutaway') ? 'cutaway' :
-    'default';
+  const groupVariant = groupVariantFor(shift.groupType || shift.group);
 
   const bidsCount = shift.bidCount ?? (shift as any).bidsCount ?? 0;
   const assignedName = shift.assignedEmployeeName || (shift as any).assigned_employee_name || (shift as any).employeeName;
@@ -80,13 +63,13 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   const footerActions = (
     <div className="flex flex-col gap-2 mt-2 w-full">
       {isAssigned ? (
-        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-black uppercase tracking-wider">
+        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold uppercase tracking-wider">
           <LucideUserCheck className="h-4 w-4 shrink-0" />
           Assigned to {assignedName || 'Employee'}
         </div>
       ) : bidsCount > 0 ? (
         <Button
-          className="w-full font-black text-xs uppercase tracking-wider h-10 rounded-xl transition-all shadow-md active:scale-[0.98] bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30"
+          className="w-full font-semibold text-[11px] uppercase tracking-wider h-10 rounded-xl transition-all shadow-md bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30"
           onClick={(e) => {
             e.stopPropagation();
             onClick();
@@ -95,7 +78,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
           <Users className="mr-2 h-4 w-4" /> Review Bids ({bidsCount})
         </Button>
       ) : (
-        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-muted/20 border border-border/30 text-muted-foreground/50 text-xs font-bold uppercase tracking-wider">
+        <div className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-muted/20 border border-border/30 text-muted-foreground/50 text-[11px] font-bold uppercase tracking-wider">
           <Clock className="h-3.5 w-3.5 shrink-0" /> No Bids Placed
         </div>
       )}
@@ -137,7 +120,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
                         <span className="text-cyan-400/80">
                           {isBulkSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                         </span>
-                        <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">
+                        <span className="text-[11px] text-muted-foreground/60 font-bold uppercase tracking-wider">
                             {isBulkSelected ? 'Selected' : 'Select'}
                         </span>
                     </div>

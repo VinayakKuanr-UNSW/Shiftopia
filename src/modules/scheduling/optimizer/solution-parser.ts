@@ -33,6 +33,9 @@ export interface ShiftMeta {
      * does and refuses pairings V8 would accept.
      */
     paid_break_minutes?: number;
+    /** The row version this snapshot was read at. Apply sends it back so the
+     *  DB refuses a shift edited after the preview checked it. */
+    version?: number;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: TargetEmploymentType | null;
     /** Narrows a 'PT' target to Flexible Part-Time staff only. */
@@ -71,7 +74,7 @@ export interface EmployeeMeta {
 // ENRICHED PROPOSAL
 // =============================================================================
 
-export interface EnrichedProposal {
+interface EnrichedProposal {
     shiftId: string;
     employeeId: string;
     employeeName: string;
@@ -83,6 +86,10 @@ export interface EnrichedProposal {
     roleName?: string;
     roleId?: string | null;
     unpaidBreakMinutes?: number;
+    /** Carried so `dailySpreadRule` nets paid rest breaks out of the split-shift
+     *  spread (cl 39.2), as HC-9 already does. Dropping it made the preview
+     *  reject pairings the solver and the DB both accept. */
+    paidBreakMinutes?: number;
     /** Carried from ShiftMeta so the compliance re-validation can rebuild a
      *  candidate shift that still knows its employment target. Without these,
      *  V8_EMPLOYMENT_TARGET falls through its `if (!target) continue` guard and
@@ -95,7 +102,7 @@ export interface EnrichedProposal {
 // GROUPED ASSIGNMENTS (by employee, for AssignmentValidator)
 // =============================================================================
 
-export interface EmployeeProposalGroup {
+interface EmployeeProposalGroup {
     employeeId: string;
     employeeName: string;
     shiftIds: string[];
@@ -106,7 +113,7 @@ export interface EmployeeProposalGroup {
 // PARSER
 // =============================================================================
 
-export class SolutionParser {
+class SolutionParser {
     /**
      * Parse the raw optimizer response into enriched, grouped proposals.
      *
@@ -149,6 +156,7 @@ export class SolutionParser {
                 roleName: shift.roleName,
                 roleId: shift.role_id,
                 unpaidBreakMinutes: shift.unpaid_break_minutes,
+                paidBreakMinutes: shift.paid_break_minutes,
                 targetEmploymentType: shift.target_employment_type ?? null,
                 targetRequiresFlexible: shift.target_requires_flexible ?? false,
             });

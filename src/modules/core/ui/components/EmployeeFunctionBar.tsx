@@ -1,20 +1,16 @@
-import React from 'react';
-import { ChevronLeft, ChevronRight, Calendar, ArrowUpDown, Filter, Layers } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronLeft, ChevronRight, Calendar, Filter } from 'lucide-react';
+import { startOfDay, isWithinInterval } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
-import { touch } from '@/modules/core/ui/typography';
+import { ToolbarRow, ToolbarIconButton, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { DatePicker } from '@/modules/core/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
+import { computeRange } from '@/modules/rosters/domain/view-range';
+import { SortSelector } from './SortSelector';
+import { GroupBySelector } from './GroupBySelector';
 import {
-  ResponsiveMenu,
-  ResponsiveMenuOption,
-  ResponsiveMenuGroup,
-} from './ResponsiveMenu';
-import {
-  DEFAULT_ROW_SORT,
-  ROW_SORT_LABELS,
-  SORT_DIRECTION_LABELS,
   type RowSort,
   type RowSortBy,
-  type SortDirection,
 } from '@/modules/core/lib/row-sorting';
 import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
 
@@ -22,22 +18,9 @@ import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
  * The function bar for every employee-facing page.
  *
  * Global Scope is Row 2 of `GoldStandardHeader` and is unchanged; this is
- * Row 3, and it is the same two lines everywhere:
- *
- *   Day · 3D · Week · Month      ‹  12 – 18 Aug  ›
- *   Sort                Filter               Group By
- *
- * Every page had been improvising this. My Roster had a bespoke navigator with
- * its own button sizes, My Attendance and Timesheets folded their view range
- * into a filter drawer, Bids and Swaps had neither, and four of them carried a
- * Refresh button — a control that exists because the page does not trust its
- * own cache, asks the person to compensate, and (with react-query revalidating
- * on mount and focus) mostly re-fetches data that was already fresh. Those are
- * gone.
- *
- * Every section is optional: a page without a date range omits the first line,
- * a page with nothing to sort omits that menu. What it must not do is render
- * its own competing version.
+ * Row 3, providing unified view ranges, Today jumping, date navigation, and
+ * standard icon triggers for Sort, Filter, and Group By matching the
+ * Global Scope dropdown UI/UX.
  */
 
 export type EmployeeViewRange = 'day' | '3day' | 'week' | 'month';
@@ -49,10 +32,14 @@ const RANGE_OPTIONS: { id: EmployeeViewRange; short: string; label: string }[] =
   { id: 'month', short: 'M', label: 'Month' },
 ];
 
-export interface EmployeeFunctionBarProps {
+interface EmployeeFunctionBarProps {
   /** ── Line 1: view range ── */
   view?: EmployeeViewRange;
   onViewChange?: (view: EmployeeViewRange) => void;
+
+  /** ── Line 1: Today ── */
+  showToday?: boolean;
+  onToday?: () => void;
 
   /** ── Line 1: range picker ── */
   selectedDate?: Date;
@@ -62,16 +49,17 @@ export interface EmployeeFunctionBarProps {
   onPrevious?: () => void;
   onNext?: () => void;
 
-  /** ── Line 2: Sort ── */
+  /** ── Line 2 / Actions: Sort ── */
   sort?: RowSort;
   onSortChange?: (sort: RowSort) => void;
   sortOptions?: RowSortBy[];
 
-  /** ── Line 2: Filter ── free-form body, since every page filters different things */
+  /** ── Line 2 / Actions: Filter ── */
+  filters?: React.ReactNode;
   filterContent?: React.ReactNode | ((close: () => void) => React.ReactNode);
   activeFilterCount?: number;
 
-  /** ── Line 2: Group By ── */
+  /** ── Line 2 / Actions: Group By ── */
   groupBy?: RowGroupBy;
   onGroupByChange?: (value: RowGroupBy) => void;
   groupByOptions?: { value: RowGroupBy; label: string }[];
@@ -84,6 +72,8 @@ export interface EmployeeFunctionBarProps {
 export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
   view,
   onViewChange,
+  showToday,
+  onToday,
   selectedDate,
   onDateChange,
   rangeLabel,
@@ -92,6 +82,7 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
   sort,
   onSortChange,
   sortOptions,
+  filters,
   filterContent,
   activeFilterCount = 0,
   groupBy,
@@ -100,51 +91,66 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
   trailing,
   className,
 }) => {
+  const [filterOpen, setFilterOpen] = useState(false);
+
   const showRange = !!view && !!onViewChange;
   const showPicker = !!rangeLabel && (!!onPrevious || !!onNext || !!onDateChange);
+  const shouldShowToday = showToday ?? (!!selectedDate && (!!onDateChange || !!onToday));
+
   const showSort = !!sort && !!onSortChange;
   const showGroupBy = !!groupBy && !!onGroupByChange && !!groupByOptions?.length;
   const showFilter = !!filterContent;
 
-  const activeGroupLabel =
-    groupByOptions?.find((o) => o.value === groupBy)?.label ?? 'None';
-
   const sortFields = sortOptions?.length ? sortOptions : (['date'] as RowSortBy[]);
-  const sortValue = sort
-    ? `${ROW_SORT_LABELS[sort.by]}, ${SORT_DIRECTION_LABELS[sort.by][sort.direction].toLowerCase()}`
-    : undefined;
 
-  // "Applied" means the control is doing something other than the default —
-  // otherwise all three would sit permanently lit and the highlight would carry
-  // no information at all.
-  const sortApplied =
-    !!sort && (sort.by !== DEFAULT_ROW_SORT.by || sort.direction !== DEFAULT_ROW_SORT.direction);
-  const groupApplied = !!groupBy && groupBy !== 'none';
+  const isTodayActive = React.useMemo(() => {
+    if (!selectedDate || !view) return false;
+    const today = new Date();
+    const r = computeRange(selectedDate, view);
+    return isWithinInterval(startOfDay(today), {
+      start: startOfDay(r.start),
+      end: startOfDay(r.end),
+    });
+  }, [selectedDate, view]);
 
-  const menuCount = [showSort, showFilter, showGroupBy].filter(Boolean).length;
-  const menuGridCls =
-    menuCount === 3 ? 'grid-cols-3' : menuCount === 2 ? 'grid-cols-2' : 'grid-cols-1';
-
-  const navButtonCls =
-    'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border ' +
-    'bg-background/60 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground ' +
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95';
+  const handleToday = React.useCallback(() => {
+    if (onToday) {
+      onToday();
+    } else if (onDateChange) {
+      onDateChange(new Date());
+    }
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const todayEls = document.querySelectorAll('[data-today="true"]');
+        if (todayEls.length === 0) return;
+        todayEls.forEach((el) => {
+          const scrollParent = el.closest('.overflow-auto') || el.closest('[data-scroll-container]');
+          if (scrollParent) {
+            const parentRect = scrollParent.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            const currentScrollLeft = scrollParent.scrollLeft;
+            const targetScrollLeft = currentScrollLeft + (elRect.left - parentRect.left) - (parentRect.width / 2) + (elRect.width / 2);
+            scrollParent.scrollTo({ left: targetScrollLeft, behavior: 'smooth' });
+          } else {
+            el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }
+        });
+      }, 50);
+    });
+  }, [onToday, onDateChange]);
 
   return (
-    // One row on desktop, two on a phone. Desktop has the width to hold the
-    // range controls and the three menus on a single line; a 390px viewport
-    // does not, and wrapping them into one flow puts a menu wherever the
-    // previous control happened to end. `gap-1.5` between the two mobile rows
-    // is enough to read them apart without looking like two separate bars.
-    <div className={cn('mt-2 flex flex-col gap-1.5 md:flex-row md:flex-wrap md:items-center md:gap-2', className)}>
-      {/* ── Line 1: view range + range picker ─────────────────────────────── */}
-      {(showRange || showPicker) && (
-        <div className="flex items-center gap-1.5 md:shrink-0">
+    <ToolbarRow
+      compactOnMobile
+      className={className}
+      // ── Line 1: view range + Today + range picker ───────────────────────────────
+      modes={(showRange || shouldShowToday || showPicker) ? (
+        <div className="flex w-full items-center gap-1.5 md:w-auto md:shrink-0">
           {showRange && (
             <div
               role="radiogroup"
               aria-label="View range"
-              className="flex h-11 shrink-0 items-center gap-0.5 rounded-xl border border-border bg-background/60 p-0.5"
+              className={cn(toolbar.control, 'gap-0.5')}
             >
               {RANGE_OPTIONS.map((opt) => {
                 const isActive = view === opt.id;
@@ -154,16 +160,12 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                     type="button"
                     role="radio"
                     aria-checked={isActive}
-                    // The visible text is an abbreviation on small screens, so
-                    // the accessible name always spells the range out.
                     aria-label={`${opt.label} view`}
                     onClick={() => onViewChange!(opt.id)}
                     className={cn(
-                      'h-10 min-w-10 rounded-[10px] px-2.5 text-xs font-semibold uppercase tracking-wide transition-colors active:scale-95',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      isActive
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                      toolbar.controlItem,
+                      'active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      isActive ? toolbar.modeOn : toolbar.modeOff,
                     )}
                   >
                     <span aria-hidden="true" className="sm:hidden">{opt.short}</span>
@@ -174,14 +176,31 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
             </div>
           )}
 
+          {shouldShowToday && (
+            <div className={toolbar.control}>
+              <button
+                type="button"
+                onClick={handleToday}
+                aria-label="Snap to today"
+                className={cn(
+                  toolbar.controlItem,
+                  'active:scale-95 cursor-pointer',
+                  isTodayActive ? toolbar.modeOn : toolbar.modeOff,
+                )}
+              >
+                Today
+              </button>
+            </div>
+          )}
+
           {showPicker && (
-            <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-none" role="group" aria-label="Date range">
+            <div className={cn(toolbar.stepper, 'min-w-0 flex-1 md:flex-none')} role="group" aria-label="Date range">
               {onPrevious && (
                 <button
                   type="button"
                   onClick={onPrevious}
                   aria-label={`Previous ${view ?? 'period'}`}
-                  className={navButtonCls}
+                  className={toolbar.stepperButton}
                 >
                   <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -192,11 +211,7 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                   <button
                     type="button"
                     aria-label={`Change date — showing ${rangeLabel}`}
-                    className={cn(
-                      touch.targetY,
-                      'flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background/60 px-3 text-xs font-semibold tabular-nums text-foreground transition-colors hover:bg-muted/50 md:w-auto md:min-w-[9rem]',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    )}
+                    className={cn(toolbar.stepperLabel, 'min-w-0 flex-1 justify-center md:flex-none md:min-w-[9rem]')}
                   >
                     <Calendar className="h-4 w-4 shrink-0 opacity-60" aria-hidden="true" />
                     <span className="truncate">{rangeLabel}</span>
@@ -204,7 +219,7 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                 </DatePicker>
               ) : (
                 <span
-                  className="flex-1 truncate px-1 text-center text-xs font-semibold tabular-nums text-foreground"
+                  className="flex-1 truncate px-1 text-center text-[11px] font-semibold tabular-nums text-foreground"
                   aria-label={`Showing ${rangeLabel}`}
                 >
                   {rangeLabel}
@@ -216,7 +231,7 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
                   type="button"
                   onClick={onNext}
                   aria-label={`Next ${view ?? 'period'}`}
-                  className={navButtonCls}
+                  className={toolbar.stepperButton}
                 >
                   <ChevronRight className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -224,98 +239,65 @@ export const EmployeeFunctionBar: React.FC<EmployeeFunctionBarProps> = ({
             </div>
           )}
         </div>
-      )}
+      ) : undefined}
+      // ── Line 2: Sort · Filter · Group By (Icons with Global Scope UI/UX) ─
+      actions={(showSort || showFilter || filters || showGroupBy || trailing) ? (
+        <div className="flex w-full items-center justify-end gap-1.5 md:w-auto md:gap-2">
+          {showSort && (
+            <SortSelector
+              value={sort!}
+              onChange={onSortChange!}
+              options={sortFields}
+              triggerVariant="icon"
+            />
+          )}
 
-      {/* ── Line 2: Sort · Filter · Group By ──────────────────────────────── */}
-      {(showSort || showFilter || showGroupBy || trailing) && (
-        <div className="flex w-full items-center gap-1.5 md:w-auto md:flex-1 md:gap-2">
-          {menuCount > 0 && (
-            // Equal thirds on a phone so the row spans the card; natural widths
-            // on desktop, where they share the line with the range controls.
-            <div className={cn('grid min-w-0 flex-1 items-center gap-1.5 md:flex md:flex-none md:gap-2', menuGridCls)}>
-              {showSort && (
-              <ResponsiveMenu
-                title="Sort"
-                value={sortValue}
-                active={sortApplied}
-                icon={<ArrowUpDown className="h-4 w-4" />}
-                description="Choose what to order this list by, and in which direction."
+          {filters ? (
+            filters
+          ) : showFilter ? (
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <ToolbarIconButton
+                  icon={<Filter />}
+                  tooltip={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : 'Filters'}
+                  variant="amber"
+                  isActive={filterOpen || activeFilterCount > 0}
+                  badge={activeFilterCount}
+                  badgeClassName="bg-orange-500 text-white"
+                />
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[300px] sm:w-[340px] border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
+                sideOffset={10}
+                align="end"
               >
-                {(close) => (
-                  <div className="flex flex-col gap-2">
-                    <ResponsiveMenuGroup label="Sort by">
-                      {sortFields.map((field) => (
-                        <ResponsiveMenuOption
-                          key={field}
-                          label={ROW_SORT_LABELS[field]}
-                          selected={sort!.by === field}
-                          onSelect={() => onSortChange!({ ...sort!, by: field })}
-                        />
-                      ))}
-                    </ResponsiveMenuGroup>
-                    <ResponsiveMenuGroup label="Direction">
-                      {(['asc', 'desc'] as SortDirection[]).map((dir) => (
-                        <ResponsiveMenuOption
-                          key={dir}
-                          label={SORT_DIRECTION_LABELS[sort!.by][dir]}
-                          selected={sort!.direction === dir}
-                          onSelect={() => {
-                            onSortChange!({ ...sort!, direction: dir });
-                            close();
-                          }}
-                        />
-                      ))}
-                    </ResponsiveMenuGroup>
+                <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
+                  <div className="p-4 max-h-[60vh] overflow-y-auto">
+                    {typeof filterContent === 'function' ? filterContent(() => setFilterOpen(false)) : filterContent}
                   </div>
-                )}
-              </ResponsiveMenu>
-            )}
-
-            {showFilter && (
-              <ResponsiveMenu
-                title="Filter"
-                icon={<Filter className="h-4 w-4" />}
-                activeCount={activeFilterCount}
-                description="Narrow this list down."
-                contentClassName="w-72"
-              >
-                {filterContent}
-              </ResponsiveMenu>
-            )}
-
-            {showGroupBy && (
-              <ResponsiveMenu
-                title="Group By"
-                value={activeGroupLabel}
-                active={groupApplied}
-                icon={<Layers className="h-4 w-4" />}
-                description="Bucket this list under headings."
-              >
-                {(close) => (
-                  <div className="flex flex-col gap-0.5" role="group" aria-label="Group by">
-                    {groupByOptions!.map((opt) => (
-                      <ResponsiveMenuOption
-                        key={opt.value}
-                        label={opt.label}
-                        selected={groupBy === opt.value}
-                        onSelect={() => {
-                          onGroupByChange!(opt.value);
-                          close();
-                        }}
-                      />
-                    ))}
+                  <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50">
+                    <span className="flex items-center gap-1">
+                      <kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">esc</kbd> Close
+                    </span>
                   </div>
-                )}
-              </ResponsiveMenu>
-              )}
-            </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : null}
+
+          {showGroupBy && (
+            <GroupBySelector
+              value={groupBy!}
+              onChange={onGroupByChange!}
+              options={groupByOptions!}
+              triggerVariant="icon"
+            />
           )}
 
           {trailing}
         </div>
-      )}
-    </div>
+      ) : undefined}
+    />
   );
 };
 
-export default EmployeeFunctionBar;

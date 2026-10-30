@@ -9,7 +9,8 @@
  *  - No Provider re-render cascade — components subscribe granularly
  *  - Selectors are composable and memoised at call-site
  *  - Date objects survive hydration via custom storage serialiser
- *  - Auth sync lives in a single useEffect in RosterUIProvider (not scattered)
+ *  - The place selection is written by ONE effect, in RostersPlannerPage,
+ *    from the scope filter — never seeded from the active contract
  *
  * Consumer API (backward-compatible with useRosterUI):
  *   const store = useRosterStore();
@@ -32,7 +33,7 @@ import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 export type CalendarView = 'day' | '3day' | 'week' | 'month';
 export type RosterMode = 'group' | 'people' | 'events' | 'roles';
-export type ComplianceFilterStatus = 'all' | 'compliant' | 'warning' | 'violation';
+type ComplianceFilterStatus = 'all' | 'compliant' | 'warning' | 'violation';
 
 export interface AdvancedFilters {
   roleId: string | null;
@@ -80,6 +81,7 @@ interface RosterState {
   isDnDModeActive: boolean;
   showUnfilledPanel: boolean;
   showFatigueHeatmap: boolean;
+  isFilterBarOpen: boolean;
   lastShiftMove: {
     shiftId: string;
     prevData: {
@@ -103,6 +105,7 @@ interface RosterState {
   setSelectedSubDepartmentId: (id: string | null) => void;
   setAdvancedFilters: (partial: Partial<AdvancedFilters>) => void;
   resetAdvancedFilters: () => void;
+  setIsFilterBarOpen: (open: boolean) => void;
   setBulkModeActive: (active: boolean) => void;
   setSelectedV8ShiftIds: (ids: Set<string>) => void;
   toggleShiftSelection: (id: string) => void;
@@ -123,8 +126,9 @@ interface RosterState {
 
 // ── Custom storage with Date serialisation ────────────────────────────────────
 // We store selectedDate as an ISO string in localStorage.
-// The _selectedDateISO field is intentionally NOT in the persist partialize
-// so it always starts as today (session state).
+// _selectedDateISO IS persisted (see partialize): a reload returns to the date
+// last viewed, not to today. Its initial value below is only the first-ever
+// default.
 
 const rosterStorage = createJSONStorage(() => localStorage);
 
@@ -143,16 +147,24 @@ export const useRosterStore = create<RosterState>()(
       bulkModeActive: false,
       selectedV8ShiftIds: new Set(),
 
-      // ── Session-only (today, not persisted) ────────────────────────────────
+      // ── Initial values (the date is restored from storage when present) ────
       _selectedDateISO: formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd'),
       isDnDModeActive: false,
       showUnfilledPanel: false,
       showFatigueHeatmap: false,
+      isFilterBarOpen: false,
       lastShiftMove: null,
 
       // ── Actions ────────────────────────────────────────────────────────────
       setViewType: (view) => set({ viewType: view }),
-      setActiveMode: (mode) => set({ activeMode: mode, selectedV8ShiftIds: new Set(), bulkModeActive: false }),
+      setActiveMode: (mode) => set({
+        activeMode: mode,
+        selectedV8ShiftIds: new Set(),
+        bulkModeActive: false,
+        // DnD does not exist in Events mode and its toggle is disabled there, so
+        // carrying it across left it on with no way off. End it on the way in.
+        ...(mode === 'events' ? { isDnDModeActive: false, showUnfilledPanel: false } : {}),
+      }),
       setBulkModeActive: (active) => set((s) => ({
         bulkModeActive: active,
         selectedV8ShiftIds: active ? s.selectedV8ShiftIds : new Set(),
@@ -193,6 +205,7 @@ export const useRosterStore = create<RosterState>()(
         isDnDModeActive: show ? s.isDnDModeActive : false,
       })),
       setShowFatigueHeatmap: (show) => set({ showFatigueHeatmap: show }),
+      setIsFilterBarOpen: (open) => set({ isFilterBarOpen: open }),
       setLastShiftMove: (move) => set({ lastShiftMove: move }),
       clearLastShiftMove: () => set({ lastShiftMove: null }),
 
@@ -291,12 +304,6 @@ export const useRosterStore = create<RosterState>()(
 // ── Derived / computed selectors ──────────────────────────────────────────────
 // Call these with useRosterStore(selectXxx) for granular subscriptions.
 
-/** The selected date as a real Date object. Derived from the ISO string. */
-// parseISO of the 'yyyy-MM-dd' calendar key yields local-midnight, so the
-// selected day never drifts a day west of GMT (new Date('yyyy-MM-dd') is
-// UTC-midnight and would).
-export const selectSelectedDate = (s: RosterState): Date =>
-  parseISO(s._selectedDateISO);
 
 /** Backward-compat: first selected department (single-select legacy API) */
 export const selectDepartmentId = (s: RosterState): string | null =>

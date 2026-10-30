@@ -1,0 +1,16 @@
+raise X to gamma: mirror Y gamma sub=true active=true
+X as gamma: shift.edit S1=t S2=f
+change X to delta: mirror delta dept=true sub=none
+lower X to alpha: mirror active=false events=granted,changed,revoked
+X as alpha: shift.edit S1=f
+B (beta S1, alpha S3): timesheet.view S1=t S3=f
+G2 with gamma S1 + S2: shift.edit S1=t S2=t typeYs=2 tree subs=2
+delete G2's S1 contract: mirror rows left=0, deleted events=1
+gamma sets access on a contract: refused(42501): Only an Administrator can set the access on a contract.
+certificate without a contract: refused(42501): Access is set on a contract, not issued as a certificate.
+end the last zeta contract: refused(23514): This contract carries the only Administrator access, so it can't have an end date: it would expire and leave nobody to manage access. Give another contract Administrator access first.
+beta with no sub-department: refused(23514): Team Lead access reaches the contract's sub-department, and this contract has none.
+Part-Time at 38h: refused(23514): Part-Time hours must be more than 0 and less than 38 a week (EBA cl 12.3(b)).
+Flexible Part-Time at 500h a year: refused(23514): Flexible Part-Time is engaged for 624 to 1,976 ordinary hours a year (EBA cl 12.4(a), 35.3(a)).
+Full-Time at 30h: refused(23514): Full-Time is 38 ordinary hours a week (EBA cl 12.2(b)).
+Casual given 38h: stored 0 (no contracted hours)

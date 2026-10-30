@@ -24,8 +24,10 @@ import { useGrossPay } from '../state/useGrossPay';
 import { GrossPayPeriodView } from './GrossPayPeriodView';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
+import { cn } from '@/modules/core/lib/utils';
 
-export interface GrossPayPageProps {
+interface GrossPayPageProps {
   /**
    * Optional fixed period bounds. When omitted the page shows its own
    * date-range selector (defaulting to the current Monday-anchored week).
@@ -44,7 +46,7 @@ function currentWeekBounds(): PeriodBounds {
   };
 }
 
-export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeNames }) => {
+const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeNames }) => {
   const [range, setRange] = useState<PeriodBounds>(() => bounds ?? currentWeekBounds());
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 
@@ -66,7 +68,7 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
   const periods = useMemo(() => data ?? [], [data]);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <PageLayout>
       {/* ── GOLD STANDARD HEADER ── */}
       <GoldStandardHeader
         title="Gross Pay"
@@ -77,47 +79,50 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
         isGammaLocked={isGammaLocked}
         functionBar={
           !controlled ? (
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={!approvedOnly}
-                  onChange={(e) => setApprovedOnly(!e.target.checked)}
-                  className="rounded border-slate-300 text-primary focus:ring-primary dark:border-white/15 dark:bg-slate-800"
-                />
-                Preview Unapproved
-              </label>
-              <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                From
-                <input
-                  type="date"
-                  value={range.periodStart}
-                  max={range.periodEnd}
-                  onChange={(e) =>
-                    setRange((r) => ({ ...r, periodStart: e.target.value }))
-                  }
-                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-white/15 dark:bg-slate-800 dark:text-white"
-                />
-              </label>
-              <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-                To
-                <input
-                  type="date"
-                  value={range.periodEnd}
-                  min={range.periodStart}
-                  onChange={(e) =>
-                    setRange((r) => ({ ...r, periodEnd: e.target.value }))
-                  }
-                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-white/15 dark:bg-slate-800 dark:text-white"
-                />
-              </label>
-            </div>
+            <ToolbarRow
+              // The period is this page's date control; previewing unapproved hours is an action on it.
+              modes={
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <label className={toolbar.field}>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">From</span>
+                    <input
+                      type="date"
+                      value={range.periodStart}
+                      max={range.periodEnd}
+                      onChange={(e) => setRange((r) => ({ ...r, periodStart: e.target.value }))}
+                      className="bg-transparent text-[16px] md:text-[11px] font-bold focus:outline-none"
+                    />
+                  </label>
+                  <label className={toolbar.field}>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">To</span>
+                    <input
+                      type="date"
+                      value={range.periodEnd}
+                      min={range.periodStart}
+                      onChange={(e) => setRange((r) => ({ ...r, periodEnd: e.target.value }))}
+                      className="bg-transparent text-[16px] md:text-[11px] font-bold focus:outline-none"
+                    />
+                  </label>
+                </div>
+              }
+              actions={
+                <label className={cn(toolbar.secondaryAction, 'cursor-pointer select-none', !approvedOnly && toolbar.secondaryActionOn)}>
+                  <input
+                    type="checkbox"
+                    checked={!approvedOnly}
+                    onChange={(e) => setApprovedOnly(!e.target.checked)}
+                    className="h-4 w-4 rounded accent-primary"
+                  />
+                  Preview Unapproved
+                </label>
+              }
+            />
           ) : undefined
         }
       />
 
       {/* ── Body (Gold Standard Glassmorphic Body Card) ── */}
-      <PageLayout.Body className="mx-4 lg:mx-6 mb-4 lg:mb-6">
+      <PageLayout.Body>
         <GrossPayPeriodView
           periods={periods}
           periodStart={effectiveBounds.periodStart}
@@ -127,7 +132,7 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
           error={error}
         />
       </PageLayout.Body>
-    </div>
+    </PageLayout>
   );
 };
 

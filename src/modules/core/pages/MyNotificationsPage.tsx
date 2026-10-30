@@ -1,4 +1,5 @@
 // src/modules/core/pages/MyNotificationsPage.tsx
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,10 +29,22 @@ import {
   type AppNotification
 } from '@/modules/core/hooks/useNotifications';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Input } from '@/modules/core/ui/primitives/input';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarRow, ToolbarSegmented, toolbar } from '@/modules/core/ui/components/Toolbar';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/modules/core/ui/primitives/dropdown-menu';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
+import { text } from '@/modules/core/ui/typography';
 import { pageVariants, itemVariants, listItemSpring } from '@/modules/core/ui/motion/presets';
 import { normalizeNotificationEventType } from '@/platform/notifications/notificationPolicy';
 
@@ -104,11 +117,29 @@ const MyNotificationsPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
+  // Category filter (Shifts, Bids, Swaps…). Empty = every category.
+  const [groups, setGroups] = useState<ReadonlySet<string>>(new Set());
+
+  /** The categories actually present, so the menu never offers an empty one. */
+  const availableGroups = useMemo(
+    () => [...new Set(notifications.map(n => getMeta(n.type).group))].sort(),
+    [notifications],
+  );
+
+  const toggleGroup = (g: string) =>
+    setGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g); else next.add(g);
+      return next;
+    });
 
   const filteredNotifications = useMemo(() => {
     let list = notifications;
     if (activeTab === 'unread') {
       list = list.filter(n => !n.read_at);
+    }
+    if (groups.size > 0) {
+      list = list.filter(n => groups.has(getMeta(n.type).group));
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -118,7 +149,7 @@ const MyNotificationsPage: React.FC = () => {
       );
     }
     return list;
-  }, [notifications, activeTab, searchQuery]);
+  }, [notifications, activeTab, searchQuery, groups]);
 
   const groupedNotifications = useMemo(() => {
     const groups: { title: string; items: AppNotification[] }[] = [
@@ -149,87 +180,95 @@ const MyNotificationsPage: React.FC = () => {
   const { isDark } = useTheme();
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <PageLayout>
       <GoldStandardHeader
         title="My Notifications"
         Icon={Bell}
-        rightActions={
-          unreadCount > 0 && (
-            <Button
-              onClick={markAllRead}
-              variant="link"
-              size="sm"
-              className="text-primary font-semibold hover:no-underline px-0 text-[10px] uppercase tracking-widest"
-            >
-              Mark all as read
-            </Button>
-          )
-        }
         functionBar={
-          <div className="flex flex-col lg:flex-row items-center gap-4 w-full">
-            <div className={cn(
-              "flex p-1 rounded-xl w-full lg:w-auto",
-              isDark ? "bg-black/20" : "bg-white/60 border border-slate-200/50 shadow-inner"
-            )}>
-              <button
-                onClick={() => setActiveTab('all')}
-                className={cn(
-                  "flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg px-6 text-[10px] font-black uppercase tracking-widest transition-all lg:flex-none",
-                  activeTab === 'all'
-                    ? "bg-primary text-white shadow-lg shadow-primary/20"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                All ({notifications.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('unread')}
-                className={cn(
-                  "flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg px-6 text-[10px] font-black uppercase tracking-widest transition-all lg:flex-none",
-                  activeTab === 'unread'
-                    ? "bg-primary text-white shadow-lg shadow-primary/20"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Unread {unreadCount > 0 && `(${unreadCount})`}
-              </button>
-            </div>
-
-            <div className={cn(
-              "flex-1 flex items-center gap-2 w-full lg:w-auto p-1 rounded-xl",
-              isDark ? "bg-black/20" : "bg-white/60 border border-slate-200/50 shadow-inner"
-            )}>
-              <div className="pl-3 text-muted-foreground/40">
-                <Search className="h-4 w-4" />
-              </div>
-              <Input
-                placeholder="SEARCH NOTIFICATIONS..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="min-h-[44px] flex-1 border-0 bg-transparent text-[11px] font-black uppercase tracking-widest shadow-none focus:ring-0"
+          <ToolbarRow
+            views={
+              <ToolbarSegmented<'all' | 'unread'>
+                value={activeTab}
+                onValueChange={setActiveTab}
+                options={[
+                  { id: 'all', label: 'All', count: notifications.length },
+                  { id: 'unread', label: 'Unread', count: unreadCount },
+                ]}
+                itemAriaLabel={(label) => `${label} notifications`}
               />
-            </div>
-
-            <Button
-              variant="outline"
-              className={cn(
-                "min-h-[44px] w-full justify-center rounded-xl border-0 px-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all lg:w-auto",
-                isDark ? "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white" : "bg-white/60 text-slate-900/40 hover:bg-white hover:text-slate-900 border border-slate-200/50"
+            }
+            actions={<>
+              <label className={toolbar.search}>
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <input
+                  type="search"
+                  aria-label="Search notifications"
+                  placeholder="Search notifications..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={toolbar.searchInput}
+                />
+              </label>
+              {unreadCount > 0 && (
+                <button type="button" onClick={markAllRead} className={toolbar.secondaryAction}>
+                  Mark all as read
+                </button>
               )}
-            >
-              <Filter className="h-3.5 w-3.5 mr-2" />
-              FILTERS
-            </Button>
-          </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={groups.size > 0 ? `Filters, ${groups.size} selected` : 'Filters'}
+                    className={cn(toolbar.secondaryAction, groups.size > 0 && toolbar.secondaryActionOn)}
+                  >
+                    <Filter className="h-3.5 w-3.5" aria-hidden="true" />
+                    Filters
+                    {groups.size > 0 && (
+                      <span className="rounded-full bg-primary px-1.5 text-[11px] font-bold tabular-nums text-primary-foreground">
+                        {groups.size}
+                      </span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[220px]">
+                  <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Show categories
+                  </DropdownMenuLabel>
+                  {availableGroups.length === 0 ? (
+                    <p className="px-2 py-2 text-[13px] text-muted-foreground">No notifications yet.</p>
+                  ) : (
+                    availableGroups.map(g => (
+                      <DropdownMenuCheckboxItem
+                        key={g}
+                        checked={groups.has(g)}
+                        onCheckedChange={() => toggleGroup(g)}
+                        // Keep the menu open so several categories can be picked in a row.
+                        onSelect={(e) => e.preventDefault()}
+                        className="min-h-[44px] text-[13px]"
+                      >
+                        {g}
+                      </DropdownMenuCheckboxItem>
+                    ))
+                  )}
+                  {groups.size > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => setGroups(new Set())} className="min-h-[44px] text-[13px]">
+                        Clear filters
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>}
+          />
         }
       />
 
       {/* ── BODY ── */}
       <div className={cn(
-          "flex-1 min-h-0 overflow-auto mx-4 lg:mx-6 mb-4 lg:mb-6 rounded-[32px] transition-all border p-4 lg:p-6 scrollbar-none",
-          isDark
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+          "flex-1 min-h-0 overflow-auto p-4 lg:p-6 scrollbar-none",
+          surface.bodyCard
         )}>
           {loading ? (
             <div className="space-y-4">
@@ -238,17 +277,19 @@ const MyNotificationsPage: React.FC = () => {
               ))}
             </div>
           ) : filteredNotifications.length === 0 ? (
-            <motion.div
-              variants={itemVariants}
-              className="flex flex-col items-center justify-center py-24 text-center opacity-70"
-            >
-              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-                <Inbox className="h-10 w-10 text-primary/40" />
-              </div>
-              <h3 className="text-xl font-black uppercase tracking-widest text-foreground/80">You're all caught up</h3>
-              <p className="text-muted-foreground max-w-sm mt-1 text-sm">
-                No notifications found. Enjoy your productive workspace!
-              </p>
+            <motion.div variants={itemVariants}>
+              {/* A narrowed list is not an empty inbox — say which it is. */}
+              {groups.size > 0 || searchQuery.trim() || activeTab === 'unread' ? (
+                <PageState
+                  state="empty"
+                  icon={Inbox}
+                  title="No notifications match"
+                  description="Try another category, tab or search."
+                  action={groups.size > 0 ? { label: 'Clear filters', onClick: () => setGroups(new Set()) } : undefined}
+                />
+              ) : (
+                <PageState state="empty" icon={Inbox} title="You're all caught up" description="New notifications will appear here." />
+              )}
             </motion.div>
           ) : (
             <motion.div variants={pageVariants} className="flex flex-col gap-4 pb-12">
@@ -295,20 +336,20 @@ const MyNotificationsPage: React.FC = () => {
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-3 flex-wrap">
                                   <h4 className={cn(
-                                    "text-sm font-black uppercase tracking-wider",
+                                    "text-[13px] font-black uppercase tracking-wider",
                                     isUnread ? "text-foreground" : "text-muted-foreground"
                                   )}>
                                     {n.title}
                                   </h4>
                                   <span className={cn(
-                                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm",
+                                    "text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm",
                                     BADGE_CLASSES[meta.tone]
                                   )}>
                                     {meta.label}
                                   </span>
                                 </div>
                                 <p className={cn(
-                                  "text-sm leading-relaxed",
+                                  "text-[13px] leading-relaxed",
                                   isUnread ? "font-medium text-foreground/90" : "text-muted-foreground/80"
                                 )}>
                                   {n.message}
@@ -316,12 +357,12 @@ const MyNotificationsPage: React.FC = () => {
                               </div>
 
                               <div className="flex items-center gap-4 mt-3">
-                                <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-widest">
+                                <span className="text-[11px] font-black text-muted-foreground/40 uppercase tracking-widest">
                                   {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                                 </span>
 
                                 {n.link && (
-                                  <button className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline transition-all flex items-center gap-1">
+                                  <button className="text-[11px] font-black uppercase tracking-widest text-primary hover:underline transition-all flex items-center gap-1">
                                     VIEW DETAILS <ArrowRight className="h-3 w-3" />
                                   </button>
                                 )}
@@ -360,7 +401,7 @@ const MyNotificationsPage: React.FC = () => {
       </div>
 
       {/* Footer Info */}
-      <div className="hidden md:flex items-center justify-between text-muted-foreground/30 text-[9px] font-black uppercase tracking-widest px-4 lg:px-6 pb-4">
+      <PageLayout.Footer className={cn(surface.footerBar, 'hidden md:flex', text.overline)}>
         <p>Notifications are archived after 7 days</p>
         <div className="flex items-center gap-4">
           {(['Shifts', 'Bids', 'Swaps', 'Messages'] as const).map(kind => (
@@ -372,8 +413,8 @@ const MyNotificationsPage: React.FC = () => {
             </span>
           ))}
         </div>
-      </div>
-    </div>
+      </PageLayout.Footer>
+    </PageLayout>
   );
 };
 

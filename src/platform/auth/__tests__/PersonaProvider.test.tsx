@@ -50,10 +50,17 @@ function cert(type: 'X' | 'Y', level: AccessLevel): AccessCertificate {
     } as AccessCertificate;
 }
 
+// Mirrors accessSuites.allows: the Personal suite follows a Type X certificate
+// (or a contract, which these users don't have); the employer features follow
+// the flag; the Admin suite follows a zeta certificate.
 function setUser(certs: AccessCertificate[], employerFeatures = false, highest: AccessLevel = 'alpha') {
     authMocks.user = { certificates: certs, highestAccessLevel: highest };
+    const personal = certs.some((c) => c.certificateType === 'X');
+    const zeta = certs.some((c) => c.accessLevel === 'zeta');
     authMocks.hasPermission = (f: string) =>
-        employerFeatures && ['templates', 'rosters', 'timesheet-view', 'management', 'broadcast', 'insights'].includes(f);
+        (f === 'my-roster' && personal)
+        || (employerFeatures && ['templates', 'rosters', 'timesheet-view', 'management', 'broadcast', 'insights'].includes(f))
+        || (zeta && ['labor-demand', 'users', 'compliance'].includes(f));
 }
 
 const Probe: React.FC = () => {
@@ -114,14 +121,21 @@ describe('PersonaProvider', () => {
     });
 
     // Production's actual shape: the only Type Y holder has no Type X.
-    it('falls back to alpha in employee mode when the user holds no Type X', () => {
+    // Access suites (2026-10-14): the employee hat is the Personal suite, held
+    // through a Type X certificate or a contract. A manager with neither — the
+    // production shape above — has only the employer hat, so there is nothing
+    // to toggle to and no empty personal pages to land on.
+    it('offers no employee hat to a manager with no Type X and no contract', () => {
         setUser([cert('Y', 'epsilon')], true);
         renderProbe();
 
+        expect(screen.getByTestId('persona').textContent).toBe('employer');
+        expect(screen.getByTestId('can-switch').textContent).toBe('false');
+
         act(() => { screen.getByText('toggle').click(); });
 
-        expect(screen.getByTestId('persona').textContent).toBe('employee');
-        expect(screen.getByTestId('level').textContent).toBe('alpha');
+        expect(screen.getByTestId('persona').textContent).toBe('employer');
+        expect(screen.getByTestId('level').textContent).toBe('epsilon');
     });
 
     // canSwitch is hasPermission, NOT "holds a Type Y" — a user can hold
@@ -178,7 +192,7 @@ describe('PersonaProvider', () => {
 
         // Permissions land.
         act(() => {
-            setUser([cert('Y', 'epsilon')], true, 'epsilon');
+            setUser([cert('X', 'alpha'), cert('Y', 'epsilon')], true, 'epsilon');
         });
         rerender(
             <PersonaProvider>
@@ -265,7 +279,12 @@ describe('personaForPath', () => {
         expect(personaForPath('/management/bids')).toBe('employer');
         expect(personaForPath('/insights/fill-rate')).toBe('employer');
         expect(personaForPath('/team-availability')).toBe('employer');
-        expect(personaForPath('/users')).toBe('employer');
+    });
+
+    it('reads the admin persona off an admin surface', () => {
+        expect(personaForPath('/users')).toBe('admin');
+        expect(personaForPath('/labor-demand')).toBe('admin');
+        expect(personaForPath('/compliance/rejections')).toBe('admin');
     });
 
     it('reads the employee persona off an employee surface', () => {
@@ -341,5 +360,35 @@ describe('PersonaRouteSync', () => {
 
         expect(screen.getByTestId('persona').textContent).toBe('employee');
         expect(localStorage.getItem('shiftopia.persona')).not.toBe('employer');
+    });
+
+    it('adopts the admin persona when landing on an admin page', () => {
+        localStorage.setItem('shiftopia.persona', 'employer');
+        setUser([cert('X', 'alpha'), cert('Y', 'zeta')], true, 'zeta');
+
+        renderAt('/users');
+
+        expect(screen.getByTestId('persona').textContent).toBe('admin');
+        expect(localStorage.getItem('shiftopia.persona')).toBe('admin');
+    });
+});
+
+describe('Admin mode resolvePersonaRoute', () => {
+    it('maps to admin fallback route when switching to admin', () => {
+        expect(resolvePersonaRoute('/my-roster', 'admin')).toBe('/labor-demand');
+        expect(resolvePersonaRoute('/rosters', 'admin')).toBe('/labor-demand');
+        expect(resolvePersonaRoute('/users', 'admin')).toBe('/users');
+    });
+
+    it('maps from admin routes to employer counterpart or fallback', () => {
+        expect(resolvePersonaRoute('/labor-demand', 'employer')).toBe('/rosters');
+        expect(resolvePersonaRoute('/users', 'employer')).toBe('/rosters');
+        expect(resolvePersonaRoute('/compliance/rejections', 'employer')).toBe('/rosters');
+    });
+
+    it('maps from admin routes to employee fallback', () => {
+        expect(resolvePersonaRoute('/labor-demand', 'employee')).toBe('/my-roster');
+        expect(resolvePersonaRoute('/users', 'employee')).toBe('/my-roster');
+        expect(resolvePersonaRoute('/compliance/rejections', 'employee')).toBe('/my-roster');
     });
 });

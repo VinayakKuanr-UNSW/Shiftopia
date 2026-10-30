@@ -13,7 +13,6 @@
  */
 
 import React, { useMemo } from 'react';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Clock, DollarSign, Users, BarChart3 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import type { Shift } from '../../domain/shift.entity';
@@ -29,7 +28,7 @@ import {
 // TYPES
 // ============================================================================
 
-export interface GroupStatsSummaryProps {
+interface GroupStatsSummaryProps {
     shifts: Shift[];
     className?: string;
     /** Compact mode shows fewer stats (for narrow headers) */
@@ -62,7 +61,7 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     compact = false,
 }) => {
     const stats = useMemo((): GroupStats => {
-        const activeShifts = shifts.filter((s) => !s.is_cancelled && !s.deleted_at);
+        const activeShifts = shifts.filter((s) => !s.is_cancelled);
         const assigned = activeShifts.filter((s) => s.assigned_employee_id);
         const unassigned = activeShifts.filter((s) => !s.assigned_employee_id);
 
@@ -104,7 +103,7 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
 
     if (compact) {
         return (
-            <div className={cn('flex items-center gap-3 text-xs', className)}>
+            <div className={cn('flex items-center gap-3 text-[11px]', className)}>
                 <span className="text-emerald-400 font-medium">{stats.totalHours.toFixed(0)}h</span>
                 <span className="text-white/40">|</span>
                 <span className="text-white/70">
@@ -116,7 +115,7 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     }
 
     return (
-        <div className={cn('flex items-center gap-4 text-xs', className)}>
+        <div className={cn('flex items-center gap-4 text-[11px]', className)}>
             {/* Shift count */}
             <div className="flex items-center gap-1.5">
                 <BarChart3 className="h-3.5 w-3.5 text-white/50" />
@@ -148,38 +147,38 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
                     </TooltipTrigger>
                     <TooltipContent className="w-56 p-3 bg-zinc-900 border-white/10 shadow-xl" side="bottom">
                         <div className="space-y-2">
-                            <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Labour Cost Breakdown</p>
+                            <p className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">Labour Cost Breakdown</p>
                             <div className="space-y-1.5">
-                                <div className="flex justify-between text-xs">
+                                <div className="flex justify-between text-[11px]">
                                     <span className="text-white/60">Base Pay</span>
                                     <span className="text-white font-medium">{formatCost(stats.breakdown.base)}</span>
                                 </div>
-                                <div className="flex justify-between text-xs">
+                                <div className="flex justify-between text-[11px]">
                                     <span className="text-white/60">Penalties (Sat/Sun/Night)</span>
                                     <span className="text-emerald-400 font-medium">+{formatCost(stats.breakdown.penalty)}</span>
                                 </div>
-                                <div className="flex justify-between text-xs">
+                                <div className="flex justify-between text-[11px]">
                                     <span className="text-white/60">Overtime</span>
                                     <span className="text-amber-400 font-medium">+{formatCost(stats.breakdown.overtime)}</span>
                                 </div>
                                 {stats.breakdown.allowance > 0 && (
-                                    <div className="flex justify-between text-xs">
+                                    <div className="flex justify-between text-[11px]">
                                         <span className="text-white/60">Allowances</span>
                                         <span className="text-blue-400 font-medium">+{formatCost(stats.breakdown.allowance)}</span>
                                     </div>
                                 )}
                                 {stats.breakdown.leave > 0 && (
-                                    <div className="flex justify-between text-xs">
+                                    <div className="flex justify-between text-[11px]">
                                         <span className="text-white/60">Leave Loading</span>
                                         <span className="text-purple-400 font-medium">+{formatCost(stats.breakdown.leave)}</span>
                                     </div>
                                 )}
-                                <div className="pt-2 border-t border-white/10 flex justify-between text-sm font-bold">
+                                <div className="pt-2 border-t border-white/10 flex justify-between text-[13px] font-bold">
                                     <span className="text-white">Total Estimate</span>
                                     <span className="text-white">{formatCost(stats.estimatedCost)}</span>
                                 </div>
                             </div>
-                            <p className="text-[10px] text-white/30 italic mt-2 leading-tight">
+                            <p className="text-[11px] text-white/30 italic mt-2 leading-tight">
                                 Estimates based on MA000080 Award interpretation rules.
                             </p>
                         </div>
@@ -197,4 +196,3 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     );
 };
 
-export default GroupStatsSummary;

@@ -2,21 +2,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
-import { Plus, FileText, Loader2, AlertCircle, Building2, Factory, Network, ArrowRight } from 'lucide-react';
+import { Plus, FileText, Loader2, AlertCircle, Building2, Factory, Network } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import { validateTemplateName, sanitizeTemplateName } from '@/modules/templates/model/templates.types';
-import { format, addMonths, startOfMonth } from 'date-fns';
 import { shiftsApi as enhancedShiftService } from '@/modules/rosters';
 import { supabase } from '@/platform/supabase/client';
 
@@ -52,15 +44,11 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedSubDeptId, setSelectedSubDeptId] = useState<string>('');
-  const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
-  const [isLoadingDepts, setIsLoadingDepts] = useState(false);
-  const [isLoadingSubDepts, setIsLoadingSubDepts] = useState(false);
+  const [, setIsLoadingOrgs] = useState(false);
+  const [, setIsLoadingDepts] = useState(false);
+  const [, setIsLoadingSubDepts] = useState(false);
 
   // Generation options (Current month + 24 future months)
-  const years = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    return [currentYear, currentYear + 1, currentYear + 2];
-  }, []);
 
   const { activeContract, user } = useAuth();
 
@@ -339,7 +327,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   const getSubDeptName = () => subDepartments.find(sd => sd.id === selectedSubDeptId)?.name || '...';
 
   return (
-    <ResponsiveDialog open={isOpen} onOpenChange={handleClose} dialogClassName="bg-card border-border p-0 overflow-hidden sm:max-w-[760px] shadow-2xl">
+    <ResponsiveDialog open={isOpen} onOpenChange={handleClose} dialogClassName="bg-card p-0 overflow-hidden" size="xl">
       <ResponsiveDialog.Header className="sr-only">
         <ResponsiveDialog.Title>Create Template</ResponsiveDialog.Title>
         <ResponsiveDialog.Description>Configure your new template skeleton</ResponsiveDialog.Description>
@@ -353,11 +341,11 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
             <div className="relative z-10 flex flex-col h-full">
               <div className="mb-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary uppercase tracking-widest mb-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[11px] font-bold text-primary uppercase tracking-widest mb-4">
                   Scope Context
                 </div>
-                <h3 className="text-2xl font-bold text-foreground tracking-tight">Hierarchy</h3>
-                <p className="text-muted-foreground text-sm mt-1">This template will be bound to the selected context.</p>
+                <h3 className="text-[20px] font-bold text-foreground tracking-tight">Hierarchy</h3>
+                <p className="text-muted-foreground text-[13px] mt-1">This template will be bound to the selected context.</p>
               </div>
 
               <div className="space-y-4 flex-1">
@@ -372,10 +360,10 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                         <item.icon className={cn("h-6 w-6", item.color)} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">
+                        <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">
                           {item.label}
                         </Label>
-                        <div className="text-sm font-semibold text-foreground truncate pr-2">
+                        <div className="text-[13px] font-semibold text-foreground truncate pr-2">
                           {item.value}
                         </div>
                       </div>
@@ -387,7 +375,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                 ))}
               </div>
 
-              <div className="mt-8 flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
+              <div className="mt-8 flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                 Prefilled from Global Scope
               </div>
@@ -399,14 +387,14 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
             <div className="flex-1">
               <div className="flex items-center justify-between mb-8">
                 <div>
-                  <h3 className="text-xl font-bold text-foreground tracking-tight">Template Details</h3>
-                  <p className="text-muted-foreground text-sm mt-1">Configure your new template skeleton.</p>
+                  <h3 className="text-[17px] font-bold text-foreground tracking-tight">Template Details</h3>
+                  <p className="text-muted-foreground text-[13px] mt-1">Configure your new template skeleton.</p>
                 </div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <Label htmlFor="name" className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                     Template Name <span className="text-primary font-black">*</span>
                   </Label>
                   <Input
@@ -433,7 +421,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  <Label htmlFor="description" className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                     Description <span className="text-muted-foreground/50">(optional)</span>
                   </Label>
                   <Textarea
@@ -441,7 +429,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Identify the specific peaks and roles this template addresses..."
-                    className="bg-background border-border text-foreground min-h-[120px] p-4 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none placeholder:text-muted-foreground/50 font-medium text-sm leading-relaxed"
+                    className="bg-background border-border text-foreground min-h-[120px] p-4 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none placeholder:text-muted-foreground/50 font-medium text-[13px] leading-relaxed"
                   />
                 </div>
 
@@ -452,10 +440,10 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                       <FileText className="h-5 w-5 text-primary" />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold text-primary uppercase tracking-widest block">
+                      <Label className="text-[11px] font-bold text-primary uppercase tracking-widest block">
                         Auto-Seeding
                       </Label>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
                         Created with core shifts for <span className="text-foreground">Convention</span>, <span className="text-foreground">Exhibition</span>, <span className="text-foreground">Theatre</span>, <span className="text-foreground">The Cutaway</span>, and <span className="text-foreground">Office</span>.
                       </p>
                     </div>
@@ -484,7 +472,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                 type="submit"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="flex-[1.5] h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black tracking-widest shadow-lg shadow-primary/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 uppercase text-xs"
+                className="flex-[1.5] h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black tracking-widest shadow-lg shadow-primary/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 uppercase text-[11px]"
               >
                 {isCreating ? (
                   <>

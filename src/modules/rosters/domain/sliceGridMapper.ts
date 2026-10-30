@@ -30,7 +30,7 @@ import { SLOT_MINUTES, SLOT_DURATION_MINUTES } from './shiftSynthesizer.policy';
 import type { RuleBaselineCell } from './ruleEngine.types';
 
 /** Midnight-anchored minutes for the start of a 30-min slice (0..47). */
-export function sliceIdxToMidnightMinutes(sliceIdx: number): number {
+function sliceIdxToMidnightMinutes(sliceIdx: number): number {
     return sliceIdx * 30;
 }
 
@@ -61,7 +61,7 @@ export function synthSlotToSliceIdx(slotIdx: number): number | null {
     return Math.floor(midnightMinutes / 30);
 }
 
-export interface SynthSlotHeadcount {
+interface SynthSlotHeadcount {
     /** Synthesizer slot index (0..39). */
     slotIdx: number;
     /** Minutes since midnight for the slot start (from SLOT_MINUTES). */
@@ -71,7 +71,7 @@ export interface SynthSlotHeadcount {
     explanation: string[];
 }
 
-export interface L3SynthMappingResult {
+interface L3SynthMappingResult {
     slots: SynthSlotHeadcount[];
     droppedPreDawn: Array<{ slice_idx: number; headcount: number; function_code: string; level: number }>;
 }

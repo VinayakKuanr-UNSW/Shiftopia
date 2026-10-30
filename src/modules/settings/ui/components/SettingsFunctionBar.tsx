@@ -6,11 +6,10 @@ import {
   Bell,
   CreditCard,
   Link,
-  ChevronRight,
   DollarSign,
 } from "lucide-react";
 import { cn } from "@/modules/core/lib/utils";
-import { useTheme } from "@/modules/core/contexts/ThemeContext";
+import { ToolbarRow, ToolbarSegmented, toolbar } from "@/modules/core/ui/components/Toolbar";
 import { useTranslation } from "react-i18next";
 
 interface SettingsFunctionBarProps {
@@ -28,7 +27,6 @@ export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
   showPayRates,
 }) => {
   const { t } = useTranslation();
-  const { isDark } = useTheme();
 
   const sections = [
     { id: "profile", label: t("settings.profile"), icon: User },
@@ -41,56 +39,27 @@ export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
   ];
 
   return (
-    <div
-      className={cn(
-        "w-full transition-all overflow-visible sm:overflow-hidden",
-        !transparent &&
-          (isDark
-            ? "bg-[#111827]/40"
-            : "bg-white/40 shadow-sm border border-white/20"),
-        !transparent && "rounded-2xl p-1.5",
-      )}
-    >
-      <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-row sm:items-center sm:overflow-x-auto sm:scrollbar-none sm:py-0.5">
-        {sections.map((section) => {
-          const Icon = section.icon;
-          const isActive = activeSection === section.id;
-
-          return (
-            <button
-              key={section.id}
-              onClick={() => onSectionChange(section.id)}
-              className={cn(
-                "flex min-w-0 items-center justify-center gap-1.5 h-10 lg:h-11 px-2 sm:px-4 rounded-xl text-[9px] sm:text-[10px] lg:text-[11px] font-black transition-all uppercase tracking-widest sm:flex-shrink-0",
-                isActive
-                  ? isDark
-                    ? "bg-primary text-white shadow-lg shadow-primary/20"
-                    : "bg-primary text-white shadow-md shadow-primary/20"
-                  : isDark
-                    ? "bg-[#111827]/60 text-white/40 hover:text-white hover:bg-[#1c2333]"
-                    : "bg-white/60 text-slate-900/40 hover:text-slate-900 hover:bg-white border border-slate-200/50",
-              )}
-            >
-              <Icon
-                className={cn(
-                  "h-3.5 w-3.5 lg:h-4 lg:w-4",
-                  isActive ? "text-white" : "opacity-50",
-                )}
-              />
-              <span className="min-w-0 truncate">{section.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Right side info/status if needed */}
-      <div className="hidden md:flex items-center gap-3 px-3">
-        <div className="h-6 w-px bg-border/20 mx-1" />
-        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]"></span>
+    <ToolbarRow
+      className={cn(!transparent && toolbar.standalone)}
+      views={
+        <ToolbarSegmented
+          value={activeSection}
+          onValueChange={onSectionChange}
+          options={sections.map((section) => ({
+            id: section.id,
+            label: section.label,
+            icon: <section.icon className="h-3.5 w-3.5" aria-hidden="true" />,
+          }))}
+          itemAriaLabel={(label) => `${label} settings`}
+          label="Settings section"
+        />
+      }
+      actions={
+        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
           <span>Status: Verified</span>
         </div>
-      </div>
-    </div>
+      }
+    />
   );
 };

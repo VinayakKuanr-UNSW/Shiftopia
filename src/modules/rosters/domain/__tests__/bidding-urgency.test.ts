@@ -14,7 +14,6 @@ import {
   computeTTS,
   isOnBidding,
   isBiddingUrgent,
-  ShiftUrgency,
 } from '../bidding-urgency';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 

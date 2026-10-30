@@ -7,7 +7,7 @@ import { useMemo } from 'react';
  * Shared shape consumed by the Roster Planner stats footer.
  * Another agent depends on this exact interface — do not deviate.
  */
-export interface RosterPlannerStats {
+interface RosterPlannerStats {
     totalShifts: number;
     assignedShifts: number;
     openShifts: number;

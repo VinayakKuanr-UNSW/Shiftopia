@@ -46,12 +46,10 @@ export const LeaveCardDialog: React.FC<{
     <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
             hideClose
-            className={cn(
-                'flex max-h-[92dvh] w-[calc(100%-2rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-3xl border-0 bg-background p-0 sm:rounded-3xl',
-                className,
-            )}
+            size="lg"
+            className={cn('flex flex-col gap-0 overflow-hidden border-0 p-0', className)}
         >
-            <div className={cn('flex min-h-0 flex-1 flex-col rounded-3xl border',
+            <div className={cn('flex min-h-0 flex-1 flex-col rounded-2xl border',
                 kind ? LEDGER_TONE[kind] : 'border-border bg-card')}>
                 {children}
                 {footer && (

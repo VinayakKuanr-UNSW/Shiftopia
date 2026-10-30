@@ -433,8 +433,6 @@ planning/
 ### Specialized Module: `compliance`
 ```
 compliance/
-├── api/
-│   └── compliance.api.ts
 ├── engine/
 │   ├── engine.ts
 │   ├── types.ts
@@ -445,12 +443,6 @@ compliance/
 │   ├── max-daily-hours.ts
 │   ├── min-rest-gap.ts
 │   └── student-visa-48h.ts
-├── hooks/
-│   └── useCompliance.ts
-├── ui/
-│   └── components/
-│       ├── ComplianceBadge.tsx
-│       └── ComplianceModal.tsx
 └── index.ts
 ```
 

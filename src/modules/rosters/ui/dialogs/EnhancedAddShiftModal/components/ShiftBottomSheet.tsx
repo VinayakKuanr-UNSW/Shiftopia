@@ -240,4 +240,3 @@ export const ShiftBottomSheet: React.FC<ShiftBottomSheetProps> = ({
     return typeof document === 'undefined' ? sheet : createPortal(sheet, document.body);
 };
 
-export default ShiftBottomSheet;

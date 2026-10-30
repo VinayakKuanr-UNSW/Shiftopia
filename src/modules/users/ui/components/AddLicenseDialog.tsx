@@ -143,7 +143,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                     {isVisa ? 'Add Work Rights' : 'Add License'}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border-border text-foreground shadow-xl shadow-black/5 dark:shadow-black/20">
+            <DialogContent className="w-[calc(100vw-2rem)] bg-card text-foreground dark:shadow-black/20" size="md">
                 <DialogHeader>
                     <DialogTitle>{isVisa ? 'Add Work Rights' : 'Add License'}</DialogTitle>
                     <DialogDescription>
@@ -169,7 +169,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                     {/* Dates Grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label className="text-muted-foreground text-xs font-bold">Issue Date <span className="text-red-500">*</span></Label>
+                            <Label className="text-muted-foreground text-[11px] font-bold">Issue Date <span className="text-red-500">*</span></Label>
                             <div className="relative">
                                 <Input
                                     type="date"
@@ -181,7 +181,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-muted-foreground text-xs font-bold">Expiry Date <span className="text-red-500">*</span></Label>
+                            <Label className="text-muted-foreground text-[11px] font-bold">Expiry Date <span className="text-red-500">*</span></Label>
                             <div className="relative">
                                 <Input
                                     type="date"

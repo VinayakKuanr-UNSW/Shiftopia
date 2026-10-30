@@ -50,8 +50,8 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 | Bulk unassign | Roster | gateway op `unassign` | UNASSIGN | ✗ | ✗ |
 | Cancel shift | Planner card → Cancel | `sm_manager_cancel` | CANCEL | ✗ | ✗ |
 | Unpublish | Card / bulk | `sm_unpublish_shift` | → Draft (not a removal) | client only | — |
-| Delete roster sub-group | Roster sub-group menu | `delete_roster_subgroup_v2` | HARD, all its shifts | ✗ | ✗ |
-| Clear / undo a template application | Templates, roster | `sm_clear_template_application`, `undo_template_batch` | HARD | ✗ | ✗ |
+| Delete roster sub-group | Roster sub-group menu (confirm shows a dry run) | `delete_roster_subgroup_v2` | HARD, unstarted shifts of that group and sub-department only (since 2026-10-17; was every same-named shift on the roster) | ✓ days before today untouched; started shifts kept | ✗ |
+| Clear / undo a template application | Roster → Templates → Recent applications → Undo (confirm shows a dry run) | `undo_template_batch`; `sm_clear_template_application` has no caller | HARD, that application's unstarted shifts, plus sub-groups it empties (since 2026-10-17) | ✓ started shifts kept | ✗ |
 | Delete template's shifts | Templates | `delete_template_shifts_cascade` | HARD | ✗ | ✗ |
 | Delete template's shifts (client) | `shiftsCommands.deleteShiftsByTemplateId` | direct `DELETE` | HARD | ✗ | ✗ — no UI caller found |
 | Bulk delete (repo layer) | `deleteShift.command` → `shiftsRepo.bulkDeleteShifts` | direct `DELETE … IN (ids)` | HARD | ✗ | ✗ — exported, no UI caller found |
@@ -81,7 +81,7 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 |---|---|---|---|
 | Dead-shift cleanup | `*/10 * * * *` | `cleanup_dead_shifts_batch` | HARD + archive — **broken since 4 Aug (J)** |
 | Offer expiry | `*/5 * * * *` | `fn_process_offer_expirations` | → Draft |
-| Shift timers / state processor | every 1 / 15 min | `process_shift_timers`, `sm_run_state_processor` | state moves (bidding timeout, trade expiry) |
+| Shift timers | every minute | `process_shift_timers` | state moves (offer, bidding and swap expiry; start; complete; no-show; 12.5h auto clock-out) |
 | Test harness | manual | `test_*`, `cleanup_test_shifts` | HARD — **callable by any user (F)** |
 
 ---
@@ -92,7 +92,7 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 |---|---|---|
 | **Archive** — `deleted_shifts` + `_archive_shift_before_delete` | Copy of a shift at deletion. Nothing in the app reads it. | **Yes.** Nothing reads it. |
 | **Shift History UI** — `ShiftHistoryTimeline` (card History toggle, Drill-down) + `get_shift_event_timeline` | The audit view over `shift_events`. | **Yes**, UI + read RPC. |
-| **`shift_events` capture** (`fn_capture_shift_event`, gateway envelopes) | The event ledger. **9 metric functions read it**: `get_marketplace_kpis`, `get_manager_scorecard`, `get_employee_metrics` (×2), `get_performance_trends`, `get_cancellation_reason_breakdown`, `get_employee_event_timeline`, `get_shift_lifecycle`, `sm_refresh_shift_snapshots`. | **No — not without breaking Performance, KPIs and Insights.** It is metrics data that the audit UI happened to sit on. |
+| **`shift_events` capture** (`fn_capture_shift_event`, gateway envelopes) | The event ledger. **4 metric functions read it** (live 2026-10-29): `get_marketplace_kpis`, `get_manager_scorecard`, `get_cancellation_reason_breakdown`, `sm_refresh_shift_snapshots`. | **No — not without breaking Performance, KPIs and Insights.** It is metrics data that the audit UI happened to sit on. |
 | Leave history — `leave_request_events`, `LeaveTimeline` (review dialog) | Leave audit trail. | Yes (UI); confirm. |
 | Timesheet audit — `timesheet_audit_log`, `timesheetAudit.api.ts` | Timesheet adjustments trail. | Confirm — payroll-adjacent. |
 

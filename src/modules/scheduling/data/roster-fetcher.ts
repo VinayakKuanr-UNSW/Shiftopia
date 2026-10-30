@@ -24,7 +24,7 @@ import type { AvailabilityOverrideRef, ExistingShiftRef, OptimizerEmployee } fro
 import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 import { isFullTimeEmployee } from '@/modules/core/model/employment.types';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
-import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
+import { normaliseCycleAnchor, resolveGoverningCycleWeeks } from '@/modules/compliance/ordinary-hours-cycle';
 
 // =============================================================================
 // SHARED UTILITIES — pure functions, no I/O
@@ -57,11 +57,33 @@ export function durationMinutes(start: string, end: string): number {
     return mins;
 }
 
+/** A shift row as both fetch paths read it, in the shape the scheduler checks against. */
+function toExistingShiftRef(r: {
+    id: string;
+    shift_date: string;
+    start_time: string;
+    end_time: string;
+    unpaid_break_minutes: number | null;
+    paid_break_minutes: number | null;
+}): ExistingShiftRef {
+    const start = normalizeTime(r.start_time);
+    const end = normalizeTime(r.end_time);
+    return {
+        id: r.id,
+        shift_date: r.shift_date,
+        start_time: start,
+        end_time: end,
+        duration_minutes: durationMinutes(start, end),
+        unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
+        paid_break_minutes: r.paid_break_minutes ?? 0,
+    };
+}
+
 // =============================================================================
 // AVAILABILITY RESULT TYPE
 // =============================================================================
 
-export interface AvailabilityResult {
+interface AvailabilityResult {
     slots: Array<{
         slot_date: string;
         start_time: string;
@@ -129,6 +151,7 @@ export class RosterFetcher {
                     start_time: string;
                     end_time: string;
                     unpaid_break_minutes: number;
+                    paid_break_minutes: number | null;
                 }>;
 
                 // Group by employee
@@ -136,17 +159,7 @@ export class RosterFetcher {
                     const empRows = rows.filter(r => r.assigned_employee_id === emp.id);
                     const refs: ExistingShiftRef[] = empRows
                         .filter(r => !candidateV8ShiftIds.has(r.id))
-                        .map(r => ({
-                            id: r.id,
-                            shift_date: r.shift_date,
-                            start_time: normalizeTime(r.start_time),
-                            end_time: normalizeTime(r.end_time),
-                            duration_minutes: durationMinutes(
-                                normalizeTime(r.start_time),
-                                normalizeTime(r.end_time),
-                            ),
-                            unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
-                        }));
+                        .map(toExistingShiftRef);
                     result.set(emp.id, refs);
                 }
                 console.debug('[RosterFetcher] Bulk roster fetch successful (%d total shifts)', rows.length);
@@ -179,17 +192,7 @@ export class RosterFetcher {
                     const rows = (data ?? []) as any[];
                     const refs: ExistingShiftRef[] = rows
                         .filter(r => !candidateV8ShiftIds.has(r.id))
-                        .map(r => ({
-                            id: r.id,
-                            shift_date: r.shift_date,
-                            start_time: normalizeTime(r.start_time),
-                            end_time: normalizeTime(r.end_time),
-                            duration_minutes: durationMinutes(
-                                normalizeTime(r.start_time),
-                                normalizeTime(r.end_time),
-                            ),
-                            unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
-                        }));
+                        .map(toExistingShiftRef);
                     result.set(emp.id, refs);
                 } catch (err) {
                     console.warn('[RosterFetcher] Roster fetch threw for', emp.id, err);
@@ -298,8 +301,7 @@ export class RosterFetcher {
         const { data: hasDataRows, error: hasErr } = await this.supabase
             .from('availability_rules')
             .select('profile_id')
-            .in('profile_id', nonFtEmployeeIds)
-            .limit(nonFtEmployeeIds.length);
+            .in('profile_id', nonFtEmployeeIds);
 
         if (hasErr) {
             // Fall back to inferring from in-window slots: if the employee
@@ -329,7 +331,7 @@ export class RosterFetcher {
             const slots = slotsByEmp.get(emp.id) ?? [];
             const hasAnyData = hasErr
                 ? slots.length > 0
-                : hasDataSet.has(emp.id);
+                : (hasDataSet.has(emp.id) || slots.length > 0);
             result.set(emp.id, { slots, hasAnyData });
         }
 
@@ -620,6 +622,55 @@ export class RosterFetcher {
                 '[RosterFetcher] Ordinary-hours envelope binds for %d/%d employees (HC-5e)',
                 result.size, employees.length,
             );
+        }
+        return result;
+    }
+
+    /**
+     * Declared cl 35.x(a) work cycle per employee (solver HC-4).
+     *
+     * Resolved EXACTLY as V8 resolves it in `fetchV8EmployeeContext`, through the
+     * same two helpers: the SHORTEST cycle across the person's Active contracts
+     * and the first declared anchor. Any other pick lets the solver average over
+     * a window V8 does not, so it proposes rosters the labour layer rejects.
+     *
+     * On a failed read the map is empty and the solver falls back to 4 weeks from
+     * 2024-01-01 — the same defaults V8 takes when it cannot read the columns.
+     */
+    async fetchOrdinaryHoursCycles(
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, Pick<OptimizerEmployee, 'ordinary_hours_cycle_weeks' | 'ordinary_hours_cycle_anchor'>>> {
+        const result = new Map<string, Pick<OptimizerEmployee, 'ordinary_hours_cycle_weeks' | 'ordinary_hours_cycle_anchor'>>();
+        if (employees.length === 0) return result;
+
+        const { data, error } = await this.supabase
+            .from('user_contracts')
+            .select('user_id,ordinary_hours_cycle_weeks,ordinary_hours_cycle_anchor')
+            .in('user_id', employees.map(e => e.id))
+            .eq('status', 'Active');
+
+        if (error) {
+            console.warn('[RosterFetcher] Work-cycle fetch failed — solver uses the default 4-week cycle this run', error);
+            return result;
+        }
+
+        type Row = {
+            user_id: string;
+            ordinary_hours_cycle_weeks: number | null;
+            ordinary_hours_cycle_anchor: string | null;
+        };
+        const byUser = new Map<string, Row[]>();
+        for (const row of (data ?? []) as Row[]) {
+            byUser.set(row.user_id, [...(byUser.get(row.user_id) ?? []), row]);
+        }
+
+        for (const [userId, rows] of byUser) {
+            result.set(userId, {
+                ordinary_hours_cycle_weeks: resolveGoverningCycleWeeks(rows.map(r => r.ordinary_hours_cycle_weeks)),
+                ordinary_hours_cycle_anchor: normaliseCycleAnchor(
+                    rows.find(r => r.ordinary_hours_cycle_anchor)?.ordinary_hours_cycle_anchor,
+                ),
+            });
         }
         return result;
     }

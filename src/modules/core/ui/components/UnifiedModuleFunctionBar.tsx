@@ -1,18 +1,18 @@
 import React from 'react';
-import { Button } from '@/modules/core/ui/primitives/button';
-import { RefreshCcw, LayoutGrid, List, Search, Calendar, Settings, Layers, Filter, X } from 'lucide-react';
+import { RefreshCcw, LayoutGrid, List, Search, X } from 'lucide-react';
 import { DateRangePicker } from '@/modules/core/ui/calendar';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { addDays, endOfMonth, format, startOfMonth } from 'date-fns';
+import { addDays, endOfMonth, startOfMonth } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
+    ToolbarRow,
+    ToolbarSegmented,
+    ToolbarIconButton,
+    toolbar,
+    type ToolbarSegmentedOption,
+} from '@/modules/core/ui/components/Toolbar';
 
 interface UnifiedModuleFunctionBarProps {
     startDate?: Date;
@@ -32,6 +32,11 @@ interface UnifiedModuleFunctionBarProps {
     children?: React.ReactNode;
 }
 
+const MODULE_VIEWS: ReadonlyArray<ToolbarSegmentedOption<'card' | 'table'>> = [
+    { id: 'table', icon: <List className="h-3.5 w-3.5" />, label: 'List' },
+    { id: 'card', icon: <LayoutGrid className="h-3.5 w-3.5" />, label: 'Card' },
+];
+
 const unwrapChildren = (children: React.ReactNode): React.ReactNode[] => {
     if (!children) return [];
     if (React.isValidElement(children) && children.type === React.Fragment) {
@@ -43,7 +48,7 @@ const unwrapChildren = (children: React.ReactNode): React.ReactNode[] => {
 /* ────────────────────────────────────────────────────────────────────────────
    MobileIconButton – 44×44 touch target (WCAG / ARIA compliant), 20×20 icon
    ──────────────────────────────────────────────────────────────────────────── */
-export const MobileIconButton = React.forwardRef<
+const MobileIconButton = React.forwardRef<
     HTMLButtonElement,
     {
         icon: React.ReactNode;
@@ -152,7 +157,7 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                             clearable={false}
                             displayFormat="d MMM"
                             presets={DATE_RANGE_PRESETS}
-                            triggerClassName="h-11 rounded-xl font-semibold tabular-nums text-xs"
+                            triggerClassName="h-11 rounded-xl font-semibold tabular-nums text-[11px]"
                         />
                     )}
 
@@ -191,7 +196,7 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                 {/* Expandable Mobile Search Field */}
                 {searchActive && (showSearch || !!searchQuery) && (
                     <div className={cn(
-                        "flex items-center gap-2 px-3 h-10 rounded-xl border transition-all w-full",
+                        "flex items-center gap-2 px-3 h-[44px] rounded-xl border transition-all w-full",
                         isDark ? "bg-[#111827]/80 border-white/10" : "bg-slate-100 border-slate-200"
                     )}>
                         <Search className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
@@ -200,13 +205,15 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                             value={searchQuery || ''}
                             onChange={(e) => onSearchChange!(e.target.value)}
                             placeholder="Search employee, role, or ID..."
-                            className="bg-transparent border-none text-xs font-bold placeholder:text-muted-foreground/40 focus:ring-0 w-full outline-none"
+                            aria-label="Search"
+                            className="bg-transparent border-none text-[16px] font-medium placeholder:text-muted-foreground focus:ring-0 w-full outline-none"
                             autoFocus
                         />
                         {searchQuery && (
                             <button
                                 onClick={() => onSearchChange!('')}
-                                className="text-muted-foreground/60 hover:text-foreground p-1"
+                                aria-label="Clear search"
+                                className="flex h-[44px] w-[44px] shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
                             >
                                 <X className="h-3.5 w-3.5" />
                             </button>
@@ -216,7 +223,9 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
 
                 {/* Children / Tabs Row */}
                 {children && (
-                    <div className="w-full overflow-x-auto scrollbar-none py-0.5">
+                    // A row, like the icon bar above — as a plain block the
+                    // page's controls each fell onto a line of their own.
+                    <div className="flex w-full items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
                         {children}
                     </div>
                 )}
@@ -224,144 +233,64 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
         );
     }
 
+    // Desktop: the three zones every function bar shares (see Toolbar.tsx).
+    const showViews = !hideViewModeToggle && !!onViewModeChange && !!viewMode;
     return (
-        <div className={cn(
-            "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden",
-            !transparent && (
-                isDark 
-                    ? "bg-[#1c2333]/40 backdrop-blur-md border border-white/5 shadow-2xl shadow-black/20" 
-                    : "bg-white/60 backdrop-blur-md border border-white/80 shadow-lg shadow-slate-200/50"
-            ),
-            className
-        )}>
-            {/* 1. Left Content (Title or Tabs) - Visible on Desktop, Hidden on small mobile to save space if needed */}
-            {leftContent && (
-                <div className="hidden lg:flex items-center px-1 flex-shrink-0">
-                    {leftContent}
-                </div>
-            )}
-
-            {/* Scrollable Container for all tools */}
-            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
-                {/* 2. Date Range Picker (Start, End, Today) */}
-                {startDate && endDate && onDateChange && (
-                    <div className="flex-shrink-0">
-                        <DateRangePicker
-                            label="Date range"
-                            value={{ from: startDate, to: endDate }}
-                            onChange={(range) => {
-                                if (!range?.from) return;
-                                onDateChange(range.from, range.to ?? range.from);
-                            }}
-                            clearable={false}
-                            displayFormat="d MMM yy"
-                            presets={DATE_RANGE_PRESETS}
-                            triggerClassName="h-10 lg:h-11 rounded-xl font-black tabular-nums text-[10px] lg:text-xs"
+        <ToolbarRow
+            className={cn(!transparent && toolbar.standalone, className)}
+            views={(showViews || leftContent) ? (
+                <div className="flex items-center gap-3">
+                    {showViews && (
+                        <ToolbarSegmented
+                            value={viewMode!}
+                            onValueChange={onViewModeChange!}
+                            options={MODULE_VIEWS}
                         />
-                    </div>
-                )}
-
-                {filters && (
-                    <>
-                        <div className="h-6 w-px bg-border/20 flex-shrink-0" />
-                        {/* 3. Custom Filters (Priority toggles etc) */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {filters}
-                        </div>
-                    </>
-                )}
-
-                <div className="h-6 w-px bg-border/20 flex-shrink-0" />
-
-                {/* 4. View Toggle (Card/Table) */}
-                {!hideViewModeToggle && onViewModeChange && (
-                    <div className={cn(
-                        "flex items-center gap-1 p-1 rounded-xl flex-shrink-0",
-                        isDark ? "bg-[#111827]/60" : "bg-slate-100"
-                    )}>
-                        <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onViewModeChange('table')}
-                                        className={cn(
-                                            "h-8 w-8 lg:h-9 lg:w-9 rounded-lg transition-all",
-                                            viewMode === 'table' ? (isDark ? "bg-[#0f172a] text-white shadow-sm" : "bg-white text-slate-900 shadow-sm") : "text-muted-foreground hover:bg-muted/50"
-                                        )}
-                                    >
-                                        <List className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="text-[10px] uppercase font-bold">List View</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                        <TooltipProvider delayDuration={200}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => onViewModeChange('card')}
-                                        className={cn(
-                                            "h-8 w-8 lg:h-9 lg:w-9 rounded-lg transition-all",
-                                            viewMode === 'card' ? (isDark ? "bg-[#0f172a] text-white shadow-sm" : "bg-white text-slate-900 shadow-sm") : "text-muted-foreground hover:bg-muted/50"
-                                        )}
-                                    >
-                                        <LayoutGrid className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="text-[10px] uppercase font-bold">Card View</TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    </div>
-                )}
-
-                {/* 5. Children (e.g. status tabs) */}
-                {children && (
-                    <>
-                        <div className="h-6 w-px bg-border/20 flex-shrink-0" />
-                        {children}
-                    </>
-                )}
-
-                {/* 6. Search Input */}
+                    )}
+                    {/* A title or count, not a control — only where there is room for it. */}
+                    {leftContent && <div className="hidden lg:flex items-center">{leftContent}</div>}
+                </div>
+            ) : undefined}
+            modes={startDate && endDate && onDateChange ? (
+                <DateRangePicker
+                    label="Date range"
+                    value={{ from: startDate, to: endDate }}
+                    onChange={(range) => {
+                        if (!range?.from) return;
+                        onDateChange(range.from, range.to ?? range.from);
+                    }}
+                    clearable={false}
+                    displayFormat="d MMM yy"
+                    presets={DATE_RANGE_PRESETS}
+                    triggerClassName={toolbar.field}
+                />
+            ) : undefined}
+            actions={(filters || children || onSearchChange !== undefined || onRefresh) ? (<>
+                {filters}
+                {children}
                 {onSearchChange !== undefined && (
-                    <>
-                        <div className="h-6 w-px bg-border/20 flex-shrink-0" />
-                        <div className={cn(
-                            "flex items-center gap-2 px-3 h-10 rounded-xl min-w-[200px] border transition-all",
-                            isDark ? "bg-[#111827]/60 border-white/5" : "bg-slate-100 border-slate-200"
-                        )}>
-                            <Search className="h-3.5 w-3.5 text-muted-foreground/40" />
-                            <input
-                                type="text"
-                                value={searchQuery || ''}
-                                onChange={(e) => onSearchChange(e.target.value)}
-                                placeholder="SEARCH..."
-                                className="bg-transparent border-none text-[10px] font-black uppercase tracking-wider placeholder:text-muted-foreground/20 focus:ring-0 w-full"
-                            />
-                        </div>
-                    </>
+                    <label className={toolbar.search}>
+                        <Search className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                        <input
+                            type="text"
+                            aria-label="Search"
+                            value={searchQuery || ''}
+                            onChange={(e) => onSearchChange(e.target.value)}
+                            placeholder="Search..."
+                            className={toolbar.searchInput}
+                        />
+                    </label>
                 )}
-
-                {/* 7. Refresh Button */}
                 {onRefresh && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
+                    <ToolbarIconButton
+                        icon={<RefreshCcw />}
+                        tooltip="Reload"
                         onClick={onRefresh}
-                        disabled={isLoading}
-                        className={cn(
-                            "h-10 w-10 lg:h-11 lg:w-11 rounded-xl flex-shrink-0 transition-all",
-                            isDark ? "bg-[#111827]/60 hover:bg-[#111827]/80" : "bg-slate-100 hover:bg-slate-200"
-                        )}
-                    >
-                        <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-                    </Button>
+                        isLoading={isLoading}
+                        variant="blue"
+                    />
                 )}
-            </div>
-        </div>
+            </>) : undefined}
+        />
     );
 };

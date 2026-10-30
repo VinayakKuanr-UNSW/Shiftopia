@@ -1,6 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
 import { AccessLevel, Role, User, UserContract, AccessCertificate, PermissionObject } from './types';
-import { mapRole } from './access.policy';
 
 /**
  * Raised when the server actively rejected our credentials, as opposed to
@@ -94,9 +93,12 @@ export const authService = {
     async getUserProfile(userId: string): Promise<User | null> {
         try {
             // 1. Fetch Profile
+            // Explicit columns, never `*`: phone, date of birth and emergency
+            // contacts are not selectable by `authenticated`, and a 42501 here
+            // would be read as a rejected credential and end the session.
             const { data: profile, error: profileErr } = await supabase
                 .from('profiles')
-                .select('*')
+                .select('id, employee_code, first_name, last_name, full_name, email, employment_type, is_active, preferences')
                 .eq('id', userId)
                 .single();
 
@@ -253,7 +255,9 @@ export const authService = {
      * Calls the `resolve_user_permissions` RPC which returns:
      * - typeX: array of personal certificates
      * - typeY: single managerial certificate or null
-     * - allowed_scope_tree: hierarchy tree based on certificate scope
+     * - allowed_scope_tree / timesheet_scope_tree / contracted_scope_tree: the
+     *   managerial, Timesheets and personal scope trees, all built from the
+     *   user's contracts (hr.user_contracts)
      */
     async fetchPermissions(): Promise<PermissionObject | null> {
         try {

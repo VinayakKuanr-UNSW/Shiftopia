@@ -19,7 +19,7 @@ export interface BucketMap {
     D: V8Hit[];    // system / qualifications
 }
 
-export interface PassedRule {
+interface PassedRule {
     rule_id:     string;
     description: string;
     category:    string;

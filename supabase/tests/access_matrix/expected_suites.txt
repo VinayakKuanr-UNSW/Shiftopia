@@ -1,0 +1,11 @@
+A  av=.. bud=.. kpi=.F pay=. tpl=... adm=.... clk=F bids=- pt=. fair=F grp=.
+B  av=.. bud=.. kpi=.F pay=. tpl=... adm=.... clk=F bids=5 pt=. fair=F grp=m
+D  av=y. bud=y. kpi=yy pay=y tpl=y.. adm=.... clk=F bids=25 pt=y fair=F grp=.
+DD av=.. bud=.. kpi=.F pay=. tpl=... adm=.... clk=F bids=- pt=. fair=F grp=m
+E  av=y. bud=y. kpi=yy pay=y tpl=y.. adm=.... clk=F bids=25 pt=y fair=F grp=.
+E2 av=y. bud=y. kpi=yy pay=y tpl=y.. adm=.... clk=F bids=25 pt=y fair=F grp=.
+F  av=.. bud=.. kpi=.F pay=. tpl=... adm=.... clk=F bids=- pt=. fair=F grp=.
+G  av=yy bud=y. kpi=yy pay=y tpl=yyy adm=.... clk=y bids=5 pt=y fair=F grp=.
+G2 av=.. bud=y. kpi=.F pay=. tpl=... adm=.... clk=F bids=2 pt=. fair=F grp=.
+X  av=y. bud=.. kpi=yy pay=y tpl=... adm=.... clk=y bids=5 pt=y fair=F grp=.
+Z  av=yy bud=yy kpi=yy pay=y tpl=yyy adm=yyyy clk=y bids=25 pt=y fair=y grp=a

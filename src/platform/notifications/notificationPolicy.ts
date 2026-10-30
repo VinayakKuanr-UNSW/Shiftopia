@@ -5,7 +5,6 @@ export {
   normalizeNotificationEventType,
   renderNotificationMessage,
   resolveNotificationPolicy,
-  type NotificationDelivery,
   type NotificationPolicy,
   type NotificationPriority,
 } from '../../../supabase/functions/_shared/notificationPolicy';

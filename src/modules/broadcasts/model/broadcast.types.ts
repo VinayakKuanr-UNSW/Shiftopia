@@ -2,11 +2,10 @@
 // Broadcast Types
 // Extracted from src/api/models/types.ts
 
-export type BroadcastPriority = 'urgent' | 'high' | 'normal' | 'low';
-export type BroadcastStatus = 'active' | 'archived' | 'expired';
-export type AcknowledgementStatus = 'pending' | 'acknowledged';
+// Mirrors broadcasts_priority_check; the DB has never accepted 'low'.
+export type BroadcastPriority = 'urgent' | 'high' | 'normal';
+type AcknowledgementStatus = 'pending' | 'acknowledged';
 export type BroadcastParticipantRole = 'admin' | 'broadcaster' | 'lead' | 'member';
-export type BroadcastParticipantStatus = 'online' | 'offline' | 'away';
 export type BroadcastFileType = 'pdf' | 'image' | 'document' | 'spreadsheet' | 'other';
 
 export interface BroadcastAttachment {
@@ -130,13 +129,6 @@ export interface BroadcastAcknowledgement {
     acknowledgedAt: string;
 }
 
-export interface BroadcastAcknowledgementWithDetails extends BroadcastAcknowledgement {
-    employee: {
-        id: string;
-        name: string;
-        email: string;
-    } | null;
-}
 
 export interface BroadcastAckStats {
     total: number;
@@ -170,7 +162,7 @@ export interface CreateBroadcastGroupRequest {
     color?: string;
 }
 
-export interface UpdateBroadcastGroupRequest extends Partial<CreateBroadcastGroupRequest> { }
+export type UpdateBroadcastGroupRequest = Partial<CreateBroadcastGroupRequest>;
 
 export interface CreateBroadcastChannelRequest {
     groupId: string;

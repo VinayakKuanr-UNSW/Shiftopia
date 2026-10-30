@@ -4,7 +4,8 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { assertWrote } from '@/platform/supabase/writes';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
@@ -19,7 +20,6 @@ import {
 
 // Re-exported for existing external consumers (AttendancePage.tsx et al.) —
 // the canonical implementation now lives in ../domain/billable-time.
-export { snapToQuarterHour, isShiftFinished };
 
 
 export interface TimesheetShiftRow {
@@ -74,6 +74,12 @@ export interface TimesheetShiftRow {
     unpaidBreakMinutes: number;
     paidBreak: string;
     unpaidBreak: string;
+    rosteredBreakStart: string | null;
+    rosteredBreakEnd: string | null;
+    actualBreakStart: string | null;
+    actualBreakEnd: string | null;
+    breakVarianceMinutes: number | null;
+    hasBreakVarianceFlag: boolean;
 
     // Calculated
     scheduledLengthMinutes: number;
@@ -173,11 +179,12 @@ export async function getShiftsForTimesheet(
                 group_type,
                 sub_group_name,
                 roster_subgroup_id,
+                break_start,
+                break_end,
                 paid_break_minutes,
                 unpaid_break_minutes,
                 net_length_minutes,
                 scheduled_length_minutes,
-                remuneration_rate,
                 is_training,
                 target_employment_type,
                 user_contract_id,
@@ -198,7 +205,6 @@ export async function getShiftsForTimesheet(
             .gte('shift_date', startDate)
             .lte('shift_date', endDate || startDate)
             .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
-            .is('deleted_at', null)
             .order('start_time');
 
         // Apply filters
@@ -278,8 +284,6 @@ export async function getShiftsForTimesheet(
 
             const scheduledMins = shift.scheduled_length_minutes ||
                 calculateMinutes(shift.start_time, shift.end_time);
-            const netMins = shift.net_length_minutes ||
-                (scheduledMins - (shift.unpaid_break_minutes || 0));
 
 
             // Resolve each side ONCE — every field below (net minutes, adjusted
@@ -330,6 +334,7 @@ export async function getShiftsForTimesheet(
                     target_employment_type: shift.target_employment_type,
                     is_training: shift.is_training,
                     unpaid_break_minutes: unpaidBreakForNet,
+                    break_start: timesheet?.actual_break_start ?? shift.break_start ?? null,
                     scheduled_length_minutes: scheduledMins,
                     shift_pay_terms: shift.shift_pay_terms ?? null,
                 }, calculatedNetMins)
@@ -420,6 +425,31 @@ export async function getShiftsForTimesheet(
                 arrivalVarianceReason: (timesheet as any)?.arrival_variance_reason ?? null,
                 departureVarianceReason: (timesheet as any)?.departure_variance_reason ?? null,
 
+                ...(() => {
+                    let breakVarianceMinutes: number | null = null;
+                    let hasBreakVarianceFlag = false;
+                    if (timesheet?.actual_break_start && shift.break_start) {
+                        const aTime = timesheet.actual_break_start.slice(0, 5);
+                        const rTime = shift.break_start.slice(0, 5);
+                        const [aH, aM] = aTime.split(':').map(Number);
+                        const [rH, rM] = rTime.split(':').map(Number);
+                        if (!isNaN(aH) && !isNaN(aM) && !isNaN(rH) && !isNaN(rM)) {
+                            let diff = Math.abs((aH * 60 + aM) - (rH * 60 + rM));
+                            if (diff > 720) diff = 1440 - diff;
+                            breakVarianceMinutes = diff;
+                            hasBreakVarianceFlag = diff > 15;
+                        }
+                    }
+                    return {
+                        rosteredBreakStart: shift.break_start || null,
+                        rosteredBreakEnd: shift.break_end || null,
+                        actualBreakStart: timesheet?.actual_break_start || null,
+                        actualBreakEnd: timesheet?.actual_break_end || null,
+                        breakVarianceMinutes,
+                        hasBreakVarianceFlag,
+                    };
+                })(),
+
                 paidBreakMinutes: timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0),
                 unpaidBreakMinutes: timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0),
                 paidBreak: String(timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0)),
@@ -485,7 +515,7 @@ function calculateMinutes(start: string, end: string): number {
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
 
-    let startMins = sh * 60 + sm;
+    const startMins = sh * 60 + sm;
     let endMins = eh * 60 + em;
 
     // Handle overnight
@@ -533,6 +563,8 @@ export async function updateTimesheetEntry(
         approximatePay?: string;
         paidBreak?: string;
         unpaidBreak?: string;
+        actualBreakStart?: string | null;
+        actualBreakEnd?: string | null;
         arrivalVarianceReason?: string | null;
         departureVarianceReason?: string | null;
     },
@@ -578,7 +610,9 @@ export async function updateTimesheetEntry(
             updates.adjustedStart !== undefined ||
             updates.adjustedEnd !== undefined ||
             updates.paidBreak !== undefined ||
-            updates.unpaidBreak !== undefined;
+            updates.unpaidBreak !== undefined ||
+            updates.actualBreakStart !== undefined ||
+            updates.actualBreakEnd !== undefined;
 
         // Audit H-12: notes / rejection-reason / variance-reason edits are
         // METADATA, not a pay-affecting change — a manager annotating an
@@ -697,9 +731,11 @@ export async function updateTimesheetEntry(
         if (updates.arrivalVarianceReason !== undefined) payload.arrival_variance_reason = updates.arrivalVarianceReason || null;
         if (updates.departureVarianceReason !== undefined) payload.departure_variance_reason = updates.departureVarianceReason || null;
 
-        // Breaks (minutes)
+        // Breaks (minutes and window)
         if (updates.paidBreak !== undefined) payload.paid_break_minutes = parseInt(updates.paidBreak, 10) || 0;
         if (updates.unpaidBreak !== undefined) payload.unpaid_break_minutes = parseInt(updates.unpaidBreak, 10) || 0;
+        if (updates.actualBreakStart !== undefined) payload.actual_break_start = updates.actualBreakStart || null;
+        if (updates.actualBreakEnd !== undefined) payload.actual_break_end = updates.actualBreakEnd || null;
         
         // NOTE: Length / Net / Pay are DERIVED on read (billable minutes × rate);
         // the `timesheets` table has NO length/net_length/approximate_pay columns,
@@ -786,6 +822,10 @@ export async function updateTimesheetEntry(
             if (opts?.expectedVersion != null && (!updatedRows || updatedRows.length === 0)) {
                 throw new TimesheetConflictError(shiftId);
             }
+            // Without a version, zero rows means row-level security refused the
+            // caller (timesheet.approve where the shift sits) — it must not read
+            // as saved. The catch below turns it into the honest `false`.
+            assertWrote({ error, data: updatedRows }, 'change this timesheet');
         } else {
             // Get shift details for new timesheet
             const { data: shift } = await supabase
@@ -922,18 +962,23 @@ export async function markShiftAsNoShow(
 ): Promise<boolean> {
     try {
         // Update shift status
-        const { error: shiftError } = await supabase
+        const { error: shiftError, count: shiftsMarked } = await supabase
             .from('shifts')
             .update({
                 attendance_status: 'no_show',
                 lifecycle_status: 'Completed',
                 updated_at: new Date().toISOString(),
                 last_modified_by: userId
-            })
+            }, { count: 'exact' })
             .eq('id', shiftId);
 
         if (shiftError) {
             console.error('[markShiftAsNoShow] Shift error:', shiftError);
+            return false;
+        }
+        // Zero rows: row-level security refused the caller. Not a no-show.
+        if (shiftsMarked === 0) {
+            console.error('[markShiftAsNoShow] Refused: no shift updated (outside the caller\'s access?)', shiftId);
             return false;
         }
 

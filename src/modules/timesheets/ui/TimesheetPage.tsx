@@ -1,43 +1,23 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { format, startOfMonth } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { Clock, CheckCircle, XCircle, UserX, Shield, Bot, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-
-const TIMESHEET_STATUS_TABS = [
-    { id: 'all', label: 'All', icon: Shield, accent: 'slate' },
-    { id: 'pending', label: 'Pending', icon: Clock, accent: 'amber' },
-    { id: 'auto_approved', label: 'Auto-Approved', icon: Bot, accent: 'emerald' },
-    { id: 'approved', label: 'Approved', icon: CheckCircle, accent: 'emerald' },
-    { id: 'denied', label: 'Denied', icon: XCircle, accent: 'red' },
-    { id: 'no_show', label: 'No-Show', icon: UserX, accent: 'slate' },
-] as const;
-
-const timesheetAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
-    amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
-    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
-    red:     { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
-    slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
-};
-
+import { Clock } from 'lucide-react';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-import { UnifiedRosterNavigator, ViewType, DateRange, computeRange, navigateDate, formatRangeLabel } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
-import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
+import { ViewType, DateRange, computeRange } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import { TimesheetTable } from './components/TimesheetTable';
-import { MobileViewRangeToggle } from '@/modules/rosters/ui/components/MobileViewRangeToggle';
 import {
-    TimesheetFilterDrawer,
     ActiveFilters,
     EMPTY_FILTERS,
     countActiveFilters,
 } from './components/TimesheetFilterDrawer';
-import { GroupBySelector } from '@/modules/core/ui/components/GroupBySelector';
+import {
+    TimesheetFunctionBar,
+} from './components/TimesheetFunctionBar';
 import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
-import { TIMESHEET_GROUP_BY_OPTIONS } from '../domain/timesheet-grouping';
 import {
     getShiftsForTimesheet,
     updateTimesheetEntry,
@@ -49,6 +29,7 @@ import {
 } from '../api/timesheets.supabase.api';
 import { useScopeFilter, ScopeMode } from '@/platform/auth/useScopeFilter';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import {
     computeAttendanceMetrics,
     type AttendanceInput,
@@ -60,11 +41,14 @@ import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/Attendance
  *
  * Owns: scope, date, search query, filter state, raw data fetch.
  */
-export const TimesheetPage: React.FC = () => {
-    const { isDark } = useTheme();
-    const { isManagerOrAbove, hasPermission, user } = useAuth();
+const TimesheetPage: React.FC = () => {
+    const { hasPermission, user } = useAuth();
 
-    const scopeMode: ScopeMode = isManagerOrAbove() ? 'managerial' : 'personal';
+    // Everyone here holds the page (route gate `timesheet-view`): the places are
+    // what their managerial contracts reach plus each Team Lead contract's
+    // sub-department. Beta used the personal tree, which also listed the
+    // sub-departments where they are ordinary staff.
+    const scopeMode: ScopeMode = 'timesheet';
     const canEdit = hasPermission('timesheet-edit');
 
     const { scope, setScope, isGammaLocked } = useScopeFilter(scopeMode);
@@ -81,7 +65,7 @@ export const TimesheetPage: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'auto_approved' | 'approved' | 'denied' | 'no_show'>('all');
     const [groupBy, setGroupBy] = useState<RowGroupBy>('date');
     const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
-    const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
+    const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters) + (statusFilter !== 'all' ? 1 : 0), [appliedFilters, statusFilter]);
     const [shifts, setShifts] = useState<TimesheetShiftRow[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -194,6 +178,12 @@ export const TimesheetPage: React.FC = () => {
         netLengthMinutes: shift.netLengthMinutes,
         paidBreak: String(shift.paidBreakMinutes),
         unpaidBreak: String(shift.unpaidBreakMinutes),
+        rosteredBreakStart: shift.rosteredBreakStart,
+        rosteredBreakEnd: shift.rosteredBreakEnd,
+        actualBreakStart: shift.actualBreakStart,
+        actualBreakEnd: shift.actualBreakEnd,
+        breakVarianceMinutes: shift.breakVarianceMinutes,
+        hasBreakVarianceFlag: shift.hasBreakVarianceFlag,
         approximatePay: shift.payBasis === 'salary'
             ? 'Salaried'
             : shift.estimatedPay ? `$${shift.estimatedPay.toFixed(2)}` : '-',
@@ -361,26 +351,11 @@ export const TimesheetPage: React.FC = () => {
         setRange(computeRange(newDate, view));
     }, [selectedDate]);
 
-    // ── Mobile compact date nav helpers ─────────────────────────────────────
-    const mobileRange = useMemo(() => computeRange(selectedDate, viewType), [selectedDate, viewType]);
-    const mobileDateLabel = useMemo(() => formatRangeLabel(mobileRange, viewType), [mobileRange, viewType]);
-    const VIEW_SHORT: Record<ViewType, string> = { day: 'D', '3day': '3D', week: 'W', month: 'M' };
 
-    const handleMobilePrev = useCallback(() => {
-        const newDate = navigateDate(selectedDate, viewType, -1);
-        setSelectedDate(newDate);
-        setRange(computeRange(newDate, viewType));
-    }, [selectedDate, viewType]);
-
-    const handleMobileNext = useCallback(() => {
-        const newDate = navigateDate(selectedDate, viewType, 1);
-        setSelectedDate(newDate);
-        setRange(computeRange(newDate, viewType));
-    }, [selectedDate, viewType]);
 
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
-        <div className="h-full flex flex-col overflow-hidden bg-background">
+        <PageLayout>
             {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
             <GoldStandardHeader
                 title="Timesheets"
@@ -389,165 +364,65 @@ export const TimesheetPage: React.FC = () => {
                 setScope={setScope}
                 isGammaLocked={isGammaLocked}
                 mode={scopeMode}
-                // Row 3 Structured Props
-                viewMode={viewMode === 'timecard' ? 'card' : 'table'}
-                onViewModeChange={(mode) => setViewMode(mode === 'card' ? 'timecard' : 'table')}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                onRefresh={handleRefresh}
-                isLoading={loading}
-                leftContent={
-                    <>
-                        {/* Mobile: compact date nav with short labels */}
-                        <div className="md:hidden flex items-center gap-1" role="region" aria-label="Date period selector">
-                            <button
-                                type="button"
-                                onClick={handleMobilePrev}
-                                aria-label="Previous date period"
-                                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors active:scale-90 touch-manipulation"
-                            >
-                                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                            <span
-                                className="text-[11px] font-bold text-foreground whitespace-nowrap min-w-[60px] text-center tabular-nums"
-                                aria-label={`Current date period: ${mobileDateLabel}`}
-                            >
-                                {mobileDateLabel}
-                            </span>
-                            <button
-                                type="button"
-                                onClick={handleMobileNext}
-                                aria-label="Next date period"
-                                className="h-11 w-11 shrink-0 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors active:scale-90 touch-manipulation"
-                            >
-                                <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                            </button>
-                            <MobileViewRangeToggle
-                                value={viewType}
-                                onChange={(v) => handleViewTypeChange(v as ViewType)}
-                                className="ml-1 shrink-0"
-                            />
-                        </div>
-                        {/* Desktop: full navigator with view tabs + date picker */}
-                        <div className="hidden md:block">
-                            <UnifiedRosterNavigator
-                                variant="full"
-                                date={selectedDate}
-                                viewType={viewType}
-                                onChange={(date, newRange) => {
-                                    setSelectedDate(date);
-                                    setRange(newRange);
-                                }}
-                                onViewTypeChange={handleViewTypeChange}
-                            />
-                        </div>
-                    </>
-                }
-                filters={
-                    <>
-                        <TimesheetFilterDrawer
-                            entries={entries}
-                            appliedFilters={appliedFilters}
-                            onApply={setAppliedFilters}
-                            activeCount={activeFilterCount}
-                            statusFilter={statusFilter}
-                            onStatusFilterChange={(s) => setStatusFilter(s as any)}
-                            statusCounts={statusCounts}
-                            statusOptions={TIMESHEET_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
-                            statusSectionLabel="Timesheet Status"
-                        />
-                        <GroupBySelector value={groupBy} onChange={setGroupBy} options={TIMESHEET_GROUP_BY_OPTIONS} />
-                    </>
-                }
-                functionBarChildren={
-                    <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-                        <div 
-                            className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide"
-                            role="tablist"
-                            aria-label="Filter timesheets by status"
-                        >
-                            {TIMESHEET_STATUS_TABS.map(tab => {
-                                const isActive = statusFilter === tab.id;
-                                const colors = timesheetAccentMap[tab.accent];
-                                const TabIcon = tab.icon;
-                                const count = statusCounts[tab.id as keyof typeof statusCounts];
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={isActive}
-                                        aria-label={`Status filter ${tab.label}: ${count} shifts`}
-                                        onClick={() => setStatusFilter(tab.id as any)}
-                                        className={cn(
-                                            'relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300 touch-manipulation',
-                                            isActive
-                                                ? `${colors.bg} ${colors.text} shadow-sm`
-                                                : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted/50'
-                                        )}
-                                    >
-                                        <TabIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                                        <span className="hidden sm:inline">{tab.label}</span>
-                                        <span 
-                                            className={cn(
-                                                'min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1',
-                                                isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : 'bg-muted text-muted-foreground/60'
-                                            )}
-                                            aria-hidden="true"
-                                        >
-                                            {count}
-                                        </span>
-                                        {isActive && (
-                                            <motion.div
-                                                layoutId="activeTimesheetTab"
-                                                className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
-                                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                                            />
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                functionBar={
+                    <TimesheetFunctionBar
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        selectedDate={selectedDate}
+                        viewType={viewType}
+                        onDateChange={setSelectedDate}
+                        onViewTypeChange={handleViewTypeChange}
+                        onRangeChange={setRange}
+                        onRefresh={handleRefresh}
+                        isLoading={loading}
+                        entries={entries}
+                        appliedFilters={appliedFilters}
+                        onApplyFilters={setAppliedFilters}
+                        activeFilterCount={activeFilterCount}
+                        groupBy={groupBy}
+                        onGroupByChange={setGroupBy}
+                        statusFilter={statusFilter}
+                        onStatusFilterChange={(s) => setStatusFilter(s as any)}
+                        statusCounts={statusCounts}
+                        compactOnMobile
+                    />
                 }
             />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">
-                <div className={cn(
-                    "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
-                    isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-                )}>
-                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
-                        {shifts.length > 0 && (
-                            <AttendanceMetricsBar metrics={attendanceMetrics} className="mb-4" />
-                        )}
-                        <TimesheetTable
-                            entries={entries}
-                            selectedDate={selectedDate}
-                            onDateChange={setSelectedDate}
-                            readOnly={!canEdit}
-                            viewMode={viewMode}
-                            onViewChange={setViewMode}
-                            searchQuery={searchQuery}
-                            setSearchQuery={setSearchQuery}
-                            appliedFilters={appliedFilters}
-                            onApplyFilters={setAppliedFilters}
-                            activeFilterCount={activeFilterCount}
-                            groupBy={groupBy}
-                            onSaveEntry={handleSaveEntry}
-                            onBulkAction={handleBulkAction}
-                            onMarkNoShow={handleMarkNoShow}
-                            onRefresh={handleRefresh}
-                            isRefreshing={loading}
-                            hideTopControls
-                        />
-                    </div>
+            <div className={cn(
+                "flex-1 min-h-0 overflow-hidden flex flex-col",
+                surface.bodyCard
+            )}>
+                <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                    <TimesheetTable
+                        entries={entries}
+                        selectedDate={selectedDate}
+                        onDateChange={setSelectedDate}
+                        readOnly={!canEdit}
+                        viewMode={viewMode}
+                        onViewChange={setViewMode}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        appliedFilters={appliedFilters}
+                        onApplyFilters={setAppliedFilters}
+                        activeFilterCount={activeFilterCount}
+                        groupBy={groupBy}
+                        onSaveEntry={handleSaveEntry}
+                        onBulkAction={handleBulkAction}
+                        onMarkNoShow={handleMarkNoShow}
+                        onRefresh={handleRefresh}
+                        isRefreshing={loading}
+                        hideTopControls
+                    />
                 </div>
             </div>
-        </div>
+
+            {/* Disconnected Attendance Metrics Footer */}
+            <PageLayout.Footer>
+                <AttendanceMetricsBar metrics={attendanceMetrics} />
+            </PageLayout.Footer>
+        </PageLayout>
     );
 };
 

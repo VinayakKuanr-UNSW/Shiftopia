@@ -2,15 +2,10 @@ import { Shift } from '../api/shifts.api';
 import { getShiftFSMState, FSM_STATE_META, type ShiftStateID as FSMStateID } from './shift-fsm';
 
 /**
- * Extended ShiftStateID — new canonical IDs from shift-fsm.ts, plus legacy IDs
- * kept for backward compatibility so existing type-checks in callers compile.
- *
- * S6, S7, S8, S12, S14 are NEVER returned by determineShiftState anymore.
- * Code that branches on them is dead — remove when convenient.
+ * The canonical IDs from shift-fsm.ts, plus 'Unknown' for a row too partial to read.
  */
 export type ShiftStateID =
     | FSMStateID          // S1 S2 S3 S4 S5 S9 S10 S11 S13 S15
-    | 'S6' | 'S7' | 'S8' | 'S12' | 'S14'   // legacy — never returned
     | 'Unknown';
 
 /**

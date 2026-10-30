@@ -45,7 +45,7 @@ import { fmtH, formatRange, initials } from '../format';
 import { periodLabel } from './LedgerCards';
 import { CardDialogClose, LeaveCardDialog, cardDivide, cardField, cardSection } from './LeaveCardDialog';
 
-export interface LeaveReviewDialogProps {
+interface LeaveReviewDialogProps {
     request: LeaveRequest | null;
     member: TeamMemberContext | undefined;
     /** This person's other requests (any period, incl. all-time gender affirmation) — for the entitlement checks. */
@@ -54,12 +54,14 @@ export interface LeaveReviewDialogProps {
     meId: string;
     today: string;
     onClose: () => void;
+    /** View-only manager (delta, epsilon): reads the request, decides nothing. */
+    readOnly?: boolean;
 }
 
 type Mode = 'idle' | 'reject' | 'revoke';
 
 export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
-    request, member, personRequests = [], nameOf, meId, today, onClose,
+    request, member, personRequests = [], nameOf, meId, today, onClose, readOnly = false,
 }) => {
     const { toast } = useToast();
     const invalidate = useLeaveInvalidation();
@@ -182,9 +184,12 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
             kind={def?.kind}
             footer={
                 <>
-                    {request.status === 'pending' && mode === 'idle' && isSelf
+                    {readOnly
+                        ? <p className={text.caption}>View-only access — you can&apos;t decide leave.</p>
+                        : request.status === 'pending' && mode === 'idle' && isSelf
                         ? <p className={text.caption}>You can&apos;t decide your own leave.</p>
                         : <span />}
+                    {!readOnly && (
                     <div className="flex flex-1 flex-wrap justify-end gap-2">
                         {request.status === 'pending' && mode === 'idle' && (
                             <>
@@ -214,6 +219,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                             </>
                         )}
                     </div>
+                    )}
                 </>
             }
         >
@@ -226,7 +232,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                         </p>
                         <CardDialogClose />
                     </div>
-                    <DialogTitle className="mt-0.5 text-xl font-bold leading-snug tracking-tight">{label}</DialogTitle>
+                    <DialogTitle className="mt-0.5">{label}</DialogTitle>
                     <div className="mt-2 flex items-center gap-2">
                         <Avatar className="h-7 w-7">
                             <AvatarImage src={member?.avatarUrl ?? undefined} alt="" />
@@ -235,7 +241,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                         <DialogDescription className={cn(text.label, 'min-w-0 flex-1 truncate text-foreground')}>{name}</DialogDescription>
                         <LeaveStatusBadge request={request} />
                     </div>
-                    <p className="mt-4 text-3xl font-bold tracking-tight tabular-nums">{fmtH(request.requestedHours)}</p>
+                    <p className="mt-4 text-[24px] font-bold tracking-tight tabular-nums">{fmtH(request.requestedHours)}</p>
                     <p className={cn(text.caption, 'mt-1 tabular-nums')}>{formatRange(request.startDate, request.endDate)}</p>
                     {request.electionMode && (
                         <p className={text.caption}>
@@ -250,7 +256,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                         <p className={heading}>Balance</p>
                         {check.draw ? (
                             <>
-                                <p className={cn('mt-1 text-3xl font-bold tracking-tight tabular-nums',
+                                <p className={cn('mt-1 text-[24px] font-bold tracking-tight tabular-nums',
                                     check.warning && 'text-red-600 dark:text-red-400')}>
                                     {check.draw.after}h
                                 </p>
@@ -262,7 +268,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                             <p className={cn(text.caption, 'mt-1')}>Not drawn from a balance.</p>
                         )}
                         {check.warning && (
-                            <p role="alert" className="mt-1 text-xs font-medium text-red-700 dark:text-red-300">{check.warning}</p>
+                            <p role="alert" className="mt-1 text-[11px] font-medium text-red-700 dark:text-red-300">{check.warning}</p>
                         )}
                     </section>
                 )}
@@ -271,7 +277,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                     <section className={cn(cardSection, 'space-y-1')}>
                         <p className={heading}>Entitlement</p>
                         {warnings.map(w => (
-                            <p key={w} role="alert" className="text-xs font-medium text-amber-800 dark:text-amber-300">{w}</p>
+                            <p key={w} role="alert" className="text-[11px] font-medium text-amber-800 dark:text-amber-300">{w}</p>
                         ))}
                     </section>
                 )}

@@ -22,7 +22,7 @@ const STATUS_WORD: Record<MetricStatus, string> = {
     good: 'on target', warn: 'needs attention', critical: 'off target', neutral: '',
 };
 
-export interface RateStripItem {
+interface RateStripItem {
     metricId: string;
     value: number;
     /** Overrides the registry label when the surface needs a shorter word. */
@@ -48,7 +48,7 @@ export const RateStrip: React.FC<{ items: RateStripItem[]; className?: string }>
                     // Status is in the label as a word, not just in the colour.
                     aria-label={`${label ?? labelFor(metricId)} ${formatMetric(metricId, value)} ${STATUS_WORD[status]}`.trim()}
                 >
-                    <dd className={cn('text-lg font-bold tabular-nums leading-none', STATUS_TEXT[status])}>
+                    <dd className={cn('text-[15px] font-bold tabular-nums leading-none', STATUS_TEXT[status])}>
                         {formatMetric(metricId, value)}
                     </dd>
                     <dt className={cn(text.overline, 'mt-1.5 block truncate')}>
@@ -60,4 +60,3 @@ export const RateStrip: React.FC<{ items: RateStripItem[]; className?: string }>
     </dl>
 );
 
-export default RateStrip;

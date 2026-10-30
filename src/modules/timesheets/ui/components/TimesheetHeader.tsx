@@ -28,7 +28,7 @@ import type { TimesheetRow } from '../../model/timesheet.types';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
-export interface TimesheetFunctionBarProps {
+interface TimesheetFunctionBarProps {
     // View
     viewMode: 'table' | 'timecard';
     onViewChange: (view: 'table' | 'timecard') => void;
@@ -135,14 +135,14 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
                     <div className="h-3.5 w-px bg-primary/20 shrink-0" />
                     <button
                         onClick={onBulkApprove}
-                        className="flex items-center gap-1 h-6 px-2.5 rounded-lg bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-emerald-600 transition-colors active:scale-95 shrink-0"
+                        className="flex items-center gap-1 h-6 px-2.5 rounded-lg bg-emerald-500 text-white text-[11px] font-black uppercase tracking-widest shadow-sm hover:bg-emerald-600 transition-colors active:scale-95 shrink-0"
                     >
                         <CheckCircle className="h-3 w-3" />
                         Approve
                     </button>
                     <button
                         onClick={onBulkReject}
-                        className="flex items-center gap-1 h-6 px-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/15 transition-colors active:scale-95 shrink-0"
+                        className="flex items-center gap-1 h-6 px-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-black uppercase tracking-widest hover:bg-rose-500/15 transition-colors active:scale-95 shrink-0"
                     >
                         <XCircle className="h-3 w-3" />
                         Reject
@@ -183,7 +183,7 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
                             <Filter className="h-3.5 w-3.5 shrink-0" />
                             <span className="hidden md:inline">Filters</span>
                             {activeFilterCount > 0 && (
-                                <Badge className="h-4 w-4 rounded-full p-0 flex items-center justify-center text-[9px] font-black bg-primary text-primary-foreground">
+                                <Badge className="h-4 w-4 rounded-full p-0 flex items-center justify-center text-[11px] font-black bg-primary text-primary-foreground">
                                     {activeFilterCount}
                                 </Badge>
                             )}
@@ -200,7 +200,7 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
                             {activeFilterCount > 0 && (
                                 <button
                                     onClick={() => { onApplyFilters(EMPTY_FILTERS); setIsFilterOpen(false); }}
-                                    className="text-[10px] font-black uppercase tracking-widest text-destructive hover:text-destructive/80 transition-colors"
+                                    className="text-[11px] font-black uppercase tracking-widest text-destructive hover:text-destructive/80 transition-colors"
                                 >
                                     Clear all
                                 </button>

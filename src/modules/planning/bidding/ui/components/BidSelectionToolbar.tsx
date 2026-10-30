@@ -91,7 +91,7 @@ export const BidSelectionToolbar: React.FC<Props> = ({
                             className={cn(
                                 "rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 shrink-0",
                                 "h-10 px-3.5 text-[11px]", // Mobile
-                                "md:h-8 md:px-2.5 md:text-[10px]", // Desktop
+                                "md:h-8 md:px-2.5 md:text-[11px]", // Desktop
                                 allSelected
                                     ? "bg-indigo-600 text-white shadow-sm"
                                     : isDark 
@@ -106,8 +106,8 @@ export const BidSelectionToolbar: React.FC<Props> = ({
                         {/* 2. Count Badge */}
                         <div className={cn(
                             "flex items-center justify-center gap-1 rounded-xl font-black tracking-wider uppercase shrink-0",
-                            "h-10 px-2.5 text-[10px]", // Mobile
-                            "md:h-8 md:px-2 md:text-[9px]", // Desktop
+                            "h-10 px-2.5 text-[11px]", // Mobile
+                            "md:h-8 md:px-2 md:text-[11px]", // Desktop
                             selectedCount > 0
                                 ? "bg-indigo-500/10 text-indigo-500"
                                 : isDark ? "bg-white/5 text-white/40" : "bg-white text-slate-400 border border-slate-200/50"
@@ -127,7 +127,7 @@ export const BidSelectionToolbar: React.FC<Props> = ({
                                     className={cn(
                                         "rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 flex-1 min-w-0 disabled:opacity-20 disabled:pointer-events-none active:scale-95 shadow-sm border-none text-white",
                                         "h-10 text-[11px]", // Mobile
-                                        "md:h-8 md:text-[10px]", // Desktop
+                                        "md:h-8 md:text-[11px]", // Desktop
                                         "bg-indigo-600 hover:bg-indigo-500"
                                     )}
                                 >
@@ -149,7 +149,7 @@ export const BidSelectionToolbar: React.FC<Props> = ({
                                     className={cn(
                                         "rounded-xl font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 flex-1 min-w-0 disabled:opacity-20 disabled:pointer-events-none active:scale-95 shadow-sm border-none text-white",
                                         "h-10 text-[11px]", // Mobile
-                                        "md:h-8 md:text-[10px]", // Desktop
+                                        "md:h-8 md:text-[11px]", // Desktop
                                         "bg-rose-500 hover:bg-rose-600"
                                     )}
                                 >

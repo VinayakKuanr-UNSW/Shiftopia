@@ -139,7 +139,10 @@ export default defineConfig(({ mode }) => ({
     },
   }),
   build: {
-    sourcemap: true,
+    // Maps only when the Sentry plugin will upload and then delete them, and
+    // 'hidden' so no bundle points at them. Vercel's Git auto-deploy builds
+    // without the token and used to serve every .map publicly.
+    sourcemap: process.env.SENTRY_AUTH_TOKEN ? 'hidden' : false,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -147,7 +150,6 @@ export default defineConfig(({ mode }) => ({
           'vendor-data': ['@tanstack/react-query', 'zustand'],
           'vendor-dnd': ['react-dnd', 'react-dnd-html5-backend'],
           'vendor-ui': [
-            '@radix-ui/react-accordion',
             '@radix-ui/react-alert-dialog',
             '@radix-ui/react-avatar',
             '@radix-ui/react-checkbox',

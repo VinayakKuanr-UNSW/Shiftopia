@@ -71,7 +71,7 @@ export const KpiSmartInsights: React.FC<KpiSmartInsightsProps> = ({
                 <div className="p-1.5 rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
                     <Sparkles className="h-4 w-4" />
                 </div>
-                <h3 className="text-base font-bold text-foreground tracking-tight">{title}</h3>
+                <h3 className="text-[14px] font-bold text-foreground tracking-tight">{title}</h3>
                 {badgeLabel && (
                     <Badge className="bg-indigo-600/15 text-indigo-600 dark:text-indigo-300 font-semibold text-[11px] px-1.5 py-0 border-0">
                         {badgeLabel}
@@ -92,8 +92,8 @@ export const KpiSmartInsights: React.FC<KpiSmartInsightsProps> = ({
                             </div>
 
                             <div className="min-w-0 flex-1">
-                                <p className="text-xs font-bold text-foreground">{item.title}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.description}</p>
+                                <p className="text-[11px] font-bold text-foreground">{item.title}</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{item.description}</p>
 
                                 {(item.actionHref || item.onAction) && (
                                     <div className="mt-1.5">
@@ -126,4 +126,3 @@ export const KpiSmartInsights: React.FC<KpiSmartInsightsProps> = ({
     );
 };
 
-export default KpiSmartInsights;

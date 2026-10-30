@@ -5,20 +5,8 @@ import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { statusFor, type MetricStatus } from '@/modules/insights/model/metric-registry';
 
 import {
-    PerformanceMetrics,
-    EmployeePerformanceRow,
-    PerformanceFilters,
-    PerformanceTrendPoint,
-    PerformanceEventTimelineItem
-} from '../model/performance.types';
+    EmployeePerformanceRow} from '../model/performance.types';
 
-export type {
-    PerformanceMetrics,
-    EmployeePerformanceRow,
-    PerformanceFilters,
-    PerformanceTrendPoint,
-    PerformanceEventTimelineItem
-};
 
 // Backward-compat alias — PerformancePage and WorkforceTab import this type
 export type QuarterlyReportRow = EmployeePerformanceRow;
@@ -173,7 +161,7 @@ export const getCurrentQuarter = () => {
     };
 };
 
-export const getQuarterDateRange = (quarterYear: string): { start: Date; end: Date } | null => {
+const getQuarterDateRange = (quarterYear: string): { start: Date; end: Date } | null => {
     if (quarterYear === 'ALL_TIME') return null;
 
     const [q, year] = quarterYear.split('_');
@@ -187,32 +175,7 @@ export const getQuarterDateRange = (quarterYear: string): { start: Date; end: Da
     };
 };
 
-export const getQuarterOptions = () => {
-    const quarters: string[] = [];
-    const { year: currentYear, quarter: currentQuarter } = getCurrentQuarter();
 
-    quarters.push(`Q${currentQuarter}_${currentYear}`);
-
-    for (let i = 1; i <= 4; i++) {
-        let quarter = currentQuarter - i;
-        let year = currentYear;
-
-        if (quarter <= 0) {
-            quarter += 4;
-            year -= 1;
-        }
-
-        quarters.push(`Q${quarter}_${year}`);
-    }
-
-    return quarters;
-};
-
-export const formatQuarter = (quarterYear: string): string => {
-    if (quarterYear === 'ALL_TIME') return 'All Time';
-    const [q, year] = quarterYear.split('_');
-    return `${q} ${year}`;
-};
 
 const parseQuarterYear = (quarterYear: string): { year: number; quarter: number } | null => {
     // Live per-employee computation needs a concrete quarter — 'ALL_TIME'

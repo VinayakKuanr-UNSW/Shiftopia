@@ -10,7 +10,6 @@
 
 import type { ContractRecordV2 } from '@/modules/compliance/v8/types';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
-export type { ContractRecordV2 };
 
 // =============================================================================
 // CANDIDATE SHIFT
@@ -34,6 +33,8 @@ export interface CandidateShift {
     /** The contract a committed shift is linked to (shifts.user_contract_id). */
     user_contract_id?: string | null;
     unpaid_break_minutes?: number;
+    /** Paid rest pauses. `dailySpreadRule` nets them out of the cl 39.2 spread. */
+    paid_break_minutes?: number;
     /** Qualification IDs required to work this shift (skill IDs). */
     required_skills?: string[] | null;
     /** Qualification IDs required to work this shift (license IDs). */
@@ -93,7 +94,7 @@ export interface SimulatedRoster {
  * DRAFT_STATE, which put a lookup failure into the `failByRule` telemetry the
  * AutoScheduler prints as a compliance reason.
  */
-export type PreflightViolationCode =
+type PreflightViolationCode =
     | 'PAST_SHIFT'
     | 'SHIFT_NOT_FOUND'
     | 'DRAFT_STATE'
@@ -122,7 +123,7 @@ export type PreflightViolationCode =
  * added to V8 had to be re-declared here or silently vanish. Carrying the id
  * verbatim deletes the translation step, and with it the failure mode.
  */
-export type ViolationCode = PreflightViolationCode | (string & {});
+type ViolationCode = PreflightViolationCode | (string & {});
 
 /**
  * A single violation on a candidate shift.

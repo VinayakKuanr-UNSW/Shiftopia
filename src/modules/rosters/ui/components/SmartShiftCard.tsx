@@ -6,22 +6,19 @@
  * - Detailed: Full info card with compliance warnings, skills, and actions
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
     Clock,
     User,
     AlertTriangle,
-    Megaphone,
     Edit,
     XCircle,
     CheckCircle,
     Hourglass,
     GripVertical,
     MoreHorizontal,
-    Flame,
-    Lock,
+    MoreVertical,
     CopyPlus,
-    Shield,
     Sparkles,
     Gavel,
     Briefcase,
@@ -38,17 +35,16 @@ import type { Shift } from '../../domain/shift.entity';
 import { 
     getShiftUIContext, 
     getLockState, 
-    getProtectionContext,
     getShiftStatusIcons,
-    getTimeRule,
-    getLiveRuleBadges,
+    resolveGroupVariant,
 } from '../../domain/shift-ui';
 import { EditingPresenceBadge } from './EditingPresenceBadge';
 import { useShiftPresence } from '../presence/ShiftEditingPresenceProvider';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 import { getShiftStateDisplay } from '../../domain/shift-fsm';
+import { ShiftStateCircleBadge } from './ShiftStateCircleBadge';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
-import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
+import { COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
 import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
@@ -66,7 +62,7 @@ import { isSecurityRoleName } from '@/modules/compliance/security-role';
 // TYPES & HELPERS
 // ============================================================================
 
-export type ShiftCardVariant = 'compact' | 'detailed' | 'comfortable';
+type ShiftCardVariant = 'compact' | 'detailed' | 'comfortable';
 export interface ComplianceInfo {
     status: 'compliant' | 'warning' | 'violation';
     violations: string[];
@@ -75,7 +71,7 @@ export interface ComplianceInfo {
     maxWeeklyHours?: number;
 }
 
-export interface SmartShiftCardProps {
+interface SmartShiftCardProps {
     shift: Shift;
     variant?: ShiftCardVariant;
     compliance?: ComplianceInfo;
@@ -137,6 +133,22 @@ const GROUP_COLORS: Record<string, { header: string; accent: string; text: strin
 
 
 /**
+ * Bucket-row tones. Each row takes its group's hue so a column reads as one
+ * venue at a glance; past rows drop the hue for a solid neutral that still
+ * clears 4.5:1 contrast (an opacity fade made them unreadable in light mode).
+ */
+type RowTone = { row: string; primary: string; secondary: string; divider: string };
+const ROW_TONES: Record<string, RowTone> = {
+    convention: { row: 'bg-blue-50 hover:bg-blue-100 border-blue-200 dark:bg-blue-500/15 dark:hover:bg-blue-500/25 dark:border-blue-400/20', primary: 'text-blue-950 dark:text-blue-50', secondary: 'text-blue-900/80 dark:text-blue-100/80', divider: 'bg-blue-300/60 dark:bg-white/10' },
+    exhibition: { row: 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/15 dark:hover:bg-emerald-500/25 dark:border-emerald-400/20', primary: 'text-emerald-950 dark:text-emerald-50', secondary: 'text-emerald-900/80 dark:text-emerald-100/80', divider: 'bg-emerald-300/60 dark:bg-white/10' },
+    theatre: { row: 'bg-red-50 hover:bg-red-100 border-red-200 dark:bg-red-500/15 dark:hover:bg-red-500/25 dark:border-red-400/20', primary: 'text-red-950 dark:text-red-50', secondary: 'text-red-900/80 dark:text-red-100/80', divider: 'bg-red-300/60 dark:bg-white/10' },
+    cutaway: { row: 'bg-amber-50 hover:bg-amber-100 border-amber-200 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-400/20', primary: 'text-amber-950 dark:text-amber-50', secondary: 'text-amber-900/80 dark:text-amber-100/80', divider: 'bg-amber-300/60 dark:bg-white/10' },
+    office: { row: 'bg-cyan-50 hover:bg-cyan-100 border-cyan-200 dark:bg-cyan-500/15 dark:hover:bg-cyan-500/25 dark:border-cyan-400/20', primary: 'text-cyan-950 dark:text-cyan-50', secondary: 'text-cyan-900/80 dark:text-cyan-100/80', divider: 'bg-cyan-300/60 dark:bg-white/10' },
+};
+const PAST_ROW_TONE: RowTone = { row: 'bg-slate-100 border-slate-200 dark:bg-slate-800/70 dark:border-white/5', primary: 'text-slate-600 dark:text-slate-300', secondary: 'text-slate-500 dark:text-slate-400', divider: 'bg-slate-300 dark:bg-white/10' };
+
+
+/**
  * Sydney-pinned, via the shared formatter.
  *
  * This used to slice the time straight out of the ISO string and never convert,
@@ -183,11 +195,11 @@ const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
     return (
         <div className="space-y-2 p-1 min-w-[180px]">
             <div className="flex justify-between items-center pb-1 border-b border-white/10">
-                <span className="text-[10px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
-                <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
+                <span className="text-[11px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
+                <span className="text-[11px] font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
             </div>
             
-            <div className="space-y-1 text-[10px]">
+            <div className="space-y-1 text-[11px]">
                 <div className="flex justify-between">
                     <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
                     <span>${ordinaryCost.toFixed(2)}</span>
@@ -208,7 +220,7 @@ const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
                 )}
             </div>
             
-            <div className="pt-1 text-[9px] opacity-40 italic border-t border-white/5">
+            <div className="pt-1 text-[11px] opacity-40 italic border-t border-white/5">
                 {COST_ESTIMATE_DISCLAIMER}
             </div>
         </div>
@@ -261,12 +273,22 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     isPeopleMode = false,
     dense = false,
 }) => {
-    const colors = useMemo(
-        () => GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow,
-        [groupColor],
-    );
-    const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
-    const roleName = shift.roles?.name || 'No Role';
+
+    const employeeName = (shift as any).employeeName
+        || (shift as any).employee_name
+        || (shift.assigned_employee_id
+            ? ((shift as any).assigned_profiles
+                ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}`.trim()
+                : (shift as any).profiles
+                    ? `${(shift as any).profiles.first_name} ${(shift as any).profiles.last_name}`.trim()
+                    : 'Assigned')
+            : null);
+
+    const roleName = shift.roles?.name
+        || (shift as any).role_name
+        || (shift as any).roleName
+        || (shift as any).role
+        || 'No Role';
 
     const ctx = useMemo(() => getShiftUIContext({
         lifecycle_status:   shift.lifecycle_status  ?? 'Draft',
@@ -281,333 +303,137 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         actual_start:       shift.actual_start      ?? null,
     }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
-    const isBiddingActive = !!(shift.bidding_status && shift.bidding_status !== 'not_on_bidding');
-    const biddingUrgency = useMemo(() => {
-        if (!isBiddingActive) return null;
-        if (ctx.urgency === 'urgent' || ctx.urgency === 'emergent') return 'urgent';
-        return 'standard';
-    }, [ctx.urgency, isBiddingActive]);
-
-    const stateDisplay = useMemo(
-        () => getShiftStateDisplay(ctx.state),
-        [ctx.state],
-    );
     const fsmLock = getLockState(ctx.state);
-    // FSM-based lock overrides — differentiation between interactive protection vs absolute lock
     const isFullyLocked = isLocked || fsmLock.fullyLocked || isPast;
-    
-    // Centralized protection logic
-    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
-    const isProtected = protection.isProtected || fsmLock.partialLock;
-    
+
     const statusStr = getNormalizedStatus(shift);
-
-    const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
-
-    const statusIcons = useMemo(() =>
-        showStatusIcons ? getShiftStatusIcons(shift) : [],
-    [shift, showStatusIcons]);
 
     const costBreakdown = useMemo(() => {
         if (detailedCost && detailedCost.totalCost > 0) return detailedCost;
         return estimateDetailedCostFromShift(shift);
     }, [detailedCost, shift]);
 
-    const timeRule = useMemo(() => getTimeRule(shift), [shift]);
-    const liveRules = useMemo(() => getLiveRuleBadges(shift), [shift]);
+    const groupVariant = useMemo(() => {
+        const gc = (groupColor || '').toLowerCase();
+        if (gc.includes('convention') || gc === 'blue') return 'convention';
+        if (gc.includes('exhibition') || gc === 'emerald' || gc === 'green') return 'exhibition';
+        if (gc.includes('theatre') || gc === 'red' || gc === 'rose') return 'theatre';
+        if (gc.includes('cutaway') || gc === 'amber' || gc === 'yellow') return 'cutaway';
+        if (gc.includes('office') || gc === 'cyan') return 'office';
 
-    const headerBgAndText = useMemo(() => {
-        if (isPast) {
-            return isDraft
-                ? 'bg-black text-white dark:bg-black'
-                : 'bg-slate-500 text-white dark:bg-slate-600';
+        const raw = (shift as any).rawShift || shift;
+        const resolved = resolveGroupVariant(
+            raw,
+            raw.departments?.name || raw.department_name || raw.departmentName,
+            raw.sub_departments?.name || raw.sub_group_name || raw.subGroupName || raw.roles?.name
+        );
+        return resolved !== 'default' ? resolved : 'convention';
+    }, [groupColor, shift]);
+
+
+    const raw = (shift as any).rawShift || shift;
+    const subDept = raw.sub_departments?.name || raw.sub_group_name || raw.subGroupName || raw.department_name;
+    const roleDisplay = useMemo(() => {
+        if (roleName.includes('·')) return roleName;
+        if (roleName.startsWith('Event Setup ') && roleName.length > 'Event Setup '.length) {
+            return `Event Setup · ${roleName.substring('Event Setup '.length)}`;
         }
-        return cn(
-            colors.header,
-            colors.text,
-            isDraft ? 'bg-opacity-40 backdrop-blur-[2px]' : 'bg-opacity-100'
-        );
-    }, [isPast, isDraft, colors.header, colors.text]);
+        if (subDept && !roleName.toLowerCase().includes(subDept.toLowerCase())) {
+            return `${subDept} · ${roleName}`;
+        }
+        return roleName;
+    }, [roleName, subDept]);
 
-    if (isPeopleMode) {
-        return (
-            <CardShell
-                className={cn(
-                    'relative group/card cursor-pointer rounded-lg overflow-hidden border border-border bg-card',
-                    'transition-[border-color,box-shadow,transform,background-color] duration-300',
-                    '[contain:layout_paint_style]',
-                    onClick && (!isFullyLocked || isSelected) && 'cursor-pointer hover:shadow-md hover:border-slate-400 dark:hover:border-white/20',
-                    isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5 dark:bg-primary/20',
-                    isDragging && 'opacity-50 scale-95',
-                    isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
-                    isPast && (isDraft ? 'opacity-70' : 'opacity-85'),
-                    className
-                )}
-                onClick={isFullyLocked || isPast ? undefined : onClick}
-            >
-                {/* Left accent bar */}
-                <div className={cn("absolute left-0 top-0 bottom-0 w-1", colors.header)} />
-
-                {/* Advisory editing-presence overlay */}
-                {editors && editors.length > 0 && (
-                    <div className="absolute top-1 right-1 z-30 pointer-events-none">
-                        <EditingPresenceBadge editors={editors} />
-                    </div>
-                )}
-                {/* Content container */}
-                <div className="flex-1 flex flex-col min-h-0 pl-3.5 pr-2.5 py-2">
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-1.5 z-[20]">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded text-white bg-white/20 dark:bg-white/10")}>
-                                {stateDisplay.id}
-                            </span>
-                            {/* If dense, render tiny status indicator dots next to state badge */}
-                            {dense && (
-                                <div className="flex items-center gap-1 ml-1 shrink-0">
-                                    {timeRule && (
-                                        <span 
-                                            className="h-1.5 w-1.5 rounded-full shrink-0 animate-in fade-in zoom-in-50 duration-350" 
-                                            style={{ backgroundColor: timeRule.color }} 
-                                            title={`Time Rule: ${timeRule.label}`} 
-                                        />
-                                    )}
-                                    {liveRules.arrival && (
-                                        <span 
-                                            className="h-1.5 w-1.5 rounded-full shrink-0 animate-in fade-in zoom-in-50 duration-350" 
-                                            style={{ backgroundColor: liveRules.arrival.color }} 
-                                            title={`Arrival: ${liveRules.arrival.label}`} 
-                                        />
-                                    )}
-                                    {liveRules.departure && (
-                                        <span 
-                                            className="h-1.5 w-1.5 rounded-full shrink-0 animate-in fade-in zoom-in-50 duration-350" 
-                                            style={{ backgroundColor: liveRules.departure.color }} 
-                                            title={`Departure: ${liveRules.departure.label}`} 
-                                        />
-                                    )}
-                                </div>
-                            )}
-                            {shift.is_from_template && <div className="mr-0.5" title="From Template"><CopyPlus className="h-3 w-3 opacity-60" /></div>}
-                            {shift.notes?.startsWith('Generated') && (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div className="mr-0.5 cursor-help"><Sparkles className="h-3 w-3 text-indigo-400 dark:text-indigo-300 opacity-90" /></div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="bg-indigo-950 text-indigo-50 border-indigo-800 py-1.5 px-3 text-[11px] max-w-[220px] text-center font-medium shadow-lg" sideOffset={4}>
-                                        {shift.notes}
-                                    </TooltipContent>
-                                </Tooltip>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                                {headerAction || (!isFullyLocked && (
-                                    <button className="h-7 w-7 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
-                                        <MoreHorizontal className="h-3 w-3 opacity-60" />
-                                    </button>
-                                ))}
-                            </div>
-
-                            {showStatusIcons && statusIcons.length > 0 && (
-                                <div className="flex items-center gap-1 ml-1">
-                                    {statusIcons.map((si, i) => (
-                                        <span key={i} title={si.tooltip} className="inline-flex items-center">
-                                            <si.icon
-                                                className={cn("h-3 w-3", si.color)}
-                                                aria-label={si.tooltip}
-                                            />
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Body */}
-                    <div className="flex flex-col gap-0.5 my-1">
-                        <div className="text-[11px] font-bold text-foreground truncate leading-tight">
-                            {roleName}
-                        </div>
-                        <div className="text-[9px] text-foreground/60 font-semibold uppercase tracking-wider font-mono truncate">
-                            {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-dashed border-border/30">
-                        <div className="bg-muted/40 rounded px-1.5 py-0.5 flex items-center gap-1 text-[9px] font-mono text-muted-foreground">
-                            <Clock className="h-2.5 w-2.5" />
-                            <span>{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
-                        </div>
-                        
-                        {costBreakdown.totalCost > 0 && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 cursor-help">
-                                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                            ${costBreakdown.totalCost.toFixed(2)}
-                                        </span>
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-xl">
-                                    <CostBreakdownTooltip breakdown={costBreakdown} />
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-                    </div>
-                </div>
-
-                {/* DnD Blocking Overlay */}
-                {isDnDActive && isLocked && isPublished && (
-                    <div
-                        className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]"
-                        aria-hidden="true"
-                    />
-                )}
-            </CardShell>
-        );
-    }
+    const tone = isPast ? PAST_ROW_TONE : ROW_TONES[groupVariant] ?? ROW_TONES.convention;
 
     return (
         <CardShell
             className={cn(
-                'relative group/card cursor-pointer rounded-lg overflow-hidden bg-card',
-                'transition-[border-color,box-shadow,transform,background-color] duration-300',
-                // CSS containment: scope style + paint to this subtree so popovers
-                // opening elsewhere in the grid don't force a global recalc.
-                '[contain:layout_paint_style]',
-                onClick && (!isFullyLocked || isSelected) && 'cursor-pointer hover:shadow-md',
-                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5 dark:bg-primary/20',
+                'relative group/card cursor-pointer w-full select-none transition-colors duration-150 border-b last:border-b-0',
+                tone.row,
+                onClick && (!isFullyLocked || isSelected) && 'cursor-pointer',
+                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
-                isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
-                isPast && (isDraft ? 'opacity-70' : 'opacity-85'),
+                isDragOver && 'ring-2 ring-blue-400 ring-offset-1 bg-blue-500/20',
                 className
             )}
             onClick={isFullyLocked || isPast ? undefined : onClick}
         >
-            {/* Advisory editing-presence overlay (other managers on this shift).
-                Absolutely positioned against the `relative` CardShell root so it
-                never disturbs the grid layout; pointer-events-none so it never
-                intercepts card clicks. Gates nothing — server CAS is the guard. */}
+            {/* Advisory editing-presence overlay */}
             {editors && editors.length > 0 && (
                 <div className="absolute top-1 right-1 z-30 pointer-events-none">
                     <EditingPresenceBadge editors={editors} />
                 </div>
             )}
-            {/* Content container — body greyscales on past, header (dot) stays crisp */}
-            <div className="flex-1 flex flex-col min-h-0">
-                {/* Header */}
-                <div className={cn('px-3 py-1.5 flex justify-between items-center transition-[background-color,color] duration-300 relative z-[20]',
-                    headerBgAndText)}>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded", isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
-                            {stateDisplay.id}
-                        </span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest truncate opacity-80">
-                            {shift.roster_subgroup?.name || shift.sub_group_name || roleName}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        {shift.is_from_template && <div className="mr-1" title="From Template"><CopyPlus className="h-3 w-3 opacity-60" /></div>}
-                        {shift.notes?.startsWith('Generated') && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className="mr-1 cursor-help"><Sparkles className="h-3 w-3 text-indigo-400 dark:text-indigo-300 opacity-90" /></div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-indigo-950 text-indigo-50 border-indigo-800 py-1.5 px-3 text-[11px] max-w-[220px] text-center font-medium shadow-lg" sideOffset={4}>
-                                    {shift.notes}
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
 
-                        <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
-                            {headerAction || (!isFullyLocked && (
-                                <button className="h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
-                                    <MoreHorizontal className="h-3 w-3 opacity-60" />
-                                </button>
-                            ))}
-                        </div>
-
-                        {showStatusIcons && statusIcons.length > 0 && (
-                            <div className="flex items-center gap-1 ml-1">
-                                {/* Native title — Radix Tooltip per status icon costs
-                                    ~5k extra pointer-events bindings across a 1.4k-card grid. */}
-                                {statusIcons.map((si, i) => (
-                                    <span key={i} title={si.tooltip} className="inline-flex items-center">
-                                        <si.icon
-                                            className={cn("h-3 w-3", si.color)}
-                                            aria-label={si.tooltip}
-                                        />
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+            {/* Shift Bucket Row: <Badge> <Role> | <Timings> | <Assignment> <Three dots> */}
+            <div
+                className="grid items-center gap-x-2 px-2.5 py-2 min-h-[36px] w-full text-[11px]"
+                style={{
+                    gridTemplateColumns: 'minmax(0, 1.25fr) 1px 96px 1px minmax(0, 1fr) 24px',
+                }}
+            >
+                {/* 1. Badge + Role */}
+                <div className="flex items-center gap-2 min-w-0">
+                    <ShiftStateCircleBadge stateId={ctx.state} />
+                    <span
+                        className={cn('font-medium truncate min-w-0 text-[11px] sm:text-[13px]', tone.primary)}
+                        title={roleDisplay}
+                    >
+                        {roleDisplay}
+                    </span>
                 </div>
 
-                {/* Body */}
-                <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]")}>
-                    <div className="flex flex-col items-center justify-center min-h-[24px] gap-0.5">
-                        <div className="text-[11px] font-bold text-foreground truncate text-center leading-none">
-                            {isPeopleMode ? roleName : (employeeName || 'Unassigned')}
-                        </div>
-                        <div className="text-[9px] text-foreground/60 font-medium uppercase tracking-tight truncate">
-                            {isPeopleMode ? (shift.roster_subgroup?.name || shift.sub_group_name || 'Shift') : roleName}
-                        </div>
-                    </div>
-                    <div className="flex justify-center mb-1">
-                        <div className="bg-muted/50 rounded-md px-2 py-0.5 flex items-center gap-1.5 text-xs">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span className="font-mono font-medium text-foreground text-[9px]">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
-                        </div>
-                    </div>
-                    
-                    {/* Cost Badge — shown for all shifts */}
-                    {costBreakdown.totalCost > 0 && (
-                        <div className="flex justify-center mt-auto">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 cursor-help">
-                                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                            {employeeName ? '=' : '≈'} ${costBreakdown.totalCost.toFixed(2)}
-                                        </span>
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-xl">
-                                    <CostBreakdownTooltip breakdown={costBreakdown} />
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-                    )}
+                {/* Divider */}
+                <div className={cn('h-4 w-px select-none justify-self-center', tone.divider)} aria-hidden="true" />
 
-                    {/* Bidding Icon — floating in bottom right */}
-                    {isBiddingActive && biddingUrgency && (
-                        <div className="absolute bottom-1.5 right-1.5 z-30">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className={cn(
-                                        "p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-help hover:scale-105 transition-all duration-300",
-                                        biddingUrgency === 'urgent' && "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400",
-                                        biddingUrgency === 'standard' && "bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400"
-                                    )}>
-                                        <Gavel className="h-4.5 w-4.5" />
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                                    {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
-                                    {biddingUrgency === 'standard' && 'Bidding Active'}
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
+                {/* 2. Timings */}
+                <span
+                    className={cn('font-medium text-[11px] sm:text-[13px] tabular-nums text-center truncate', tone.secondary)}
+                    title={`${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}${costBreakdown.totalCost > 0 ? ` · Est. $${costBreakdown.totalCost.toFixed(0)}` : ''}`}
+                >
+                    {formatTime(shift.start_time)} – {formatTime(shift.end_time)}
+                </span>
+
+                {/* Divider */}
+                <div className={cn('h-4 w-px select-none justify-self-center', tone.divider)} aria-hidden="true" />
+
+                {/* 3. Assignment */}
+                <div className="flex items-center min-w-0">
+                    {employeeName ? (
+                        <span className={cn('truncate font-normal text-[11px] sm:text-[13px]', tone.primary)} title={employeeName}>
+                            {employeeName}
+                        </span>
+                    ) : (
+                        <span className={cn('text-[11px] sm:text-[13px] font-medium tracking-tight truncate', isPast ? 'text-amber-800/80 dark:text-amber-300/70' : 'text-amber-700 dark:text-amber-300')}>
+                            Unassigned
+                        </span>
                     )}
+                </div>
+
+                {/* 4. Action Area: Three Dots Menu */}
+                <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative z-30 shrink-0 w-6 flex items-center justify-end"
+                >
+                    {headerAction || (!isFullyLocked ? (
+                        <button
+                            className="h-6 w-6 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                            aria-label="Shift actions"
+                        >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                        </button>
+                    ) : (
+                        <div className="w-6 h-6" aria-hidden="true" />
+                    ))}
                 </div>
             </div>
 
-            {/* DnD Blocking Overlay (highest layer) */}
+            {/* DnD Blocking Overlay */}
             {isDnDActive && isLocked && isPublished && (
                 <div
-                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]"
+                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50"
                     aria-hidden="true"
                 />
             )}
@@ -670,8 +496,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
     
     // Centralized protection logic
-    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
-    const isProtected = protection.isProtected || fsmLock.partialLock;
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
@@ -729,10 +553,10 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     <div className="flex justify-between items-center mb-3 z-[20]">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                             <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-40 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
-                            <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded text-white bg-white/20 dark:bg-white/10")}>
+                            <span className={cn("text-[11px] font-mono font-bold px-1 py-0.5 rounded text-white bg-white/20 dark:bg-white/10")}>
                                 {stateDisplay.id}
                             </span>
-                            {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
+                            {shift.is_from_template && <Badge variant="outline" className="text-[11px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
                         </div>
                         <div className="flex items-center gap-1.5">
                             {getLifecycleIcon(statusStr)}
@@ -763,13 +587,13 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">
                             <Avatar className="h-9 w-9 border border-border">
-                                <AvatarFallback className={cn('text-xs font-bold bg-primary/20 text-primary')}>
+                                <AvatarFallback className={cn('text-[11px] font-bold bg-primary/20 text-primary')}>
                                     <Briefcase className="h-4 w-4" />
                                 </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-foreground truncate">{roleName}</p>
-                                <p className="text-xs text-muted-foreground truncate">
+                                <p className="text-[13px] font-bold text-foreground truncate">{roleName}</p>
+                                <p className="text-[11px] text-muted-foreground truncate">
                                     {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
                                 </p>
                             </div>
@@ -778,15 +602,15 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         <div className="flex items-center justify-between pt-2 border-t border-dashed border-border/30">
                             <div className="bg-muted/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
                                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span className="text-xs font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                                <span className="text-[11px] font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                             </div>
                             <div className="flex flex-col items-end gap-1">
-                                {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
+                                {totalHours && <Badge variant="secondary" className="text-[11px]">{totalHours}h net</Badge>}
                                  {costBreakdown.totalCost > 0 && (
                                      <Tooltip>
                                          <TooltipTrigger asChild>
                                              <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
-                                                 <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                                 <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                                                      ${costBreakdown.totalCost.toFixed(2)}
                                                  </span>
                                              </div>
@@ -800,7 +624,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </div>
 
                         {hasComplianceIssue && (
-                            <div className={cn('rounded-lg p-2.5 text-xs border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
+                            <div className={cn('rounded-lg p-2.5 text-[11px] border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
                                 <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle className="h-3.5 w-3.5" />{compliance?.status === 'violation' ? 'Compliance Violation' : 'Compliance Warning'}</div>
                                 <ul className="space-y-0.5 pl-5 list-disc">
                                     {compliance?.violations.map((v, i) => <li key={`v-${i}`}>{v}</li>)}
@@ -815,7 +639,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                 <p className="text-[11px] leading-relaxed font-medium">{shift.notes}</p>
                             </div>
                         ) : shift.notes ? (
-                            <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
+                            <p className="text-[11px] text-muted-foreground italic truncate">{shift.notes}</p>
                         ) : null}
                     </div>
                 </div>
@@ -832,7 +656,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                     <Gavel className="h-4.5 w-4.5" />
                                 </div>
                             </TooltipTrigger>
-                            <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                            <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[11px] font-bold">
                                 {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
                                 {biddingUrgency === 'standard' && 'Bidding Active'}
                             </TooltipContent>
@@ -843,7 +667,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 {/* DnD Blocking Overlay (highest layer) */}
                 {isDnDActive && isLocked && isPublished && (
                     <div
-                        className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]"
+                        className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50"
                         aria-hidden="true"
                     />
                 )}
@@ -875,7 +699,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     headerBgAndText)}>
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-40 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
-                        <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded",
+                        <span className={cn("text-[11px] font-mono font-bold px-1 py-0.5 rounded",
                             isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
                             {stateDisplay.id}
                         </span>
@@ -884,7 +708,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                        {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
+                        {shift.is_from_template && <Badge variant="outline" className="text-[11px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
 
                         {getLifecycleIcon(statusStr)}
                         <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
@@ -915,13 +739,13 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 <div className={cn("p-4 space-y-3 relative z-[20]")}>
                     <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border border-border">
-                            <AvatarFallback className={cn('text-xs font-bold bg-primary/20 text-primary')}>
+                            <AvatarFallback className={cn('text-[11px] font-bold bg-primary/20 text-primary')}>
                                 {isPeopleMode ? <Briefcase className="h-4 w-4" /> : (employeeName ? getInitials(employeeName) : <User className="h-4 w-4" />)}
                             </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-foreground truncate">{isPeopleMode ? roleName : (employeeName || 'Unassigned')}</p>
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="text-[13px] font-bold text-foreground truncate">{isPeopleMode ? roleName : (employeeName || 'Unassigned')}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
                                 {isPeopleMode ? (shift.roster_subgroup?.name || shift.sub_group_name || 'Shift') : roleName}
                             </p>
                         </div>
@@ -930,16 +754,16 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     <div className="flex items-center justify-between">
                         <div className="bg-muted/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
                             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-xs font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                            <span className="text-[11px] font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                            {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
+                            {totalHours && <Badge variant="secondary" className="text-[11px]">{totalHours}h net</Badge>}
                              {/* Cost Badge — shown for all shifts */}
                              {costBreakdown.totalCost > 0 && (
                                  <Tooltip>
                                      <TooltipTrigger asChild>
                                          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
-                                             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                             <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                                                  {employeeName ? '=' : '≈'} ${costBreakdown.totalCost.toFixed(2)}
                                              </span>
                                          </div>
@@ -953,7 +777,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </div>
 
                     {hasComplianceIssue && (
-                        <div className={cn('rounded-lg p-2.5 text-xs border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
+                        <div className={cn('rounded-lg p-2.5 text-[11px] border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
                             <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle className="h-3.5 w-3.5" />{compliance?.status === 'violation' ? 'Compliance Violation' : 'Compliance Warning'}</div>
                             <ul className="space-y-0.5 pl-5 list-disc">
                                 {compliance?.violations.map((v, i) => <li key={`v-${i}`}>{v}</li>)}
@@ -968,7 +792,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             <p className="text-[11px] leading-relaxed font-medium">{shift.notes}</p>
                         </div>
                     ) : shift.notes ? (
-                        <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
+                        <p className="text-[11px] text-muted-foreground italic truncate">{shift.notes}</p>
                     ) : null}
 
                     {/* Bidding Icon */}
@@ -984,7 +808,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                         <Gavel className="h-4.5 w-4.5" />
                                     </div>
                                 </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[11px] font-bold">
                                     {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
                                     {biddingUrgency === 'standard' && 'Bidding Active'}
                                 </TooltipContent>
@@ -997,7 +821,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
             {/* DnD Blocking Overlay (highest layer) */}
             {isDnDActive && isLocked && isPublished && (
                 <div
-                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]"
+                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50"
                     aria-hidden="true"
                 />
             )}
@@ -1022,18 +846,6 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
     const roleName = shift.roles?.name || 'No Role';
 
-    const ctx = useMemo(() => getShiftUIContext({
-        lifecycle_status:   shift.lifecycle_status  ?? 'Draft',
-        assignment_status:  shift.assignment_status ?? 'unassigned',
-        assignment_outcome: shift.assignment_outcome ?? null,
-        trading_status:     shift.trading_status    ?? null,
-        is_cancelled:       shift.is_cancelled      ?? false,
-        scheduled_start:    shift.scheduled_start   ?? null,
-        scheduled_end:      shift.scheduled_end     ?? null,
-        start_at:           shift.start_at          ?? null,
-        end_at:             shift.end_at            ?? null,
-        actual_start:       shift.actual_start      ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
 
 
@@ -1241,4 +1053,3 @@ const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
 
 export const SmartShiftCard = React.memo(SmartShiftCardImpl);
 
-export default SmartShiftCard;

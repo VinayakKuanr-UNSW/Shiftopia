@@ -8,7 +8,7 @@
 /**
  * Availability type enum matching database enum
  */
-export type AvailabilityType = 'available' | 'preferred' | 'limited' | 'unavailable';
+type AvailabilityType = 'available' | 'preferred' | 'limited' | 'unavailable';
 
 /**
  * Priority order for availability resolution

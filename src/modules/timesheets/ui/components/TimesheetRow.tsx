@@ -2,6 +2,7 @@
    TimesheetRow.tsx - Migrated to new module
 ------------------------------------------------------------------- */
 
+import { tableTokens } from '@/modules/core/ui/primitives/table';
 import React, { useState, useMemo } from "react";
 import {
     CheckCircle,
@@ -12,15 +13,12 @@ import {
     MessageSquare,
     UserX,
     Lock,
-    ShieldCheck,
-    RotateCcw,
     Pencil,
     Clock,
     User,
     Bot,
     TrendingUp,
 } from "lucide-react";
-import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
 
 
 import { cn } from "@/modules/core/lib/utils";
@@ -43,14 +41,13 @@ import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
-import { parseZonedDateTime, SYDNEY_TZ } from "@/modules/core/lib/date.utils";
-import { getProtectionContext, getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
-import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from "../../domain/variance-reasons";
-import { validateBillableEdit, billableVarianceVsRoster } from "../../domain/billable-edit";
+import { getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
+import { validateBillableEdit, parseHHMM } from "../../domain/billable-edit";
+import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
-import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 
 /* Billable-time provenance icons (F16) — explicit iconography, not a bare `*`. */
 type BillableSource = 'manual' | 'snapped' | 'auto' | null | undefined;
@@ -78,7 +75,7 @@ const BillableSourceIcon: React.FC<{
                         <Icon className="h-3 w-3" />
                     </span>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="text-[10px]">{label}</TooltipContent>
+                <TooltipContent side="top" className="text-[11px]">{label}</TooltipContent>
             </Tooltip>
         </TooltipProvider>
     );
@@ -137,6 +134,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         adjustedEnd: entry.adjustedEnd || "",
         paidBreak: entry.paidBreak || "0",
         unpaidBreak: entry.unpaidBreak || "0",
+        actualBreakStart: entry.actualBreakStart || "",
+        actualBreakEnd: entry.actualBreakEnd || "",
     });
     // Snapshot of the editor prefill — only sides the manager actually CHANGED
     // are persisted (and thus become manual/`*`). Saving an untouched side
@@ -148,21 +147,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         isShiftFinished(entry.date, entry.scheduledStart, entry.scheduledEnd, entry.clockOut),
     [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.clockOut]);
 
-    const isPast = useMemo(() => {
-        if (!entry.date || !entry.scheduledEnd) return false;
-        try {
-            // Compare the shift's Sydney wall-clock end instant against the real
-            // current epoch — browser-timezone-independent.
-            return parseZonedDateTime(String(entry.date), entry.scheduledEnd, SYDNEY_TZ).getTime() < Date.now();
-        } catch {
-            return false;
-        }
-    }, [entry.date, entry.scheduledEnd]);
 
-    const protection = useMemo(() => getProtectionContext(
-        { lifecycle_status: entry.liveStatus as any },
-        isPast
-    ), [entry.liveStatus, isPast]);
 
     // Single shared projection — keeps row, mobile card, and bulk-select gating
     // derived from the exact same ShiftDotInput (incl. per-side manual signals).
@@ -343,6 +328,10 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             scheduledEnd: entry.scheduledEnd,
             unpaidBreakMinutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
             requiredMinutes,
+            actualBreakStart: editedAdjusted.actualBreakStart || null,
+            actualBreakEnd: editedAdjusted.actualBreakEnd || null,
+            rosteredBreakStart: entry.rosteredBreakStart || null,
+            rosteredBreakEnd: entry.rosteredBreakEnd || null,
         });
         if (!v.ok) {
             setTimingError(v.error!);
@@ -363,6 +352,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             employmentType: entry.employmentType,
             is_training: entry.isTraining,
             unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
+            break_start: v.normalizedBreakStart || entry.actualBreakStart || entry.rosteredBreakStart || undefined,
             scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
         });
         const approximatePay = cost.payBasis === 'salary' ? 'Salaried' : `$${cost.totalCost.toFixed(2)}`;
@@ -374,6 +364,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             ...(endChanged ? { adjustedEnd } : {}),
             paidBreak: editedAdjusted.paidBreak,
             unpaidBreak: editedAdjusted.unpaidBreak,
+            actualBreakStart: v.normalizedBreakStart || null,
+            actualBreakEnd: v.normalizedBreakEnd || null,
             length: calculatedValues.length,
             netLength: calculatedValues.netLength,
             differential: calculatedValues.differential,
@@ -433,6 +425,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             adjustedEnd: entry.adjustedEnd || "",
             paidBreak: entry.paidBreak || "0",
             unpaidBreak: entry.unpaidBreak || "0",
+            actualBreakStart: entry.actualBreakStart || "",
+            actualBreakEnd: entry.actualBreakEnd || "",
         });
         setTimingError('');
         setIsEditingAdjusted(false);
@@ -456,6 +450,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 ...prefill,
                 paidBreak: entry.paidBreak || "0",
                 unpaidBreak: entry.unpaidBreak || "0",
+                actualBreakStart: entry.actualBreakStart || "",
+                actualBreakEnd: entry.actualBreakEnd || "",
             });
             setInitialEdit(prefill);
             setIsEditingAdjusted(true);
@@ -473,18 +469,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     const actionNote = (entry as any).notes || (entry as any).rejectedReason;
 
     /* -- render ------------------------------------------------ */
-    const cellClass = "p-3 text-sm whitespace-nowrap border-b border-border/50 transition-all duration-200";
-    const editableCellClass = cn(
-        cellClass,
-        (!isFinalized && !readOnly && !reviewLocked)
-            ? "cursor-pointer hover:bg-primary/5 hover:text-primary font-medium text-foreground/80"
-            : "font-medium text-foreground/60"
-    );
+    const cellClass = cn(tableTokens.cell, "px-3 whitespace-nowrap");
 
     return (
         <>{/* TimesheetRow.tsx */}
             <tr className={cn(
-            "group hover:bg-muted/30 transition-all duration-300",
+            tableTokens.row, "group",
             entry.attendanceStatus === 'no_show' && "bg-red-500/5 hover:bg-red-500/10",
         )}>
                 {/* Select */}
@@ -503,14 +493,14 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
  
                 {/* Date column (Optional) */}
                 {showDate && (
-                    <td className={`${cellClass} font-black text-xs text-primary border-r border-border/30`}>
+                    <td className={`${cellClass} font-semibold text-primary border-r border-border/30`}>
                         {String(entry.date)}
                     </td>
                 )}
 
                 {/* Employee Info */}
-                <td className={`${cellClass} font-black text-[11px] text-muted-foreground/60 uppercase tracking-tighter`}>{entry.employeeId}</td>
-                <td className={`${cellClass} font-black tracking-tight text-foreground border-r border-border/30`}>{entry.employee}</td>
+                <td className={`${cellClass} max-w-[96px] truncate font-mono text-muted-foreground`} title={String(entry.employeeId)}>{entry.employeeId}</td>
+                <td className={`${cellClass} font-semibold text-foreground border-r border-border/30`}>{entry.employee}</td>
 
                 {/* Hierarchy */}
                 <td className={cellClass}>{entry.group}</td>
@@ -518,7 +508,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 <td className={cellClass}>{entry.role}</td>
                 <td className={`${cellClass} border-r border-border/30`}>
                     {entry.remunerationLevel && !entry.remunerationLevel.toLowerCase().includes('team lead') && !entry.remunerationLevel.toLowerCase().includes('operational control') && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20 shadow-sm">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-black uppercase bg-primary/10 text-primary border border-primary/20 shadow-sm">
                             {entry.remunerationLevel}
                         </span>
                     )}
@@ -534,7 +524,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         <span className="font-bold">{entry.clockIn || '-'}</span>
                         {entry.varianceMinutes !== null && entry.varianceMinutes !== undefined && (
                             <span className={cn(
-                                "text-[9px] font-black uppercase tracking-tighter",
+                                "text-[11px] font-black uppercase tracking-tighter",
                                 entry.varianceMinutes > 5 ? "text-amber-500" : entry.varianceMinutes < -5 ? "text-emerald-500" : "text-muted-foreground/40"
                             )}>
                                 {entry.varianceMinutes > 0 ? `+${entry.varianceMinutes}m` : `${entry.varianceMinutes}m`}
@@ -543,7 +533,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         {/* Missing check-in badge */}
                         {(!entry.clockIn || entry.clockIn === '-') &&
                             (entry.liveStatus === 'InProgress' || entry.liveStatus === 'Completed') && (
-                            <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit border border-red-500/20">
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit border border-red-500/20">
                                 <AlertTriangle className="h-2.5 w-2.5" />Missing
                             </span>
                         )}
@@ -554,7 +544,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         <span className="font-bold">{entry.clockOut || '-'}</span>
                         {entry.clockOutVarianceMinutes !== null && entry.clockOutVarianceMinutes !== undefined && (
                             <span className={cn(
-                                "text-[9px] font-black uppercase tracking-tighter",
+                                "text-[11px] font-black uppercase tracking-tighter",
                                 entry.clockOutVarianceMinutes > 5 ? "text-amber-500" : entry.clockOutVarianceMinutes < -5 ? "text-emerald-500" : "text-muted-foreground/40"
                             )}>
                                 {entry.clockOutVarianceMinutes > 0 ? `+${entry.clockOutVarianceMinutes}m` : `${entry.clockOutVarianceMinutes}m`}
@@ -563,7 +553,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         {/* Missing check-out badge — shown when a completed/in-progress shift has no clock-out */}
                         {(!entry.clockOut || entry.clockOut === '-') &&
                             (entry.liveStatus === 'Completed') && (
-                            <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit border border-red-500/20">
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit border border-red-500/20">
                                 <AlertTriangle className="h-2.5 w-2.5" />Missing
                             </span>
                         )}
@@ -578,7 +568,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 type="time"
                                 value={editedAdjusted.adjustedStart}
                                 onChange={(e) => { setEditedAdjusted({ ...editedAdjusted, adjustedStart: e.target.value }); setTimingError(''); }}
-                                className={cn("bg-background border rounded-lg px-2 py-1 w-24 text-xs font-black shadow-sm", timingError ? "border-red-500/50" : "border-primary/30")}
+                                className={cn("bg-background border rounded-lg px-2 py-1 w-24 text-[11px] font-black shadow-sm", timingError ? "border-red-500/50" : "border-primary/30")}
                             />
                         </td>
                         <td className={`${cellClass} ${timingError ? 'bg-red-500/5' : 'bg-primary/5'}`}>
@@ -586,14 +576,14 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 type="time"
                                 value={editedAdjusted.adjustedEnd}
                                 onChange={(e) => { setEditedAdjusted({ ...editedAdjusted, adjustedEnd: e.target.value }); setTimingError(''); }}
-                                className={cn("bg-background border rounded-lg px-2 py-1 w-24 text-xs font-black shadow-sm", timingError ? "border-red-500/50" : "border-primary/30")}
+                                className={cn("bg-background border rounded-lg px-2 py-1 w-24 text-[11px] font-black shadow-sm", timingError ? "border-red-500/50" : "border-primary/30")}
                             />
-                            {timingError && <p className="text-[8px] text-red-500 mt-0.5 font-bold">{timingError}</p>}
+                            {timingError && <p className="text-[11px] text-red-500 mt-0.5 font-bold">{timingError}</p>}
                         </td>
                         <td className={`${cellClass} bg-primary/10 border-r border-border/30`}>
                             <div className="flex flex-col">
                                 <span className="font-black text-primary">{calculatedValues.length}</span>
-                                <span className="text-[8px] font-black uppercase text-muted-foreground tracking-widest leading-none">Auto</span>
+                                <span className="text-[11px] font-black uppercase text-muted-foreground tracking-widest leading-none">Auto</span>
                             </div>
                         </td>
                         <td className={`${cellClass} bg-primary/5`}>
@@ -603,18 +593,66 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 min="0"
                                 value={editedAdjusted.paidBreak}
                                 onChange={(e) => setEditedAdjusted({ ...editedAdjusted, paidBreak: e.target.value })}
-                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-xs font-black shadow-sm"
+                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-[11px] font-black shadow-sm"
                             />
                         </td>
                         <td className={`${cellClass} bg-primary/5`}>
-                            <input
-                                type="number"
-                                step="0.25"
-                                min="0"
-                                value={editedAdjusted.unpaidBreak}
-                                onChange={(e) => setEditedAdjusted({ ...editedAdjusted, unpaidBreak: e.target.value })}
-                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-xs font-black shadow-sm"
-                            />
+                            <div className="flex flex-col gap-1">
+                                <input
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    value={editedAdjusted.unpaidBreak}
+                                    onChange={(e) => setEditedAdjusted({ ...editedAdjusted, unpaidBreak: e.target.value })}
+                                    className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-[11px] font-black shadow-sm"
+                                    title="Unpaid break minutes"
+                                />
+                                <div className="flex items-center gap-1">
+                                    <input
+                                        type="text"
+                                        placeholder="Start"
+                                        value={editedAdjusted.actualBreakStart}
+                                        onChange={(e) => {
+                                            const start = e.target.value;
+                                            const updated = { ...editedAdjusted, actualBreakStart: start };
+                                            if (start && editedAdjusted.actualBreakEnd) {
+                                                const s = parseHHMM(start);
+                                                const end = parseHHMM(editedAdjusted.actualBreakEnd);
+                                                if (s !== null && end !== null) {
+                                                    const dur = end <= s ? end + 1440 - s : end - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    updated.unpaidBreak = entry.isSecurityRole ? '0' : String(dur);
+                                                }
+                                            }
+                                            setEditedAdjusted(updated);
+                                        }}
+                                        className="bg-background border border-primary/30 rounded px-1 py-0.5 w-14 text-[11px] font-mono shadow-sm"
+                                        title="Actual break start (HH:MM)"
+                                    />
+                                    <span className="text-[11px] text-muted-foreground">-</span>
+                                    <input
+                                        type="text"
+                                        placeholder="End"
+                                        value={editedAdjusted.actualBreakEnd}
+                                        onChange={(e) => {
+                                            const end = e.target.value;
+                                            const updated = { ...editedAdjusted, actualBreakEnd: end };
+                                            if (editedAdjusted.actualBreakStart && end) {
+                                                const s = parseHHMM(editedAdjusted.actualBreakStart);
+                                                const endM = parseHHMM(end);
+                                                if (s !== null && endM !== null) {
+                                                    const dur = endM <= s ? endM + 1440 - s : endM - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    updated.unpaidBreak = entry.isSecurityRole ? '0' : String(dur);
+                                                }
+                                            }
+                                            setEditedAdjusted(updated);
+                                        }}
+                                        className="bg-background border border-primary/30 rounded px-1 py-0.5 w-14 text-[11px] font-mono shadow-sm"
+                                        title="Actual break end (HH:MM)"
+                                    />
+                                </div>
+                            </div>
                         </td>
                         <td className={`${cellClass} bg-primary/10 border-r border-border/30`}>
                             <div className="flex flex-col">
@@ -624,7 +662,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 )}>
                                     {calculatedValues.netLength}
                                 </span>
-                                <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">Preview</span>
+                                <span className="text-[11px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">Preview</span>
                             </div>
                         </td>
                     </>
@@ -686,7 +724,31 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             {entry.paidBreak || '0'}
                         </td>
                         <td className={cn(cellClass, "font-medium text-foreground/80")}>
-                            {entry.unpaidBreak || '0'}
+                            <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5">
+                                    <span>{entry.unpaidBreak || '0'}</span>
+                                    {entry.actualBreakStart && entry.actualBreakEnd && (
+                                        <span className="text-[11px] font-mono text-muted-foreground/60">
+                                            ({entry.actualBreakStart}–{entry.actualBreakEnd})
+                                        </span>
+                                    )}
+                                </div>
+                                {entry.hasBreakVarianceFlag && (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 w-fit border border-amber-500/20 cursor-default">
+                                                    <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                                    {entry.breakVarianceMinutes != null ? `±${entry.breakVarianceMinutes}m` : '>15m dev'}
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Actual break ({entry.actualBreakStart}–{entry.actualBreakEnd}) deviates {entry.breakVarianceMinutes != null ? `${entry.breakVarianceMinutes}m` : '>15m'} from rostered break ({entry.rosteredBreakStart || '-'}–{entry.rosteredBreakEnd || '-'}). Manager review required.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                )}
+                            </div>
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.netLength}
@@ -701,7 +763,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
                 {/* Differential */}
                 <td className={`${cellClass} border-r border-border/30`}>
-                    <div className={`px-2 py-1 rounded-lg text-[10px] font-black text-center w-fit ${getDifferentialColor(isEditingAdjusted ? calculatedValues.differential : displayValues.differential).replace('text-', 'bg-').replace('-400', '/10 text-')}`}>
+                    <div className={`px-2 py-1 rounded-lg text-[11px] font-black text-center w-fit ${getDifferentialColor(isEditingAdjusted ? calculatedValues.differential : displayValues.differential).replace('text-', 'bg-').replace('-400', '/10 text-')}`}>
                         {isEditingAdjusted ? calculatedValues.differential : displayValues.differential}
                     </div>
                 </td>
@@ -711,7 +773,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 <td className={cellClass}>
                     {timeRuleBadge && (
                         <span 
-                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap"
+                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap"
                             style={{
                                 color: timeRuleBadge.color,
                                 backgroundColor: `${timeRuleBadge.color}10`,
@@ -730,12 +792,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 <TooltipProvider>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <span className="inline-flex items-center gap-0.5 px-1.5 h-5 rounded-md border border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-black font-mono cursor-default">
+                                            <span className="inline-flex items-center gap-0.5 px-1.5 h-5 rounded-md border border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-black font-mono cursor-default">
                                                 <Pencil className="h-2.5 w-2.5" />
                                                 {entry.editCount}
                                             </span>
                                         </TooltipTrigger>
-                                        <TooltipContent side="top" className="text-[10px]">
+                                        <TooltipContent side="top" className="text-[11px]">
                                             {entry.editCount} manager {entry.editCount === 1 ? 'edit' : 'edits'} — see History
                                         </TooltipContent>
                                     </Tooltip>
@@ -745,7 +807,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         {[liveRuleBadges.arrival, liveRuleBadges.departure].map((badge, i) => badge && (
                             <span
                                 key={i}
-                                className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap"
+                                className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap"
                                 style={{
                                     color: badge.color,
                                     backgroundColor: `${badge.color}10`,
@@ -760,7 +822,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <span className="inline-flex items-center gap-1 text-[8px] text-muted-foreground/60 cursor-default mt-0.5">
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 cursor-default mt-0.5">
                                             <MessageSquare className="h-2.5 w-2.5 shrink-0" />
                                             <span className="truncate max-w-[80px]">{actionNote}</span>
                                         </span>
@@ -780,7 +842,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 [payrollRuleBadges.arrival, payrollRuleBadges.departure].map((badge, i) => badge && (
                                     <span
                                         key={i}
-                                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap"
+                                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap"
                                         style={{
                                             color: badge.color,
                                             backgroundColor: `${badge.color}10`,
@@ -791,7 +853,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                     </span>
                                 ))
                             ) : (
-                                <span className="text-[9px] font-mono text-muted-foreground/40 uppercase tracking-wider">No billable</span>
+                                <span className="text-[11px] font-mono text-muted-foreground/40 uppercase tracking-wider">No billable</span>
                             )
                         ) : null}
                         {entry.wasToppedUpToMinEngagement && (
@@ -799,7 +861,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <span
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap cursor-default"
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap cursor-default"
                                             style={{ color: '#0891B2', backgroundColor: '#0891B210', borderColor: '#0891B220' }}
                                         >
                                             <TrendingUp className="h-2.5 w-2.5" />
@@ -818,7 +880,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             <TooltipProvider>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <span className="inline-flex items-center gap-1 text-[8px] text-muted-foreground/60 cursor-default mt-0.5">
+                                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 cursor-default mt-0.5">
                                             <MessageSquare className="h-2.5 w-2.5 shrink-0" />
                                             <span>Variance reason</span>
                                         </span>
@@ -996,7 +1058,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     <ul className="space-y-2 my-2">
                         {warnings.map((w, i) => (
                             <li key={i} className={cn(
-                                'flex items-start gap-2 text-sm px-3 py-2 rounded-lg',
+                                'flex items-start gap-2 text-[13px] px-3 py-2 rounded-lg',
                                 w.severity === 'error'
                                     ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
                                     : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20',
@@ -1009,7 +1071,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
                     {requiresReason && (
                         <div className="space-y-1.5">
-                            <Label htmlFor="override-reason" className="text-sm font-semibold">
+                            <Label htmlFor="override-reason" className="text-[13px] font-semibold">
                                 Override reason <span className="text-red-500">*</span>
                             </Label>
                             <Textarea
@@ -1017,7 +1079,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 placeholder="e.g. Supervisor confirmed attendance verbally…"
                                 value={overrideReason}
                                 onChange={e => setOverrideReason(e.target.value)}
-                                className="text-sm"
+                                className="text-[13px]"
                             />
                             <p className="text-[11px] text-muted-foreground">This reason will be saved and visible to the employee.</p>
                         </div>
@@ -1061,7 +1123,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     </DialogHeader>
 
                     <div className="space-y-1.5 my-2">
-                        <Label htmlFor="reject-reason" className="text-sm font-semibold">
+                        <Label htmlFor="reject-reason" className="text-[13px] font-semibold">
                             Rejection reason <span className="text-red-500">*</span>
                         </Label>
                         <Textarea
@@ -1069,7 +1131,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             placeholder="e.g. Clock-in times do not match scheduled hours. Please review and resubmit."
                             value={rejectReason}
                             onChange={e => setRejectReason(e.target.value)}
-                            className="text-sm"
+                            className="text-[13px]"
                             rows={3}
                         />
                     </div>
@@ -1107,16 +1169,16 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     <div className="space-y-4 my-2">
                         {pendingSave?.needArrival && (
                             <div className="space-y-1.5">
-                                <Label htmlFor="arrival-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                <Label htmlFor="arrival-variance" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                                     Arrival variance reason <span className="text-red-500">*</span>
                                 </Label>
                                 <Select value={arrivalReason} onValueChange={setArrivalReason}>
-                                    <SelectTrigger id="arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                    <SelectTrigger id="arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-[13px] font-semibold text-foreground">
                                         <SelectValue placeholder="Select a reason…" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
                                         {ARRIVAL_VARIANCE_REASONS.map(r => (
-                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-[11px] font-semibold cursor-pointer">
                                                 {r}
                                             </SelectItem>
                                         ))}
@@ -1126,16 +1188,16 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         )}
                         {pendingSave?.needDeparture && (
                             <div className="space-y-1.5">
-                                <Label htmlFor="departure-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                <Label htmlFor="departure-variance" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                                     Departure variance reason <span className="text-red-500">*</span>
                                 </Label>
                                 <Select value={departureReason} onValueChange={setDepartureReason}>
-                                    <SelectTrigger id="departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                    <SelectTrigger id="departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-[13px] font-semibold text-foreground">
                                         <SelectValue placeholder="Select a reason…" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
                                         {DEPARTURE_VARIANCE_REASONS.map(r => (
-                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-[11px] font-semibold cursor-pointer">
                                                 {r}
                                             </SelectItem>
                                         ))}

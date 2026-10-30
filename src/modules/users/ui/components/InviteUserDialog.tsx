@@ -62,20 +62,20 @@ export const InviteUserDialog: React.FC<{ className?: string }> = ({ className }
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
                 <Button className={className}>
-                    <UserPlus className="h-3.5 w-3.5 mr-2 shrink-0" />
+                    <UserPlus className="h-3.5 w-3.5 shrink-0" />
                     NEW USER
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent size="md">
                 <DialogHeader>
                     <div className="flex items-center gap-3 mb-1">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                             <UserPlus className="w-5 h-5 text-primary" />
                         </div>
-                        <DialogTitle className="text-xl font-bold">Add a new user</DialogTitle>
+                        <DialogTitle>Add a new user</DialogTitle>
                     </div>
                     <DialogDescription asChild>
-                        <div className="text-sm leading-relaxed text-muted-foreground">
+                        <div className="text-[13px] leading-relaxed text-muted-foreground">
                             Send this registration link to the new employee. They set their own
                             password, so no one else ever handles it.
                         </div>
@@ -88,7 +88,7 @@ export const InviteUserDialog: React.FC<{ className?: string }> = ({ className }
                         value={SIGNUP_URL}
                         onFocus={(e) => e.currentTarget.select()}
                         aria-label="Registration link"
-                        className="font-mono text-xs"
+                        className="font-mono text-[11px]"
                     />
                     <Button
                         variant="outline"
@@ -101,10 +101,10 @@ export const InviteUserDialog: React.FC<{ className?: string }> = ({ className }
                 </div>
 
                 <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">
+                    <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground mb-3">
                         What happens next
                     </p>
-                    <ol className="space-y-2 text-xs text-muted-foreground list-decimal list-inside">
+                    <ol className="space-y-2 text-[11px] text-muted-foreground list-decimal list-inside">
                         <li>They register and their profile is created automatically.</li>
                         <li>
                             Until you grant access they stay on a{' '}
@@ -135,4 +135,3 @@ export const InviteUserDialog: React.FC<{ className?: string }> = ({ className }
     );
 };
 
-export default InviteUserDialog;

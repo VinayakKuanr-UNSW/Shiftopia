@@ -1,0 +1,143 @@
+-- sm_bulk_publish_shifts had no authorisation check (found by the API
+-- integration suite, 2026-10-13): any signed-in user — an employee, or a
+-- manager of another organisation — could publish any shift by id, and the
+-- caller-supplied p_actor_id was recorded as last_modified_by. Its siblings
+-- (sm_publish_shift, sm_unpublish_shift, the gateway, bulk assign/delete) all
+-- check scope; this one updated shifts directly. The function is otherwise
+-- unchanged: built from pg_get_functiondef of the live definition.
+--
+-- A forbidden shift anywhere in the batch refuses the whole call. The body's
+-- EXCEPTION handler turns that into {success:false, error:'Not authorised: …'},
+-- the shape the bulk action UI already handles, and nothing is written.
+
+CREATE OR REPLACE FUNCTION public.sm_bulk_publish_shifts(p_shift_ids uuid[], p_actor_id uuid DEFAULT auth.uid())
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+DECLARE
+    v_total_count int;
+    v_success_count int;
+    v_actor_name text;
+    v_actor_role text;
+BEGIN
+    -- authz guard (2026-10-13): every shift must be publishable by the caller —
+    -- the check sm_publish_shift makes via sm_require_shift_action. Without it
+    -- any signed-in user could publish any shift in any organisation, and name
+    -- any actor. System callers (cron, service role) pass, as there.
+    IF NOT public.sm_request_is_system() THEN
+        p_actor_id := auth.uid();
+        PERFORM public.sm_require_shift_action(sid, 'shift.publish') FROM unnest(p_shift_ids) AS sid;
+    END IF;
+
+    v_total_count := array_length(p_shift_ids, 1);
+
+    IF p_actor_id IS NOT NULL THEN
+        SELECT
+            COALESCE(first_name || ' ' || COALESCE(last_name, ''), email),
+            left(lower(legacy_system_role::text), 50)
+        INTO v_actor_name, v_actor_role
+        FROM profiles
+        WHERE id = p_actor_id;
+    ELSE
+        v_actor_name := 'System';
+        v_actor_role := 'system_automation';
+    END IF;
+
+    WITH shift_calculations AS (
+        SELECT
+            s.id,
+            s.assigned_employee_id,
+            s.shift_date,
+            s.target_employment_type = 'FT' AS is_ft,
+            get_shift_state_id(s.id) as current_state,
+            COALESCE(s.scheduled_start, s.start_at) as shift_start_tz,
+            get_time_category(COALESCE(s.scheduled_start, s.start_at)) as time_cat
+        FROM shifts s
+        WHERE s.id = ANY(p_shift_ids)
+          AND s.deleted_at IS NULL
+    ),
+    valid_transitions AS (
+        SELECT
+            id,
+            current_state,
+            time_cat,
+            CASE
+                WHEN is_ft AND current_state = 'S2' THEN 'S4'
+                WHEN is_ft THEN NULL
+                WHEN current_state = 'S1' AND time_cat IN ('URGENT','NORMAL') THEN 'S5'
+                WHEN current_state = 'S2' AND time_cat = 'EMERGENCY' THEN 'S4'
+                WHEN current_state = 'S2' THEN 'S3'
+                ELSE NULL
+            END as new_state_id,
+            CASE
+                WHEN EXTRACT(EPOCH FROM (shift_start_tz - NOW())) / 3600.0 <= 4 THEN NOW()
+                WHEN EXTRACT(EPOCH FROM (shift_start_tz - NOW())) / 3600.0 <= 24 THEN LEAST(NOW() + INTERVAL '4 hours', shift_start_tz - INTERVAL '4 hours')
+                WHEN EXTRACT(EPOCH FROM (shift_start_tz - NOW())) / 3600.0 <= 48 THEN NOW() + INTERVAL '8 hours'
+                ELSE NOW() + INTERVAL '12 hours'
+            END as offer_deadline
+        FROM shift_calculations
+        WHERE current_state IN ('S1', 'S2')
+          AND time_cat != 'PAST'
+          AND NOT (current_state = 'S1' AND time_cat = 'EMERGENCY')
+          -- Approved leave: an assigned shift is never published onto it.
+          AND NOT (assigned_employee_id IS NOT NULL
+                   AND public.employee_on_approved_leave(assigned_employee_id, shift_date))
+    ),
+    updated_rows AS (
+        UPDATE shifts s
+        SET
+            lifecycle_status = 'Published',
+            published_at = NOW(),
+            last_modified_by = p_actor_id,
+            updated_at = NOW(),
+            bidding_status = CASE WHEN vt.new_state_id = 'S5' THEN 'on_bidding' ELSE s.bidding_status END,
+            is_on_bidding = CASE WHEN vt.new_state_id = 'S5' THEN TRUE ELSE s.is_on_bidding END,
+            bidding_open_at = CASE WHEN vt.new_state_id = 'S5' THEN NOW() ELSE s.bidding_open_at END,
+            fulfillment_status = CASE
+                WHEN vt.new_state_id = 'S5' THEN 'bidding'::shift_fulfillment_status
+                WHEN vt.new_state_id = 'S4' THEN 'scheduled'::shift_fulfillment_status
+                WHEN vt.new_state_id = 'S3' THEN 'offered'::shift_fulfillment_status
+                ELSE s.fulfillment_status
+            END,
+            assignment_outcome = CASE
+                WHEN vt.new_state_id = 'S4' THEN 'confirmed'
+                WHEN vt.new_state_id = 'S3' THEN NULL
+                ELSE s.assignment_outcome
+            END,
+            confirmed_at = CASE WHEN vt.new_state_id = 'S4' THEN NOW() ELSE s.confirmed_at END,
+            offer_sent_at = CASE WHEN vt.new_state_id = 'S3' THEN NOW() ELSE s.offer_sent_at END,
+            offer_expires_at = CASE WHEN vt.new_state_id = 'S3' THEN vt.offer_deadline ELSE s.offer_expires_at END
+        FROM valid_transitions vt
+        WHERE s.id = vt.id AND vt.new_state_id IS NOT NULL
+        RETURNING s.id, vt.current_state, vt.new_state_id, vt.offer_deadline
+    ),
+    offers_update AS (
+        UPDATE public.shift_offers so
+        SET offer_expires_at = ur.offer_deadline
+        FROM updated_rows ur
+        WHERE so.shift_id = ur.id
+          AND ur.new_state_id = 'S3'
+          AND so.status = 'Pending'
+        RETURNING so.id
+    )
+    SELECT count(*) INTO v_success_count FROM updated_rows;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'total_requested', v_total_count,
+        'success_count', v_success_count,
+        'failure_count', v_total_count - v_success_count,
+        'message', format('Successfully published %s of %s shifts', v_success_count, v_total_count)
+    );
+
+EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'Error in sm_bulk_publish_shifts: %', SQLERRM;
+    RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+END;
+$function$;
+
+-- CREATE OR REPLACE must not widen who may call it: restate production's grants.
+REVOKE ALL ON FUNCTION public.sm_bulk_publish_shifts(uuid[], uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.sm_bulk_publish_shifts(uuid[], uuid) TO authenticated, service_role;

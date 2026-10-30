@@ -24,14 +24,14 @@ export function parseHHMM(t: string | null | undefined): number | null {
 }
 
 /** Auto-format a bare "1600" / "930" into "16:00" / "09:30"; leave others as-is. */
-export function formatTimeStr(t: string): string {
+function formatTimeStr(t: string): string {
     if (/^\d{3,4}$/.test(t)) {
         return t.length === 3 ? `0${t.slice(0, 1)}:${t.slice(1)}` : `${t.slice(0, 2)}:${t.slice(2)}`;
     }
     return t;
 }
 
-export interface BillableEditInput {
+interface BillableEditInput {
     editedStart: string;
     editedEnd: string;
     initialStart: string;
@@ -49,9 +49,15 @@ export interface BillableEditInput {
      * applies.
      */
     requiredMinutes?: number;
+    /** Actual meal break window entered on timesheet (HH:mm) */
+    actualBreakStart?: string | null;
+    actualBreakEnd?: string | null;
+    /** Rostered meal break window from shift (HH:mm) */
+    rosteredBreakStart?: string | null;
+    rosteredBreakEnd?: string | null;
 }
 
-export interface BillableEditResult {
+interface BillableEditResult {
     ok: boolean;
     /** validation message when !ok */
     error?: string;
@@ -62,6 +68,10 @@ export interface BillableEditResult {
     /** a CHANGED side that now varies from roster beyond ±grace → reason required */
     needArrivalReason: boolean;
     needDepartureReason: boolean;
+    normalizedBreakStart?: string | null;
+    normalizedBreakEnd?: string | null;
+    breakVarianceMinutes?: number | null;
+    hasBreakVarianceFlag: boolean;
 }
 
 export function validateBillableEdit(p: BillableEditInput): BillableEditResult {
@@ -74,6 +84,10 @@ export function validateBillableEdit(p: BillableEditInput): BillableEditResult {
         normalizedStart, normalizedEnd,
         startChanged: false, endChanged: false,
         needArrivalReason: false, needDepartureReason: false,
+        normalizedBreakStart: null,
+        normalizedBreakEnd: null,
+        breakVarianceMinutes: null,
+        hasBreakVarianceFlag: false,
     };
     const fail = (error: string): BillableEditResult => ({ ok: false, error, ...base });
 
@@ -92,6 +106,54 @@ export function validateBillableEdit(p: BillableEditInput): BillableEditResult {
         grossMins = end - sMins;
         if (grossMins <= 0) return fail('Adjusted end time must be after start time.');
     }
+
+    // Actual break validation (cl 36.1: 30-60m meal break, within shift)
+    let normalizedBreakStart: string | null = null;
+    let normalizedBreakEnd: string | null = null;
+    let hasBreakVarianceFlag = false;
+    let breakVarianceMinutes: number | null = null;
+
+    if (p.actualBreakStart || p.actualBreakEnd) {
+        if (!p.actualBreakStart || !p.actualBreakEnd) {
+            return fail('Both actual break start and end times must be provided.');
+        }
+        normalizedBreakStart = formatTimeStr(p.actualBreakStart);
+        normalizedBreakEnd = formatTimeStr(p.actualBreakEnd);
+        const bStartMins = normalizedBreakStart ? parseHHMM(normalizedBreakStart) : null;
+        const bEndMins = normalizedBreakEnd ? parseHHMM(normalizedBreakEnd) : null;
+
+        if (bStartMins === null || bEndMins === null) {
+            return fail('Invalid break time format. Use HH:MM or HHMM.');
+        }
+
+        const breakDuration = bEndMins <= bStartMins ? (bEndMins + DAY_MIN - bStartMins) : (bEndMins - bStartMins);
+        if (breakDuration < 30 || breakDuration > 60) {
+            return fail('Actual meal break must be between 30 and 60 minutes (cl 36.1).');
+        }
+
+        if (sMins !== null && eMins !== null) {
+            const shiftEnd = eMins <= sMins ? eMins + DAY_MIN : eMins;
+            const breakStartRel = bStartMins < sMins ? bStartMins + DAY_MIN : bStartMins;
+            const breakEndRel = breakStartRel + breakDuration;
+
+            if (breakStartRel < sMins || breakEndRel > shiftEnd) {
+                return fail('Actual meal break must fall within the shift start and end times.');
+            }
+        }
+
+        if (p.rosteredBreakStart) {
+            const rostStartMins = parseHHMM(formatTimeStr(p.rosteredBreakStart));
+            if (rostStartMins !== null) {
+                let diff = Math.abs(bStartMins - rostStartMins);
+                if (diff > DAY_MIN / 2) diff = DAY_MIN - diff;
+                breakVarianceMinutes = diff;
+                if (diff > 15) {
+                    hasBreakVarianceFlag = true;
+                }
+            }
+        }
+    }
+
     // Unpaid break bounds.
     if (p.unpaidBreakMinutes < 0) return fail('Unpaid break cannot be negative.');
     if (grossMins !== null && p.unpaidBreakMinutes > grossMins) {
@@ -119,6 +181,10 @@ export function validateBillableEdit(p: BillableEditInput): BillableEditResult {
         startChanged, endChanged,
         needArrivalReason: !!(startChanged && normalizedStart && arrival),
         needDepartureReason: !!(endChanged && normalizedEnd && departure),
+        normalizedBreakStart,
+        normalizedBreakEnd,
+        breakVarianceMinutes,
+        hasBreakVarianceFlag,
     };
 }
 

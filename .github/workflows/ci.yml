@@ -1,9 +1,12 @@
 name: CI & Deploy
 
 # Single gated pipeline:
-#   verify  → type-check + unit tests + build (runs on every push & PR)
-#   deploy  → runs ONLY if verify passes. main push → production,
-#             PR → preview (URL auto-commented). A red build never ships.
+#   verify           → type-check + unit tests + build (runs on every push & PR)
+#   rls-audit        → RLS regression guard against the Supabase dev database
+#   api-integration  → HTTP + SQL access suites on a throwaway Supabase built
+#                      from supabase/migrations + supabase/seeds
+#   deploy           → runs ONLY if all three pass. main push → production,
+#                      PR → preview (URL auto-commented). A red build never ships.
 #
 # Activation: the deploy job is guarded on the VERCEL_TOKEN secret. Until that
 # secret exists it skips cleanly (green) so the pipeline is safe to land before
@@ -14,6 +17,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Manual run on any branch, for stacked PRs whose base is not main and so
+  # never trigger the two events above. Verification only: deploy skips it.
+  workflow_dispatch:
 
 concurrency:
   group: ci-deploy-${{ github.ref }}
@@ -67,6 +73,28 @@ jobs:
           VITE_SENTRY_RELEASE: ${{ github.sha }}
         run: npm run build
 
+  # The CP-SAT solver's regression suite. Python matches the service image
+  # (optimizer-service/Dockerfile). Not a gate on `deploy`: the Vercel build
+  # does not ship the solver, which deploys as its own container.
+  optimizer-tests:
+    name: Optimizer tests (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: optimizer-service/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r optimizer-service/requirements.txt
+
+      - name: Run pytest
+        run: python -m pytest optimizer-service/tests -q
+
   rls-audit:
     name: RLS regression guard
     needs: verify
@@ -93,9 +121,50 @@ jobs:
         if: steps.guard.outputs.ok == 'true'
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls_guard.sql
 
+  # API integration tests: real HTTP (PostgREST, RPCs, edge functions) against a
+  # throwaway local Supabase built from supabase/migrations + supabase/seeds —
+  # the same database production runs (docs/operations/database-baseline.md).
+  # Proves the access matrix over HTTP and pins what the anon key can reach.
+  # Nothing here touches the Supabase project. Database and edge-function
+  # changes ship through the MCP (Supabase is the source of truth; the drift
+  # check proves the repo matches it), but the app deploys only when this
+  # suite is green: the frontend relies on the access rules it pins.
+  api-integration:
+    name: API integration (local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check integration tests
+        run: npm run type-check:integration
+
+      - name: Start local Supabase (migrations + seeds + edge runtime)
+        # Pull from GHCR, not the CLI's default public.ecr.aws: ECR's anonymous
+        # quota is per runner IP and refuses shared runners ("Data limit exceeded").
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+        run: npx supabase start -x studio,imgproxy,mailpit,logflare,vector,postgres-meta,supavisor,realtime
+
+      - name: API integration tests
+        run: npm run test:integration
+
+      - name: Stop local Supabase
+        if: always()
+        run: npx supabase stop --no-backup
+
   deploy:
     name: Deploy (Vercel)
-    needs: verify
+    needs: [verify, rls-audit, api-integration]
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

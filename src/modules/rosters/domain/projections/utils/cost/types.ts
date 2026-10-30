@@ -1,5 +1,4 @@
 
-import type { Shift } from '../../../shift.entity';
 
 export interface ShiftCostBreakdown {
   totalCost: number;
@@ -69,6 +68,14 @@ export interface CostCalculatorOptions {
    * reads this field (compliance audit finding — 2026-08-02).
    */
   unpaid_break_minutes?: number;
+  /**
+   * Where the unpaid meal break starts (`HH:mm` or `HH:mm:ss`), resolved against
+   * `start_time` across midnight. With it, the Standard engine prices the hours
+   * actually worked around the break — night rate (cl 43) and day loadings
+   * (cl 41) attach to worked hours. Without it, the break is laid at the END of
+   * the shift (the legacy layout).
+   */
+  break_start?: string | null;
   shift_date: string;
   allowances?: {
     meal?: boolean;
@@ -176,7 +183,3 @@ export interface CostCalculatorOptions {
   priorOrdinaryHoursThisWeek?: number;
 }
 
-export interface CostEngine {
-  estimateDetailedShiftCost(options: CostCalculatorOptions): ShiftCostBreakdown;
-  estimateShiftCost(options: CostCalculatorOptions): number;
-}

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     MAX_CONTRACTED_WEEKLY_HOURS,
     computeRemainingCapacity,
+    concurrentWith,
     validateContractHours,
     isCeilingCounted,
     type ExistingContract,
@@ -399,5 +400,40 @@ describe('validateContractHours', () => {
 describe('MAX_CONTRACTED_WEEKLY_HOURS', () => {
     it('is 38', () => {
         expect(MAX_CONTRACTED_WEEKLY_HOURS).toBe(38);
+    });
+});
+
+// ── concurrentWith (dates drive the contract, 2026-10-16) ─────────────────
+
+describe('concurrentWith — what runs alongside a proposed contract', () => {
+    const pt = (id: string, start: string, end: string | null, status = 'Active') => ({
+        id, employment_status: 'Part-Time', contracted_weekly_hours: 25, status, start_date: start, end_date: end,
+    });
+
+    it('drops a contract that ends before the proposal starts, so its hours are free again', () => {
+        const held = concurrentWith([pt('a', '2026-01-05', '2026-11-30')], '2026-12-01', null);
+        expect(held).toEqual([]);
+        expect(validateContractHours(20, 'Part-Time', held).valid).toBe(true);
+    });
+
+    it('counts an upcoming contract the proposal overlaps', () => {
+        const held = concurrentWith([pt('u', '2027-01-04', null, 'Upcoming')], '2026-12-01', null);
+        expect(held.map(c => c.status)).toEqual(['Active']);
+        expect(validateContractHours(20, 'Part-Time', held).valid).toBe(false);
+    });
+
+    it('counts an expired contract a backdated proposal falls inside', () => {
+        const held = concurrentWith([pt('x', '2026-01-05', '2026-06-30', 'Expired')], '2026-03-02', '2026-04-30');
+        expect(held).toHaveLength(1);
+        expect(validateContractHours(20, 'Part-Time', held).valid).toBe(false);
+    });
+
+    it('treats the last day as worked: a contract ending the day the proposal starts overlaps it', () => {
+        expect(concurrentWith([pt('a', '2026-01-05', '2026-12-01')], '2026-12-01', null)).toHaveLength(1);
+    });
+
+    it('leaves a row without dates to its status', () => {
+        const legacy = { id: 'l', employment_status: 'Part-Time', contracted_weekly_hours: 25, status: 'Expired' };
+        expect(concurrentWith([legacy], '2026-12-01', null)).toEqual([legacy]);
     });
 });
