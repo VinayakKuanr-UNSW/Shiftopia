@@ -9,12 +9,17 @@ import { describe, expect, it } from 'vitest';
  * table with that column, so any `deleted_at` in a query is a shifts filter that
  * never filters anything, and once the column is gone it fails the whole select.
  *
- * Scans the app and the deployed edge functions with comments stripped. The
- * generated `types.ts` is regenerated after the drop; `_retired` is not deployed.
+ * `roster_date` (Phase 3) is the same kind of column: written on every insert,
+ * never read, and left stale when a shift moves to another day, so it is being
+ * dropped too, as are `scheduled_start` / `scheduled_end`, copies of `start_at` /
+ * `end_at` the app never loads.
+ *
+ * Scans the app and the edge functions with comments stripped. The generated
+ * `types.ts` is regenerated after the drop.
  */
 
 const ROOTS = ['src', 'supabase/functions'].map((dir) => resolve(process.cwd(), dir));
-const SKIP_DIRS = new Set(['__tests__', '_retired', 'node_modules']);
+const SKIP_DIRS = new Set(['__tests__', 'node_modules']);
 const ALLOWED = new Set(['src/platform/supabase/types.ts']);
 
 function sourceFiles(dir: string): string[] {
@@ -30,18 +35,18 @@ const stripComments = (code: string) =>
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-describe('nothing reads or filters shifts.deleted_at', () => {
+describe('nothing reads or writes the dropped shifts columns', () => {
     const files = ROOTS.flatMap(sourceFiles);
 
     it('scans the source tree (guards against an empty walk)', () => {
         expect(files.length).toBeGreaterThan(500);
     });
 
-    it('no source file names deleted_at', () => {
+    it('no source file names deleted_at, roster_date, scheduled_start or scheduled_end', () => {
         const offenders = files
             .map((path) => relative(process.cwd(), path))
             .filter((rel) => !ALLOWED.has(rel))
-            .filter((rel) => /\bdeleted_at\b/.test(stripComments(readFileSync(rel, 'utf8'))));
+            .filter((rel) => /\b(deleted_at|roster_date|scheduled_start|scheduled_end)\b/.test(stripComments(readFileSync(rel, 'utf8'))));
         expect(offenders).toEqual([]);
     });
 });

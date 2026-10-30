@@ -23,7 +23,6 @@ import {
     TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
-import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import {
     getTimeRule,
     getLiveRuleBadges,
@@ -58,11 +57,7 @@ interface SharedShiftCardProps {
     timerText?: string | null;
     isExpired?: boolean;
     lifecycleStatus?: string;
-    isUrgent?: boolean;
-    /** Full three-zone urgency badge. When provided, supersedes isUrgent. */
-    urgency?: ShiftUrgency;
     groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';
-    complianceLabel?: string;
     isPast?: boolean;
     statusIcons?: React.ReactNode;
     footerActions?: React.ReactNode;
@@ -76,7 +71,6 @@ interface SharedShiftCardProps {
     isFlat?: boolean;
     /** Attendance / Timesheet specific data */
     employeeName?: string;
-    avatarUrl?: string;
     clockIn?: string | null;
     clockOut?: string | null;
     adjustedStart?: string | null;
@@ -415,7 +409,6 @@ const SectionHeader: React.FC<{
 };
 
 export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(({
-    avatarUrl,
     organization,
     department,
     subGroup,
@@ -433,10 +426,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     timerText,
     isExpired,
     lifecycleStatus = 'Published',
-    isUrgent,
-    urgency,
     groupVariant = 'default',
-    complianceLabel = 'Compliant',
     isPast = false,
     statusIcons,
     footerActions,

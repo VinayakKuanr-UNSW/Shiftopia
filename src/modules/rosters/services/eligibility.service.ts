@@ -76,10 +76,6 @@ interface EligibleEmployee {
     contracted_weekly_hours?: number;
 }
 
-interface EligibleContract {
-    user_id: string;
-    role_id: string | null;
-}
 
 export interface ContractedStaffMember {
     id: string;
@@ -352,44 +348,6 @@ export const EligibilityService = {
             return typeof context.limit === 'number' && context.limit > 0
                 ? result.slice(0, context.limit)
                 : result;
-        } catch (error) {
-            console.error('[EligibilityService] Exception:', error);
-            return [];
-        }
-    },
-
-    /**
-     * Returns raw contract rows (user_id + role_id) for the auto-scheduler's
-     * per-shift role matching. This avoids fetching full profile data when
-     * only contract eligibility is needed.
-     */
-    async getEligibleContracts(context: Omit<EligibilityContext, 'roleId'>): Promise<EligibleContract[]> {
-        try {
-            let query = supabase
-                .from('user_contracts')
-                .select('user_id, role_id');
-
-            if (context.organizationId && isValidUuid(context.organizationId)) {
-                query = query.eq('organization_id', context.organizationId);
-            }
-
-            if (context.subDepartmentId && isValidUuid(context.subDepartmentId)) {
-                if (context.departmentId && isValidUuid(context.departmentId)) {
-                    query = query.eq('department_id', context.departmentId);
-                }
-                query = query.or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
-            } else if (context.departmentId && isValidUuid(context.departmentId)) {
-                query = query.eq('department_id', context.departmentId);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                console.error('[EligibilityService] Error fetching contracts:', error);
-                return [];
-            }
-
-            return (data ?? []) as EligibleContract[];
         } catch (error) {
             console.error('[EligibilityService] Exception:', error);
             return [];

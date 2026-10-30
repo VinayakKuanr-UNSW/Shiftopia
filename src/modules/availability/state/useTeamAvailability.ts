@@ -10,7 +10,6 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { eachDayOfInterval, format } from 'date-fns';
 import type { ScopeSelection } from '@/platform/auth/types';
-import { todayISO } from '@/modules/core/lib/date.utils';
 import {
     getResolvedAvailabilities,
     getTeamLeaveDays,
@@ -134,7 +133,7 @@ export function useTeamAvailability(
 
         const cells = buildTeamDayCells(filtered);
         const buckets = buildCoverageBuckets(filtered);
-        const summary = summarise(filtered, cells, buckets, todayISO());
+        const summary = summarise(filtered, cells, buckets);
 
         return {
             data: {

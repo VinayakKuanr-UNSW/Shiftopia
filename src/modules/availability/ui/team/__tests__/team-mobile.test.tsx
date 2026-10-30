@@ -96,7 +96,6 @@ const renderList = (
             hours.byProfile.get('p1')!.byWeek,
             hours.byProfile.get('p1')!.byDate,
             hours.sortedWeekKeys,
-            'FT',
             38,
         )],
     ]);

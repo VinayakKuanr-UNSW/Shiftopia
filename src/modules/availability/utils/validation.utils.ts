@@ -42,47 +42,6 @@ const AVAILABILITY_ERRORS = {
 // DATABASE ERROR TRANSLATION
 // ============================================================================
 
-/**
- * Map database constraint errors to user-friendly messages
- */
-export function translateDatabaseError(error: string | Error | unknown): string {
-  const errorMsg = error instanceof Error ? error.message : String(error);
-
-  // Constraint violations
-  if (errorMsg.includes('chk_date_range_valid')) {
-    return AVAILABILITY_ERRORS.DATE_RANGE_INVALID;
-  }
-  if (errorMsg.includes('chk_time_pair_consistency')) {
-    return AVAILABILITY_ERRORS.TIME_PAIR_MISSING;
-  }
-  if (errorMsg.includes('chk_time_not_equal')) {
-    return AVAILABILITY_ERRORS.TIME_ZERO_LENGTH;
-  }
-  if (errorMsg.includes('chk_recurrence_requires_rule')) {
-    return AVAILABILITY_ERRORS.RECURRENCE_RULE_MISSING;
-  }
-  if (errorMsg.includes('chk_approval_fields')) {
-    return AVAILABILITY_ERRORS.APPROVAL_INCOMPLETE;
-  }
-
-  // Trigger violations
-  if (errorMsg.includes('time window must fit within a single day')) {
-    return AVAILABILITY_ERRORS.TIME_SPAN_INVALID;
-  }
-  if (errorMsg.includes('Duplicate availability rule')) {
-    return AVAILABILITY_ERRORS.DUPLICATE_RULE;
-  }
-  if (errorMsg.includes('Reason required for extended unavailability')) {
-    return AVAILABILITY_ERRORS.REASON_REQUIRED;
-  }
-  if (errorMsg.includes('published rosters')) {
-    return AVAILABILITY_ERRORS.PUBLISHED_ROSTERS_AFFECTED;
-  }
-
-  // Generic fallback
-  return AVAILABILITY_ERRORS.GENERIC_ERROR;
-}
-
 // ============================================================================
 // VALIDATION FUNCTIONS
 // ============================================================================

@@ -19,7 +19,6 @@ vi.mock('@capacitor/core', () => ({
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: localNotifications }));
 
 import {
-  presentLocalDemoNotification,
   presentLocalNotification,
 } from '@/platform/notifications/localNotifications';
 
@@ -41,18 +40,6 @@ describe('local notification presentation', () => {
 
   it('keeps production notifications behind the device opt-in', async () => {
     await expect(presentLocalNotification(notification)).resolves.toBe('disabled');
-    expect(localNotifications.schedule).not.toHaveBeenCalled();
-  });
-
-  it('presents an explicit demo in the Android system tray without the persistent opt-in', async () => {
-    await expect(presentLocalDemoNotification(notification)).resolves.toBe('scheduled');
-    expect(localNotifications.schedule).toHaveBeenCalledOnce();
-  });
-
-  it('continues to suppress system alerts for in-app-only policies', async () => {
-    await expect(
-      presentLocalDemoNotification({ ...notification, id: 'demo:bid', type: 'BID_SUBMITTED' }),
-    ).resolves.toBe('in_app_only');
     expect(localNotifications.schedule).not.toHaveBeenCalled();
   });
 });

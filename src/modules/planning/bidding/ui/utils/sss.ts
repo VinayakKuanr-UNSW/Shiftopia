@@ -106,10 +106,3 @@ export function computeSss(i: SssInputs): SssResult {
         },
     };
 }
-
-/** Colour band for an SSS value, reusing the report's tuned reliability thresholds. */
-export function sssBand(score: number): 'good' | 'warn' | 'poor' {
-    if (score >= 85) return 'good';
-    if (score >= 70) return 'warn';
-    return 'poor';
-}

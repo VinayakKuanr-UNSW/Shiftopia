@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { addDays, subDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { addDays, subDays, startOfMonth, endOfMonth } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import { useAuth } from '@/platform/auth/useAuth';
 import { CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
@@ -118,10 +118,6 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
         staleTime: 30000, // Consistent with useRosterShifts
     });
 
-    const resolvedDateRange = useMemo(
-        () => eachDayOfInterval({ start: new Date(startDateStr), end: new Date(endDateStr) }),
-        [startDateStr, endDateStr],
-    );
 
     /**
      * Scope identity, flattened.
@@ -232,43 +228,12 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
     );
 
     // Navigation functions
-    const goToPrevious = () => {
-        if (view === 'day') {
-            return subDays(selectedDate, 1);
-        } else if (view === '3day') {
-            return subDays(selectedDate, 3);
-        } else if (view === 'week') {
-            return subDays(selectedDate, 7);
-        } else if (view === 'month') {
-            const newDate = new Date(selectedDate);
-            newDate.setMonth(newDate.getMonth() - 1);
-            return newDate;
-        }
-        return selectedDate;
-    };
 
-    const goToNext = () => {
-        if (view === 'day') {
-            return addDays(selectedDate, 1);
-        } else if (view === '3day') {
-            return addDays(selectedDate, 3);
-        } else if (view === 'week') {
-            return addDays(selectedDate, 7);
-        } else if (view === 'month') {
-            const newDate = new Date(selectedDate);
-            newDate.setMonth(newDate.getMonth() + 1);
-            return newDate;
-        }
-        return selectedDate;
-    };
 
     return {
-        dateRange: resolvedDateRange,
         shifts,
         isLoading,
         error,
-        getShiftsForDate,
-        goToPrevious,
-        goToNext
+        getShiftsForDate
     };
 };

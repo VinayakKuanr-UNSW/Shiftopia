@@ -6,11 +6,11 @@
  * useShiftAvailabilityWarning) are handed an `employeeId` and nothing else — no
  * contract, no employment status. Threading one down would mean touching every
  * caller of every caller, and each would then be free to derive the mode its own
- * way. This resolves it from the same `fetchContractBasis` reader the
+ * way. This resolves it from the same `fetchScopedContractBasis` reader the
  * availability page and the leave form use, so the warning a manager sees cannot
  * disagree with what the employee is told on their own page.
  *
- * FAILS TO THE STRICT READING. `fetchContractBasis` returns the empty basis on a
+ * FAILS TO THE STRICT READING. `fetchScopedContractBasis` returns the empty basis on a
  * read error, whose `availabilityMode` is 'OPT_IN'. A transient failure therefore
  * over-warns (a visible, correctable false alarm) rather than silently
  * suppressing a real one.
@@ -34,11 +34,11 @@ export function useAvailabilityMode(
     employeeId: string | null | undefined,
     enabled = true,
     scope?: AvailabilityScopeRef,
-): { mode: AvailabilityMode; isLoading: boolean } {
+): { mode: AvailabilityMode; } {
     const subDepartmentId = scope?.subDepartmentId ?? null;
     const departmentId = scope?.departmentId ?? null;
 
-    const { data, isLoading } = useQuery({
+    const { data } = useQuery({
         // The scope is part of the KEY, not just the query. Without it, opening
         // the modal against Set-up after Security would serve Security's mode
         // from cache — and on a Capacitor WebView it would never self-correct,
@@ -59,7 +59,6 @@ export function useAvailabilityMode(
         // caller gets `isLoading` so it can hold the banner back rather than
         // flash "no declared availability" at a full-timer for one frame.
         mode: data?.availabilityMode ?? 'OPT_IN',
-        isLoading,
     };
 }
 

@@ -3,12 +3,11 @@
 
 import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/platform/supabase/client';
-import { User, AccessLevel, Role, UserContract, AccessCertificate, PermissionObject } from './types';
+import { User, AccessLevel, UserContract, AccessCertificate, PermissionObject } from './types';
 import { authService, AuthSessionError, isRejectedCredential } from './auth.service';
 import { setSentryUser } from '@/platform/observability/sentry';
 
 // Re-export types for backward compatibility with existing imports
-export type { Role };
 
 /**
  * AccessScope represents the organizational boundaries derived from the user's

@@ -109,5 +109,3 @@ export const GridBadgeLegendPopover: React.FC<GridBadgeLegendPopoverProps> = ({ 
     </Popover>
   );
 };
-
-export default GridBadgeLegendPopover;

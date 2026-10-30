@@ -52,9 +52,6 @@ import {
   useBulkPublishShifts,
   useBulkDeleteShifts,
   useBulkUnpublishShifts,
-  useAcceptOffer,
-  useRequestTrade,
-  useCancelShift,
   useUnpublishShift,
   useShiftDeltaSync,
 } from '@/modules/rosters/state/useRosterShifts';
@@ -140,7 +137,6 @@ const NewRostersPage: React.FC = () => {
       isDnDModeActive: s.isDnDModeActive,
     })),
   );
-  const deselectMultiple = useRosterStore(s => s.deselectMultiple);
   // ==================== SESSION-SCOPED STATE FROM CONTEXT ====================
   // These persist across navigation but reset on browser refresh
   const {
@@ -235,8 +231,6 @@ const NewRostersPage: React.FC = () => {
   // ==================== MODAL REF ====================
   // All modal open/close state lives in RosterModals; page calls imperative methods.
   const modalsRef = useRef<RosterModalsHandle>(null);
-
-  const [dayZoom] = useState<60>(60);
 
   // ==================== DERIVED ====================
 
@@ -356,9 +350,6 @@ const NewRostersPage: React.FC = () => {
   // Mutation hooks
   const bulkPublish = useBulkPublishShifts();
   const bulkDelete = useBulkDeleteShifts();
-  const bidShiftMutation = useAcceptOffer();
-  const swapShiftMutation = useRequestTrade();
-  const cancelShiftMutation = useCancelShift();
   const unpublishShiftMutation = useUnpublishShift();
   const bulkUnpublishByHook = useBulkUnpublishShifts();
   const updateShiftMutation = useUpdateShift();
@@ -559,14 +550,6 @@ const NewRostersPage: React.FC = () => {
     modalsRef.current?.openAddShift(context);
   };
 
-
-  const handleShiftCreated = () => {
-    // Mutation hooks auto-invalidate; no manual refresh needed
-    toast({
-      title: 'Success',
-      description: 'Shift created successfully.',
-    });
-  };
 
   // Reload refetches every cache the grid draws from (lists, summary cells,
   // footer stats, row structure) and reports only once they have loaded.
@@ -974,7 +957,7 @@ const NewRostersPage: React.FC = () => {
     [updateShiftMutation, toast, queryClient],
   );
 
-  const executePendingAssignment = async (options: { ignoreWarnings: boolean }) => {
+  const executePendingAssignment = async () => {
     if (!pendingDndAssign) return;
     setIsExecutingDnd(true);
     try {
@@ -987,7 +970,6 @@ const NewRostersPage: React.FC = () => {
         employeeId,
         context: 'MANUAL',
         targetDate: dateChanged ? dateKey : undefined,
-        ignoreWarnings: options.ignoreWarnings,
       });
 
       if (!result.success) {
@@ -1069,35 +1051,6 @@ const NewRostersPage: React.FC = () => {
   const viewTotalShifts = shifts.length > 0 ? shiftsForStateInspection.length : totalShifts;
 
   // ==================== SINGLE SHIFT HANDLERS (via mutation hooks) ====================
-  const handleBidShift = async (shiftId: string) => {
-    try {
-      await bidShiftMutation.mutateAsync(shiftId);
-      toast({ title: 'Bid Placed', description: 'You have successfully bid on this shift.' });
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to bid on shift', variant: 'destructive' });
-    }
-  };
-
-  const handleSwapShift = async (shiftId: string) => {
-    try {
-      await swapShiftMutation.mutateAsync(shiftId);
-      toast({ title: 'Trade Requested', description: 'Trade request submitted successfully.' });
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to request trade', variant: 'destructive' });
-    }
-  };
-
-  const handleCancelSingleShift = async (shiftId: string) => {
-    try {
-      await cancelShiftMutation.mutateAsync({ shiftId, reason: 'User initiated cancel' });
-      toast({ title: 'Shift Cancelled', description: 'Shift has been cancelled.' });
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to cancel shift', variant: 'destructive' });
-    }
-  };
 
   const handleUnpublishShift = async (shiftId: string) => {
     // Determine the shift from the collection to check for locking
@@ -1354,9 +1307,6 @@ const NewRostersPage: React.FC = () => {
             onViewShift={(shift: EmployeeShift) => {
               handleEditShift(shift);
             }}
-            onBidShift={handleBidShift}
-            onSwapShift={handleSwapShift}
-            onCancelShift={handleCancelSingleShift}
             onUnpublishShift={handleUnpublishShift}
           />
         )}
@@ -1381,46 +1331,23 @@ const NewRostersPage: React.FC = () => {
             onAddShift={handleAddShiftWithGroup}
             // Bulk Mode
             isBulkMode={bulkModeActive}
-            onBulkModeToggle={handleBulkModeToggle}
             selectedV8ShiftIds={selectedV8ShiftIdsArray}
             onToggleShiftSelection={handleToggleShiftSelection}
-            onSelectShiftIds={selectMultiple}
-            onDeselectShiftIds={deselectMultiple}
             // Day zoom
-            dayZoom={dayZoom}
             // Data from unified hook
             shifts={shifts}
             isShiftsLoading={isLoading}
             projection={projection.group ?? undefined}
-            footerStats={{
-              totalShifts,
-              assignedShifts: totalAssignedShifts,
-              unfilledShifts: totalUnfilledShifts,
-              estimatedCost,
-              budget,
-              remainingBudget,
-              scheduledCost: plannerStats.scheduledCost,
-              actualCost: plannerStats.actualCost,
-              scheduledNetMinutes: plannerStats.scheduledNetMinutes,
-              actualNetMinutes: plannerStats.actualNetMinutes,
-              costedShifts: plannerStats.costedShifts,
-              uncostedShifts: plannerStats.uncostedShifts,
-              actualShifts: plannerStats.actualShifts,
-            }}
-            showBudget={showBudget}
             // Centralized DnD assignment (employee → shift card)
             onAssignShift={handleDndAssignToShift}
             // Bucket View summary + drill-down — default for Day / 3-Day / Week / Month
             summaryData={cellSummaryMap}
-            onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
           />
         )}
 
         {activeMode === 'events' && (
           <EventsModeView
 
-            selectedDate={selectedDate}
-            viewType={viewType}
             shifts={shifts}
             isShiftsLoading={isLoading}
             organizationId={selectedOrganizationId || undefined}
@@ -1447,8 +1374,6 @@ const NewRostersPage: React.FC = () => {
             selectedV8ShiftIds={selectedV8ShiftIdsArray}
             isBulkMode={bulkModeActive}
             onToggleShiftSelection={handleToggleShiftSelection}
-            summaryData={viewType !== 'day' ? cellSummaryMap : undefined}
-            onDrillDown={(date, groupType, subGroupName) => setDrillDownState({ isOpen: true, date, groupType, subGroupName })}
           />
         )}
       </div>
@@ -1507,8 +1432,6 @@ const NewRostersPage: React.FC = () => {
                 stateCounts={viewShiftStateCounts}
                 selectedState={advancedFilters.stateId}
                 onSelectState={(stateId) => setAdvancedFilters({ stateId })}
-                assignedShifts={totalAssignedShifts}
-                unfilledShifts={totalUnfilledShifts}
                 scheduledCost={plannerStats.scheduledCost}
                 actualCost={plannerStats.actualCost}
                 scheduledNetMinutes={plannerStats.scheduledNetMinutes}
@@ -1556,7 +1479,6 @@ const NewRostersPage: React.FC = () => {
         queryFilters={queryFilters}
         autoSchedulerShifts={autoSchedulerShifts}
         autoSchedulerEmployees={autoSchedulerEmployees}
-        onShiftSaved={handleShiftCreated}
         onAutoScheduleComplete={() => {}}
       />
 

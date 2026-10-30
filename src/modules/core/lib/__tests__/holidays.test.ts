@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   getPublicHolidayName,
-  getPublicHolidayNameISO,
   getShiftDayType,
   isPublicHoliday,
   isPublicHolidayISO,
@@ -55,7 +54,6 @@ describe('NSW public holidays', () => {
     expect(getPublicHolidayName(new Date(NaN))).toBeNull();
     expect(isPublicHolidayISO(null)).toBe(false);
     expect(isPublicHolidayISO('')).toBe(false);
-    expect(getPublicHolidayNameISO(undefined)).toBeNull();
   });
 });
 
@@ -63,7 +61,6 @@ describe('ISO-string lookups', () => {
   it('agrees with the Date-based lookups', () => {
     expect(isPublicHolidayISO('2026-04-03')).toBe(true);
     expect(isPublicHolidayISO('2026-04-14')).toBe(false);
-    expect(getPublicHolidayNameISO('2026-12-25')).toMatch(/Christmas/i);
   });
 
   it('parses on local date parts, not UTC', () => {

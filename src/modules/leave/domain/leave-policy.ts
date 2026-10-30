@@ -9,7 +9,7 @@
  */
 
 import type {
-  LeavePolicy, LeaveTypeCode, LeaveBalance, LeaveRequest,
+  LeavePolicy, LeaveTypeCode, 
   LeaveElectionMode, OrdinaryHoursCredit,
 } from '../model/leave.types';
 import { isPublicHoliday } from '@/modules/core/lib/holidays';
@@ -227,60 +227,6 @@ export function getLeavePolicies(isFullTimeSecurity: boolean): Record<LeaveTypeC
   };
 }
 
-/**
- * Project a leave balance forward in time, accounting for accrual and
- * pending/approved requests.
- *
- * @param balance       Current balance snapshot
- * @param requests      All requests (pending + approved) that consume this balance
- * @param projectionDate  YYYY-MM-DD to project to
- * @param serviceStartDate YYYY-MM-DD — the employee's continuous service start
- * @param policies      Policy table to project against — pass
- *                       `getLeavePolicies(isFullTimeSecurity)` for a
- *                       role-aware projection; defaults to the general table.
- * @returns Projected balance in hours at the projection date
- */
-export function projectBalance(
-  balance: LeaveBalance,
-  requests: LeaveRequest[],
-  projectionDate: string,
-  serviceStartDate: string,
-  policies: Record<LeaveTypeCode, LeavePolicy> = LEAVE_POLICIES,
-): number {
-  const policy = policies[balance.leaveType];
-  if (!policy) return balance.balanceHours;
-
-  // No accrual for per-occasion types or upfront granted types.
-  if (policy.accrualRateHoursPerYear == null || policy.grantedUpFront) return balance.balanceHours;
-
-  // Daily accrual rate (continuous pro-rata).
-  const dailyAccrual = policy.accrualRateHoursPerYear / 365;
-
-  // Days from the balance's as-of date to the projection date.
-  const asOfMs = Date.parse(balance.asOfDate + 'T00:00:00');
-  const projMs = Date.parse(projectionDate + 'T00:00:00');
-  if (Number.isNaN(asOfMs) || Number.isNaN(projMs)) return balance.balanceHours;
-  const daysDiff = Math.max(0, Math.round((projMs - asOfMs) / 86_400_000));
-
-  // Accrued between as-of and projection.
-  const projected = balance.balanceHours + dailyAccrual * daysDiff;
-
-  // Deduct pending + approved requests that fall within the projection window.
-  const deductions = requests
-    .filter((r) => r.leaveType === balance.leaveType)
-    .filter((r) => r.status === 'pending') // DB trigger already deducts approved requests from the underlying balance
-    .filter((r) => r.startDate <= projectionDate)
-    .reduce((sum, r) => sum + r.requestedHours, 0);
-
-  const result = projected - deductions;
-
-  // Apply cap if configured.
-  if (policy.maxBalanceHours != null) {
-    return Math.min(result, policy.maxBalanceHours);
-  }
-  return Math.round(result * 100) / 100;
-}
-
 /** Adjacency context for the cl 45.4 certificate rule (audit M-12). */
 interface CertificateAdjacency {
   /** The day immediately before the leave start, or immediately after the
@@ -303,32 +249,6 @@ interface CertificateContext {
   rosteredDates?: ReadonlySet<string>;
   /** Their OTHER pending or approved leave (this request excluded). */
   otherLeave?: ReadonlyArray<{ startDate: string; endDate: string }>;
-}
-
-/**
- * Whether a certificate is required for a leave request based on the
- * number of consecutive days requested.
- *
- * AUDIT FIX M-12: cl 45.4's evidence requirement isn't only about the raw
- * day-count — a single day of personal leave taken immediately before or
- * after a weekend or public holiday (the classic "long weekend" pattern) is
- * treated the same as exceeding the day-count threshold, since it has the
- * same practical effect of extending time off without evidence. Previously
- * this only compared `consecutiveDays` to the threshold, so a Friday-only or
- * Monday-only absence never triggered the certificate requirement regardless
- * of adjacency. `adjacency` is optional and defaults to no adjacency
- * (unchanged prior behaviour) so existing callers that don't yet compute it
- * are unaffected.
- */
-export function isCertificateRequired(
-  leaveType: LeaveTypeCode,
-  consecutiveDays: number,
-  adjacency: CertificateAdjacency = {},
-): boolean {
-  const policy = LEAVE_POLICIES[leaveType];
-  if (!policy?.requiresCertificate) return false;
-  if (policy.certificateThresholdDays == null) return true; // always required (jury, parental)
-  return certificateReasons(leaveType, consecutiveDays, adjacency).length > 0;
 }
 
 /**

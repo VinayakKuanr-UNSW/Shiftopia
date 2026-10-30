@@ -93,23 +93,10 @@ export const DeleteShiftResponseSchema = z.object({
   code: z.string().optional(),
 });
 
-// sm_manager_cancel
-export const CancelShiftResponseSchema = z.object({
-  success: z.boolean(),
-  new_status: z.string().optional(),
-  message: z.string().optional(),
-});
-
 // sm_accept_offer / sm_reject_offer
 export const OfferActionResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),
-});
-
-// sm_request_trade
-export const RequestTradeResponseSchema = z.object({
-  success: z.boolean(),
-  trade_id: z.string().optional(),
 });
 
 // sm_employee_drop_shift
@@ -118,14 +105,6 @@ export const EmployeeDropResponseSchema = z.object({
   new_bidding_status: z.string().optional(),
   hours_to_start: z.number().optional(),
   message: z.string().optional(),
-  error: z.string().optional(),
-});
-
-// sm_close_bidding
-export const CloseBiddingResponseSchema = z.object({
-  success: z.boolean(),
-  from_state: z.string().optional(),
-  to_state: z.string().optional(),
   error: z.string().optional(),
 });
 

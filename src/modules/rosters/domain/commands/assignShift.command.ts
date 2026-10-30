@@ -62,8 +62,6 @@ interface AssignShiftInput {
     targetStartTime?: string;
     /** New end time (HH:mm). If provided, end_time is updated. */
     targetEndTime?: string;
-    /** If true, availability warnings (Bucket B) will NOT block the assignment */
-    ignoreWarnings?: boolean;
 }
 
 interface AssignShiftOutput {
@@ -99,7 +97,6 @@ async function runFullCompliancePreCheck(
         is_training?:         boolean;
     },
     context:        AssignmentContext,
-    ignoreWarnings: boolean,
 ): Promise<{ error: string | null; advisories: string[] }> {
     // Fetch all required data in parallel.
     // Any thrown exception propagates — no catch here (fail-closed).
@@ -302,7 +299,6 @@ export async function executeAssignShift(
                 effectiveEmployeeId,
                 effectiveShift as Parameters<typeof runFullCompliancePreCheck>[1],
                 context,
-                input.ignoreWarnings ?? false,
             );
             if (check.error) {
                 return { success: false, error: check.error };

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   estimateDetailedCostFromShift,
-  estimateCostFromShift,
   resolveShiftPayInputs,
 } from '../../projections/utils/cost/index';
 import type { ShiftPayTermsField } from '../../projections/utils/cost/types';
@@ -80,12 +79,6 @@ describe('card estimates on the linked contract’s terms', () => {
       }),
     }));
     expect(b.totalCost).toBe(436.68);
-  });
-
-  it('the legacy total-only wrapper agrees', () => {
-    expect(estimateCostFromShift(shift({
-      shift_pay_terms: terms({ substantive_level: 7, paid_level: 7, base_rate: 44.92 }),
-    }))).toBe(134.76);
   });
 });
 

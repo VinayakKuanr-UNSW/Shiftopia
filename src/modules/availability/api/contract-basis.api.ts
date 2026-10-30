@@ -172,29 +172,6 @@ async function readActiveContracts(employeeId: string): Promise<ActiveContractsR
 }
 
 /**
- * Resolve the PERSON-WIDE basis for one employee — how many hours may this
- * human work, and what does an empty calendar mean for them overall.
- *
- * Unchanged in meaning by the sub-department work, and deliberately so: the
- * rolling ordinary-hours caps and leave pricing are person-wide facts. For the
- * per-job question — may they declare availability for THIS sub-department —
- * use `fetchScopedContractBasis`.
- *
- * Fails CLOSED: a query error returns the empty basis, whose `availabilityMode`
- * is 'OPT_IN' and whose weekly hours are undefined. Both are the strict
- * reading, so a transient failure understates entitlement rather than
- * overstating it — and the caller can tell the two apart via `isError`.
- */
-export async function fetchContractBasis(employeeId: string): Promise<ContractBasisRead> {
-    if (!employeeId) return EMPTY_READ(false);
-
-    const { inputs, roleIds, isError } = await readActiveContracts(employeeId);
-    if (isError) return EMPTY_READ(true);
-
-    return { ...resolveComplianceBasis(inputs), roleIds, isError: false };
-}
-
-/**
  * Resolve the basis for ONE JOB.
  *
  * `scope.subDepartmentId === null` returns the person-wide basis, so a caller

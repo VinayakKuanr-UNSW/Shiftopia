@@ -44,9 +44,6 @@ const DEFAULT_SHOWN = new Map(USERS_COLUMNS.map((c) => [c.id, c.defaultShown]));
 export const isColumnShown = (visibility: ColumnVisibility | undefined | null, id: UsersColumnId): boolean =>
     id === 'name' || (visibility?.[id] ?? DEFAULT_SHOWN.get(id) ?? true);
 
-export const hiddenColumnCount = (visibility: ColumnVisibility | undefined | null): number =>
-    HIDEABLE_COLUMNS.filter((c) => !isColumnShown(visibility, c.id)).length;
-
 const STORAGE_KEY = 'users.table.columns.v1';
 
 /** What this browser remembers; nothing (the defaults) when storage is empty, blocked or unreadable. */

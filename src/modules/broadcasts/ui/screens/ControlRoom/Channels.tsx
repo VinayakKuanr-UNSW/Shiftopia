@@ -195,7 +195,6 @@ export const ControlRoomChannels: React.FC<ControlRoomChannelsProps> = ({
                 <DialogContent className="p-0 overflow-hidden border-none bg-transparent" size="lg">
                     {selectedChannelId && (
                         <ComposeSection
-                            channelId={selectedChannelId}
                             channelName={group.channels?.find(c => c.id === selectedChannelId)?.name || ''}
                             groupName={group.name}
                             totalRecipients={totalRecipients}

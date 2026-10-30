@@ -20,12 +20,11 @@ import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import CreateSwapRequestModal from './CreateSwapRequestModal';
-import DropShiftDrawer from './DropShiftDrawer';
+import { CreateSwapRequestModal } from './CreateSwapRequestModal';
+import { DropShiftDrawer } from './DropShiftDrawer';
 import { AddToCalendar } from './AddToCalendar';
 import { useOnlineStatus } from '@/modules/core/hooks/useOnlineStatus';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
@@ -142,8 +141,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     if (gross < 0) gross += 1440;
     return Math.max(0, gross - unpaidBreak);
   }, [shiftData?.shift.start_time, shiftData?.shift.end_time, unpaidBreak]);
-
-  const urgency = computeShiftUrgency(shiftData?.shift.shift_date || '', shiftData?.shift.start_time || '', (shiftData?.shift as any)?.start_at);
 
   const groupVariant = React.useMemo(() => {
     if (!shiftData) return 'default' as const;
@@ -379,7 +376,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               netLength={billableFloor?.netMinutes ?? netLengthMinutes}
               paidBreak={paidBreak}
               unpaidBreak={unpaidBreak}
-              urgency={urgency}
               groupVariant={groupVariant}
               isPast={isPast}
               shiftData={shiftDataForCard}

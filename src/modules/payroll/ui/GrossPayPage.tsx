@@ -33,8 +33,6 @@ interface GrossPayPageProps {
    * date-range selector (defaulting to the current Monday-anchored week).
    */
   bounds?: PeriodBounds;
-  /** Optional employee-id → display-name map handed to the view. */
-  employeeNames?: Record<string, string>;
 }
 
 /** Current Monday-anchored ISO week as inclusive YYYY-MM-DD bounds. */
@@ -46,7 +44,7 @@ function currentWeekBounds(): PeriodBounds {
   };
 }
 
-const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeNames }) => {
+const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds }) => {
   const [range, setRange] = useState<PeriodBounds>(() => bounds ?? currentWeekBounds());
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 
@@ -127,7 +125,6 @@ const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeNames }) =>
           periods={periods}
           periodStart={effectiveBounds.periodStart}
           periodEnd={effectiveBounds.periodEnd}
-          employeeNames={employeeNames}
           isLoading={isLoading}
           error={error}
         />

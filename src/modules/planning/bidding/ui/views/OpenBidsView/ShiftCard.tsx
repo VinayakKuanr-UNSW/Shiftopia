@@ -108,7 +108,6 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         unpaidBreak={shift.unpaidBreak}
         timerText={timeRemaining.isExpired ? 'Bidding Closed' : `Closes in ${formatTimeRemaining(timeRemaining)}`}
         isExpired={timeRemaining.isExpired}
-        isUrgent={shift.isUrgent || shift.toggle === 'urgent'}
         lifecycleStatus={shift.lifecycleStatus || 'Published'}
         footerActions={footerActions}
         shiftData={shift}

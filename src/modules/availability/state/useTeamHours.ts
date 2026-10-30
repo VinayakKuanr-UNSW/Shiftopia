@@ -61,9 +61,6 @@ interface HoursRange {
 }
 
 interface UseTeamHoursResult {
-    shifts: RawTeamShift[];
-    /** The widened range these shifts cover — not the range on screen. */
-    range: HoursRange;
     /** Per-employee daily and weekly hours, folded over the WIDENED range. */
     hours: TeamHoursFold;
     /** profileId -> severity, windows and daily caps. */
@@ -77,11 +74,7 @@ interface UseTeamHoursResult {
     fairnessContribution: Map<string, Map<string, DayFairnessContribution>>;
     /** Total columns for the VISIBLE axis — where each one is drawn. */
     weekColumns: WeekColumn[];
-    isLoading: boolean;
-    isError: boolean;
-    error: Error | null;
     shiftsTruncated: boolean;
-    refetch: () => void;
 }
 
 /**
@@ -147,7 +140,6 @@ export function useTeamHours(
                     entry.byWeek,
                     entry.byDate,
                     hours.sortedWeekKeys,
-                    member.contractType ?? null,
                     member.contractedWeeklyHours,
                     member.cycleWeeks,
                     member.cycleAnchor,
@@ -199,17 +191,11 @@ export function useTeamHours(
     }, [shifts, members, visibleDates]);
 
     return {
-        shifts: shifts ?? [],
-        range,
         hours,
         complianceByProfile,
         fatigueByProfile,
         fairnessContribution,
         weekColumns,
-        isLoading: query.isLoading,
-        isError: query.isError,
-        error: (query.error as Error) ?? null,
         shiftsTruncated: query.data?.truncated ?? false,
-        refetch: () => void query.refetch(),
     };
 }

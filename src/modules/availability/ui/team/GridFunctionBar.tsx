@@ -617,5 +617,3 @@ export const GridFunctionBar: React.FC<GridFunctionBarProps> = ({
     </TooltipProvider>
   );
 };
-
-export default GridFunctionBar;

@@ -155,7 +155,6 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     unpaidBreak={opp.unpaidBreak}
                                     timerText={isTerminal ? undefined : (isExpired ? 'Bidding Closed' : `Closes in ${timerStr}`)}
                                     isExpired={isTerminal ? false : isExpired}
-                                    isUrgent={opp.isUrgent}
                                     isPast={isPast}
                                     lifecycleStatus={opp.lifecycleStatus || 'Published'}
                                     estimatedPay={cardPay.estimatedPay}

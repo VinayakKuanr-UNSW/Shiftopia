@@ -29,7 +29,6 @@ export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
 
     return (
         <GlobalScopeFilter
-            mode="personal"
             allowedScopeTree={scopeTree}
             lockConfig={{
                 orgLocked: false,

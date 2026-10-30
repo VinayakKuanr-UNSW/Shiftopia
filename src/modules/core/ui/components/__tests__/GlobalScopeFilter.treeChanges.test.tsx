@@ -36,7 +36,6 @@ describe('GlobalScopeFilter — organizations follow the tree', () => {
                 defaultSelection={{ org_ids: ['icc', 'other'], dept_ids: ['icc-d', 'other-d'], subdept_ids: ['bar', 'cafe'] }}
                 onScopeChange={onScopeChange}
                 multiSelect={false}
-                mode="managerial"
             />,
         );
         await waitFor(() => expect(latest(onScopeChange)).not.toBeNull());
@@ -48,13 +47,13 @@ describe('GlobalScopeFilter — organizations follow the tree', () => {
         const onScopeChange = vi.fn();
         const { rerender } = render(
             <GlobalScopeFilter allowedScopeTree={ICC_ONLY as any} lockConfig={LOCKS}
-                onScopeChange={onScopeChange} multiSelect={false} mode="managerial" />,
+                onScopeChange={onScopeChange} multiSelect={false} />,
         );
         await waitFor(() => expect(latest(onScopeChange)?.org_ids).toEqual(['icc']));
 
         rerender(
             <GlobalScopeFilter allowedScopeTree={OTHER_ONLY as any} lockConfig={LOCKS}
-                onScopeChange={onScopeChange} multiSelect={false} mode="managerial" />,
+                onScopeChange={onScopeChange} multiSelect={false} />,
         );
         await waitFor(() => expect(latest(onScopeChange)?.org_ids).toEqual(['other']));
         expect(latest(onScopeChange).subdept_ids).toEqual(['cafe']);

@@ -66,17 +66,3 @@ export interface CreateFeedbackInput {
     rule_version_at_event?: number | null;
 }
 
-interface FeedbackBucketKey {
-    function_code: FunctionCode;
-    level: number;
-}
-
-/** Query window for the multiplier accumulator. */
-export interface FeedbackWindowParams extends FeedbackBucketKey {
-    /** ISO timestamp; rows older than this are excluded. */
-    sinceIso?: string;
-    /** Hard cap on rows considered (newest first). Default 10. */
-    limit?: number;
-    /** Optional: restrict to a specific rule generation. */
-    ruleVersion?: number;
-}

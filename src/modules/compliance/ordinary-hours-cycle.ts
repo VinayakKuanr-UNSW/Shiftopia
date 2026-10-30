@@ -51,14 +51,6 @@ const ORD_WEEKLY_LIMIT_DEFAULT = 38;
 
 export type OrdinaryCycleWeeks = 1 | 2 | 3 | 4;
 
-/** The four ceilings cl 35.x(a) enumerates, at the standard 38h basis. */
-export const ORD_CYCLE_CEILINGS: Readonly<Record<OrdinaryCycleWeeks, number>> = {
-    1: 38,
-    2: 76,
-    3: 114,
-    4: 152,
-};
-
 const MS_PER_DAY = 86_400_000;
 
 /**

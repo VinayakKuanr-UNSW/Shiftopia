@@ -10,14 +10,12 @@
  * about what the employee has to do.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchScopedContractBasis, type ContractBasisRead } from '../api/contract-basis.api';
 import { resolveComplianceBasis, type AvailabilityScopeRef } from '../domain/contract-basis';
 
 interface MyContractBasis {
     basis: ContractBasisRead;
-    loading: boolean;
-    refresh: () => Promise<void>;
 }
 
 const EMPTY: ContractBasisRead = { ...resolveComplianceBasis([]), roleIds: [], isError: false };
@@ -37,41 +35,26 @@ export function useMyContractBasis(
     const subDepartmentId = scope?.subDepartmentId ?? null;
     const departmentId = scope?.departmentId ?? null;
     const [basis, setBasis] = useState<ContractBasisRead>(EMPTY);
-    const [loading, setLoading] = useState(true);
 
-    const refresh = useCallback(async () => {
-        if (!userId) {
-            setBasis(EMPTY);
-            setLoading(false);
-            return;
-        }
-        setLoading(true);
-        try {
-            setBasis(await fetchScopedContractBasis(userId, { subDepartmentId, departmentId }));
-        } finally {
-            setLoading(false);
-        }
-    }, [userId, subDepartmentId, departmentId]);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
             if (!userId) {
-                if (!cancelled) { setBasis(EMPTY); setLoading(false); }
+                if (!cancelled) { setBasis(EMPTY); }
                 return;
             }
-            setLoading(true);
             const next = await fetchScopedContractBasis(userId, { subDepartmentId, departmentId });
             // The user can switch (impersonation, a fast re-auth) while this is
             // in flight; without the guard a stale response overwrites the
             // current person's basis and the page describes someone else's
             // contract.
-            if (!cancelled) { setBasis(next); setLoading(false); }
+            if (!cancelled) { setBasis(next); }
         })();
         return () => { cancelled = true; };
         // Scope is a dependency: switching job must re-resolve the basis, or the
         // page keeps rendering the previous job's verdict about this one.
     }, [userId, subDepartmentId, departmentId]);
 
-    return { basis, loading, refresh };
+    return { basis };
 }

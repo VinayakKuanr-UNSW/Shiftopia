@@ -65,10 +65,3 @@ export function computeBiddingUrgency(shiftDate: string, startTime: string): Shi
 export function isOnBidding(biddingStatus: string): boolean {
   return biddingStatus !== 'not_on_bidding' && biddingStatus !== 'bidding_closed_no_winner';
 }
-
-/**
- * Convenience: returns true if urgency is 'urgent' (TTS 4–24h).
- */
-export function isBiddingUrgent(shiftDate: string, startTime: string): boolean {
-  return computeShiftUrgency(shiftDate, startTime) === 'urgent';
-}

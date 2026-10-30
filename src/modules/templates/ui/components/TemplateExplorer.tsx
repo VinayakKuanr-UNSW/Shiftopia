@@ -763,5 +763,3 @@ export const TemplateExplorer: React.FC<TemplateExplorerProps> = ({
     </div>
   );
 };
-
-export default TemplateExplorer;

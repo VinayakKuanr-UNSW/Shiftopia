@@ -46,8 +46,6 @@ import {
 const MAX_CARDS_PER_EVENT = 12;
 
 interface EventsModeViewProps {
-  selectedDate: Date;
-  viewType: 'day' | '3day' | 'week' | 'month';
   /** Shifts data from parent */
   shifts?: Shift[];
   /** Loading state from parent */
@@ -116,8 +114,6 @@ function canUnpublish(shift: Shift): boolean {
 }
 
 export const EventsModeView: React.FC<EventsModeViewProps> = ({
-  selectedDate,
-  viewType,
   shifts = [],
   isShiftsLoading = false,
   organizationId,
@@ -445,7 +441,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
       <ScrollArea className="flex-1">
         <div className="p-4 md:p-5 space-y-4">
-          {eventGroups.map((group, groupIdx) => {
+          {eventGroups.map((group) => {
             const isCollapsed = collapsedEvents.has(group.eventId);
             const badgeVariant = getBadgeVariant(group);
             const badgeLabel = getBadgeLabel(group);

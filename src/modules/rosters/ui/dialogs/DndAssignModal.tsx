@@ -46,7 +46,7 @@ import { supabase } from '@/platform/supabase/client';
 interface DndAssignModalProps {
   open: boolean;
   onClose: () => void;
-  onConfirm: (options: { ignoreWarnings: boolean }) => void;
+  onConfirm: () => void;
   /** Is the parent currently executing the assignment? */
   isAssigning?: boolean;
   // Assignment data
@@ -354,7 +354,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
             Cancel
           </Button>
           <Button
-            onClick={() => onConfirm({ ignoreWarnings: panel.warningsAcknowledged })}
+            onClick={() => onConfirm()}
             disabled={!panel.canProceed || isAssigning || (availResult.isWarning && !availAck)}
             className={cn(
               'text-[11px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95',

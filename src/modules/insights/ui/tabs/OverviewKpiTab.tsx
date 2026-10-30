@@ -25,7 +25,6 @@ import { KpiSmartInsights, type InsightItem } from '../components/KpiSmartInsigh
 import { KpiHorizontalBars } from '../components/KpiHorizontalBars';
 import { cn } from '@/modules/core/lib/utils';
 import { text } from '@/modules/core/ui/typography';
-import type { ScopeSelection } from '@/platform/auth/types';
 import type { InsightsFilters } from '../../model/metric.types';
 
 const DEPT_COLORS = [
@@ -41,10 +40,9 @@ function fmt$(n: number) {
 
 interface OverviewKpiTabProps {
     filters: KpiFilters;
-    scope: ScopeSelection;
 }
 
-export default function OverviewKpiTab({ filters, scope }: OverviewKpiTabProps) {
+export default function OverviewKpiTab({ filters }: OverviewKpiTabProps) {
     const { period, comparison } = filters;
 
     const insightsFilters: InsightsFilters = {

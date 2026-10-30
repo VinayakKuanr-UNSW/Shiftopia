@@ -8,13 +8,11 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
   Template,
-  Group,
   SubGroup,
   TemplateShift,
   CreateTemplateInput,
   SaveTemplateResult,
   VersionCheckResult,
-  ValidationResult,
   dbTemplateToFrontend,
   frontendToDbGroups,
   normalizeRemunerationLevel,
@@ -113,8 +111,6 @@ interface UseTemplatesReturn {
 
   // Local editing
   setCurrentTemplate: (template: Template | null) => void;
-  updateLocalTemplate: (updates: Partial<Template>) => void;
-  updateLocalGroup: (groupId: string | number, updates: Partial<Group>) => void;
   addLocalSubgroup: (groupId: string | number, name: string) => void;
   updateLocalSubgroup: (
     groupId: string | number,
@@ -145,10 +141,6 @@ interface UseTemplatesReturn {
     subgroupId: string | number,
     shiftId: string | number
   ) => void;
-  discardChanges: () => void;
-
-  // Validation
-  validateName: (name: string, excludeId?: string) => Promise<ValidationResult>;
   checkVersion: () => Promise<VersionCheckResult | null>;
 }
 
@@ -456,36 +448,6 @@ export function useTemplates(): UseTemplatesReturn {
      LOCAL EDITING
      ============================================================ */
 
-  const updateLocalTemplate = useCallback((updates: Partial<Template>) => {
-    setLocalTemplate((prev) => {
-      if (!prev) return null;
-
-      const sanitized: Partial<Template> = { ...updates };
-      if (sanitized.name) sanitized.name = sanitizeTemplateName(sanitized.name);
-      if (sanitized.description)
-        sanitized.description = sanitizeString(sanitized.description);
-
-      const updated = { ...prev, ...sanitized };
-      return updated;
-    });
-    setHasUnsavedChanges(true);
-  }, []);
-
-  const updateLocalGroup = useCallback(
-    (groupId: string | number, updates: Partial<Group>) => {
-      setLocalTemplate((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          groups: prev.groups.map((g) =>
-            g.id === groupId ? { ...g, ...updates } : g
-          ),
-        };
-      });
-      setHasUnsavedChanges(true);
-    },
-    []
-  );
 
   const addLocalSubgroup = useCallback(
     (groupId: string | number, name: string) => {
@@ -764,25 +726,6 @@ export function useTemplates(): UseTemplatesReturn {
     },
     []
   );
-
-  const discardChanges = useCallback(() => {
-    if (lastSavedTemplateRef.current) {
-      const restored = deepClone(lastSavedTemplateRef.current);
-      setLocalTemplate(restored);
-      setHasUnsavedChanges(false);
-      log('info', 'Discarded changes, restored to last saved state');
-      toast({
-        title: 'Changes discarded',
-        description: 'Reverted to last saved version',
-      });
-    } else {
-      toast({
-        title: 'Nothing to discard',
-        description: 'No saved version to restore',
-        variant: 'destructive',
-      });
-    }
-  }, [toast]);
 
   /* ============================================================
      SAVE TEMPLATE (ATOMIC VIA RPC)
@@ -1181,41 +1124,6 @@ export function useTemplates(): UseTemplatesReturn {
      VALIDATION HELPERS
      ============================================================ */
 
-  const validateName = useCallback(
-    async (name: string, excludeId?: string): Promise<ValidationResult> => {
-      // Local validation first
-      const localValidation = validateTemplateName(name);
-      if (!localValidation.valid) {
-        return localValidation;
-      }
-
-      // Check uniqueness via RPC
-      if (currentTemplate?.organizationId && currentTemplate?.departmentId && currentTemplate?.subDepartmentId) {
-        try {
-          const { data } = await supabase.rpc('validate_template_name', {
-            p_organization_id: currentTemplate.organizationId,
-            p_department_id: currentTemplate.departmentId,
-            p_sub_department_id: currentTemplate.subDepartmentId,
-            p_name: name.trim(),
-            p_exclude_id: excludeId,
-          });
-
-          const dataArray = data as any[];
-          if (dataArray?.[0] && !dataArray[0].is_valid) {
-            return {
-              valid: false,
-              errors: [dataArray[0].error_message || 'Name already exists'],
-            };
-          }
-        } catch {
-          // If RPC fails, proceed with local validation only
-        }
-      }
-
-      return { valid: true, errors: [] };
-    },
-    [currentTemplate?.organizationId]
-  );
 
   const checkVersion = useCallback(async (): Promise<VersionCheckResult | null> => {
     if (!currentTemplate) return null;
@@ -1357,8 +1265,6 @@ export function useTemplates(): UseTemplatesReturn {
 
     // Local editing
     setCurrentTemplate,
-    updateLocalTemplate,
-    updateLocalGroup,
     addLocalSubgroup,
     updateLocalSubgroup,
     deleteLocalSubgroup,
@@ -1366,10 +1272,8 @@ export function useTemplates(): UseTemplatesReturn {
     addLocalShift,
     updateLocalShift,
     deleteLocalShift,
-    discardChanges,
 
     // Validation
-    validateName,
     checkVersion,
   };
 }

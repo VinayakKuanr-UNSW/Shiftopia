@@ -22,10 +22,8 @@ import { GroupSectionHeader } from '@/modules/core/ui/components/GroupSectionHea
 
 interface TimesheetMobileViewProps {
     entries: TimesheetRow[];
-    selectedDate: Date;
     readOnly?: boolean;
     searchQuery?: string;
-    setSearchQuery?: (query: string) => void;
     /** Filter state owned by TimesheetTable — shared with desktop view */
     appliedFilters: ActiveFilters;
     onApplyFilters: (f: ActiveFilters) => void;
@@ -34,10 +32,6 @@ interface TimesheetMobileViewProps {
     onSaveEntry?: (id: string, updates: Partial<TimesheetRow>) => void;
     onBulkAction?: (ids: string[], action: 'approve' | 'reject') => void;
     onMarkNoShow?: (id: string) => void;
-    onDateChange?: (date: Date) => void;
-    onRefresh?: () => void;
-    isRefreshing?: boolean;
-    onExportPDF?: () => void;
     onExportSpreadsheet?: () => void;
 }
 
@@ -52,10 +46,8 @@ function isPending(entry: TimesheetRow): boolean {
 
 export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
     entries,
-    selectedDate,
     readOnly = false,
     searchQuery = '',
-    setSearchQuery,
     appliedFilters,
     onApplyFilters,
     activeFilterCount,
@@ -63,10 +55,6 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
     onSaveEntry,
     onBulkAction,
     onMarkNoShow,
-    onDateChange,
-    onRefresh,
-    isRefreshing,
-    onExportPDF,
 }) => {
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);

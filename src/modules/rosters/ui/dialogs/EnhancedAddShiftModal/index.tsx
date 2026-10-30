@@ -59,7 +59,6 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
 
         // Statuses
         isAssignmentEnabled,
-        minShiftHours,
         shape,
         shapeBlockers,
 
@@ -157,7 +156,6 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                     shiftLength={shiftLength}
                     netLength={netLength}
                     hardValidation={hardValidation}
-                    minShiftHours={minShiftHours}
                     shape={shape}
                     shapeBlockers={shapeBlockers}
                     compliancePanel={compliancePanel}
@@ -227,8 +225,6 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                             <ShiftFormDrawerContent
                                 form={form}
                                 isReadOnly={isReadOnly}
-                                isPast={isPast}
-                                isStarted={isStarted}
                                 isPublished={isPublished}
                                 isTemplateMode={isTemplateMode}
                                 editMode={editMode}
@@ -251,13 +247,10 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                 netLength={netLength}
                                 hardValidation={hardValidation}
                                 isAssignmentEnabled={isAssignmentEnabled}
-                                minShiftHours={minShiftHours}
                                 shape={shape}
                                 shapeBlockers={shapeBlockers}
                                 compliancePanel={compliancePanel}
                                 runV2Compliance={runChecks}
-                                onUnpublish={handleUnpublish}
-                                canUnpublish={canUnpublish}
                                 isGroupLocked={isGroupLocked}
                                 isSubGroupLocked={isSubGroupLocked}
                                 isRoleLocked={isRoleLocked}
@@ -312,6 +305,5 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
     );
 };
 
-export default EnhancedAddShiftModal;
 export * from './types';
 

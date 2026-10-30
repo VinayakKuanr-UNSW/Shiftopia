@@ -82,46 +82,7 @@ export function gapFill(gap: number, hasDemand: boolean, isDark: boolean): strin
     return steps[Math.min(Math.abs(gap), 4) - 1];
 }
 
-// ── Day-state hues ──────────────────────────────────────────────────────────
 
-interface StateStyle {
-    /** Background fill, or null when the state is encoded as an absence. */
-    fill: string | null;
-    /** Single-character glyph — the secondary encoding. Never colour alone. */
-    glyph: string;
-}
-
-const STATE_STYLES: Record<TeamDayState, { light: StateStyle; dark: StateStyle }> = {
-    assigned: {
-        light: { fill: '#2a78d6', glyph: '' },
-        dark: { fill: '#3987e5', glyph: '' },
-    },
-    available: {
-        light: { fill: '#1baf7a', glyph: '' },
-        dark: { fill: '#199e70', glyph: '' },
-    },
-    // Same green as `available` on purpose — see the header note.
-    contract: {
-        light: { fill: '#1baf7a', glyph: '' },
-        dark: { fill: '#199e70', glyph: '' },
-    },
-    leave: {
-        light: { fill: '#eb6834', glyph: '' },
-        dark: { fill: '#d95926', glyph: '' },
-    },
-    unavailable: {
-        light: { fill: '#dc2626', glyph: '' },
-        dark: { fill: '#ef4444', glyph: '' },
-    },
-    unset: {
-        light: { fill: '#6b7280', glyph: '' },
-        dark: { fill: '#9ca3af', glyph: '' },
-    },
-};
-
-export function stateStyle(state: TeamDayState, isDark: boolean): StateStyle {
-    return STATE_STYLES[state][isDark ? 'dark' : 'light'];
-}
 
 // ── Soft-tint treatment (the surface both the grid and the day timeline use) ──
 //
