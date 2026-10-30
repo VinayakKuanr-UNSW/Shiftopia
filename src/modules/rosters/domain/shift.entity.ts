@@ -36,7 +36,6 @@ export interface Shift {
     updated_at: string;
     version: number;
     roster_id: string;
-    roster_date: string;
     shift_date: string;
     template_id: string | null;
     template_group: TemplateGroupType | null;

@@ -247,7 +247,6 @@ export const shiftsCommands = {
             roster_id: shiftData.roster_id,
             department_id: safeUuid(shiftData.department_id)!,
             shift_date: shiftData.shift_date,
-            roster_date: shiftData.shift_date,
             start_time: shiftData.start_time,
             end_time: shiftData.end_time,
             organization_id: safeUuid(shiftData.organization_id),

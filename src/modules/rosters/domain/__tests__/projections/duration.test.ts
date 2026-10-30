@@ -20,7 +20,6 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
     updated_at: '2025-01-01T00:00:00Z',
     version: 1,
     roster_id: 'roster-1',
-    roster_date: '2025-03-15',
     shift_date: '2025-03-15',
     template_id: null,
     template_group: null,

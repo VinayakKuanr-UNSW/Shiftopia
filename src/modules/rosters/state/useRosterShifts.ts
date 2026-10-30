@@ -422,7 +422,6 @@ function buildOptimisticShift(
     department_id: data.department_id,
     sub_department_id: data.sub_department_id ?? null,
     shift_date: data.shift_date,
-    roster_date: data.shift_date,
     start_time: data.start_time,
     end_time: data.end_time,
     start_at: data.start_at ?? null,

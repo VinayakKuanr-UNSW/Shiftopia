@@ -113,6 +113,17 @@ There is **no behaviour change**: every filter is already always true. The risk 
 
 A generated column **cannot be written**, so every writer must stop writing these first: the trigger `shift_compute_trigger`, template application and the `sm_*` functions. Some, such as `net_length_minutes`, are read by pay and compliance code. A parity test pins the old and new values across sample shifts before any switch.
 
+**Inventory (2026-10-30, live).** Stored and computed values agree on all 20 rows for every column below (20 rows prove nothing on their own; the writers decide). Two BEFORE triggers own them:
+
+- `shift_compute_trigger` → `compute_shift_fields()` re-derives `is_overnight`, `scheduled_length_minutes`, `net_length_minutes` and `break_minutes` on **every** insert and update, so any value another writer puts there is overwritten. It sets `roster_date` **only when it is NULL**.
+- `tr_compute_scheduled_timestamps` → `compute_scheduled_timestamps()` derives `scheduled_start` / `scheduled_end` from `shift_date` + times in `'Australia/Melbourne'` (same offsets and DST as Sydney, so the values match `start_at` / `end_at` today, but it is a second, divergent copy).
+
+**Steps:**
+
+1. **3a `roster_date` — dead and drifting.** No reader anywhere (app, edge functions, solver, views, functions): only `idx_shifts_roster_date` and three writers (`compute_shift_fields`, `sm_create_shift`, `sm_move_shift`). Because the trigger only fills it when NULL, moving a shift to another day leaves it on the old date — proven by a rolled-back probe (shift_date 2026-11-03 → 2026-11-04, roster_date stayed 2026-11-03). **Code half DONE** on `refactor/shifts-phase3` (the app and `get-roster-view` no longer select or insert it; guard test extended). **After deploy + `get-roster-view` redeploy:** one migration removes it from the three writers and drops the index and the column.
+2. **3b `scheduled_start` / `scheduled_end`** duplicate `start_at` / `end_at`. Readers to repoint first: `get_manager_scorecard`, `get_marketplace_kpis`, `get_quarterly_performance_report`, `sm_bulk_publish_shifts`, `sm_refresh_shift_snapshots`, `sm_select_bid_winner`, the view `v_shift_assignment_episodes`, and any app select. Then drop the trigger and both columns.
+3. **3c `is_overnight`, `scheduled_length_minutes`, `net_length_minutes`, `break_minutes`** become `GENERATED ALWAYS` (immutable expressions of the times and break minutes), so readers (pay, compliance, insights, leave accrual) need no change. First stop the explicit writers (`_apply_shift_op_write` and `sm_create_shift` set `break_minutes`; app inserts must not send any of them), then a parity test over sample shapes (overnight, breaks, midnight end), then the switch and the trigger simplification.
+
 ### Phase 4 — side-table mirrors
 
 `compliance_snapshot` / `compliance_checked_at` / `compliance_override` live in `shifts` **and** `shift_compliance_snapshots`. About 10 payroll fields are likewise stored twice, with `shift_payroll_records`. The plan:
