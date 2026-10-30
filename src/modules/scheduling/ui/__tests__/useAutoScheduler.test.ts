@@ -93,10 +93,9 @@ describe('summariseScope', () => {
         expect(breakdown.published).toBe(0);
     });
 
-    it('leaves cancelled and deleted shifts out of the total entirely', () => {
+    it('leaves cancelled shifts out of the total entirely', () => {
         const breakdown = summariseScope([
             { ...farFuture, is_cancelled: true },
-            { ...farFuture, deleted_at: '2026-08-01T00:00:00Z' },
             { ...farFuture, is_draft: true },
         ]);
         expect(breakdown.total).toBe(1);

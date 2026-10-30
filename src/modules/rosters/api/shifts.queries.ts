@@ -121,9 +121,6 @@ const SHIFT_SELECT = `
   roster_subgroup_id,
   role_id,
   remuneration_level,
-  remuneration_rate,
-  actual_hourly_rate,
-  currency,
   start_time,
   end_time,
   is_overnight,
@@ -166,7 +163,6 @@ const SHIFT_SELECT = `
   is_first_aid_duty,
   published_at,
   cancelled_at,
-  deleted_at,
   last_modified_by,
   target_employment_type,
   target_requires_flexible,
@@ -222,7 +218,6 @@ const PUBLISH_PLAN_SELECT = `
   assigned_employee_id,
   lifecycle_status,
   is_cancelled,
-  deleted_at,
   target_employment_type
 `;
 
@@ -373,7 +368,6 @@ export const shiftsQueries = {
             .from('shifts')
             .select(SHIFT_DETAIL_SELECT)
             .eq('id', shiftId)
-            .is('deleted_at', null)
             .maybeSingle();
 
         if (error) {
@@ -411,8 +405,7 @@ export const shiftsQueries = {
                 .from('shifts')
                 .select(SHIFT_SELECT)
                 .eq('organization_id', organizationId)
-                .eq('shift_date', date)
-                .is('deleted_at', null);
+                .eq('shift_date', date);
 
             if (filters?.departmentId && isValidUuid(filters.departmentId)) {
                 q = q.eq('department_id', filters.departmentId);
@@ -471,8 +464,7 @@ export const shiftsQueries = {
             .select('assigned_employee_id, shift_date, start_time, end_time, unpaid_break_minutes, is_cancelled')
             .in('assigned_employee_id', ids)
             .gte('shift_date', startDate)
-            .lte('shift_date', endDate)
-            .is('deleted_at', null);
+            .lte('shift_date', endDate);
         if (error) {
             console.warn('getFatigueHistoryShifts failed:', error);
             return [];
@@ -499,8 +491,7 @@ export const shiftsQueries = {
                 .select(SHIFT_SELECT)
                 .eq('organization_id', organizationId)
                 .gte('shift_date', startDate)
-                .lte('shift_date', endDate)
-                .is('deleted_at', null);
+                .lte('shift_date', endDate);
 
             // `id` last: the other keys tie, and OFFSET paging over a tied sort
             // can skip or repeat rows at a page boundary.
@@ -586,8 +577,7 @@ export const shiftsQueries = {
                     .select(PUBLISH_PLAN_SELECT)
                     .eq('organization_id', organizationId)
                     .gte('shift_date', startDate)
-                    .lte('shift_date', endDate)
-                    .is('deleted_at', null),
+                    .lte('shift_date', endDate),
                 filters,
             );
             if (lastId) q = q.gt('id', lastId);
@@ -628,8 +618,7 @@ export const shiftsQueries = {
             const { data, error } = await supabase
                 .from('shifts')
                 .select('id, shift_date, start_time, end_time, start_at, unpaid_break_minutes, assigned_employee_id, target_employment_type, version')
-                .in('id', ids)
-                .is('deleted_at', null);
+                .in('id', ids);
             if (error) throw new Error(error.message);
             return (data ?? []) as PublishCheckRow[];
         }));
@@ -667,7 +656,6 @@ export const shiftsQueries = {
                 .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
-                .is('deleted_at', null)
                 .order('shift_date')
                 .order('start_time');
 
@@ -702,7 +690,7 @@ export const shiftsQueries = {
      *     it can see a shift the person holds on another team that day.
      *
      * Uses SHIFT_SELECT, deliberately. A hand-rolled select here would drop
-     * `remuneration_level`/`remuneration_rate` and `roles(name)`, and the cost
+     * `remuneration_level` and `roles(name)`, and the cost
      * engine does not fail on their absence — it falls through to a flat default
      * rate. See `shift-card-pay.ts` for where that shipped.
      */
@@ -723,7 +711,6 @@ export const shiftsQueries = {
                 .in('assigned_employee_id', ids)
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
-                .is('deleted_at', null)
                 .order('shift_date')
                 .order('start_time');
 
@@ -770,7 +757,6 @@ export const shiftsQueries = {
                 .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
-                .is('deleted_at', null)
                 .order('shift_date')
                 .order('start_time');
 
@@ -1231,7 +1217,6 @@ export const shiftsQueries = {
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
                 .is('assignment_outcome', null)
-                .is('deleted_at', null)
                 // Must match getMyOffers exactly, or the badge counts offers the
                 // list does not show.
                 .gte('shift_date', actionableOfferFloor());
@@ -1331,7 +1316,6 @@ export const shiftsQueries = {
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
                 .is('assignment_outcome', null)
-                .is('deleted_at', null)
                 .gte('shift_date', actionableOfferFloor());
 
             if (filters?.organizationId && isValidUuid(filters.organizationId)) {
@@ -1426,8 +1410,7 @@ export const shiftsQueries = {
                     sub_departments(name),
                     organizations(id, name),
                     remuneration_levels(level_number, level_name)
-                `)
-                .is('deleted_at', null);
+                `);
 
             // 2. Apply identity filter based on events if available, otherwise fallback to column matching
             if (eventData && eventData.length > 0) {
@@ -1543,7 +1526,6 @@ export const shiftsQueries = {
             `)
                 .eq('organization_id', organizationId)
                 .in('bidding_status', ['on_bidding', 'on_bidding_normal', 'on_bidding_urgent'])
-                .is('deleted_at', null)
                 .eq('is_cancelled', false);
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
@@ -1640,7 +1622,6 @@ export const shiftsQueries = {
                     shift_bids(id, status)
                 `)
                 .eq('organization_id', organizationId)
-                .is('deleted_at', null)
                 .eq('is_cancelled', false)
                 // Fetch shifts that are or were on bidding
                 .eq('lifecycle_status', 'Published');
@@ -1715,7 +1696,6 @@ export const shiftsQueries = {
 interface ShiftDeltaRow {
     id: string;
     updated_at: string;
-    deleted_at: string | null;
     shift_date: string | null;
     start_time: string | null;
     end_time: string | null;

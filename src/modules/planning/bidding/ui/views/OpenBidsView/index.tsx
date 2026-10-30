@@ -194,7 +194,6 @@ function useBidsCompliancePanel(
         .eq('assigned_employee_id', selectedBid.employeeId)
         .gte('shift_date', startDate)
         .lte('shift_date', endDate)
-        .is('deleted_at', null)
         .eq('is_cancelled', false);
 
       const existingShifts = (existingRaw || [])
@@ -1221,7 +1220,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
             .eq('assigned_employee_id', bid.employee_id)
             .gte('shift_date', startDate)
             .lte('shift_date', endDate)
-            .is('deleted_at', null)
             .eq('is_cancelled', false);
 
           // R5 fix: keep each existing shift's real role_id + required_qualifications

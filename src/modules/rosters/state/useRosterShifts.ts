@@ -465,7 +465,6 @@ function buildOptimisticShift(
     version: 0,
     created_at: nowIso,
     updated_at: nowIso,
-    deleted_at: null,
   } as unknown as Shift;
 }
 
@@ -1225,7 +1224,6 @@ export function useRequestTrade() {
  * cursor) via the `get_shift_delta` RPC and merges the result surgically into
  * all active TanStack Query list caches — avoiding a full list invalidation.
  *
- * Deleted rows (deleted_at IS NOT NULL) are removed from the cache.
  * Updated rows have their changed fields patched in-place.
  *
  * @param orgId       Organisation to subscribe to (required)
@@ -1280,45 +1278,33 @@ export function useShiftDeltaSync(params: {
       const maxUpdatedAt = rows.reduce((max, r) => (r.updated_at > max ? r.updated_at : max), cursorRef.current);
       cursorRef.current = maxUpdatedAt;
 
-      const deleted = new Set(rows.filter(r => r.deleted_at !== null).map(r => r.id));
-      const updated = rows.filter(r => r.deleted_at === null);
-      const updatedMap = new Map(updated.map(r => [r.id, r]));
+      const updatedMap = new Map(rows.map(r => [r.id, r]));
 
       queryClient.setQueriesData<Shift[]>({ queryKey: shiftKeys.lists }, (old) => {
         if (!old || !Array.isArray(old)) return old;
 
-        // Check if any row in old is actually affected
-        const hasDeleted = deleted.size > 0 && old.some(s => deleted.has(s.id));
-        const hasUpdated = updatedMap.size > 0 && old.some(s => updatedMap.has(s.id));
-        if (!hasDeleted && !hasUpdated) {
+        if (!old.some(s => updatedMap.has(s.id))) {
           // No changes apply to this query cache entry; return same reference to prevent re-render churn
           return old;
         }
 
-        // Remove soft-deleted rows
-        let next = hasDeleted ? old.filter(s => !deleted.has(s.id)) : old;
-
         // Patch updated rows (only update fields that are in the delta)
-        if (hasUpdated) {
-          next = next.map(s => {
-            const delta = updatedMap.get(s.id);
-            if (!delta) return s;
-            return {
-              ...s,
-              shift_date:          delta.shift_date          ?? s.shift_date,
-              start_time:          delta.start_time          ?? s.start_time,
-              end_time:            delta.end_time            ?? s.end_time,
-              lifecycle_status:    (delta.lifecycle_status   ?? s.lifecycle_status) as Shift['lifecycle_status'],
-              assignment_status:   (delta.assignment_status  ?? s.assignment_status) as Shift['assignment_status'],
-              assigned_employee_id: delta.assigned_employee_id !== undefined
-                ? delta.assigned_employee_id
-                : s.assigned_employee_id,
-              version:             delta.version             ?? s.version,
-            };
-          });
-        }
-
-        return next;
+        return old.map(s => {
+          const delta = updatedMap.get(s.id);
+          if (!delta) return s;
+          return {
+            ...s,
+            shift_date:          delta.shift_date          ?? s.shift_date,
+            start_time:          delta.start_time          ?? s.start_time,
+            end_time:            delta.end_time            ?? s.end_time,
+            lifecycle_status:    (delta.lifecycle_status   ?? s.lifecycle_status) as Shift['lifecycle_status'],
+            assignment_status:   (delta.assignment_status  ?? s.assignment_status) as Shift['assignment_status'],
+            assigned_employee_id: delta.assigned_employee_id !== undefined
+              ? delta.assigned_employee_id
+              : s.assigned_employee_id,
+            version:             delta.version             ?? s.version,
+          };
+        });
       });
 
       // Invalidate detail views for any changed shift so they re-fetch fully

@@ -19,7 +19,7 @@ DECLARE
 BEGIN
   SELECT id, assigned_employee_id INTO v_shift, v_emp
   FROM public.shifts
-  WHERE deleted_at IS NULL AND assigned_employee_id IS NOT NULL
+  WHERE assigned_employee_id IS NOT NULL
   LIMIT 1;
   IF v_shift IS NULL THEN
     RAISE EXCEPTION 'SKIPPED: need one assigned shift';

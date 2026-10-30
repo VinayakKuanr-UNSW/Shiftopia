@@ -290,22 +290,6 @@ describe('mapShiftRowToGrossPayInput — rate & classification resolution', () =
     expect(mapShiftRowToGrossPayInput(row)!.classificationLevel).toBe('TRAINEE');
   });
 
-  it('has no per-shift rate override — a stray remuneration_rate on the row is ignored when level is present', () => {
-    // User decision 2026-10-08: someone on a level is paid that level. The SQL
-    // budget (fn_eba_resolve_shift_rate called with NULL overrides) agrees.
-    const row = { ...baseRow(), remuneration_rate: 99 } as GrossPayShiftRow;
-    const input = mapShiftRowToGrossPayInput(row)!;
-    expect(input.rate).toBeNull();
-    expect(input.classificationLevel).toBe('LEVEL_3');
-  });
-
-  it('uses remuneration_rate only as a last resort (unlinked row without a level)', () => {
-    const row = baseRow({ remuneration_level: null, remuneration_levels: null, remuneration_rate: 41.2 });
-    const input = mapShiftRowToGrossPayInput(row)!;
-    expect(input.rate).toBe(41.2);
-    expect(input.classificationLevel).toBeUndefined();
-  });
-
   it('is null when there is no level and no level rate', () => {
     const row = baseRow({ remuneration_level: null, remuneration_levels: null });
     const input = mapShiftRowToGrossPayInput(row)!;

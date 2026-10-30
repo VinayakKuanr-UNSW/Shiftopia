@@ -226,8 +226,10 @@ BEGIN
 END;
 $function$;
 
-SELECT cron.unschedule('shift-state-processor');
-SELECT cron.unschedule('sweep_expired_offers');
-SELECT cron.unschedule('shift-auto-clockout');
+-- Only jobs that exist: they were scheduled outside the migrations, so a
+-- database rebuilt from this repo never had them.
+SELECT cron.unschedule(jobname)
+FROM cron.job
+WHERE jobname IN ('shift-state-processor', 'sweep_expired_offers', 'shift-auto-clockout');
 
 DROP PROCEDURE public.sm_run_state_processor();

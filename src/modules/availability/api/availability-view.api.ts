@@ -76,7 +76,6 @@ export async function getAssignedShiftsForAvailability(
     .lte('shift_date', endDate)
     .neq('lifecycle_status', 'Cancelled')
     .or('is_cancelled.is.null,is_cancelled.eq.false')
-    .is('deleted_at', null)
     .order('shift_date')
     .order('start_time');
 

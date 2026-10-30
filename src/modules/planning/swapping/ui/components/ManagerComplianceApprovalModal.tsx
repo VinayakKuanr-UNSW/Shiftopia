@@ -350,7 +350,6 @@ export function ManagerComplianceApprovalModal({
                 .eq('assigned_employee_id', employeeId)
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
-                .is('deleted_at', null)
                 .is('is_cancelled', false);
             if (error) return [];
             return (data || []) as RosterShiftInput[];
