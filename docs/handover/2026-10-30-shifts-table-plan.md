@@ -62,12 +62,7 @@ The expected outcome is roughly 8–12 columns and 2–4 indexes. Each column is
 
 - **1a APPLIED** `20261029224806`: `deleted_by`, `workflow_status`, `roster_template_id`, `bidding_enabled` (108 → 104 columns).
 - **1b, code half DONE** on `refactor/duplicate-implementations`. Nothing in the app or `get-roster-view` reads `currency` or `actual_hourly_rate` any more. Neither column is ever written: no app code or DB function sets them, every row is NULL or the default `AUD`.
-- **1b, drop PENDING.** Apply it only after that code is live **and** `get-roster-view` has been redeployed. The version of the app deployed now still selects both, and PostgREST fails the whole select on a missing column:
-
-  ```sql
-  ALTER TABLE public.shifts DROP COLUMN currency, DROP COLUMN actual_hourly_rate, DROP COLUMN remuneration_rate;
-  ```
-
+- **1b, drop APPLIED** `20261030014859`, with Phase 2c, after the code was live on Vercel production and `get-roster-view` was redeployed (v17): `currency`, `actual_hourly_rate` and `remuneration_rate` are gone.
 - **Moved.** The compliance trio goes to Phase 4, because `_sync_compliance_snapshot` copies them. `is_draft` goes with Phase 5's flags, because screens read it.
 - **Kept.** `synthesis_run_id`, `demand_source` and `demand_group_id` are provenance the shift synthesiser writes on purpose.
 - **`remuneration_rate`, code half DONE 2026-10-30.** You chose to drop it: it is never written, so the per-shift rate fallbacks (Gross Pay's last resort, the "priceable" check, labour-demand and timesheet reads) could never fire. A shift is priced from its `remuneration_level` only. It is in the pending drop above.
@@ -79,13 +74,8 @@ The expected outcome is roughly 8–12 columns and 2–4 indexes. Each column is
 - **2a APPLIED** `20261029232549`: 36 functions lost their no-op filters. The live hash equals the file for every one; `plpgsql_check` is unchanged; four SQL tests pass.
 - **2b, database half APPLIED** `20261029233740`: the always-false `deleted_at IS NOT NULL` checks are gone from `fn_shift_not_started`, `fn_shift_office_is_ft_only`, `fn_shift_shape_day_typed_guard` and `internal.trg_shift_eba_compliance`; the `'shift_deleted'` outcome is gone from `sm_refresh_shift_snapshots` and `v_shift_assignment_episodes` (still `security_invoker`); `idx_shifts_deleted_at` is dropped and the five partial indexes are rebuilt without the predicate. Live definitions equal the file. In a rolled-back dry run the view returned the same 20 rows before and after, and `plpgsql_check` was clean. Test: `supabase/tests/shifts_deleted_at_logic_removed.sql` (failed before, passes now).
 - **2b, app half DONE** on `refactor/duplicate-implementations`: no app file or deployed edge function names `deleted_at` (guard: `no-shifts-deleted-at.test.ts`, which failed on the 22 files). The delta sync patches rows and no longer looks for deleted ones.
-- **2c, PENDING:** only after that code is live **and** `get-roster-view` is redeployed (the deployed app still filters on the column and reads it from `get_shift_delta`). One migration: recreate `get_shift_delta` without the `deleted_at` output column (a changed return type needs DROP + CREATE, then re-grant EXECUTE as it is today), then
-
-  ```sql
-  ALTER TABLE public.shifts DROP CONSTRAINT shifts_no_soft_delete, DROP COLUMN deleted_at;
-  ```
-
-  and prune `deleted_at` from the generated `types.ts`. The `_retired` edge functions still name it, but they are not deployed (only `get-roster-view` is).
+- **2c APPLIED** `20261030014859` (2026-10-30), after the release (PR #27 → `main`, deployed to https://shiftopia.vercel.app; no served chunk names the column) and the `get-roster-view` redeploy. `get_shift_delta` was recreated without `deleted_at` (still SECURITY INVOKER, EXECUTE for authenticated and service_role only). Two trigger *definitions* also named the column, which a function-body search misses: the EBA check's `UPDATE OF` list and TOIL's `WHEN` clause; both were recreated without it. Then `shifts_no_soft_delete` and the column were dropped. The migration first asserts that no row holds data in any dropped column. `shifts`: 100 columns. Test: `supabase/tests/shifts_phase2c_columns_dropped.sql` (failed before, passes now); every shift SQL test passes live, and the app's three shift selects, the delta RPC and `get-roster-view` answer 200.
+- **Phase 2 is complete.**
 
 `CHECK shifts_no_soft_delete` keeps `deleted_at` NULL on every row, so every `deleted_at IS NULL` filter is a no-op. Today it is named by:
 

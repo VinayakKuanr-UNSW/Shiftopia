@@ -4231,7 +4231,6 @@ export type Database = {
       shifts: {
         Row: {
           actual_end: string | null
-          actual_hourly_rate: number | null
           actual_net_minutes: number | null
           actual_start: string | null
           assigned_at: string | null
@@ -4260,8 +4259,6 @@ export type Database = {
           created_at: string | null
           created_by_user_id: string | null
           creation_source: string | null
-          currency: string | null
-          deleted_at: string | null
           demand_group_id: string | null
           demand_source: string | null
           department_id: string
@@ -4301,7 +4298,6 @@ export type Database = {
           published_at: string | null
           published_by_user_id: string | null
           remuneration_level: number | null
-          remuneration_rate: number | null
           required_licenses: Json | null
           required_skills: Json | null
           role_id: string | null
@@ -4339,7 +4335,6 @@ export type Database = {
         }
         Insert: {
           actual_end?: string | null
-          actual_hourly_rate?: number | null
           actual_net_minutes?: number | null
           actual_start?: string | null
           assigned_at?: string | null
@@ -4368,8 +4363,6 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           creation_source?: string | null
-          currency?: string | null
-          deleted_at?: string | null
           demand_group_id?: string | null
           demand_source?: string | null
           department_id: string
@@ -4409,7 +4402,6 @@ export type Database = {
           published_at?: string | null
           published_by_user_id?: string | null
           remuneration_level?: number | null
-          remuneration_rate?: number | null
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
@@ -4447,7 +4439,6 @@ export type Database = {
         }
         Update: {
           actual_end?: string | null
-          actual_hourly_rate?: number | null
           actual_net_minutes?: number | null
           actual_start?: string | null
           assigned_at?: string | null
@@ -4476,8 +4467,6 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           creation_source?: string | null
-          currency?: string | null
-          deleted_at?: string | null
           demand_group_id?: string | null
           demand_source?: string | null
           department_id?: string
@@ -4517,7 +4506,6 @@ export type Database = {
           published_at?: string | null
           published_by_user_id?: string | null
           remuneration_level?: number | null
-          remuneration_rate?: number | null
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
@@ -7279,7 +7267,6 @@ export type Database = {
         Returns: {
           assigned_employee_id: string
           assignment_status: Database["public"]["Enums"]["shift_assignment_status"]
-          deleted_at: string
           department_id: string
           end_time: string
           id: string

@@ -200,23 +200,22 @@ jobs:
         with:
           node-version: '20'
 
+      # Pinned: an unannounced CLI change is how the build lost its env (below).
       - name: Install Vercel CLI
         if: steps.guard.outputs.ok == 'true'
-        run: npm i -g vercel@latest
+        run: npm i -g vercel@65.8.0
 
-      - name: Pull Vercel project settings & env
-        if: steps.guard.outputs.ok == 'true'
-        run: vercel pull --yes --environment=${{ steps.target.outputs.env }} --token="$VERCEL_TOKEN"
-
-      - name: Build
-        if: steps.guard.outputs.ok == 'true'
-        run: vercel build ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN"
-
+      # Vercel builds the source itself. The project's VITE_* variables are
+      # Sensitive, and `vercel pull` cannot read Sensitive values: it writes
+      # "[SENSITIVE]" placeholders, so a runner-side `vercel build` baked
+      # VITE_SUPABASE_URL="[SENSITIVE]" into the bundle and production failed
+      # to start ("Invalid supabaseUrl"). The gate is unchanged: this job still
+      # runs only after verify, rls-audit and api-integration pass.
       - name: Deploy
         if: steps.guard.outputs.ok == 'true'
         id: deploy
         run: |
-          url=$(vercel deploy --prebuilt ${{ steps.target.outputs.flag }} --token="$VERCEL_TOKEN" | tail -n1)
+          url=$(vercel deploy ${{ steps.target.outputs.flag }} --yes --token="$VERCEL_TOKEN" | tail -n1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Deployed ${{ steps.target.outputs.env }}: $url"
           echo "### 🚀 Deployed (${{ steps.target.outputs.env }})" >> "$GITHUB_STEP_SUMMARY"
