@@ -18,7 +18,6 @@ import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { templateKeys } from '@/modules/templates/hooks/queries/useTemplateQueries';
 import { rostersApi } from '@/modules/rosters/api/rosters.api';
 import {
-  cloneRosterSubgroup,
   deleteRosterSubgroup,
   renameRosterSubgroup,
   type SubgroupScope,
@@ -158,20 +157,6 @@ interface ApplyTemplateVariables {
   source:                 'templates_page' | 'roster_modal';
   targetDepartmentId?:    string;
   targetSubDepartmentId?: string;
-  /** When true, bypasses the "shift already started" temporal guard so managers can
-   *  re-apply templates to today or past dates without an exception. The per-shift
-   *  template_instance_id duplicate check still prevents actual duplicates.
-   *
-   *  Defaults to FALSE. It previously defaulted to true, which meant every template
-   *  apply from the roster modal silently created shifts in the past — directly
-   *  against the rule that shifts are never created, edited or updated in the past
-   *  (decision 2026-08-05). Past shifts are now soft-skipped and reported through
-   *  `shifts_skipped`. Callers that genuinely need to backfill must opt in.
-   *
-   *  Sent as the RPC's `p_force_stack`, a misleading name kept only because
-   *  renaming a parameter means dropping the function: it has nothing to do with
-   *  stacking. A template always adds on top of what is already there. */
-  includeStartedShifts?:  boolean;
 }
 
 /**
@@ -282,7 +267,6 @@ export function useApplyTemplate() {
         p_source:                   vars.source,
         p_target_department_id:     vars.targetDepartmentId,
         p_target_sub_department_id: vars.targetSubDepartmentId,
-        p_force_stack:              vars.includeStartedShifts ?? false,
       });
 
       if (error) throw error;
@@ -366,7 +350,7 @@ export function useApplyTemplate() {
 // ── useClearTemplate ──────────────────────────────────────────────────────────
 
 
-// ── Sub-group changes: delete / rename / clone ────────────────────────────────
+// ── Sub-group changes: delete / rename ────────────────────────────────────────
 //
 // Each acts on ONE group of ONE sub-department's roster, from today to the end
 // of the range (days before today are never changed). The dialogs preview with
@@ -424,29 +408,6 @@ export function useRenameSubGroup() {
     onError: (err) => {
       console.error('[useRenameSubGroup]', err);
       toast({ title: 'Could not rename the subgroup', description: errorMessage(err, 'Failed to rename subgroup'), variant: 'destructive' });
-    },
-  });
-}
-
-export function useCloneSubGroup() {
-  const queryClient = useQueryClient();
-  const { toast }   = useToast();
-
-  return useMutation({
-    mutationFn: ({ scope, sourceName, newName }: { scope: SubgroupScope; sourceName: string; newName: string }) =>
-      cloneRosterSubgroup(scope, sourceName, newName, false),
-
-    onSuccess: (result, { newName }) => {
-      invalidateRosterContent(queryClient);
-      toast({
-        title: 'Subgroup cloned',
-        description: `“${newName}” created with ${result.shiftsCopied} shift${result.shiftsCopied !== 1 ? 's' : ''}.`,
-      });
-    },
-
-    onError: (err) => {
-      console.error('[useCloneSubGroup]', err);
-      toast({ title: 'Could not clone the subgroup', description: errorMessage(err, 'Failed to clone subgroup'), variant: 'destructive' });
     },
   });
 }

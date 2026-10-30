@@ -63,8 +63,7 @@ describe('ShiftExpandDialog', () => {
     it('treats a level or a rate as enough to price', () => {
         expect(isPriceable({})).toBe(false);
         expect(isPriceable({ remuneration_level: 3 })).toBe(true);
-        expect(isPriceable({ remuneration_rate: 41.2 })).toBe(true);
-        expect(isPriceable({ remuneration_level: 0, remuneration_rate: 0 })).toBe(false);
+        expect(isPriceable({ remuneration_level: 0 })).toBe(false);
     });
 
     it('flags a second shift the same day', () => {

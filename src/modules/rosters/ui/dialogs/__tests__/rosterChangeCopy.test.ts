@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  describeSubgroupClone,
   describeSubgroupDeletion,
   describeSubgroupRename,
   describeTemplateStacking,
@@ -75,21 +74,6 @@ describe('describeSubgroupRename', () => {
       'Renames “AM Base” to “PM Base” on 2 days (Wed 2 Dec – Thu 3 Dec), moving 4 shifts with it.',
       '1 earlier day in view keeps the name “AM Base”.',
     ]);
-  });
-});
-
-describe('describeSubgroupClone', () => {
-  it('reports copies, skipped started shifts and untouched earlier days', () => {
-    const s = describeSubgroupClone(
-      { fromDate: '2026-12-02', toDate: '2026-12-02', days: 1, shiftsCopied: 3, shiftsSkipped: 1, pastDays: 2, conflicts: [] },
-      'AM Base', 'AM Base 2',
-    );
-    expect(s.lines).toEqual([
-      'Creates “AM Base 2” on 1 day (Wed 2 Dec) with 3 shifts copied as unassigned drafts.',
-      '1 shift has already started and is not copied.',
-      '2 earlier days in view are not copied.',
-    ]);
-    expect(s.confirmLabel).toBe('Clone with 3 shifts');
   });
 });
 

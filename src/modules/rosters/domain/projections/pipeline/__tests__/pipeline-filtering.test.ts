@@ -31,8 +31,6 @@ function makeDto(overrides: Partial<WorkerShiftDTO>): WorkerShiftDTO {
     roleId: 'role-1',
     roleName: 'Event Setup Team Member',
     remunerationLevel: 4,
-    remunerationRate: 30,
-    actualHourlyRate: null,
     levelName: 'Level 4',
     levelNumber: 4,
     groupType: 'convention_centre',

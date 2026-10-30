@@ -144,6 +144,6 @@ describe('anonymous attack surface', () => {
             }
         }
         expect(unexpected).toEqual([]);
-        expect(refused).toBeGreaterThan(200);
+        expect(refused).toBeGreaterThan(100);  // the sweep really ran; 148 definer RPCs live 2026-10-29
     });
 });

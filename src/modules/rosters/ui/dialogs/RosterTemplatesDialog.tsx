@@ -371,7 +371,6 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
             source: 'roster_modal',
             targetDepartmentId: departmentId,
             targetSubDepartmentId: subDepartmentId || undefined,
-            includeStartedShifts: false,
         });
         onOpenChange(false);
     };

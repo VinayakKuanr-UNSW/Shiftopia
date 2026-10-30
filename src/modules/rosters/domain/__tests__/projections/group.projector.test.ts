@@ -38,8 +38,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     role_level: null,
     remuneration_level: null,
     remuneration_rate: 25,
-    actual_hourly_rate: null,
-    currency: 'AUD',
     cost_center_id: null,
     start_time: '09:00',
     end_time: '17:00',
@@ -88,8 +86,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     payroll_exported: false,
     last_modified_by: null,
     last_modified_reason: null,
-    deleted_at: null,
-    deleted_by: null,
     notes: null,
     is_recurring: false,
     recurrence_rule: null,
@@ -209,8 +205,8 @@ describe('projectGroup — stats', () => {
 
   it('group stats roll up from subgroup shifts', () => {
     const shifts = [
-      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 480, remuneration_rate: 30 }),
-      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 240, remuneration_rate: 30 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 480 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 240 }),
     ];
     const result = projectGroup(shifts as unknown as WorkerShiftDTO[]);
     const theatre = result.groups.find(g => g.type === 'theatre')!;
