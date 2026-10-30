@@ -108,7 +108,6 @@ export function BidComplianceModal({
                 .eq('assigned_employee_id', user.id)
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
-                .is('deleted_at', null)
                 .eq('is_cancelled', false);
 
             if (error) {

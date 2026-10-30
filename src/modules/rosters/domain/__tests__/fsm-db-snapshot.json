@@ -1,0 +1,3350 @@
+[
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S2",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S1",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Draft",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S3",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S3",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S9",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S9",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S10",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S10",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S3",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S3",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S4",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S4",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S9",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S9",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S10",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S10",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S4",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S4",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S5",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S9",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S10",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S5",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S11",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "InProgress",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S13",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Completed",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": false,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "NoTrade",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeAccepted",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "not_on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S15",
+        "bidding": "on_bidding",
+        "outcome": "no_show",
+        "trading": "TradeApproved",
+        "cancelled": true,
+        "lifecycle": "Cancelled",
+        "assignment": "unassigned"
+    }
+]

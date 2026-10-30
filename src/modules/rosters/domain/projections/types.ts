@@ -49,7 +49,7 @@ interface ProjectedShift {
   startTime:       string;
   endTime:         string;
 
-  // Timing & cost (derived from net_length_minutes / remuneration_rate)
+  // Timing & cost (derived from net_length_minutes / remuneration_level)
   netMinutes:      number;
   estimatedCost:   number;
   costBreakdown: {
@@ -120,7 +120,7 @@ export interface ProjectionStats {
   publishedShifts:  number;
   /** Sum of net_length_minutes across all non-cancelled shifts */
   totalNetMinutes:  number;
-  /** Estimated labour cost at remuneration_rate */
+  /** Estimated labour cost at the shift's remuneration level */
   estimatedCost:    number;
   costBreakdown: {
     base: number;

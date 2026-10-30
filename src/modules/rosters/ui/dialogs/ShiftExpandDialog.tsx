@@ -11,11 +11,11 @@
  * IT IS HANDED THE RAW SHIFT ROW, NOT A VIEW MODEL. `shiftData` drives the
  * card's status dot, its Live Rules badges and its payroll rows, and a
  * hand-built camelCase object loses `target_employment_type`,
- * `remuneration_level`, `remuneration_rate` and `roles.name` — the cost engine
+ * `remuneration_level` and `roles.name` — the cost engine
  * does not fail on their absence, it returns a confident default rate.
  *
  * PAY IS SHOWN AS UNPRICED RATHER THAN WRONG. Full-time shifts often carry no
- * `remuneration_level` or `remuneration_rate`, and `buildShiftCardPay` on such
+ * `remuneration_level`, and `buildShiftCardPay` on such
  * a row prices at the engine's `defaultRate` — Level 1 casual, no loading,
  * identical on every card. So the inputs are checked FIRST and the card says
  * "not priced" when they are missing. A visible gap is recoverable; a plausible
@@ -52,15 +52,12 @@ function formatDuration(mins: number): string {
 }
 
 /**
- * Can this shift be priced at all? `remuneration_rate` alone is enough (the
- * resolved hourly figure); `remuneration_level` alone is enough too, because
- * the engine looks the rate up from it. Neither means nothing but the default.
+ * Can this shift be priced at all? Only through its `remuneration_level` — the
+ * engine looks the rate up from it. Without one it would price at the default.
  */
 export function isPriceable(shift: Record<string, unknown>): boolean {
     const level = shift.remuneration_level;
-    const rate = shift.remuneration_rate ?? shift.actual_hourly_rate;
-    return (typeof level === 'number' && level > 0)
-        || (rate != null && Number(rate) > 0);
+    return typeof level === 'number' && level > 0;
 }
 
 const UNPRICED = (

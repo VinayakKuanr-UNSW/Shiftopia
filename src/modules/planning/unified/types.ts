@@ -37,17 +37,6 @@ type OfferStatus =
   | 'REJECTED'   // Either compliance-blocked or manager-rejected
   | 'WITHDRAWN'; // Withdrawn by the offerer
 
-/**
- * Workflow states on the shifts table.
- * IDLE is the normal/default state.
- */
-export type ShiftWorkflowStatus =
-  | 'IDLE'
-  | 'OPEN_FOR_BIDS'
-  | 'OPEN_FOR_TRADE'
-  | 'PENDING_APPROVAL'
-  | 'LOCKED';
-
 // =============================================================================
 // DATABASE ROW TYPES  (snake_case, mirrors table columns exactly)
 // =============================================================================

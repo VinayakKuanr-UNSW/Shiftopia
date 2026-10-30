@@ -114,7 +114,6 @@ interface ScopeCandidate {
     start_time: string;
     assigned_employee_id?: string | null;
     is_cancelled?: boolean | null;
-    deleted_at?: string | null;
     is_draft?: boolean | null;
 }
 
@@ -127,8 +126,8 @@ interface ScopeCandidate {
  */
 export function summariseScope(shifts: readonly ScopeCandidate[]): ScopeBreakdown {
     return shifts.reduce<ScopeBreakdown>((acc, s) => {
-        // Cancelled/deleted shifts are not shifts anyone is counting.
-        if (s.is_cancelled || s.deleted_at) return acc;
+        // Cancelled shifts are not shifts anyone is counting.
+        if (s.is_cancelled) return acc;
         acc.total += 1;
         if (s.assigned_employee_id) acc.assigned += 1;
         else if (!(s.is_draft ?? true)) acc.published += 1;
@@ -252,7 +251,7 @@ export function useAutoScheduler({
         // the time window at run time in case a shift crosses into it.
         return rawShifts
             .filter((s) =>
-                !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
+                !s.assigned_employee_id && !s.is_cancelled
                 && (s.is_draft ?? true)
                 && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
             .map((s) => ({

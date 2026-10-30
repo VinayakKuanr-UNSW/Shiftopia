@@ -3178,32 +3178,23 @@ export type Database = {
       }
       public_holidays: {
         Row: {
-          applies_to_state: string | null
           created_at: string | null
           holiday_date: string
-          holiday_name: string | null
           id: string
-          is_national: boolean | null
           jurisdiction: string
           name: string
         }
         Insert: {
-          applies_to_state?: string | null
           created_at?: string | null
           holiday_date: string
-          holiday_name?: string | null
           id?: string
-          is_national?: boolean | null
           jurisdiction?: string
           name: string
         }
         Update: {
-          applies_to_state?: string | null
           created_at?: string | null
           holiday_date?: string
-          holiday_name?: string | null
           id?: string
-          is_national?: boolean | null
           jurisdiction?: string
           name?: string
         }
@@ -4253,7 +4244,6 @@ export type Database = {
           attendance_note: string | null
           attendance_status: Database["public"]["Enums"]["shift_attendance_status"]
           bidding_close_at: string | null
-          bidding_enabled: boolean | null
           bidding_open_at: string | null
           bidding_status: Database["public"]["Enums"]["shift_bidding_status"]
           break_end: string | null
@@ -4272,7 +4262,6 @@ export type Database = {
           creation_source: string | null
           currency: string | null
           deleted_at: string | null
-          deleted_by: string | null
           demand_group_id: string | null
           demand_source: string | null
           department_id: string
@@ -4319,7 +4308,6 @@ export type Database = {
           roster_date: string | null
           roster_id: string
           roster_subgroup_id: string
-          roster_template_id: string | null
           scheduled_end: string | null
           scheduled_length_minutes: number | null
           scheduled_start: string | null
@@ -4350,7 +4338,6 @@ export type Database = {
           updated_at: string | null
           user_contract_id: string | null
           version: number
-          workflow_status: string
         }
         Insert: {
           actual_end?: string | null
@@ -4367,7 +4354,6 @@ export type Database = {
           attendance_note?: string | null
           attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
           bidding_close_at?: string | null
-          bidding_enabled?: boolean | null
           bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
           break_end?: string | null
@@ -4386,7 +4372,6 @@ export type Database = {
           creation_source?: string | null
           currency?: string | null
           deleted_at?: string | null
-          deleted_by?: string | null
           demand_group_id?: string | null
           demand_source?: string | null
           department_id: string
@@ -4433,7 +4418,6 @@ export type Database = {
           roster_date?: string | null
           roster_id: string
           roster_subgroup_id: string
-          roster_template_id?: string | null
           scheduled_end?: string | null
           scheduled_length_minutes?: number | null
           scheduled_start?: string | null
@@ -4464,7 +4448,6 @@ export type Database = {
           updated_at?: string | null
           user_contract_id?: string | null
           version?: number
-          workflow_status?: string
         }
         Update: {
           actual_end?: string | null
@@ -4481,7 +4464,6 @@ export type Database = {
           attendance_note?: string | null
           attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
           bidding_close_at?: string | null
-          bidding_enabled?: boolean | null
           bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
           break_end?: string | null
@@ -4500,7 +4482,6 @@ export type Database = {
           creation_source?: string | null
           currency?: string | null
           deleted_at?: string | null
-          deleted_by?: string | null
           demand_group_id?: string | null
           demand_source?: string | null
           department_id?: string
@@ -4547,7 +4528,6 @@ export type Database = {
           roster_date?: string | null
           roster_id?: string
           roster_subgroup_id?: string
-          roster_template_id?: string | null
           scheduled_end?: string | null
           scheduled_length_minutes?: number | null
           scheduled_start?: string | null
@@ -4578,7 +4558,6 @@ export type Database = {
           updated_at?: string | null
           user_contract_id?: string | null
           version?: number
-          workflow_status?: string
         }
         Relationships: [
           {
@@ -4649,20 +4628,6 @@ export type Database = {
             columns: ["roster_subgroup_id"]
             isOneToOne: false
             referencedRelation: "roster_subgroups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_template_id_fkey"
-            columns: ["roster_template_id"]
-            isOneToOne: false
-            referencedRelation: "roster_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_roster_template_id_fkey"
-            columns: ["roster_template_id"]
-            isOneToOne: false
-            referencedRelation: "v_template_full"
             referencedColumns: ["id"]
           },
           {
@@ -6743,14 +6708,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      check_state_machine_invariants_v3: {
-        Args: never
-        Returns: {
-          check_name: string
-          status: string
-          violations: number
-        }[]
-      }
       check_template_version: {
         Args: { p_expected_version: number; p_template_id: string }
         Returns: {
@@ -7391,18 +7348,7 @@ export type Database = {
         }[]
       }
       get_shift_start_time: { Args: { p_shift_id: string }; Returns: string }
-      get_shift_state_id:
-        | {
-            Args: {
-              p_assignment: Database["public"]["Enums"]["shift_assignment_status"]
-              p_bidding: Database["public"]["Enums"]["shift_bidding_status"]
-              p_lifecycle: Database["public"]["Enums"]["shift_lifecycle"]
-              p_outcome: Database["public"]["Enums"]["shift_assignment_outcome"]
-              p_trading: Database["public"]["Enums"]["shift_trading"]
-            }
-            Returns: string
-          }
-        | { Args: { p_shift_id: string }; Returns: string }
+      get_shift_state_id: { Args: { p_shift_id: string }; Returns: string }
       get_time_category: {
         Args: { p_scheduled_start: string }
         Returns: string
@@ -7510,10 +7456,6 @@ export type Database = {
         Args: { p_jurisdiction?: string }
         Returns: string
       }
-      publish_shift: {
-        Args: { p_actor_id?: string; p_shift_id: string }
-        Returns: Json
-      }
       quarter_date_range: {
         Args: { p_quarter: number; p_year: number }
         Returns: Record<string, unknown>
@@ -7620,21 +7562,16 @@ export type Database = {
         Args: { p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
-      sm_accept_trade:
-        | {
-            Args: { p_accepting_employee_id: string; p_shift_id: string }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_compliance_snapshot?: Json
-              p_offer_id: string
-              p_offer_shift_id?: string
-              p_offerer_id: string
-              p_swap_id: string
-            }
-            Returns: Json
-          }
+      sm_accept_trade: {
+        Args: {
+          p_compliance_snapshot?: Json
+          p_offer_id: string
+          p_offer_shift_id?: string
+          p_offerer_id: string
+          p_swap_id: string
+        }
+        Returns: Json
+      }
       sm_all_active_contracts_ft_in: {
         Args: { p_profile_id: string; p_sub_department_id: string }
         Returns: boolean
@@ -7790,10 +7727,6 @@ export type Database = {
           p_sub_group_name?: string
           p_user_id?: string
         }
-        Returns: Json
-      }
-      sm_publish_shift: {
-        Args: { p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
       sm_refresh_shift_snapshots: {

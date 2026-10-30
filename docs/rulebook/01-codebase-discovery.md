@@ -213,7 +213,7 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 | Migration files | 65 total: 1 baseline snapshot (`20251015000000_baseline_schema.sql`, 30,031 lines, consolidating pre-Oct-2025 history archived separately) + 60 incremental (Oct 2025 → Jul 2026) + 5 non-applied parity/validation scripts under `_parity/` |
 | Schemas | `public` (~139 tables) + `hr` (7 tables, newer HR/contracts cutover, fronted by `public.*` compatibility views for backward compatibility) |
 | Extensions | `pg_cron`, `pg_net`, `pg_stat_statements`, `pgcrypto`, `supabase_vault`, `uuid-ossp` |
-| Scheduled jobs | `nightly_leave_accrual` (02:00 daily), `shift-state-processor` (every 15 min) and 8 others via `pg_cron`; 5 Edge Function workers (§4.5) driven by DB job queues |
+| Scheduled jobs | `shift-timer-sweep` (every minute — every time-driven shift change), `nightly_leave_accrual` (02:00 daily) and 5 other calendar jobs via `pg_cron`; 5 Edge Function workers (§4.5) driven by DB job queues |
 | RLS | ~433 `CREATE POLICY` statements + 6 dedicated hardening migrations (2026-07-19/20/21) |
 | Raw counts | 139 `CREATE TABLE`, 17 `CREATE VIEW`/`MATERIALIZED VIEW`, ~336 unique functions, 92 `CREATE TRIGGER` |
 

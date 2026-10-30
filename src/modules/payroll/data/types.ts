@@ -67,7 +67,6 @@ export interface GrossPayShiftRow {
   net_length_minutes?: number | null;
   scheduled_length_minutes?: number | null;
   remuneration_level?: number | null;
-  remuneration_rate?: number | null;
   /** 'FT' | 'PT' | 'Casual' — the shift's own employment basis. */
   target_employment_type?: string | null;
   /** The assignee's contract this shift is worked under (set by trg_shift_z_link_contract). */

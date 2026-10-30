@@ -27,7 +27,7 @@ export const UuidSchema = z.string().uuid();
 // will fetch the full row to satisfy the Shift entity interface.
 export const CreateShiftResponseSchema = z.string().uuid();
 
-// sm_publish_shift
+// sm_unpublish_shift (the envelope sm_publish_shift used to share)
 export const PublishShiftResponseSchema = z.object({
   success: z.boolean(),
   from_state: z.string().optional(),

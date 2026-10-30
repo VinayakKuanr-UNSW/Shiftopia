@@ -148,8 +148,9 @@ export function getShiftStateDisplay(state: ShiftStateID): ShiftStateDisplay {
  * data; the `validate_shift_state_invariants` trigger enforces this server-side).
  */
 export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
-    // 1. Cancelled — highest priority, short-circuits everything
-    if (shift.is_cancelled) return 'S15';
+    // 1. Cancelled — highest priority, short-circuits everything. Either signal
+    //    counts, as in get_shift_fsm_state().
+    if (shift.is_cancelled || shift.lifecycle_status === 'Cancelled') return 'S15';
 
     // 2. Completed
     if (shift.lifecycle_status === 'Completed') return 'S13';
