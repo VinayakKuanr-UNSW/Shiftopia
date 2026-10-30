@@ -37,7 +37,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     role_id: 'role-1',
     role_level: null,
     remuneration_level: null,
-    remuneration_rate: 25,
     cost_center_id: null,
     start_time: '09:00',
     end_time: '17:00',

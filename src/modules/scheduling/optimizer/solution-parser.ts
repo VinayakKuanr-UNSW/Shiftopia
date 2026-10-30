@@ -62,7 +62,6 @@ export interface EmployeeMeta {
     employment_status?: string | null;
     contracted_role_ids?: string[];
     contracted_weekly_hours?: number;
-    remuneration_rate?: number;
     max_weekly_minutes?: number;
     level?: number;
     is_flexible?: boolean;

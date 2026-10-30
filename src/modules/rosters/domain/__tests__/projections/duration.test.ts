@@ -35,7 +35,6 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
     role_id: null,
     role_level: null,
     remuneration_level: null,
-    remuneration_rate: null,
     cost_center_id: null,
     start_time: '09:00',
     end_time: '17:00',

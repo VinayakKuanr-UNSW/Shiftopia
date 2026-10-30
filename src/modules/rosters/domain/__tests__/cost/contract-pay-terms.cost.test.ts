@@ -100,12 +100,6 @@ describe('without contract terms: the shift’s own level, never a guess or an o
     expect(resolveShiftPayInputs({ remunerationLevel: 0, roleName: 'Supervisor' }).classificationLevel).toBe('TRAINEE');
     expect(resolveShiftPayInputs({ remunerationLevel: null, roleName: 'Supervisor' }).classificationLevel).toBe('LEVEL_5');
   });
-
-  it('ignores per-shift rate overrides', () => {
-    const plain = estimateDetailedCostFromShift(shift({}));
-    const overridden = estimateDetailedCostFromShift(shift({ remuneration_rate: 99 }));
-    expect(overridden.totalCost).toBe(plain.totalCost);
-  });
 });
 
 describe('roster projection pipeline', () => {

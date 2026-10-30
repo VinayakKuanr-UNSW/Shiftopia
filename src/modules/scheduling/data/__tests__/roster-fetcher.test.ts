@@ -136,7 +136,7 @@ const shift = (id: string, date: string = '2026-05-15'): ShiftMeta => ({
 
 const employee = (id: string, contract_type: 'FT' | 'PT' | 'CASUAL' = 'CASUAL'): EmployeeMeta => ({
     id, name: `E-${id}`, contract_type,
-    contracted_weekly_hours: contract_type === 'FT' ? 38 : 0, remuneration_rate: 25,
+    contracted_weekly_hours: contract_type === 'FT' ? 38 : 0,
 });
 
 // ---------------------------------------------------------------------------
