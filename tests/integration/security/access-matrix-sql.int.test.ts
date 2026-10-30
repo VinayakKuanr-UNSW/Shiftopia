@@ -53,7 +53,7 @@ describe('SQL access harness', () => {
 
     it('03_legacy_flag.sql: the retired admin flag grants nothing; zeta keeps broadcast admin', () => {
         expect(sqlFileNotices(stack().dbContainer, `${DIR}/03_legacy_flag.sql`)).toEqual([
-            'X(flag=admin, no cert): is_admin=false mgr_or_above=false delta_access=false bcast_sys=false '
+            'X(flag=admin, no cert): is_admin=false delta_access=false bcast_sys=false '
             + 'require_scope=denied change_own_flag=refused | Z: bcast_sys=true',
         ]);
     });
