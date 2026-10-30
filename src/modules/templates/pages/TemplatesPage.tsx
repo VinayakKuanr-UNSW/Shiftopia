@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTemplates } from '../state/useTemplates';
 
 // Components
-import TemplateExplorer, { ExplorerTemplate } from '../ui/components/TemplateExplorer';
+import { TemplateExplorer, ExplorerTemplate } from '../ui/components/TemplateExplorer';
 import TemplateEditor from '../ui/components/TemplateEditor';
 import CreateTemplateDialog from '../ui/dialogs/CreateTemplateDialog';
 import { Button } from '@/modules/core/ui/primitives/button';

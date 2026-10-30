@@ -9,7 +9,7 @@ vi.mock('@/modules/core/contexts/ThemeContext', () => ({
 }));
 
 import TeamAvailabilityGrid from '../TeamAvailabilityGrid';
-import GridBadgeLegendPopover from '../GridBadgeLegendPopover';
+import { GridBadgeLegendPopover } from '../GridBadgeLegendPopover';
 import TeamDayTimeline from '../TeamDayTimeline';
 import CoverageHeatmap from '../CoverageHeatmap';
 import NearMissPanel from '../NearMissPanel';

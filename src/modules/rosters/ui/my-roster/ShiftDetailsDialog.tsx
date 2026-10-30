@@ -20,8 +20,8 @@ import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import CreateSwapRequestModal from './CreateSwapRequestModal';
-import DropShiftDrawer from './DropShiftDrawer';
+import { CreateSwapRequestModal } from './CreateSwapRequestModal';
+import { DropShiftDrawer } from './DropShiftDrawer';
 import { AddToCalendar } from './AddToCalendar';
 import { useOnlineStatus } from '@/modules/core/hooks/useOnlineStatus';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';

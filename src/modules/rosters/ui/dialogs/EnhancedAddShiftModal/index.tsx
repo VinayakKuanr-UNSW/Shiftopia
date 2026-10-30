@@ -312,6 +312,5 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
     );
 };
 
-export default EnhancedAddShiftModal;
 export * from './types';
 

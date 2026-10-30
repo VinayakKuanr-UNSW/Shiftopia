@@ -48,7 +48,8 @@ import TeamDayTimeline from '../ui/team/TeamDayTimeline';
 import CoverageHeatmap from '../ui/team/CoverageHeatmap';
 import NearMissPanel from '../ui/team/NearMissPanel';
 import { RosterPaginationFooter } from '@/modules/rosters/ui/components/RosterPaginationFooter';
-import GridFunctionBar, {
+import {
+    GridFunctionBar,
     CELL_MODES,
     type ViewKey,
     type SortOptionKey,

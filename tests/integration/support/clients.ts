@@ -13,7 +13,7 @@ import { inject } from 'vitest';
 import type { StackEnv } from './stack';
 
 // Untyped schemas: the tests address tables by name across `public` and `hr`.
-export type Client = SupabaseClient<any, any, any>;
+type Client = SupabaseClient<any, any, any>;
 
 export type Persona = 'A' | 'B' | 'D' | 'DD' | 'E' | 'E2' | 'F' | 'G' | 'G2' | 'X' | 'Z';
 
@@ -30,7 +30,7 @@ export function personaId(p: Persona): string {
 const b64url = (v: string | Buffer) => Buffer.from(v).toString('base64url');
 
 /** Sign an access token for `sub` the way GoTrue would. */
-export function mintAccessToken(sub: string, secret: string, ttlSeconds = 3600): string {
+function mintAccessToken(sub: string, secret: string, ttlSeconds = 3600): string {
     const now = Math.floor(Date.now() / 1000);
     const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
     const payload = b64url(JSON.stringify({
@@ -48,12 +48,6 @@ function client(key: string, bearer: string, schema: 'public' | 'hr' = 'public')
         global: { headers: { Authorization: `Bearer ${bearer}` } },
         db: { schema },
     });
-}
-
-/** Someone holding only the public anon key — i.e. anyone on the internet. */
-export function anonClient(schema: 'public' | 'hr' = 'public'): Client {
-    const { anonKey } = stack();
-    return client(anonKey, anonKey, schema);
 }
 
 /** A signed-in fixture persona (see supabase/tests/access_matrix/README.md). */

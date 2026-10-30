@@ -213,5 +213,3 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
     </Drawer>
   );
 };
-
-export default DropShiftDrawer;
