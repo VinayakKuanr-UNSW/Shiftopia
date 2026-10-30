@@ -213,7 +213,7 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 | Migration files | 65 total: 1 baseline snapshot (`20251015000000_baseline_schema.sql`, 30,031 lines, consolidating pre-Oct-2025 history archived separately) + 60 incremental (Oct 2025 → Jul 2026) + 5 non-applied parity/validation scripts under `_parity/` |
 | Schemas | `public` (~139 tables) + `hr` (7 tables, newer HR/contracts cutover, fronted by `public.*` compatibility views for backward compatibility) |
 | Extensions | `pg_cron`, `pg_net`, `pg_stat_statements`, `pgcrypto`, `supabase_vault`, `uuid-ossp` |
-| Scheduled jobs | `nightly_leave_accrual` (02:00 daily), `shift-state-processor` (every 15 min) and 8 others via `pg_cron`; 5 Edge Function workers (§4.5) driven by DB job queues |
+| Scheduled jobs | `shift-timer-sweep` (every minute — every time-driven shift change), `nightly_leave_accrual` (02:00 daily) and 5 other calendar jobs via `pg_cron`; 5 Edge Function workers (§4.5) driven by DB job queues |
 | RLS | ~433 `CREATE POLICY` statements + 6 dedicated hardening migrations (2026-07-19/20/21) |
 | Raw counts | 139 `CREATE TABLE`, 17 `CREATE VIEW`/`MATERIALIZED VIEW`, ~336 unique functions, 92 `CREATE TRIGGER` |
 
@@ -234,7 +234,7 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 
 ### 4.3 Notable views
 
-`v_shift_assignment_episodes` (reconstructs assignment episodes from `shift_events` — source for KPIs and quarterly performance), `employee_daily_metrics` (materialized), `v_template_full`, `hr.v_headcount_by_level`, `hr.v_org_chart`, `hr.v_promotion_ladder`. Several views (`v_group_all_participants`, `v_broadcast_groups_with_stats`, `v_unread_broadcasts_by_group`, `v_template_full`) were **dropped by the Oct-2025 re-baseline and had to be restored** in follow-up migrations — see §5.
+`v_shift_assignment_episodes` (reconstructs assignment episodes from `shift_events` — source for KPIs and quarterly performance), `v_template_full`. Several views (`v_group_all_participants`, `v_broadcast_groups_with_stats`, `v_unread_broadcasts_by_group`, `v_template_full`) were **dropped by the Oct-2025 re-baseline and had to be restored** in follow-up migrations — see §5.
 
 ### 4.4 App-facing RPCs (called from the frontend, confirmed via grep of `.rpc(`)
 

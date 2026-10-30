@@ -10,7 +10,6 @@ import { SmartShiftCard, ComplianceInfo } from '@/modules/rosters/ui/components/
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
-import { useToast } from '@/modules/core/hooks/use-toast';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { cn } from '@/modules/core/lib/utils';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
@@ -127,7 +126,6 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   onEditShift,
   canEdit = false,
 }) => {
-  const { toast } = useToast();
   const [collapsedEvents, setCollapsedEvents] = useState<Set<string>>(new Set());
 
   // Per-event "+N more" expansion (session-only), keyed by eventId.

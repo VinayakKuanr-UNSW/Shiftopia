@@ -26,7 +26,6 @@ export function buildRosterSummaryMap(shifts: readonly Shift[]): Map<string, Ros
     const cells = new Map<string, RosterSummaryCellDTO & { _employees: Set<string> }>();
 
     for (const s of shifts) {
-        if (s.deleted_at) continue;
         const key = rosterSummaryKey(s.shift_date, s.group_type, s.sub_group_name);
         let cell = cells.get(key);
         if (!cell) {

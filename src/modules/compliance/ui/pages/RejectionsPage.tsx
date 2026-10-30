@@ -27,7 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/modules/core/ui/primitives/select';
-import { format, parseISO } from 'date-fns';
+import { parseISO } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { V8RulesTable } from '../components/V8RulesTable';
 
 type Window = '24h' | '7d' | '30d';
@@ -67,7 +68,7 @@ function RejectionCard({ r }: { r: Rejection }) {
           {r.rule_id}
         </Badge>
         <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-          {format(parseISO(r.created_at), 'dd MMM yyyy, HH:mm')}
+          {formatInTimezone(parseISO(r.created_at), SYDNEY_TZ, 'dd MMM yyyy, HH:mm')}
         </span>
       </div>
       <p className="text-[14.5px] leading-relaxed text-foreground font-normal">{r.summary}</p>
@@ -266,7 +267,7 @@ export default function RejectionsPage() {
                       {(data ?? []).map(r => (
                         <TableRow key={r.id}>
                           <TableCell className="font-mono whitespace-nowrap text-muted-foreground">
-                            {format(parseISO(r.created_at), 'dd MMM, HH:mm')}
+                            {formatInTimezone(parseISO(r.created_at), SYDNEY_TZ, 'dd MMM, HH:mm')}
                           </TableCell>
                           <TableCell className="font-mono font-medium">
                             {r.employee_id.slice(0, 8)}

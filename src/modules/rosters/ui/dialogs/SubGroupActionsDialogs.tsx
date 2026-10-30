@@ -20,8 +20,7 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2, Edit3, Copy, Check, ArrowLeft } from 'lucide-react';
-import { sameSubgroupName } from '@/modules/rosters/domain/subgroupRules';
+import { Loader2, Edit3, Check, ArrowLeft } from 'lucide-react';
 import { ImpactConfirmDialog, ImpactSummaryView, canConfirmSummary } from './ImpactConfirmDialog';
 import type { ChangeSummary } from './rosterChangeCopy';
 

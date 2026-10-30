@@ -51,7 +51,7 @@ import { GridBadgeLegendPopover } from './GridBadgeLegendPopover';
 export type ViewKey = 'grid' | 'coverage' | 'nearmiss';
 export type SortOptionKey = 'name' | 'fewest-days' | 'most-days';
 
-export const VIEWS: Array<{ key: ViewKey; label: string; Icon: typeof Grid3x3 }> = [
+const VIEWS: Array<{ key: ViewKey; label: string; Icon: typeof Grid3x3 }> = [
   { key: 'grid', label: 'Team', Icon: Grid3x3 },
   { key: 'coverage', label: 'Coverage', Icon: Thermometer },
   { key: 'nearmiss', label: 'Near misses', Icon: PhoneCall },
@@ -87,7 +87,7 @@ export const CELL_MODES: Array<{
   },
 ];
 
-export const SORT_OPTIONS: Array<{
+const SORT_OPTIONS: Array<{
   key: SortOptionKey;
   label: string;
 }> = [
@@ -96,7 +96,7 @@ export const SORT_OPTIONS: Array<{
   { key: 'most-days', label: 'Most Days' },
 ];
 
-export const EMPLOYMENT_OPTIONS = [
+const EMPLOYMENT_OPTIONS = [
   { id: 'Casual', label: 'Casual' },
   { id: 'Part-Time', label: 'Part-Time' },
   { id: 'Full-Time', label: 'Full-Time' },
@@ -137,7 +137,7 @@ interface GridFilterPopoverProps {
   className?: string;
 }
 
-export const GridFilterPopover: React.FC<GridFilterPopoverProps> = ({
+const GridFilterPopover: React.FC<GridFilterPopoverProps> = ({
   employmentStatuses,
   onEmploymentStatusesChange,
   search,
@@ -275,7 +275,7 @@ interface GridCellModePopoverProps {
   className?: string;
 }
 
-export const GridCellModePopover: React.FC<GridCellModePopoverProps> = ({
+const GridCellModePopover: React.FC<GridCellModePopoverProps> = ({
   cellMode,
   onCellModeChange,
   className,
@@ -384,7 +384,7 @@ interface GridSortPopoverProps {
   className?: string;
 }
 
-export const GridSortPopover: React.FC<GridSortPopoverProps> = ({
+const GridSortPopover: React.FC<GridSortPopoverProps> = ({
   sortKey,
   onSortChange,
   className,
@@ -485,7 +485,7 @@ export const GridSortPopover: React.FC<GridSortPopoverProps> = ({
 };
 
 /* ─── Grid Function Bar Props ─── */
-export interface GridFunctionBarProps {
+interface GridFunctionBarProps {
   view: ViewKey;
   onViewChange: (view: ViewKey) => void;
   selectedDate: Date;

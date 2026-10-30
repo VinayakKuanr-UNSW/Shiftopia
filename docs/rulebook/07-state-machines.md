@@ -80,12 +80,19 @@ stateDiagram-v2
 
 ### 1.3 Time-based automatic sweeps
 
-**⚠ Finding (OPEN, architectural risk):** there are **four independent, overlapping automatic-transition mechanisms**, not one — this is itself worth flagging for a consolidation pass:
+**One mechanism (since 2026-10-29, migration `20261029065518`).** `process_shift_timers()`, run every minute by the `shift-timer-sweep` `pg_cron` job, makes every time-driven shift change, in order:
 
-1. **`process_shift_timers()`** — per-minute `pg_cron` job (name provisioned outside migration history, unlike the other two scheduled jobs). Five steps: offer expiry (S3→S2), bidding timeout (S5/S6→S1 directly, no S8 hop), auto-start (S4/dead-S7→S11/dead-S12, gated on `assignment_outcome`), auto-complete (S11→S13, excluding currently-clocked-in employees), swap expiry (S9/S10→S4, plus cascades to expire child `swap_offers` — a gap the introducing migration explicitly fixed for swaps but not for bids, see §3.7).
-2. **`sm_run_state_processor()`** — a separate `pg_cron` job confusingly also named `shift-state-processor` in its schedule entry, explicitly documented as distinct from the edge function of the same name. Duplicates offer-expiry and bidding-timeout (steps 2-3), but its own auto-start pass has **no `assignment_outcome` check** — looser than `process_shift_timers`' equivalent step, meaning it would (incorrectly, per the FSM's own intent) auto-start an S3 "awaiting employee decision" shift into InProgress once its scheduled time passes, which `process_shift_timers` deliberately excludes. Also does auto-no-show marking and the 12.5h auto-clock-out safety net (shared with mechanism 3).
-3. **`sm_handle_auto_clock_out()`** — a 5-minute cron, explicitly commented "prod-only, not scheduled in any migration file." The *primary* 12.5h auto-clock-out; mechanism 2's Pass 6 is its documented safety net.
-4. **Edge functions `shift-lifecycle-updater` and `shift-state-processor`** — a third, independent TypeScript implementation of the same rules, writing directly to `shifts`/`timesheets` via `.update()` with **no FSM gate, no version CAS**. Has a dead filter clause (`.in('lifecycle_status', ['Published','Confirmed'])` — `'Confirmed'` isn't a valid `shift_lifecycle` value) and anchors its 12.5h auto-close off `start_at` alone rather than `GREATEST(actual_start, start_at)`, so it could close a shift earlier than the DB-side rule intends if these ever run against the same data. Per its own migration header, `shift-state-processor` (the edge function) has **no scheduled caller** — it's currently dead code.
+1. offer expiry (S3→S2, via `fn_process_offer_expirations`);
+2. bidding timeout (S5/S6→S1 directly, unassigned shifts only);
+3. auto-start (S4→S11, gated on a confirmed `assignment_outcome`);
+4. auto-complete (S11→S13, excluding employees still clocked in);
+5. swap expiry (S9/S10→S4, expiring child `swap_offers` too);
+6. no-show (ended, no clock-in, not inside the employee's approved leave);
+7. 12.5h auto clock-out (via `sm_handle_auto_clock_out`).
+
+It fails loudly: an error aborts that minute's run and shows in the cron history.
+
+Before, there were four overlapping mechanisms. The 15-minute `sm_run_state_processor()` duplicated steps 1–4 with looser guards: its bidding pass could unassign an assigned shift, its auto-start would start an unaccepted offer, and its offer pass matched a value nothing writes. It swallowed its own errors. It also owned the only no-show pass. Two 5-minute jobs re-ran offer expiry and clock-out. The edge-function copies (`shift-lifecycle-updater`, `shift-state-processor`) were retired earlier; see `supabase/functions/_retired/`. The test is `supabase/tests/process_shift_timers_no_show_and_clockout.sql`.
 
 Window is uniformly **T-4h before shift start** across bidding, direct offers, and swaps.
 

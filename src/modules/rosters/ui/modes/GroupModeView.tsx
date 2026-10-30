@@ -72,7 +72,6 @@ import {
   useDeleteShift,
   usePublishShift,
   useUnpublishShift,
-  useCreateShift,
   useEmployees,
   snapshotLists,
   rollbackLists,
@@ -707,10 +706,6 @@ interface GroupSectionProps {
   isBulkMode: boolean;
   externalShifts: Shift[];
   isDateInTemplate: (date: Date) => boolean;
-  shiftsByBucketKey: Map<string, Shift[]>;
-  selectedV8ShiftIdsSet: Set<string>;
-  onDeselectShiftIds?: (ids: string[]) => void;
-  onSelectShiftIds?: (ids: string[]) => void;
   isDnDModeActive: boolean;
   summaryData: any;
   onDrillDown?: (dateKey: string, groupType: string, subGroupName: string) => void;
@@ -744,10 +739,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   isBulkMode,
   externalShifts,
   isDateInTemplate,
-  shiftsByBucketKey,
-  selectedV8ShiftIdsSet,
-  onDeselectShiftIds,
-  onSelectShiftIds,
   isDnDModeActive,
   summaryData,
   onDrillDown,
@@ -1066,23 +1057,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                     const isGhost = !isDateInTemplate(date);
                     const holidayName = getPublicHolidayName(date);
 
-                    const bucketKey = `${dateKey}::${group.type}::${subGroup.name}`;
-                    const bucketShifts = shiftsByBucketKey.get(bucketKey) || [];
-                    const eligibleIds = bucketShifts
-                      .filter(s => !isShiftLocked(s.shift_date, s.start_time, 'roster_management'))
-                      .map(s => s.id);
-                    const selectableCount = eligibleIds.length;
-                    
-                    let cellSelectionState: 'all' | 'some' | 'none' = 'none';
-                    if (selectableCount > 0) {
-                      const selectedCount = eligibleIds.filter(id => selectedV8ShiftIdsSet.has(id)).length;
-                      if (selectedCount === selectableCount) {
-                        cellSelectionState = 'all';
-                      } else if (selectedCount > 0) {
-                        cellSelectionState = 'some';
-                      }
-                    }
-
 
                     return (
                       <div
@@ -1262,31 +1236,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   );
 
   // The shifts the toolbar filters let through — the same rule every view uses.
-  // Bulk bucket-selection and the legacy branch read this, so selecting a bucket
-  // never picks up shifts the filter is hiding.
+  // The legacy branch reads this, so it never shows shifts the filter is hiding.
   const visibleShifts = React.useMemo(
     () => (externalShifts ? applyAdvancedFilters(externalShifts, advancedFilters) : externalShifts),
     [externalShifts, advancedFilters],
   );
-
-  // Index shifts by key: `${shift_date}::${group_type||'unassigned'}::${sub_group_name||'General'}`
-  const shiftsByBucketKey = React.useMemo(() => {
-    const map = new Map<string, Shift[]>();
-    if (!visibleShifts) return map;
-    
-    visibleShifts.forEach(shift => {
-      const dateKey = shift.shift_date;
-      const groupKey = shift.group_type || 'unassigned';
-      const subGroupKey = shift.sub_group_name || 'General';
-      const key = `${dateKey}::${groupKey}::${subGroupKey}`;
-      
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-      map.get(key)!.push(shift);
-    });
-    return map;
-  }, [visibleShifts]);
 
   // Collapsible group state (persisted to localStorage)
   const [collapsedGroups, toggleGroupCollapse] = useCollapsedGroups();
@@ -1321,7 +1275,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const deleteShiftMutation = useDeleteShift();
   const publishShiftMutation = usePublishShift();
   const unpublishShiftMutation = useUnpublishShift();
-  const createShiftMutation = useCreateShift();
   const queryClient = useQueryClient();
 
   // ==================== UNDO HANDLER ====================
@@ -2504,10 +2457,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   isBulkMode={isBulkMode}
                   externalShifts={externalShifts}
                   isDateInTemplate={isDateInTemplate}
-                  shiftsByBucketKey={shiftsByBucketKey}
-                  selectedV8ShiftIdsSet={selectedV8ShiftIdsSet}
-                  onDeselectShiftIds={onDeselectShiftIds}
-                  onSelectShiftIds={onSelectShiftIds}
                   isDnDModeActive={isDnDModeActive}
                   summaryData={summaryData}
                   onDrillDown={onDrillDown}

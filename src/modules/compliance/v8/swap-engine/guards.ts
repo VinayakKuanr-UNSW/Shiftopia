@@ -79,13 +79,13 @@ export class SwapGuardError extends Error {
 // INDIVIDUAL GUARDS
 // =============================================================================
 
-/** #16, #25 — Verify shifts exist, are not deleted, and are not cancelled. */
+/** #16, #25 — Verify shifts exist and are not cancelled. */
 async function checkShiftsValid(shiftIds: string[]): Promise<GuardViolation[]> {
     const violations: GuardViolation[] = [];
 
     const { data, error } = await (supabase as any)
         .from('shifts')
-        .select('id, is_cancelled, deleted_at, lifecycle_status')
+        .select('id, is_cancelled, lifecycle_status')
         .in('id', shiftIds);
 
     if (error) return violations; // Fail open — let solver catch it
@@ -98,8 +98,8 @@ async function checkShiftsValid(shiftIds: string[]): Promise<GuardViolation[]> {
             continue;
         }
         const row = (data || []).find((s: any) => s.id === id);
-        if (row?.deleted_at || row?.is_cancelled) {
-            violations.push({ code: 'SHIFT_CANCELLED', message: `Shift ${id} has been cancelled or deleted.`, entity_id: id });
+        if (row?.is_cancelled) {
+            violations.push({ code: 'SHIFT_CANCELLED', message: `Shift ${id} has been cancelled.`, entity_id: id });
         }
     }
 
