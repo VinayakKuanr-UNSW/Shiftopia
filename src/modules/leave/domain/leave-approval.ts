@@ -80,7 +80,7 @@ export function ledgerFor(
     };
 }
 
-export interface ApprovalCheck {
+interface ApprovalCheck {
     /** Set only when approval is impossible — the request is no longer pending. */
     blockedReason: string | null;
     /**
@@ -155,7 +155,7 @@ export function canRevoke(req: Pick<LeaveRequest, 'status' | 'endDate'>, today: 
 
 export type RequestTab = 'pending' | 'approved' | 'rejected';
 
-export type RequestTabs = Record<RequestTab, LeaveRequest[]>;
+type RequestTabs = Record<RequestTab, LeaveRequest[]>;
 
 /**
  * Pending / Approved / Rejected — the same three tabs on My Leave and on Leave
@@ -222,7 +222,7 @@ export function inScope(
 
 // ── What an approval did ─────────────────────────────────────────────────────
 
-export interface ApprovalOutcome {
+interface ApprovalOutcome {
     /** Full-time shifts the approval deleted. */
     removed: number;
     /** Full-time shifts it could not delete — still rostered under the leave. */

@@ -11,11 +11,11 @@
  * IT IS HANDED THE RAW SHIFT ROW, NOT A VIEW MODEL. `shiftData` drives the
  * card's status dot, its Live Rules badges and its payroll rows, and a
  * hand-built camelCase object loses `target_employment_type`,
- * `remuneration_level`, `remuneration_rate` and `roles.name` — the cost engine
+ * `remuneration_level` and `roles.name` — the cost engine
  * does not fail on their absence, it returns a confident default rate.
  *
  * PAY IS SHOWN AS UNPRICED RATHER THAN WRONG. Full-time shifts often carry no
- * `remuneration_level` or `remuneration_rate`, and `buildShiftCardPay` on such
+ * `remuneration_level`, and `buildShiftCardPay` on such
  * a row prices at the engine's `defaultRate` — Level 1 casual, no loading,
  * identical on every card. So the inputs are checked FIRST and the card says
  * "not priced" when they are missing. A visible gap is recoverable; a plausible
@@ -36,7 +36,7 @@ import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 
-export interface ShiftExpandDialogProps {
+interface ShiftExpandDialogProps {
     /** The raw shift row. Null keeps the dialog closed. */
     shift: Shift | null;
     /** Further shifts the same person holds that day — a cl 39.1 breach, said out loud. */
@@ -45,22 +45,19 @@ export interface ShiftExpandDialogProps {
 }
 
 /** "7h 36m". */
-export function formatDuration(mins: number): string {
+function formatDuration(mins: number): string {
     const h = Math.floor(mins / 60);
     const m = Math.round(mins % 60);
     return m === 0 ? `${h}h` : h === 0 ? `${m}m` : `${h}h ${m}m`;
 }
 
 /**
- * Can this shift be priced at all? `remuneration_rate` alone is enough (the
- * resolved hourly figure); `remuneration_level` alone is enough too, because
- * the engine looks the rate up from it. Neither means nothing but the default.
+ * Can this shift be priced at all? Only through its `remuneration_level` — the
+ * engine looks the rate up from it. Without one it would price at the default.
  */
 export function isPriceable(shift: Record<string, unknown>): boolean {
     const level = shift.remuneration_level;
-    const rate = shift.remuneration_rate ?? shift.actual_hourly_rate;
-    return (typeof level === 'number' && level > 0)
-        || (rate != null && Number(rate) > 0);
+    return typeof level === 'number' && level > 0;
 }
 
 const UNPRICED = (
@@ -80,11 +77,11 @@ const UNPRICED = (
 );
 
 /** A second shift on the same day. Shown, never hidden. */
-export const SplitShiftBadge: React.FC<{ alsoOnThisDay: readonly Shift[] }> = ({ alsoOnThisDay }) => (
+const SplitShiftBadge: React.FC<{ alsoOnThisDay: readonly Shift[] }> = ({ alsoOnThisDay }) => (
     <div className="flex items-center gap-1.5">
         <Tooltip>
             <TooltipTrigger asChild>
-                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-400 bg-red-500/10 border border-red-500/30">
+                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-red-400 bg-red-500/10 border border-red-500/30">
                     <AlertTriangle className="h-2.5 w-2.5" />
                     Split shift
                 </span>
@@ -137,7 +134,8 @@ export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, als
         <Dialog open onOpenChange={onOpenChange}>
             <DialogContent
                 hideClose
-                className="max-h-[92dvh] w-[calc(100%-2rem)] max-w-6xl overflow-y-auto rounded-3xl border-0 bg-background p-0 sm:rounded-3xl"
+                className="max-h-[92dvh] w-[calc(100%-2rem)] overflow-y-auto border-0 p-0"
+                size="2xl"
             >
                 <SharedShiftCard
                     variant="timecard"
@@ -172,16 +170,15 @@ export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, als
                     sectionLayout="columns"
                     hideBreadcrumbs
                     hideSegmentedBox
-                    hideGlow
                     className="w-full rounded-3xl text-left"
                     topContent={<>
                         <div className="mb-3 flex items-start justify-between gap-2">
                             {/* Radix requires the dialog be titled and described. */}
                             <div className="min-w-0">
-                                <DialogTitle className="text-xl font-bold tracking-tight tabular-nums">
+                                <DialogTitle className="tabular-nums">
                                     {dateLabel} · {start} – {end}
                                 </DialogTitle>
-                                <DialogDescription className="mt-0.5 text-sm font-medium opacity-80 tabular-nums">
+                                <DialogDescription className="mt-0.5 opacity-80 tabular-nums">
                                     {[who, row.roles?.name ?? 'Shift', `Net ${formatDuration(net)}`, `Unpaid break ${unpaid}m`]
                                         .filter(Boolean).join(' · ')}
                                 </DialogDescription>
@@ -199,4 +196,3 @@ export const ShiftExpandDialog: React.FC<ShiftExpandDialogProps> = ({ shift, als
     );
 };
 
-export default ShiftExpandDialog;

@@ -19,7 +19,7 @@ export function Segmented<K extends string>({ label, value, onChange, options }:
                     aria-selected={value === o.key}
                     onClick={() => onChange(o.key)}
                     className={cn(
-                        'inline-flex items-center gap-1.5 rounded-lg px-4 text-sm font-semibold transition',
+                        'inline-flex items-center gap-1.5 rounded-lg px-4 text-[13px] font-semibold transition',
                         touch.targetY,
                         value === o.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                     )}

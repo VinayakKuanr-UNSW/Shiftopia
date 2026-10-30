@@ -3,7 +3,7 @@ import { Hash } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import type { BroadcastChannelWithStats } from '../../model/broadcast.types';
 
-export interface ChannelItemProps {
+interface ChannelItemProps {
   channel: BroadcastChannelWithStats;
   isActive: boolean;
   onClick: () => void;
@@ -28,9 +28,9 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel, isActive, onC
     </div>
 
     <div className="flex-1 min-w-0">
-      <p className={cn('font-semibold truncate', compact ? 'text-xs' : 'text-sm')}>{channel.name}</p>
+      <p className={cn('font-semibold truncate', compact ? 'text-[11px]' : 'text-[13px]')}>{channel.name}</p>
       {!compact && channel.description && (
-        <p className="text-[10px] md:text-xs text-slate-400 dark:text-white/40 truncate mt-0.5">
+        <p className="text-[11px] md:text-[11px] text-slate-400 dark:text-white/40 truncate mt-0.5">
           {channel.description}
         </p>
       )}
@@ -39,4 +39,3 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel, isActive, onC
   </div>
 );
 
-export default ChannelItem;

@@ -66,6 +66,9 @@ export interface ExistingShiftRef {
     end_time: string;       // HH:MM
     duration_minutes: number;
     unpaid_break_minutes: number;
+    /** cl 39.2 nets rest breaks out of the split-shift spread; the solver's
+     *  HC-9/HC-13 read this on pinned shifts as well as candidates. */
+    paid_break_minutes?: number;
 }
 
 /**
@@ -226,6 +229,15 @@ export interface OptimizerEmployee {
     /** ISO weekdays (1=Mon .. 7=Sun) the span applies on. Empty = all seven. */
     ordinary_days?: number[];
     /**
+     * cl 35.x(a) declared work cycle (1-4 weeks) and the Monday it counts from
+     * (`hr.user_contracts`). The solver's HC-4 averages ordinary hours over this
+     * ANCHORED cycle and falls back to 4 / '2024-01-01' when omitted.
+     * Hydrated by `RosterFetcher.fetchOrdinaryHoursCycles`, which resolves a
+     * multi-contract person exactly as V8 does (shortest cycle, first anchor).
+     */
+    ordinary_hours_cycle_weeks?: number;
+    ordinary_hours_cycle_anchor?: string;
+    /**
      * Severity-based availability windows: tuples of
      * `[start_time, end_time, severity]` where severity is 'HARD',
      * 'SOFT', or 'PREFERENCE'. HARD entries are pre-filter blockers;
@@ -316,14 +328,14 @@ export interface AuditRequest {
     target_shift_ids?: string[];
 }
 
-export interface AuditEmployeeRow {
+interface AuditEmployeeRow {
     employee_id: string;
     status: 'PASS' | 'FAIL';
     /** Reason codes (e.g. 'ROLE_MISMATCH', 'OUTSIDE_DECLARED_AVAILABILITY'). */
     rejection_reasons: string[];
 }
 
-export interface AuditShiftRow {
+interface AuditShiftRow {
     shift_id: string;
     /** Map of reason code → number of employees rejected for that reason. */
     rejection_summary: Record<string, number>;
@@ -432,7 +444,7 @@ export interface OptimizeResponse {
 // AUTO-SCHEDULER RESULT (after compliance validation)
 // =============================================================================
 
-export type ProposalValidationStatus = 'PASS' | 'WARN' | 'FAIL';
+type ProposalValidationStatus = 'PASS' | 'WARN' | 'FAIL';
 
 export interface ValidatedProposal {
     shiftId: string;
@@ -511,6 +523,9 @@ export interface AutoSchedulerResult {
     auditedUncoveredCount?: number;
     capacityCheck?: CapacityCheck;
     proposals: ValidatedProposal[];
+    /** shift id → row version the preview validated. Apply sends it to
+     *  sm_bulk_assign_atomic so a shift changed since is not booked. */
+    shiftVersions?: Record<string, number>;
     canCommit: boolean;
     usedFallback: boolean;
     /** Per-category solver objective breakdown forwarded from the Python service.

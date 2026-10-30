@@ -1,14 +1,14 @@
 // src/pages/TemplatesPage.tsx
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTemplates } from '../state/useTemplates';
-import { TemplateConflict } from '../model/templates.types';
 
 // Components
 import TemplateExplorer, { ExplorerTemplate } from '../ui/components/TemplateExplorer';
 import TemplateEditor from '../ui/components/TemplateEditor';
 import CreateTemplateDialog from '../ui/dialogs/CreateTemplateDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Loader2, AlertTriangle, FileText } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,15 +21,19 @@ import {
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useAuth } from '@/platform/auth/useAuth';
 import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { TemplateFunctionBar } from '../ui/components/TemplateFunctionBar';
 import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 
 const TemplatesPage: React.FC = () => {
-  const { toast } = useToast();
+  useToast();
   const { scope, setScope, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('managerial');
+  // Delta and epsilon see every template in scope but change none (access suites).
+  const canEdit = useAuth().hasPermission('managerial-write');
 
   const {
     templates,
@@ -57,7 +61,6 @@ const TemplatesPage: React.FC = () => {
     updateLocalShift,
     deleteLocalShift,
     discardChanges,
-    validateName,
     checkVersion,
   } = useTemplates();
 
@@ -77,7 +80,6 @@ const TemplatesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<string>('updated-desc');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const { isDark } = useTheme();
 
   // Department and sub-department are OPTIONAL filters here (see the
   // `|| undefined` at the fetch below), so "several selected" must mean "do not
@@ -284,51 +286,37 @@ const TemplatesPage: React.FC = () => {
   );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden px-4 md:px-8 pb-24 md:pb-0 space-y-4">
+    <PageLayout>
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 pt-4 pb-2 lg:pb-4">
-        <div className={cn(
-          "rounded-[32px] p-4 lg:p-6 transition-all border",
-          isDark 
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}>
-          {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
-          <PersonalPageHeader
-            title="My Templates"
-            Icon={FileText}
-            scope={scope}
-            setScope={setScope}
-            isGammaLocked={isGammaLocked}
-            mode="managerial"
+      <GoldStandardHeader
+        title="My Templates"
+        Icon={FileText}
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        mode="managerial"
+        // The editor owns its own toolbar, so the explorer's is hidden while it is open.
+        functionBar={!localTemplate ? (
+          <TemplateFunctionBar
+            transparent
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            onCreateTemplate={() => setCreateDialogOpen(true)}
+            readOnly={!canEdit}
+            counts={counts}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
           />
-
-          {/* Row 3: Function Bar */}
-          {!localTemplate && (
-            <div className="mt-4 lg:mt-6">
-              <TemplateFunctionBar
-                transparent
-                statusFilter={statusFilter}
-                onStatusFilterChange={setStatusFilter}
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-                onCreateTemplate={() => setCreateDialogOpen(true)}
-                counts={counts}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+        ) : undefined}
+      />
 
       {/* ── Main Content Area (Full-Width Explorer or Editor) ─────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
-          "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
-          isDark 
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+          "h-full overflow-hidden flex flex-col",
+          surface.bodyCard
         )}>
           {error && !isLoading && templates.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full w-full px-6 text-center" role="alert">
@@ -341,15 +329,13 @@ const TemplatesPage: React.FC = () => {
               })} className="mt-4 h-11 min-h-[44px] px-5 font-bold">Retry</Button>
             </div>
           ) : (isLoading || isScopeLoading) && templates.length === 0 ? (
-            <div className="flex items-center justify-center h-full w-full" role="status">
-              <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
-              <span className="sr-only">Loading templates…</span>
-            </div>
+            <PageState state="loading" className="h-full" title="Loading templates" />
           ) : localTemplate ? (
             /* ── Full-Width Template Editor ───────────────────────────── */
             <div className="flex-1 overflow-hidden flex flex-col h-full animate-in fade-in-50 duration-200">
               <TemplateEditor
                 template={localTemplate}
+                readOnly={!canEdit}
                 isSaving={isSaving}
                 hasUnsavedChanges={hasUnsavedChanges}
                 onBack={handleBack}
@@ -375,11 +361,12 @@ const TemplatesPage: React.FC = () => {
                 onSelectTemplate={handleSelectTemplate}
                 onOpenTemplate={handleOpenTemplate}
                 onCreateTemplate={() => setCreateDialogOpen(true)}
-                onDuplicateTemplate={duplicateTemplate}
+                onDuplicateTemplate={canEdit ? duplicateTemplate : undefined}
                 onDeleteTemplate={deleteTemplate}
-                onRenameTemplate={renameTemplate}
+                onRenameTemplate={canEdit ? renameTemplate : undefined}
                 onArchiveTemplate={handleArchiveTemplate}
-                onRestoreTemplate={handleRestoreTemplate}
+                onRestoreTemplate={canEdit ? handleRestoreTemplate : undefined}
+                readOnly={!canEdit}
                 isLoading={isLoading}
                 statusFilter={statusFilter}
                 searchQuery={searchQuery}
@@ -435,7 +422,7 @@ const TemplatesPage: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageLayout>
   );
 };
 

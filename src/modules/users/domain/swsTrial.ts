@@ -10,13 +10,13 @@
 const TRIAL_CAP_WEEKS = 12;
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
-export interface SwsTrialInput {
+interface SwsTrialInput {
   isSws: boolean | null | undefined;
   isSwsTrial: boolean | null | undefined;
   swsTrialStartDate: string | null | undefined; // YYYY-MM-DD
 }
 
-export interface SwsTrialStatus {
+interface SwsTrialStatus {
   /** True only when this is an active SWS trial (not a permanent SWS rate). */
   onTrial: boolean;
   /** Whole weeks elapsed since the trial started, as of `asOf`. */

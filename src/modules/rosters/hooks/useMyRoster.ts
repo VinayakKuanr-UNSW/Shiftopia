@@ -70,7 +70,7 @@ interface DayBucket {
 export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: ScopeSelection | null) => {
     const { user } = useAuth();
     // We still use orgSelection for legacy/fallback context if needed, but scope takes precedence for filtering
-    const { organizationId, departmentId, subDepartmentId } = useOrgSelection();
+    const { organizationId } = useOrgSelection();
 
     // Calculate date range based on the view
     const calculateDateRange = () => {

@@ -29,7 +29,7 @@ const DEFAULT_WEEKLY_HOURS = 38;
 const WORKING_DAYS_PER_WEEK = 5;
 
 // ── EBA paid-day caps (measured from the LEAVE START, not per pay period) ───
-export const PARENTAL_LEAVE_CAP_WEEKS = 10;  // cl 51.2 — 10 weeks paid
+const PARENTAL_LEAVE_CAP_WEEKS = 10;  // cl 51.2 — 10 weeks paid
 export const PARENTAL_LEAVE_CAP_DAYS = PARENTAL_LEAVE_CAP_WEEKS * WORKING_DAYS_PER_WEEK; // 50
 export const JURY_DUTY_CAP_DAYS = 10;        // cl 53.2 — make-up pay, first 10 days
 export const SUPPORTING_CARER_CAP_DAYS = 5;  // cl 52.2 — ONE week paid per occasion
@@ -403,7 +403,7 @@ const APPROVED_LEAVE_STATUSES = new Set(['approved', 'accepted', 'taken']);
  * eligible-day `GrossPayShiftInput`s. Rate + contracted hours come from each
  * employee's active `user_contracts` row; employment type from `profiles`.
  */
-export interface LeaveFetchBounds {
+interface LeaveFetchBounds {
   periodStart: string;
   periodEnd: string;
   orgIds?: string[];
@@ -510,8 +510,7 @@ async function fetchRosteredMinutes(
     .in('assigned_employee_id', employeeIds)
     .gte('shift_date', bounds.periodStart)
     .lte('shift_date', bounds.periodEnd)
-    .neq('lifecycle_status', 'Cancelled')
-    .is('deleted_at', null);
+    .neq('lifecycle_status', 'Cancelled');
   if (error) {
     console.error('[leaveGrossPay] rostered shifts query error:', error);
     return out;

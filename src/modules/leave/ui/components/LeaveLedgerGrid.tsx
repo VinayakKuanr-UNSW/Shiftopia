@@ -132,7 +132,7 @@ export const LeaveLedgerGrid: React.FC<{
             {missingServiceStart > 0 && (
                 <div role="status" className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                    <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
                         {missingServiceStart === rows.length ? 'No one' : `${missingServiceStart} of ${rows.length} employees`}
                         {missingServiceStart === rows.length ? ' here has' : ' have'} a continuous service start recorded.
                         Until HR records it, long service leave shows as not recorded (n/r), FDV is shown in hours
@@ -147,7 +147,7 @@ export const LeaveLedgerGrid: React.FC<{
                 <button
                     type="button"
                     onClick={() => setSort(sort === 'name' ? 'annual' : 'name')}
-                    className={cn('inline-flex items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold hover:bg-muted/50', touch.targetY)}
+                    className={cn('inline-flex items-center gap-1.5 rounded-lg border border-border px-3 text-[11px] font-semibold hover:bg-muted/50', touch.targetY)}
                     aria-label={sort === 'name' ? 'Sort by lowest annual balance' : 'Sort by name'}
                 >
                     <ArrowDownWideNarrow className="h-3.5 w-3.5" aria-hidden="true" />
@@ -171,7 +171,7 @@ export const LeaveLedgerGrid: React.FC<{
                             {LEDGER_TYPES.map(def => (
                                 <div key={def.type} role="columnheader" className="px-2 py-2 text-left" title={def.basis}>
                                     <span className="block text-[11px] font-bold leading-tight text-foreground">{def.label}</span>
-                                    <span className="block text-[10px] text-muted-foreground">{def.clause}</span>
+                                    <span className="block text-[11px] text-muted-foreground">{def.clause}</span>
                                 </div>
                             ))}
                         </div>
@@ -201,7 +201,7 @@ export const LeaveLedgerGrid: React.FC<{
                                     </button>
                                 </div>
                                 {LEDGER_TYPES.map(def => (
-                                    <div key={def.type} role="cell" className="px-2 py-2 text-sm tabular-nums">
+                                    <div key={def.type} role="cell" className="px-2 py-2 text-[13px] tabular-nums">
                                         <Cell entry={row.entries.find(e => e.def.type === def.type)} />
                                     </div>
                                 ))}
@@ -247,8 +247,8 @@ const MobileList: React.FC<{ rows: readonly LedgerGridRow[]; onOpen: (id: string
                         </span>
                         <span className="mt-2.5 grid grid-cols-4 gap-1.5">
                             {MOBILE_BALANCES.map(type => (
-                                <span key={type} className="rounded-lg bg-muted/40 px-1.5 py-1 text-center text-sm tabular-nums">
-                                    <span className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                                <span key={type} className="rounded-lg bg-muted/40 px-1.5 py-1 text-center text-[13px] tabular-nums">
+                                    <span className="block text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                                         {SHORT_LABEL[type]}
                                     </span>
                                     <Cell entry={row.entries.find(e => e.def.type === type)} />

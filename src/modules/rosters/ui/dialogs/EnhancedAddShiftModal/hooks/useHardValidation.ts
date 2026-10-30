@@ -112,6 +112,7 @@ export function useHardValidation({
                 start_time: string;
                 end_time: string;
                 unpaid_break_minutes: number;
+                paid_break_minutes: number | null;
                 user_contract_id?: string | null;
             }>;
         },
@@ -169,6 +170,8 @@ export function useHardValidation({
             end_time: s.end_time,
             shift_date: s.shift_date,
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
+            // cl 39.2 nets rest pauses out of the split-shift spread.
+            paid_break_minutes: s.paid_break_minutes ?? 0,
             user_contract_id: s.user_contract_id ?? null,
         }));
     }, [rawShifts, watchEmployeeId]);

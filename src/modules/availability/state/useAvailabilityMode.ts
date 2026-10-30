@@ -63,4 +63,3 @@ export function useAvailabilityMode(
     };
 }
 
-export default useAvailabilityMode;

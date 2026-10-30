@@ -150,4 +150,38 @@ describe('ShiftCard', () => {
 
     expect(screen.getByText('Flexible Part-Time')).toBeInTheDocument();
   });
+
+  it('renders Casual for a casual template shift (never Full-Time)', () => {
+    render(
+      <ShiftCard
+        shift={{ ...mockShift, targetEmploymentType: 'Casual' }}
+        isReadOnly={false}
+        groupColor="blue"
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Casual')).toBeInTheDocument();
+    expect(screen.queryByText('Full-Time')).not.toBeInTheDocument();
+  });
+
+  // Regression: v_template_full omitted targetEmploymentType, every shift
+  // hydrated as null, and the card's `: 'Full-Time'` fallback showed FT on
+  // templates that cannot hold FT rows. A missing target must be visible as
+  // missing, not disguised as a real employment type.
+  it('flags a missing target instead of falling back to Full-Time', () => {
+    render(
+      <ShiftCard
+        shift={{ ...mockShift, targetEmploymentType: null }}
+        isReadOnly={false}
+        groupColor="blue"
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText('Full-Time')).not.toBeInTheDocument();
+    expect(screen.getByText('Employment type not set')).toBeInTheDocument();
+  });
 });

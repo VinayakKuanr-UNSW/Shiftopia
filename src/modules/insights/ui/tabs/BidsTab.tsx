@@ -8,7 +8,7 @@
  *  - Volume count strips & per-employee bidding detail table
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Gavel, Trophy, Users, AlertTriangle } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
@@ -25,7 +25,6 @@ import { KpiDetailTable, type KpiDetailRow } from '../components/KpiDetailTable'
 import { EmployeeDrillDown } from '../components/EmployeeDrillDown';
 import { KpiBand, CountStrip } from '../components/KpiBand';
 import { KpiSmartInsights, type InsightItem } from '../components/KpiSmartInsights';
-import { KpiHorizontalBars } from '../components/KpiHorizontalBars';
 import type { ScopeSelection } from '@/platform/auth/types';
 
 interface BidsTabProps {

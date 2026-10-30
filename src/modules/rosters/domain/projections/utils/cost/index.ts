@@ -4,7 +4,6 @@ import * as StandardEngine from './standard';
 import * as SecurityEngine from './security';
 import { Shift } from '../../../shift.entity';
 import type { AwardContext } from './award-context';
-import { buildAwardContext } from './award-context';
 import { resolveShiftAllowances } from './shift-allowances';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
@@ -94,7 +93,7 @@ function resolveClassificationLevel(
  * it used to fall through to the role-name guess here. NULL/blank ⇒ undefined
  * (Number(null) is 0, so it must be ruled out before converting).
  */
-export function levelClassification(level: unknown): string | undefined {
+function levelClassification(level: unknown): string | undefined {
   if (level === null || level === undefined || level === '') return undefined;
   const lvl = Number(level);
   if (!Number.isInteger(lvl)) return undefined;
@@ -135,7 +134,7 @@ function resolveEmploymentType(empType?: string | null): string | undefined {
 }
 
 /** The engine inputs that depend on WHO works a shift, and on what terms. */
-export interface ShiftPayInputs {
+interface ShiftPayInputs {
   employmentType?: CostCalculatorOptions['employmentType'];
   classificationLevel?: string;
   higherDutiesLevel?: string;
@@ -260,7 +259,7 @@ export function estimateDetailedShiftCost(
   return StandardEngine.estimateDetailedShiftCost(options, ctx);
 }
 
-export function estimateShiftCost(
+function estimateShiftCost(
   options: CostCalculatorOptions & { isSecurityRole?: boolean },
   ctx?: AwardContext,
 ): number {
@@ -305,6 +304,8 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     // break if it is told about it. Omitting this key silently PAID the break on
     // every caller that relies on that fallback.
     unpaid_break_minutes: shift.unpaid_break_minutes,
+    // cl 41 / 43 attach to hours WORKED — where the break sits moves them.
+    break_start: shift.break_start,
     employmentType: pay.employmentType,
     isSecurityRole: pay.isSecurityRole,
     classificationLevel: pay.classificationLevel,
@@ -364,6 +365,7 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     previousWage: shift.previousWage,
     // See estimateCostFromShift — without this the unpaid meal break is paid.
     unpaid_break_minutes: shift.unpaid_break_minutes,
+    break_start: shift.break_start,
     employmentType: pay.employmentType,
     isSecurityRole: pay.isSecurityRole,
     classificationLevel: pay.classificationLevel,
@@ -383,5 +385,3 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
 }
 
 // Re-export AwardContext builder for use by projectors and pipeline
-export { buildAwardContext } from './award-context';
-export type { AwardContext } from './award-context';

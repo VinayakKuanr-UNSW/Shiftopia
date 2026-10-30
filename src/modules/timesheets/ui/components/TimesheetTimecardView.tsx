@@ -47,7 +47,7 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
                         <Clock className="h-11 w-11 text-primary/30" />
                     </div>
                 </div>
-                <h3 className="font-black text-2xl text-foreground mb-3">No entries found</h3>
+                <h3 className="font-black text-[20px] text-foreground mb-3">No entries found</h3>
                 <p className="text-[14px] text-muted-foreground/80 max-w-[300px] leading-relaxed mx-auto font-medium">
                     Try adjusting your filters or search query to see more staff.
                 </p>
@@ -55,7 +55,7 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
                     <div className="mt-10">
                         <Button
                             onClick={onClearFilters}
-                            className="rounded-full px-10 h-14 font-black text-xs uppercase tracking-widest bg-primary shadow-[0_8px_25px_rgba(var(--primary-rgb),0.25)] transition-all active:scale-95"
+                            className="rounded-full px-10 h-14 font-black text-[11px] uppercase tracking-widest bg-primary shadow-[0_8px_25px_rgba(var(--primary-rgb),0.25)] transition-all active:scale-95"
                         >
                             Clear All Filters
                         </Button>

@@ -62,7 +62,6 @@ import type {
     OptimizerStrategy,
     OptimizerHealth,
     OptimizerStatus,
-    UncoveredAudit,
     CapacityCheck,
     CapacityDayBreakdown,
     PillarScores,
@@ -310,7 +309,7 @@ export function buildFairShareCaps(
     return caps;
 }
 
-export interface ContractObligationInput {
+interface ContractObligationInput {
     /** Weekly contracted minimum, in minutes. 0 for casuals. */
     weeklyContractMinutes: number;
     /** Window length in weeks — `diffDays / 7`, the same scale the caps use. */
@@ -411,7 +410,7 @@ export function inWindowScheduledMinutes(
 }
 
 /** The greedy scorer's utilization term. Neutral when there is no contract. */
-export interface GreedyUtilizationTerms {
+interface GreedyUtilizationTerms {
     /** Percent of the window obligation already scheduled. 0 when undefined. */
     utilization: number;
     /** Subtracted from the candidate score. Over-cap only. */
@@ -484,6 +483,7 @@ interface WeeklyOrdinaryEntry {
     shiftDate: string;
     startTime: string;
     endTime: string;
+    unpaidBreakMinutes: number;
     isExisting: boolean;
 }
 
@@ -494,12 +494,19 @@ interface WeeklyOrdinaryEntry {
  * (casual weekly OT is ambiguous under the EA — see cost/standard.ts).
  * Existing shifts seed the running total; only proposal shift IDs are
  * ever present in the returned map.
+ *
+ * Hours accrue NET of the unpaid break, as `netMinutesFromDTO` does in the
+ * roster pipeline: a meal break is not worked, and counting it pushed staff
+ * into weekly overtime early. `shifts` supplies proposals' breaks, which
+ * `ValidatedProposal` does not carry.
  */
 export function buildGreedyFallbackPriorOrdinaryMap(
     proposals: ValidatedProposal[],
     existingRoster: Map<string, ExistingShiftRef[]>,
+    shifts: ShiftMeta[] = [],
 ): Map<string, number> {
     const prior = new Map<string, number>();
+    const unpaidByShift = new Map(shifts.map(s => [s.id, s.unpaid_break_minutes ?? 0]));
     const byEmpWeek = new Map<string, Map<string, WeeklyOrdinaryEntry[]>>();
 
     const pushEntry = (employeeId: string, entry: WeeklyOrdinaryEntry) => {
@@ -514,7 +521,8 @@ export function buildGreedyFallbackPriorOrdinaryMap(
     for (const [employeeId, shifts] of existingRoster.entries()) {
         for (const s of shifts) {
             pushEntry(employeeId, {
-                key: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time, isExisting: true,
+                key: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time,
+                unpaidBreakMinutes: s.unpaid_break_minutes ?? 0, isExisting: true,
             });
         }
     }
@@ -522,7 +530,8 @@ export function buildGreedyFallbackPriorOrdinaryMap(
         if (!p.passing || !p.employeeId) continue;
         if (/casual/i.test(p.employmentType || '')) continue;
         pushEntry(p.employeeId, {
-            key: p.shiftId, shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime, isExisting: false,
+            key: p.shiftId, shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime,
+            unpaidBreakMinutes: unpaidByShift.get(p.shiftId) ?? 0, isExisting: false,
         });
     }
 
@@ -534,7 +543,7 @@ export function buildGreedyFallbackPriorOrdinaryMap(
             let running = 0;
             for (const entry of list) {
                 if (!entry.isExisting) prior.set(entry.key, running);
-                const net = durationMinutes(entry.startTime, entry.endTime) / 60;
+                const net = Math.max(0, durationMinutes(entry.startTime, entry.endTime) - entry.unpaidBreakMinutes) / 60;
                 const dailyOt = Math.max(0, net - 12);
                 running += Math.max(0, net - dailyOt);
             }
@@ -594,8 +603,8 @@ function priorEffectiveMinutesForHorizon(
 
 // Mirrors the Python service guards (ortools_runner.py). Surface to the user
 // before we serialize a giant payload and round-trip to the optimizer.
-export const MAX_OPTIMIZER_SHIFTS = 2000;
-export const MAX_OPTIMIZER_EMPLOYEES = 500;
+const MAX_OPTIMIZER_SHIFTS = 2000;
+const MAX_OPTIMIZER_EMPLOYEES = 500;
 
 export class AutoSchedulerInputTooLargeError extends Error {
     constructor(message: string) {
@@ -608,7 +617,7 @@ export class AutoSchedulerInputTooLargeError extends Error {
 // INPUT / OPTIONS
 // =============================================================================
 
-export interface AutoSchedulerInput {
+interface AutoSchedulerInput {
     shifts: ShiftMeta[];
     employees: EmployeeMeta[];
     employeeDetails?: Map<string, Partial<OptimizerEmployee>>;
@@ -632,7 +641,7 @@ export interface AutoSchedulerInput {
     computeAlternatives?: boolean;
 }
 
-export interface CommitResult {
+interface CommitResult {
     success: boolean;
     totalCommitted: number;
     failedEmployees: string[];
@@ -865,7 +874,6 @@ async function greedyFallback(
             // No overqualification penalty (single-mode policy): holding a
             // role's contract makes that shift a legitimate assignment, so a
             // multi-role employee is not penalised for taking a lower role.
-            const finalScore = candidate.score;
 
             const existingV8ShiftIds = assignedByEmployee.get(emp.id) ?? [];
             const candidateIds = [...existingV8ShiftIds, shift.id];
@@ -890,6 +898,7 @@ async function greedyFallback(
                                 end_time: e.end_time,
                                 assigned_employee_id: emp.id,
                                 unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
+                                paid_break_minutes: e.paid_break_minutes ?? 0,
                             })) as any,
                             employee: {
                                 id: emp.id,
@@ -979,6 +988,12 @@ export class AutoSchedulerController {
         // ── Layer -1: Request-size guard (matches Python service) ────────────
         // Done before any I/O so the user sees a useful error instead of a
         // late HTTP 400 from the optimizer.
+        //
+        // Empty is refused too: the window maths below reads dates[0], so no
+        // shifts made every scaled weekly cap NaN, which serialises as null.
+        if (input.shifts.length === 0) {
+            throw new Error('No shifts to schedule in this range — widen the dates or the scope filter.');
+        }
         if (input.shifts.length > MAX_OPTIMIZER_SHIFTS) {
             throw new AutoSchedulerInputTooLargeError(
                 `Too many shifts (${input.shifts.length}). The optimizer accepts at most ${MAX_OPTIMIZER_SHIFTS} per run — narrow the date range.`,
@@ -1069,6 +1084,9 @@ export class AutoSchedulerController {
         // `fetchOrdinaryHoursEnvelopes`. Empty map = every contract unrestricted,
         // which is production's current state and a safe one.
         const envelopes = await rosterFetcher.fetchOrdinaryHoursEnvelopes(input.employees);
+        throwIfAborted();
+        // Declared cl 35.x(a) work cycle (solver HC-4), resolved as V8 resolves it.
+        const workCycles = await rosterFetcher.fetchOrdinaryHoursCycles(input.employees);
         throwIfAborted();
         const totalExisting = Array.from(existingRoster.values())
             .reduce((acc, list) => acc + list.length, 0);
@@ -1396,6 +1414,7 @@ export class AutoSchedulerController {
                 // `unavailable_dates`: a caller-supplied `employeeDetails` must
                 // not be able to widen someone's rosterable span.
                 ...(envelopes.get(e.id) ?? {}),
+                ...(workCycles.get(e.id) ?? {}),
                 // WINDOW-SCALED limits — like `unavailable_dates` below, these MUST
                 // sit after the `...det` spread. They were previously written above
                 // it, so any caller-supplied `employeeDetails` carrying either key
@@ -1659,7 +1678,7 @@ export class AutoSchedulerController {
             // A no-op (undefined lookups) on the optimizer path, since it's only
             // consulted inside the `usedFallback` branch below.
             const fallbackPriorOrdinaryMap = usedFallback
-                ? buildGreedyFallbackPriorOrdinaryMap(validatedProposals, existingRoster)
+                ? buildGreedyFallbackPriorOrdinaryMap(validatedProposals, existingRoster, input.shifts)
                 : new Map<string, number>();
 
             for (const p of validatedProposals) {
@@ -1713,6 +1732,9 @@ export class AutoSchedulerController {
                         is_overnight: (shift as any).is_overnight ?? false,
                         is_cancelled: false,
                         shift_date: shift.shift_date,
+                        // cl 41 / 43 attach to hours WORKED — the break's position moves them.
+                        unpaid_break_minutes: isSecurityShift ? 0 : (shift.unpaid_break_minutes ?? 0),
+                        break_start: (shift as { break_start?: string | null }).break_start ?? null,
                         employmentType: employmentType as any,
                         isSecurityRole: isSecurityShift,
                         // Prefer the employee's REAL Schedule 1/2 classification
@@ -1816,6 +1838,13 @@ export class AutoSchedulerController {
             failing,
             uncoveredV8ShiftIds,
             proposals: compliantProposals,  // only assignments we will actually book
+            // The exact snapshot this preview validated. A shift without a
+            // version is omitted, and the RPC refuses an absent entry.
+            shiftVersions: Object.fromEntries(
+                input.shifts
+                    .filter(s => typeof s.version === 'number')
+                    .map(s => [s.id, s.version as number]),
+            ),
             canCommit: passing > 0,
             usedFallback,
             capacityCheck,
@@ -1883,11 +1912,12 @@ export class AutoSchedulerController {
      *
      * Flow:
      *   1. Group the compliant proposals by employee.
-     *   2. Send the whole list to sm_bulk_assign_atomic via ONE RPC call with a
-     *      per-attempt idempotency key (crypto.randomUUID). Atomic across all
-     *      employees: a hard DB error writes nothing; a retry with the same key
-     *      is a no-op. The RPC's lost-update guard skips any shift claimed by
-     *      another employee since preview and returns it as a conflict.
+     *   2. Send the whole list to sm_bulk_assign_atomic via ONE RPC call with
+     *      the shift versions the preview validated. Atomic across all
+     *      employees: a hard DB error writes nothing. Any shift claimed,
+     *      edited or published since preview is refused and returned as a
+     *      conflict; one already assigned to the intended employee counts as
+     *      booked, so a retried Apply is safe.
      *   3. Map the RPC's per_employee breakdown back to CommitResult shape.
      *
      * NOTE: there is deliberately NO per-employee compliance re-simulation. The
@@ -1896,10 +1926,6 @@ export class AutoSchedulerController {
      * proposals are 100% compliant; re-validating here via scenarioLoader's
      * DB-fetch path used a DIFFERENT data context and disagreed with the preview,
      * silently dropping ~23% of valid assignments. preview == commit now.
-     *
-     * Idempotency key is generated fresh per commit attempt so a manager
-     * clicking Apply twice gets two independent attempts — each is idempotent
-     * within itself (retry-safe) but does not deduplicate across attempts.
      */
     async commit(result: AutoSchedulerResult): Promise<CommitResult> {
         const byEmployee = new Map<string, string[]>();
@@ -1922,23 +1948,18 @@ export class AutoSchedulerController {
         // injectedData, so it re-fetched a DIFFERENT data context from the DB
         // than the preview injected (V8 employee context + existing-roster
         // window). That made it disagree with the preview and silently drop ~23%
-        // of valid assignments. The ONLY genuine apply-time concurrency concern —
-        // a shift claimed by another employee since preview — is handled
-        // atomically by sm_bulk_assign_atomic's lost-update guard, which skips
-        // such shifts and returns them as conflicts. So what the preview approves
-        // is exactly what books.
+        // of valid assignments. Apply-time drift — a shift claimed by someone
+        // else, edited, or published since preview — is refused atomically by
+        // sm_bulk_assign_atomic against the versions the preview validated, and
+        // returned as conflicts. So what the preview approves is exactly what
+        // books, or nothing does.
         const entries = Array.from(byEmployee.entries());
         const atomicAssignments = entries.map(([employeeId, shiftIds]) => ({ employeeId, shiftIds }));
 
-        const idempotencyKey = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-            ? crypto.randomUUID()
-            : undefined;
+        const atomicResult = await assignmentCommitter.commitAtomic(atomicAssignments, result.shiftVersions);
 
-        const atomicResult = await assignmentCommitter.commitAtomic(atomicAssignments, idempotencyKey);
-
-        // Failures/conflicts now come solely from the atomic RPC: a shift grabbed
-        // by another employee since preview (lost-update guard → conflict), or a
-        // hard DB error (→ failedEmployees).
+        // Failures/conflicts come solely from the atomic RPC: a shift changed or
+        // claimed since preview (→ conflict), or a hard DB error (→ failedEmployees).
         const allFailedEmployees = atomicResult.failedEmployees;
         const allConflicts = atomicResult.concurrencyConflicts;
 
@@ -1946,7 +1967,6 @@ export class AutoSchedulerController {
             totalCommitted: atomicResult.totalCommitted,
             failedEmployees: allFailedEmployees,
             concurrencyConflicts: allConflicts,
-            idempotencyKey: idempotencyKey ?? 'none',
         });
 
         // ── F1 fairness-ledger write-back ─────────────────────────────────────
@@ -2166,6 +2186,7 @@ export class AutoSchedulerController {
                     id: s.id, shift_date: s.shift_date, start_time: s.start_time,
                     end_time: s.end_time, duration_minutes: s.duration_minutes,
                     unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+                    paid_break_minutes: s.paid_break_minutes ?? 0,
                 });
                 pinsByEmp.set(p.employeeId, arr);
             }
@@ -2278,6 +2299,7 @@ export class AutoSchedulerController {
                                 role_id: p.roleId,
                                 lifecycle_status: 'draft',
                                 unpaid_break_minutes: p.unpaidBreakMinutes ?? 0,
+                                paid_break_minutes: p.paidBreakMinutes ?? 0,
                                 // Without these the rebuilt candidate loses its
                                 // employment target and V8_EMPLOYMENT_TARGET goes
                                 // silent, so this validator would keep ratifying
@@ -2292,6 +2314,7 @@ export class AutoSchedulerController {
                                 end_time: e.end_time,
                                 assigned_employee_id: group.employeeId,
                                 unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
+                                paid_break_minutes: e.paid_break_minutes ?? 0,
                             })) as any,
                             employee: {
                                 id: group.employeeId,

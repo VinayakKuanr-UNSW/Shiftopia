@@ -8,12 +8,10 @@
 import type { OrdinaryCycleWeeks } from '../ordinary-hours-cycle';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
-export type ComplianceCheckInput = any; // Legacy alias
-export type ComplianceResult = any;     // Legacy alias
 
 export type V8ShiftId = string;
 export type V8EmpId   = string;
-export type V8RoleId  = string;
+type V8RoleId  = string;
 
 /**
  * The EMPLOYMENT axis, and only that.
@@ -32,7 +30,6 @@ export type V8RoleId  = string;
  * — the same separation `target_requires_flexible` uses for FPT.
  */
 export type V8ContractType = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'FLEXI_PART_TIME';
-export type V8Severity     = 'WARNING' | 'BLOCKING';
 export type V8Status       = 'PASS' | 'WARNING' | 'BLOCKING';
 
 /** Unified shift representation for the V8 engine */
@@ -43,7 +40,11 @@ export interface V8Shift {
     start_time:            string;    // HH:mm
     end_time:              string;    // HH:mm
     unpaid_break_minutes?: number;
+    /** cl 37 rest pauses only. A Security meal break is paid but lives in the window below. */
     paid_break_minutes?:   number;
+    /** The meal-break window (shifts.break_start/break_end). Optional: not every caller hydrates it. */
+    break_start?:          string | null;
+    break_end?:            string | null;
     role_id?:              V8RoleId;
     /**
      * Which job this shift is for. Needed by V8_EMPLOYMENT_TARGET to pick the

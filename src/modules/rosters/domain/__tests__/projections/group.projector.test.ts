@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { projectGroup } from '../../projections/projectors/group.projector';
 import type { Shift } from '../../shift.entity';
@@ -38,8 +38,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     role_level: null,
     remuneration_level: null,
     remuneration_rate: 25,
-    actual_hourly_rate: null,
-    currency: 'AUD',
     cost_center_id: null,
     start_time: '09:00',
     end_time: '17:00',
@@ -88,8 +86,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     payroll_exported: false,
     last_modified_by: null,
     last_modified_reason: null,
-    deleted_at: null,
-    deleted_by: null,
     notes: null,
     is_recurring: false,
     recurrence_rule: null,
@@ -146,6 +142,46 @@ describe('projectGroup — shift routing', () => {
   });
 });
 
+describe('projectGroup — the same sub-group name in two groups', () => {
+  // Two venues with an "AM Base" each: a common case once templates stack.
+  const rosterStructures = [{
+    groups: [
+      { externalId: 'convention_centre', name: 'Convention Centre', subGroups: [{ id: 'sg-cc', name: 'AM Base', sortOrder: 0 }] },
+      { externalId: 'theatre',           name: 'Theatre',           subGroups: [{ id: 'sg-th', name: 'AM Base', sortOrder: 0 }] },
+      { externalId: 'exhibition_centre', name: 'Exhibition Centre', subGroups: [{ id: 'sg-ex', name: 'Loading Dock', sortOrder: 0 }] },
+    ],
+  }];
+
+  const shiftsIn = (result: ReturnType<typeof projectGroup>, type: string, sub: string) =>
+    Object.values(result.groups.find(g => g.type === type)?.subGroups.find(sg => sg.name === sub)?.shiftsByDate ?? {}).flat();
+
+  // Regression: every "AM Base" shift used to land under the FIRST group with
+  // that name (Convention Centre), so DnD mode disagreed with Bucket View.
+  it('keeps each shift in the group it belongs to', () => {
+    const shifts = [
+      makeShift({ id: 'cc-1', group_type: 'convention_centre', sub_group_name: 'AM Base' }),
+      makeShift({ id: 'th-1', group_type: 'theatre', sub_group_name: 'AM Base' }),
+      makeShift({ id: 'th-2', group_type: 'theatre', sub_group_name: 'AM Base' }),
+    ];
+    const result = projectGroup(shifts as unknown as WorkerShiftDTO[], { rosterStructures });
+    expect(shiftsIn(result, 'convention_centre', 'AM Base').map(s => s.id)).toEqual(['cc-1']);
+    expect(shiftsIn(result, 'theatre', 'AM Base').map(s => s.id).sort()).toEqual(['th-1', 'th-2']);
+  });
+
+  it('places a shift with no group by its sub-group name when only one group has that name', () => {
+    const shifts = [makeShift({ id: 'x', group_type: null, sub_group_name: 'Loading Dock' })];
+    const result = projectGroup(shifts as unknown as WorkerShiftDTO[], { rosterStructures });
+    expect(shiftsIn(result, 'exhibition_centre', 'Loading Dock').map(s => s.id)).toEqual(['x']);
+  });
+
+  it('leaves a shift with no group unassigned when the name is ambiguous', () => {
+    const shifts = [makeShift({ id: 'x', group_type: null, sub_group_name: 'AM Base' })];
+    const result = projectGroup(shifts as unknown as WorkerShiftDTO[], { rosterStructures });
+    expect(shiftsIn(result, 'unassigned', 'AM Base').map(s => s.id)).toEqual(['x']);
+    expect(shiftsIn(result, 'convention_centre', 'AM Base')).toHaveLength(0);
+  });
+});
+
 describe('projectGroup — stats', () => {
   it('stats.totalShifts excludes cancelled shifts', () => {
     const shifts = [
@@ -169,8 +205,8 @@ describe('projectGroup — stats', () => {
 
   it('group stats roll up from subgroup shifts', () => {
     const shifts = [
-      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 480, remuneration_rate: 30 }),
-      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 240, remuneration_rate: 30 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 480 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 240 }),
     ];
     const result = projectGroup(shifts as unknown as WorkerShiftDTO[]);
     const theatre = result.groups.find(g => g.type === 'theatre')!;

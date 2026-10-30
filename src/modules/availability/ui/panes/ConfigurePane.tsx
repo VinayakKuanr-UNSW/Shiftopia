@@ -17,7 +17,6 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { Calendar, Clock, Repeat, AlertCircle, Save, X } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -25,7 +24,6 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
-import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -39,7 +37,7 @@ import { validateAvailabilityForm } from '../../utils/validation.utils';
 // TYPES
 // ============================================================================
 
-export interface ConfigurePaneProps {
+interface ConfigurePaneProps {
   mode: 'create' | 'edit' | null;
   ruleBeingEdited: AvailabilityRule | null;
   isSubmitting: boolean;
@@ -201,10 +199,10 @@ export function ConfigurePane({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b flex-shrink-0">
-        <h2 className="text-lg font-semibold">
+        <h2 className="text-[15px] font-semibold">
           {mode === 'edit' ? 'Edit Availability' : 'Configure Availability'}
         </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+        <p className="text-[13px] text-slate-600 dark:text-slate-300">
           {mode === 'edit'
             ? 'Update your availability rule'
             : mode === 'create'
@@ -222,7 +220,7 @@ export function ConfigurePane({
               {errors.map((error, idx) => (
                 <div
                   key={idx}
-                  className="flex items-start gap-2 text-sm text-destructive"
+                  className="flex items-start gap-2 text-[13px] text-destructive"
                 >
                   <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <span>{error}</span>
@@ -236,7 +234,7 @@ export function ConfigurePane({
             <div className="py-12 text-center text-slate-600 dark:text-slate-300">
               <Calendar className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p>No rule selected for editing.</p>
-              <p className="text-sm mt-1">
+              <p className="text-[13px] mt-1">
                 Click "Add Availability" to create a new rule.
               </p>
             </div>
@@ -275,7 +273,7 @@ export function ConfigurePane({
                 </Label>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label htmlFor="start-time" className="text-xs text-muted-foreground">
+                    <Label htmlFor="start-time" className="text-[11px] text-muted-foreground">
                       Start
                     </Label>
                     <Input
@@ -292,7 +290,7 @@ export function ConfigurePane({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="end-time" className="text-xs text-muted-foreground">
+                    <Label htmlFor="end-time" className="text-[11px] text-muted-foreground">
                       End
                     </Label>
                     <Input
@@ -364,7 +362,7 @@ export function ConfigurePane({
                               onClick={() => handleDayToggle(day.value)}
                               disabled={isDisabled}
                               className={cn(
-                                'w-9 h-9 rounded-full text-sm font-medium transition-colors',
+                                'w-9 h-9 rounded-full text-[13px] font-medium transition-colors',
                                 'border-2 focus:outline-none focus:ring-2 focus:ring-offset-1',
                                 formState.repeatDays.includes(day.value)
                                   ? 'bg-primary text-primary-foreground border-primary'
@@ -377,7 +375,7 @@ export function ConfigurePane({
                           ))}
                         </div>
                         {formState.repeatDays.length === 0 && (
-                          <p className="text-xs text-destructive">
+                          <p className="text-[11px] text-destructive">
                             Select at least one day
                           </p>
                         )}
@@ -401,7 +399,7 @@ export function ConfigurePane({
                         disabled={isDisabled}
                       />
                       {!formState.repeatEndDate && (
-                        <p className="text-xs text-destructive">
+                        <p className="text-[11px] text-destructive">
                           End date is required for repeating rules
                         </p>
                       )}
@@ -445,4 +443,3 @@ export function ConfigurePane({
   );
 }
 
-export default ConfigurePane;

@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/modules/core/ui/primitives/card';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
-import { Megaphone, Trash2, Edit, MoreVertical, Settings, Users, MessageSquare } from 'lucide-react';
+import { Megaphone, Trash2, Edit, MoreVertical, Users, MessageSquare } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -11,7 +10,6 @@ import {
     DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { BroadcastGroupWithStats } from '../../model/broadcast.types';
-import { cn } from '@/modules/core/lib/utils';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -76,10 +74,10 @@ export const BroadcastGroupsView: React.FC<BroadcastGroupsViewProps> = ({
                                     <Megaphone className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                                    <CardTitle className="flex items-center gap-2">
                                         {group.name}
                                     </CardTitle>
-                                    <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
+                                    <p className="text-[13px] text-muted-foreground line-clamp-1 mt-1">
                                         {group.description || 'No description'}
                                     </p>
                                 </div>
@@ -113,7 +111,7 @@ export const BroadcastGroupsView: React.FC<BroadcastGroupsViewProps> = ({
                         </div>
                     </CardHeader>
                     <CardContent className="pb-3">
-                        <div className="flex gap-4 text-sm text-muted-foreground">
+                        <div className="flex gap-4 text-[13px] text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                                 <Users className="h-4 w-4" />
                                 <span>{group.participantCount || 0} Members</span>
@@ -124,7 +122,7 @@ export const BroadcastGroupsView: React.FC<BroadcastGroupsViewProps> = ({
                             </div>
                         </div>
                     </CardContent>
-                    <CardFooter className="pt-3 border-t bg-muted/20 text-xs text-muted-foreground flex justify-between">
+                    <CardFooter className="pt-3 border-t bg-muted/20 text-[11px] text-muted-foreground flex justify-between">
                         <span>Updated {formatDistanceToNow(new Date(group.updatedAt || group.createdAt), { addSuffix: true })}</span>
                     </CardFooter>
                 </Card>

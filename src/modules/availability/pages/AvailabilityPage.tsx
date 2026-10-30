@@ -21,11 +21,12 @@ import { format } from 'date-fns';
 import { AvailabilityScreen } from '../ui/AvailabilityScreen';
 import { pageVariants } from '@/modules/core/ui/motion/presets';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
 import { useAvailabilityScope } from '../state/useAvailabilityScope';
 import { resolveComplianceBasis, type ContractBasis } from '../domain/contract-basis';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import type { ScopeSelection } from '@/platform/auth/types';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { formatEnvelopeDaysClause, formatEnvelopeTime } from '../ui/envelope-format';
@@ -69,12 +70,12 @@ function useBreakpoint(): Breakpoint {
   return breakpoint;
 }
 
-export const AvailabilityPage: React.FC = () => {
+const AvailabilityPage: React.FC = () => {
   const breakpoint = useBreakpoint();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const { toast } = useToast();
+  useToast();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -144,7 +145,7 @@ export const AvailabilityPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <PageLayout>
       {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
       <GoldStandardHeader
         title="My Availabilities"
@@ -158,83 +159,34 @@ export const AvailabilityPage: React.FC = () => {
         // list — see `singleSelectLevels` on GlobalScopeFilterProps.
         singleSelectLevels={['subdept']}
         functionBar={
-          <div className={cn(
-            "flex flex-row items-center justify-center md:justify-start gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden",
-            isDark ? "bg-[#111827]/60" : "bg-slate-100"
-          )}>
-            <div className="flex items-center justify-center md:justify-start gap-2 flex-1 min-w-0 py-0.5">
-              {/* The JOB is named one row above, in the global scope filter.
-                  Everything in this bar is scoped by it — the month being paged
-                  and the availability being added both belong to that job. */}
-
-              {/* Month Navigation — a calendar control, so it goes where the
-                  calendar goes. A full-timer has no month-scoped view below,
-                  and paging a month that changes nothing on screen reads as a
-                  broken control rather than an absent one. */}
-              {!isFullTime && (
-              <div className="flex items-center justify-center gap-1.5 w-full md:w-auto flex-shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handlePrevMonth}
-                  aria-label="Previous month"
-                  className={cn(
-                    "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all flex-shrink-0",
-                    isDark ? "bg-[#111827]/60 text-muted-foreground hover:text-white" : "bg-white shadow-sm"
-                  )}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                <div className={cn(
-                  "h-9 lg:h-11 px-4 lg:px-6 rounded-xl flex items-center justify-center min-w-[140px] md:min-w-[180px]",
-                  isDark ? "bg-[#111827]/60" : "bg-white shadow-sm"
-                )}>
-                  <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-[0.2em] text-foreground text-center">
-                    {format(currentMonth, 'MMMM yyyy')}
-                  </span>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleNextMonth}
-                  aria-label="Next month"
-                  className={cn(
-                    "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all flex-shrink-0",
-                    isDark ? "bg-[#111827]/60 text-muted-foreground hover:text-white" : "bg-white shadow-sm"
-                  )}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+          // The JOB is named one row above, in the global scope filter; the
+          // month being paged and the availability being added belong to it.
+          <ToolbarRow
+            // Month navigation is a calendar control, so it goes where the
+            // calendar goes. A full-timer has no month-scoped view below, and
+            // paging a month that changes nothing reads as a broken control.
+            modes={!isFullTime ? (
+              <div className={toolbar.stepper} role="group" aria-label="Month">
+                <button type="button" onClick={handlePrevMonth} aria-label="Previous month" className={toolbar.stepperButton}>
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <span className={cn(toolbar.stepperLabel, 'min-w-[9rem] justify-center hover:bg-transparent dark:hover:bg-transparent')}>
+                  {format(currentMonth, 'MMMM yyyy')}
+                </span>
+                <button type="button" onClick={handleNextMonth} aria-label="Next month" className={toolbar.stepperButton}>
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
               </div>
-              )}
-
-              {/* Add Availability — DESKTOP ONLY. On mobile it is the floating
-                  action button below: the function bar is already a horizontal
-                  scroller on a phone, and the page's primary action was the
-                  thing scrolling out of sight. Same treatment as My Roster's
-                  offers button. */}
-              {canDeclare && (
-                <>
-                  <div className="hidden md:block h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-                  <Button
-                    onClick={handleAddAvailability}
-                    className={cn(
-                      "hidden md:flex flex-shrink-0 gap-2 h-9 lg:h-11 px-3 lg:px-6 rounded-xl font-black uppercase text-[9px] lg:text-[10px] tracking-wider transition-all shadow-sm",
-                      isDark
-                        ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20"
-                        : "bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100"
-                    )}
-                  >
-                    <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-                    Add Availability
-                  </Button>
-                </>
-              )}
-
-            </div>
-          </div>
+            ) : undefined}
+            // Desktop only: on a phone this is the floating action button
+            // below, where it cannot scroll out of sight (as My Roster's offers).
+            actions={canDeclare ? (
+              <button type="button" onClick={handleAddAvailability} className={cn(toolbar.primaryAction, 'hidden md:inline-flex')}>
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add Availability
+              </button>
+            ) : undefined}
+          />
         }
       />
 
@@ -243,7 +195,7 @@ export const AvailabilityPage: React.FC = () => {
         variants={pageVariants}
         initial="hidden"
         animate="show"
-        className="flex-1 min-h-0 overflow-y-auto px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col gap-4"
+        className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4"
       >
         {/* NOT rendered for FT. Its OPT_OUT copy tells the reader that "anything
             you add BELOW narrows when you can be rostered … use it for one-off
@@ -293,19 +245,19 @@ export const AvailabilityPage: React.FC = () => {
                 </div>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase tracking-widest text-emerald-500">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-emerald-500">
                       Contract-Obligation Model
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                       Available by Default
                     </span>
                   </div>
-                  <h2 className="text-xl md:text-2xl font-black tracking-tight">
+                  <h2 className="text-[17px] md:text-[20px] font-black tracking-tight">
                     Full-Time Availability
                     {selectedScope ? ` — ${selectedScope.subDepartmentName}` : ''}
                   </h2>
                   <p className={cn(
-                    "text-sm leading-relaxed max-w-2xl",
+                    "text-[13px] leading-relaxed max-w-2xl",
                     isDark ? "text-slate-400" : "text-slate-600"
                   )}>
                     You hold this job on a Full Time contract ({contractBasis.contractedWeeklyHours ?? 38}h/week ordinary hours), so you are rostered
@@ -319,7 +271,7 @@ export const AvailabilityPage: React.FC = () => {
 
               <Button
                 onClick={() => navigate('/my-leave')}
-                className="flex items-center gap-2 h-11 px-5 rounded-2xl font-black uppercase text-xs tracking-wider bg-primary text-primary-foreground shadow-md hover:shadow-lg transition-all flex-shrink-0 self-start md:self-auto"
+                className="flex items-center gap-2 h-11 px-5 rounded-2xl font-black uppercase text-[11px] tracking-wider bg-primary text-primary-foreground shadow-md hover:shadow-lg transition-all flex-shrink-0 self-start md:self-auto"
               >
                 <FileText className="h-4 w-4" />
                 <span>Go to Leave Management</span>
@@ -332,14 +284,14 @@ export const AvailabilityPage: React.FC = () => {
                 "p-4 rounded-2xl border flex flex-col gap-1.5",
                 isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
               )}>
-                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                   <Clock className="h-4 w-4 text-primary" />
                   Contracted Basis
                 </div>
-                <div className="text-lg font-black text-foreground">
+                <div className="text-[15px] font-black text-foreground">
                   {contractBasis.contractedWeeklyHours ?? 38} Hours / Week
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground">
                   Averaged over the 4-week roster cycle (ICC Sydney EBA cl 35).
                 </div>
               </div>
@@ -352,16 +304,16 @@ export const AvailabilityPage: React.FC = () => {
                 "p-4 rounded-2xl border flex flex-col gap-1.5",
                 isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
               )}>
-                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                   <Clock className="h-4 w-4 text-sky-500" />
                   Ordinary Hours
                 </div>
-                <div className="text-lg font-black text-foreground">
+                <div className="text-[15px] font-black text-foreground">
                   {contractBasis.envelope.isConfigured
                     ? `${formatEnvelopeTime(contractBasis.envelope.spanStart)}–${formatEnvelopeTime(contractBasis.envelope.spanEnd)}`
                     : 'Any rosterable time'}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground">
                   {contractBasis.envelope.isConfigured
                     ? `Your contract limits rostering to this span${formatEnvelopeDaysClause(contractBasis.envelope.days)}.`
                     : 'Your contract sets no span limit; the EBA rules below still apply.'}
@@ -372,14 +324,14 @@ export const AvailabilityPage: React.FC = () => {
                 "p-4 rounded-2xl border flex flex-col gap-1.5",
                 isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
               )}>
-                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                   <ShieldCheck className="h-4 w-4 text-emerald-500" />
                   Unavailability Policy
                 </div>
-                <div className="text-lg font-black text-foreground">
+                <div className="text-[15px] font-black text-foreground">
                   Leave Management
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground">
                   Planned or unplanned time off must be submitted as Leave Requests.
                 </div>
               </div>
@@ -388,14 +340,14 @@ export const AvailabilityPage: React.FC = () => {
                 "p-4 rounded-2xl border flex flex-col gap-1.5",
                 isDark ? "bg-slate-900/50 border-slate-800" : "bg-slate-50 border-slate-200/60"
               )}>
-                <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                   <CalendarDays className="h-4 w-4 text-indigo-500" />
                   Roster Protections
                 </div>
-                <div className="text-lg font-black text-foreground">
+                <div className="text-[15px] font-black text-foreground">
                   EBA & Compliance
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-[11px] text-muted-foreground">
                   Paired days off, rest gaps, and rolling caps are automatically audited.
                 </div>
               </div>
@@ -461,7 +413,7 @@ export const AvailabilityPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </PageLayout>
   );
 };
 

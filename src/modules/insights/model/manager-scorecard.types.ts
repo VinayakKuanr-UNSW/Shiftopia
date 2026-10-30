@@ -59,7 +59,7 @@ export const EMPTY_SCORECARD: ManagerScorecard = {
 // ---------------------------------------------------------------------------
 // ManagerScorecardKey — every field of ManagerScorecard
 // ---------------------------------------------------------------------------
-export type ManagerScorecardKey = keyof ManagerScorecard;
+type ManagerScorecardKey = keyof ManagerScorecard;
 
 // ---------------------------------------------------------------------------
 // SCORECARD_THRESHOLDS — only the metrics with a meaningful target carry

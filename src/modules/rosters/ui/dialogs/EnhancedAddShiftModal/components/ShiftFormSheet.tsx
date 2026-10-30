@@ -29,13 +29,6 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Switch } from '@/modules/core/ui/primitives/switch';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import { cn } from '@/modules/core/lib/utils';
 import {
     AlertCircle,
@@ -63,12 +56,14 @@ import {
 
 import { MultiSelect } from './MultiSelect';
 import { ShiftBottomSheet } from './ShiftBottomSheet';
-import { TemplateDaySelect } from './TemplateDaySelect';
-import { formatHours, calculateShiftLength } from '../utils';
+import { TemplateDaySelect, firstTemplateDay } from './TemplateDaySelect';
+import { SingleSelect } from './SingleSelect';
+import { FIELD_CARD, FIELD_INPUT, FIELD_LABEL } from '@/modules/core/ui/components/PickerField';
+import { formatHours } from '../utils';
 import type { ShiftFormSheetProps } from '../types';
 import {
     targetEmploymentTypeOptions,
-    FULL_TIME_GROUP_TYPE,
+    targetAfterGroupChange,
     TARGET_EMPLOYMENT_TYPES,
     TARGET_EMPLOYMENT_TYPE_LABELS,
     contractMatchesTarget,
@@ -99,7 +94,7 @@ const Section: React.FC<{
                 {title}
             </h3>
             {hint && (
-                <span className="ml-auto text-[10px] font-semibold text-muted-foreground/60">
+                <span className="ml-auto text-[11px] font-semibold text-muted-foreground/60">
                     {hint}
                 </span>
             )}
@@ -112,7 +107,7 @@ const FieldLabel: React.FC<{ children: React.ReactNode; required?: boolean }> = 
     children,
     required,
 }) => (
-    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/80">
+    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/80">
         {children}
         {required && <span className="ml-0.5 text-amber-500">*</span>}
     </p>
@@ -132,15 +127,12 @@ const ReadOnlyField: React.FC<{ label?: string; value: string; icon?: React.Elem
             ) : (
                 <LockIcon className="h-3 w-3 shrink-0 text-muted-foreground/40" />
             )}
-            <span className="truncate text-sm font-semibold text-foreground/75">{value}</span>
+            <span className="truncate text-[13px] font-semibold text-foreground/75">{value}</span>
         </div>
     </div>
 );
 
-const SELECT_CLS =
-    'h-12 rounded-xl border-border/60 bg-background text-sm font-medium data-[placeholder]:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-purple-500/30';
-const INPUT_CLS =
-    'h-12 rounded-xl border-border/60 bg-background text-base font-medium text-foreground focus-visible:ring-2 focus-visible:ring-purple-500/30 focus-visible:border-purple-500/50';
+const INPUT_CLS = cn(FIELD_INPUT, 'h-14 text-[14px] font-medium');
 
 /* ═══════════════════════════════════════════════════════════════════════
    MAIN
@@ -194,7 +186,6 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     const watchShiftDate    = form.watch('shift_date');
     const watchGroup        = form.watch('group_type');
     const watchSubGroupName = form.watch('sub_group_name');
-    const watchUnpaidBreak  = form.watch('unpaid_break_minutes');
     const watchStart        = form.watch('start_time');
     const watchEnd          = form.watch('end_time');
     const watchDayOfWeek = form.watch('day_of_week');
@@ -284,10 +275,6 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     }, [assignedEmployee, existingShift, watchEmployeeId]);
 
     /* ── Break recommendation ── */
-    const localLength = useMemo(
-        () => calculateShiftLength(watchStart, watchEnd),
-        [watchStart, watchEnd],
-    );
 
     /* ── Compliance: run before submission, not after ──
        Mirrors the desktop step-5 auto-run. Guarded on status so the panel's own
@@ -351,7 +338,11 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
         [form],
     );
 
-    const readOnlyBanner = isPublished
+    // A NEW shift with a past start stays editable (the save gate says why it
+    // cannot be saved), so it gets no read-only banner.
+    const readOnlyBanner = !isReadOnly
+        ? null
+        : isPublished
         ? { title: 'Published — read only', body: 'Unpublish to edit.' }
         : isStarted
         ? { title: 'In progress — read only', body: 'This shift has started.' }
@@ -367,11 +358,11 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     const header = (
         <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-1">
             <div className="min-w-0">
-                <h2 className="text-lg font-black leading-tight tracking-tight text-foreground">
+                <h2 className="text-[15px] font-black leading-tight tracking-tight text-foreground">
                     {editMode ? 'Edit Shift' : 'Add Shift'}
                 </h2>
                 {/* Keeps the roster context visible: which day, which group. */}
-                <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs font-medium text-muted-foreground">
+                <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] font-medium text-muted-foreground">
                     <Calendar className="h-3.5 w-3.5 shrink-0 text-primary" />
                     <span className="truncate">{isTemplateMode ? 'Template' : dateDisplay}</span>
                     {(watchSubGroupName || resolvedContext.subGroupName) && (
@@ -463,7 +454,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                         type="button"
                         variant="ghost"
                         onClick={onCancel}
-                        className="h-12 flex-1 rounded-xl border border-border/60 text-sm font-bold"
+                        className="h-12 flex-1 rounded-xl border border-border/60 text-[13px] font-bold"
                     >
                         Close
                     </Button>
@@ -471,7 +462,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                         <Button
                             type="button"
                             onClick={onUnpublish}
-                            className="h-12 flex-1 gap-2 rounded-xl border border-purple-500/25 bg-purple-500/10 text-sm font-bold text-purple-400 hover:bg-purple-500/20"
+                            className="h-12 flex-1 gap-2 rounded-xl border border-purple-500/25 bg-purple-500/10 text-[13px] font-bold text-purple-400 hover:bg-purple-500/20"
                         >
                             <Undo2 className="h-4 w-4" />
                             Unpublish
@@ -498,9 +489,9 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                         disabled={!canSave || isLoading}
                         aria-describedby={!canSave && saveBlockReason ? 'sheet-save-block-reason' : undefined}
                         className={cn(
-                            'h-12 w-full gap-2 rounded-xl text-[13px] font-black uppercase tracking-[0.12em] shadow-lg transition-all',
+                            'h-12 w-full gap-2 rounded-xl text-[14px] font-semibold shadow-sm transition-all',
                             canSave
-                                ? 'bg-purple-600 text-white shadow-purple-500/20 hover:bg-purple-500 active:bg-purple-700 focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none'
+                                ? 'bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none'
                                 : 'cursor-not-allowed bg-muted text-muted-foreground opacity-60 shadow-none',
                         )}
                     >
@@ -566,11 +557,11 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                     onClick={() => selectEmployee(null)}
                     className="mb-2 flex w-full items-center gap-3 rounded-xl border border-border/50 bg-muted/20 px-3 py-3 text-left active:scale-[0.99]"
                 >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-muted-foreground/70">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-[13px] font-bold text-muted-foreground/70">
                         —
                     </div>
                     <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-foreground">Leave unassigned</p>
+                        <p className="text-[13px] font-bold text-foreground">Leave unassigned</p>
                         <p className="text-[11px] text-muted-foreground">Opens the shift for bidding</p>
                     </div>
                     {!watchEmployeeId && <Check className="h-4 w-4 shrink-0 text-emerald-500" />}
@@ -581,12 +572,12 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                     // yet reads as "nobody is available" — a very different answer.
                     <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground" role="status">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-sm font-semibold">Loading staff…</span>
+                        <span className="text-[13px] font-semibold">Loading staff…</span>
                     </div>
                 ) : searchedEmployees.length === 0 ? (
                     <div className="py-10 text-center">
                         <Users className="mx-auto mb-2 h-8 w-8 text-muted-foreground/25" />
-                        <p className="text-sm font-semibold text-muted-foreground">
+                        <p className="text-[13px] font-semibold text-muted-foreground">
                             {watchTargetType && excludedByTarget > 0
                                 ? `No ${TARGET_EMPLOYMENT_TYPE_LABELS[watchTargetType]}${
                                       watchTargetType === 'PT' && watchTargetFlex ? ' (Flexible)' : ''
@@ -603,7 +594,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                 ) : (
                     <div role="listbox" aria-label="Available staff">
                         {excludedByTarget > 0 && (
-                            <p className="mb-2 px-1 text-[10px] text-muted-foreground/70">
+                            <p className="mb-2 px-1 text-[11px] text-muted-foreground/70">
                                 {excludedByTarget} hidden by the shift&apos;s employment target
                             </p>
                         )}
@@ -634,10 +625,10 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                         {initialsOf(emp)}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-bold text-foreground">
+                                        <p className="truncate text-[13px] font-bold text-foreground">
                                             {displayNameOf(emp)}
                                         </p>
-                                        <p className="truncate font-mono text-[10px] text-muted-foreground/60">
+                                        <p className="truncate font-mono text-[11px] text-muted-foreground/60">
                                             {emp.employment_status ?? emp.contract_type ?? emp.id.slice(0, 8)}
                                         </p>
                                     </div>
@@ -706,35 +697,26 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                 name="group_type"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FieldLabel required>Group</FieldLabel>
-                                        <Select
+                                        <SingleSelect
+                                            id="sheet-group-select"
+                                            label="Group"
+                                            required
+                                            options={availableGroups.map((g: any) => ({
+                                                id: g.external_id || g.name.toLowerCase().replace(/\s+/g, '_'),
+                                                name: g.name,
+                                            }))}
                                             value={field.value || ''}
-                                            onValueChange={(val) => {
+                                            onChange={(val) => {
                                                 field.onChange(val);
                                                 form.setValue('sub_group_name', '', { shouldValidate: false });
+                                                form.setValue('target_employment_type', targetAfterGroupChange(
+                                                    form.getValues('target_employment_type'), val,
+                                                ) as never);
                                             }}
+                                            placeholder="Select group…"
                                             disabled={isReadOnly}
-                                        >
-                                            <FormControl>
-                                                <SelectTrigger className={SELECT_CLS}>
-                                                    <SelectValue placeholder="Select group…" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent className="z-[200]">
-                                                {availableGroups.map((g: any) => (
-                                                    <SelectItem
-                                                        key={g.id}
-                                                        value={
-                                                            g.external_id ||
-                                                            g.name.toLowerCase().replace(/\s+/g, '_')
-                                                        }
-                                                    >
-                                                        {g.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage className="text-[10px] text-rose-500" />
+                                        />
+                                        <FormMessage className="text-[11px] text-rose-500" />
                                     </FormItem>
                                 )}
                             />
@@ -751,30 +733,17 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                 name="sub_group_name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FieldLabel required>Sub-group</FieldLabel>
-                                        <Select
+                                        <SingleSelect
+                                            id="sheet-subgroup-select"
+                                            label="Sub-group"
+                                            required
+                                            options={availableSubGroups.map((sg: any) => ({ id: sg.name, name: sg.name }))}
                                             value={field.value || ''}
-                                            onValueChange={field.onChange}
+                                            onChange={field.onChange}
+                                            placeholder={!watchGroup ? 'Pick a group first' : 'Select sub-group…'}
                                             disabled={isReadOnly || !watchGroup}
-                                        >
-                                            <FormControl>
-                                                <SelectTrigger className={SELECT_CLS}>
-                                                    <SelectValue
-                                                        placeholder={
-                                                            !watchGroup ? 'Pick a group first' : 'Select sub-group…'
-                                                        }
-                                                    />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent className="z-[200]">
-                                                {availableSubGroups.map((sg: any) => (
-                                                    <SelectItem key={sg.id || sg.name} value={sg.name}>
-                                                        {sg.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage className="text-[10px] text-rose-500" />
+                                        />
+                                        <FormMessage className="text-[11px] text-rose-500" />
                                     </FormItem>
                                 )}
                             />
@@ -798,13 +767,17 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                         {isTemplateMode && (
                             <FormField
                                 control={form.control}
-                                name="day_of_week"
+                                name="days_of_week"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormControl>
                                             <TemplateDaySelect
                                                 value={field.value}
-                                                onChange={field.onChange}
+                                                onChange={(v) => {
+                                                    field.onChange(v);
+                                                    form.setValue('day_of_week', firstTemplateDay(v));
+                                                }}
+                                                multiple={!editMode}
                                                 disabled={isReadOnly}
                                                 id="sheet-day-of-week"
                                             />
@@ -820,10 +793,10 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                             control={form.control}
                             name="is_training"
                             render={({ field }) => (
-                                <FormItem className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-border/50 bg-background px-3 py-2.5 transition-colors">
-                                    <div className="min-w-0">
-                                        <p className="text-[12px] font-bold text-foreground">Training shift</p>
-                                        <p className="text-[10px] text-muted-foreground">
+                                <FormItem className={cn(FIELD_CARD, 'space-y-0')}>
+                                    <div className="min-w-0 flex flex-col gap-0.5">
+                                        <p className={FIELD_LABEL}>Training shift</p>
+                                        <p className="text-[11px] sm:text-[13px] font-semibold text-slate-500 dark:text-slate-400">
                                             Exempt from standard minimum engagement (2h floor)
                                         </p>
                                     </div>
@@ -863,7 +836,36 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                                     className={cn(INPUT_CLS, 'font-mono font-semibold')}
                                                 />
                                             </FormControl>
-                                            <FormMessage className="text-[10px] text-rose-500" />
+                                            <FormMessage className="text-[11px] text-rose-500" />
+                                        </FormItem>
+                                    )}
+                                />
+                            ))}
+                        </div>
+
+                        {/* The meal break is WHEN, not just how long: pay follows the
+                            hours worked either side of it (cl 41, cl 43). */}
+                        <div className="grid grid-cols-2 gap-2">
+                            {(['break_start', 'break_end'] as const).map((name) => (
+                                <FormField
+                                    key={name}
+                                    control={form.control}
+                                    name={name}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FieldLabel>
+                                                {name === 'break_start' ? 'Meal break start' : 'Meal break end'}
+                                            </FieldLabel>
+                                            <FormControl>
+                                                <Input
+                                                    type="time"
+                                                    value={field.value ?? ''}
+                                                    onChange={(e) => field.onChange(e.target.value || null)}
+                                                    onBlur={field.onBlur}
+                                                    disabled={isReadOnly}
+                                                    className={cn(INPUT_CLS, 'font-mono font-semibold')}
+                                                />
+                                            </FormControl>
                                         </FormItem>
                                     )}
                                 />
@@ -873,35 +875,10 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                         <div className="grid grid-cols-2 gap-2">
                             <FormField
                                 control={form.control}
-                                name="unpaid_break_minutes"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FieldLabel>Unpaid break (min)</FieldLabel>
-                                        <FormControl>
-                                            <Input
-                                                type="number"
-                                                inputMode="numeric"
-                                                min={0}
-                                                value={field.value === undefined ? '' : field.value}
-                                                onChange={(e) =>
-                                                    field.onChange(
-                                                        e.target.value === '' ? undefined : Number(e.target.value),
-                                                    )
-                                                }
-                                                disabled={isReadOnly}
-                                                placeholder="0"
-                                                className={cn(INPUT_CLS, 'font-mono')}
-                                            />
-                                        </FormControl>
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
                                 name="paid_break_minutes"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FieldLabel>Paid break (min)</FieldLabel>
+                                        <FieldLabel>Rest pauses (paid, min)</FieldLabel>
                                         <FormControl>
                                             <Input
                                                 type="number"
@@ -926,20 +903,20 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                         {shiftLength > 0 && (
                             <div className="flex items-center gap-2">
                                 <div className="flex-1 rounded-xl border border-border/40 bg-background px-3 py-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
                                         Length
                                     </p>
-                                    <p className="font-mono text-base font-black text-foreground">
+                                    <p className="font-mono text-[14px] font-black text-foreground">
                                         {formatHours(shiftLength)}
                                     </p>
                                 </div>
                                 <div className="flex-1 rounded-xl border border-border/40 bg-background px-3 py-2">
-                                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
                                         Net paid
                                     </p>
                                     <p
                                         className={cn(
-                                            'font-mono text-base font-black',
+                                            'font-mono text-[14px] font-black',
                                             netLength > 0 && shape.blocking
                                                 ? 'text-rose-500'
                                                 : 'text-emerald-500',
@@ -992,10 +969,15 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                             name="target_employment_type"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FieldLabel required>Employment target</FieldLabel>
-                                    <Select
+                                    <SingleSelect
+                                        id="sheet-target-select"
+                                        label="Employment target"
+                                        required
+                                        options={targetEmploymentTypeOptions(field.value, {
+                                            groupType: watchGroup,
+                                        }).map((t) => ({ id: t, name: TARGET_EMPLOYMENT_TYPE_LABELS[t] }))}
                                         value={field.value ?? ''}
-                                        onValueChange={(v) => {
+                                        onChange={(v) => {
                                             field.onChange(v);
                                             // The flexible flag is only coherent for a PT target.
                                             if (v !== 'PT') form.setValue('target_requires_flexible', false);
@@ -1013,27 +995,13 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                                 if (!stillOk) form.setValue('assigned_employee_id', null);
                                             }
                                         }}
+                                        placeholder="Who is this shift for?"
                                         disabled={isReadOnly || isTargetTypeLocked}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger className={SELECT_CLS}>
-                                                <SelectValue placeholder="Who is this shift for?" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent className="z-[200]">
-                                            {targetEmploymentTypeOptions(field.value, {
-                                                allowFullTime: watchGroup === FULL_TIME_GROUP_TYPE,
-                                            }).map((t) => (
-                                                <SelectItem key={t} value={t}>
-                                                    {TARGET_EMPLOYMENT_TYPE_LABELS[t]}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <p className="mt-1 text-[10px] text-muted-foreground">
+                                    />
+                                    <p className="mt-1 text-[11px] text-muted-foreground">
                                         Only staff on a matching contract for this sub-department can be assigned.
                                     </p>
-                                    <FormMessage className="text-[10px] text-rose-500" />
+                                    <FormMessage className="text-[11px] text-rose-500" />
                                 </FormItem>
                             )}
                         />
@@ -1048,7 +1016,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                             <p className="text-[12px] font-bold text-foreground">
                                                 Flexible Part-Time only
                                             </p>
-                                            <p className="text-[10px] text-muted-foreground">
+                                            <p className="text-[11px] text-muted-foreground">
                                                 Narrows the pool to Flexible PT contracts
                                             </p>
                                         </div>
@@ -1081,26 +1049,17 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                             name="role_id"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FieldLabel required>Role</FieldLabel>
-                                    <Select
+                                    <SingleSelect
+                                        id="sheet-role-select"
+                                        label="Role"
+                                        required
+                                        options={roles.map((r: any) => ({ id: r.id, name: r.name }))}
                                         value={field.value || ''}
-                                        onValueChange={field.onChange}
+                                        onChange={field.onChange}
+                                        placeholder="Select role…"
                                         disabled={isReadOnly || isRoleLocked}
-                                    >
-                                        <FormControl>
-                                            <SelectTrigger className={SELECT_CLS}>
-                                                <SelectValue placeholder="Select role…" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent className="z-[200] max-h-[50dvh]">
-                                            {roles.map((r: any) => (
-                                                <SelectItem key={r.id} value={r.id}>
-                                                    {r.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage className="text-[10px] text-rose-500" />
+                                    />
+                                    <FormMessage className="text-[11px] text-rose-500" />
                                 </FormItem>
                             )}
                         />
@@ -1138,7 +1097,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                         )}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-bold text-foreground">
+                                        <p className="truncate text-[13px] font-bold text-foreground">
                                             {assignedName ?? 'Unassigned'}
                                         </p>
                                         <p className="truncate text-[11px] text-muted-foreground">
@@ -1170,7 +1129,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                             <h3 className="text-[11px] font-black uppercase tracking-[0.16em] text-foreground/80">
                                 Requirements & Notes
                             </h3>
-                            <span className="ml-auto text-[10px] font-semibold text-muted-foreground/60">
+                            <span className="ml-auto text-[11px] font-semibold text-muted-foreground/60">
                                 Optional
                             </span>
                             <ChevronDown
@@ -1243,7 +1202,7 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                                                     {...field}
                                                     placeholder="Shift notes or handover…"
                                                     disabled={isReadOnly}
-                                                    className="min-h-[80px] resize-none rounded-xl border-border/60 bg-background p-3 text-base"
+                                                    className="min-h-[80px] resize-none rounded-xl border-border/60 bg-background p-3 text-[14px]"
                                                 />
                                             </FormControl>
                                         </FormItem>
@@ -1363,4 +1322,3 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
     );
 };
 
-export default ShiftFormSheet;

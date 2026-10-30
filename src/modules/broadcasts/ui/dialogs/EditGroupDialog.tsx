@@ -4,7 +4,7 @@ import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog'
 import { BroadcastGroupFormFields } from './BroadcastGroupFormFields';
 import type { BroadcastGroup, UpdateBroadcastGroupRequest } from '@/modules/broadcasts/model/broadcast.types';
 
-export interface EditGroupDialogProps {
+interface EditGroupDialogProps {
     isOpen: boolean;
     onClose: () => void;
     group: BroadcastGroup | null;

@@ -3,9 +3,8 @@
  * Domain layer - determines if a shift can be edited
  */
 
-import { isShiftLocked as isShiftLockedUtil } from '../shift-locking.utils';
 
-export interface CanEditShiftInput {
+interface CanEditShiftInput {
     shiftId: string;
     isDraft: boolean;
     status: string;
@@ -18,7 +17,7 @@ export interface CanEditShiftInput {
     isEmergency?: boolean;
 }
 
-export interface CanEditShiftOutput {
+interface CanEditShiftOutput {
     canEdit: boolean;
     reason?: string;
     /** cl 38.2/38.3 — set when a shift-time change falls inside the required notice window. Advisory only: never blocks. */
@@ -30,7 +29,7 @@ const FTPT_CHANGE_NOTICE_HOURS = 48;
 /** cl 38.3 — casual start-time change notice; below this, a 3h minimum-payment obligation can be triggered if unreachable. */
 const CASUAL_CHANGE_NOTICE_HOURS = 2;
 
-export interface ShiftChangeNoticeInput {
+interface ShiftChangeNoticeInput {
     shiftDate: string;          // YYYY-MM-DD
     originalStartTime: string;  // 'HH:MM' or 'HH:MM:SS'
     employmentType?: string;
@@ -124,26 +123,6 @@ export function canEditShift(input: CanEditShiftInput): CanEditShiftOutput {
     return { canEdit: true, noticeWarning };
 }
 
-/**
- * Check if a shift is locked due to time (Manager View - Start Time Lock)
- * @deprecated Use isShiftLocked from shift-locking.utils.ts with 'roster_management' context
- */
-export function isShiftLocked(shiftDate: string | Date, endTime: string): boolean {
-    if (!shiftDate || !endTime) return false;
-
-    try {
-        // Handle Date object
-        const dateStr = shiftDate instanceof Date
-            ? shiftDate.toISOString().split('T')[0]
-            : shiftDate;
-
-        // Use the main utility with roster_management context
-        return isShiftLockedUtil(dateStr, endTime, 'roster_management');
-    } catch (e) {
-        console.error('[isShiftLocked] Error:', e);
-        return false;
-    }
-}
 
 /**
  * Check if a shift can be deleted

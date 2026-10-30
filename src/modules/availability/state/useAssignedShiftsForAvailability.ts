@@ -31,7 +31,7 @@ import { resolveProfileId } from '../api/availability.service';
 // QUERY KEY FACTORY
 // ============================================================================
 
-export const assignedShiftsQueryKey = (
+const assignedShiftsQueryKey = (
   profileId: string,
   startDate: string,
   endDate: string
@@ -41,7 +41,7 @@ export const assignedShiftsQueryKey = (
 // HOOK
 // ============================================================================
 
-export interface UseAssignedShiftsForAvailabilityResult {
+interface UseAssignedShiftsForAvailabilityResult {
   assignedShifts: AssignedShiftInterval[];
   isLoading: boolean;
 }

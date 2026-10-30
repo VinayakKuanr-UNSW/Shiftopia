@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/prim
 import { usePerformanceMetrics, getMetricStatus, EMPTY_METRICS } from '@/modules/users/hooks/usePerformanceMetrics';
 import { BarChart3, RefreshCw, Shield, Inbox, CheckCircle2, CalendarCheck } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 
 interface PerformanceSectionProps {
     employeeId: string;
@@ -43,12 +44,12 @@ const MetricCard = ({
             'rounded-lg border p-3 transition-colors',
             statusBg[status]
         )}>
-            <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-widest font-medium">{label}</p>
+            <p className="text-[11px] text-muted-foreground mb-1 uppercase tracking-widest font-medium">{label}</p>
             <div className={cn('mt-1', !hasData ? 'text-muted-foreground' : statusColors[status])}>
                 {!hasData ? (
                     <span className="text-[11px] uppercase tracking-wider font-semibold opacity-70">—</span>
                 ) : (
-                    <span className="text-2xl font-black tabular-nums">{value.toFixed(1)}{suffix}</span>
+                    <span className="text-[20px] font-black tabular-nums">{value.toFixed(1)}{suffix}</span>
                 )}
             </div>
         </div>
@@ -58,8 +59,8 @@ const MetricCard = ({
 /* ═══════════════════════════ COUNT PILL ═══════════════════════════ */
 const CountPill = ({ label, value }: { label: string; value: number }) => (
     <div className="flex flex-col items-center">
-        <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">{label}</span>
-        <span className="text-sm font-black text-foreground tabular-nums">{value}</span>
+        <span className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold">{label}</span>
+        <span className="text-[13px] font-black text-foreground tabular-nums">{value}</span>
     </div>
 );
 
@@ -75,7 +76,7 @@ const SectionHeader = ({
 }) => (
     <div className="flex items-center gap-1.5 mb-2">
         <Icon className={cn('w-3.5 h-3.5', color)} />
-        <h4 className={cn('text-[10px] font-bold uppercase tracking-widest', color)}>{label}</h4>
+        <h4 className={cn('text-[11px] font-bold uppercase tracking-widest', color)}>{label}</h4>
     </div>
 );
 
@@ -105,9 +106,9 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
     const hasOffered = offeredCount > 0;
 
     return (
-        <Card className="border border-border bg-card">
+        <Card>
             <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center justify-between">
+                <CardTitle className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <BarChart3 className="w-5 h-5" />
                         Performance
@@ -124,7 +125,7 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
             </CardHeader>
             <CardContent>
                 {isLoading ? (
-                    <p className="text-muted-foreground text-sm">Loading performance metrics...</p>
+                    <p className="text-muted-foreground text-[13px]">Loading performance metrics...</p>
                 ) : (
                     <div className="space-y-4">
 
@@ -137,15 +138,15 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                         )}>
                             <div className="flex items-center justify-center gap-2 mb-1">
                                 <Shield className={cn('w-5 h-5', hasAssigned ? statusColors[getMetricStatus('reliability_score', m.reliability_score)] : 'text-muted-foreground')} />
-                                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Reliability Score</span>
+                                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Reliability Score</span>
                             </div>
                             <p className={cn(
-                                'text-5xl font-black tabular-nums',
-                                !hasAssigned ? 'text-muted-foreground text-3xl' : statusColors[getMetricStatus('reliability_score', m.reliability_score)]
+                                'text-[36px] font-black tabular-nums',
+                                !hasAssigned ? 'text-muted-foreground text-[24px]' : statusColors[getMetricStatus('reliability_score', m.reliability_score)]
                             )}>
                                 {!hasAssigned ? '—' : `${m.reliability_score.toFixed(0)}%`}
                             </p>
-                            <p className="text-[10px] text-muted-foreground mt-1">
+                            <p className="text-[11px] text-muted-foreground mt-1">
                                 {hasAssigned
                                     ? `Based on ${m.shifts_assigned} assigned shift${m.shifts_assigned !== 1 ? 's' : ''}`
                                     : 'No shift data yet'
@@ -232,7 +233,7 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                         <div className="bg-muted/40 dark:bg-card/40 rounded-lg border border-border p-3">
                             <div className="flex items-center gap-1.5 mb-2">
                                 <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Summary Metrics</span>
+                                <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Summary Metrics</span>
                             </div>
                             <div className="flex flex-wrap justify-start gap-4 px-2">
                                 <CountPill label="No. of Shifts Offered" value={(m as any).shifts_offered} />
@@ -243,8 +244,8 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                     </div>
                 )}
 
-                <p className="text-[10px] text-muted-foreground mt-2 text-right">
-                    Last refreshed: {m.calculated_at ? new Date(m.calculated_at).toLocaleTimeString() : 'Never'}
+                <p className="text-[11px] text-muted-foreground mt-2 text-right">
+                    Last refreshed: {formatClockTime(m.calculated_at, 'h:mm:ss a', 'Never')}
                 </p>
             </CardContent>
         </Card>

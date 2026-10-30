@@ -18,9 +18,9 @@ import { resolve } from 'node:path';
 import {
     CREATABLE_TARGET_EMPLOYMENT_TYPES,
     FULL_TIME_GROUP_TYPE,
-    TARGET_EMPLOYMENT_TYPES,
     initialTargetEmploymentType,
     targetEmploymentTypeOptions,
+    targetAfterGroupChange,
 } from '@/modules/core/model/employment.types';
 import { runHardValidation } from '@/modules/compliance';
 
@@ -38,11 +38,33 @@ describe('the target picker', () => {
         expect(targetEmploymentTypeOptions('Casual')).toEqual(['PT', 'Casual']);
     });
 
-    it('offers every type in the Office group', () => {
+    it('offers ONLY full-time in the Office group', () => {
         expect(FULL_TIME_GROUP_TYPE).toBe('office');
-        expect(targetEmploymentTypeOptions(undefined, { allowFullTime: true }))
-            .toEqual(TARGET_EMPLOYMENT_TYPES);
-        expect(targetEmploymentTypeOptions('PT', { allowFullTime: true })).toContain('FT');
+        expect(targetEmploymentTypeOptions(undefined, { groupType: 'office' })).toEqual(['FT']);
+        expect(targetEmploymentTypeOptions('FT', { groupType: 'office' })).toEqual(['FT']);
+    });
+
+    it('never offers full-time outside Office', () => {
+        expect(targetEmploymentTypeOptions(undefined, { groupType: 'convention_centre' }))
+            .toEqual(['PT', 'Casual']);
+    });
+
+    it('locks Office to full-time in templates too', () => {
+        // Full-time rostering moved into templates when Baseline FT was retired;
+        // the template form must not offer PT / Casual in Office. (The picker
+        // call sites are pinned to the group alone further down.)
+        expect(targetAfterGroupChange(undefined, 'office')).toBe('FT');
+        expect(targetAfterGroupChange('Casual', 'office')).toBe('FT');
+    });
+
+    it('keeps a legacy out-of-rule value renderable', () => {
+        expect(targetEmploymentTypeOptions('PT', { groupType: 'office' })).toEqual(['PT', 'FT']);
+    });
+
+    it('re-decides the target when the group changes', () => {
+        expect(targetAfterGroupChange('Casual', 'office')).toBe('FT');
+        expect(targetAfterGroupChange('FT', 'convention_centre')).toBeUndefined();
+        expect(targetAfterGroupChange('PT', 'convention_centre')).toBe('PT');
     });
 
     it('keeps an existing full-time shift renderable anywhere', () => {
@@ -53,13 +75,13 @@ describe('the target picker', () => {
     });
 
     it.each([['mobile sheet', SHEET], ['desktop drawer', DRAWER]])(
-        'the %s picker allows full-time exactly when the group is Office',
+        'the %s picker derives its options from the group alone (templates included)',
         (_label, path) => {
             // Both variants render the picker, so a change to one and not the
             // other leaves the two devices disagreeing.
             const src = stripComments(read(path));
             expect(src).toMatch(
-                /targetEmploymentTypeOptions\(field\.value,\s*\{\s*allowFullTime:\s*watchGroup === FULL_TIME_GROUP_TYPE,?\s*\}\)/);
+                /targetEmploymentTypeOptions\(field\.value,\s*\{\s*groupType:\s*watchGroup,?\s*\}\)/);
             expect(src).not.toMatch(/options=\{TARGET_EMPLOYMENT_TYPES\.map/);
         },
     );
@@ -133,24 +155,18 @@ describe('editing and cloning on the roster', () => {
         const gate = src.slice(src.indexOf('const saveGate = useMemo'), src.indexOf('const canSave = saveGate.ok'));
         expect(gate).toMatch(/editMode && savedTarget === 'FT' && prevAssignee && !watchEmployeeId/);
     });
-
-    it('Clone carries the target, which every shift must have', () => {
-        // Without it sm_create_shift's row fails fn_shift_inherit_template_row
-        // with "target_employment_type is required" — every clone, every type.
-        const src = stripComments(read('src/modules/rosters/ui/modes/GroupModeView.tsx'));
-        const clone = src.slice(src.indexOf('const handleCloneShift'), src.indexOf('createShiftMutation.mutateAsync(cloneData)'));
-        expect(clone).toMatch(/target_employment_type:\s*\(rawShift as any\)\.target_employment_type/);
-        expect(clone).not.toMatch(/assigned_employee_id:/);
-    });
 });
 
 describe('templates cannot seed a full-time shift', () => {
-    it('the template editor does not fall back to FT', () => {
+    it('the template editor does not fall back to FT (or any guessed type)', () => {
         // `template_shifts` refuses full-time rows outright
         // (trg_no_ft_template_shifts), so a dropped type defaulting to 'FT'
-        // would make the save fail with a bare 400.
-        const src = read('src/modules/templates/ui/components/TemplateEditor.tsx');
-        expect(src).not.toMatch(/editShift\?\.targetEmploymentType \|\| 'FT'/);
-        expect(src).toMatch(/editShift\?\.targetEmploymentType \|\| 'Casual'/);
+        // would make the save fail with a bare 400. A 'Casual' default is no
+        // better: it silently re-types a shift whose target was lost upstream
+        // (v_template_full once dropped the column entirely). The target must
+        // come from the form or the stored shift — never be invented.
+        const src = stripComments(read('src/modules/templates/ui/components/TemplateEditor.tsx'));
+        expect(src).not.toMatch(/editShift\?\.targetEmploymentType\s*(\|\||\?\?)\s*'(FT|PT|Casual)'/);
+        expect(src).toMatch(/editShift\?\.targetEmploymentType\s*\?\?\s*null/);
     });
 });

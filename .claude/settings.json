@@ -163,6 +163,15 @@
             "command": "CMD=$(python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))\" 2>/dev/null || true); case \"$CMD\" in *grep*|*rg\\ *|*ripgrep*|*find\\ *|*fd\\ *|*ack\\ *|*ag\\ *)   [ -f graphify-out/graph.json ] &&   echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: 4-layer graph (code+SQL+docs+memory). Try scripts/graphify/ask.py brief <entity> first (~450 tok, all layers); then impact|surface|owns|warnings|docs. Or graphify-out/wiki/index.md (~5k). Do NOT read GRAPH_REPORT.md (~37k) or graph.json (~3.9M).\"}}'   || true ;; esac"
           }
         ]
+      },
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": \"graphify: 4-layer graph (code+SQL+docs+memory). Try scripts/graphify/ask.py brief <entity> first (~450 tok, all layers); then impact|surface|owns|warnings|docs. Or graphify-out/wiki/index.md (~5k). Do NOT read GRAPH_REPORT.md (~37k) or graph.json (~3.9M).\"}}' || true"
+          }
+        ]
       }
     ]
   }

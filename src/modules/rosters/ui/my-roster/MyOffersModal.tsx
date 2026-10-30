@@ -35,7 +35,6 @@ import {
 } from 'lucide-react';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
-import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
@@ -46,6 +45,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/modules/core/ui/primitives/dialog';
+import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 /* ═══════════════════════════════════════════════════════════════════════
    TYPES
@@ -89,6 +89,7 @@ interface OfferData {
             level_number?: number;
         } | null;
         group_type?: string | null;
+        sub_group_name?: string | null;
     };
 }
 
@@ -197,6 +198,12 @@ const OfferItem: React.FC<{
         offer.shift.departments?.name ||
         '';
 
+    const subGroupName =
+        offer.shift.sub_group_name ||
+        (offer.shift as any).roster_subgroup?.name ||
+        offer.shift.sub_departments?.name ||
+        undefined;
+
     const urgency = computeShiftUrgency(offer.shift.shift_date, offer.shift.start_time);
 
     const footerActions = showActions ? (
@@ -277,7 +284,7 @@ const OfferItem: React.FC<{
                 department={offer.shift.departments?.name || ''}
                 subDepartment={offer.shift.sub_departments?.name}
                 group={groupName}
-                subGroup={(offer.shift as any).sub_group_name}
+                subGroup={subGroupName}
                 role={roleLabel}
                 shiftDate={formatCalendarDate(offer.shift.shift_date, 'EEE, MMM d, yyyy')}
                 startTime={offer.shift.start_time?.slice(0, 5) ?? '--:--'}
@@ -288,16 +295,8 @@ const OfferItem: React.FC<{
                 timerText={(showActions && !isProcessingThis && offer.status === 'Pending') ? timerText : null}
                 isExpired={isExpired || isLocked}
                 urgency={urgency}
-                shiftData={offer.shift as any}
-                hideGlow
-                groupVariant={
-                    offer.shift.group_type === 'convention_centre' ? 'convention' :
-                    offer.shift.group_type === 'exhibition_centre' ? 'exhibition' :
-                    offer.shift.group_type === 'theatre' ? 'theatre' :
-                    offer.shift.group_type === 'the_cutaway' ? 'cutaway' :
-                    offer.shift.group_type === 'office' ? 'office' :
-                    resolveGroupVariant(offer.shift as any, offer.shift.departments?.name, offer.shift.sub_departments?.name)
-                }
+                shiftData={{ ...offer.shift, sub_group_name: subGroupName } as any}
+                groupVariant={groupVariantFor(offer.shift.group_type)}
                 footerActions={footerActions}
             />
         </div>
@@ -430,7 +429,8 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                     // would be a second control for the same action sitting
                     // over the first.
                     hideClose
-                    className="max-w-md w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] p-0 overflow-hidden bg-card/95 backdrop-blur-2xl border border-border shadow-2xl rounded-[28px] flex flex-col z-[150]"
+                    className="w-[calc(100vw-2rem)] sm:w-full max-h-[85vh] p-0 overflow-hidden bg-card/95 flex flex-col z-[150]"
+                    size="md"
                 >
                     <DialogHeader className="sr-only">
                         <DialogTitle>My Shift Offers</DialogTitle>
@@ -566,7 +566,7 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                 open={!!showDeclineConfirm}
                 onOpenChange={() => setShowDeclineConfirm(null)}
             >
-                <AlertDialogContent className="bg-background border border-border rounded-2xl p-6 max-w-sm z-[200] shadow-2xl" aria-describedby={undefined}>
+                <AlertDialogContent className="z-[200]" aria-describedby={undefined}>
                     <AlertDialogHeader>
                         <AlertDialogTitle className={cn(text.title, 'text-foreground')}>
                             Decline Shift?

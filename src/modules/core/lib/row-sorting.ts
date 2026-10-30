@@ -46,7 +46,7 @@ export const SORT_DIRECTION_LABELS: Record<RowSortBy, Record<SortDirection, stri
   status: { asc: 'A → Z', desc: 'Z → A' },
 };
 
-export interface SortableFields extends GroupableFields {
+interface SortableFields extends GroupableFields {
   /** "HH:mm" or "HH:mm:ss". Optional — falls back to date-only ordering. */
   startTime?: string;
 }

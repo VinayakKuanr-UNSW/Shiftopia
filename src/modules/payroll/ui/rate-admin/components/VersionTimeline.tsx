@@ -34,7 +34,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
       role="region" 
       aria-label="Award version timeline"
     >
-      <h3 className="text-base font-bold text-foreground mb-5">Version Timeline</h3>
+      <h3 className="text-[14px] font-bold text-foreground mb-5">Version Timeline</h3>
 
       <div className="relative pl-6">
         {/* Vertical line */}
@@ -72,28 +72,28 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span className={cn(
-                        'text-sm font-bold',
+                        'text-[13px] font-bold',
                         isActive ? 'text-primary' : 'text-foreground',
                       )}>
                         {formatDate(set.effectiveFrom)}
                       </span>
                       {isActive && (
-                        <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-primary border border-primary/20">
+                        <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-primary border border-primary/20">
                           Active
                         </span>
                       )}
                       {isFuture && (
-                        <span className="rounded-full bg-blue-500/15 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-blue-400 border border-blue-500/20">
+                        <span className="rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-blue-400 border border-blue-500/20">
                           Scheduled
                         </span>
                       )}
                       {!isActive && !isFuture && i < versions.length - 1 && (
-                        <span className="rounded-full bg-muted/50 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-muted-foreground border border-border/10">
+                        <span className="rounded-full bg-muted/50 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground border border-border/10">
                           Superseded
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1 font-medium">
+                    <p className="text-[13px] text-muted-foreground mt-1 font-medium">
                       {set.rates.length} classification rate{set.rates.length !== 1 ? 's' : ''} · {set.allowances.length} allowance{set.allowances.length !== 1 ? 's' : ''}
                     </p>
                   </div>
@@ -105,7 +105,7 @@ const VersionTimeline: React.FC<VersionTimelineProps> = ({
           {/* Add new version placeholder */}
           <div className="relative flex items-center gap-4 -ml-3 p-3 opacity-65" role="listitem">
             <div className="absolute left-[-15px] top-[18px] h-3.5 w-3.5 rounded-full border-2 border-dashed border-muted-foreground flex-shrink-0 z-10" aria-hidden="true" />
-            <span className="text-sm text-muted-foreground italic font-medium">
+            <span className="text-[13px] text-muted-foreground italic font-medium">
               + New version via CPI preview
             </span>
           </div>

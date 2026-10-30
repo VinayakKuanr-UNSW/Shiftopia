@@ -25,6 +25,7 @@ import {
 } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { buildAssignInput } from '@/modules/planning/unified/compliance/input-builder';
@@ -42,7 +43,7 @@ import { supabase } from '@/platform/supabase/client';
 // PROPS
 // =============================================================================
 
-export interface DndAssignModalProps {
+interface DndAssignModalProps {
   open: boolean;
   onClose: () => void;
   onConfirm: (options: { ignoreWarnings: boolean }) => void;
@@ -252,45 +253,6 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   }, [open, scopeReady]); // intentionally excluding panel.run to avoid re-trigger loops
 
   // Format display values
-  const formatTime = (t: string | undefined | null) => {
-    if (!t) return '--:--';
-    
-    let timePart = t;
-    if (t.includes('T')) {
-      const tSplit = t.split('T');
-      if (tSplit[1]) {
-        timePart = tSplit[1].split(/[+-Z]/)[0];
-      }
-    }
-    
-    const parts = timePart.split(':');
-    if (parts.length >= 2) {
-      const hourVal = parseInt(parts[0], 10);
-      const minVal = parts[1];
-      if (!isNaN(hourVal) && minVal) {
-        const ampm = hourVal >= 12 ? 'PM' : 'AM';
-        const displayHour = hourVal % 12 || 12;
-        const displayMin = minVal.substring(0, 2);
-        return `${displayHour}:${displayMin} ${ampm}`;
-      }
-    }
-    
-    try {
-      const d = new Date(t);
-      if (!isNaN(d.getTime())) {
-        const hourVal = d.getHours();
-        const minVal = d.getMinutes().toString().padStart(2, '0');
-        const ampm = hourVal >= 12 ? 'PM' : 'AM';
-        const displayHour = hourVal % 12 || 12;
-        return `${displayHour}:${minVal} ${ampm}`;
-      }
-    } catch {
-      // ignore
-    }
-    
-    return t;
-  };
-
   const formatDate = (d: string | undefined | null) => {
     if (!d) return '---';
     let dateStr = d;
@@ -309,12 +271,12 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto" size="lg">
         <DialogHeader>
-          <DialogTitle className="text-lg font-black uppercase tracking-wider">
+          <DialogTitle className="uppercase tracking-wider">
             Assign Employee
           </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
+          <DialogDescription>
             Review compliance before confirming assignment
           </DialogDescription>
         </DialogHeader>
@@ -326,8 +288,8 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
               <User className="h-4 w-4 text-indigo-500" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Employee</p>
-              <p className="text-sm font-bold text-foreground">{employeeName}</p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Employee</p>
+              <p className="text-[13px] font-bold text-foreground">{employeeName}</p>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
@@ -335,8 +297,8 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
               <Briefcase className="h-4 w-4 text-emerald-500" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Role</p>
-              <p className="text-sm font-bold text-foreground">{shiftRole}</p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Role</p>
+              <p className="text-[13px] font-bold text-foreground">{shiftRole}</p>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
@@ -344,8 +306,8 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
               <Calendar className="h-4 w-4 text-blue-500" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Date</p>
-              <p className="text-sm font-bold text-foreground">{formatDate(shiftDate)}</p>
+              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Date</p>
+              <p className="text-[13px] font-bold text-foreground">{formatDate(shiftDate)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
@@ -353,9 +315,9 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
               <Clock className="h-4 w-4 text-amber-500" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">Time</p>
-              <p className="text-sm font-bold text-foreground">
-                {formatTime(shiftStartTime)} – {formatTime(shiftEndTime)}
+              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Time</p>
+              <p className="text-[13px] font-bold text-foreground">
+                {formatClockTime(shiftStartTime, 'h:mm a', '--:--')} – {formatClockTime(shiftEndTime, 'h:mm a', '--:--')}
               </p>
             </div>
           </div>
@@ -368,13 +330,13 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
 
         {/* Availability — warn-only (never blocks; requires explicit acknowledgement) */}
         {availResult.isWarning && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-[13px] text-amber-700 dark:text-amber-300">
             <div className="flex items-center gap-2 font-semibold mb-1">
               <AlertTriangle className="h-4 w-4" />
               Outside declared availability
             </div>
-            <p className="text-xs opacity-90">{availResult.message}</p>
-            <label className="mt-2 flex items-center gap-2 cursor-pointer text-xs font-medium">
+            <p className="text-[11px] opacity-90">{availResult.message}</p>
+            <label className="mt-2 flex items-center gap-2 cursor-pointer text-[11px] font-medium">
               <Checkbox checked={availAck} onCheckedChange={(v) => setAvailAck(v === true)} />
               Assign anyway — I acknowledge this shift is outside the employee’s availability.
             </label>
@@ -387,7 +349,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
             variant="ghost"
             onClick={onClose}
             disabled={isAssigning}
-            className="text-xs font-black uppercase tracking-widest"
+            className="text-[11px] font-black uppercase tracking-widest"
           >
             Cancel
           </Button>
@@ -395,7 +357,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
             onClick={() => onConfirm({ ignoreWarnings: panel.warningsAcknowledged })}
             disabled={!panel.canProceed || isAssigning || (availResult.isWarning && !availAck)}
             className={cn(
-              'text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95',
+              'text-[11px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95',
               panel.canProceed
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 : 'bg-muted text-muted-foreground cursor-not-allowed',
@@ -416,4 +378,3 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   );
 };
 
-export default DndAssignModal;

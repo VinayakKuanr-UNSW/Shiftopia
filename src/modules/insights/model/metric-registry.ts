@@ -39,9 +39,9 @@
 export type MetricStatus = 'good' | 'warn' | 'critical' | 'neutral';
 
 /** How a value is rendered and compared. */
-export type MetricFormat = 'percent' | 'count' | 'hours' | 'currency' | 'ratio';
+type MetricFormat = 'percent' | 'count' | 'hours' | 'currency' | 'ratio';
 
-export interface MetricSpec {
+interface MetricSpec {
     /** Canonical id. Matches the RPC column wherever one exists. */
     id: string;
     /** Short human label. Sentence case, no trailing unit. */

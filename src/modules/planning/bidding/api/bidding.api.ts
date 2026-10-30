@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import { Shift } from '@/modules/rosters';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOpUx } from '@/modules/rosters/domain/shift-ops.contract';
@@ -6,15 +7,6 @@ import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Bid, BidStatus } from '../model/bid.types';
 
 // --- Helper Functions ---
-const mapDbStatusToBidStatus = (dbStatus: string): BidStatus => {
-    const map: Record<string, BidStatus> = {
-        'pending': 'pending',
-        'accepted': 'selected', // UI 'selected' matches DB 'accepted'
-        'rejected': 'rejected',
-        'withdrawn': 'withdrawn'
-    };
-    return map[dbStatus] || 'pending';
-};
 
 const mapBidStatusToDbStatus = (status: BidStatus): string => {
     const map: Record<BidStatus, string> = {
@@ -89,8 +81,7 @@ export const biddingApi = {
                 remuneration_levels(level_number, level_name)
             `)
             .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
-            .is('assigned_employee_id', null)
-            .is('deleted_at', null);
+            .is('assigned_employee_id', null);
 
         if (filters?.organizationId) {
             query = query.eq('organization_id', filters.organizationId);
@@ -276,6 +267,8 @@ export const biddingApi = {
             .select()
             .single();
 
+        // PGRST116 = no row came back: row-level security refused the update.
+        if (error?.code === 'PGRST116') throw new WriteRefusedError('change this bid');
         if (error) {
             console.error(`Error updating bid status for ${id}:`, error);
             throw error;
@@ -313,12 +306,13 @@ export const biddingApi = {
      */
     async updateBulkBidStatus(ids: string[], status: BidStatus): Promise<void> {
         const dbStatus = mapBidStatusToDbStatus(status);
-        const { error } = await supabase
+        const updated = await supabase
             .from('shift_bids')
-            .update({ status: dbStatus } as any)
+            .update({ status: dbStatus } as any, { count: 'exact' })
             .in('id', ids);
 
-        if (error) throw error;
+        if (updated.error) throw updated.error;
+        if (ids.length > 0) assertWrote(updated, 'change these bids');
     },
 
     /* ============================================================

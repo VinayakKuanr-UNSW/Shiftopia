@@ -26,7 +26,7 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import type { RawLeaveDay } from '@/modules/office/domain/types';
 
-export interface LeaveDayCardProps {
+interface LeaveDayCardProps {
     leave: RawLeaveDay;
     /**
      * True when a shift still exists on this day.
@@ -96,7 +96,7 @@ export const LeaveDayCard: React.FC<LeaveDayCardProps> = ({ leave, hasConflictin
                 <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <span className="mt-auto inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-red-400 cursor-help">
+                        <span className="mt-auto inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-red-400 cursor-help">
                             <TriangleAlert className="h-2.5 w-2.5" />
                             Shift still rostered
                         </span>
@@ -114,4 +114,3 @@ export const LeaveDayCard: React.FC<LeaveDayCardProps> = ({ leave, hasConflictin
     );
 };
 
-export default LeaveDayCard;

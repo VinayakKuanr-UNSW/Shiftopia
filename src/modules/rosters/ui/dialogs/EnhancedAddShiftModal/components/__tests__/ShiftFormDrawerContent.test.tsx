@@ -1,8 +1,7 @@
-import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useForm, FormProvider } from 'react-hook-form';
-import { ShiftFormDrawerContent, STEP, STEP_META } from '../ShiftFormDrawerContent';
+import { ShiftFormDrawerContent } from '../ShiftFormDrawerContent';
 
 // Helper test wrapper with react-hook-form
 function TestWrapper({ defaultValues = {}, drawerProps = {} }: { defaultValues?: any; drawerProps?: any }) {
@@ -116,7 +115,7 @@ describe('ShiftFormDrawerContent — 5-Stepper and Top Tabs Redesign', () => {
         expect(screen.getByText(/role & organizational placement/i)).toBeInTheDocument();
 
         // Advance to Step 2
-        const continueBtn = screen.getByRole('button', { name: /save & continue/i });
+        const continueBtn = screen.getByRole('button', { name: /^continue$/i });
         fireEvent.click(continueBtn);
 
         // Step 2: Requirements & Notes
@@ -124,21 +123,21 @@ describe('ShiftFormDrawerContent — 5-Stepper and Top Tabs Redesign', () => {
         expect(screen.getByText(/requirements & handover notes/i)).toBeInTheDocument();
 
         // Advance to Step 3
-        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
 
         // Step 3: Timings & Breaks
         expect(screen.getByRole('tabpanel', { name: /timings & breaks/i })).toBeInTheDocument();
         expect(screen.getByText(/schedule & break allocation/i)).toBeInTheDocument();
 
         // Advance to Step 4
-        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
 
         // Step 4: Assignment
         expect(screen.getByRole('tabpanel', { name: /assignment/i })).toBeInTheDocument();
         expect(screen.getByText(/employee assignment/i)).toBeInTheDocument();
 
         // Advance to Step 5
-        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
 
         // Step 5: Compliance & Review
         expect(screen.getByRole('tabpanel', { name: /compliance & review/i })).toBeInTheDocument();
@@ -150,7 +149,7 @@ describe('ShiftFormDrawerContent — 5-Stepper and Top Tabs Redesign', () => {
         render(<TestWrapper />);
 
         // Move to step 2
-        fireEvent.click(screen.getByRole('button', { name: /save & continue/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
         expect(screen.getByRole('tabpanel', { name: /requirements & notes/i })).toBeInTheDocument();
 
         // Click Back
@@ -218,5 +217,80 @@ describe('ShiftFormDrawerContent — 5-Stepper and Top Tabs Redesign', () => {
         const submitBtn = screen.getByRole('button', { name: /create shift/i });
         fireEvent.click(submitBtn);
         expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('disables Save & Continue on Step 3 in template mode when day_of_week is undefined', () => {
+        render(<TestWrapper defaultValues={{ day_of_week: undefined }} drawerProps={{ isTemplateMode: true }} />);
+
+        // Advance from Step 1 to Step 2
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+        // Advance from Step 2 to Step 3
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+
+        expect(screen.getByRole('tabpanel', { name: /timings & breaks/i })).toBeInTheDocument();
+
+        // On Step 3 with day_of_week undefined, Save & Continue must be disabled
+        const continueBtn = screen.getByRole('button', { name: /^continue$/i });
+        expect(continueBtn).toBeDisabled();
+    });
+
+    it('enables Save & Continue on Step 3 in template mode when day_of_week is null (Every day)', () => {
+        render(<TestWrapper defaultValues={{ day_of_week: null }} drawerProps={{ isTemplateMode: true }} />);
+
+        // Advance to Step 3
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+
+        expect(screen.getByRole('tabpanel', { name: /timings & breaks/i })).toBeInTheDocument();
+
+        const continueBtn = screen.getByRole('button', { name: /^continue$/i });
+        expect(continueBtn).not.toBeDisabled();
+
+        // Advance to Step 4
+        fireEvent.click(continueBtn);
+        expect(screen.getByRole('tabpanel', { name: /assignment/i })).toBeInTheDocument();
+    });
+
+    it('enables Save & Continue on Step 3 in template mode when day_of_week is 0 (Sunday)', () => {
+        render(<TestWrapper defaultValues={{ day_of_week: 0 }} drawerProps={{ isTemplateMode: true }} />);
+
+        // Advance to Step 3
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+
+        expect(screen.getByRole('tabpanel', { name: /timings & breaks/i })).toBeInTheDocument();
+
+        const continueBtn = screen.getByRole('button', { name: /^continue$/i });
+        expect(continueBtn).not.toBeDisabled();
+
+        // Advance to Step 4
+        fireEvent.click(continueBtn);
+        expect(screen.getByRole('tabpanel', { name: /assignment/i })).toBeInTheDocument();
+    });
+});
+
+describe('ShiftFormDrawerContent — assigned employee card', () => {
+    function goToAssignment() {
+        for (let i = 0; i < 3; i++) {
+            fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+        }
+    }
+
+    it('does not call an id missing from the employee list "Unassigned" or vouch for it', () => {
+        render(<TestWrapper defaultValues={{ assigned_employee_id: 'emp-unknown' }} />);
+        goToAssignment();
+
+        expect(screen.getByText('Employee not in this list')).toBeInTheDocument();
+        expect(screen.getByText(/tap × to clear/i)).toBeInTheDocument();
+        expect(screen.queryByText('Qualified')).not.toBeInTheDocument();
+        expect(screen.queryByText('Matching Contract')).not.toBeInTheDocument();
+    });
+
+    it('shows the qualification badges for a resolved employee', () => {
+        render(<TestWrapper defaultValues={{ assigned_employee_id: 'emp-1' }} />);
+        goToAssignment();
+
+        expect(screen.queryByText('Employee not in this list')).not.toBeInTheDocument();
+        expect(screen.getByText('Qualified')).toBeInTheDocument();
     });
 });

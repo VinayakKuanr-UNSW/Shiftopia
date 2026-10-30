@@ -1,8 +1,6 @@
-// src/components/templates/ShiftCard.tsx
 import React from 'react';
-import { Clock, Edit2, Trash2, Coffee, User, Briefcase, Copy, MoreHorizontal } from 'lucide-react';
+import { Edit2, Trash2, Copy, MoreVertical } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +25,7 @@ import {
   toTargetEmploymentType,
 } from '@/modules/core/model/employment.types';
 import { useSkills, useLicenses } from '@/modules/rosters/state/useRosterShifts';
+import { ShiftStateCircleBadge } from '@/modules/rosters/ui/components/ShiftStateCircleBadge';
 
 interface ShiftCardProps {
   shift: TemplateShift;
@@ -37,64 +36,15 @@ interface ShiftCardProps {
   onClone?: () => void;
 }
 
-const colorClasses: Record<
-  string,
-  { bg: string; border: string; text: string; bgHover: string }
-> = {
-  blue: {
-    bg: 'bg-blue-500/5 dark:bg-blue-500/10',
-    bgHover: 'hover:bg-blue-500/10 dark:hover:bg-blue-500/20',
-    border: 'border-blue-500/20 dark:border-blue-500/30',
-    text: 'text-blue-600 dark:text-blue-400',
-  },
-  green: {
-    bg: 'bg-emerald-500/5 dark:bg-emerald-500/10',
-    bgHover: 'hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20',
-    border: 'border-emerald-500/20 dark:border-emerald-500/30',
-    text: 'text-emerald-600 dark:text-emerald-400',
-  },
-  red: {
-    bg: 'bg-red-500/5 dark:bg-red-500/10',
-    bgHover: 'hover:bg-red-500/10 dark:hover:bg-red-500/20',
-    border: 'border-red-500/20 dark:border-red-500/30',
-    text: 'text-red-600 dark:text-red-400',
-  },
-  amber: {
-    bg: 'bg-amber-500/5 dark:bg-amber-500/10',
-    bgHover: 'hover:bg-amber-500/10 dark:hover:bg-amber-500/20',
-    border: 'border-amber-500/20 dark:border-amber-500/30',
-    text: 'text-amber-600 dark:text-amber-400',
-  },
-  cyan: {
-    bg: 'bg-cyan-500/5 dark:bg-cyan-500/10',
-    bgHover: 'hover:bg-cyan-500/10 dark:hover:bg-cyan-500/20',
-    border: 'border-cyan-500/20 dark:border-cyan-500/30',
-    text: 'text-cyan-600 dark:text-cyan-400',
-  },
-};
-
 const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
   shift,
   isReadOnly,
-  groupColor,
   onEdit,
   onDelete,
   onClone,
 }) => {
-  const colors = colorClasses[groupColor] || colorClasses.blue;
-
-  // Template shifts persist skill/licence UUIDs — resolve to display names.
-  // Values that are already names (legacy rows) pass through unchanged.
-  const { data: skillsLookup } = useSkills();
-  const { data: licensesLookup } = useLicenses();
-  const skillName = React.useCallback(
-    (v: string) => skillsLookup?.find(s => s.id === v)?.name ?? v,
-    [skillsLookup],
-  );
-  const licenseName = React.useCallback(
-    (v: string) => licensesLookup?.find(l => l.id === v)?.name ?? v,
-    [licensesLookup],
-  );
+  useSkills();
+  useLicenses();
 
   const roleLabel = shift.roleName || shift.name || 'Unnamed Shift';
   const remunerationLabel =
@@ -112,28 +62,92 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
   const targetType = shift.targetEmploymentType
     ? toTargetEmploymentType(shift.targetEmploymentType)
     : null;
+
   const employmentTypeLabel = targetType
     ? (targetType === 'PT' && shift.targetRequiresFlexible
         ? 'Flexible Part-Time'
         : TARGET_EMPLOYMENT_TYPE_LABELS[targetType] || targetType)
-    : 'Full-Time';
+    : null;
+
+  const baseRole = shift.roleName || shift.name || 'Unnamed Shift';
+  const roleDisplay = React.useMemo(() => {
+    if (baseRole.includes('·')) return baseRole;
+    if (baseRole.startsWith('Event Setup ') && baseRole.length > 'Event Setup '.length) {
+      return `Event Setup · ${baseRole.substring('Event Setup '.length)}`;
+    }
+    return baseRole;
+  }, [baseRole]);
 
   return (
     <div
       className={cn(
-        'group relative p-3 rounded-lg border transition-all duration-200',
-        colors.bg,
-        colors.bgHover,
-        colors.border,
-        'hover:border-opacity-60'
+        'group relative flex items-center justify-between gap-2.5 px-3 py-2.5 min-h-[40px] w-full text-[11px] transition-colors duration-150 select-none hover:bg-white/[0.04] cursor-pointer'
       )}
+      onClick={onEdit}
     >
-      {/* Actions. The trigger was icon-only with no aria-label, so it announced
-          as an unnamed "button" — the tooltip is not an accessible name.
-          Both wrappers are load-bearing: TooltipTrigger names it, DropdownMenuTrigger
-          is what actually opens the menu. Dropping the latter leaves a dead button. */}
+      {/* 1. Badge + Role */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <ShiftStateCircleBadge stateId="S1" />
+        <span
+          className="font-medium text-slate-100 dark:text-slate-100 truncate text-[11px] sm:text-[13px]"
+          title={`${roleDisplay}${remunerationLabel ? ` (${remunerationLabel})` : ''}`}
+        >
+          {roleDisplay}
+        </span>
+        {remunerationLabel && (
+          <span className="sr-only">
+            {remunerationLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 shrink-0 mx-2 select-none" aria-hidden="true" />
+
+      {/* 2. Timings */}
+      <div
+        className="flex items-center gap-1.5 shrink-0 font-medium text-slate-300 dark:text-slate-300 text-[11px] sm:text-[13px] tabular-nums"
+        title={`${formatTimeDisplay(shift.startTime)} – ${formatTimeDisplay(shift.endTime)} (${netHours}h net)`}
+      >
+        <span>
+          {formatTimeDisplay(shift.startTime)} - {formatTimeDisplay(shift.endTime)}
+        </span>
+        <span className="sr-only">
+          {netHours}h net
+        </span>
+      </div>
+
+      {/* Accessible break duration text for screen readers & tests */}
+      {totalBreak > 0 && (
+        <span className="sr-only">
+          {shift.paidBreakDuration > 0 && `${shift.paidBreakDuration}m paid`}
+          {shift.paidBreakDuration > 0 && shift.unpaidBreakDuration > 0 && ' + '}
+          {shift.unpaidBreakDuration > 0 && `${shift.unpaidBreakDuration}m unpaid`}
+        </span>
+      )}
+
+      {/* Divider */}
+      <div className="h-4 w-px bg-slate-300/40 dark:bg-white/10 shrink-0 mx-2 select-none" aria-hidden="true" />
+
+      {/* 3. Assignment */}
+      <div className="flex items-center min-w-0 max-w-[180px] flex-1">
+        {employmentTypeLabel ? (
+          <span className="text-slate-300 dark:text-slate-300 truncate font-medium text-[11px] sm:text-[13px]">
+            {employmentTypeLabel}
+          </span>
+        ) : (
+          <span className="text-amber-400 font-medium text-[11px] sm:text-[13px] truncate">
+            Employment type not set
+          </span>
+        )}
+      </div>
+
+      {/* 4. Three Dots Menu */}
       {!isReadOnly && (
-        <div className="absolute top-1 right-1">
+        <div
+          className="relative z-30 shrink-0 flex items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
           <TooltipProvider>
             <Tooltip>
               <DropdownMenu>
@@ -143,10 +157,9 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                       variant="ghost"
                       size="icon"
                       aria-label={`Actions for ${roleLabel}`}
-                      className="h-11 w-11 min-h-[44px] min-w-[44px] text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full"
-                      onClick={(e) => e.stopPropagation()}
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-white/10 rounded-full"
                     >
-                      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                      <MoreVertical className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
@@ -193,120 +206,6 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
             </Tooltip>
           </TooltipProvider>
         </div>
-      )}
-
-      {/* Row 1: <Role> <Remuneration Level> */}
-      <div className="flex items-start gap-2 mb-2 pr-12">
-        <div
-          className={cn(
-            'w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5',
-            colors.bg
-          )}
-        >
-          <User className={cn('h-3.5 w-3.5', colors.text)} />
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-1.5 flex-wrap">
-            <h4 className="text-sm font-medium text-foreground truncate">
-              {roleLabel}
-            </h4>
-            {remunerationLabel && (
-              <span className="text-xs text-muted-foreground font-normal shrink-0">
-                {remunerationLabel}
-              </span>
-            )}
-          </div>
-          {shift.name && shift.roleName && shift.name !== shift.roleName && (
-            <p className="text-xs text-muted-foreground truncate">{shift.name}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Row 2: Timings Net */}
-      <div className="flex items-center gap-2 mb-2">
-        <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
-        <span className="text-sm text-foreground/80">
-          {formatTimeDisplay(shift.startTime)} -{' '}
-          {formatTimeDisplay(shift.endTime)}
-        </span>
-        <Badge
-          variant="outline"
-          className="text-[10px] px-1.5 py-0 text-muted-foreground border-border"
-        >
-          {netHours}h net
-        </Badge>
-      </div>
-
-      {/* Row 3: Breaks */}
-      {totalBreak > 0 && (
-        <div className="flex items-center gap-2 mb-2">
-          <Coffee className="h-3.5 w-3.5 text-muted-foreground/70" />
-          <span className="text-xs text-muted-foreground">
-            {shift.paidBreakDuration > 0 && (
-              <span className="text-emerald-400/70">
-                {shift.paidBreakDuration}m paid
-              </span>
-            )}
-            {shift.paidBreakDuration > 0 &&
-              shift.unpaidBreakDuration > 0 &&
-              ' + '}
-            {shift.unpaidBreakDuration > 0 && (
-              <span>{shift.unpaidBreakDuration}m unpaid</span>
-            )}
-          </span>
-        </div>
-      )}
-
-      {/* Row 4: <target employment type> */}
-      <div className="flex items-center gap-2 mb-2">
-        <Briefcase className="h-3.5 w-3.5 text-muted-foreground/70" />
-        <span className="text-xs text-muted-foreground">
-          {employmentTypeLabel}
-        </span>
-      </div>
-
-      {/* Tags */}
-      {(shift.skills?.length > 0 || shift.licenses?.length > 0) && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          {shift.skills?.slice(0, 3).map((skill, idx) => (
-            <Badge
-              key={`skill-${idx}`}
-              className="text-[9px] px-1.5 py-0 bg-purple-500/20 text-purple-400 border-purple-500/30"
-            >
-              {skillName(skill)}
-            </Badge>
-          ))}
-          {shift.licenses?.slice(0, 2).map((license, idx) => (
-            <Badge
-              key={`license-${idx}`}
-              className="text-[9px] px-1.5 py-0 bg-amber-500/20 text-amber-400 border-amber-500/30"
-            >
-              {licenseName(license)}
-            </Badge>
-          ))}
-          {(shift.skills?.length || 0) + (shift.licenses?.length || 0) > 5 && (
-            <Badge className="text-[9px] px-1.5 py-0 bg-muted text-muted-foreground border-border">
-              +{(shift.skills?.length || 0) + (shift.licenses?.length || 0) - 5}{' '}
-              more
-            </Badge>
-          )}
-        </div>
-      )}
-
-      {/* Notes Preview */}
-      {shift.notes && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <p className="text-[10px] text-muted-foreground/80 mt-2 truncate cursor-help">
-                📝 {shift.notes}
-              </p>
-            </TooltipTrigger>
-            <TooltipContent className="max-w-[300px]">
-              <p className="text-sm">{shift.notes}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       )}
     </div>
   );

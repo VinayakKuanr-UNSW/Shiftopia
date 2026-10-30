@@ -97,9 +97,6 @@ function subscribe(onStoreChange: () => void): () => void {
   };
 }
 
-function getSnapshot(): ClockSnapshot {
-  return snapshot;
-}
 
 /**
  * Subscribe to the shared clock, re-rendering only when `select` changes value.

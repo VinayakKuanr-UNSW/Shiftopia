@@ -55,8 +55,9 @@ android/app/src/main/res/xml/config.xml
 e2e/.auth/
 /coverage/
 
-# Reference-repo working copy (the almond fork, cloned for comparison)
+# Reference-repo working copies (forks of this repo, cloned for comparison)
 capstone-project-26t2-9900-t17b-almond/
+capstone-project-26t2-9900-t19b-donut/
 
 # Claude Code agent worktrees — transient; never commit as gitlinks
 .claude/worktrees/
@@ -82,3 +83,38 @@ supabase/.temp/
 # with "run graphify first", and the rulebook/docs merely describe the artifact.
 # Regenerate with `/graphify`.
 graphify-out/
+
+# ECC payloads for non-Claude harnesses (Codex/Antigravity, pi) — not used by Claude Code
+.claude/.agents/
+.claude/.pi/
+
+# ECC harness (Everything Claude Code, project-scope install) is LOCAL tooling.
+# Its hook commands embed this machine's home path, so it cannot run elsewhere,
+# and it is ~550 third-party files. These patterns only hide UNTRACKED files:
+# the team's own agents (planner, code-reviewer, compliance-specialist, ...),
+# agent-memory, mcp.json and settings*.json stay versioned. Add a new
+# project-owned agent or skill with `git add -f`.
+# ECC's edits to the tracked .claude/settings.json are hidden locally with
+# `git update-index --skip-worktree .claude/settings.json`
+# (undo with --no-skip-worktree before changing that file on purpose).
+.claude/AGENTS.md
+.claude/PLUGIN_SCHEMA_NOTES.md
+.claude/README.md
+.claude/the-security-guide.md
+.claude/marketplace.json
+.claude/plugin.json
+.claude/agents/
+.claude/commands/
+.claude/ecc/
+.claude/hooks/
+.claude/mcp-configs/
+.claude/rules/
+.claude/scripts/
+.claude/skills/
+
+# Local scratch and one-off artifacts. scratch/ holds personal data
+# (first_100_users.json, seed files) that must never reach this public repo;
+# its older tracked scripts are unaffected.
+scratch/
+project-structure.txt
+Faceted Multicolor Loading Ring.png

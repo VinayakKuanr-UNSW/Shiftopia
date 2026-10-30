@@ -1,58 +1,28 @@
 import { V8Hit, V8RuleEvaluator } from '../types';
-import { parseTimeToMinutes } from '../utils/time';
+import { consecutivePairs } from '../utils/rest-gap';
 
 /**
  * V8 Rule: No Overlap
- * 
- * Ensures no employee has two shifts that overlap in time.
+ *
+ * Ensures no employee has two shifts that overlap in time. Shifts are compared
+ * on the absolute timeline, so an overnight shift overlaps the next morning's:
+ * this used to compare same-start-day pairs only, and that case fell between
+ * it and the rest-gap rule, which skips negative gaps as this rule's.
  */
 export const noOverlapRule: V8RuleEvaluator = (ctx) => {
-    const { shifts } = ctx;
-    if (shifts.length < 2) return [];
-
-    // 1. Filter out incomplete shifts and sort by minutes-since-epoch
-    const sorted = [...shifts]
-        .filter(s => !!(s.date || s.shift_date) && !!s.start_time)
-        .sort((a, b) => {
-        const dA = a.date || a.shift_date || '';
-        const dB = b.date || b.shift_date || '';
-        if (dA !== dB) return dA.localeCompare(dB);
-        
-        const tA = parseTimeToMinutes(a.start_time || '00:00');
-        const tB = parseTimeToMinutes(b.start_time || '00:00');
-        return tA - tB;
-    });
-
     const violations: V8Hit[] = [];
 
-    for (let i = 0; i < sorted.length - 1; i++) {
-        const current = sorted[i];
-        const next = sorted[i + 1];
-
-        const dateCurrent = current.date || current.shift_date || '';
-        const dateNext = next.date || next.shift_date || '';
-        
-        // Only check overlap if on same day (multi-day overlap handled by shift duration rules)
-        if (dateCurrent !== dateNext) continue;
-
-        const currentStart = parseTimeToMinutes(current.start_time || '00:00');
-        let currentEnd = parseTimeToMinutes(current.end_time || '00:00');
-        const nextStart = parseTimeToMinutes(next.start_time || '00:00');
-
-        // Handle cross-midnight segment of the current shift
-        if (currentEnd <= currentStart) currentEnd += 1440;
-
-        if (nextStart < currentEnd) {
-            violations.push({
-                rule_id: 'V8_NO_OVERLAP',
-                rule_name: 'No Overlap',
-                status: 'BLOCKING',
-                summary: 'Overlapping shifts detected',
-                details: `Shift on ${current.date} (${current.start_time}-${current.end_time}) overlaps with shift (${next.start_time}-${next.end_time}).`,
-                affected_shifts: [current.id, next.id],
-                blocking: true
-            });
-        }
+    for (const { a, b, gapMinutes } of consecutivePairs(ctx.shifts)) {
+        if (gapMinutes >= 0) continue;
+        violations.push({
+            rule_id: 'V8_NO_OVERLAP',
+            rule_name: 'No Overlap',
+            status: 'BLOCKING',
+            summary: 'Overlapping shifts detected',
+            details: `Shift on ${a.date} (${a.start_time}-${a.end_time}) overlaps with the shift on ${b.date} (${b.start_time}-${b.end_time}).`,
+            affected_shifts: [a.id, b.id],
+            blocking: true
+        });
     }
 
     return violations;

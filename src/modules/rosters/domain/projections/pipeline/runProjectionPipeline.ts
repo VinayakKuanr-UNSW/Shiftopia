@@ -41,6 +41,7 @@ import { projectPeople } from '../projectors/people.projector';
 import { projectGroup } from '../projectors/group.projector';
 import { projectEvents } from '../projectors/events.projector';
 import { projectRoles } from '../projectors/roles.projector';
+import { determineShiftState } from '../../shift-state.utils';
 
 // ── Filter Logic (mirrors utils/filters.ts but operates on DTOs) ─────────────
 
@@ -66,7 +67,14 @@ function applyFilters(shifts: WorkerShiftDTO[], filters: WorkerFilterDTO): Worke
   return shifts.filter(s => {
     if (roleId && s.roleId !== roleId) return false;
     if (skillIds.length > 0 && !skillIds.every(id => s.requiredSkills.includes(id))) return false;
-    if (lifecycleStatus !== 'all' && s.lifecycleStatus.toLowerCase() !== lifecycleStatus) return false;
+    if (lifecycleStatus !== 'all') {
+      const lc = (s.lifecycleStatus ?? '').toLowerCase();
+      if (lifecycleStatus === 'cancelled') {
+        if (!s.isCancelled && lc !== 'cancelled') return false;
+      } else {
+        if (s.isCancelled || lc !== lifecycleStatus) return false;
+      }
+    }
     if (assignmentStatus !== 'all') {
       const isAssigned = !!s.assignedEmployeeId;
       if (assignmentStatus === 'assigned' && !isAssigned) return false;
@@ -81,6 +89,16 @@ function applyFilters(shifts: WorkerShiftDTO[], filters: WorkerFilterDTO): Worke
       const isTrade = !!s.tradeRequestedAt;
       if (tradingStatus === 'requested' && !isTrade) return false;
       if (tradingStatus === 'none' && isTrade) return false;
+    }
+    if (stateId && stateId !== 'all') {
+      const shiftState = determineShiftState({
+        lifecycle_status: s.lifecycleStatus as any,
+        assignment_status: (s.assignmentStatus ?? 'unassigned') as any,
+        assignment_outcome: s.assignmentOutcome as any,
+        trading_status: s.tradingStatus as any,
+        is_cancelled: s.isCancelled,
+      });
+      if (shiftState !== stateId) return false;
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -174,7 +192,7 @@ export function computeCostForShift(
  * past ~38h in a week; split-shift: only same-day PT/Flex-PT pairs), so
  * recomputing them per projection is cheap.
  */
-export function computeCostForShiftAdjusted(
+function computeCostForShiftAdjusted(
   shift: WorkerShiftDTO,
   netMinutes: number,
   overrides: { priorOrdinaryHoursThisWeek?: number; isSplitShiftEligible?: boolean },
@@ -195,7 +213,7 @@ function netMinutesFromDTO(shift: WorkerShiftDTO): number {
   if (shift.netLengthMinutes != null && shift.netLengthMinutes > 0) return shift.netLengthMinutes;
   const [sh, sm] = shift.startTime.split(':').map(Number);
   const [eh, em] = shift.endTime.split(':').map(Number);
-  let start = sh * 60 + sm;
+  const start = sh * 60 + sm;
   let end = eh * 60 + em;
   if (end <= start) end += 24 * 60;
   return Math.max(0, (end - start) - shift.unpaidBreakMinutes);

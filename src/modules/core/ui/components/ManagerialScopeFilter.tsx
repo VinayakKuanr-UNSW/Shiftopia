@@ -5,22 +5,25 @@ import type { ScopeSelection } from '@/platform/auth/types';
 
 interface ManagerialScopeFilterProps {
     onScopeChange: (scope: ScopeSelection) => void;
+    /** 'timesheet' adds the Team Lead contracts' sub-departments (Timesheets page). */
+    mode?: 'managerial' | 'timesheet';
     multiSelect?: boolean;
     compactOnMobile?: boolean;
 }
 
 /**
  * ManagerialScopeFilter
- * 
- * Specialized implementation of GlobalScopeFilter for 'managerial' (Type Y) mode.
- * Handles locking logic based on gamma certification.
+ *
+ * Specialized implementation of GlobalScopeFilter for the managerial and
+ * Timesheets trees, both built from the user's contracts.
  */
 export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
     onScopeChange,
+    mode = 'managerial',
     multiSelect = false,
     compactOnMobile = false,
 }) => {
-    const { scope, scopeTree, isGammaLocked, isLoading } = useScopeFilter('managerial');
+    const { scope, scopeTree, isGammaLocked, isLoading } = useScopeFilter(mode);
 
     if (isLoading || !scopeTree) {
         return null;
@@ -28,10 +31,12 @@ export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
 
     return (
         <GlobalScopeFilter
-            mode="managerial"
+            mode={mode}
             allowedScopeTree={scopeTree}
             lockConfig={{
-                orgLocked: true, // Managerial certs are always pinned to an organization
+                // Nothing to choose with one organization (ICC Sydney). A zeta, or
+                // someone with contracts in two organizations, may pick.
+                orgLocked: scopeTree.organizations.length <= 1,
                 deptLocked: isGammaLocked,
                 subDeptLocked: isGammaLocked,
             }}

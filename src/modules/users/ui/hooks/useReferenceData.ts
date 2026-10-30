@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/platform/supabase/client';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 
-export interface ReferenceDataState {
+interface ReferenceDataState {
     organizations: any[];
     departments: any[];
     subDepartments: any[];

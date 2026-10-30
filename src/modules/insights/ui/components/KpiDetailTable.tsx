@@ -10,6 +10,7 @@
  * 320px would need two-dimensional scrolling, which SC 1.4.10 forbids.
  */
 
+import { Table, tableTokens, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import React, { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
@@ -22,7 +23,7 @@ import {
     type MetricStatus,
 } from '../../model/metric-registry';
 
-export interface KpiColumn {
+interface KpiColumn {
     /** Registry metric id, or a bare key for an ungraded count. */
     key: string;
     /** Overrides the registry label. */
@@ -157,7 +158,7 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
                                             <dt className={cn(text.caption, 'truncate')}>
                                                 {col.header ?? labelFor(col.key)}
                                             </dt>
-                                            <dd className={cn('tabular-nums text-sm font-semibold', STATUS_CELL[cellStatus(col, v)])}>
+                                            <dd className={cn('tabular-nums text-[13px] font-semibold', STATUS_CELL[cellStatus(col, v)])}>
                                                 {formatMetric(col.key, v)}
                                             </dd>
                                         </div>
@@ -187,13 +188,13 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
             </div>
 
             <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-                <table className="w-full border-collapse">
-                    <thead>
-                        <tr className="border-b border-border">
-                            <th
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead
                                 scope="col"
                                 aria-sort={sortKey === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                                className="sticky left-0 z-10 bg-card px-4 py-2.5 text-left"
+                                className={cn('sticky left-0 z-10', tableTokens.stickyHeadCell)}
                             >
                                 <button
                                     type="button"
@@ -202,13 +203,13 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
                                 >
                                     Employee <SortIcon col="name" />
                                 </button>
-                            </th>
+                            </TableHead>
                             {columns.map((col) => (
-                                <th
+                                <TableHead
                                     key={col.key}
                                     scope="col"
                                     aria-sort={sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                                    className="whitespace-nowrap px-4 py-2.5 text-right"
+                                    className="whitespace-nowrap text-right"
                                 >
                                     <button
                                         type="button"
@@ -217,16 +218,16 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
                                     >
                                         {col.header ?? labelFor(col.key)} <SortIcon col={col.key} />
                                     </button>
-                                </th>
+                                </TableHead>
                             ))}
-                        </tr>
-                    </thead>
-                    <tbody>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
                         {sorted.map((r) => (
-                            <tr key={r.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30">
+                            <TableRow key={r.id} className="last:border-0">
                                 <th
                                     scope="row"
-                                    className={cn('sticky left-0 z-10 bg-card px-4 py-2.5 text-left font-semibold', text.body)}
+                                    className={cn(tableTokens.cell, 'sticky left-0 z-10 text-left font-semibold', tableTokens.stickyCell)}
                                 >
                                     {onSelect ? (
                                         <button
@@ -247,21 +248,21 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
                                 {columns.map((col) => {
                                     const v = r.values[col.key] ?? 0;
                                     return (
-                                        <td
+                                        <TableCell
                                             key={col.key}
                                             className={cn(
-                                                'whitespace-nowrap px-4 py-2.5 text-right text-sm font-semibold tabular-nums',
+                                                'whitespace-nowrap text-right font-semibold tabular-nums',
                                                 STATUS_CELL[cellStatus(col, v)],
                                             )}
                                         >
                                             {formatMetric(col.key, v)}
-                                        </td>
+                                        </TableCell>
                                     );
                                 })}
-                            </tr>
+                            </TableRow>
                         ))}
-                    </tbody>
-                </table>
+                    </TableBody>
+                </Table>
             </div>
 
             {sorted.length === 0 && (
@@ -271,4 +272,3 @@ export const KpiDetailTable: React.FC<KpiDetailTableProps> = ({
     );
 };
 
-export default KpiDetailTable;

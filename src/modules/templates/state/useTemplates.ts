@@ -3,35 +3,28 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/hooks/use-toast';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
   Template,
   Group,
   SubGroup,
   TemplateShift,
-  TemplateConflict,
   CreateTemplateInput,
   SaveTemplateResult,
-  PublishTemplateResult,
   VersionCheckResult,
-  NameValidationResult,
   ValidationResult,
   dbTemplateToFrontend,
   frontendToDbGroups,
   normalizeRemunerationLevel,
   validateTemplateName,
   validateShift,
-  validateDateRange,
-  validateTemplateForPublish,
   sanitizeString,
   sanitizeTemplateName,
   deepClone,
   generateTempId,
-  isTempId,
-  formatDateForDb,
 } from '@/modules/templates/model/templates.types';
-import { SYDNEY_TZ, getTodayInTimezone, getNowInTimezone } from '@/modules/core/lib/date.utils';
-import { parse, isSameMonth, startOfMonth, endOfMonth, format as formatCb } from 'date-fns';
 import {
   validateTemplateShapes,
   describeTemplateShapeFailures,
@@ -44,11 +37,6 @@ import {
 const LOG_PREFIX = '[Templates]';
 const IS_DEV = process.env.NODE_ENV === 'development';
 
-const DEFAULT_GROUPS = [
-  { name: 'Convention Centre', color: '#3b82f6', icon: 'building' },
-  { name: 'Exhibition Centre', color: '#22c55e', icon: 'layout-grid' },
-  { name: 'Theatre', color: '#ef4444', icon: 'theater' },
-];
 
 /* ============================================================
    LOGGING
@@ -66,7 +54,7 @@ type LogLevel =
 const log = (level: LogLevel, message: string, data?: any) => {
   if (!IS_DEV && level !== 'error' && level !== 'security') return;
 
-  const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+  const timestamp = formatInTimezone(new Date(), SYDNEY_TZ, 'HH:mm:ss.SSS');
   const prefix = `${timestamp} ${LOG_PREFIX}`;
 
   const styles: Record<LogLevel, string> = {
@@ -97,13 +85,13 @@ const log = (level: LogLevel, message: string, data?: any) => {
    HOOK INTERFACE
    ============================================================ */
 
-export interface FetchTemplatesOptions {
+interface FetchTemplatesOptions {
   organizationId?: string;
   departmentId?: string;
   subDepartmentId?: string;
 }
 
-export interface UseTemplatesReturn {
+interface UseTemplatesReturn {
   // State
   templates: Template[];
   currentTemplate: Template | null;
@@ -615,11 +603,20 @@ export function useTemplates(): UseTemplatesReturn {
               ...deepClone(original),
               id: generateTempId('subgroup'),
               name: `${original.name} (Copy)`,
-              shifts: original.shifts.map((s) => ({
+              description: original.description,
+              sortOrder: g.subGroups.length,
+              shifts: original.shifts.map((s, idx) => ({
                 ...s,
                 id: generateTempId('shift'),
+                sortOrder: idx,
+                skills: [...(s.skills || [])],
+                licenses: [...(s.licenses || [])],
+                siteTags: [...(s.siteTags || [])],
+                eventTags: [...(s.eventTags || [])],
+                dayOfWeek: s.dayOfWeek !== undefined ? s.dayOfWeek : null,
+                targetEmploymentType: s.targetEmploymentType ?? null,
+                targetRequiresFlexible: s.targetRequiresFlexible ?? false,
               })),
-              sortOrder: g.subGroups.length,
             };
 
             return {
@@ -665,18 +662,21 @@ export function useTemplates(): UseTemplatesReturn {
                   shifts: [
                     ...sg.shifts,
                     {
+                      ...shift,
                       id: generateTempId('shift'),
-                      name: sanitizeString(shift.name) || 'New Shift',
+                      name: shift.name ? sanitizeString(shift.name) : (shift.roleName || 'New Shift'),
                       startTime: shift.startTime || '09:00',
                       endTime: shift.endTime || '17:00',
-                      paidBreakDuration: shift.paidBreakDuration || 0,
-                      unpaidBreakDuration: shift.unpaidBreakDuration || 0,
-                      skills: shift.skills || [],
-                      licenses: shift.licenses || [],
-                      siteTags: shift.siteTags || [],
-                      eventTags: shift.eventTags || [],
+                      paidBreakDuration: shift.paidBreakDuration ?? 0,
+                      unpaidBreakDuration: shift.unpaidBreakDuration ?? 0,
+                      skills: [...(shift.skills || [])],
+                      licenses: [...(shift.licenses || [])],
+                      siteTags: [...(shift.siteTags || [])],
+                      eventTags: [...(shift.eventTags || [])],
                       sortOrder: sg.shifts.length,
-                      ...shift,
+                      dayOfWeek: shift.dayOfWeek !== undefined ? shift.dayOfWeek : null,
+                      targetEmploymentType: shift.targetEmploymentType ?? null,
+                      targetRequiresFlexible: shift.targetRequiresFlexible ?? false,
                     } as TemplateShift,
                   ],
                 };
@@ -862,7 +862,7 @@ export function useTemplates(): UseTemplatesReturn {
       // Prepare groups data for RPC
       const groupsData = frontendToDbGroups(localTemplate.groups);
 
-      // Debug log: print shift data to verify role/employee is included
+      // Debug log: print shift data to verify the role is included
       console.log('[SaveTemplate] groupsData shifts:', groupsData.map(g => ({
         group: g.name,
         subGroups: g.subGroups.map((sg: any) => ({
@@ -871,8 +871,6 @@ export function useTemplates(): UseTemplatesReturn {
             name: sh.name,
             roleId: sh.roleId,
             roleName: sh.roleName,
-            assignedEmployeeId: sh.assignedEmployeeId,
-            assignedEmployeeName: sh.assignedEmployeeName,
           }))
         }))
       })));
@@ -989,12 +987,13 @@ export function useTemplates(): UseTemplatesReturn {
         const shiftsDeleted = 0;
 
         // 2. Delete the template itself (will cascade to template_groups and template_subgroups via FK)
-        const { error: err } = await supabase
+        const deleted = await supabase
           .from('roster_templates')
-          .delete()
+          .delete({ count: 'exact' })
           .eq('id', id);
 
-        if (err) throw err;
+        if (deleted.error) throw deleted.error;
+        assertWrote(deleted, 'delete this template');
 
         // Update UI state
         safeSetState(setTemplates, (prev) =>
@@ -1065,13 +1064,13 @@ export function useTemplates(): UseTemplatesReturn {
             organization_id: original.organizationId,
             department_id: original.departmentId,
             sub_department_id: original.subDepartmentId,
-            published_month: null, // Clear month on duplicate
-            start_date: null,      // Clear dates on duplicate
-            end_date: null,        // Clear dates on duplicate
+            published_month: original.publishedMonth || null,
+            start_date: original.startDate || null,
+            end_date: original.endDate || null,
             published_at: null,    // Clear pub info
             published_by: null,    // Clear pub info
-            is_base_template: false,
-            is_active: original.isActive,
+            is_base_template: original.isBaseTemplate ?? false,
+            is_active: original.isActive ?? true,
             status: 'draft',
             created_by: user.id,
             last_edited_by: user.id,
@@ -1118,32 +1117,26 @@ export function useTemplates(): UseTemplatesReturn {
             if (subgroup.shifts.length > 0) {
               const shiftsToInsert = subgroup.shifts.map((s, idx) => ({
                 subgroup_id: newSubgroup.id,
-                name: s.name,
-                role_id: s.roleId || null,
-                role_name: s.roleName,
-                remuneration_level: normalizeRemunerationLevel(s.remunerationLevel),
-                remuneration_level_name: s.remunerationLevelName || null,
-                start_time: s.startTime,
-                end_time: s.endTime,
-                paid_break_minutes: s.paidBreakDuration,
-                unpaid_break_minutes: s.unpaidBreakDuration,
-                required_skills: s.skills,
-                required_licenses: s.licenses,
-                site_tags: s.siteTags,
-                event_tags: s.eventTags,
-                notes: s.notes,
+                name: s.name || null,
+                role_id: s.roleId || (s as any).role_id || null,
+                role_name: s.roleName || (s as any).role_name || null,
+                remuneration_level: normalizeRemunerationLevel(s.remunerationLevel ?? (s as any).remuneration_level),
+                remuneration_level_name: s.remunerationLevelName || (s as any).remuneration_level_name || null,
+                start_time: s.startTime || (s as any).start_time,
+                end_time: s.endTime || (s as any).end_time,
+                paid_break_minutes: s.paidBreakDuration ?? (s as any).paid_break_minutes ?? 0,
+                unpaid_break_minutes: s.unpaidBreakDuration ?? (s as any).unpaid_break_minutes ?? 0,
+                break_start: s.breakStart ?? (s as any).break_start ?? null,
+                break_end: s.breakEnd ?? (s as any).break_end ?? null,
+                required_skills: [...(s.skills || (s as any).required_skills || [])],
+                required_licenses: [...(s.licenses || (s as any).required_licenses || [])],
+                site_tags: [...(s.siteTags || (s as any).site_tags || [])],
+                event_tags: [...(s.eventTags || (s as any).event_tags || [])],
+                notes: s.notes || (s as any).notes || null,
                 sort_order: idx,
-                // `?? null`, not `?? 0` — 0 is Sunday. Duplicating a shift with
-                // no weekday used to pin the copy to Sundays.
-                day_of_week: s.dayOfWeek ?? null,
-                assigned_employee_id: s.assignedEmployeeId || null,
-                assigned_employee_name: s.assignedEmployeeName || null,
-                // NOT NULL with no default and NO trigger on template_shifts —
-                // duplicating a template with shifts failed on a 23502 before
-                // this line existed. The stale generated types hid it by not
-                // marking the column required. Same `?? 'Casual'` mapping
-                // `templateShape.ts` uses on the save path.
-                target_employment_type: s.targetEmploymentType ?? 'Casual',
+                day_of_week: s.dayOfWeek !== undefined ? s.dayOfWeek : ((s as any).day_of_week !== undefined ? (s as any).day_of_week : null),
+                target_employment_type: (s.targetEmploymentType || (s as any).target_employment_type)!,
+                target_requires_flexible: s.targetRequiresFlexible ?? (s as any).target_requires_flexible ?? false,
               }));
 
               await supabase.from('template_shifts').insert(shiftsToInsert);
@@ -1243,12 +1236,13 @@ export function useTemplates(): UseTemplatesReturn {
     async (id: string, status: string): Promise<boolean> => {
       log('network', `📤 Updating template ${id} status to ${status}...`);
       try {
-        const { error: err } = await supabase
+        const updated = await supabase
           .from('roster_templates')
-          .update({ status: status as any })
+          .update({ status: status as any }, { count: 'exact' })
           .eq('id', id);
 
-        if (err) throw err;
+        if (updated.error) throw updated.error;
+        assertWrote(updated, 'change this template');
 
         safeSetState(setTemplates, (prev) =>
           prev.map((t) => (String(t.id) === id ? { ...t, status: status as any } : t))
@@ -1298,12 +1292,13 @@ export function useTemplates(): UseTemplatesReturn {
 
       log('network', `📤 Renaming template ${id} to "${sanitizedName}"...`);
       try {
-        const { error: err } = await supabase
+        const renamed = await supabase
           .from('roster_templates')
-          .update({ name: sanitizedName })
+          .update({ name: sanitizedName }, { count: 'exact' })
           .eq('id', id);
 
-        if (err) throw err;
+        if (renamed.error) throw renamed.error;
+        assertWrote(renamed, 'rename this template');
 
         safeSetState(setTemplates, (prev) =>
           prev.map((t) => (String(t.id) === id ? { ...t, name: sanitizedName } : t))
@@ -1379,6 +1374,4 @@ export function useTemplates(): UseTemplatesReturn {
   };
 }
 
-export default useTemplates;
 
-export { useSnapRosterAsTemplate } from '../hooks/queries/useTemplateQueries';

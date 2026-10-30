@@ -24,7 +24,6 @@ import {
     callAuthenticatedRpc,
     callAuthenticatedVoidRpc,
     callRpc,
-    callVoidRpc,
     requireUser,
 } from '../client';
 import { AppError, AuthenticationError } from '../errors';
@@ -156,16 +155,18 @@ describe('requireUser / authenticated calls', () => {
     });
 });
 
-describe('callVoidRpc', () => {
+describe('callAuthenticatedVoidRpc', () => {
     it('resolves to undefined whatever the RPC returns', async () => {
+        signedIn();
         h.rpc.mockResolvedValue({ data: { anything: 1 }, error: null });
-        await expect(callVoidRpc('sm_do_thing', {})).resolves.toBeUndefined();
+        await expect(callAuthenticatedVoidRpc('sm_do_thing', () => ({}))).resolves.toBeUndefined();
     });
 
     it('still surfaces a mapped error', async () => {
+        signedIn();
         h.rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'not allowed' } });
 
-        const err = await rejection(callVoidRpc('sm_do_thing', {}));
+        const err = await rejection(callAuthenticatedVoidRpc('sm_do_thing', () => ({})));
 
         expect(err.code).toBe('PERMISSION_DENIED');
     });

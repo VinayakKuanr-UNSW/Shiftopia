@@ -2,13 +2,13 @@ import { supabase } from '@/platform/supabase/client';
 
 // Rule types parsed from work_rules.rule_value JSONB
 
-export interface SupervisoryRatioRule {
+interface SupervisoryRatioRule {
   subDepartmentId: string;
   ratio: number;              // 1 supervisor per N staff
   supervisorV8RoleId: string;
 }
 
-export interface MinimumStaffRule {
+interface MinimumStaffRule {
   subDepartmentId: string;
   roleId: string;
   minimumHeadcount: number;

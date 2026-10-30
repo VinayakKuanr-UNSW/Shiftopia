@@ -38,8 +38,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     role_level: null,
     remuneration_level: 3,
     remuneration_rate: 25,
-    actual_hourly_rate: null,
-    currency: 'AUD',
     cost_center_id: null,
     start_time: '09:00',
     end_time: '17:00',
@@ -88,8 +86,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     payroll_exported: false,
     last_modified_by: null,
     last_modified_reason: null,
-    deleted_at: null,
-    deleted_by: null,
     notes: null,
     is_recurring: false,
     recurrence_rule: null,
@@ -187,8 +183,8 @@ describe('projectRoles — totalHours / totalCost aggregation', () => {
   it('level totalHours sums across all roles in that level', () => {
     // Cost is employee-dependent: assigned shifts read their cost from the
     // projection cache (seeded here), unassigned shifts contribute zero.
-    const s1 = makeShift({ assigned_employee_id: 'emp-1', role_id: 'role-1', remuneration_level: 3, net_length_minutes: 480, remuneration_rate: 30 });
-    const s2 = makeShift({ assigned_employee_id: 'emp-2', role_id: 'role-2', remuneration_level: 3, net_length_minutes: 240, remuneration_rate: 30,
+    const s1 = makeShift({ assigned_employee_id: 'emp-1', role_id: 'role-1', remuneration_level: 3, net_length_minutes: 480 });
+    const s2 = makeShift({ assigned_employee_id: 'emp-2', role_id: 'role-2', remuneration_level: 3, net_length_minutes: 240,
       roles: { id: 'role-2', name: 'AV Tech' },
     });
     seedCost(s1, 240); // 8h * 30

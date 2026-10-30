@@ -29,7 +29,7 @@ import type { ShiftCostBreakdown, ShiftPayTermsField } from '../utils/cost/types
 
 // ── Projection Modes ──────────────────────────────────────────────────────────
 
-export type ProjectionMode = 'group' | 'people' | 'events' | 'roles';
+type ProjectionMode = 'group' | 'people' | 'events' | 'roles';
 
 // ── Worker DTOs (Main Thread → Worker) ────────────────────────────────────────
 
@@ -77,8 +77,6 @@ export interface WorkerShiftDTO {
   roleId: string | null;
   roleName: string | null;
   remunerationLevel: number | null;
-  remunerationRate: number | null;
-  actualHourlyRate: number | null;
   /** The linked contract's pay terms (shifts.shift_pay_terms) when visible. */
   payTerms?: ShiftPayTermsField | null;
 

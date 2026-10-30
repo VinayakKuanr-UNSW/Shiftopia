@@ -10,7 +10,6 @@
  * + jest-dom, wired in vitest.config.ts → src/test/setup.ts).
  */
 
-import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { EarningsLinesTable } from '../ui/EarningsLinesTable';

@@ -2,10 +2,11 @@
 // Employee & User Types
 // Extracted from src/api/models/types.ts
 
-export type AccessLevel = 'Alpha' | 'Beta' | 'Gamma' | 'Delta';
-export type ContractStatus = 'Active' | 'Inactive' | 'Terminated';
+type AccessLevel = 'Alpha' | 'Beta' | 'Gamma' | 'Delta';
+/** Set by the database from the contract's dates (contract dates drive the contract). */
+type ContractStatus = 'Upcoming' | 'Active' | 'Expired';
 
-export interface UserContract {
+interface UserContract {
     id: string;
     userId: string;
     organizationId: string;

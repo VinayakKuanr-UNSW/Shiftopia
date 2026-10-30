@@ -4,8 +4,7 @@
  * All state has moved to `useRosterStore` (Zustand).
  * This file now:
  *  1. Re-exports the types callers import from here
- *  2. Provides a `RosterUIProvider` that owns the one auth-sync effect
- *  3. Exposes `useRosterUI()` / `useRosterUIOptional()` as compatibility hooks
+ *  2. Exposes `useRosterUI()` / `useRosterUIOptional()` as compatibility hooks
  *     that read directly from the Zustand store — no Context overhead, no
  *     Provider re-render cascade
  *
@@ -22,12 +21,11 @@
  * 'month', update the Zustand store default back to 'day' or '3day' to keep the
  * initial fetch set small and avoid the SHIFT_RENDER_BUDGET advisory banner.
  *
- * selectedDate (_selectedDateISO) is NOT persisted — it always resets to today
- * on each page load (see useRosterStore partialize config).
+ * selectedDate (_selectedDateISO) IS persisted with the rest of the view state
+ * (useRosterStore partialize): a reload returns to the date last viewed.
  */
 
-import React, { useCallback, useMemo, useEffect } from 'react';
-import { useAuth } from '@/platform/auth/useAuth';
+import { useCallback, useMemo } from 'react';
 import {
   useRosterStore,
   selectDepartmentId,
@@ -40,13 +38,11 @@ import {
   type RosterMode,
   type AdvancedFilters,
   type DateRange,
-  type ComplianceFilterStatus,
 } from '../state/useRosterStore';
-import { eachDayOfInterval } from 'date-fns';
 
 // ── Re-export types (callers import from this path) ──────────────────────────
 
-export type { CalendarView, RosterMode, ComplianceFilterStatus, AdvancedFilters, DateRange };
+export type { CalendarView, RosterMode, AdvancedFilters };
 
 // ── Context value interface (unchanged public API) ────────────────────────────
 
@@ -71,6 +67,8 @@ interface RosterUIContextValue {
   setAdvancedFilters:          (filters: Partial<AdvancedFilters>) => void;
   resetAdvancedFilters:        () => void;
   hasActiveFilters:            boolean;
+  isFilterBarOpen:             boolean;
+  setIsFilterBarOpen:          (open: boolean) => void;
   bulkModeActive:              boolean;
   setBulkModeActive:           (active: boolean) => void;
   selectedV8ShiftIds:            Set<string>;
@@ -85,49 +83,6 @@ interface RosterUIContextValue {
   getDaysInRange:              () => Date[];
   viewOptions:                 typeof VIEW_OPTIONS;
 }
-
-// ── Provider — owns ONLY the auth-sync effect ─────────────────────────────────
-
-interface RosterUIProviderProps { children: React.ReactNode }
-
-export const RosterUIProvider: React.FC<RosterUIProviderProps> = ({ children }) => {
-  const { activeContract, accessScope } = useAuth();
-
-  const selectedOrganizationId      = useRosterStore(s => s.selectedOrganizationId);
-  const selectedDepartmentIds       = useRosterStore(s => s.selectedDepartmentIds);
-  const selectedSubDepartmentIds    = useRosterStore(s => s.selectedSubDepartmentIds);
-  const setSelectedOrganizationId   = useRosterStore(s => s.setSelectedOrganizationId);
-  const setSelectedDepartmentIds    = useRosterStore(s => s.setSelectedDepartmentIds);
-  const setSelectedSubDepartmentIds = useRosterStore(s => s.setSelectedSubDepartmentIds);
-
-  useEffect(() => {
-    if (!activeContract) return;
-
-    // Sync org from active contract
-    if (activeContract.organizationId && selectedOrganizationId !== activeContract.organizationId) {
-      setSelectedOrganizationId(activeContract.organizationId);
-    }
-
-    // Dept-restricted roles (gamma/beta/alpha = Manager and below)
-    const effectiveAccess = accessScope?.accessLevel ?? activeContract.accessLevel;
-    const isDeptRestricted = ['gamma', 'beta', 'alpha'].includes(effectiveAccess);
-
-    if (isDeptRestricted && activeContract.departmentId &&
-        !selectedDepartmentIds.includes(activeContract.departmentId)) {
-      setSelectedDepartmentIds([activeContract.departmentId]);
-    }
-
-    // Sub-dept-restricted roles (beta/alpha = Team Lead + Member)
-    const isSubDeptRestricted = ['beta', 'alpha'].includes(effectiveAccess);
-    if (isSubDeptRestricted && activeContract.subDepartmentId &&
-        !selectedSubDepartmentIds.includes(activeContract.subDepartmentId)) {
-      setSelectedSubDepartmentIds([activeContract.subDepartmentId]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeContract?.organizationId, activeContract?.departmentId, activeContract?.subDepartmentId, accessScope?.accessLevel]);
-
-  return <>{children}</>;
-};
 
 // ── useRosterUI — reads Zustand, exposes the legacy Context API ───────────────
 
@@ -144,6 +99,7 @@ export const useRosterUI = (): RosterUIContextValue => {
   const selectedDepartmentIds  = useRosterStore(s => s.selectedDepartmentIds);
   const selectedSubDepartmentIds = useRosterStore(s => s.selectedSubDepartmentIds);
   const advancedFilters        = useRosterStore(s => s.advancedFilters);
+  const isFilterBarOpen        = useRosterStore(s => s.isFilterBarOpen);
   const bulkModeActive         = useRosterStore(s => s.bulkModeActive);
   const selectedV8ShiftIds       = useRosterStore(s => s.selectedV8ShiftIds);
 
@@ -168,6 +124,7 @@ export const useRosterUI = (): RosterUIContextValue => {
   const setSelectedSubDepartmentId  = useRosterStore(s => s.setSelectedSubDepartmentId);
   const setAdvancedFilters          = useRosterStore(s => s.setAdvancedFilters);
   const resetAdvancedFilters        = useRosterStore(s => s.resetAdvancedFilters);
+  const setIsFilterBarOpen          = useRosterStore(s => s.setIsFilterBarOpen);
   const setBulkModeActive           = useRosterStore(s => s.setBulkModeActive);
   const setSelectedV8ShiftIds         = useRosterStore(s => s.setSelectedV8ShiftIds);
   const toggleShiftSelection        = useRosterStore(s => s.toggleShiftSelection);
@@ -211,6 +168,8 @@ export const useRosterUI = (): RosterUIContextValue => {
     setAdvancedFilters,
     resetAdvancedFilters,
     hasActiveFilters,
+    isFilterBarOpen,
+    setIsFilterBarOpen,
     bulkModeActive,
     setBulkModeActive,
     selectedV8ShiftIds,
@@ -235,6 +194,7 @@ export const useRosterUI = (): RosterUIContextValue => {
     selectedSubDepartmentId, setSelectedSubDepartmentId,
     advancedFilters, setAdvancedFilters, resetAdvancedFilters,
     hasActiveFilters,
+    isFilterBarOpen, setIsFilterBarOpen,
     bulkModeActive, setBulkModeActive,
     selectedV8ShiftIds, setSelectedV8ShiftIds,
     toggleShiftSelection, selectMultiple, clearSelection,
@@ -243,14 +203,3 @@ export const useRosterUI = (): RosterUIContextValue => {
   ]);
 };
 
-/**
- * Optional variant — returns null if called before store hydrates.
- * Kept for backward compat only; prefer useRosterUI() in new code.
- */
-export const useRosterUIOptional = (): RosterUIContextValue | null => {
-  try {
-    return useRosterUI();
-  } catch {
-    return null;
-  }
-};

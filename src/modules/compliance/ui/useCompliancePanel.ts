@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { runV8Orchestrator, V8Hit } from '@/modules/compliance/v8';
+import { runV8Orchestrator } from '@/modules/compliance/v8';
 import type { V8OrchestratorResult } from '@/modules/compliance/v8/orchestrator/types';
 import { classifyBuckets, getV8BucketSummary } from './bucket-map';
 import type { BucketMap, BucketSummary } from './bucket-map';
@@ -22,7 +22,7 @@ export interface PanelResult {
     };
 }
 
-export interface UseCompliancePanelOptions {
+interface UseCompliancePanelOptions {
     /**
      * Async function that returns the V8 compliance input(s).
      */

@@ -20,6 +20,7 @@
  *     and night allowances (§4.1(b)); only overtime is paid on top (§4.2).
  */
 
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import React from 'react';
 import {
   DollarSign, Sun, Moon, CalendarDays, Clock, Award, Info, Lock,
@@ -68,7 +69,7 @@ const RateLine: React.FC<RateLineProps> = ({ icon: Icon, label, value, clause, d
       </div>
       <div>
         <div className="flex items-center gap-2">
-          <span className="text-base text-foreground font-semibold">{label}</span>
+          <span className="text-[14px] text-foreground font-semibold">{label}</span>
           {clause && description && (
             <TooltipProvider>
               <Tooltip>
@@ -80,19 +81,19 @@ const RateLine: React.FC<RateLineProps> = ({ icon: Icon, label, value, clause, d
                     <Info className="h-4 w-4" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs text-sm p-3">
+                <TooltipContent side="right" className="max-w-xs text-[13px] p-3">
                   <p className="font-bold mb-1">{clause}</p>
-                  <p className="text-muted-foreground text-xs leading-relaxed">{description}</p>
+                  <p className="text-muted-foreground text-[11px] leading-relaxed">{description}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
         </div>
-        {clause && <p className="text-xs text-muted-foreground font-medium mt-0.5">{clause}</p>}
+        {clause && <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{clause}</p>}
       </div>
     </div>
     <span className={cn(
-      'text-base font-extrabold tabular-nums',
+      'text-[14px] font-extrabold tabular-nums',
       value ? 'text-foreground' : 'text-muted-foreground',
     )}>
       {value ?? '—'}
@@ -102,10 +103,10 @@ const RateLine: React.FC<RateLineProps> = ({ icon: Icon, label, value, clause, d
 
 // ── penalty table cell: dollar (bold) + multiplier (muted) ────────────────────
 const RateCell: React.FC<{ ordinary: number; mult: number }> = ({ ordinary, mult }) => (
-  <td className="text-right py-3 px-4">
-    <span className="block text-sm font-extrabold tabular-nums text-foreground">{money(ordinary * mult)}</span>
+  <TableCell className="text-right">
+    <span className="block text-[13px] font-extrabold tabular-nums text-foreground">{money(ordinary * mult)}</span>
     <span className="block text-[11px] text-muted-foreground tabular-nums font-medium">{pct(mult)}</span>
-  </td>
+  </TableCell>
 );
 
 // cl 41 weekend / public-holiday penalties — FT/PT loading and the casual
@@ -153,13 +154,13 @@ const RateDetailDrawer: React.FC<RateDetailDrawerProps> = ({ detail, open, onClo
         aria-describedby="rate-drawer-description"
       >
         <SheetHeader className="pb-4 border-b border-border/40">
-          <SheetTitle className="flex items-center gap-3 text-xl font-bold">
+          <SheetTitle className="flex items-center gap-3">
             <div className="rounded-lg bg-primary/10 p-2">
               <DollarSign className="h-6 w-6 text-primary" aria-hidden="true" />
             </div>
             {detail.classLabel}
           </SheetTitle>
-          <SheetDescription id="rate-drawer-description" className="text-sm">
+          <SheetDescription id="rate-drawer-description">
             Detailed rate breakdown and penalty rates. Effective {effectiveLabel}.
           </SheetDescription>
         </SheetHeader>
@@ -205,7 +206,7 @@ const RateDetailDrawer: React.FC<RateDetailDrawerProps> = ({ detail, open, onClo
           )}
 
           <div className="pt-6 pb-3">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               Penalty &amp; overtime rates (× ordinary)
             </p>
           </div>
@@ -215,80 +216,80 @@ const RateDetailDrawer: React.FC<RateDetailDrawerProps> = ({ detail, open, onClo
             <div className="space-y-4">
               <div className="rounded-xl border border-border/40 bg-muted/30 p-4 flex items-start gap-3" role="note">
                 <Award className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true" />
-                <p className="text-xs text-muted-foreground leading-relaxed font-medium">
+                <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
                   The annualised salary is paid for all rostered hours <span className="font-semibold text-foreground">in lieu of</span> weekend,
                   public-holiday and night-shift penalties (Sch&nbsp;3 §4.1(b)). Only overtime is paid on top.
                 </p>
               </div>
               <div className="rounded-lg border border-border/40 overflow-hidden bg-muted/10">
-                <table className="w-full text-sm" aria-label="Security overtime rates">
-                  <thead>
-                    <tr className="text-muted-foreground border-b border-border bg-muted/30">
-                      <th scope="col" className="text-left font-bold py-3 px-4 text-xs uppercase tracking-wider">Overtime</th>
-                      <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">Rate</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table aria-label="Security overtime rates">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">Overtime</TableHead>
+                      <TableHead scope="col" className="text-right">Rate</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {OT_ROWS.map((r) => (
-                      <tr key={r.label} className="border-b border-border/30 last:border-0">
-                        <td className="py-3 px-4">
+                      <TableRow key={r.label} className="last:border-0">
+                        <TableCell>
                           <span className="flex items-center gap-2 font-semibold text-foreground">
                             <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                             {r.label}
                           </span>
-                          <span className="text-xs text-muted-foreground font-medium">Sch 3 §4.2</span>
-                        </td>
+                          <span className="text-[11px] text-muted-foreground font-medium">Sch 3 §4.2</span>
+                        </TableCell>
                         <RateCell ordinary={baseOrdinary} mult={r.mult} />
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </div>
           ) : (
             // ── Standard: weekend/PH + OT split by FT/PT vs casual (cl 41 / 42) ──
             <div className="space-y-4">
               <div className="rounded-lg border border-border/40 overflow-hidden bg-muted/10">
-                <table className="w-full text-sm" aria-label="Penalty and overtime rates by employment basis">
-                  <thead>
-                    <tr className="text-muted-foreground border-b border-border bg-muted/30">
-                      <th scope="col" className="text-left font-bold py-3 px-4 text-xs uppercase tracking-wider">Penalty</th>
-                      <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">FT/PT</th>
-                      <th scope="col" className="text-right font-bold py-3 px-4 text-xs uppercase tracking-wider">Casual</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table aria-label="Penalty and overtime rates by employment basis">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">Penalty</TableHead>
+                      <TableHead scope="col" className="text-right">FT/PT</TableHead>
+                      <TableHead scope="col" className="text-right">Casual</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {WEEKEND_ROWS.map(({ icon: Icon, label, clause, ftpt, casual }) => (
-                      <tr key={label} className="border-b border-border/30">
-                        <td className="py-3 px-4">
+                      <TableRow key={label}>
+                        <TableCell>
                           <span className="flex items-center gap-2 font-semibold text-foreground">
                             <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                             {label}
                           </span>
-                          <span className="text-xs text-muted-foreground font-medium">{clause}</span>
-                        </td>
+                          <span className="text-[11px] text-muted-foreground font-medium">{clause}</span>
+                        </TableCell>
                         <RateCell ordinary={baseOrdinary} mult={ftpt} />
                         <RateCell ordinary={baseOrdinary} mult={casual} />
-                      </tr>
+                      </TableRow>
                     ))}
                     {OT_ROWS.map((r) => (
-                      <tr key={r.label} className="border-b border-border/30 last:border-0">
-                        <td className="py-3 px-4">
+                      <TableRow key={r.label} className="last:border-0">
+                        <TableCell>
                           <span className="flex items-center gap-2 font-semibold text-foreground">
                             <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                             {r.label}
                           </span>
-                          <span className="text-xs text-muted-foreground font-medium">{r.clause}</span>
-                        </td>
+                          <span className="text-[11px] text-muted-foreground font-medium">{r.clause}</span>
+                        </TableCell>
                         <RateCell ordinary={baseOrdinary} mult={r.mult} />
                         <RateCell ordinary={baseOrdinary} mult={r.mult} />
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
-              <p className="text-xs text-muted-foreground leading-relaxed font-medium px-1">
+              <p className="text-[11px] text-muted-foreground leading-relaxed font-medium px-1">
                 Overtime is priced on the ordinary base rate — the 25% casual loading is not
                 compounded on overtime (cl 42.2), so casual and FT/PT overtime match.
               </p>
@@ -296,8 +297,8 @@ const RateDetailDrawer: React.FC<RateDetailDrawerProps> = ({ detail, open, onClo
               <div className="rounded-xl border border-border/40 bg-muted/30 p-4 flex items-start gap-3" role="note">
                 <Moon className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true" />
                 <div className="space-y-1">
-                  <p className="text-xs font-bold text-foreground">Night allowance (cl 43)</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed font-medium">
+                  <p className="text-[11px] font-bold text-foreground">Night allowance (cl 43)</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed font-medium">
                     A loading on night hours, keyed to the day the shift concludes —
                     FT/PT <span className="tabular-nums font-semibold text-foreground">+20% Mon–Thu · +25% Fri · +50% Sat–Sun</span>;
                     casual <span className="tabular-nums font-semibold text-foreground">+45% · +50% · +75%</span>.
@@ -317,8 +318,8 @@ const RateDetailDrawer: React.FC<RateDetailDrawerProps> = ({ detail, open, onClo
         >
           <Lock className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-sm font-bold text-foreground">Read-only view</p>
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed font-medium">
+            <p className="text-[13px] font-bold text-foreground">Read-only view</p>
+            <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed font-medium">
               Direct rate editing is coming in Phase 3. Use the CPI preview to generate
               rate updates for the database and cost engine.
             </p>

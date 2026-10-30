@@ -45,9 +45,9 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
         const d = entry.fdvDays;
         return (
             <>
-                <p className={cn('text-3xl font-bold tracking-tight tabular-nums', d.left < 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>
+                <p className={cn('text-[24px] font-bold tracking-tight tabular-nums', d.left < 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>
                     {d.left}
-                    <span className="ml-1 text-xs font-medium text-muted-foreground">day{d.left === 1 ? '' : 's'} left of 10</span>
+                    <span className="ml-1 text-[13px] font-medium text-muted-foreground">day{d.left === 1 ? '' : 's'} left of 10</span>
                 </p>
                 <p className={cn(text.caption, 'tabular-nums')}>
                     {d.taken} taken{d.pending > 0 ? ` · ${d.pending} pending` : ''} since {d.yearStart}
@@ -61,16 +61,16 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
         if (!l.serviceRecorded) {
             return (
                 <>
-                    <p className="text-3xl font-bold tracking-tight tabular-nums text-muted-foreground">—</p>
+                    <p className="text-[24px] font-bold tracking-tight tabular-nums text-muted-foreground">—</p>
                     <p className={text.caption}>Continuous service start not recorded — ask HR</p>
                 </>
             );
         }
         return (
             <>
-                <p className="text-3xl font-bold tracking-tight tabular-nums text-foreground">
+                <p className="text-[24px] font-bold tracking-tight tabular-nums text-foreground">
                     {l.eligible ? fmtH(l.availableHours) : fmtH(l.accruedHours)}
-                    <span className="ml-1 text-xs font-medium text-muted-foreground">
+                    <span className="ml-1 text-[13px] font-medium text-muted-foreground">
                         {l.eligible ? 'available' : 'accrued'}
                     </span>
                 </p>
@@ -88,7 +88,7 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
         if (!line) {
             return (
                 <>
-                    <p className="text-3xl font-bold tracking-tight tabular-nums text-muted-foreground">—</p>
+                    <p className="text-[24px] font-bold tracking-tight tabular-nums text-muted-foreground">—</p>
                     <p className={text.caption}>No balance recorded yet</p>
                 </>
             );
@@ -96,7 +96,7 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
         const negative = line.balance < 0;
         return (
             <>
-                <p className={cn('text-3xl font-bold tracking-tight tabular-nums',
+                <p className={cn('text-[24px] font-bold tracking-tight tabular-nums',
                     negative ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>
                     {fmtH(line.balance)}
                 </p>
@@ -114,10 +114,10 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
         const over = (entry.remainingHours ?? 0) < 0;
         return (
             <>
-                <p className={cn('text-3xl font-bold tracking-tight tabular-nums',
+                <p className={cn('text-[24px] font-bold tracking-tight tabular-nums',
                     over ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>
                     {fmtH(entry.remainingHours ?? 0)}
-                    <span className="ml-1 text-xs font-medium text-muted-foreground">left of {fmtH(entry.capHours ?? 0)}</span>
+                    <span className="ml-1 text-[13px] font-medium text-muted-foreground">left of {fmtH(entry.capHours ?? 0)}</span>
                 </p>
                 <p className={cn(text.caption, 'tabular-nums')}>
                     {fmtH(entry.usedHours)} taken{entry.pendingHours > 0 ? ` · ${fmtH(entry.pendingHours)} pending` : ''}
@@ -129,9 +129,9 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
     if (def.kind === 'occasion') {
         return (
             <>
-                <p className="text-3xl font-bold tracking-tight tabular-nums text-foreground">
+                <p className="text-[24px] font-bold tracking-tight tabular-nums text-foreground">
                     {entry.occasions}
-                    <span className="ml-1 text-xs font-medium text-muted-foreground">
+                    <span className="ml-1 text-[13px] font-medium text-muted-foreground">
                         occasion{entry.occasions === 1 ? '' : 's'} this year
                     </span>
                 </p>
@@ -144,9 +144,9 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
 
     return (
         <>
-            <p className="text-3xl font-bold tracking-tight tabular-nums text-foreground">
+            <p className="text-[24px] font-bold tracking-tight tabular-nums text-foreground">
                 {fmtH(entry.usedHours)}
-                <span className="ml-1 text-xs font-medium text-muted-foreground">this year</span>
+                <span className="ml-1 text-[13px] font-medium text-muted-foreground">this year</span>
             </p>
             {entry.pendingHours > 0 && (
                 <p className={cn(text.caption, 'tabular-nums')}>{fmtH(entry.pendingHours)} pending</p>
@@ -178,7 +178,7 @@ const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCod
                     tabIndex={0}
                     aria-label={entry.def.label}
                     className={cn(
-                        'flex min-h-[12.5rem] flex-col rounded-3xl border p-5 outline-none',
+                        'flex min-h-[12.5rem] flex-col rounded-2xl border p-4 shadow-sm outline-none',
                         'transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none',
                         LEDGER_TONE[entry.def.kind],
                         negative && 'border-red-400/60 dark:border-red-400/40',
@@ -188,7 +188,7 @@ const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCod
                         <p className={text.caption}>{periodLabel(entry.def)}</p>
                         <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">{entry.def.clause}</span>
                     </div>
-                    <p className="mt-1 text-lg font-bold leading-snug tracking-tight text-foreground">{entry.def.label}</p>
+                    <p className="mt-1 text-[15px] font-bold leading-snug tracking-tight text-foreground">{entry.def.label}</p>
 
                     <div className="mt-auto space-y-0.5 pt-4">
                         <LedgerFigure entry={entry} />
@@ -201,7 +201,7 @@ const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCod
                                 onClick={() => onRequest(entry.def.type)}
                                 aria-label={`Request ${entry.def.label}`}
                                 className={cn(
-                                    'flex-1 rounded-full bg-white px-4 text-sm font-semibold text-foreground shadow-sm',
+                                    'flex-1 rounded-full bg-white px-4 text-[13px] font-semibold text-foreground shadow-sm',
                                     'transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                                     'dark:bg-white/10 dark:hover:bg-white/15',
                                     touch.targetY,
@@ -212,7 +212,7 @@ const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCod
                         )}
                         <button
                             type="button"
-                            className={cn('sm:hidden px-2 text-xs font-semibold text-primary', !onRequest && '-ml-2', touch.targetY)}
+                            className={cn('sm:hidden px-2 text-[13px] font-semibold text-primary', !onRequest && '-ml-2', touch.targetY)}
                             aria-expanded={explained}
                             aria-controls={basisId}
                             onClick={() => setExplained(v => !v)}
@@ -225,7 +225,7 @@ const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCod
                     )}
                 </article>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="hidden sm:block max-w-xs text-xs">{entry.def.basis}</TooltipContent>
+            <TooltipContent side="bottom" className="hidden sm:block max-w-xs text-[13px]">{entry.def.basis}</TooltipContent>
         </Tooltip>
     );
 };

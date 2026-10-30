@@ -40,7 +40,7 @@ export interface ShiftFSMInput {
 
 // ─── State metadata ───────────────────────────────────────────────────────────
 
-export interface ShiftFSMStateInfo {
+interface ShiftFSMStateInfo {
     /**
      * Canonical state ID. This is a stable TS↔PL/pgSQL contract — DB transition
      * guards (`sm_*`, `publish_shift`) branch on these exact strings returned by
@@ -76,7 +76,7 @@ export const FSM_STATE_META: Record<ShiftStateID, ShiftFSMStateInfo> = {
 };
 
 /** Hex colours for the Tailwind tokens above — for inline-styled badges/rows. */
-export const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
+const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
     slate:   '#64748B',
     blue:    '#3B82F6',
     violet:  '#8B5CF6',
@@ -85,6 +85,31 @@ export const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
     orange:  '#F97316',
     red:     '#EF4444',
     gray:    '#94A3B8',
+};
+
+/**
+ * Semantic state color palette tokens for circular shift state badges (canonical S1...S15).
+ * Features dark tinted backgrounds with high-contrast text derived from the corresponding state palette.
+ */
+interface ShiftStateBadgeToken {
+    bg: string;
+    text: string;
+    border?: string;
+    label: string;
+}
+
+export const SHIFT_STATE_BADGE_TOKENS: Record<ShiftStateID, ShiftStateBadgeToken> = {
+    S1:      { bg: '#303542', text: '#E2E8F0', border: 'rgba(226, 232, 240, 0.15)', label: 'Draft' },
+    S2:      { bg: '#34445F', text: '#CBD5E1', border: 'rgba(203, 213, 225, 0.15)', label: 'Draft (Assigned)' },
+    S3:      { bg: '#075985', text: '#BAE6FD', border: 'rgba(186, 230, 253, 0.25)', label: 'Offered' },
+    S4:      { bg: '#166534', text: '#BBF7D0', border: 'rgba(187, 247, 208, 0.25)', label: 'Confirmed' },
+    S5:      { bg: '#854D0E', text: '#FDE68A', border: 'rgba(253, 230, 138, 0.25)', label: 'Bidding' },
+    S9:      { bg: '#9A3412', text: '#FED7AA', border: 'rgba(254, 215, 170, 0.25)', label: 'Trade (Peer)' },
+    S10:     { bg: '#6B21A8', text: '#E9D5FF', border: 'rgba(233, 213, 255, 0.25)', label: 'Trade (Mgr)' },
+    S11:     { bg: '#1D4ED8', text: '#BFDBFE', border: 'rgba(191, 219, 254, 0.25)', label: 'In Progress' },
+    S13:     { bg: '#115E59', text: '#99F6E4', border: 'rgba(153, 246, 228, 0.25)', label: 'Completed' },
+    S15:     { bg: '#991B1B', text: '#FECACA', border: 'rgba(254, 202, 202, 0.25)', label: 'Cancelled' },
+    UNKNOWN: { bg: '#334155', text: '#E2E8F0', border: 'rgba(226, 232, 240, 0.15)', label: 'Unknown' },
 };
 
 /** Display descriptor for a shift's State badge/row. */
@@ -123,8 +148,9 @@ export function getShiftStateDisplay(state: ShiftStateID): ShiftStateDisplay {
  * data; the `validate_shift_state_invariants` trigger enforces this server-side).
  */
 export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
-    // 1. Cancelled — highest priority, short-circuits everything
-    if (shift.is_cancelled) return 'S15';
+    // 1. Cancelled — highest priority, short-circuits everything. Either signal
+    //    counts, as in get_shift_fsm_state().
+    if (shift.is_cancelled || shift.lifecycle_status === 'Cancelled') return 'S15';
 
     // 2. Completed
     if (shift.lifecycle_status === 'Completed') return 'S13';
@@ -170,10 +196,6 @@ export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
 
 // ─── Convenience helpers ──────────────────────────────────────────────────────
 
-/** Returns state metadata alongside the derived state ID. */
-export function getShiftFSMStateInfo(shift: ShiftFSMInput): ShiftFSMStateInfo {
-    return FSM_STATE_META[getShiftFSMState(shift)];
-}
 
 /** True if the shift is in any terminal state (no further transitions possible). */
 export function isShiftTerminal(shift: ShiftFSMInput): boolean {

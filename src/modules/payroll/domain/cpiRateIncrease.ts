@@ -29,7 +29,7 @@ export const round2 = (x: number): number => Math.round(x * 100) / 100;
 /** cl 25.1 multiplier: CPI% + 0.5%. */
 export const cpiFactor = (cpiPercent: number): number => 1 + (cpiPercent + 0.5) / 100;
 
-export interface CpiProjectionInput {
+interface CpiProjectionInput {
   base: EbaRateSet;
   /** ABS All-Groups CPI (Sydney), March-quarter YoY % (cl 25.2). */
   cpiPercent: number;
@@ -37,7 +37,7 @@ export interface CpiProjectionInput {
   effectiveFrom: string;
 }
 
-export interface CpiProjection {
+interface CpiProjection {
   effectiveFrom: string;
   cpiPercent: number;
   factor: number;

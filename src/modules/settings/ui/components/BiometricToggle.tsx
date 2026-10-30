@@ -51,32 +51,32 @@ export function BiometricToggle() {
         type="button"
         onClick={() => chooseMode(everyOpen)}
         className={
-          'flex-1 text-left p-4 rounded-xl border transition-colors ' +
-          (active ? 'bg-primary/20 border-primary/50' : 'bg-white/5 border-white/10 hover:bg-white/10')
+          'flex-1 text-left p-4 rounded-xl border transition-all ' +
+          (active ? 'bg-primary/10 border-primary ring-1 ring-primary/20' : 'bg-card border-border/80 hover:bg-muted/40')
         }
       >
-        <div className={'text-sm font-medium ' + (active ? 'text-white' : 'text-white/80')}>{title}</div>
-        <div className="text-xs text-blue-200/60 mt-1">{sub}</div>
+        <div className={'text-[13px] font-semibold ' + (active ? 'text-primary' : 'text-foreground')}>{title}</div>
+        <div className="text-[11px] text-muted-foreground mt-1">{sub}</div>
       </button>
     );
   };
 
   return (
-    <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
+    <div className="p-6 rounded-2xl bg-card border border-border/80 shadow-xs">
       <div>
-        <h4 className="text-white font-medium">Biometric verification</h4>
-        <p className="text-sm text-blue-200/60 mt-1">
+        <h4 className="text-foreground font-semibold">Biometric verification</h4>
+        <p className="text-[13px] text-muted-foreground mt-1">
           Sensitive data (e.g. timesheets) always requires your fingerprint or
           face. Choose whether opening the app also requires it.
         </p>
       </div>
 
       {!isNative ? (
-        <p className="text-sm text-white/40 mt-4">Available in the mobile app.</p>
+        <p className="text-[13px] text-muted-foreground mt-4">Available in the mobile app.</p>
       ) : checking ? (
-        <p className="text-sm text-white/40 mt-4">Checking device…</p>
+        <p className="text-[13px] text-muted-foreground mt-4">Checking device…</p>
       ) : !available ? (
-        <p className="text-sm text-white/40 mt-4">
+        <p className="text-[13px] text-muted-foreground mt-4">
           No biometrics enrolled on this device — set up a fingerprint or face in
           your device settings to use this.
         </p>
@@ -90,4 +90,3 @@ export function BiometricToggle() {
   );
 }
 
-export default BiometricToggle;

@@ -60,6 +60,10 @@ export interface ShiftOpResult {
     // WRITE_REJECTED — machine-readable reason (e.g. 'PUBLISH_TOO_LATE',
     // 'NOT_IMPLEMENTED', 'MISSING_WINNER_ID').
     note?: string;
+    // WRITE_REJECTED with note 'EBA_COMPLIANCE_BREACH' — the rule broken and,
+    // in words, why.
+    rule_id?: string;
+    details?: string;
     // VERSION_CONFLICT
     current_version?: number;
     current_state?: string;
@@ -110,7 +114,7 @@ export function mapShiftOpResultToUx(r: ShiftOpResult): ShiftOpUx {
         case 'WRITE_REJECTED':
             return {
                 kind: 'rejected',
-                toast: writeRejectedToast(r.note),
+                toast: writeRejectedToast(r.note, r.details),
                 // No version advanced, but the local row may be stale relative to
                 // the (unchanged) server row — a refresh keeps the UI honest.
                 refresh: true,
@@ -155,8 +159,10 @@ export function mapShiftOpResultToUx(r: ShiftOpResult): ShiftOpUx {
 }
 
 /** Human-readable copy for the machine-readable `WRITE_REJECTED` notes. */
-function writeRejectedToast(note?: string): string {
+function writeRejectedToast(note?: string, details?: string): string {
     switch (note) {
+        case 'EBA_COMPLIANCE_BREACH':
+            return details ?? 'This change would break an EBA rule.';
         case 'PUBLISH_TOO_LATE':
             return 'Too late to publish — the shift is within its 4-hour lock.';
         case 'MISSING_WINNER_ID':

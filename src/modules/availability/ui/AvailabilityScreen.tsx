@@ -19,21 +19,17 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { addMonths, subMonths, format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { itemVariants, tabTransition } from '@/modules/core/ui/motion/presets';
 import {
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
   Calendar,
   ClipboardList,
   Settings,
 } from 'lucide-react';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { CalendarDays } from 'lucide-react';
 
 import { useAssignedShiftsForAvailability } from '../state/useAssignedShiftsForAvailability';
 import { AvailabilityRule, AvailabilityFormPayload } from '../model/availability.types';
@@ -49,7 +45,7 @@ import { ConfigurePane } from './panes/ConfigurePane';
 import { UseAvailabilityResult } from '../state/useAvailability';
 import { UseAvailabilityEditingResult } from '../state/useAvailabilityEditing';
 
-export interface AvailabilityScreenProps {
+interface AvailabilityScreenProps {
   /**
    * Layout mode for responsive design
    * - 'desktop': Three panes side-by-side
@@ -57,9 +53,9 @@ export interface AvailabilityScreenProps {
    * - 'mobile': Single pane with tab navigation
    */
   layout: 'desktop' | 'tablet' | 'mobile';
-  currentMonth?: Date;
-  availabilityData?: UseAvailabilityResult;
-  editingData?: UseAvailabilityEditingResult;
+  currentMonth: Date;
+  availabilityData: UseAvailabilityResult;
+  editingData: UseAvailabilityEditingResult;
 }
 
 type TabType = 'calendar' | 'logs' | 'configure';
@@ -83,8 +79,6 @@ export function AvailabilityScreen({
   const { isDark } = useTheme();
 
   const { toast } = useToast();
-
-  if (!currentMonth || !availabilityData || !editingData) return null;
 
   // ========================================
   // DATA DESTRUCTURING
@@ -288,7 +282,7 @@ export function AvailabilityScreen({
               <button
                 onClick={() => setBottomTab('logs')}
                 className={cn(
-                  'flex-1 py-3 px-4 text-sm font-bold transition-colors',
+                  'flex-1 py-3 px-4 text-[13px] font-bold transition-colors',
                   bottomTab === 'logs'
                     ? 'border-b-2 border-primary text-primary bg-background'
                     : 'text-muted-foreground hover:text-foreground'
@@ -299,7 +293,7 @@ export function AvailabilityScreen({
               <button
                 onClick={() => setBottomTab('configure')}
                 className={cn(
-                  'flex-1 py-3 px-4 text-sm font-bold transition-colors',
+                  'flex-1 py-3 px-4 text-[13px] font-bold transition-colors',
                   bottomTab === 'configure'
                     ? 'border-b-2 border-primary text-primary bg-background'
                     : 'text-muted-foreground hover:text-foreground',
@@ -368,7 +362,7 @@ export function AvailabilityScreen({
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-[0.98]',
+                'flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all active:scale-[0.98]',
                 isActive
                   ? 'bg-[#7b61ff] text-white shadow-sm'
                   : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
@@ -379,7 +373,7 @@ export function AvailabilityScreen({
               <span className="sm:hidden">{tab.mobileLabel}</span>
               {tab.count !== undefined && (
                 <span className={cn(
-                  "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black tabular-nums",
+                  "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[11px] font-black tabular-nums",
                   isActive
                     ? "bg-white/20 text-white"
                     : (isDark ? "bg-white/5 text-white/40" : "bg-slate-900/5 text-slate-900/40")
@@ -394,10 +388,8 @@ export function AvailabilityScreen({
 
       <div
         className={cn(
-          "flex-1 min-h-0 flex flex-col overflow-hidden rounded-[32px] border transition-all relative",
-          isDark
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+          "flex-1 min-h-0 flex flex-col overflow-hidden relative",
+          surface.bodyCard
         )}
       >
         {/* Tab Content */}
@@ -442,4 +434,3 @@ export function AvailabilityScreen({
   );
 }
 
-export default AvailabilityScreen;

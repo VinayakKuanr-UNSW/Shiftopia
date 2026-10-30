@@ -5,7 +5,7 @@
  * Improved from capstone to use Contracted Hours as the baseline.
  */
 
-export interface EmployeeFairness {
+interface EmployeeFairness {
   employeeId: string;
   contractedHours: number;
   scheduledHours: number;

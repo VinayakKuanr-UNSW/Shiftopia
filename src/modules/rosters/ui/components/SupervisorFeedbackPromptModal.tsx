@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
@@ -41,7 +41,7 @@ import { useSubmitFeedback } from '../../state/useSupervisorFeedback';
  * For multi-bucket feedback, render the modal multiple times.
  */
 
-export interface SupervisorFeedbackPromptModalProps {
+interface SupervisorFeedbackPromptModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** VenueOps event_id (text). Null is allowed for ad-hoc feedback. */
@@ -139,7 +139,7 @@ export function SupervisorFeedbackPromptModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
+            <DialogContent size="lg">
                 <DialogHeader>
                     <DialogTitle>How was staffing?</DialogTitle>
                     <DialogDescription>
@@ -167,7 +167,7 @@ export function SupervisorFeedbackPromptModal({
                                         <RadioGroupItem value={opt.value} id={`verdict-${opt.value}`} />
                                         <span className="font-medium">{opt.label}</span>
                                     </div>
-                                    <span className="ml-6 text-xs text-muted-foreground">{opt.hint}</span>
+                                    <span className="ml-6 text-[11px] text-muted-foreground">{opt.hint}</span>
                                 </label>
                             ))}
                         </RadioGroup>
@@ -215,7 +215,7 @@ export function SupervisorFeedbackPromptModal({
                     <div>
                         <div className="mb-2 flex items-center justify-between">
                             <Label>Time range</Label>
-                            <span className="text-xs text-muted-foreground">{sliceRangeLabel}</span>
+                            <span className="text-[11px] text-muted-foreground">{sliceRangeLabel}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             <Select
@@ -252,7 +252,7 @@ export function SupervisorFeedbackPromptModal({
                         <div>
                             <div className="mb-2 flex items-center justify-between">
                                 <Label htmlFor="severity">V8Severity</Label>
-                                <span className="text-xs text-muted-foreground">{severity} / 5</span>
+                                <span className="text-[11px] text-muted-foreground">{severity} / 5</span>
                             </div>
                             <Slider
                                 id="severity"
@@ -262,7 +262,7 @@ export function SupervisorFeedbackPromptModal({
                                 value={[severity]}
                                 onValueChange={(v) => setV8Severity(v[0] ?? 3)}
                             />
-                            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                            <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
                                 <span>Mild</span><span>Significant</span><span>Critical</span>
                             </div>
                         </div>

@@ -6,30 +6,31 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from '@/modules/core/lib/utils'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-lg font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-lg text-[13px] font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 hover:shadow-primary/40",
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm hover:shadow-destructive/25",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
         outline:
-          "border border-white/10 bg-transparent hover:bg-white/5 hover:text-accent-foreground hover:border-white/20 hover:shadow-glow transition-all",
+          "border border-border bg-transparent text-foreground hover:bg-muted shadow-none",
         secondary:
-          "bg-white/5 backdrop-blur-sm border border-white/10 text-secondary-foreground hover:bg-white/10 hover:border-white/20 shadow-sm",
+          "border border-border bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-sm",
         ghost: "hover:bg-accent/10 hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        glass: "backdrop-blur-md bg-white/5 border border-white/10 hover:bg-white/10 text-foreground shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/30",
-        gaming: "bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 hover:brightness-110",
-        solid: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md",
-        warning: "bg-amber-500 text-white hover:bg-amber-600 shadow-lg shadow-amber-500/20",
+        glass: "border border-border bg-muted/50 text-foreground hover:bg-muted shadow-sm",
+        gaming: "bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow-sm hover:brightness-110",
+        solid: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+        warning: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
       },
       size: {
-        default: "h-10 px-5 py-2.5",
-        sm: "h-9 rounded-md px-4 text-xs",
-        lg: "h-12 rounded-lg px-8 text-base",
-        icon: "h-10 w-10",
-        xs: "h-8 rounded px-3 text-xs",
+        // 44px on touch, 36px from md (pointer) — root font is 75%, so never h-10 (30px).
+        default: "h-[44px] md:h-[36px] px-4",
+        sm: "h-[40px] md:h-[32px] rounded-md px-3",
+        lg: "h-[48px] rounded-lg px-6 text-[15px]",
+        icon: "h-[44px] w-[44px] md:h-[36px] md:w-[36px]",
+        xs: "h-[32px] rounded px-2.5 text-[11px]",
       },
     },
     defaultVariants: {
@@ -39,7 +40,7 @@ const buttonVariants = cva(
   }
 )
 
-export interface ButtonProps
+interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
   VariantProps<typeof buttonVariants> {
   asChild?: boolean

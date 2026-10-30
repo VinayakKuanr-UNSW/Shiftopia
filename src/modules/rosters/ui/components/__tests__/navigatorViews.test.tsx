@@ -8,7 +8,6 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import * as React from 'react';
 import {
     UnifiedRosterNavigator, type ViewType,
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
@@ -62,5 +61,51 @@ describe('UnifiedRosterNavigator `views`', () => {
         // Given out of order; rendered in VIEW_OPTIONS' order, so two pages
         // passing the same set always look the same.
         expect(offeredViews(container)).toEqual(['Day', 'Month']);
+    });
+
+    it('renders a Today button in full variant when showToday is true and snaps to today', async () => {
+        const handleChange = vi.fn();
+        render(
+            <UnifiedRosterNavigator
+                variant="full"
+                date={new Date(2025, 0, 1)}
+                viewType="month"
+                onChange={handleChange}
+                onViewTypeChange={vi.fn()}
+                showToday
+            />
+        );
+
+        const todayBtn = screen.getByRole('button', { name: /snap to today/i });
+        expect(todayBtn).toBeDefined();
+        expect(todayBtn.textContent?.trim()).toBe('Today');
+        expect(todayBtn.className).toContain('uppercase');
+        expect(todayBtn.className).toContain('tracking-wider');
+
+        // Click today button
+        todayBtn.click();
+        expect(handleChange).toHaveBeenCalled();
+        const calledDate = handleChange.mock.calls[0][0];
+        const now = new Date();
+        expect(calledDate.getFullYear()).toBe(now.getFullYear());
+        expect(calledDate.getMonth()).toBe(now.getMonth());
+        expect(calledDate.getDate()).toBe(now.getDate());
+    });
+
+    it('date trigger does not use font-mono in full variant', () => {
+        const { container } = render(
+            <UnifiedRosterNavigator
+                variant="full"
+                date={new Date(2026, 9, 19)}
+                viewType="month"
+                onChange={vi.fn()}
+                onViewTypeChange={vi.fn()}
+            />
+        );
+
+        const dateBtn = container.querySelector('button[aria-label^="Change date"]');
+        expect(dateBtn).toBeDefined();
+        expect(dateBtn?.className).not.toContain('font-mono');
+        expect(dateBtn?.className).toContain('font-bold');
     });
 });

@@ -97,6 +97,8 @@ vi.mock('../shifts.queries', () => ({
             start_time: '09:00',
             end_time: '17:30',
             unpaid_break_minutes: 30,
+            break_start: '13:00',
+            break_end: '13:30',
             paid_break_minutes: 30,
             is_training: false,
             role_id: null,
@@ -125,6 +127,8 @@ const baseShift = {
     start_time: '09:00',
     end_time: '17:30',
     unpaid_break_minutes: 30,
+    break_start: '13:00',
+    break_end: '13:30',
     paid_break_minutes: 30,
 };
 

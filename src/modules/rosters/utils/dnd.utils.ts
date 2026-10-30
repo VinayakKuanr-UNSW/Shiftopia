@@ -2,8 +2,7 @@
  * DnD Utilities — Single Source of Truth for Roster DnD Logic
  */
 import { ShiftDisplay } from '../domain/queries/getGroupsModeGrid.query';
-import { getSydneyNow, isSydneyStarted } from '@/modules/core/lib/date.utils';
-import { format } from 'date-fns';
+import { isSydneyStarted } from '@/modules/core/lib/date.utils';
 
 /**
  * Determines if a shift can be dragged.

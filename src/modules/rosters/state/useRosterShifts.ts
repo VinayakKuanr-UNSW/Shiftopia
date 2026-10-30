@@ -23,11 +23,10 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { shiftsQueries, type ShiftDeltaRow } from '../api/shifts.queries';
+import { shiftsQueries } from '../api/shifts.queries';
 import { shiftsCommands } from '../api/shifts.commands';
 import { applyShiftOp } from '../api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOp, type ShiftOpResult } from '../domain/shift-ops.contract';
-import { complianceService } from '../services/compliance.service';
 import type { Shift } from '../domain/shift.entity';
 import { shiftKeys, rosterKeys, type ShiftFilters } from '../api/queryKeys';
 
@@ -36,7 +35,7 @@ import { shiftKeys, rosterKeys, type ShiftFilters } from '../api/queryKeys';
  * gone, rejected, …). The `.message` is the human-readable UX copy; `.shiftOpResult`
  * carries the raw gateway envelope for richer handling (diff, refresh).
  */
-export interface ShiftOpError extends Error {
+interface ShiftOpError extends Error {
   shiftOpResult: ShiftOpResult;
 }
 
@@ -83,7 +82,7 @@ function invalidateShiftAggregates(queryClient: ReturnType<typeof useQueryClient
 
 // ── Shared optimistic-update helpers ─────────────────────────────────────────
 
-export type Snapshot = [readonly unknown[], Shift[] | undefined][];
+type Snapshot = [readonly unknown[], Shift[] | undefined][];
 
 export function snapshotLists(queryClient: ReturnType<typeof useQueryClient>): Snapshot {
   return queryClient.getQueriesData<Shift[]>({ queryKey: shiftKeys.lists });
@@ -191,27 +190,7 @@ export function useShiftsByDateRange(
   });
 }
 
-export function useEmployeeShifts(
-  employeeId: string | null,
-  startDate: string | null,
-  endDate: string | null,
-) {
-  return useQuery({
-    queryKey: shiftKeys.byEmployee(employeeId ?? '', startDate ?? '', endDate ?? ''),
-    queryFn: () => shiftsQueries.getEmployeeShifts(employeeId!, startDate!, endDate!),
-    enabled: !!employeeId && !!startDate && !!endDate,
-    staleTime: 30_000,
-  });
-}
 
-export function useShiftDetail(shiftId: string | null) {
-  return useQuery({
-    queryKey: shiftKeys.detail(shiftId ?? ''),
-    queryFn: () => shiftsQueries.getShiftById(shiftId!),
-    enabled: !!shiftId,
-    staleTime: 15_000,
-  });
-}
 
 /**
  * Offer freshness.
@@ -270,21 +249,7 @@ export function useMyOffersHistory(
 
 // ── Lookup hooks ──────────────────────────────────────────────────────────────
 
-export function useOrganizations() {
-  return useQuery({
-    queryKey: shiftKeys.lookups.organizations(),
-    queryFn: () => shiftsQueries.getOrganizations(),
-    staleTime: 5 * 60_000,
-  });
-}
 
-export function useDepartments(organizationId?: string) {
-  return useQuery({
-    queryKey: shiftKeys.lookups.departments(organizationId),
-    queryFn: () => shiftsQueries.getDepartments(organizationId),
-    staleTime: 5 * 60_000,
-  });
-}
 
 export function useSubDepartments(departmentId?: string) {
   return useQuery({
@@ -500,7 +465,6 @@ function buildOptimisticShift(
     version: 0,
     created_at: nowIso,
     updated_at: nowIso,
-    deleted_at: null,
   } as unknown as Shift;
 }
 
@@ -689,39 +653,6 @@ export function useDeleteShift() {
   });
 }
 
-/**
- * Generic optimistic-concurrency mutation through the shift gateway
- * (`sm_apply_shift_op`). Callers pass the shift's CURRENT `version`; a non-applied
- * result is thrown as a {@link ShiftOpError} whose `.message` is ready-to-toast UX
- * copy. Use for op call sites that don't need bespoke optimistic cache patching
- * (the foundation for wiring edit / approve_trade / reject_trade once their
- * gateway-semantics prerequisites are met).
- */
-export function useApplyShiftOp() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (args: {
-      shiftId: string;
-      expectedVersion: number;
-      op: ShiftOp;
-      payload?: Record<string, unknown>;
-    }) => runGatewayOp(args),
-
-    onError: (_err, variables) => {
-      // Invalidate queries immediately on CAS mismatch or error to lock out stale mutations
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
-      invalidateShiftAggregates(queryClient);
-    },
-
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
-      invalidateShiftAggregates(queryClient);
-    },
-  });
-}
 
 
 
@@ -859,9 +790,11 @@ export function useBulkUnpublishShifts() {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
       const snapshot = snapshotLists(queryClient);
 
+      // Set lookup: `ids.includes` inside `map` was N×M (55 ms at 5,000 shifts).
+      const ids = new Set(shiftIds);
       patchLists(queryClient, (old) =>
         old.map(s =>
-          shiftIds.includes(s.id)
+          ids.has(s.id)
             ? {
                 ...s,
                 lifecycle_status: 'Draft' as const,
@@ -881,9 +814,10 @@ export function useBulkUnpublishShifts() {
       // Revert only failed IDs back to Published — successful ones keep Draft
       if (result.failed.length > 0) {
         const failedIds = result.failed.map(f => f.id);
+        const failed = new Set(failedIds);
         patchLists(queryClient, (old) =>
           old.map(s =>
-            failedIds.includes(s.id)
+            failed.has(s.id)
               ? { ...s, lifecycle_status: 'Published' as const, is_published: true, is_draft: false }
               : s,
           ),
@@ -922,9 +856,11 @@ export function useBulkPublishShifts() {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
       const snapshot = snapshotLists(queryClient);
 
+      // Set lookup: `ids.includes` inside `map` was N×M (55 ms at 5,000 shifts).
+      const ids = new Set(shiftIds);
       patchLists(queryClient, (old) =>
         old.map(s =>
-          shiftIds.includes(s.id)
+          ids.has(s.id)
             ? { ...s, lifecycle_status: 'Published' as const }
             : s,
         ),
@@ -940,9 +876,10 @@ export function useBulkPublishShifts() {
         ...result.dbFailed.map(f => f.id),
       ];
       if (failedIds.length > 0) {
+        const failed = new Set(failedIds);
         patchLists(queryClient, (old) =>
           old.map(s =>
-            failedIds.includes(s.id)
+            failed.has(s.id)
               ? { ...s, lifecycle_status: 'Draft' as const }
               : s,
           ),
@@ -987,7 +924,8 @@ export function useBulkDeleteShifts() {
     onSuccess: (result) => {
       // Surgically remove only confirmed-deleted shifts from all list caches.
       if (result.deletedIds.length > 0) {
-        patchLists(queryClient, (old) => old.filter(s => !result.deletedIds.includes(s.id)));
+        const deleted = new Set(result.deletedIds);
+        patchLists(queryClient, (old) => old.filter(s => !deleted.has(s.id)));
         result.deletedIds.forEach(id => queryClient.removeQueries({ queryKey: shiftKeys.detail(id) }));
       }
     },
@@ -1000,60 +938,6 @@ export function useBulkDeleteShifts() {
   });
 }
 
-/**
- * Bulk update shift times.
- * Optimized for resizing buckets — applies shifts in parallel to the server
- * but performs a single optimistic surgical patch to the list views.
- */
-export function useBulkUpdateShiftTimes() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      shiftIds,
-      updates,
-    }: {
-      shiftIds: string[];
-      updates: { start_time: string; end_time: string };
-    }) => {
-      // Loop updates - since there is no bulk RPC for this yet.
-      // Optimistic updates happen separately so this doesn't block the UI.
-      const results = await Promise.all(
-        shiftIds.map(id => shiftsCommands.updateShift(id, updates))
-      );
-      return results;
-    },
-
-    onMutate: async ({ shiftIds, updates }) => {
-      await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
-      const snapshot = snapshotLists(queryClient);
-
-      // Single surgical patch for all affected shifts
-      patchLists(queryClient, (old) =>
-        old.map(s => (shiftIds.includes(s.id) ? { ...s, ...updates } as Shift : s))
-      );
-
-      // Also patch detail views if loaded
-      shiftIds.forEach(id => {
-        const prevDetail = queryClient.getQueryData<Shift>(shiftKeys.detail(id));
-        if (prevDetail) {
-          queryClient.setQueryData(shiftKeys.detail(id), { ...prevDetail, ...updates });
-        }
-      });
-
-      return { snapshot };
-    },
-
-    onError: (_err, _vars, context) => {
-      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
-    },
-
-    onSettled: (_data, _err, { shiftIds }) => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
-      shiftIds.forEach(id => queryClient.invalidateQueries({ queryKey: shiftKeys.detail(id) }));
-    },
-  });
-}
 
 /**
  * Employee drops a shift (pushes it to bidding).
@@ -1329,26 +1213,6 @@ export function useRequestTrade() {
 
 // ── Compliance validation ─────────────────────────────────────────────────────
 
-export function useComplianceValidation() {
-  return useMutation({
-    mutationFn: (params: {
-      employeeId: string;
-      shiftDate: string;
-      startTime: string;
-      endTime: string;
-      netLengthMinutes: number;
-      excludeV8ShiftId?: string;
-    }) =>
-      complianceService.validateShiftCompliance(
-        params.employeeId,
-        params.shiftDate,
-        params.startTime,
-        params.endTime,
-        params.netLengthMinutes,
-        params.excludeV8ShiftId,
-      ),
-  });
-}
 
 // ── Delta sync hook ───────────────────────────────────────────────────────────
 
@@ -1360,7 +1224,6 @@ export function useComplianceValidation() {
  * cursor) via the `get_shift_delta` RPC and merges the result surgically into
  * all active TanStack Query list caches — avoiding a full list invalidation.
  *
- * Deleted rows (deleted_at IS NOT NULL) are removed from the cache.
  * Updated rows have their changed fields patched in-place.
  *
  * @param orgId       Organisation to subscribe to (required)
@@ -1415,18 +1278,19 @@ export function useShiftDeltaSync(params: {
       const maxUpdatedAt = rows.reduce((max, r) => (r.updated_at > max ? r.updated_at : max), cursorRef.current);
       cursorRef.current = maxUpdatedAt;
 
-      const deleted = new Set(rows.filter(r => r.deleted_at !== null).map(r => r.id));
-      const updated = rows.filter(r => r.deleted_at === null);
+      const updatedMap = new Map(rows.map(r => [r.id, r]));
 
       queryClient.setQueriesData<Shift[]>({ queryKey: shiftKeys.lists }, (old) => {
         if (!old || !Array.isArray(old)) return old;
 
-        // Remove soft-deleted rows
-        let next = old.filter(s => !deleted.has(s.id));
+        if (!old.some(s => updatedMap.has(s.id))) {
+          // No changes apply to this query cache entry; return same reference to prevent re-render churn
+          return old;
+        }
 
         // Patch updated rows (only update fields that are in the delta)
-        next = next.map(s => {
-          const delta = updated.find(r => r.id === s.id);
+        return old.map(s => {
+          const delta = updatedMap.get(s.id);
           if (!delta) return s;
           return {
             ...s,
@@ -1441,8 +1305,6 @@ export function useShiftDeltaSync(params: {
             version:             delta.version             ?? s.version,
           };
         });
-
-        return next;
       });
 
       // Invalidate detail views for any changed shift so they re-fetch fully
@@ -1500,44 +1362,3 @@ export function useShiftDeltaSync(params: {
 
 // ── Combined convenience hook ─────────────────────────────────────────────────
 
-/**
- * Combined hook for the most common shift operations in a single date view.
- * Prefer individual hooks when you only need one or two operations.
- */
-export function useRosterShifts(
-  organizationId: string | null,
-  date: string | null,
-  filters?: ShiftFilters,
-) {
-  const queryClient = useQueryClient();
-  const shiftsQuery = useShiftsByDate(organizationId, date, filters);
-  const createShift = useCreateShift();
-  const updateShift = useUpdateShift();
-  const deleteShift = useDeleteShift();
-  const bulkPublish = useBulkPublishShifts();
-  const bulkUnpublish = useBulkUnpublishShifts();
-  const bulkDelete = useBulkDeleteShifts();
-  const bulkUpdateTimes = useBulkUpdateShiftTimes();
-
-  /** Hard-invalidate all shift list queries (use sparingly). */
-  const invalidateAll = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
-    queryClient.invalidateQueries({ queryKey: rosterKeys.all });
-  }, [queryClient]);
-
-  return {
-    shifts: shiftsQuery.data ?? [],
-    isLoading: shiftsQuery.isLoading,
-    isFetching: shiftsQuery.isFetching,
-    error: shiftsQuery.error,
-    refetch: shiftsQuery.refetch,
-    createShift,
-    updateShift,
-    deleteShift,
-    bulkPublish,
-    bulkUnpublish,
-    bulkDelete,
-    bulkUpdateTimes,
-    invalidateAll,
-  };
-}

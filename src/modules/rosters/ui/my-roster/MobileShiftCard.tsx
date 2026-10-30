@@ -1,3 +1,4 @@
+import { cardTokens } from '@/modules/core/ui/primitives/card';
 import React from 'react';
 import { Clock, User, Coffee, Briefcase } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -12,6 +13,7 @@ import {
   toTargetEmploymentType,
 } from '@/modules/core/model/employment.types';
 import { useAuth } from '@/platform/auth/useAuth';
+import { resolveGroupVariant, type GroupVariant } from '@/modules/rosters/domain/shift-ui';
 
 interface MobileShiftCardProps {
   shiftData: {
@@ -64,22 +66,36 @@ const colorClasses: Record<
     border: 'border-cyan-500/20 dark:border-cyan-500/30',
     text: 'text-cyan-600 dark:text-cyan-400',
   },
-  purple: {
-    bg: 'bg-purple-500/5 dark:bg-purple-500/10',
-    bgHover: 'hover:bg-purple-500/10 dark:hover:bg-purple-500/20',
-    border: 'border-purple-500/20 dark:border-purple-500/30',
-    text: 'text-purple-600 dark:text-purple-400',
+  // Not a sixth group colour: only for a shift that maps to none of the five.
+  slate: {
+    bg: 'bg-slate-500/5 dark:bg-slate-500/10',
+    bgHover: 'hover:bg-slate-500/10 dark:hover:bg-slate-500/20',
+    border: 'border-slate-500/20 dark:border-slate-500/30',
+    text: 'text-slate-600 dark:text-slate-400',
   },
 };
 
+const COLOR_KEY_BY_VARIANT: Record<GroupVariant, string> = {
+  convention: 'blue',
+  exhibition: 'green',
+  theatre: 'red',
+  cutaway: 'amber',
+  office: 'cyan',
+  default: 'slate',
+};
+
 function resolveColorKey(groupColor?: string, groupName?: string): string {
-  const c = (groupColor || groupName || '').toLowerCase();
-  if (c === 'office' || c.includes('cyan')) return 'cyan';
-  if (c.includes('exhibition') || c.includes('green') || c.includes('emerald')) return 'green';
-  if (c.includes('theatre') || c.includes('red') || c.includes('rose')) return 'red';
-  if (c.includes('cutaway') || c.includes('amber') || c.includes('yellow')) return 'amber';
-  if (c.includes('purple') || c.includes('violet')) return 'purple';
-  return 'blue';
+  // The group decides (exact name), then the group's colour token. No guess:
+  // a shift that is neither is a wiring bug and renders neutral.
+  const variant = resolveGroupVariant(groupName, groupColor);
+  if (variant !== 'default') return COLOR_KEY_BY_VARIANT[variant];
+  const c = (groupColor || '').toLowerCase();
+  if (c.includes('cyan')) return 'cyan';
+  if (c.includes('blue')) return 'blue';
+  if (c.includes('green') || c.includes('emerald')) return 'green';
+  if (c.includes('red') || c.includes('rose')) return 'red';
+  if (c.includes('amber') || c.includes('yellow')) return 'amber';
+  return 'slate';
 }
 
 export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onClick }) => {
@@ -160,11 +176,13 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
         }
       }}
       className={cn(
-        'group relative p-3 rounded-xl border transition-all duration-200 cursor-pointer active:scale-[0.98]',
+        cardTokens.shell,
+        cardTokens.interactive,
+        cardTokens.pad,
+        'group relative',
         colors.bg,
         colors.bgHover,
         colors.border,
-        'hover:border-opacity-60',
       )}
     >
       {/* Row 1: <Role> <Remuneration Level> */}
@@ -179,31 +197,31 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <h4 className="text-sm font-medium text-foreground truncate">
+            <h4 className={cn(cardTokens.title, 'truncate')}>
               {roleLabel}
             </h4>
             {remunerationLabel && (
-              <span className="text-xs text-muted-foreground font-normal shrink-0">
+              <span className={cn(cardTokens.meta, 'shrink-0')}>
                 {remunerationLabel}
               </span>
             )}
           </div>
           {(shift as any).name && (shift as any).roleName && (shift as any).name !== (shift as any).roleName && (
-            <p className="text-xs text-muted-foreground truncate">{(shift as any).name}</p>
+            <p className={cn(cardTokens.meta, 'truncate')}>{(shift as any).name}</p>
           )}
         </div>
       </div>
 
       {/* Row 2: Timings Net */}
       <div className="flex items-center gap-2 mb-2">
-        <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
-        <span className="text-sm text-foreground/80">
+        <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-[13px] tabular-nums text-foreground/80">
           {formatTimeDisplay(startTime.slice(0, 5))} -{' '}
           {formatTimeDisplay(endTime.slice(0, 5))}
         </span>
         <Badge
           variant="outline"
-          className="text-[10px] px-1.5 py-0 text-muted-foreground border-border"
+          className="text-[11px] px-1.5 py-0 text-muted-foreground border-border"
         >
           {netHours}h net
         </Badge>
@@ -212,10 +230,10 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
       {/* Row 3: Breaks */}
       {totalBreak > 0 && (
         <div className="flex items-center gap-2 mb-2">
-          <Coffee className="h-3.5 w-3.5 text-muted-foreground/70" />
-          <span className="text-xs text-muted-foreground">
+          <Coffee className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span className={cardTokens.meta}>
             {paidBreak > 0 && (
-              <span className="text-emerald-400/70">
+              <span className="text-emerald-600 dark:text-emerald-400">
                 {paidBreak}m paid
               </span>
             )}
@@ -229,8 +247,8 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
 
       {/* Row 4: <target employment type> */}
       <div className="flex items-center gap-2">
-        <Briefcase className="h-3.5 w-3.5 text-muted-foreground/70" />
-        <span className="text-xs text-muted-foreground">
+        <Briefcase className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className={cardTokens.meta}>
           {employmentTypeLabel}
         </span>
       </div>

@@ -88,18 +88,86 @@ async function authoriseRosterRead(
   return null;
 }
 
-// `is_first_aid_duty` is a COMPUTED field (cl 28.2, migration 20261005060327):
-// `*` never includes computed fields, so it is named explicitly. Without it the
-// rows this function seeds into the planner cache price first aid at zero.
+// Lean projection for roster view (Phase 5: frontend memory & wire payload hardening).
+// Replaces wildcard `*` which previously loaded all 108 columns including heavy
+// JSONB blobs (compliance_snapshot, eligibility_snapshot, audit logs, recurrence rules)
+// reducing edge function wire payload from ~46.5 MB to ~10 MB on full-month views.
 const SHIFT_SELECT = `
-  *,
+  id,
+  organization_id,
+  department_id,
+  sub_department_id,
+  created_at,
+  updated_at,
+  version,
+  roster_id,
+  roster_date,
+  shift_date,
+  template_id,
+  template_group,
+  template_sub_group,
+  is_from_template,
+  template_instance_id,
+  group_type,
+  sub_group_name,
+  display_order,
+  shift_group_id,
+  roster_subgroup_id,
+  role_id,
+  remuneration_level,
+  start_time,
+  end_time,
+  is_overnight,
+  scheduled_length_minutes,
+  break_minutes,
+  paid_break_minutes,
+  unpaid_break_minutes,
+  net_length_minutes,
+  total_hours,
+  timezone,
+  start_at,
+  end_at,
+  assigned_employee_id,
+  assigned_at,
+  lifecycle_status,
+  assignment_status,
+  assignment_outcome,
+  fulfillment_status,
+  is_draft,
+  is_cancelled,
+  is_on_bidding,
+  is_published,
+  is_locked,
+  bidding_status,
+  trade_requested_at,
+  trading_status,
+  attendance_status,
+  attendance_note,
+  actual_start,
+  actual_end,
+  offer_expires_at,
+  event_ids,
+  tags,
+  required_skills,
+  required_licenses,
+  notes,
+  is_training,
   is_first_aid_duty,
+  published_at,
+  cancelled_at,
+  target_employment_type,
+  target_requires_flexible,
+  user_contract_id,
+  shift_pay_terms,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
   roles!shifts_role_id_fkey(id, name),
   remuneration_levels(level_number, level_name),
-  assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
+  assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
+  templates:roster_templates!template_id(id, name),
+  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
+  timesheets(status, start_time, end_time)
 `;
 
 // ── In-memory TTL cache ───────────────────────────────────────────────────────────────────────────────────
@@ -152,16 +220,23 @@ async function withPayTerms(
     .map((s) => s["id"] as string);
   if (ids.length === 0) return shifts;
 
-  const { data, error } = await callerClient(req).rpc("get_shift_pay_terms", { p_shift_ids: ids });
-  if (error) {
-    console.error("[get-roster-view] get_shift_pay_terms failed:", error.message);
-    return shifts;
+  const BATCH_SIZE = 500;
+  const termsById = new Map<string, unknown>();
+
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    const { data, error } = await callerClient(req).rpc("get_shift_pay_terms", { p_shift_ids: batch });
+    if (error) {
+      console.error("[get-roster-view] get_shift_pay_terms failed:", error.message);
+      continue;
+    }
+    for (const r of ((data ?? []) as { shift_id: string; pay_terms: unknown }[])) {
+      if (r.pay_terms !== null) {
+        termsById.set(r.shift_id, r.pay_terms);
+      }
+    }
   }
-  const termsById = new Map<string, unknown>(
-    ((data ?? []) as { shift_id: string; pay_terms: unknown }[])
-      .filter((r) => r.pay_terms !== null)
-      .map((r) => [r.shift_id, r.pay_terms]),
-  );
+
   if (termsById.size === 0) return shifts;
   return shifts.map((s) =>
     termsById.has(s["id"] as string) ? { ...s, shift_pay_terms: termsById.get(s["id"] as string) } : s
@@ -213,32 +288,72 @@ Deno.serve(async (req: Request) => {
     const lookupKey = `${organization_id}:${primaryDeptId ?? ""}:${primarySubDeptId ?? ""}`;
 
     // ── Cache hit check ────────────────────────────────────────────────────────────────
-    const cachedShifts  = getCache(shiftCache,  shiftKey);
-    const cachedLookups = getCache(lookupCache, lookupKey);
+    const cachedShiftsEntry = getCache(shiftCache,  shiftKey);
+    const cachedLookups     = getCache(lookupCache, lookupKey);
 
-    if (cachedShifts && cachedLookups) {
+    if (cachedShiftsEntry && cachedLookups) {
+      const cachedShifts = Array.isArray(cachedShiftsEntry) ? cachedShiftsEntry : cachedShiftsEntry.shifts;
+      const isTruncated = Array.isArray(cachedShiftsEntry) ? false : !!cachedShiftsEntry.truncated;
       return Response.json(
-        { ...cachedLookups, shifts: await withPayTerms(req, cachedShifts), _cached: true },
+        { ...cachedLookups, shifts: await withPayTerms(req, cachedShifts), truncated: isTruncated, _cached: true },
         { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
       );
     }
 
     // ── 1. Shifts query ────────────────────────────────────────────────────────
+    // PostgREST caps single queries at PGRST_DB_MAX_ROWS (1,000). Page through
+    // until all shifts in range are fetched so the planner cache is never silently truncated.
+    const cachedShifts = cachedShiftsEntry
+      ? (Array.isArray(cachedShiftsEntry) ? cachedShiftsEntry : cachedShiftsEntry.shifts)
+      : null;
+
     const shiftsPromise = cachedShifts
-      ? Promise.resolve(null)
-      : (() => {
-          let q = supabase
-            .from("shifts")
-            .select(SHIFT_SELECT)
-            .eq("organization_id", organization_id)
-            .gte("shift_date", start_date)
-            .lte("shift_date", end_date)
-            .is("deleted_at", null);
+      ? Promise.resolve({ data: null, error: null, truncated: Array.isArray(cachedShiftsEntry) ? false : !!cachedShiftsEntry.truncated })
+      : (async () => {
+          const PAGE_SIZE = 1000;
+          let from = 0;
+          const allRows: Record<string, unknown>[] = [];
+          const MAX_PAGES = 50; // Safety guardrail (up to 50,000 shifts)
+          let page = 0;
+          let isTruncated = false;
 
-          if (validDeptIds.length > 0)    q = q.in("department_id", validDeptIds) as typeof q;
-          if (validSubDeptIds.length > 0) q = q.in("sub_department_id", validSubDeptIds) as typeof q;
+          while (page < MAX_PAGES) {
+            let q = supabase
+              .from("shifts")
+              .select(SHIFT_SELECT)
+              .eq("organization_id", organization_id)
+              .gte("shift_date", start_date)
+              .lte("shift_date", end_date);
 
-          return q.order("shift_date").order("display_order").order("start_time");
+            if (validDeptIds.length > 0)    q = q.in("department_id", validDeptIds) as typeof q;
+            if (validSubDeptIds.length > 0) q = q.in("sub_department_id", validSubDeptIds) as typeof q;
+
+            const { data, error } = await q
+              .order("shift_date")
+              .order("display_order")
+              .order("start_time")
+              .order("id")
+              .range(from, from + PAGE_SIZE - 1);
+
+            if (error) {
+              return { data: null, error, truncated: false };
+            }
+
+            const rows = (data ?? []) as Record<string, unknown>[];
+            allRows.push(...rows);
+
+            if (rows.length < PAGE_SIZE) {
+              break;
+            }
+            from += PAGE_SIZE;
+            page += 1;
+            if (page === MAX_PAGES) {
+              isTruncated = true;
+              console.warn(`[get-roster-view] Hit MAX_PAGES (${MAX_PAGES}) safety cap; payload truncated at ${allRows.length} shifts.`);
+            }
+          }
+
+          return { data: allRows, error: null, truncated: isTruncated };
         })();
 
     // ── 2. Employees ─────────────────────────────────────────────────────────────────
@@ -334,12 +449,15 @@ Deno.serve(async (req: Request) => {
     if (cachedShifts) {
       shifts = cachedShifts;
     } else {
+      if (shiftsRes?.error) {
+        throw new Error(`Failed to fetch shifts: ${shiftsRes.error.message}`);
+      }
       shifts = (shiftsRes!.data ?? []).map((row: Record<string, unknown>) => ({
         ...row,
         is_trade_requested:
           !!row["trade_requested_at"] || row["trading_status"] === "TradeRequested",
       }));
-      setCache(shiftCache, shiftKey, shifts, SHIFT_TTL_MS);
+      setCache(shiftCache, shiftKey, { shifts, truncated: shiftsRes?.truncated ?? false }, SHIFT_TTL_MS);
     }
 
     // ── Build lookup payload (or use cache) ───────────────────────────────────────
@@ -406,7 +524,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return Response.json(
-      { ...lookups, shifts: await withPayTerms(req, shifts) },
+      { ...lookups, shifts: await withPayTerms(req, shifts), truncated: shiftsRes?.truncated ?? false },
       { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {

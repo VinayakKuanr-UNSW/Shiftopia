@@ -6,10 +6,10 @@
  */
 
 import React from 'react';
-import { AlertTriangle, Clock, CalendarClock } from 'lucide-react';
+import { Clock, CalendarClock } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface PayRateWarning {
+interface PayRateWarning {
   id: string;
   severity: 'warning' | 'error';
   icon: React.ElementType;
@@ -77,9 +77,9 @@ const WarningBanner: React.FC<{ warnings: PayRateWarning[] }> = ({ warnings }) =
         >
           <w.icon className="h-5 w-5 mt-0.5 flex-shrink-0" aria-hidden="true" />
           <div className="min-w-0">
-            <h4 className="text-base font-bold tracking-tight">{w.title}</h4>
+            <h4 className="text-[14px] font-bold tracking-tight">{w.title}</h4>
             <p className={cn(
-              'text-sm mt-1 leading-relaxed font-medium',
+              'text-[13px] mt-1 leading-relaxed font-medium',
               w.severity === 'error' ? 'text-red-400/80' : 'text-amber-400/80',
             )}>
               {w.description}

@@ -17,7 +17,7 @@ import { getWeekDays } from '@/modules/core/lib/date/week';
  *
  * `days` is optional: pass an anchor date and the Monday-based week is derived.
  */
-export interface WeekStripProps {
+interface WeekStripProps {
   /** Anchor date — the Mon–Sun week containing it is rendered. */
   date?: Date;
   /** Explicit day columns. Overrides `date`; use for 3-day or custom spans. */
@@ -75,7 +75,7 @@ export function WeekStrip({
           <>
             <span
               className={cn(
-                'text-xs font-medium uppercase',
+                'text-[11px] font-medium uppercase',
                 holidayName ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
               )}
             >
@@ -83,14 +83,14 @@ export function WeekStrip({
             </span>
             <span
               className={cn(
-                'mt-0.5 text-lg font-bold',
+                'mt-0.5 text-[15px] font-bold',
                 isToday ? 'text-primary' : holidayName ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
               )}
             >
               {format(day, 'd')}
             </span>
             {isToday && (
-              <span className="mt-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[9px] text-primary-foreground">
+              <span className="mt-0.5 rounded-full bg-primary px-1.5 py-0.5 text-[11px] text-primary-foreground">
                 Today
               </span>
             )}

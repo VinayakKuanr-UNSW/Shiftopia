@@ -1,4 +1,4 @@
-export type NotificationDigestState = {
+type NotificationDigestState = {
   count: number;
   deliverAt: number;
 };

@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/modules/core/ui/primitives/dialog';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
 import { MobileShiftCard } from './MobileShiftCard';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import MyRosterShift from './MyRosterShift';
@@ -145,7 +145,7 @@ const MonthView: React.FC<MonthViewProps> = ({
                     : '',
             )}
           >
-            <span className="text-xs font-bold tracking-tight">{ctx.date.getDate()}</span>
+            <span className="text-[11px] font-bold tracking-tight">{ctx.date.getDate()}</span>
           </div>
 
           {/* Shift density dots, coloured by group */}
@@ -185,7 +185,7 @@ const MonthView: React.FC<MonthViewProps> = ({
           <div className="mb-2 flex items-center justify-between">
             <span
               className={cn(
-                'flex h-6 w-6 items-center justify-center rounded-lg text-xs font-bold transition-colors',
+                'flex h-6 w-6 items-center justify-center rounded-lg text-[11px] font-bold transition-colors',
                 isToday
                   ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
                   : ctx.holidayName
@@ -255,12 +255,12 @@ const MonthView: React.FC<MonthViewProps> = ({
 
   const dayPopover = (
     <Dialog open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-      <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden bg-card/95 backdrop-blur-2xl border border-border shadow-2xl rounded-[28px] max-h-[85vh] flex flex-col">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden bg-card/95 max-h-[85vh] flex flex-col" size="md">
         <DialogHeader className="px-6 pb-2 pt-6">
           <div className="flex items-end justify-between border-b border-foreground/[0.03] pb-4">
             <div>
               <DialogTitle asChild>
-                <h2 className={cn(text.display, 'text-xl leading-none')}>
+                <h2 className={cn(text.display, 'text-[17px] leading-none')}>
                   {format(selectedDay, 'EEEE, d MMMM')}
                 </h2>
               </DialogTitle>
@@ -311,7 +311,7 @@ const MonthView: React.FC<MonthViewProps> = ({
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted/20">
                   <Calendar className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                 </div>
-                <p className={cn(text.overline, 'text-sm')}>
+                <p className={cn(text.overline, 'text-[13px]')}>
                   No shifts scheduled
                 </p>
               </motion.div>

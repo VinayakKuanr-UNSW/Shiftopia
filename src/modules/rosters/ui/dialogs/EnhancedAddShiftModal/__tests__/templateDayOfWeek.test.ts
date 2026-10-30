@@ -15,7 +15,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { formSchema } from '../types';
-import { TEMPLATE_WEEKDAYS } from '../components/TemplateDaySelect';
+import {
+    TEMPLATE_WEEKDAYS, describeTemplateDays, toggleTemplateDay, firstTemplateDay, daysFromTemplateDay,
+} from '../components/TemplateDaySelect';
 
 /**
  * Stored weekday (0 = Sunday) to ISO weekday (7 = Sunday).
@@ -101,5 +103,47 @@ describe('formSchema.day_of_week', () => {
         expect(formSchema.safeParse({ ...base, day_of_week: 7 }).success).toBe(false);
         expect(formSchema.safeParse({ ...base, day_of_week: -1 }).success).toBe(false);
         expect(formSchema.safeParse({ ...base, day_of_week: 1.5 }).success).toBe(false);
+    });
+});
+
+describe('multi-day selection', () => {
+    it('toggles days on and off, and empties back to "not chosen"', () => {
+        expect(toggleTemplateDay(undefined, 1, true)).toEqual([1]);
+        expect(toggleTemplateDay([1], 3, true)).toEqual([1, 3]);
+        expect(toggleTemplateDay([1, 3], 1, true)).toEqual([3]);
+        expect(toggleTemplateDay([3], 3, true)).toBeUndefined();
+    });
+
+    it('turns all seven days into the every-day wildcard, not seven rows', () => {
+        const sixDays = [1, 2, 3, 4, 5, 6];
+        expect(toggleTemplateDay(sixDays, 0, true)).toBeNull();
+    });
+
+    it('replaces the day when editing a single row', () => {
+        expect(toggleTemplateDay([1], 3, false)).toEqual([3]);
+        expect(toggleTemplateDay(null, 3, false)).toEqual([3]);
+    });
+
+    it('labels selections with short names, Monday first', () => {
+        expect(describeTemplateDays(undefined)).toBeNull();
+        expect(describeTemplateDays(null)).toBe('Every day');
+        expect(describeTemplateDays([5, 1, 3])).toBe('Mon, Wed, Fri');
+        expect(describeTemplateDays([1, 2, 3, 4, 5])).toBe('Weekdays');
+        expect(describeTemplateDays([0, 6])).toBe('Weekends');
+        expect(describeTemplateDays([0, 1])).toBe('Mon, Sun');
+    });
+
+    it('mirrors the selection into the single day_of_week the save gate reads', () => {
+        expect(firstTemplateDay(null)).toBeNull();          // every day is a real choice
+        expect(firstTemplateDay(undefined)).toBeUndefined(); // nothing chosen blocks save
+        expect(firstTemplateDay([0, 3])).toBe(0);           // Sunday (0) is not "unset"
+        expect(daysFromTemplateDay(0)).toEqual([0]);
+        expect(daysFromTemplateDay(null)).toBeNull();
+    });
+
+    it('accepts a list of days in the form schema', () => {
+        expect(formSchema.shape.days_of_week.safeParse([1, 3, 5]).success).toBe(true);
+        expect(formSchema.shape.days_of_week.safeParse(null).success).toBe(true);
+        expect(formSchema.shape.days_of_week.safeParse([7]).success).toBe(false);
     });
 });

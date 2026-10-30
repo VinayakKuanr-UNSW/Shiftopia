@@ -191,26 +191,4 @@ export async function getResolvedAvailabilities(
     return result;
 }
 
-/**
- * Get availability for a single profile on a single date.
- * Convenience wrapper used by the assign-shift availability warnings.
- */
-export async function getEmployeeAvailabilityForDate(
-    profileId: string,
-    date: Date,
-    /** See `getResolvedAvailabilities`. Omit for the person-wide answer. */
-    subDepartmentId?: string | null,
-): Promise<EmployeeAvailability | null> {
-    const result = await getResolvedAvailabilities([profileId], date, date, subDepartmentId);
-    const profileMap = result.get(profileId);
 
-    if (!profileMap) return null;
-
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return profileMap.get(dateStr) || null;
-}
-
-export const availabilityApi = {
-    getResolvedAvailabilities,
-    getEmployeeAvailabilityForDate,
-};

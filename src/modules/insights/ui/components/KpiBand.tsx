@@ -47,7 +47,7 @@ export const KpiTileGrid: React.FC<{ children: React.ReactNode; className?: stri
     </div>
 );
 
-export interface CountStripItem {
+interface CountStripItem {
     label: string;
     value: number | string;
     /** Optional emphasis colour class for the value. */
@@ -70,7 +70,7 @@ export const CountStrip: React.FC<{ items: CountStripItem[]; className?: string 
     >
         {items.map((item) => (
             <div key={item.label} className="min-w-0">
-                <dd className={cn('text-xl font-bold tabular-nums leading-none', item.tone ?? 'text-foreground')}>
+                <dd className={cn('text-[17px] font-bold tabular-nums leading-none', item.tone ?? 'text-foreground')}>
                     {item.value}
                 </dd>
                 <dt className={cn(text.overline, 'mt-1.5 block truncate')}>{item.label}</dt>

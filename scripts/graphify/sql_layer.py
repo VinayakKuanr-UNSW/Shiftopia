@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Deterministic SQL + cross-layer extractor for graphify.
 
-The AST extractor understands .ts/.tsx/.py but not .sql, so 173 migrations
-(~272k words) were invisible to the graph. This adds them, plus the edges that
+graphify's AST extractor never modelled migrations as DB objects (and since
+an upgrade it parses .sql into disconnected stubs, so migrations are in
+.graphifyignore). This adds them plus the edges that
 join the TypeScript layer to the database layer:
 
-    ts_file --calls_rpc--> db_function     (supabase.rpc('name'))
+    ts_file --calls_rpc--> db_function     (supabase.rpc('name') / callRpc('name'))
     ts_file --queries-->   db_table        (supabase.from('table'))
 
 Those two edge types are what make impact analysis a traversal instead of a
@@ -176,7 +177,9 @@ def main() -> int:
                 add_edge(iid, tid, "indexes", sf=rel, loc=line_of(text, m.start()))
 
     # ---------- cross-layer: TS/Python -> DB ----------
-    RPC = re.compile(r"""\.rpc\(\s*['"]([a-zA-Z0-9_]+)['"]""")
+    # callRpc() is the app's typed wrapper (src/platform/supabase/rpc/client.ts):
+    # `callRpc<T>(\n  'name', ...)` is as direct a call as `.rpc('name')`.
+    RPC = re.compile(r"""(?:\.rpc|\bcallRpc)(?:<[^>()]*>)?\(\s*['"]([a-zA-Z0-9_]+)['"]""")
     FROM = re.compile(r"""\.from\(\s*['"]([a-zA-Z0-9_]+)['"]""")
     code_roots = [ROOT / "src", ROOT / "supabase" / "functions", ROOT / "optimizer-service", ROOT / "scripts"]
     xrpc = xfrom = xref = xdoc = 0
@@ -190,12 +193,14 @@ def main() -> int:
                 text = f.read_text(encoding="utf-8", errors="ignore")
             except Exception:
                 continue
-            if ".rpc(" not in text and ".from(" not in text:
+            if ".rpc(" not in text and ".from(" not in text and "callRpc" not in text:
                 continue
             rel = str(f.relative_to(ROOT))
             src_id = file_node_id(rel)
             add_node(src_id, rel, rel, "L1")  # path label: bare "index.ts" fuzzy-merges
+            direct = set()
             for m in RPC.finditer(text):
+                direct.add(m.group(1))
                 fid = nid("db_fn", m.group(1))
                 if fid in functions:
                     add_edge(src_id, fid, "calls_rpc", sf=rel, loc=line_of(text, m.start()))
@@ -209,7 +214,7 @@ def main() -> int:
                 fid = nid("db_fn", fname)
                 if fid not in functions:
                     continue
-                if f".rpc('{fname}'" in text or f'.rpc("{fname}"' in text:
+                if fname in direct:
                     continue                      # already an EXTRACTED calls_rpc
                 if re.search(rf"""['"]{re.escape(fname)}['"]""", code_only):
                     add_edge(src_id, fid, "invokes_rpc_indirectly", "INFERRED", 0.85, rel, None)

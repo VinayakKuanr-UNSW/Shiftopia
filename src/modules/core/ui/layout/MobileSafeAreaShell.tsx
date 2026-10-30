@@ -11,7 +11,7 @@ const MobileSafeAreaShell: React.FC<MobileSafeAreaShellProps> = ({
   className,
 }) => {
   return (
-    <div className={cn('min-h-0 h-full w-full mobile-safe-area-shell', className)}>
+    <div className={cn('min-h-0 min-w-0 h-full w-full max-w-full mobile-safe-area-shell', className)}>
       {children}
     </div>
   );

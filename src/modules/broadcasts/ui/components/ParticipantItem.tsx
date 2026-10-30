@@ -49,7 +49,7 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors group"
         >
             <Avatar className="h-9 w-9">
-                <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                <AvatarFallback className="bg-primary/20 text-primary text-[13px]">
                     {participant.employee?.name
                         ?.split(' ')
                         .map((n) => n[0])
@@ -58,14 +58,14 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
             </Avatar>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-foreground truncate">
+                    <span className="text-[13px] font-medium text-foreground truncate">
                         {participant.employee?.name || 'Unknown'}
                     </span>
                     {roleConfig.icon && (
                         <span className={roleConfig.color}>{roleConfig.icon}</span>
                     )}
                 </div>
-                <p className={cn('text-xs', roleConfig.color)}>{roleConfig.label}</p>
+                <p className={cn('text-[11px]', roleConfig.color)}>{roleConfig.label}</p>
             </div>
             {isEditMode && (
                 <Button

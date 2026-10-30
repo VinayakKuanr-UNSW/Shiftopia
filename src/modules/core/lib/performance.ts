@@ -16,7 +16,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type QueryPerfStatus = 'loading' | 'success' | 'error';
+type QueryPerfStatus = 'loading' | 'success' | 'error';
 
 export interface QueryPerfEntry {
     /** Serialised query key (for display) */
@@ -57,7 +57,7 @@ function serializeKey(raw: unknown): string {
 
 const MAX_ENTRIES = 60;
 
-export class QueryPerfTracker {
+class QueryPerfTracker {
     private readonly log: QueryPerfEntry[] = [];
     private readonly pending = new Map<string, number>(); // key → start ts
     private unsubscribe: (() => void) | null = null;
@@ -135,7 +135,7 @@ export class QueryPerfTracker {
 
 // ── WebVitalsCollector ────────────────────────────────────────────────────────
 
-export class WebVitalsCollector {
+class WebVitalsCollector {
     private snapshot: WebVitalsSnapshot = {};
     private observers: PerformanceObserver[] = [];
     private listeners: Array<() => void> = [];

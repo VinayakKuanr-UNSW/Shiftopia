@@ -12,7 +12,6 @@ import {
   UserRound,
   Clock,
 } from 'lucide-react';
-import { useToast } from '@/modules/core/hooks/use-toast';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import { useContractedStaff } from '@/modules/rosters/state/useRosterShifts';
@@ -101,7 +100,7 @@ const StaffCard: React.FC<{ member: ContractedStaffMember }> = ({ member }) => {
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="text-xs font-semibold text-slate-800 dark:text-white truncate">
+        <div className="text-[11px] font-semibold text-slate-800 dark:text-white truncate">
           {member.first_name} {member.last_name}
         </div>
         {member.role_name ? (
@@ -117,7 +116,7 @@ const StaffCard: React.FC<{ member: ContractedStaffMember }> = ({ member }) => {
 
       {/* Role code badge */}
       {member.role_code && (
-        <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0', roleColor)}>
+        <span className={cn('text-[11px] font-bold px-1.5 py-0.5 rounded flex-shrink-0', roleColor)}>
           {member.role_code}
         </span>
       )}
@@ -172,7 +171,7 @@ const ShiftCard: React.FC<{ shift: UnfilledShift; onClick: () => void; disabled?
 
       <div className="flex-1 p-2.5 min-w-0">
         {/* Role */}
-        <div className="text-xs font-semibold text-slate-800 dark:text-white truncate">
+        <div className="text-[11px] font-semibold text-slate-800 dark:text-white truncate">
           {shift.role}
         </div>
         {/* Title / subgroup — only if distinct */}
@@ -192,7 +191,7 @@ const ShiftCard: React.FC<{ shift: UnfilledShift; onClick: () => void; disabled?
           </span>
         </div>
         {/* Date */}
-        <div className="text-[10px] text-slate-400 dark:text-white/40 mt-1">
+        <div className="text-[11px] text-slate-400 dark:text-white/40 mt-1">
           {format(dateObj, 'EEE, MMM d')}
         </div>
       </div>
@@ -202,7 +201,7 @@ const ShiftCard: React.FC<{ shift: UnfilledShift; onClick: () => void; disabled?
 
 /* ── Main Panel ──────────────────────────────────────────────────────────────── */
 
-export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
+const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
   unfilledShifts,
   onPickShift,
 }) => {
@@ -259,7 +258,7 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
           ) : (
             <AlertCircle className="h-4 w-4 text-amber-500" />
           )}
-          <h3 className="text-sm font-bold text-slate-800 dark:text-white tracking-tight">
+          <h3 className="text-[13px] font-bold text-slate-800 dark:text-white tracking-tight">
             {showStaff ? 'Contracted Staff' : 'Unfilled Shifts'}
           </h3>
           <span className="ml-auto text-[11px] font-semibold text-slate-400 dark:text-white/40 bg-slate-200 dark:bg-white/[0.06] px-2 py-0.5 rounded-full">
@@ -282,7 +281,7 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={showStaff ? 'Search staff or role…' : 'Search shifts…'}
-            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-white dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white/80 placeholder-slate-400 dark:placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-8 pr-3 py-1.5 text-[11px] rounded-lg bg-white dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white/80 placeholder-slate-400 dark:placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
       </div>
@@ -297,13 +296,13 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
               {staffLoading && (
                 <div className="flex items-center justify-center gap-2 py-12 text-slate-400 dark:text-white/40">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-xs">Loading staff…</span>
+                  <span className="text-[11px]">Loading staff…</span>
                 </div>
               )}
               {!staffLoading && filteredStaff.length === 0 && (
                 <div className="flex flex-col items-center py-12 gap-3">
                   <Users className="h-8 w-8 text-slate-300 dark:text-white/20" />
-                  <p className="text-xs text-slate-400 dark:text-white/40 text-center">
+                  <p className="text-[11px] text-slate-400 dark:text-white/40 text-center">
                     {search
                       ? 'No staff match your search'
                       : 'No contracted staff in this scope'}
@@ -329,7 +328,7 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
               {filteredShifts.length === 0 && (
                 <div className="flex flex-col items-center py-12 gap-3">
                   <CheckCircle2 className="h-8 w-8 text-emerald-400 dark:text-emerald-500/40" />
-                  <p className="text-xs text-slate-400 dark:text-white/40 text-center">
+                  <p className="text-[11px] text-slate-400 dark:text-white/40 text-center">
                     {search ? 'No matching shifts' : 'All shifts are filled'}
                   </p>
                 </div>

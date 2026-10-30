@@ -36,18 +36,24 @@ per-row FT rule must sort after the resolver (as `trg_shift_ft_one_per_day` does
 - Client: `ALL_GROUP_TYPES` / `GROUP_DISPLAY_NAMES` / `GROUP_COLORS` in
   `src/modules/rosters/domain/projections/constants.ts`. `office-group.test.ts` fails if a file
   that handles The Cutaway does not also handle Office.
-- The Add Shift form offers FT — and starts as FT — only when the shift is in the Office group
-  (`targetEmploymentTypeOptions`, `initialTargetEmploymentType`, `FULL_TIME_GROUP_TYPE` in
-  `src/modules/core/model/employment.types.ts`).
+- Office holds FT only, and FT lives only in Office. The Add Shift form offers just FT in Office
+  and just PT / Casual elsewhere, and template shifts follow the same rule (`targetEmploymentTypeOptions`,
+  `targetAfterGroupChange`, `initialTargetEmploymentType`, `FULL_TIME_GROUP_TYPE` in
+  `src/modules/core/model/employment.types.ts`). The database enforces both directions,
+  Office ⇒ FT and FT ⇒ Office, with `trg_shift_z_office_is_ft_only` (named `z_` so it fires after
+  `trg_shift_placement`) on shifts and `trg_template_shift_office_is_ft_only` on template shifts. The 8 legacy FT shifts outside Office were deleted on 2026-10-22.
 
 ## Rosters page features for FT shifts
 
 | Feature | Where | Code |
 |---|---|---|
-| Copy to… a range (leave, existing shifts, writable rosters, cycle ceiling checked for the range) | Group mode ⋯ menu | `src/modules/office/ui/components/CopyShiftFlow.tsx` |
 | Expand: Scheduled · Actual · Payroll · Variance; "Not priced" instead of a default rate | Group and People mode ⋯ menu | `src/modules/rosters/ui/dialogs/ShiftExpandDialog.tsx` |
 | Delete states the hours removed from the cycle | Group mode delete dialog | `GroupModeView.tsx` |
 | Leave card on approved-leave days; day closed to rostering (all employment types) | People mode | `useApprovedLeaveDays.ts`, `LeaveDayCard.tsx` |
+
+Rosters has no copy of any kind (removed 2026-10-29). A full-time pattern that repeats is authored
+in a template under Office → Administration and applied; the shifts arrive unassigned (a template
+shift has no employee) and each is then assigned, which runs the compliance checks per person.
 
 ## Leave
 
@@ -56,6 +62,6 @@ shifts are **unassigned** (Published → Bidding); shifts that have started are 
 
 ## The `office` module
 
-No page. It holds what Rosters uses: the cycle ledger (`computeProposal` in
-`api/office.commands.ts`), the Copy-to flow and dialog (`ui/components`), the leave loader
-(`api/office.loaders.ts`), the hooks behind them, and the pure domain (`domain/*`).
+No page. It holds what Rosters still uses: the leave loader (`api/office.loaders.ts`) and the
+shared types (`domain/types.ts`). The cycle ledger, the Copy-to flow and the hooks behind them
+were removed with the Rosters copy (2026-10-29).

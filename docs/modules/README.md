@@ -9,6 +9,7 @@ Per-module/feature deep dives, each mirroring a directory under `src/modules/` (
 | **[autoscheduler/](autoscheduler/)** | The OR-Tools CP-SAT optimizer service: solver design, schema-drift contract tests, hardening | `01` → `02` |
 | **[shift-synthesizer/](shift-synthesizer/)** | ML-driven labour-demand forecasting → automatic draft-shift generation | `01` → `02` → `03` |
 | **[full-time-rostering.md](full-time-rostering.md)** | Full-time shifts on the Rosters page (Office group): FSM branch, DB rules, Copy-to, leave, the `office` module | single page |
+| **[templates-and-rosters.md](templates-and-rosters.md)** | How a template becomes roster sub-groups and shifts: matching by name, Office's fixed sub-group, stacking templates, what each Planner view shows, deleting / renaming / cloning a sub-group | single page |
 | **[shift-integrity.md](shift-integrity.md)** | Every rule the database enforces on `shifts` (placement, overlap, leave, FT, shape, state) and the known gaps | single page |
 
 Each folder has (or should have) its own `README.md`/index — check there first for that module's specifics, current-vs-historical caveats, and file-to-code cross-references.

@@ -95,5 +95,26 @@ export const isOrgAmbiguous = (scope: ScopeSelection | null | undefined): boolea
 export const isDeptAmbiguous = (scope: ScopeSelection | null | undefined): boolean =>
   deptIds(scope).length > 1;
 
-export const isSubDeptAmbiguous = (scope: ScopeSelection | null | undefined): boolean =>
-  subDeptIds(scope).length > 1;
+
+/**
+ * The organisation a page may query with, or null until its own copy of the
+ * selection matches the resolved scope.
+ *
+ * Pages copy the scope into their store one render AFTER it resolves, and the
+ * store starts from whatever the browser persisted last session. Querying in
+ * between asks for a wider place than the person may see: get-roster-view
+ * refused those with a 403 (org-wide, then department-wide) on every manager
+ * load of the Roster Planner. Every hook it gates treats null as "do not fetch".
+ */
+export const orgIdOnceSynced = (
+  scope: ScopeSelection,
+  selection: { orgId: string | null; deptIds: readonly string[]; subDeptIds: readonly string[] },
+  isScopeLoading: boolean,
+): string | null => {
+  if (isScopeLoading) return null;
+  if (selection.deptIds.join(',') !== deptIds(scope).join(',')) return null;
+  if (selection.subDeptIds.join(',') !== subDeptIds(scope).join(',')) return null;
+  const sole = soleOrgId(scope);
+  if (sole !== null && sole !== selection.orgId) return null;
+  return selection.orgId;
+};

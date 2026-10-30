@@ -32,7 +32,7 @@ interface Props {
 
 const hourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
 
-export const TeamMobileCoverage: React.FC<Props> = ({ buckets, date }) => {
+const TeamMobileCoverage: React.FC<Props> = ({ buckets, date }) => {
     const { isDark } = useTheme();
     const headingId = `coverage-${date}`;
 
@@ -52,7 +52,7 @@ export const TeamMobileCoverage: React.FC<Props> = ({ buckets, date }) => {
     if (rows.length === 0) {
         return (
             <div className="py-12 px-4 text-center border rounded-2xl bg-muted/10">
-                <p className="text-sm font-semibold text-muted-foreground">
+                <p className="text-[13px] font-semibold text-muted-foreground">
                     Nothing is scheduled on {format(parseISO(date), 'EEEE d MMMM')}.
                 </p>
             </div>
@@ -141,7 +141,7 @@ export const TeamMobileCoverage: React.FC<Props> = ({ buckets, date }) => {
                                     ['Available', b.available],
                                 ].map(([label, value]) => (
                                     <div key={String(label)} className="flex flex-col gap-0.5">
-                                        <dt className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                                        <dt className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
                                             {label}
                                         </dt>
                                         <dd className="text-[13px] font-bold tabular-nums text-foreground">

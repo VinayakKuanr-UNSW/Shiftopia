@@ -13,27 +13,11 @@
  *   WeekStrip       a Mon–Sun day axis for timeline/agenda views
  */
 
-export { Calendar, type CalendarProps, type CalendarSize } from '@/modules/core/ui/primitives/calendar';
 
-export { DatePicker, type DatePickerProps } from './DatePicker';
+export { DatePicker } from './DatePicker';
 export {
   DateRangePicker,
-  type DateRangePickerProps,
-  type DateRangePreset,
-  type DateRange,
 } from './DateRangePicker';
-export { MonthGrid, type MonthGridProps, type MonthGridDayContext } from './MonthGrid';
-export { WeekStrip, type WeekStripProps } from './WeekStrip';
+export { MonthGrid, type MonthGridDayContext } from './MonthGrid';
+export { WeekStrip } from './WeekStrip';
 
-export {
-  AU_WEEK_OPTIONS,
-  WEEK_STARTS_ON,
-  WEEKDAY_LABELS,
-  endOfWeekAU,
-  getMonthGridDays,
-  getMonthGridWeeks,
-  getWeekDays,
-  getWeekdayIndexAU,
-  isWeekend,
-  startOfWeekAU,
-} from '@/modules/core/lib/date/week';

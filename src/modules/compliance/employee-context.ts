@@ -170,9 +170,13 @@ export async function fetchV8EmployeeContext(
     const activeContractStatus: string | undefined = headline?.employment_status;
     const rawStatus = activeContractStatus || profile?.employment_type || '';
     const rawType = rawStatus.toLowerCase().replace(/[-_]/g, ' ');
+    // 'Flexible Part-Time' must be mapped before the /part/ fallback below,
+    // which would read it as plain part-time and silently drop the cl 35.3(g)
+    // ten-day streak cap V8_STREAK_LIMIT applies only to flexi.
     const employmentTypeMap: Record<string, ContractType> = {
         'full time':   'FULL_TIME',
         'full_time':   'FULL_TIME', // fallback
+        'flexible part time': 'FLEXI_PART_TIME',
         'part time':   'PART_TIME',
         'part_time':   'PART_TIME', // fallback
         'casual':      'CASUAL',
@@ -378,7 +382,17 @@ export async function fetchEmployeeShiftsV2(
         p_exclude_id:  excludeV8ShiftId,
     });
 
-    if (error || !data) return [];
+    if (error) {
+        // An empty history makes every cumulative rule pass, so a refusal
+        // (42501: not this employee's roster) or a failure must not read as
+        // "no shifts". Callers (useCompliancePanel, the assign command, swap
+        // approval) already treat a throw as "cannot proceed".
+        throw Object.assign(
+            new Error(`Could not load the shift history for ${employeeId}: ${error.message}`),
+            { cause: error },
+        );
+    }
+    if (!data) return [];
 
     return (data as Array<{
         id:                   string;
@@ -386,6 +400,7 @@ export async function fetchEmployeeShiftsV2(
         start_time:           string;
         end_time:             string;
         unpaid_break_minutes: number | null;
+        paid_break_minutes:   number | null;
         user_contract_id?:    string | null;
     }>).map(s => ({
         id:                      s.id,
@@ -400,5 +415,7 @@ export async function fetchEmployeeShiftsV2(
         required_qualifications: [],
         break_minutes:           s.unpaid_break_minutes ?? 0,
         unpaid_break_minutes:    s.unpaid_break_minutes ?? 0,
+        // cl 39.2 nets rest pauses out of the split-shift spread.
+        paid_break_minutes:      s.paid_break_minutes ?? 0,
     }));
 }

@@ -28,7 +28,6 @@ import { shiftSorter }           from './engine/shift-sorter';
 import { incrementalValidator }  from './engine/incremental-validator';
 import { complianceEvaluator }   from './engine/compliance-evaluator';
 import { conflictReporter }      from './engine/conflict-reporter';
-import { assignmentCommitter }   from './engine/assignment-committer';
 import type {
     ValidationRunOptions,
     ValidationRunResult,
@@ -39,7 +38,7 @@ import type {
 // CONTROLLER
 // =============================================================================
 
-export class AssignmentValidator {
+class AssignmentValidator {
     /**
      * Validate every proposed (shift, employee) pair and build compliance results.
      * Does NOT write to the database.

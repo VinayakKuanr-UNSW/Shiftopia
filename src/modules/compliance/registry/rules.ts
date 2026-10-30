@@ -1,7 +1,7 @@
 /**
  * Compliance Rule Registry — the table.
  *
- * 34 rules: 12 shape, 22 labour. See `./types.ts` for why this exists and which
+ * 36 rules: 14 shape, 22 labour. See `./types.ts` for why this exists and which
  * fields are machine-verified.
  *
  * REGISTERED AS IMPLEMENTED, NOT AS PROPOSED. Several rules diverge from the
@@ -152,6 +152,21 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
             'because SHAPE_FT_MIN_DAY already requires 7.6h.',
     },
 
+    SHAPE_BREAK_WINDOW: {
+        id: 'SHAPE_BREAK_WINDOW',
+        name: 'Meal Break Window',
+        tier: 'BLOCKING',
+        layer: 'SHAPE',
+        category: 'STRUCTURE',
+        employment: 'ALL',
+        authority: { source: 'operational', clauses: [] },
+        engines: { shape: true, v8: false, solver: null },
+        description:
+            'A meal break has both a start and an end, sits inside the shift, and the unpaid ' +
+            'minutes deducted are its length (none for security, whose meal break is paid). ' +
+            'Pay reads where it falls: cl 43 night hours and cl 41 day loadings.',
+    },
+
     SHAPE_MEAL_BREAK: {
         id: 'SHAPE_MEAL_BREAK',
         name: 'Meal Break Requirement',
@@ -162,8 +177,8 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         authority: eba('cl 36.1', 'Sch 3 §3.2(a)', 'Sch 3 §5.3(a)'),
         engines: { shape: true, v8: false, solver: null },
         description:
-            'More than 5h net requires a meal break of at least 30 minutes — unpaid under ' +
-            'cl 36.1, paid for security roles under Schedule 3.',
+            'More than 5h net requires a meal break with a start and end time, at least 30 ' +
+            'minutes long — unpaid under cl 36.1, paid for security roles under Schedule 3.',
         knownGap:
             'Enforces the per-SHIFT reading only. cl 36.1 says "more than five (5) hours ON ANY ONE ' +
             'DAY", and a day worked in two parts can cross five hours with neither part doing so. ' +
@@ -178,9 +193,25 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         layer: 'SHAPE',
         category: 'TIME',
         employment: 'ALL',
-        authority: eba('cl 36.1'),
+        authority: eba('cl 36.1', 'Sch 3 §3.2(a)'),
         engines: { shape: true, v8: false, solver: null },
-        description: 'A meal break may not exceed 60 minutes.',
+        description:
+            'A meal break may not exceed 60 minutes; full-time security\'s is a flat 30 ' +
+            '(Sch 3 §3.2(a)).',
+    },
+
+    SHAPE_MEAL_BREAK_TIMING: {
+        id: 'SHAPE_MEAL_BREAK_TIMING',
+        name: 'Meal Break Timing',
+        tier: 'WARNING',
+        layer: 'SHAPE',
+        category: 'TIME',
+        employment: 'ALL',
+        authority: eba('cl 36.2', 'Sch 3 §3.2(b)', 'Sch 3 §5.3(b)'),
+        engines: { shape: true, v8: false, solver: null },
+        description:
+            'No more than 5 hours should be worked without a meal break, before it or after it. ' +
+            'Advisory: the clause is an endeavour and allows a later break for operational reasons.',
     },
 
     SHAPE_SECURITY_PAID_BREAK: {

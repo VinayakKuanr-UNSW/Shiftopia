@@ -1,14 +1,11 @@
 import React, { useState, useMemo, forwardRef } from 'react';
 import {
     UserX,
-    ArrowRight,
-    Edit3,
     CheckSquare,
     Check,
     X,
-    RotateCcw,
+    AlertTriangle,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Label } from '@/modules/core/ui/primitives/label';
@@ -20,18 +17,14 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';
-import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
-import { TimesheetStatusBadge } from './TimesheetStatusBadge';
-import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { isShiftFinished, isEntryReviewable, cleanTime, calculateHoursBetween } from './TimesheetTable.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
-import { validateBillableEdit, billableVarianceVsRoster } from '../../domain/billable-edit';
+import { validateBillableEdit, parseHHMM } from '../../domain/billable-edit';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
@@ -47,55 +40,12 @@ interface TimesheetMobileCardProps {
     isManager?: boolean;
     employeeHeader?: React.ReactNode;
     employeeActions?: React.ReactNode;
-    hideGlow?: boolean;
     useGroupColoring?: boolean;
     className?: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const DataRow: React.FC<{
-    label: string;
-    start: string;
-    end?: string;
-    emphasis?: boolean;
-    muted?: boolean;
-    accentColor?: string;
-    style?: React.CSSProperties;
-}> = ({ label, start, end, emphasis, muted, accentColor, style }) => (
-    <div 
-        style={style}
-        className={cn(
-            "flex items-center justify-between py-2 transition-all duration-300",
-            muted ? "opacity-30" : "opacity-100"
-        )}
-    >
-        <span className="text-[12px] font-medium text-foreground/50">
-            {label}
-        </span>
-        <div className="flex items-center gap-3">
-            <span className={cn(
-                "tabular-nums tracking-tight",
-                emphasis ? "text-[16px] font-bold text-foreground" : "text-[14px] font-medium text-foreground/90",
-                accentColor && !muted ? accentColor : ""
-            )}>
-                {start}
-            </span>
-            {end && (
-                <>
-                    <ArrowRight className="h-3 w-3 text-foreground/20" />
-                    <span className={cn(
-                        "tabular-nums tracking-tight",
-                        emphasis ? "text-[16px] font-bold text-foreground" : "text-[14px] font-medium text-foreground/90",
-                        accentColor && !muted ? accentColor : ""
-                    )}>
-                        {end}
-                    </span>
-                </>
-            )}
-        </div>
-    </div>
-);
 
 /**
  * Sydney-pinned, via the shared formatter.
@@ -108,22 +58,6 @@ function formatTime(t: string | null | undefined): string {
     return formatClockTime(t, 'h:mm a', '—') ?? '—';
 }
 
-function getDisplayStatus(entry: TimesheetRow): { label: string; variant: string; isPrimary: boolean } {
-    const tsStatus = (entry.timesheetStatus || '').toLowerCase();
-    const attStatus = (entry.attendanceStatus || '').toLowerCase();
-    const live = entry.liveStatus;
-
-    if (tsStatus === 'approved') return { label: 'Approved', variant: 'APPROVED', isPrimary: true };
-    if (tsStatus === 'rejected') return { label: 'Rejected', variant: 'REJECTED', isPrimary: true };
-    if (attStatus === 'no_show') return { label: 'No Show', variant: 'NO_SHOW', isPrimary: true };
-
-    if (live === 'Ongoing Session') return { label: 'Active', variant: 'ACTIVE', isPrimary: true };
-    if (live === 'Completed') return { label: 'Completed', variant: 'COMPLETED', isPrimary: true };
-    if (live === 'Upcoming') return { label: 'Upcoming', variant: 'UPCOMING', isPrimary: true };
-
-    if (tsStatus === 'submitted') return { label: 'Published', variant: 'SUBMITTED', isPrimary: false };
-    return { label: 'Draft', variant: 'DRAFT', isPrimary: false };
-}
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
@@ -138,7 +72,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     isManager = true,
     employeeHeader,
     employeeActions,
-    hideGlow = false,
     useGroupColoring = false,
     className,
 }, ref) => {
@@ -147,6 +80,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     const [localAdjEnd, setLocalAdjEnd] = useState(entry.adjustedEnd || '');
     const [localPaidBreak, setLocalPaidBreak] = useState(entry.paidBreak || '0');
     const [localUnpaidBreak, setLocalUnpaidBreak] = useState(entry.unpaidBreak || '0');
+    const [localActualBreakStart, setLocalActualBreakStart] = useState(entry.actualBreakStart || '');
+    const [localActualBreakEnd, setLocalActualBreakEnd] = useState(entry.actualBreakEnd || '');
 
     // Billable variance-reason flow (mirrors the desktop row).
     const [varianceOpen, setVarianceOpen] = useState(false);
@@ -177,6 +112,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
+                break_start: entry.rosteredBreakStart || undefined,
                 scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
             });
         } catch {
@@ -214,6 +150,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 employmentType: entry.employmentType,
                 is_training: entry.isTraining,
                 unpaid_break_minutes: parseFloat(entry.unpaidBreak) || 0,
+                break_start: entry.actualBreakStart || entry.rosteredBreakStart || undefined,
                 scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
             }, entry.netLengthMinutes);
         } catch {
@@ -245,6 +182,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         setLocalAdjEnd(entry.adjustedEnd || entry.scheduledEnd || '');
         setLocalPaidBreak(entry.paidBreak || '0');
         setLocalUnpaidBreak(entry.unpaidBreak || '0');
+        setLocalActualBreakStart(entry.actualBreakStart || '');
+        setLocalActualBreakEnd(entry.actualBreakEnd || '');
         setIsEditing(true);
     };
 
@@ -258,61 +197,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
 
     const isPending = ['submitted', 'draft', 'pending'].includes((entry.timesheetStatus || '').toLowerCase());
     
-    const theme = useMemo(() => {
-        const type = entry.groupType;
-        const group = (entry.group || '').toLowerCase();
-        const dept = (entry.department || '').toLowerCase();
-        const subDept = (entry.subDepartment || '').toLowerCase();
-        const org = (entry.organization || '').toLowerCase();
-        
-        const isConvention = type === 'convention_centre' || group.includes('convention') || dept.includes('convention') || subDept.includes('convention') || org.includes('convention');
-        const isExhibition = type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
-        const isTheatre = type === 'theatre' || group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
-        const isCutaway = type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway') || subDept.includes('cutaway') || org.includes('cutaway');
-        // Office by the group alone, and first: "office" is too common in
-        // department and role names to infer, and an Office shift in a
-        // department named after a venue must still read as Office.
-        const isOffice = type === 'office' || group === 'office';
 
-        if (isOffice) return {
-            color: '#0891b2',
-            secondary: '#06b6d4',
-            atmosphere: ['#0e7490', '#0891b2', '#22d3ee'],
-            tint: 'rgba(6, 182, 212, 0.04)'
-        };
-
-        if (isConvention) return { 
-            color: '#2563eb', 
-            secondary: '#3b82f6', 
-            atmosphere: ['#1d4ed8', '#2563eb', '#60a5fa'],
-            tint: 'rgba(37, 99, 235, 0.04)'
-        };
-        
-        if (isExhibition) return { 
-            color: '#10b981', 
-            secondary: '#059669', 
-            atmosphere: ['#059669', '#10b981', '#34d399'],
-            tint: 'rgba(16, 185, 129, 0.04)'
-        };
-        
-        if (isTheatre) return {
-            color: '#ef4444',
-            secondary: '#dc2626',
-            atmosphere: ['#991b1b', '#ef4444', '#f87171'],
-            tint: 'rgba(239, 68, 68, 0.04)'
-        };
-
-        if (isCutaway) return {
-            color: '#d97706',
-            secondary: '#f59e0b',
-            atmosphere: ['#b45309', '#d97706', '#fbbf24'],
-            tint: 'rgba(245, 158, 11, 0.04)'
-        };
-
-        return { color: '#9333ea', secondary: '#a855f7', atmosphere: ['#7e22ce', '#9333ea', '#c084fc'], tint: 'transparent' };
-    }, [entry.groupType, entry.group, entry.department, entry.subDepartment, entry.organization]);
-
-    const themeColor = theme.color;
 
     const isFinalized = useMemo(() => {
         const tsStatus = (entry.timesheetStatus || '').toLowerCase();
@@ -323,23 +208,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     
     const showNoShowBtn = isShiftOver && (!entry.clockIn || entry.clockIn === '-') && (!entry.clockOut || entry.clockOut === '-') && entry.attendanceStatus !== 'no_show' && !readOnly && !!onMarkNoShow && !isFinalized;
 
-    const displayStatus = useMemo(() => getDisplayStatus(entry), [entry]);
 
-    const isPast = useMemo(() => {
-        if (!entry.date || !entry.scheduledEnd) return false;
-        try {
-            // Compare the shift's Sydney wall-clock end instant against the real
-            // current epoch — browser-timezone-independent.
-            return parseZonedDateTime(String(entry.date), entry.scheduledEnd, SYDNEY_TZ).getTime() < Date.now();
-        } catch {
-            return false;
-        }
-    }, [entry.date, entry.scheduledEnd]);
 
-    const protection = useMemo(() => getProtectionContext(
-        { lifecycle_status: entry.liveStatus as any },
-        isPast
-    ), [entry.liveStatus, isPast]);
 
     const reviewLockedToast = () => toast({
         title: 'Locked',
@@ -389,6 +259,10 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             scheduledEnd: entry.scheduledEnd,
             unpaidBreakMinutes: parseFloat(localUnpaidBreak) || 0,
             requiredMinutes,
+            actualBreakStart: localActualBreakStart || null,
+            actualBreakEnd: localActualBreakEnd || null,
+            rosteredBreakStart: entry.rosteredBreakStart || null,
+            rosteredBreakEnd: entry.rosteredBreakEnd || null,
         });
         if (!v.ok) {
             toast({ title: 'Check the edit', description: v.error!, variant: 'destructive' });
@@ -400,6 +274,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             adjustedEnd: v.normalizedEnd,
             paidBreak: localPaidBreak,
             unpaidBreak: localUnpaidBreak,
+            actualBreakStart: v.normalizedBreakStart || null,
+            actualBreakEnd: v.normalizedBreakEnd || null,
             isAdjustedManual: true,
         };
         if (v.startChanged && !v.needArrivalReason) payload.arrivalVarianceReason = null;
@@ -443,7 +319,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         <>
             <SharedShiftCard
             variant="timecard"
-            hideGlow={hideGlow}
             identityGrid
             organization={entry.organization}
             department={entry.department}
@@ -464,6 +339,10 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             })()}
             paidBreak={parseInt(entry.paidBreak) || 0}
             unpaidBreak={parseInt(entry.unpaidBreak) || 0}
+            rosteredBreakStart={entry.rosteredBreakStart}
+            rosteredBreakEnd={entry.rosteredBreakEnd}
+            actualBreakStart={entry.actualBreakStart}
+            actualBreakEnd={entry.actualBreakEnd}
             lifecycleStatus={entry.liveStatus}
             groupVariant={resolveGroupVariant(entry.groupType, `${entry.group} ${entry.department}`, entry.role)}
             employeeName={entry.employee}
@@ -508,6 +387,12 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             }}
             topContent={
                 <div className="flex items-center gap-2">
+                    {entry.hasBreakVarianceFlag && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                            Break dev {entry.breakVarianceMinutes ? `±${entry.breakVarianceMinutes}m` : '>15m'}
+                        </span>
+                    )}
                     {isSelectMode && (
                         <button
                             onClick={onToggleSelect}
@@ -527,44 +412,88 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                         <div className="space-y-3 w-full">
                             <div className="grid grid-cols-2 gap-2 w-full">
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Adj In</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Adj In</Label>
                                     <input 
                                         value={localAdjStart} 
                                         onChange={e => setLocalAdjStart(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Adj Out</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Adj Out</Label>
                                     <input 
                                         value={localAdjEnd} 
                                         onChange={e => setLocalAdjEnd(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2 w-full">
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Paid Break</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Paid Break</Label>
                                     <input 
                                         value={localPaidBreak} 
                                         onChange={e => setLocalPaidBreak(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                                 <div className="space-y-1 min-w-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Unpaid Break</Label>
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Unpaid Break</Label>
                                     <input 
                                         value={localUnpaidBreak} 
                                         onChange={e => setLocalUnpaidBreak(e.target.value)} 
-                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 w-full">
+                                <div className="space-y-1 min-w-0">
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Actual Break Start</Label>
+                                    <input 
+                                        value={localActualBreakStart} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setLocalActualBreakStart(val);
+                                            if (val && localActualBreakEnd) {
+                                                const s = parseHHMM(val);
+                                                const end = parseHHMM(localActualBreakEnd);
+                                                if (s !== null && end !== null) {
+                                                    const dur = end <= s ? end + 1440 - s : end - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    setLocalUnpaidBreak(entry.isSecurityRole ? '0' : String(dur));
+                                                }
+                                            }
+                                        }} 
+                                        placeholder="HH:MM"
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                    />
+                                </div>
+                                <div className="space-y-1 min-w-0">
+                                    <Label className="text-[11px] font-semibold uppercase tracking-widest opacity-40">Actual Break End</Label>
+                                    <input 
+                                        value={localActualBreakEnd} 
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setLocalActualBreakEnd(val);
+                                            if (localActualBreakStart && val) {
+                                                const s = parseHHMM(localActualBreakStart);
+                                                const end = parseHHMM(val);
+                                                if (s !== null && end !== null) {
+                                                    const dur = end <= s ? end + 1440 - s : end - s;
+                                                    // Sch 3 §3.2(a)/§5.3(a): a Security meal break is paid.
+                                                    setLocalUnpaidBreak(entry.isSecurityRole ? '0' : String(dur));
+                                                }
+                                            }
+                                        }} 
+                                        placeholder="HH:MM"
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-[11px] text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
                                 </div>
                             </div>
                             <div className="flex items-center justify-center gap-2 w-full pt-1">
                                 <Button
                                     onClick={handleSaveAdjustment}
-                                    className="flex-1 h-11 rounded-xl font-bold bg-primary text-white shadow-lg active:scale-95 transition-all flex items-center justify-center"
+                                    className="flex-1 h-11 rounded-xl font-bold bg-primary text-primary-foreground shadow-lg active:scale-95 transition-all flex items-center justify-center"
                                 >
                                     <Check className="h-5 w-5 mr-2" /> Save
                                 </Button>
@@ -584,7 +513,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                     onClick={handleApprove}
                                     disabled={reviewLocked}
                                     title={reviewLocked ? 'Unlocks after clock-out, auto clock-out, or no-show' : undefined}
-                                    className="flex-1 h-9 rounded-xl font-black uppercase text-[9px] tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
+                                    className="flex-1 h-9 rounded-xl font-semibold uppercase text-[11px] tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
                                 >
                                     Approve
                                 </Button>
@@ -592,7 +521,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                     onClick={handleReject}
                                     disabled={reviewLocked}
                                     title={reviewLocked ? 'Unlocks after clock-out, auto clock-out, or no-show' : undefined}
-                                    className="flex-1 h-9 rounded-xl font-black uppercase text-[9px] tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
+                                    className="flex-1 h-9 rounded-xl font-semibold uppercase text-[11px] tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 transition-all active:scale-95 px-0 shadow-none text-center"
                                 >
                                     Reject
                                 </Button>
@@ -601,7 +530,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                     onClick={handleStartEditing}
                                     disabled={reviewLocked}
                                     title={reviewLocked ? 'Unlocks after clock-out, auto clock-out, or no-show' : undefined}
-                                    className="flex-1 h-9 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 px-0 disabled:opacity-30 text-center"
+                                    className="flex-1 h-9 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[11px] font-semibold uppercase tracking-widest transition-all active:scale-95 px-0 disabled:opacity-30 text-center"
                                 >
                                     Edit
                                 </Button>
@@ -610,7 +539,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                                         variant="outline"
                                         onClick={() => onMarkNoShow?.(String(entry.id))}
                                         disabled={!isShiftOver}
-                                        className="flex-1 h-9 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[8px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95 px-1 flex items-center justify-center"
+                                        className="flex-1 h-9 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[11px] font-semibold uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95 px-1 flex items-center justify-center"
                                     >
                                         <UserX className="h-3 w-3 mr-1" /> No-Show
                                     </Button>
@@ -618,14 +547,14 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                             </div>
                         ) : (
                             <div className="w-full flex items-center justify-center gap-2">
-                                <div className="flex-1 flex items-center justify-center h-9 bg-foreground/[0.04] border border-foreground/5 rounded-xl text-foreground/40 text-[9px] font-black uppercase tracking-widest text-center">
+                                <div className="flex-1 flex items-center justify-center h-9 bg-foreground/[0.04] border border-foreground/5 rounded-xl text-foreground/40 text-[11px] font-semibold uppercase tracking-widest text-center">
                                     Finalized Record
                                 </div>
                                 {!readOnly && (
                                     <Button
                                         variant="outline"
                                         onClick={handleStartEditing}
-                                        className="h-9 px-4 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[9px] font-black uppercase tracking-widest transition-all active:scale-95"
+                                        className="h-9 px-4 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[11px] font-semibold uppercase tracking-widest transition-all active:scale-95"
                                     >
                                         Edit
                                     </Button>
@@ -660,16 +589,16 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 <div className="space-y-4 my-2">
                     {pendingSave?.needArrival && (
                         <div className="space-y-1.5">
-                            <Label htmlFor="m-arrival-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            <Label htmlFor="m-arrival-variance" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Arrival variance reason <span className="text-red-500">*</span>
                             </Label>
                             <Select value={arrivalReason} onValueChange={setArrivalReason}>
-                                <SelectTrigger id="m-arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                <SelectTrigger id="m-arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-[13px] font-semibold text-foreground">
                                     <SelectValue placeholder="Select a reason…" />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
                                     {ARRIVAL_VARIANCE_REASONS.map(r => (
-                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-[11px] font-semibold cursor-pointer">
                                             {r}
                                         </SelectItem>
                                     ))}
@@ -679,16 +608,16 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                     )}
                     {pendingSave?.needDeparture && (
                         <div className="space-y-1.5">
-                            <Label htmlFor="m-departure-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            <Label htmlFor="m-departure-variance" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                                 Departure variance reason <span className="text-red-500">*</span>
                             </Label>
                             <Select value={departureReason} onValueChange={setDepartureReason}>
-                                <SelectTrigger id="m-departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                <SelectTrigger id="m-departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-[13px] font-semibold text-foreground">
                                     <SelectValue placeholder="Select a reason…" />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
                                     {DEPARTURE_VARIANCE_REASONS.map(r => (
-                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                        <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-[11px] font-semibold cursor-pointer">
                                             {r}
                                         </SelectItem>
                                     ))}

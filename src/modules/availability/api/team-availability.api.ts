@@ -311,7 +311,7 @@ const SHIFT_PAGE_SIZE = 1000;
 const SHIFT_ROW_CAP = 8000;
 const SHIFT_MAX_PAGES = 25;
 
-export interface TeamShiftsResult {
+interface TeamShiftsResult {
     shifts: RawTeamShift[];
     /**
      * The read hit its ceiling and the range is only partly represented. Hours
@@ -340,8 +340,7 @@ export async function getTeamShifts(
             .gte('shift_date', format(startDate, 'yyyy-MM-dd'))
             .lte('shift_date', format(endDate, 'yyyy-MM-dd'))
             .neq('lifecycle_status', 'Cancelled')
-            .or('is_cancelled.is.null,is_cancelled.eq.false')
-            .is('deleted_at', null);
+            .or('is_cancelled.is.null,is_cancelled.eq.false');
 
         if (deptIds.length > 0) query = query.in('department_id', deptIds);
         if (subDeptIds.length > 0) query = query.in('sub_department_id', subDeptIds);
@@ -504,7 +503,7 @@ export async function getTeamLeaveDays(
  * only change needed here — the rest of the page already reads `required`
  * source-agnostically.
  */
-export async function getRequiredFromDemand(
+async function getRequiredFromDemand(
     _scope: ScopeSelection,
     _startDate: Date,
     _endDate: Date,
@@ -520,7 +519,7 @@ export async function getRequiredFromDemand(
     return null;
 }
 
-export interface RequiredResolution {
+interface RequiredResolution {
     required: Map<string, Map<number, number>> | null;
     source: RequiredSource;
 }
@@ -606,12 +605,3 @@ export async function getTeamFairnessStanding(
     return out;
 }
 
-export const teamAvailabilityApi = {
-    getTeamMembers,
-    getTeamShifts,
-    getTeamLeaveDays,
-    getTeamRestrictedWorkLimits,
-    getTeamFairnessStanding,
-    resolveRequired,
-    getResolvedAvailabilities,
-};

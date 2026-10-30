@@ -1,23 +1,23 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
 import MyRosterCalendar from '@/modules/rosters/ui/my-roster/MyRosterCalendar';
 import { MyOffersModal } from '@/modules/rosters/ui/my-roster/MyOffersModal';
 import { useMyRoster } from '@/modules/rosters';
 import { usePendingOfferCount, useMyOffers } from '@/modules/rosters/state/useRosterShifts';
-import { CalendarDays, Info, Loader2, Mail } from 'lucide-react';
+import { CalendarDays, Info, Mail } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { text, touch } from '@/modules/core/ui/typography';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { EmployeeFunctionBar } from '@/modules/core/ui/components/EmployeeFunctionBar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { format, startOfMonth, startOfDay, isWithinInterval } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-import { DatePicker } from '@/modules/core/ui/calendar';
+import { startOfMonth } from 'date-fns';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { 
   computeRange, 
   navigateDate, 
@@ -59,7 +59,6 @@ const MyRosterPage: React.FC = () => {
     setSelectedDate(date);
   }, [view]);
 
-  const { isDark } = useTheme();
 
   if (!user) {
     return (
@@ -72,7 +71,7 @@ const MyRosterPage: React.FC = () => {
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <CalendarDays className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Authentication Required</h2>
+          <h2 className="text-[20px] font-bold text-foreground mb-2">Authentication Required</h2>
           <p className="text-muted-foreground">Please log in to view your personal roster.</p>
         </motion.div>
       </div>
@@ -80,7 +79,7 @@ const MyRosterPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <PageLayout>
       {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
       <GoldStandardHeader
         title="My Roster"
@@ -94,6 +93,8 @@ const MyRosterPage: React.FC = () => {
             onViewChange={(v) => setView(v as ViewType)}
             selectedDate={selectedDate}
             onDateChange={handleDateSelect}
+            showToday
+            onToday={() => handleDateSelect(new Date())}
             rangeLabel={rangeLabel}
             onPrevious={() => setSelectedDate(navigateDate(selectedDate, view, -1))}
             onNext={() => setSelectedDate(navigateDate(selectedDate, view, 1))}
@@ -129,28 +130,21 @@ const MyRosterPage: React.FC = () => {
       />
 
       {/* ── BODY (Calendar) ── */}
-      <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
-            "h-full rounded-[32px] overflow-hidden transition-all border",
-            isDark 
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+            "h-full overflow-hidden",
+            surface.bodyCard
         )}>
           {isLoading ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-9 w-9 animate-spin text-primary/60" />
-              <span className="text-sm text-muted-foreground font-medium tracking-wide">
-                Loading your roster…
-              </span>
-            </div>
+            <PageState state="loading" className="h-full" title="Loading your roster" />
           ) : error ? (
             <div className="h-full flex flex-col items-center justify-center gap-4 text-center p-8">
               <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center">
                 <Info className="h-7 w-7 text-destructive" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-foreground">Could not load roster</h3>
-                <p className="text-sm text-muted-foreground mt-1">
+                <h3 className="text-[15px] font-bold text-foreground">Could not load roster</h3>
+                <p className="text-[13px] text-muted-foreground mt-1">
                   Failed to fetch shifts. Try refreshing the page.
                 </p>
               </div>
@@ -215,7 +209,7 @@ const MyRosterPage: React.FC = () => {
         onClose={() => setShowOffersModal(false)}
         onOfferResponded={handleOfferResponded}
       />
-    </div>
+    </PageLayout>
   );
 };
 

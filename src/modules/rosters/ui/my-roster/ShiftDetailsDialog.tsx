@@ -8,7 +8,6 @@ import {
   DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import {
   X,
   ArrowLeftRight,
@@ -16,20 +15,21 @@ import {
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { text, touch } from '@/modules/core/ui/typography';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
-import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge';
 
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
 import DropShiftDrawer from './DropShiftDrawer';
+import { AddToCalendar } from './AddToCalendar';
+import { useOnlineStatus } from '@/modules/core/hooks/useOnlineStatus';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useClockValue, isShiftPast, type ClockSnapshot } from '@/modules/core/hooks/useClock';
@@ -59,39 +59,6 @@ interface ShiftDetailsDialogProps {
 }
 
 // ── Cost Tooltip ──────────────────────────────────────────────────────────
-export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
-  if (!breakdown) return null;
-  const { totalCost, ordinaryCost, overtimeCost, allowanceCost, ordinaryHours, overtimeHours, breakdown: details } = breakdown;
-  return (
-      <div className="space-y-2 p-1 min-w-[180px]">
-          <div className="flex justify-between items-center pb-1 border-b border-white/10">
-              <span className="text-[11px] font-bold uppercase tracking-[0.12em] opacity-90">{COST_ESTIMATE_TITLE}</span>
-              <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
-          </div>
-          <div className="space-y-1 text-[11px] tabular-nums">
-              <div className="flex justify-between">
-                  <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
-                  <span>${ordinaryCost.toFixed(2)}</span>
-              </div>
-              {overtimeCost > 0 && (
-                  <div className="flex justify-between text-orange-300">
-                      <span>Overtime ({overtimeHours.toFixed(1)}h)</span>
-                      <span>${overtimeCost.toFixed(2)}</span>
-                  </div>
-              )}
-              {allowanceCost > 0 && (
-                  <div className="flex justify-between text-blue-300">
-                      <span>Night Allowance ({details.nightHours.toFixed(1)}h)</span>
-                      <span>${allowanceCost.toFixed(2)}</span>
-                  </div>
-              )}
-          </div>
-          <div className="pt-1 text-[11px] opacity-80 italic border-t border-white/10">
-              {COST_ESTIMATE_DISCLAIMER}
-          </div>
-      </div>
-  );
-};
 
 const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   isOpen,
@@ -157,7 +124,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
 
   const isS3PendingOffer = shiftData?.shift.lifecycle_status === 'Published' && shiftData?.shift.assignment_status === 'assigned' && !shiftData?.shift.assignment_outcome;
 
-  const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
+  // Offline the dialog may be showing a saved copy; swap/drop need the server.
+  const isOnline = useOnlineStatus();
+  const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast || !isOnline;
   // Full-time hours are fixed: an FT shift is never swapped or dropped to
   // Bidding (the database refuses both). Changes go through leave or the manager.
   const isFullTimeShift = (shiftData?.shift as any)?.target_employment_type === 'FT';
@@ -378,7 +347,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden bg-card/95 backdrop-blur-2xl border border-border shadow-2xl rounded-[28px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full p-0 overflow-hidden bg-card/95 max-h-[90vh] overflow-y-auto" size="md">
           <DialogHeader className="sr-only">
             <DialogTitle>{shift.roles?.name || 'Shift'} Details</DialogTitle>
             <DialogDescription>
@@ -391,7 +360,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             <SharedShiftCard
               variant="timecard"
               isFlat={true}
-              hideGlow={true}
               customColor={groupColor}
               organization={shift.organizations?.name || ''}
               department={shift.departments?.name || ''}
@@ -470,6 +438,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                         {dropLabel}
                       </Button>
                     </div>
+                  )}
+                  {!shift.is_cancelled && !isPast && (
+                    <AddToCalendar shift={shift} groupName={groupName} subGroupName={subGroupName} />
                   )}
                   {isWithinLockoutPeriod && !isPast && !isActiveOrCommenced && (
                     <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3">

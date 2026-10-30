@@ -41,7 +41,7 @@ export interface SssBreakdown {
     penalty: number;
 }
 
-export interface SssResult {
+interface SssResult {
     score: number;
     flag: SssFlag;
     breakdown: SssBreakdown;

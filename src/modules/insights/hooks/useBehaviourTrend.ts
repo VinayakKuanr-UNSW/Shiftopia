@@ -11,7 +11,7 @@ import type { ScopeSelection } from '@/platform/auth/types';
  * disagree. Empty buckets come back as zero rows, so a quiet week draws a gap
  * at zero instead of the line jumping over it.
  */
-export interface BehaviourTrendRow {
+interface BehaviourTrendRow {
     bucket_start: string;
     held: number;
     worked: number;

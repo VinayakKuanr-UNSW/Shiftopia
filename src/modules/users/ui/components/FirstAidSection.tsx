@@ -8,6 +8,7 @@ import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import { cn } from '@/modules/core/lib/utils';
+import { CommandSelector } from './CommandSelector';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
 import {
@@ -137,7 +138,7 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
             {/* Header */}
             <div className="px-5 py-3.5 border-b border-border/20 bg-card flex items-center justify-between gap-2 shrink-0">
                 <div className="space-y-0.5 min-w-0">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                    <h3 className="text-[13px] font-black uppercase tracking-wider text-foreground flex items-center gap-2">
                         <HeartPulse className="w-4 h-4 text-primary" aria-hidden="true" />
                         First Aid
                     </h3>
@@ -151,7 +152,7 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                         variant="outline"
                         onClick={openAdd}
                         aria-label={`Appoint ${employeeName} as a first aider`}
-                        className="rounded-xl h-8 px-3 text-[10px] font-black uppercase tracking-wider shrink-0"
+                        className="rounded-xl h-8 px-3 text-[11px] font-black uppercase tracking-wider shrink-0"
                     >
                         <Plus className="w-3.5 h-3.5 mr-1" aria-hidden="true" />
                         Appoint
@@ -170,11 +171,11 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                 )}
 
                 {isLoading ? (
-                    <p className="text-muted-foreground text-xs font-medium animate-pulse py-6 text-center">Loading appointments…</p>
+                    <p className="text-muted-foreground text-[11px] font-medium animate-pulse py-6 text-center">Loading appointments…</p>
                 ) : !appointments || appointments.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
                         <HeartPulse className="w-8 h-8 mx-auto mb-2 opacity-20" aria-hidden="true" />
-                        <p className="text-xs font-bold">Never appointed as a first aider</p>
+                        <p className="text-[11px] font-bold">Never appointed as a first aider</p>
                     </div>
                 ) : (
                     <ul className="space-y-2.5" aria-label="First-aid appointments">
@@ -188,7 +189,7 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                                     className="bg-muted/30 hover:bg-muted/60 rounded-xl border border-border/20 p-3 transition-colors flex items-start justify-between gap-2"
                                 >
                                     <div className="min-w-0 flex-1">
-                                        <p className="font-bold text-xs text-foreground">
+                                        <p className="font-bold text-[11px] text-foreground">
                                             {formatDay(a.effective_from)} – {a.effective_to ? formatDay(a.effective_to) : 'until ended'}
                                         </p>
                                         {appointer && (
@@ -199,7 +200,7 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
-                                        <Badge className={cn('border font-bold text-[9px] uppercase shadow-none', STATUS_BADGE[status].className)}>
+                                        <Badge className={cn('border font-bold text-[11px] uppercase shadow-none', STATUS_BADGE[status].className)}>
                                             {STATUS_BADGE[status].label}
                                         </Badge>
                                         {canManage && actions.canEnd && (
@@ -234,10 +235,10 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
 
             {/* Appoint dialog */}
             <Dialog open={adding} onOpenChange={setAdding}>
-                <DialogContent className="rounded-2xl border border-border/30 bg-popover">
+                <DialogContent className="bg-popover">
                     <DialogHeader>
-                        <DialogTitle className="text-lg font-black uppercase tracking-tight">Appoint first aider</DialogTitle>
-                        <DialogDescription className="text-xs text-muted-foreground">
+                        <DialogTitle className="uppercase">Appoint first aider</DialogTitle>
+                        <DialogDescription>
                             {employeeName} will be paid the first-aid allowance on every ordinary hour they work
                             while the appointment is in force (cl 28.2).
                         </DialogDescription>
@@ -245,25 +246,22 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                     <div className="space-y-4 mt-2">
                         <QualificationNotice qualifications={qualifications} />
                         {organisations && organisations.length > 1 && (
-                            <div>
-                                <Label htmlFor="fa-org" className="text-xs font-bold">Organisation</Label>
-                                <select
-                                    id="fa-org"
-                                    value={activeOrgId ?? ''}
-                                    onChange={e => setOrganisationId(e.target.value)}
-                                    className="mt-1 w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm"
-                                >
-                                    {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                                </select>
-                            </div>
+                            // The page's picker design, as the contract's own organization picker
+                            <CommandSelector
+                                label="Organisation"
+                                placeholder="Select organisation"
+                                value={activeOrgId ?? ''}
+                                onValueChange={setOrganisationId}
+                                options={organisations.map(o => ({ id: o.id, name: o.name }))}
+                            />
                         )}
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <Label htmlFor="fa-from" className="text-xs font-bold">Starts <span className="text-red-500">*</span></Label>
+                                <Label htmlFor="fa-from" className="text-[11px] font-bold">Starts <span className="text-red-500">*</span></Label>
                                 <Input id="fa-from" type="date" required value={from} onChange={e => setFrom(e.target.value)} className="rounded-xl border-border/40" />
                             </div>
                             <div>
-                                <Label htmlFor="fa-to" className="text-xs font-bold">Last day (optional)</Label>
+                                <Label htmlFor="fa-to" className="text-[11px] font-bold">Last day (optional)</Label>
                                 <Input id="fa-to" type="date" min={from} value={to} onChange={e => setTo(e.target.value)} className="rounded-xl border-border/40" />
                             </div>
                         </div>
@@ -271,9 +269,9 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                             Leave the last day empty for an ongoing appointment. For a single event, use the same date twice.
                         </p>
                         <div>
-                            <Label htmlFor="fa-notes" className="text-xs font-bold">Notes (optional)</Label>
+                            <Label htmlFor="fa-notes" className="text-[11px] font-bold">Notes (optional)</Label>
                             <Textarea id="fa-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-                                placeholder="e.g. certificate sighted, event name" className="rounded-xl border-border/40 text-sm" />
+                                placeholder="e.g. certificate sighted, event name" className="rounded-xl border-border/40 text-[13px]" />
                         </div>
                         {addError && <p role="alert" className="text-[11px] font-semibold text-red-600 dark:text-red-400">{addError}</p>}
                         <Button
@@ -290,10 +288,10 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
 
             {/* End dialog */}
             <Dialog open={!!ending} onOpenChange={open => !open && setEnding(null)}>
-                <DialogContent className="rounded-2xl border border-border/30 bg-popover">
+                <DialogContent className="bg-popover">
                     <DialogHeader>
-                        <DialogTitle className="text-lg font-black uppercase tracking-tight">End appointment</DialogTitle>
-                        <DialogDescription className="text-xs text-muted-foreground">
+                        <DialogTitle className="uppercase">End appointment</DialogTitle>
+                        <DialogDescription>
                             Choose the last day the allowance applies. Pick yesterday to stop it from today.
                             Earlier dates are locked because those shifts have already been worked and priced.
                         </DialogDescription>
@@ -301,7 +299,7 @@ const FirstAidSection: React.FC<FirstAidSectionProps> = ({ employeeId, employeeN
                     {ending && (
                         <div className="space-y-4 mt-2">
                             <div>
-                                <Label htmlFor="fa-end" className="text-xs font-bold">Last day</Label>
+                                <Label htmlFor="fa-end" className="text-[11px] font-bold">Last day</Label>
                                 <Input
                                     id="fa-end"
                                     type="date"

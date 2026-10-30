@@ -25,8 +25,9 @@ import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useQueryClient } from '@tanstack/react-query';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { cn } from '@/modules/core/lib/utils';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
 
 import { useKpiFilters } from '../hooks/useKpiFilters';
 import { KpiFunctionBar, type KpiTabDef } from '../ui/components/KpiFunctionBar';
@@ -83,7 +84,6 @@ const InsightsPage: React.FC = () => {
         setPeriodByLabel, setCompare, setActiveTab,
     } = useKpiFilters(scope, 'overview');
     const queryClient = useQueryClient();
-    const { isDark } = useTheme();
 
     /**
      * Refresh must invalidate every key the ACTIVE tab reads. It is also the
@@ -99,12 +99,10 @@ const InsightsPage: React.FC = () => {
 
     return (
         <TooltipProvider delayDuration={200}>
-            <div className="flex h-full flex-col overflow-hidden bg-background">
-                <Tabs
-                    value={activeTab}
-                    onValueChange={setActiveTab}
-                    className="flex min-h-0 flex-1 flex-col"
-                >
+            {/* Tabs wraps the shell (not the other way round) so the header and
+                body are the shell's own children and get its gap. */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+                <PageLayout>
                     <GoldStandardHeader
                         title="KPI"
                         Icon={BarChart3}
@@ -127,10 +125,9 @@ const InsightsPage: React.FC = () => {
 
                     <div
                         className={cn(
-                            'custom-scrollbar mx-4 mb-4 min-h-0 flex-1 overflow-y-auto rounded-[28px] border p-4 transition-all lg:mx-6 lg:mb-6 lg:p-6',
-                            isDark
-                                ? 'border-border/60 bg-background/50 shadow-2xl shadow-black/20'
-                                : 'border-border/60 bg-card/40 shadow-sm backdrop-blur-sm',
+                            'custom-scrollbar min-h-0 flex-1 overflow-y-auto',
+                            page.bodyInset,
+                            surface.bodyCard,
                         )}
                     >
                         <TabsContent value="overview" className="mt-0 outline-none">
@@ -163,8 +160,8 @@ const InsightsPage: React.FC = () => {
                             {activeTab === 'cancellations' && <CancellationsTab filters={filters} scope={scope} />}
                         </TabsContent>
                     </div>
-                </Tabs>
-            </div>
+                </PageLayout>
+            </Tabs>
         </TooltipProvider>
     );
 };

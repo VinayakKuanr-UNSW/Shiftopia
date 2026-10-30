@@ -7,9 +7,11 @@
  * `PerformancePage`, the employee-facing page showing a person their OWN
  * numbers. Two different audiences, near-identical names.
  */
+import { tableTokens } from '@/modules/core/ui/primitives/table';
 import React, { useState, useMemo } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, Info, Search } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 import {
     useQuarterlyReport,
     getReportCellStatus,
@@ -279,7 +281,7 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
                                             </Tooltip>
                                         )}
                                     </div>
-                                    <p className={cn('text-3xl font-black tabular-nums tracking-tight', statusTextColor[st])}>
+                                    <p className={cn('text-[24px] font-black tabular-nums tracking-tight', statusTextColor[st])}>
                                         {s.value.toFixed(1)}%
                                     </p>
                                     <p className="text-[11px] text-muted-foreground mt-1 font-medium">Team Average · Selected Scope</p>
@@ -292,10 +294,8 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
 
             {/* ═══ TABLE ═══ */}
             <div className={cn(
-                "rounded-[32px] border transition-all overflow-hidden flex flex-col",
-                isDark 
-                    ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                    : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                "overflow-hidden flex flex-col",
+                surface.bodyCard
             )}>
                 {/* Search Bar */}
                 {!isLoading && rows.length > 0 && (
@@ -308,7 +308,7 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className={cn(
-                                    "w-full pl-9 pr-4 py-1.5 bg-background border border-border/40 rounded-xl text-xs transition-all",
+                                    "w-full pl-9 pr-4 py-1.5 bg-background border border-border/40 rounded-xl text-[11px] transition-all",
                                     "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40",
                                     "placeholder:text-muted-foreground font-medium"
                                 )}
@@ -319,24 +319,24 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
 
                 {isLoading ? (
                     <div className="flex items-center justify-center h-48">
-                        <p className="text-muted-foreground text-sm animate-pulse">Loading report…</p>
+                        <p className="text-muted-foreground text-[13px] animate-pulse">Loading report…</p>
                     </div>
                 ) : isError ? (
                     <div className="flex flex-col items-center justify-center h-48 gap-2">
-                        <p className="text-red-500 text-sm font-semibold">Couldn't load the performance report.</p>
-                        <p className="text-muted-foreground text-xs max-w-sm text-center">
+                        <p className="text-red-500 text-[13px] font-semibold">Couldn't load the performance report.</p>
+                        <p className="text-muted-foreground text-[11px] max-w-sm text-center">
                             {error instanceof Error ? error.message : 'An unexpected error occurred.'}
                         </p>
                         <button
                             onClick={() => refetch()}
-                            className="mt-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                            className="mt-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
                         >
                             Retry
                         </button>
                     </div>
                 ) : filteredRows.length === 0 ? (
                     <div className="flex items-center justify-center h-48">
-                        <p className="text-muted-foreground text-sm">
+                        <p className="text-muted-foreground text-[13px]">
                             {rows.length === 0
                                 ? 'No activity recorded for this quarter yet.'
                                 : 'No users match your search query.'}
@@ -353,7 +353,7 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
                     </div>
                 ) : (
                     <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
-                        <table className="w-full text-sm border-collapse">
+                        <table className={tableTokens.table}>
                             <thead>
                                 <tr ref={row1Ref} className="border-b border-border/50">
                                     {groups.map((g, index) => (
@@ -378,7 +378,8 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
                                         {columns.map((col, cIdx) => (
                                             <th
                                                 key={col.key}
-                                                onClick={() => handleSort(col.key)}
+                                                scope="col"
+                                                aria-sort={sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                                                 style={{ top: `${row1Height - 0.5}px` }}
                                                 className={cn(
                                                     "px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20 last:border-r-0",
@@ -389,7 +390,14 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
                                                 )}
                                             >
                                                 <div className="flex items-center gap-1">
-                                                    {col.label}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleSort(col.key)}
+                                                        className="inline-flex min-h-[32px] items-center gap-1 uppercase tracking-wider hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                                                    >
+                                                        {col.label}
+                                                        <SortIcon col={col.key} />
+                                                    </button>
                                                     {col.key === 'performance_score' && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
@@ -400,7 +408,6 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
                                                             </TooltipContent>
                                                         </Tooltip>
                                                     )}
-                                                    <SortIcon col={col.key} />
                                                 </div>
                                             </th>
                                         ))}
@@ -408,27 +415,21 @@ export default function EmployeePerformanceTable({ scope, selectedYear, selected
                                 </tr>
                             </thead>
                             <tbody>
-                                {sortedRows.map((row, idx) => (
+                                {sortedRows.map((row) => (
                                     <tr
                                         key={row.employee_id}
-                                        className={cn(
-                                            'group/row border-b border-border/30 hover:bg-muted/20 transition-colors',
-                                            idx % 2 === 0 ? 'bg-transparent' : 'bg-muted/5',
-                                        )}
+                                        className={tableTokens.row}
                                     >
                                         {columns.map((col, cIdx) => (
                                             <td
                                                 key={col.key}
                                                 className={cn(
-                                                    'px-3 py-2.5 whitespace-nowrap tabular-nums font-semibold border-r border-border/10 last:border-r-0',
+                                                    tableTokens.cell, 'px-3 whitespace-nowrap tabular-nums font-semibold border-r border-border/10 last:border-r-0',
                                                     col.key === 'employee_name' ? 'font-bold text-foreground' : '',
                                                     cIdx === 0
                                                         ? cn(
-                                                            'sticky left-0 z-10 border-r-2 border-r-border/80 transition-colors shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)] w-48 min-w-[12rem] px-4 text-left',
-                                                            isDark
-                                                                ? (idx % 2 === 0 ? 'bg-[#151c27]' : 'bg-[#121822]')
-                                                                : (idx % 2 === 0 ? 'bg-white' : 'bg-[#f8fafc]'),
-                                                            'group-hover/row:bg-slate-200/50 dark:group-hover/row:bg-[#1e2738]'
+                                                            'sticky left-0 z-10 border-r-2 border-r-border/80 shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)] w-48 min-w-[12rem] px-4 text-left',
+                                                            tableTokens.stickyCell
                                                         )
                                                         : '',
                                                     cellClass(row, col),

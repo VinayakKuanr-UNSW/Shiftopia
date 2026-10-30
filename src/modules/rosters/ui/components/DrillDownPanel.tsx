@@ -1,3 +1,4 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import {
@@ -5,12 +6,12 @@ import {
   useDeleteShift,
   usePublishShift,
   useUnpublishShift,
-  useCreateShift,
   useBulkPublishShifts,
   useBulkUnpublishShifts,
   useBulkDeleteShifts,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
+import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
 import { X, Loader2, Edit2, Trash2, Send, Undo2, Lock } from 'lucide-react';
 import { isSydneyPast, isSydneyStarted, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
@@ -80,7 +81,6 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const deleteMutation = useDeleteShift();
   const publishMutation = usePublishShift();
   const unpublishMutation = useUnpublishShift();
-  const createShiftMutation = useCreateShift();
 
   // Fetch data with guaranteed organization ID fallback and enabled only when modal is open
   // The hardcoded literal here was the id of the only organisation that exists,
@@ -115,10 +115,14 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
     shiftFilters,
   );
 
+  // The toolbar filters apply here too, so the panel lists exactly the shifts
+  // the cell it was opened from counted (useCellSummaryMap).
+  const advancedFilters = useRosterStore(s => s.advancedFilters);
+
   // Filter shifts with robust fallback normalization, trimming, and case-insensitivity
   const filteredShifts = useMemo(() => {
     if (!isOpen || !date) return [];
-    return shifts.filter(s => {
+    return applyAdvancedFilters(shifts, advancedFilters).filter(s => {
       const sGroupType = (s.group_type || 'convention_centre').trim().toLowerCase();
       const targetGroupType = (groupType || 'convention_centre').trim().toLowerCase();
       if (sGroupType !== targetGroupType) return false;
@@ -130,7 +134,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
       }
       return true;
     });
-  }, [isOpen, date, shifts, groupType, subGroupName]);
+  }, [isOpen, date, shifts, groupType, subGroupName, advancedFilters]);
 
   /**
    * The org → sub-group scope, stated once.
@@ -441,7 +445,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
         // inert={false} would still serialise as an attribute (inert is
         // presence-based), leaving the panel permanently inert.
         {...(!isOpen ? ({ inert: '' } as Record<string, string>) : {})}
-        className={`fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
         <div
           ref={dialogRef}
@@ -455,7 +459,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
           <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/10 bg-slate-100/50 dark:bg-[#111726]/50">
             <div className="flex items-center gap-3">
               <div>
-                <h2 id="drilldown-title" className="text-lg font-bold">
+                <h2 id="drilldown-title" className="text-[15px] font-bold">
                   {displayDate}
                 </h2>
               </div>
@@ -485,7 +489,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                     <dt className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                       {label}
                     </dt>
-                    <dd className="text-xs font-semibold text-foreground">{value}</dd>
+                    <dd className="text-[11px] font-semibold text-foreground">{value}</dd>
                   </div>
                 </div>
               ))}
@@ -493,14 +497,14 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
           )}
 
           <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50/50 dark:bg-[#0c101c]/50">
-            <div className="text-sm font-medium" aria-live="polite">
+            <div className="text-[13px] font-medium" aria-live="polite">
               {filteredShifts.length} Shift{filteredShifts.length !== 1 ? 's' : ''}
             </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs font-semibold"
+                className="h-8 text-[11px] font-semibold"
                 disabled={selectableShifts.length === 0}
                 onClick={handleSelectAllToggle}
               >
@@ -521,27 +525,20 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
 
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto overscroll-contain p-3.5 bg-slate-100 dark:bg-[#06080e]">
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin mb-4" />
-                <p>Loading full shift details...</p>
-              </div>
+              <PageState state="loading" scope="inline" title="Loading shift details" />
             ) : isError ? (
               // A failed fetch must NOT masquerade as an empty day — that is how a
               // rejected select (bad column / bad embed) read as "no shifts here"
               // while the bucket cell, served by an RPC, still showed a count.
-              <div className="flex flex-col items-center justify-center h-40 text-center gap-3 px-4">
-                <p className="text-sm font-medium text-destructive">Couldn’t load shifts for this day.</p>
-                <p className="text-xs text-muted-foreground max-w-md break-words">
-                  {(error as Error)?.message || 'Unknown error'}
-                </p>
-                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => refetch()}>
-                  Retry
-                </Button>
-              </div>
+              <PageState
+                state="error"
+                scope="inline"
+                title="Couldn’t load shifts for this day"
+                description={<span className="break-words">{(error as Error)?.message || 'Unknown error'}</span>}
+                onRetry={() => refetch()}
+              />
             ) : filteredShifts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-center">
-                <p>No shifts scheduled for this day.</p>
-              </div>
+              <PageState state="empty" scope="inline" title="No shifts scheduled for this day" />
             ) : (
               /*
                * Eight across, so a day's shifts are compared side by side
@@ -655,7 +652,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
           <div className="border-t border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-[#0c101c]/80 px-4 min-h-[64px] flex items-center shrink-0">
             {selectedInDrawerCount > 0 ? (
               <div className="w-full flex items-center justify-between gap-3 animate-in fade-in duration-200">
-                <span className="text-xs font-semibold text-muted-foreground shrink-0">
+                <span className="text-[11px] font-semibold text-muted-foreground shrink-0">
                   {selectedInDrawerCount} of {filteredShifts.length} selected
                 </span>
                 <div className="flex items-center gap-2">
@@ -663,7 +660,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                     size="sm"
                     onClick={handleBulkPublish}
                     disabled={isProcessing || !hasDraftSelected || isPastDate}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs gap-1 shadow-none"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] gap-1 shadow-none"
                   >
                     {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     Publish ({draftSelectedCount})
@@ -672,7 +669,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                     size="sm"
                     onClick={handleBulkUnpublish}
                     disabled={isProcessing || !hasPublishedSelected || isPastDate}
-                    className="border border-amber-500/20 text-amber-500 hover:bg-amber-500/10 font-medium text-xs gap-1 bg-transparent shadow-none"
+                    className="border border-amber-500/20 text-amber-500 hover:bg-amber-500/10 font-medium text-[11px] gap-1 bg-transparent shadow-none"
                   >
                     {isUnpublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
                     Unpublish ({publishedSelectedCount})
@@ -682,7 +679,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                     variant="destructive"
                     onClick={() => setBulkDeleteConfirmOpen(true)}
                     disabled={isProcessing}
-                    className="font-medium text-xs gap-1 px-3 shadow-none"
+                    className="font-medium text-[11px] gap-1 px-3 shadow-none"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
@@ -691,14 +688,14 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => clearSelection()}
-                    className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    className="h-8 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                   >
                     Clear
                   </Button>
                 </div>
               </div>
             ) : (
-              <p className="w-full text-xs text-muted-foreground/50 text-center">
+              <p className="w-full text-[11px] text-muted-foreground/50 text-center">
                 Select shifts to publish, unpublish, or delete in bulk
               </p>
             )}
@@ -708,10 +705,10 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
 
       {/* Bulk Delete Dialog */}
       <AlertDialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
-        <AlertDialogContent className="bg-background border-border">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Delete {selectedInDrawerCount} Shifts?</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
+            <AlertDialogTitle>Delete {selectedInDrawerCount} Shifts?</AlertDialogTitle>
+            <AlertDialogDescription>
               This action cannot be undone. All {selectedInDrawerCount} selected shifts will be permanently removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -736,10 +733,10 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="bg-background border-border">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Delete Shift?</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
+            <AlertDialogTitle>Delete Shift?</AlertDialogTitle>
+            <AlertDialogDescription>
               This action cannot be undone. The shift will be permanently removed.
             </AlertDialogDescription>
           </AlertDialogHeader>

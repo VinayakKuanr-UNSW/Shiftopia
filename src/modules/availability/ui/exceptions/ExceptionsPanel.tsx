@@ -49,7 +49,7 @@ function describe(exception: AvailabilityException): string {
     return `${when} · ${exception.startTime}–${exception.endTime}`;
 }
 
-export interface ExceptionsPanelProps {
+interface ExceptionsPanelProps {
     profileId: string;
     /**
      * Which job this exception applies to. NULL means unscoped / person-wide.
@@ -148,7 +148,7 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, sub
                     size="sm"
                     variant="ghost"
                     onClick={() => setAdding((v) => !v)}
-                    className="h-8 gap-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider"
+                    className="h-8 gap-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider"
                 >
                     <Plus className="h-3.5 w-3.5" />
                     Add
@@ -156,7 +156,7 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, sub
             </header>
 
             {error && (
-                <p role="alert" className="mb-3 rounded-lg border border-red-500/20 bg-red-500/5 p-2 text-xs text-red-600 dark:text-red-400">
+                <p role="alert" className="mb-3 rounded-lg border border-red-500/20 bg-red-500/5 p-2 text-[11px] text-red-600 dark:text-red-400">
                     {error}
                 </p>
             )}
@@ -164,44 +164,44 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, sub
             {adding && (
                 <div className="mb-3 space-y-3 rounded-xl border border-border/40 bg-background/60 p-3">
                     <div className="grid gap-2 sm:grid-cols-3">
-                        <label className="block text-xs">
+                        <label className="block text-[11px]">
                             <span className="mb-1 block text-muted-foreground">Date</span>
                             <input
                                 type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-sm"
+                                className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-[13px]"
                             />
                             {/* Blank is a real, useful answer here — it is how you
                                 say "every Tuesday afternoon, indefinitely". */}
-                            <span className="mt-1 block text-[10px] text-muted-foreground">
+                            <span className="mt-1 block text-[11px] text-muted-foreground">
                                 Leave blank for every day
                             </span>
                         </label>
-                        <label className="block text-xs">
+                        <label className="block text-[11px]">
                             <span className="mb-1 block text-muted-foreground">From</span>
                             <input
                                 type="time"
                                 value={start}
                                 onChange={(e) => setStart(e.target.value)}
-                                className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-sm"
+                                className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-[13px]"
                             />
                         </label>
-                        <label className="block text-xs">
+                        <label className="block text-[11px]">
                             <span className="mb-1 block text-muted-foreground">To</span>
                             <input
                                 type="time"
                                 value={end}
                                 onChange={(e) => setEnd(e.target.value)}
-                                className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-sm"
+                                className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-[13px]"
                             />
                         </label>
                     </div>
 
                     <fieldset className="space-y-1.5">
-                        <legend className="mb-1 text-xs text-muted-foreground">How firm is this?</legend>
+                        <legend className="mb-1 text-[11px] text-muted-foreground">How firm is this?</legend>
                         {(Object.keys(SEVERITY_COPY) as Array<'SOFT' | 'PREFERENCE'>).map((key) => (
-                            <label key={key} className="flex cursor-pointer items-start gap-2 text-xs">
+                            <label key={key} className="flex cursor-pointer items-start gap-2 text-[11px]">
                                 <input
                                     type="radio"
                                     name="exception-severity"
@@ -211,7 +211,7 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, sub
                                 />
                                 <span>
                                     <span className="font-medium text-foreground">{SEVERITY_COPY[key].label}</span>
-                                    <span className="block text-[10px] text-muted-foreground">
+                                    <span className="block text-[11px] text-muted-foreground">
                                         {SEVERITY_COPY[key].hint}
                                     </span>
                                 </span>
@@ -219,28 +219,28 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, sub
                         ))}
                     </fieldset>
 
-                    <label className="block text-xs">
+                    <label className="block text-[11px]">
                         <span className="mb-1 block text-muted-foreground">Reason (optional)</span>
                         <input
                             type="text"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             placeholder="Medical appointment, study, …"
-                            className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-sm"
+                            className="w-full rounded-lg border border-border/50 bg-background px-2 py-1.5 text-[13px]"
                         />
                     </label>
 
                     {windowInvalid && (
-                        <p className="text-xs text-red-500">
+                        <p className="text-[11px] text-red-500">
                             The end time has to be after the start time.
                         </p>
                     )}
 
                     <div className="flex justify-end gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => setAdding(false)} className="h-8 text-xs">
+                        <Button size="sm" variant="ghost" onClick={() => setAdding(false)} className="h-8 text-[11px]">
                             Cancel
                         </Button>
-                        <Button size="sm" onClick={handleAdd} disabled={saving || windowInvalid} className="h-8 gap-1.5 text-xs">
+                        <Button size="sm" onClick={handleAdd} disabled={saving || windowInvalid} className="h-8 gap-1.5 text-[11px]">
                             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                             Save
                         </Button>
@@ -249,9 +249,9 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, sub
             )}
 
             {loading ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">Loading…</p>
+                <p className="py-4 text-center text-[11px] text-muted-foreground">Loading…</p>
             ) : exceptions.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
+                <p className="py-4 text-center text-[11px] text-muted-foreground">
                     Nothing here. Add a window when there is a time you should not be rostered.
                 </p>
             ) : (
@@ -262,16 +262,16 @@ export const ExceptionsPanel: React.FC<ExceptionsPanelProps> = ({ profileId, sub
                             className="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-background/50 px-3 py-2"
                         >
                             <div className="min-w-0">
-                                <p className="truncate text-xs font-medium text-foreground">
+                                <p className="truncate text-[11px] font-medium text-foreground">
                                     {describe(exception)}
                                 </p>
                                 {exception.reason && (
-                                    <p className="truncate text-[10px] text-muted-foreground">{exception.reason}</p>
+                                    <p className="truncate text-[11px] text-muted-foreground">{exception.reason}</p>
                                 )}
                             </div>
                             <div className="flex flex-shrink-0 items-center gap-2">
                                 <span className={cn(
-                                    'rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider',
+                                    'rounded-md border px-1.5 py-0.5 text-[11px] font-black uppercase tracking-wider',
                                     SEVERITY_BADGE[exception.severity],
                                 )}>
                                     {exception.severity === 'HARD' ? 'Blocked' :

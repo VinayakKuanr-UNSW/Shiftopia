@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ScopeSelection } from '@/platform/auth/types';
 import { insightsApi } from '../api/insights.api';
-import type { ManagerScorecard } from '../model/manager-scorecard.types';
 
-export type { ManagerScorecard };
 
 /** How the roster was RUN: publish lead time, churn, emergency fills. */
 export const useManagerScorecard = (from: string, to: string, scope: ScopeSelection) =>

@@ -58,7 +58,7 @@ export interface MonthGridDayContext {
   holidayName: string | null;
 }
 
-export interface MonthGridProps {
+interface MonthGridProps {
   /** The month to display. */
   month: Date;
   /** Fired when the user pages to another month via the built-in navigation. */
@@ -266,7 +266,7 @@ export function MonthGrid({
           // Day cells own their padding, borders and state colours here; the
           // ghost-button preset from the picker size would wash them out.
           day: cn(
-            'w-full h-full p-0 font-normal flex flex-col items-stretch justify-start rounded-none text-left align-top text-sm transition-colors',
+            'w-full h-full p-0 font-normal flex flex-col items-stretch justify-start rounded-none text-left align-top text-[13px] transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:z-10',
           ),
           ...(captionVariant === 'hidden' ? { caption: 'sr-only', nav: 'hidden' } : null),

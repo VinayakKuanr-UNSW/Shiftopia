@@ -102,8 +102,8 @@ export function BiometricLockGate() {
         <Fingerprint className="h-10 w-10 text-indigo-400" />
       </div>
       <div>
-        <h2 className="text-lg font-semibold text-white">Shiftopia is locked</h2>
-        <p className="mt-1 text-sm text-slate-400">
+        <h2 className="text-[15px] font-semibold text-white">Shiftopia is locked</h2>
+        <p className="mt-1 text-[13px] text-slate-400">
           Unlock with your fingerprint or face to continue.
         </p>
       </div>
@@ -111,7 +111,7 @@ export function BiometricLockGate() {
         type="button"
         onClick={tryUnlock}
         disabled={authenticating}
-        className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+        className="rounded-xl bg-indigo-600 px-6 py-3 text-[13px] font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
       >
         {authenticating ? 'Authenticating…' : 'Unlock'}
       </button>
@@ -125,7 +125,7 @@ export function BiometricLockGate() {
           unlockingRef.current = false;
           void logout();
         }}
-        className="text-sm text-slate-400 underline underline-offset-4 transition hover:text-slate-200"
+        className="text-[13px] text-slate-400 underline underline-offset-4 transition hover:text-slate-200"
       >
         Use password instead
       </button>
@@ -133,4 +133,3 @@ export function BiometricLockGate() {
   );
 }
 
-export default BiometricLockGate;

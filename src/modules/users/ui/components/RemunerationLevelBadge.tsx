@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface RemunerationLevelBadgeProps {
+interface RemunerationLevelBadgeProps {
     /** -1, null, or undefined render as the unlevelled "—" badge. */
     level: number | null | undefined;
     className?: string;
@@ -20,7 +20,7 @@ export const RemunerationLevelBadge: React.FC<RemunerationLevelBadgeProps> = ({ 
 
     return (
         <span className={cn(
-            "px-2.5 py-1 rounded-lg text-xs font-black font-mono border shrink-0 inline-block",
+            "px-2.5 py-1 rounded-lg text-[11px] font-black font-mono border shrink-0 inline-block",
             levelNumber === 7 ? "bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30" :
             levelNumber === 6 ? "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30" :
             levelNumber === 5 ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30" :
@@ -36,4 +36,3 @@ export const RemunerationLevelBadge: React.FC<RemunerationLevelBadgeProps> = ({ 
     );
 };
 
-export default RemunerationLevelBadge;

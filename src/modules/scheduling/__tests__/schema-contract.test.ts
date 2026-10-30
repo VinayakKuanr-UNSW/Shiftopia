@@ -88,6 +88,9 @@ const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({
     // drops it at the wire boundary and the envelope silently stops binding —
     // which for an FT, who carries no availability slots, means available 24/7.
     ordinary_span_start: 0, ordinary_span_end: 0, ordinary_days: 0,
+    // cl 35.x(a) anchored work cycle (HC-4). Dropped at the wire it would leave
+    // the solver averaging on 4 weeks while V8 used the declared cycle.
+    ordinary_hours_cycle_weeks: 0, ordinary_hours_cycle_anchor: 0,
     availability_overrides: 0, fairness_debts: 0,
     initial_effective_minutes: 0,
     // Schedule 3/4/5/6 classification carriers. These had drifted out of this
@@ -128,6 +131,9 @@ const AVAILABILITY_SLOT_FIELDS = fieldSet<Required<AvailabilitySlotRef>>({
 const EXISTING_SHIFT_FIELDS = fieldSet<Required<ExistingShiftRef>>({
     id: 0, shift_date: 0, start_time: 0, end_time: 0,
     duration_minutes: 0, unpaid_break_minutes: 0,
+    // cl 39.2 nets rest pauses out of the spread; HC-9/HC-13 read it on pinned
+    // shifts, so it must cross the wire for existing shifts too.
+    paid_break_minutes: 0,
 });
 
 // ---------------------------------------------------------------------------

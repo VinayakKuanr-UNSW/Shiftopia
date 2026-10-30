@@ -77,7 +77,14 @@
       "Bash(git cherry-pick *)",
       "Bash(git check-ignore *)",
       "Bash(git ls-tree *)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(git push *)",
+      "Bash(gh pr create *)"
+    ],
+    "deny": [
+      "Bash(git push * main)",
+      "Bash(git push *:main)",
+      "Bash(git push *--force*)"
     ]
   }
 }

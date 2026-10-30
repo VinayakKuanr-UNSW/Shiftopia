@@ -29,7 +29,7 @@ import { isSalariedShift } from '../utils/governing-contract';
  */
 
 /** Clause 39.4 — the maximum gap that still qualifies as a split shift. */
-export const SPLIT_SHIFT_MAX_GAP_MINUTES = 180; // 3h
+const SPLIT_SHIFT_MAX_GAP_MINUTES = 180; // 3h
 
 export const splitShiftRule: V8RuleEvaluator = (ctx) => {
     const { shifts, employee } = ctx;

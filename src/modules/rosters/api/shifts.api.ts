@@ -14,8 +14,6 @@ export * from '../domain/shift.entity';
 export * from './shifts.dto';
 
 // Re-export services for direct usage if needed
-export { shiftsCommands } from './shifts.commands';
-export { shiftsQueries } from './shifts.queries';
 
 // Combined API for backward compatibility with existing code
 export const shiftsApi = {
@@ -102,6 +100,8 @@ export async function applyShiftOp(args: {
             version:          typeof raw.version === 'number' ? raw.version : undefined,
             state:            typeof raw.state === 'string' ? raw.state : undefined,
             note:             typeof raw.note === 'string' ? raw.note : undefined,
+            rule_id:          typeof raw.rule_id === 'string' ? raw.rule_id : undefined,
+            details:          typeof raw.details === 'string' ? raw.details : undefined,
             current_version:  typeof raw.current_version === 'number' ? raw.current_version : undefined,
             current_state:    typeof raw.current_state === 'string' ? raw.current_state : undefined,
             last_modified_by: typeof raw.last_modified_by === 'string' ? raw.last_modified_by : undefined,

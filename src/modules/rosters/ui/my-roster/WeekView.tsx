@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { addDays } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import TimeGrid, { HOUR_HEIGHT } from '@/modules/rosters/ui/components/TimeGrid';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
-import { cn } from '@/modules/core/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { calculateShiftLayout } from '../../utils/shift-layout.utils';
 import MyRosterShift from './MyRosterShift';
@@ -15,26 +14,8 @@ interface WeekViewProps {
 }
 
 // Helper to format time for display
-const formatTime = (time: string): string => {
-  if (!time) return '';
-  const [h, m] = time.split(':').map(Number);
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-};
 
 // Get gradient class based on color
-const getGradientClass = (color: string): string => {
-  const base = 'dept-card-glass-base';
-  switch (color?.toLowerCase()) {
-    case 'convention':
-      return `${base} dept-card-glass-convention border-blue-400/30 shadow-blue-500/20`;
-    case 'exhibition':
-      return `${base} dept-card-glass-exhibition border-green-400/30 shadow-green-500/20`;
-    case 'theatre':
-      return `${base} dept-card-glass-theatre border-red-400/30 shadow-red-500/20`;
-    default:
-      return `${base} dept-card-glass-default border-slate-400/30 shadow-slate-500/20`;
-  }
-};
 
 const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
   const [selectedShift, setSelectedShift] = useState<{

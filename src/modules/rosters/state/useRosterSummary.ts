@@ -1,7 +1,11 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { shiftKeys, ShiftFilters } from '../api/queryKeys';
 import { rosterSummaryQueries, RosterSummaryCellDTO } from '../api/rosterSummary.queries';
 import { useMemo } from 'react';
+import type { Shift } from '../domain/shift.entity';
+import { buildRosterSummaryMap, rosterSummaryKey } from '../domain/roster-summary';
+import { applyAdvancedFilters } from '../domain/projections/utils/filters';
+import { useRosterStore, selectHasActiveFilters } from './useRosterStore';
 
 /**
  * useRosterSummary
@@ -48,8 +52,7 @@ export function useRosterSummary(
         const map = new Map<string, RosterSummaryCellDTO>();
         for (const cell of rawData) {
             // Treat null group_type as a default/empty bucket if necessary
-            const key = `${cell.shift_date}::${cell.group_type || 'unassigned'}::${cell.sub_group_name || ''}`;
-            map.set(key, cell);
+            map.set(rosterSummaryKey(cell.shift_date, cell.group_type, cell.sub_group_name), cell);
         }
         return map;
     }, [rawData]);
@@ -62,4 +65,25 @@ export function useRosterSummary(
         error,
         refetch
     };
+}
+
+/**
+ * The summary cells the grid should show. With no toolbar filter on, the
+ * server's aggregate. With a filter on, cells built from the FILTERED shifts —
+ * the same `applyAdvancedFilters` every other view runs — because the server
+ * aggregate cannot see those filters. The page must load the shifts whenever a
+ * filter is on (it does: see RostersPlannerPage's bucket-view gating).
+ */
+export function useCellSummaryMap(
+    shifts: readonly Shift[],
+    serverSummaryMap: Map<string, RosterSummaryCellDTO>,
+): Map<string, RosterSummaryCellDTO> {
+    const advancedFilters = useRosterStore(s => s.advancedFilters);
+    const hasActiveFilters = useRosterStore(selectHasActiveFilters);
+    return useMemo(
+        () => (hasActiveFilters
+            ? buildRosterSummaryMap(applyAdvancedFilters(shifts as Shift[], advancedFilters))
+            : serverSummaryMap),
+        [hasActiveFilters, shifts, advancedFilters, serverSummaryMap],
+    );
 }

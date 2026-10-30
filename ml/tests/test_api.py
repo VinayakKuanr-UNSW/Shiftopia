@@ -97,7 +97,7 @@ def test_predict_demand_supabase_failure_does_not_break_response(client, valid_a
 def test_predict_demand_missing_env_vars_swallows_error(client, valid_api_payload, monkeypatch):
     """If env vars are missing, create_client might fail, but API should still return predictions."""
     monkeypatch.delenv('VITE_SUPABASE_URL', raising=False)
-    monkeypatch.delenv('VITE_SUPABASE_ANON_KEY', raising=False)
+    monkeypatch.delenv('SUPABASE_SERVICE_ROLE_KEY', raising=False)
     valid_api_payload['event_id'] = 'evt-missing-env'
 
     # We expect it not to crash

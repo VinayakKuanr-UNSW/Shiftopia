@@ -1,21 +1,14 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo, useEffect } from 'react';
 import {
     Hash,
     Users,
     MessageSquare,
-    Loader2,
     Search,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import { cn } from '@/modules/core/lib/utils';
 import { useBroadcastGroup, useBroadcasts } from '../../../state/useBroadcasts';
 import { BroadcastItem } from '../../components/BroadcastItem';
@@ -93,12 +86,7 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
 
     if (groupLoading) {
         return (
-            <div className="h-screen bg-background flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                    <p className="text-muted-foreground">Loading group...</p>
-                </div>
-            </div>
+            <PageState state="loading" scope="page" title="Loading group" description="Opening the control room." />
         );
     }
 
@@ -106,7 +94,7 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
         return (
             <div className="h-screen bg-background flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-muted-foreground text-lg mb-4">Group not found</p>
+                    <p className="text-muted-foreground text-[15px] mb-4">Group not found</p>
                     <Button onClick={onBack}>Back to Dashboard</Button>
                 </div>
             </div>
@@ -138,11 +126,11 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
                         <div className="bg-card/50 border-b border-border px-6 py-4 backdrop-blur-sm">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                                    <h2 className="text-[17px] font-bold text-foreground flex items-center gap-2">
                                         <Hash className="h-5 w-5 text-primary" />
                                         {selectedChannel.name}
                                     </h2>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-[13px] text-muted-foreground">
                                         {selectedChannel.description}
                                     </p>
                                 </div>
@@ -167,7 +155,7 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
                                     placeholder="Search broadcasts..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-9 h-8 bg-muted/50 rounded-full text-sm"
+                                    className="pl-9 h-8 bg-muted/50 rounded-full text-[13px]"
                                 />
                             </div>
                             <div className="flex items-center gap-1.5">
@@ -176,7 +164,7 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
                                         key={opt}
                                         onClick={() => setFilter(opt)}
                                         className={cn(
-                                            'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                                            'px-3 py-1 rounded-full text-[11px] font-medium transition-colors',
                                             filter === opt
                                                 ? 'bg-primary text-primary-foreground'
                                                 : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -193,16 +181,9 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
 
                             <div className="w-full space-y-4 relative z-10">
                                 {broadcastsLoading ? (
-                                    <div className="flex items-center justify-center py-16">
-                                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                    </div>
+                                    <PageState state="loading" title="Loading broadcasts" />
                                 ) : filteredBroadcasts.length === 0 ? (
-                                    <div className="text-center py-16">
-                                        <MessageSquare className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-                                        <p className="text-muted-foreground">
-                                            No broadcasts match your filter.
-                                        </p>
-                                    </div>
+                                    <PageState state="empty" icon={MessageSquare} title="No broadcasts match your filter" description="Try a different channel or clear the search." />
                                 ) : (
                                     <div className="space-y-4">
                                         {filteredBroadcasts.map((bc) => (
@@ -222,7 +203,7 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
                     <div className="flex-1 flex items-center justify-center">
                         <div className="text-center">
                             <Hash className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
-                            <p className="text-muted-foreground text-lg">
+                            <p className="text-muted-foreground text-[15px]">
                                 Select a channel to manage broadcasts
                             </p>
                         </div>

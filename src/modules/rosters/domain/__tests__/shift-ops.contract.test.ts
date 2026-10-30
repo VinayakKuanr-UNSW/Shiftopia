@@ -37,6 +37,13 @@ describe('mapShiftOpResultToUx — existing branches remain intact', () => {
             .toMatch(/no bid winner/i);
     });
 
+    it('WRITE_REJECTED for an EBA breach says which rule and why, not a generic refusal', () => {
+        const details = 'Only 9.0h rest between the shift on 2026-11-10 and the shift on 2026-11-11. Minimum required is 10h.';
+        expect(mapShiftOpResultToUx(res({
+            code: 'WRITE_REJECTED', note: 'EBA_COMPLIANCE_BREACH', rule_id: 'V8_MIN_REST_GAP', details,
+        })).toast).toBe(details);
+    });
+
     it('ILLEGAL_TRANSITION / GONE / FORBIDDEN / ERROR map to their intents', () => {
         expect(mapShiftOpResultToUx(res({ code: 'ILLEGAL_TRANSITION', current_state: 'S4', attempted: 'approve_trade' })).kind).toBe('illegal');
         expect(mapShiftOpResultToUx(res({ code: 'GONE' })).kind).toBe('gone');

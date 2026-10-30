@@ -4,10 +4,10 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, UserRound } from 'lucide-
 import { getReportCellStatus, type QuarterlyReportRow } from '@/modules/users/hooks/usePerformanceMetrics';
 import { cn } from '@/modules/core/lib/utils';
 
-export type PerformanceSortKey = keyof QuarterlyReportRow;
-export type PerformanceSortDirection = 'asc' | 'desc';
+type PerformanceSortKey = keyof QuarterlyReportRow;
+type PerformanceSortDirection = 'asc' | 'desc';
 
-export interface PerformanceColumn {
+interface PerformanceColumn {
     key: PerformanceSortKey;
     label: string;
     group: string;
@@ -28,7 +28,7 @@ interface PerformanceReportCardsProps {
     sort: PerformanceSortState;
 }
 
-export const performanceStatusTextColor = {
+const performanceStatusTextColor = {
     good: 'text-emerald-600 dark:text-emerald-400',
     warn: 'text-amber-600 dark:text-amber-400',
     critical: 'text-red-600 dark:text-red-400',
@@ -83,7 +83,7 @@ function EmployeeMetricCard({
     const employeeInitial = row.employee_name?.trim().charAt(0).toUpperCase() || '?';
 
     return (
-        <article className="overflow-hidden rounded-[24px] border border-border/50 bg-background/35 shadow-sm">
+        <article className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
             <button
                 type="button"
                 onClick={onToggle}
@@ -94,14 +94,14 @@ function EmployeeMetricCard({
                 aria-expanded={isExpanded}
                 aria-label={`${isExpanded ? 'Collapse' : 'Expand'} metrics for ${row.employee_name}`}
             >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-black text-primary">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-[13px] font-semibold text-primary">
                     {employeeInitial}
                 </span>
                 <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-muted-foreground/65">
+                    <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/65">
                         <UserRound className="h-3 w-3" /> Identity
                     </span>
-                    <span className="mt-0.5 block truncate text-sm font-black text-foreground">
+                    <span className="mt-0.5 block truncate text-[13px] font-semibold text-foreground">
                         {row.employee_name}
                     </span>
                 </span>
@@ -117,16 +117,16 @@ function EmployeeMetricCard({
                             key={column.key}
                             onClick={() => sort.onChange(column.key)}
                             className={cn(
-                                'min-w-0 rounded-2xl bg-muted/35 px-3 py-3 text-left transition-transform active:scale-[0.98]',
+                                'min-w-0 rounded-2xl bg-muted/35 px-3 py-3 text-left transition-transform',
                                 spansRow && 'col-span-2',
                                 getMetricTone(row, column),
                             )}
                         >
-                            <span className="flex items-center justify-between gap-2 text-[9px] font-black uppercase tracking-wider opacity-65">
+                            <span className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wider opacity-65">
                                 <span className="truncate">{column.label}</span>
                                 <SortIndicator column={column.key} sort={sort} />
                             </span>
-                            <span className="mt-1 block text-lg font-black tabular-nums tracking-tight">
+                            <span className="mt-1 block text-[15px] font-semibold tabular-nums tracking-tight">
                                 {formatCellValue(row, column)}
                             </span>
                         </button>
@@ -156,12 +156,12 @@ export function PerformanceReportCards({ rows, columns, isLoading, sort }: Perfo
     };
 
     if (isLoading) {
-        return <div className="flex h-48 items-center justify-center text-sm text-muted-foreground animate-pulse">Loading report…</div>;
+        return <div className="flex h-48 items-center justify-center text-[13px] text-muted-foreground animate-pulse">Loading report…</div>;
     }
 
     if (rows.length === 0) {
         return (
-            <div className="flex h-48 items-center justify-center px-8 text-center text-sm text-muted-foreground">
+            <div className="flex h-48 items-center justify-center px-8 text-center text-[13px] text-muted-foreground">
                 No data for this quarter. Click &quot;Refresh All&quot; to populate.
             </div>
         );
@@ -169,20 +169,20 @@ export function PerformanceReportCards({ rows, columns, isLoading, sort }: Perfo
 
     return (
         <section className="space-y-3" aria-label="Employee performance report">
-            <div className="rounded-[24px] border border-border/50 bg-background/35 p-3 shadow-sm">
+            <div className="rounded-2xl border border-border/60 bg-card p-3 shadow-sm">
                 <div className="mb-2.5 flex items-end justify-between px-1">
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-[0.18em] text-muted-foreground/65">Metric group</p>
-                        <p className="mt-0.5 text-sm font-black text-foreground">Employee breakdown</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/65">Metric group</p>
+                        <p className="mt-0.5 text-[13px] font-semibold text-foreground">Employee breakdown</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <p className="text-[10px] font-bold text-muted-foreground">
+                        <p className="text-[11px] font-bold text-muted-foreground">
                             {rows.length} {rows.length === 1 ? 'employee' : 'employees'}
                         </p>
                         <button
                             type="button"
                             onClick={() => sort.onChange('employee_name')}
-                            className="flex min-h-8 items-center gap-1 rounded-lg bg-muted/45 px-2 text-[9px] font-black uppercase tracking-wider text-muted-foreground active:scale-[0.98]"
+                            className="flex min-h-8 items-center gap-1 rounded-lg bg-muted/45 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
                             aria-label="Sort employees by name"
                         >
                             Name <SortIndicator column="employee_name" sort={sort} />
@@ -200,7 +200,7 @@ export function PerformanceReportCards({ rows, columns, isLoading, sort }: Perfo
                                 data-active={isActive}
                                 onClick={() => setActiveGroup(group)}
                                 className={cn(
-                                    'min-h-10 rounded-xl border border-border/45 bg-muted/25 px-2.5 py-2 text-[10px] font-black uppercase tracking-wide text-muted-foreground transition-colors active:scale-[0.98]',
+                                    'min-h-10 rounded-xl border border-border/45 bg-muted/25 px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors',
                                     groupAccent[group],
                                 )}
                                 aria-pressed={isActive}

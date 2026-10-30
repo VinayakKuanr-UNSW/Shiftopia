@@ -17,7 +17,7 @@ import type { SwapEvaluationInput, SolverResult } from './types';
 const scenarioBuilder = new ScenarioBuilder();
 const engine = new V8SwapEngine();
 
-export class SwapEvaluator {
+class SwapEvaluator {
     /**
      * Evaluate whether the swap is compliant for both parties.
      *

@@ -21,7 +21,6 @@ import {
   getAvailabilityRules,
   getAvailabilitySlots,
   deleteAvailabilityRule,
-  getCurrentProfileId,
 } from "../api/availability.api";
 
 import {
@@ -79,7 +78,7 @@ const QUERY_KEYS = {
 // TYPES
 // ============================================================================
 
-export interface UseAvailabilityOptions {
+interface UseAvailabilityOptions {
   profileId?: string; // Defaults to 'current-user'
   month?: Date;       // Defaults to current month
   /**

@@ -149,7 +149,7 @@ describe('the merge keeps the fields the caller did not send', () => {
         // paid. Lawful on every rule, so any failure below is about the merge.
         h.state.shift = storedShift({
             target_employment_type: 'FT', end_time: '17:30',
-            unpaid_break_minutes: 30, paid_break_minutes: 30,
+            unpaid_break_minutes: 30, break_start: '13:00', break_end: '13:30', paid_break_minutes: 30,
         });
         const r = await assertShapeForShiftId('shift-1', {
             shift_date: '2026-12-30',
@@ -169,14 +169,13 @@ describe('the merge keeps the fields the caller did not send', () => {
     });
 
     it('resolves Schedule 3 from the joined role without a second lookup', async () => {
-        // Security meal breaks are PAID (Sch 3 §5.3(a)), so net equals gross
-        // and the requirement is met from `paid_break_minutes`. A six-hour
-        // security shift with 45m paid (30m meal + a 15m pause) and NO unpaid
-        // break is lawful; a gate that deducted an unpaid break, or that read
-        // the whole paid pool as the meal break, would refuse it.
+        // Security meal breaks are PAID (Sch 3 §5.3(a)), so net equals gross:
+        // the window is required but deducts nothing. A six-hour security shift
+        // with a 12:00–12:30 meal break, a 15m pause and NO unpaid minutes is
+        // lawful; a gate that resolved the role as anything else would refuse it.
         h.state.shift = storedShift({
-            end_time: '15:00', unpaid_break_minutes: 0, paid_break_minutes: 45,
-            role_id: 'role-sec', roles: { name: 'Security Officer' },
+            end_time: '15:00', unpaid_break_minutes: 0, break_start: '12:00', break_end: '12:30',
+            paid_break_minutes: 15, role_id: 'role-sec', roles: { name: 'Security Officer' },
         });
         const r = await assertShapeForShiftId('shift-1', { shift_date: '2026-12-25' });
         expect(r.blocking).toBe(false);
@@ -190,7 +189,7 @@ describe('the merge keeps the fields the caller did not send', () => {
         return assertShapeForShiftId('shift-1', { shift_date: '2026-12-30' }).then(() => {
             for (const column of [
                 'shift_date', 'start_time', 'end_time',
-                'unpaid_break_minutes', 'paid_break_minutes', 'is_training',
+                'unpaid_break_minutes', 'paid_break_minutes', 'break_start', 'break_end', 'is_training',
                 'target_employment_type', 'target_requires_flexible', 'role_id',
             ]) {
                 expect(h.state.selected, `${column} is missing from the gate's select`)

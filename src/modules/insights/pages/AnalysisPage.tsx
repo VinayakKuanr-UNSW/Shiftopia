@@ -9,6 +9,10 @@ import { useMetricAnalysis } from '../hooks/useMetricAnalysis';
 import { recentQuarters } from '../hooks/useKpiFilters';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
+import { ToolbarRow, toolbar } from '@/modules/core/ui/components/Toolbar';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
+import { cn } from '@/modules/core/lib/utils';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { LineChart as LineChartIcon } from 'lucide-react';
 import { format } from 'date-fns';
@@ -40,7 +44,7 @@ const AnalysisPage: React.FC = () => {
 
   if (!metricId) {
     return (
-      <div className="flex items-center justify-center h-full text-white">
+      <div className="flex items-center justify-center h-full text-foreground">
         Metric ID was not provided.
       </div>
     );
@@ -82,11 +86,11 @@ const AnalysisPage: React.FC = () => {
   const renderChart = () => {
     if (!data.chartData || data.chartData.length === 0) {
       return (
-        <Card className="bg-white/5 border-white/10 text-white">
+        <Card className="bg-muted/40">
           <CardHeader>
-            <CardTitle className="text-white/90">Trend Analysis</CardTitle>
+            <CardTitle>Trend Analysis</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px] flex items-center justify-center text-white/40 italic">
+          <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground italic">
             Insufficient data points for trend visualization in this period.
           </CardContent>
         </Card>
@@ -98,9 +102,9 @@ const AnalysisPage: React.FC = () => {
     };
 
     return (
-      <Card className="bg-white/5 border-white/10 text-white">
+      <Card className="bg-muted/40">
         <CardHeader>
-          <CardTitle className="text-white/90">Trend Analysis</CardTitle>
+          <CardTitle>Trend Analysis</CardTitle>
         </CardHeader>
         <CardContent>
           <ChartContainer config={config} className="h-[300px]">
@@ -147,33 +151,35 @@ const AnalysisPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <PageLayout>
       <GoldStandardHeader
         title={`${data.title} · ${period.label}`}
         Icon={LineChartIcon}
-        rightActions={
-          <Button asChild variant="ghost" size="sm" className="text-foreground/80 hover:bg-muted">
-            {/* Carry the period back so returning does not silently reset it. */}
-            <Link to={`/insights?period=${encodeURIComponent(period.label)}`}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to KPI
-            </Link>
-          </Button>
+        functionBar={
+          <ToolbarRow
+            actions={
+              // Carry the period back so returning does not silently reset it.
+              <Link to={`/insights?period=${encodeURIComponent(period.label)}`} className={toolbar.secondaryAction}>
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Back to KPI
+              </Link>
+            }
+          />
         }
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 lg:px-6 pb-24 md:pb-6 space-y-4 animate-fade-in">
-      <div className="glass-panel p-4 lg:p-6 border border-white/10 rounded-2xl backdrop-blur-xl bg-white/5 shadow-2xl shadow-black/20">
-        <p className="text-lg text-white/70 mb-6 font-medium">{data.summary}</p>
+      <div className={cn('flex-1 min-h-0 overflow-y-auto space-y-4 animate-fade-in', page.bodyInset, surface.bodyCard)}>
+      <div className="p-4 lg:p-6 rounded-2xl border border-border bg-muted/40">
+        <p className="text-[15px] text-muted-foreground mb-6 font-medium">{data.summary}</p>
 
         {data.metrics && Object.keys(data.metrics).length > 0 && (
           <div className="flex flex-wrap gap-3">
             {Object.entries(data.metrics).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl backdrop-blur-md">
+              <div key={key} className="flex items-center gap-3 px-4 py-3 bg-muted/40 border border-border rounded-xl backdrop-blur-md">
                 <div className="flex flex-col">
                     <span className="text-muted-foreground text-[11px] uppercase font-bold tracking-widest">{key}</span>
                     <div className="flex items-center gap-2">
-                        <span className="text-white font-bold text-lg leading-none">{value as string}</span>
+                        <span className="text-foreground font-bold text-[15px] leading-none">{value as string}</span>
                         {key === 'trend' && getTrendIcon(value as string)}
                     </div>
                 </div>
@@ -185,12 +191,12 @@ const AnalysisPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          <Card className="bg-white/5 border-white/10 text-white overflow-hidden rounded-2xl shadow-xl">
-            <CardHeader className="bg-white/5 border-b border-white/5">
-              <CardTitle className="text-white/90 text-sm font-bold uppercase tracking-wider">Detailed Context</CardTitle>
+          <Card className="bg-muted/40 overflow-hidden shadow-xl">
+            <CardHeader className="bg-muted/40 border-b border-border">
+              <CardTitle className="uppercase tracking-wider">Detailed Context</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <p className="text-white/70 leading-relaxed text-base font-light">{data.details}</p>
+              <p className="text-muted-foreground leading-relaxed text-[14px] font-light">{data.details}</p>
             </CardContent>
           </Card>
           
@@ -198,40 +204,40 @@ const AnalysisPage: React.FC = () => {
         </div>
         
         <div className="space-y-4">
-          <Card className="bg-white/5 border-white/10 text-white rounded-2xl shadow-xl overflow-hidden">
-            <CardHeader className="bg-white/5 border-b border-white/5">
-              <CardTitle className="text-white/90 text-sm font-bold uppercase tracking-wider">Recommendations</CardTitle>
+          <Card className="bg-muted/40 shadow-xl overflow-hidden">
+            <CardHeader className="bg-muted/40 border-b border-border">
+              <CardTitle className="uppercase tracking-wider">Recommendations</CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
               {data.recommendations && data.recommendations.length > 0 ? (
                 <ul className="space-y-4">
                   {data.recommendations.map((rec: string, index: number) => (
-                    <li key={index} className="flex gap-3 text-white/70 group">
-                        <div className="h-6 w-6 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 text-blue-400 font-bold text-xs">
+                    <li key={index} className="flex gap-3 text-muted-foreground group">
+                        <div className="h-6 w-6 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0 text-blue-400 font-bold text-[11px]">
                             {index + 1}
                         </div>
-                        <span className="text-sm font-medium leading-tight group-hover:text-white transition-colors">{rec}</span>
+                        <span className="text-[13px] font-medium leading-tight group-hover:text-foreground transition-colors">{rec}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-white/40 italic text-sm">No specific recommendations at this time.</p>
+                <p className="text-muted-foreground italic text-[13px]">No specific recommendations at this time.</p>
               )}
             </CardContent>
           </Card>
 
-          <Card className="bg-white/5 border-white/10 text-white rounded-2xl shadow-xl overflow-hidden">
-            <CardHeader className="bg-white/5 border-b border-white/5">
-              <CardTitle className="text-white/90 text-sm font-bold uppercase tracking-wider">Quick Actions</CardTitle>
+          <Card className="bg-muted/40 shadow-xl overflow-hidden">
+            <CardHeader className="bg-muted/40 border-b border-border">
+              <CardTitle className="uppercase tracking-wider">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 pt-4 px-4 pb-4">
-              <Button variant="outline" className="w-full justify-start text-white border-white/10 hover:bg-white/10 h-11 rounded-xl">
+              <Button variant="outline" className="w-full justify-start text-foreground border-border hover:bg-muted/60 h-11 rounded-xl">
                 Export Detailed PDF
               </Button>
-              <Button variant="outline" className="w-full justify-start text-white border-white/10 hover:bg-white/10 h-11 rounded-xl">
+              <Button variant="outline" className="w-full justify-start text-foreground border-border hover:bg-muted/60 h-11 rounded-xl">
                 Set Performance Alert
               </Button>
-              <Button variant="outline" className="w-full justify-start text-white border-white/10 hover:bg-white/10 h-11 rounded-xl">
+              <Button variant="outline" className="w-full justify-start text-foreground border-border hover:bg-muted/60 h-11 rounded-xl">
                 Share with Department Head
               </Button>
             </CardContent>
@@ -239,7 +245,7 @@ const AnalysisPage: React.FC = () => {
         </div>
       </div>
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

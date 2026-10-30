@@ -47,7 +47,6 @@ import {
     evaluateShiftShape,
     type ShapeEmploymentTarget,
     type ShapeResult,
-    type ShapeRuleId,
 } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { ComplianceError } from '@/platform/supabase/rpc/errors';
@@ -60,11 +59,10 @@ import { ComplianceError } from '@/platform/supabase/rpc/errors';
  * Cached set of Security role ids.
  *
  * Schedule 3 changes what a lawful shape IS — the meal break is paid, so net
- * length equals gross and the requirement is satisfied from `paid_break_minutes`
- * rather than `unpaid_break_minutes`. Without this the gate would read a
- * compliant security shift (30m paid, 0m unpaid) as having no meal break at all
- * and refuse to save it. The flag is therefore not optional decoration; it is
- * load-bearing for correctness in both directions.
+ * length equals gross and its window deducts nothing. Without this the gate
+ * would read a compliant security shift (window set, 0m unpaid) as deducting
+ * the wrong amount and refuse to save it. The flag is therefore not optional
+ * decoration; it is load-bearing for correctness in both directions.
  *
  * Cached as a PROMISE, not a value, so twenty concurrent `createShift` calls
  * from the synthesiser's chunked insert share one request instead of racing
@@ -123,6 +121,8 @@ export interface ShapeGateInput {
     end_time:                string;
     unpaid_break_minutes?:   number | null;
     paid_break_minutes?:     number | null;
+    break_start?:            string | null;
+    break_end?:              string | null;
     is_training?:            boolean | null;
     target_employment_type?: string | null;
     target_requires_flexible?: boolean | null;
@@ -163,6 +163,8 @@ export async function evaluateShapeForRow(input: ShapeGateInput): Promise<ShapeR
         end_time:               input.end_time,
         unpaid_break_minutes:   input.unpaid_break_minutes ?? 0,
         paid_break_minutes:     input.paid_break_minutes ?? 0,
+        break_start:            input.break_start ?? null,
+        break_end:              input.break_end ?? null,
         is_training:            input.is_training ?? false,
         target_employment_type: normaliseTarget(input.target_employment_type),
         target_requires_flexible: input.target_requires_flexible ?? false,
@@ -170,30 +172,7 @@ export async function evaluateShapeForRow(input: ShapeGateInput): Promise<ShapeR
     });
 }
 
-/**
- * A named, reasoned, RULE-SCOPED bypass.
- *
- * This used to be a bare `exemptReason: string` that waived every blocking rule
- * at once. It had exactly one user — the demand synthesiser, whose output is a
- * coverage skeleton with no breaks modelled — and the reason it gave said so:
- * "breaks are filled in by the manager". But a blanket waiver does not mean what
- * its reason says. It also waived `SHAPE_MIN_ENGAGEMENT_PH`, so the synthesiser
- * could mint a two-hour casual shift on Christmas Day and the audit trail would
- * explain it as a missing meal break.
- *
- * Naming the rules makes the waiver as narrow as its justification, and makes
- * the next one impossible to widen by accident: a rule the caller did not list
- * still blocks.
- */
-export interface ShapeExemption {
-    /** Exactly the rules this caller may breach. Anything else still throws. */
-    rules:  readonly ShapeRuleId[];
-    /** Why — recorded in the warning, read by whoever finds the shift later. */
-    reason: string;
-}
-
-export interface ShapeGateOptions {
-    exempt?: ShapeExemption;
+interface ShapeGateOptions {
     /** Included in the thrown error so the message names the operation. */
     rpcName?: string;
 }
@@ -201,37 +180,23 @@ export interface ShapeGateOptions {
 /**
  * Evaluate, and throw `ComplianceError` on a blocking shape.
  *
- * Returns the result either way so a caller with an exemption can still record
- * what the shift would have failed. `ComplianceError` is reused rather than a
- * new error type: the UI already renders `code: 'COMPLIANCE'` with the violation
- * list, and shape findings carry the same human-readable summaries.
+ * There is no bypass. There used to be a rule-scoped exemption, whose one user
+ * was the demand synthesiser writing break-less skeleton shifts — but the
+ * table's own CHECK constraints refused those rows anyway, so the exemption only
+ * moved the refusal from here, with a reason, to the database, without one. The
+ * synthesiser now writes a lawful break instead.
+ *
+ * `ComplianceError` is reused rather than a new error type: the UI already
+ * renders `code: 'COMPLIANCE'` with the violation list, and shape findings carry
+ * the same human-readable summaries.
  */
 export async function assertShapeForRow(
     input: ShapeGateInput,
     options: ShapeGateOptions = {},
 ): Promise<ShapeResult> {
     const result = await evaluateShapeForRow(input);
-
     if (!result.blocking) return result;
-
-    const blocking = result.hits.filter(h => h.blocking);
-    const exempt   = options.exempt;
-    // Partition rather than short-circuit: a caller exempt from the meal break
-    // must still be refused a two-hour public holiday engagement. Waiving the
-    // listed rules is not the same as waiving the call.
-    const waived   = exempt ? blocking.filter(h => exempt.rules.includes(h.rule_id)) : [];
-    const enforced = exempt ? blocking.filter(h => !exempt.rules.includes(h.rule_id)) : blocking;
-
-    if (waived.length > 0) {
-        console.warn(
-            `[shape-gate] blocking shape allowed through — ${exempt!.reason}:`,
-            waived.map(h => h.rule_id).join(', '),
-        );
-    }
-
-    if (enforced.length === 0) return result;
-
-    throw new ComplianceError(enforced.map(h => h.details), options.rpcName);
+    throw new ComplianceError(result.hits.filter(h => h.blocking).map(h => h.details), options.rpcName);
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -241,10 +206,11 @@ export async function assertShapeForRow(
 /** The columns a shape verdict needs from a stored shift. */
 const SHAPE_COLUMNS =
     'id, shift_date, start_time, end_time, unpaid_break_minutes, paid_break_minutes, ' +
+    'break_start, break_end, ' +
     'is_training, target_employment_type, target_requires_flexible, role_id, roles(name)';
 
 /** The subset of a shift a caller may be changing. Absent ⇒ unchanged. */
-export type ShapePatch = Partial<Omit<ShapeGateInput, 'role_name'>>;
+type ShapePatch = Partial<Omit<ShapeGateInput, 'role_name'>>;
 
 /**
  * Judge a shift AFTER a pending change, given only its id.
@@ -281,6 +247,7 @@ export async function assertShapeForShiftId(
     const current = data as unknown as {
         shift_date: string; start_time: string; end_time: string;
         unpaid_break_minutes: number | null; paid_break_minutes: number | null;
+        break_start: string | null; break_end: string | null;
         is_training: boolean | null; target_employment_type: string | null;
         target_requires_flexible: boolean | null; role_id: string | null;
         roles?: { name?: string | null } | null;
@@ -296,6 +263,8 @@ export async function assertShapeForShiftId(
             end_time:                 pick('end_time') as string,
             unpaid_break_minutes:     pick('unpaid_break_minutes') as number | null,
             paid_break_minutes:       pick('paid_break_minutes') as number | null,
+            break_start:              pick('break_start') as string | null,
+            break_end:                pick('break_end') as string | null,
             is_training:              pick('is_training') as boolean | null,
             target_employment_type:   pick('target_employment_type') as string | null,
             target_requires_flexible: pick('target_requires_flexible') as boolean | null,

@@ -36,14 +36,14 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth';
 import type { AccessCertificate, AccessLevel } from './types';
 
-export type Persona = 'employee' | 'employer';
+export type Persona = 'employee' | 'employer' | 'admin';
 
 const STORAGE_KEY = 'shiftopia.persona';
 
 /**
  * 1-to-1 route pairings across Employee and Employer personas.
  */
-export const PAIRED_ROUTES: Array<{
+const PAIRED_ROUTES: Array<{
     employee: string;
     employer: string;
     employerPermission?: string;
@@ -61,7 +61,7 @@ export const PAIRED_ROUTES: Array<{
 /**
  * Shared workspace pages that belong to the user/session, valid in both personas.
  */
-export const SHARED_ROUTES = [
+const SHARED_ROUTES = [
     '/profile',
     '/settings',
     '/my-notifications',
@@ -70,7 +70,7 @@ export const SHARED_ROUTES = [
 /**
  * Prioritized employer route fallback list when user lacks permission for the primary paired route.
  */
-export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
+const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
     { path: '/rosters', permission: 'rosters' },
     { path: '/team-availability', permission: 'management' },
     { path: '/management/bids', permission: 'management' },
@@ -80,8 +80,26 @@ export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }
     { path: '/templates', permission: 'templates' },
     { path: '/timesheet', permission: 'timesheet-view' },
     { path: '/broadcast', permission: 'broadcast' },
-    { path: '/compliance/rejections', permission: 'management' },
+];
+
+/**
+ * Prioritized admin route fallback list. The Admin suite is zeta's alone
+ * (access suites, 2026-10-14); each page still names its own key so a route
+ * guard and its nav entry can never disagree.
+ */
+const ADMIN_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
+    { path: '/labor-demand', permission: 'labor-demand' },
     { path: '/users', permission: 'users' },
+    { path: '/compliance/rejections', permission: 'compliance' },
+];
+
+/**
+ * Admin surfaces moved out of employer mode into dedicated admin mode.
+ */
+const ADMIN_ROUTES = [
+    '/labor-demand',
+    '/users',
+    '/compliance',
 ];
 
 /**
@@ -93,9 +111,6 @@ export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }
  */
 const EMPLOYER_ONLY_ROUTES = [
     '/templates',
-    '/users',
-    '/labor-demand',
-    '/compliance',
     '/management',
     '/grid',
     '/availability-manager',
@@ -117,6 +132,7 @@ function matchesRoute(pathname: string, base: string): boolean {
  */
 export function personaForPath(pathname: string): Persona | null {
     if (SHARED_ROUTES.some((shared) => matchesRoute(pathname, shared))) return null;
+    if (ADMIN_ROUTES.some((route) => matchesRoute(pathname, route))) return 'admin';
     if (PAIRED_ROUTES.some((pair) => matchesRoute(pathname, pair.employee))) return 'employee';
     if (PAIRED_ROUTES.some((pair) => matchesRoute(pathname, pair.employer))) return 'employer';
     if (EMPLOYER_ONLY_ROUTES.some((route) => matchesRoute(pathname, route))) return 'employer';
@@ -136,12 +152,30 @@ export function resolvePersonaRoute(
         return currentPath;
     }
 
+    if (targetPersona === 'admin') {
+        if (ADMIN_ROUTES.some((r) => matchesRoute(currentPath, r))) {
+            return currentPath;
+        }
+        if (hasPermission) {
+            const accessible = ADMIN_FALLBACK_ORDER.find((item) => hasPermission(item.permission));
+            if (accessible) return accessible.path;
+        }
+        return '/labor-demand';
+    }
+
     if (targetPersona === 'employer') {
         const pair = PAIRED_ROUTES.find((p) => currentPath === p.employee || currentPath.startsWith(`${p.employee}/`));
         if (pair) {
             if (!pair.employerPermission || !hasPermission || hasPermission(pair.employerPermission)) {
                 return pair.employer;
             }
+        }
+        if (ADMIN_ROUTES.some((r) => matchesRoute(currentPath, r))) {
+            if (hasPermission) {
+                const accessible = EMPLOYER_FALLBACK_ORDER.find((item) => hasPermission(item.permission));
+                if (accessible) return accessible.path;
+            }
+            return '/rosters';
         }
         if (hasPermission) {
             const accessible = EMPLOYER_FALLBACK_ORDER.find((item) => hasPermission(item.permission));
@@ -157,7 +191,7 @@ export function resolvePersonaRoute(
         if (currentPath === '/grid' || currentPath.startsWith('/grid/')) {
             return '/my-availabilities';
         }
-        // Fallback for employer-only pages (/templates, /labor-demand, /compliance/rejections, /users, etc.)
+        // Fallback for employer-only or admin pages (/templates, /labor-demand, /compliance/rejections, /users, etc.)
         return '/my-roster';
     }
 }
@@ -167,7 +201,7 @@ export function resolvePersonaRoute(
  * these can switch personas — see the header note on why this is `hasPermission`
  * and not "holds a Type Y certificate".
  */
-export const EMPLOYER_FEATURES = [
+const EMPLOYER_FEATURES = [
     'templates',
     'rosters',
     'timesheet-view',
@@ -176,12 +210,34 @@ export const EMPLOYER_FEATURES = [
     'insights',
 ] as const;
 
+/**
+ * The Admin suite's surfaces. Holding any of them is what puts the admin hat
+ * within reach — today that means a zeta certificate, nothing else.
+ */
+const ADMIN_FEATURES = [
+    'labor-demand',
+    'users',
+    'compliance',
+] as const;
+
+/**
+ * Personal-suite surfaces. A person with no Type X certificate and no contract
+ * (a zeta who is not on any roster) has no employee hat to wear.
+ */
+const EMPLOYEE_FEATURES = [
+    'my-roster',
+] as const;
+
 interface PersonaContextValue {
     persona: Persona;
     setPersona: (next: Persona) => void;
     togglePersona: () => void;
-    /** False for a pure employee — there is no second hat to put on. */
+    /** False when only one hat is available — there is nothing to switch to. */
     canSwitch: boolean;
+    /** Whether the user can access admin mode */
+    canAccessAdmin: boolean;
+    /** All personas available to this user */
+    availablePersonas: Persona[];
     /** The certificate backing each persona, when one exists. */
     employeeCertificate: AccessCertificate | null;
     employerCertificate: AccessCertificate | null;
@@ -198,7 +254,7 @@ const PersonaContext = createContext<PersonaContextValue | undefined>(undefined)
 function readStored(): Persona | null {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        return raw === 'employee' || raw === 'employer' ? raw : null;
+        return raw === 'employee' || raw === 'employer' || raw === 'admin' ? raw : null;
     } catch {
         // Private windows and blocked site-data both throw on access rather
         // than returning null. A persona is a convenience, never a gate.
@@ -218,12 +274,32 @@ export const PersonaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         [user],
     );
 
-    const canSwitch = useMemo(
-        () => EMPLOYER_FEATURES.some((f) => hasPermission(f)),
-        // hasPermission closes over the resolved level, which changes with the
-        // user and the active contract/certificate.
-        [hasPermission, user, activeContract],
+    // One hat per suite, each offered only when the person holds that suite.
+    // hasPermission closes over the user's certificates and contracts.
+    const canAccessAdmin = useMemo(
+        () => ADMIN_FEATURES.some((f) => hasPermission(f)),
+        [hasPermission, user],
     );
+    const canAccessEmployer = useMemo(
+        () => EMPLOYER_FEATURES.some((f) => hasPermission(f)),
+        [hasPermission, user],
+    );
+    const canAccessEmployee = useMemo(
+        () => EMPLOYEE_FEATURES.some((f) => hasPermission(f)),
+        [hasPermission, user],
+    );
+
+    const availablePersonas = useMemo<Persona[]>(() => {
+        const hats: Persona[] = [];
+        if (canAccessEmployee) hats.push('employee');
+        if (canAccessEmployer) hats.push('employer');
+        if (canAccessAdmin) hats.push('admin');
+        // Before the profile loads nothing is held yet; report the employee hat
+        // rather than none, exactly as before suites existed.
+        return hats.length ? hats : ['employee'];
+    }, [canAccessEmployee, canAccessEmployer, canAccessAdmin]);
+
+    const canSwitch = availablePersonas.length > 1;
 
     // Seeded from the certificate, not from `canSwitch`: a manager should land
     // in the employer view, but someone who merely *can* switch should not be
@@ -250,34 +326,51 @@ export const PersonaProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, []);
 
-    const togglePersona = useCallback(
-        () => setPersona(persona === 'employee' ? 'employer' : 'employee'),
-        [persona, setPersona],
+    const togglePersona = useCallback(() => {
+        const available: Persona[] = (availablePersonas && availablePersonas.length > 1)
+            ? availablePersonas
+            : ['employee', 'employer'];
+        const currentIndex = available.indexOf(persona);
+        const nextIndex = (currentIndex + 1) % available.length;
+        setPersona(available[nextIndex]);
+    }, [availablePersonas, persona, setPersona]);
+
+    // Derived, never stored: a remembered hat the person no longer holds is not
+    // REPORTED, but it is kept, because permissions land after the first render
+    // and discarding it then would lose the choice on every reload.
+    const resolvedPersona = useMemo<Persona>(
+        () => (availablePersonas.includes(persona) ? persona : availablePersonas[0]),
+        [availablePersonas, persona],
     );
 
     const displayLevel = useMemo<AccessLevel | null>(() => {
-        if (persona === 'employee') {
+        if (resolvedPersona === 'employee') {
             return employeeCertificate?.accessLevel
                 ?? activeContract?.accessLevel
                 ?? 'alpha';
         }
+        if (resolvedPersona === 'admin') {
+            return employerCertificate?.accessLevel ?? null;
+        }
+        // A beta's employer hat is its read-only Timesheets view, backed by the
+        // Type X certificate rather than a Type Y one.
         return employerCertificate?.accessLevel
-            ?? (user?.highestAccessLevel && user.highestAccessLevel !== 'alpha' && user.highestAccessLevel !== 'beta'
-                ? user.highestAccessLevel
-                : null);
-    }, [persona, employeeCertificate, employerCertificate, activeContract, user]);
+            ?? (employeeCertificate?.accessLevel === 'beta' ? 'beta' : null);
+    }, [resolvedPersona, employeeCertificate, employerCertificate, activeContract]);
 
     const value = useMemo(
         () => ({
-            persona: canSwitch ? persona : 'employee',
+            persona: resolvedPersona,
             setPersona,
             togglePersona,
             canSwitch,
+            canAccessAdmin,
+            availablePersonas,
             employeeCertificate,
             employerCertificate,
             displayLevel,
         }),
-        [persona, canSwitch, setPersona, togglePersona, employeeCertificate, employerCertificate, displayLevel],
+        [resolvedPersona, setPersona, togglePersona, canSwitch, canAccessAdmin, availablePersonas, employeeCertificate, employerCertificate, displayLevel],
     );
 
     return <PersonaContext.Provider value={value}>{children}</PersonaContext.Provider>;
@@ -295,7 +388,7 @@ export const PersonaProvider: React.FC<{ children: React.ReactNode }> = ({ child
  */
 export const PersonaRouteSync: React.FC = () => {
     const { pathname } = useLocation();
-    const { persona, setPersona, canSwitch } = usePersona();
+    const { persona, setPersona, availablePersonas } = usePersona();
     const syncedPath = useRef<string | null>(null);
 
     useEffect(() => {
@@ -303,13 +396,14 @@ export const PersonaRouteSync: React.FC = () => {
         if (!implied) return;
         // Bail WITHOUT recording the path: permissions land after the first
         // render, so this must stay armed and re-run when `canSwitch` flips.
-        if (implied === 'employer' && !canSwitch) return;
+        if (implied === 'employer' && !availablePersonas.includes('employer')) return;
+        if (implied === 'admin' && !availablePersonas.includes('admin')) return;
         // Once per navigation. Guarding on the path rather than on the persona
         // keeps a toggle made ON a shared route from being immediately undone.
         if (syncedPath.current === pathname) return;
         syncedPath.current = pathname;
         if (implied !== persona) setPersona(implied);
-    }, [pathname, persona, canSwitch, setPersona]);
+    }, [pathname, persona, availablePersonas, setPersona]);
 
     return null;
 };
@@ -327,6 +421,8 @@ export function usePersona(): PersonaContextValue {
         setPersona: () => {},
         togglePersona: () => {},
         canSwitch: false,
+        canAccessAdmin: false,
+        availablePersonas: ['employee'],
         employeeCertificate: null,
         employerCertificate: null,
         displayLevel: 'alpha',

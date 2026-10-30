@@ -18,18 +18,16 @@
 
 import React, { useState } from 'react';
 import {
-  Megaphone,
-  Plus,
-  RefreshCw,
   BarChart3,
   Bell,
   LayoutGrid,
 } from 'lucide-react';
-import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
+import { useOptionalSidebar } from '@/modules/core/ui/primitives/sidebar';
+import { contentOffsetClass } from '@/modules/core/ui/layout/AppLayout';
 import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 
 import { useBroadcastGroups } from '../../state/useBroadcasts';
@@ -39,14 +37,14 @@ import { BroadcastAnalytics } from '../views/BroadcastAnalytics.view';
 import { ControlRoom } from './ControlRoom';
 import { CreateGroupDialog } from '../dialogs/CreateGroupDialog';
 import { EditGroupDialog } from '../dialogs/EditGroupDialog';
-import { BroadcastGroupWithStats, CreateBroadcastGroupRequest } from '../../model/broadcast.types';
+import { BroadcastGroupWithStats } from '../../model/broadcast.types';
 
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface BroadcastsManagerScreenProps {
+interface BroadcastsManagerScreenProps {
   /**
    * Layout mode for responsive design
    * - 'desktop': Three-column layout with sidebar
@@ -79,7 +77,8 @@ export function BroadcastsManagerScreen({
   showCreateDialogOverride = false,
   onCloseCreateDialog,
 }: BroadcastsManagerScreenProps) {
-  const { toast } = useToast();
+  useToast();
+  const sidebar = useOptionalSidebar();
 
   // ========================================
   // HIERARCHY STATE
@@ -156,13 +155,6 @@ export function BroadcastsManagerScreen({
   // HANDLERS
   // ========================================
 
-  const handleRefresh = async () => {
-    await refetch();
-    toast({
-      title: 'Refreshed',
-      description: 'Broadcast groups have been refreshed.',
-    });
-  };
 
   const handleCreateGroup = async (data: {
     name: string;
@@ -195,7 +187,7 @@ export function BroadcastsManagerScreen({
 
   if (selectedGroupId) {
     return (
-      <div className="fixed inset-0 md:left-[280px] z-30 bg-background">
+      <div className={cn('fixed inset-0 z-30 bg-background', contentOffsetClass(sidebar?.state === 'collapsed'))}>
         <ControlRoom
           groupId={selectedGroupId}
           onBack={() => setSelectedGroupId(null)}
@@ -211,8 +203,8 @@ export function BroadcastsManagerScreen({
   const renderGroupsSection = () => (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl md:text-2xl font-bold text-foreground">My Groups</h2>
-        <Badge variant="secondary" className="text-xs md:text-sm">
+        <h2 className="text-[17px] md:text-[20px] font-bold text-foreground">My Groups</h2>
+        <Badge variant="secondary" className="text-[11px] md:text-[13px]">
           {filteredGroups.length} active groups
         </Badge>
       </div>
@@ -233,7 +225,7 @@ export function BroadcastsManagerScreen({
 
   const renderAnalyticsSection = () => (
     <div className="space-y-4 md:space-y-6">
-      <h2 className="text-xl md:text-2xl font-bold text-foreground">Analytics</h2>
+      <h2 className="text-[17px] md:text-[20px] font-bold text-foreground">Analytics</h2>
       <BroadcastAnalytics />
     </div>
   );
@@ -244,7 +236,7 @@ export function BroadcastsManagerScreen({
 
   const renderActivitySection = () => (
     <div className="space-y-4 md:space-y-6">
-      <h2 className="text-xl md:text-2xl font-bold text-foreground">Recent Activity</h2>
+      <h2 className="text-[17px] md:text-[20px] font-bold text-foreground">Recent Activity</h2>
       <BroadcastNotificationsList />
     </div>
   );
@@ -326,7 +318,7 @@ export function BroadcastsManagerScreen({
                   <BarChart3 className="h-5 w-5 text-muted-foreground" />
                   <span className="font-semibold">Analytics Overview</span>
                 </div>
-                <span className="text-muted-foreground text-sm">
+                <span className="text-muted-foreground text-[13px]">
                   {showAnalytics ? 'Hide' : 'Show'}
                 </span>
               </button>
@@ -376,7 +368,7 @@ export function BroadcastsManagerScreen({
           <button
             onClick={() => setMobileTab('groups')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex-1 py-3 flex flex-col items-center gap-1 text-[11px] transition-colors',
               mobileTab === 'groups' ? 'text-primary' : 'text-muted-foreground'
             )}
           >
@@ -386,7 +378,7 @@ export function BroadcastsManagerScreen({
           <button
             onClick={() => setMobileTab('analytics')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex-1 py-3 flex flex-col items-center gap-1 text-[11px] transition-colors',
               mobileTab === 'analytics' ? 'text-primary' : 'text-muted-foreground'
             )}
           >
@@ -396,7 +388,7 @@ export function BroadcastsManagerScreen({
           <button
             onClick={() => setMobileTab('activity')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex-1 py-3 flex flex-col items-center gap-1 text-[11px] transition-colors',
               mobileTab === 'activity' ? 'text-primary' : 'text-muted-foreground'
             )}
           >
@@ -411,4 +403,3 @@ export function BroadcastsManagerScreen({
   );
 }
 
-export default BroadcastsManagerScreen;

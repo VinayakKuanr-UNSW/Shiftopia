@@ -1,12 +1,50 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { RosterSummaryCellDTO } from '../../../api/rosterSummary.queries';
 import { GroupSummaryCell } from '../GroupSummaryCell';
 
 const date = new Date(2026, 6, 31);
 
 describe('GroupSummaryCell', () => {
-  it('gives an empty summary button a descriptive accessible name', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 1));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not render an add button for past dates when summary is empty', () => {
+    render(
+      <GroupSummaryCell
+        date={new Date(2026, 5, 1)} // 1 June 2026 is past relative to 1 July 2026
+        groupName="General"
+        summary={undefined}
+        accent="gray"
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('does not render an add button when canEdit is false', () => {
+    render(
+      <GroupSummaryCell
+        date={date}
+        groupName="General"
+        summary={undefined}
+        accent="gray"
+        onClick={vi.fn()}
+        canEdit={false}
+      />,
+    );
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('gives an empty summary button a descriptive accessible name on future dates', () => {
     render(
       <GroupSummaryCell
         date={date}
@@ -119,7 +157,7 @@ describe('GroupSummaryCell', () => {
   });
 
   describe('public holiday styling', () => {
-    it('applies golden border and background on public holidays for empty cells', () => {
+    it('applies golden background and standard border on public holidays for empty cells without dashed borders', () => {
       // Labour Day 2026: 5 October 2026
       const labourDay = new Date(2026, 9, 5);
       render(
@@ -133,8 +171,9 @@ describe('GroupSummaryCell', () => {
       );
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('border-amber-500/40');
+      expect(button.className).toContain('border-amber-500/30');
       expect(button.className).toContain('bg-amber-500/10');
+      expect(button.className).not.toContain('border-dashed');
     });
 
     it('applies standard muted styling on regular non-holiday days', () => {
@@ -150,8 +189,8 @@ describe('GroupSummaryCell', () => {
       );
 
       const button = screen.getByRole('button');
-      expect(button.className).toContain('border-border/50');
-      expect(button.className).toContain('bg-muted/20');
+      expect(button.className).toContain('border-primary/20');
+      expect(button.className).toContain('bg-primary/10');
       expect(button.className).not.toContain('border-amber-500/40');
     });
   });

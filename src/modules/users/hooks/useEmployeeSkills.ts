@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
+import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/hooks/use-toast';
 
 // Types
-export interface Skill {
+interface Skill {
     id: string;
     name: string;
     description?: string;
@@ -28,7 +29,7 @@ export interface EmployeeSkill {
     skill?: Skill;
 }
 
-export interface NewEmployeeSkill {
+interface NewEmployeeSkill {
     employee_id: string;
     skill_id: string;
     proficiency_level?: 'Novice' | 'Competent' | 'Proficient' | 'Expert';
@@ -126,6 +127,8 @@ export const useUpdateEmployeeSkill = () => {
         `)
                 .single();
 
+            // PGRST116 = no row came back: row-level security refused the update.
+            if (error?.code === 'PGRST116') throw new WriteRefusedError('change this skill');
             if (error) throw error;
             return data as EmployeeSkill;
         },
@@ -150,12 +153,13 @@ export const useRemoveEmployeeSkill = () => {
 
     return useMutation({
         mutationFn: async ({ id, employeeId }: { id: string; employeeId: string }) => {
-            const { error } = await supabase
+            const removed = await supabase
                 .from('employee_skills')
-                .delete()
+                .delete({ count: 'exact' })
                 .eq('id', id);
 
-            if (error) throw error;
+            if (removed.error) throw removed.error;
+            assertWrote(removed, 'remove this skill');
             return { id, employeeId };
         },
         onSuccess: async (data) => {

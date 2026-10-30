@@ -5,6 +5,7 @@ import { LucideIcon } from 'lucide-react';
 import { ScopeFilterBanner } from './ScopeFilterBanner';
 import type { ScopeLevel } from './GlobalScopeFilter';
 import { ScopeSelection } from '@/platform/auth/types';
+import type { ScopeMode } from '@/platform/auth/scope-selection';
 import { itemVariants } from '../motion/presets';
 import { cn } from '@/modules/core/lib/utils';
 
@@ -14,7 +15,7 @@ interface PersonalPageHeaderProps {
     scope?: ScopeSelection;
     setScope?: (scope: ScopeSelection) => void;
     isGammaLocked?: boolean;
-    mode?: 'personal' | 'managerial';
+    mode?: ScopeMode;
     multiSelect?: boolean;
     /** Levels forced to a single choice — see `GlobalScopeFilterProps`. */
     singleSelectLevels?: ScopeLevel[];
@@ -134,4 +135,3 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
     );
 };
 
-export default PersonalPageHeader;

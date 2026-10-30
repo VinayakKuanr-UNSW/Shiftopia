@@ -59,9 +59,10 @@ function penaltyLoading(day: number, isHoliday: boolean): number {
 interface DaySeg { fromMins: number; toMins: number; day: number; isHoliday: boolean; }
 
 /**
- * Split a shift's ordinary span [startMins, endMins) at midnight (1440) so each
- * calendar day is priced on its own day-of-week + public-holiday status. The
- * ordinary cap is 12h and start < 24:00, so there are at most two segments.
+ * Split a worked span [startMins, endMins) at midnight (1440) so each calendar
+ * day is priced on its own day-of-week + public-holiday status. A span can now
+ * begin after midnight — the half of a shift that resumes after a meal break
+ * taken across 00:00 — so a span wholly past 1440 is one next-day segment.
  */
 function splitOrdinaryAtMidnight(
   startMins: number,
@@ -74,10 +75,50 @@ function splitOrdinaryAtMidnight(
   if (endMins <= 1440) {
     return [{ fromMins: startMins, toMins: endMins, day: startDay, isHoliday: startIsHoliday }];
   }
+  if (startMins >= 1440) {
+    return [{ fromMins: startMins, toMins: endMins, day: nextDay, isHoliday: nextIsHoliday }];
+  }
   return [
     { fromMins: startMins, toMins: 1440, day: startDay, isHoliday: startIsHoliday },
     { fromMins: 1440, toMins: endMins, day: nextDay, isHoliday: nextIsHoliday },
   ];
+}
+
+/**
+ * Where the worked minutes fall on the clock, skipping the unpaid meal break.
+ *
+ * Ordinary minutes are laid first and overtime after (cl 42), from the shift's
+ * start, jumping over the break wherever they reach it. Without a break this is
+ * one span each, exactly the layout the engine always used. With one, it is
+ * what the night rate (cl 43: ordinary hours WORKED 22:00–06:00) and the day
+ * loadings (cl 41: hours worked ON that day) actually see — a break laid at the
+ * end, as before, priced every shift whose break fell anywhere else wrongly.
+ *
+ * Minutes are measured from the shift date's midnight; past 1440 is the next day.
+ */
+export function layWorkedMinutes(
+  startMins: number,
+  ordinaryMinutes: number,
+  overtimeMinutes: number,
+  breakFromMins: number | null,
+  breakMinutes: number,
+): { ordinary: Array<[number, number]>; overtime: Array<[number, number]> } {
+  const hole = breakFromMins !== null && breakMinutes > 0 ? breakMinutes : 0;
+  const workedBefore = hole > 0 ? (breakFromMins as number) - startMins : Infinity;
+  const lay = (fromWork: number, toWork: number): Array<[number, number]> => {
+    const spans: Array<[number, number]> = [];
+    if (fromWork < workedBefore) {
+      spans.push([startMins + fromWork, startMins + Math.min(toWork, workedBefore)]);
+    }
+    if (toWork > workedBefore) {
+      spans.push([startMins + Math.max(fromWork, workedBefore) + hole, startMins + toWork + hole]);
+    }
+    return spans.filter(([a, b]) => b > a);
+  };
+  return {
+    ordinary: lay(0, ordinaryMinutes),
+    overtime: lay(ordinaryMinutes, ordinaryMinutes + overtimeMinutes),
+  };
 }
 
 /**
@@ -354,38 +395,38 @@ export function estimateDetailedShiftCost(
   const baseMult = isCasual ? 1.25 : 1.0; // permanent 25% casual loading, if any
   const hasTimes = !!options.start_time;
 
-  let startMins = 0;
-  let ordinaryEndMins = ordinaryHours * 60; // no start_time ⇒ single same-day span
-  if (hasTimes) {
-    startMins = parseTimeToMinutes(String(options.start_time).substring(0, 5));
-    ordinaryEndMins = startMins + ordinaryHours * 60;
-  }
+  const startMins = hasTimes ? parseTimeToMinutes(String(options.start_time).substring(0, 5)) : 0;
+  // The unpaid meal break, as a hole in the worked timeline. Paid breaks
+  // (security, Sch 3) are worked time for pay, so they leave no hole.
+  const breakFromMins = hasTimes && options.break_start && (options.unpaid_break_minutes || 0) > 0
+    ? startMins + ((parseTimeToMinutes(String(options.break_start).substring(0, 5)) - startMins + 1440) % 1440)
+    : null;
+  const worked = layWorkedMinutes(
+    startMins, ordinaryHours * 60, hasTimes ? overtimeHours * 60 : 0,
+    breakFromMins, options.unpaid_break_minutes || 0,
+  );
+  // Where the shift's worked time ends, overtime tail included. Either span can
+  // cross midnight on its own (cl 42 day-split, below), so the next day's facts
+  // are needed whenever this does.
+  const shiftEndMins = Math.max(startMins, ...worked.ordinary.map(s => s[1]), ...worked.overtime.map(s => s[1]));
 
-  // The overtime span begins where ordinary ends and runs for `overtimeHours`.
-  // Its tail can cross midnight independently of the ordinary hours (cl 42
-  // day-split, below), so the next-day holiday status may be needed even when the
-  // ORDINARY span stayed same-day. Resolve it whenever either span crosses 1440.
-  const otEndMins = hasTimes ? ordinaryEndMins + overtimeHours * 60 : ordinaryEndMins;
-
-  // Next calendar day's facts — needed when ordinary OR the overtime tail crosses
-  // midnight. Reuses the addOneDay + next-day lookup pattern from the ordinary split.
+  // Next calendar day's facts — needed when any worked minute crosses midnight.
   const nextDay = (dayOfWeek + 1) % 7;
   let nextIsHoliday = false;
-  if (ordinaryEndMins > 1440 || otEndMins > 1440) {
+  if (shiftEndMins > 1440) {
     const nextStr = addOneDay(shift_date);
     nextIsHoliday = ctx ? getDateFacts(ctx, nextStr).isPublicHoliday : isPublicHolidayISO(nextStr);
   }
 
-  const segments = splitOrdinaryAtMidnight(
-    startMins, ordinaryEndMins, dayOfWeek, isHoliday, nextDay, nextIsHoliday,
-  );
+  const segments = worked.ordinary.flatMap(([from, to]) =>
+    splitOrdinaryAtMidnight(from, to, dayOfWeek, isHoliday, nextDay, nextIsHoliday));
 
   // Engagement-day penalty rate — representative for the breakdown and used to
   // price minimum-payment top-up hours (which are paid but not worked).
   const startPenaltyRate = ordinaryRate * (baseMult + penaltyLoading(dayOfWeek, isHoliday));
 
   // cl 43 conclusion day: the day the WHOLE shift ends (overtime tail included).
-  const concludesNextDay = ordinaryEndMins > 1440 || otEndMins > 1440;
+  const concludesNextDay = shiftEndMins > 1440;
   const conclusionDay = concludesNextDay ? nextDay : dayOfWeek;
   // cl 43.2: the casual night rates (45/50/75%) INCLUDE the 25% casual loading,
   // which the ordinary cost below already carries via baseMult — subtract it so
@@ -541,7 +582,7 @@ export function estimateDetailedShiftCost(
   // OVERNIGHT DAY-SPLIT (cl 42): an overnight shift whose overtime tail crosses
   // midnight can have OT hours land on a DIFFERENT calendar day — and only the
   // hours actually ON a public-holiday day should attract the 2.5x PH rate. We
-  // therefore split the OT span [ordinaryEndMins, otEndMins) at 1440 (reusing the
+  // therefore split each OT span from `layWorkedMinutes` at 1440 (reusing the
   // same addOneDay + next-day holiday lookup as the ordinary split) and price each
   // day-segment on its own holiday status, while keeping the cumulative 1.5/2.0
   // tiering by OT position across the whole run. For a PH hour we pay
@@ -560,15 +601,19 @@ export function estimateDetailedShiftCost(
     // Without times we cannot split — price the whole run on the start-date PH flag.
     interface OtSeg { hours: number; isHoliday: boolean; }
     let otSegs: OtSeg[];
-    if (hasTimes && otEndMins > 1440 && ordinaryEndMins < otEndMins) {
-      const splitAt = Math.max(ordinaryEndMins, 1440); // OT may start after midnight
-      const beforeH = Math.max(0, (Math.min(1440, otEndMins) - ordinaryEndMins)) / 60;
-      const afterH = Math.max(0, (otEndMins - splitAt)) / 60;
-      otSegs = [];
-      if (beforeH > 0) otSegs.push({ hours: beforeH, isHoliday });          // start day
-      if (afterH > 0) otSegs.push({ hours: afterH, isHoliday: nextIsHoliday }); // next day
+    if (hasTimes && worked.overtime.length > 0) {
+      // Each OT span (two when the break falls inside the overtime) split at
+      // midnight, in order, so the 1.5/2.0 tiering still runs by OT position.
+      otSegs = worked.overtime.flatMap(([from, to]) => {
+        const beforeH = Math.max(0, Math.min(to, 1440) - from) / 60;
+        const afterH = Math.max(0, to - Math.max(from, 1440)) / 60;
+        const parts: OtSeg[] = [];
+        if (beforeH > 0) parts.push({ hours: beforeH, isHoliday });               // start day
+        if (afterH > 0) parts.push({ hours: afterH, isHoliday: nextIsHoliday });  // next day
+        return parts;
+      });
     } else {
-      // Same-day OT (or no times): the whole run sits on the start date.
+      // No times: the whole run sits on the start date.
       otSegs = [{ hours: overtimeHours, isHoliday }];
     }
 
@@ -664,6 +709,3 @@ export function estimateShiftCost(options: CostCalculatorOptions, ctx?: AwardCon
   return estimateDetailedShiftCost(options, ctx).totalCost;
 }
 
-function toOrdinaryRate(rate: number): number {
-  return rate / 1.25;
-}

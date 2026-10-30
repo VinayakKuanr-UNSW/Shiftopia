@@ -21,7 +21,7 @@ import { format } from 'date-fns';
 import { loadLeaveDays } from '@/modules/office/api/office.loaders';
 import type { RawLeaveDay } from '@/modules/office/domain/types';
 
-export const approvedLeaveKeys = {
+const approvedLeaveKeys = {
     all: ['leave', 'approved-days'] as const,
     range: (employeeIds: readonly string[], from: string, to: string) =>
         ['leave', 'approved-days', [...employeeIds].sort().join(','), from, to] as const,

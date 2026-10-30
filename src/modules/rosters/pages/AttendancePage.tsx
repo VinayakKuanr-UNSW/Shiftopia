@@ -6,19 +6,21 @@
  *  - Logs   → D / 3D / W / M attendance history, calendar picker, filters, totals
  */
 
+import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { motion, type Variants } from 'framer-motion';
+import type { Variants } from 'framer-motion';
 import {
   format, parseISO, startOfMonth,
 } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useQuery } from '@tanstack/react-query';
 import {
   Fingerprint, MapPin, Loader2, UserX, LogIn, LogOut,
   CheckCircle, Timer,
-  BarChart3, ChevronLeft, ChevronRight,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { page, surface } from '@/modules/core/ui/layout/pageTokens';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
@@ -51,23 +53,21 @@ import {
 } from '@/modules/rosters/utils/gps';
 
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { EmployeeFunctionBar, type EmployeeViewRange } from '@/modules/core/ui/components/EmployeeFunctionBar';
 import { sortRows, DEFAULT_ROW_SORT, type RowSort } from '@/modules/core/lib/row-sorting';
-import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
-  UnifiedRosterNavigator, type ViewType, type DateRange,
+  type ViewType, type DateRange,
   computeRange, navigateDate, formatRangeLabel,
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import {
-  TimesheetFilterPanel,
+  TimesheetFilterDrawer,
   type ActiveFilters,
   EMPTY_FILTERS,
   countActiveFilters,
   applyTimesheetFilters,
 } from '@/modules/timesheets/ui/components/TimesheetFilterDrawer';
-import { GroupBySelector } from '@/modules/core/ui/components/GroupBySelector';
 import { GroupSectionHeader } from '@/modules/core/ui/components/GroupSectionHeader';
 import { groupRows, isTodayBucketKey, type RowGroupBy } from '@/modules/core/lib/row-grouping';
 import {
@@ -88,10 +88,6 @@ import { isSecurityRoleName } from '@/modules/compliance/security-role';
 const pageVariants: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.04, delayChildren: 0.02 } },
-};
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: { ease: [0.16, 1, 0.3, 1], duration: 0.4 } },
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -324,11 +320,11 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-3 space-y-2 text-xs" align="start">
+      <PopoverContent className="w-64 p-3 space-y-2 text-[11px]" align="start">
         <p className="font-bold text-foreground text-[11px] uppercase tracking-wide">GPS Signal</p>
         {gpsAnalysis?.hasLocation ? (
           <>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono">
               <span className="text-muted-foreground">Lat</span>
               <span className="text-foreground">{gpsCapture!.lat.toFixed(5)}</span>
               <span className="text-muted-foreground">Lon</span>
@@ -345,7 +341,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
             {gpsAnalysis.flags.length > 0 && (
               <div className="pt-1 border-t border-border/40 space-y-0.5">
                 {gpsAnalysis.flags.map(f => (
-                  <p key={f} className="text-amber-500 text-[9px] font-semibold uppercase tracking-wide">
+                  <p key={f} className="text-amber-500 text-[11px] font-semibold uppercase tracking-wide">
                     ⚠ {flagLabel(f)}
                   </p>
                 ))}
@@ -353,7 +349,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
             )}
           </>
         ) : (
-          <p className="text-red-500 text-[10px] font-semibold">GPS unavailable — clock-in is blocked until a fix is obtained.</p>
+          <p className="text-red-500 text-[11px] font-semibold">GPS unavailable — clock-in is blocked until a fix is obtained.</p>
         )}
       </PopoverContent>
     </Popover>
@@ -363,7 +359,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
   if (isAutoClockOut) {
     topContent = (
       <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
-        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
           <LogOut className="h-3 w-3" />DID NOT CLOCK OUT
         </span>
       </div>
@@ -372,13 +368,13 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
     topContent = (
       <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
         {timing === 'before_window' && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-500 dark:text-slate-400 border border-slate-500/30">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-500 dark:text-slate-400 border border-slate-500/30">
             <Timer className="h-3 w-3" />Opens in {formatHM(minsUntilWindow)}
           </span>
         )}
         {shift.lifecycle_status === 'InProgress' && shift.actual_start && !shift.actual_end && (
           <div className="w-full mt-1">
-            <div className="flex items-center justify-between text-[9px] text-muted-foreground/60 mb-0.5 font-mono">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground/60 mb-0.5 font-mono">
               <span>{formatHM(minsElapsed)} in</span>
               <span>{formatHM(minsRemaining)} left</span>
             </div>
@@ -402,7 +398,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
    */
   const actionButtonCls =
     'flex-1 h-12 rounded-xl border-0 shadow-none bg-purple-600 hover:bg-purple-700 text-white ' +
-    'dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white text-sm font-bold ' +
+    'dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white text-[13px] font-bold ' +
     'disabled:opacity-60 transition-colors';
 
   const footerActions = (canClockIn || canClockOut) ? (
@@ -460,7 +456,6 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
         </div>
       }
       employeeActions={footerActions}
-      hideGlow={true}
       useGroupColoring={useGroupColoring}
     />
   );
@@ -506,12 +501,6 @@ const ATTENDANCE_STATUS_TABS: { id: StatusFilter; label: string; icon: React.FC<
   { id: 'unknown', label: ATTENDANCE_STATUS_LABELS.unknown, icon: Fingerprint, accent: 'slate' },
 ];
 
-const attendanceAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
-  amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
-  emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
-  red:     { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
-  slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
-};
 
 const AttendancePage: React.FC = () => {
   const { user } = useAuth();
@@ -525,7 +514,6 @@ const AttendancePage: React.FC = () => {
   const [sort, setSort] = useState<RowSort>(DEFAULT_ROW_SORT);
   const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
-  const { isDark } = useTheme();
   const { orgBranding } = useSettings();
   const useGroupColoring = (orgBranding as any)?.enable_group_coloring || false;
 
@@ -681,12 +669,7 @@ const AttendancePage: React.FC = () => {
 
 
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="hidden"
-      animate="show"
-      className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4"
-    >
+    <PageLayout variants={pageVariants} initial="hidden" animate="show">
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <GoldStandardHeader
         title="My Attendance"
@@ -695,30 +678,39 @@ const AttendancePage: React.FC = () => {
         setScope={setScope}
         isGammaLocked={isGammaLocked}
         mode="personal"
-        className="p-0"
         functionBar={
           <EmployeeFunctionBar
             view={viewType as EmployeeViewRange}
             onViewChange={(v) => handleViewTypeChange(v as ViewType)}
             selectedDate={selectedDate}
             onDateChange={(d) => { setSelectedDate(d); setRange(computeRange(d, viewType)); }}
+            showToday
+            onToday={() => {
+              const now = new Date();
+              let snapped = now;
+              if (viewType === 'week') snapped = startOfWeekAU(now);
+              if (viewType === 'month') snapped = startOfMonth(now);
+              setSelectedDate(snapped);
+              setRange(computeRange(snapped, viewType));
+            }}
             rangeLabel={mobileDateLabel}
             onPrevious={handleMobilePrev}
             onNext={handleMobileNext}
             sort={sort}
             onSortChange={setSort}
             sortOptions={['date', 'startTime', 'role', 'group', 'status']}
-            activeFilterCount={activeFilterCount}
-            filterContent={
-              <TimesheetFilterPanel
+            filters={
+              <TimesheetFilterDrawer
                 entries={filterRows}
                 appliedFilters={appliedFilters}
                 onApply={setAppliedFilters}
+                activeCount={activeFilterCount}
                 statusFilter={statusFilter}
                 onStatusFilterChange={(st) => setStatusFilter(st as StatusFilter)}
                 statusCounts={statusCounts}
                 statusOptions={ATTENDANCE_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
                 statusSectionLabel="Attendance Status"
+                triggerVariant="icon"
               />
             }
             groupBy={groupBy}
@@ -731,36 +723,25 @@ const AttendancePage: React.FC = () => {
       {/* ── Main Content Area ─────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
-            "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
-            isDark
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
-                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+            "h-full overflow-hidden flex flex-col",
+            surface.bodyCard
         )}>
           {logsLoading ? (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-primary/60" />
-                <span className="text-sm text-muted-foreground font-medium tracking-wide">
-                  Loading attendance records…
-                </span>
-              </div>
-            </div>
+            <PageState state="loading" className="flex-1" title="Loading attendance records" />
           ) : (
             <div className={cn(
-              "flex-1 min-h-0 overflow-y-auto space-y-4 px-4 lg:px-6 py-4 pb-32 scrollbar-none",
+              "flex-1 min-h-0 overflow-y-auto space-y-4 scrollbar-none",
+              page.bodyInset,
               filteredLogs.length === 0 && "flex flex-col items-center justify-center pb-4"
             )}>
-              {/* Attendance scorecard */}
-              {logShifts.length > 0 && <AttendanceMetricsBar metrics={attendanceMetrics} />}
 
               {filteredLogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center gap-3">
-                  <BarChart3 className="h-10 w-10 text-muted-foreground/40" />
-                  <p className="text-base font-bold text-foreground">No attendance records</p>
-                  <p className="text-sm text-muted-foreground">
-                    {statusFilter !== 'all' || activeFilterCount > 0 ? 'Try removing a filter' : 'No shifts found for this period'}
-                  </p>
-                </div>
+                <PageState
+                  state="empty"
+                  icon={BarChart3}
+                  title="No attendance records"
+                  description={statusFilter !== 'all' || activeFilterCount > 0 ? 'Try removing a filter.' : 'No shifts found for this period.'}
+                />
               ) : (
                 groupedBuckets.map((bucket) => (
                   <div key={bucket.key}>
@@ -782,7 +763,11 @@ const AttendancePage: React.FC = () => {
         </div>
       </div>
 
-    </motion.div>
+      {/* Disconnected Attendance Metrics Footer */}
+      <PageLayout.Footer>
+        <AttendanceMetricsBar metrics={attendanceMetrics} />
+      </PageLayout.Footer>
+    </PageLayout>
   );
 };
 

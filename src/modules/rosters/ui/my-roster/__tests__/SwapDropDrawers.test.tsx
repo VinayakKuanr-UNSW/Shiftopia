@@ -1,6 +1,5 @@
-import { describe, expect, it, vi, beforeAll } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
 import { DropShiftDrawer } from '../DropShiftDrawer';
 import { CreateSwapRequestModal } from '../CreateSwapRequestModal';
 

@@ -10,7 +10,7 @@
  *   modalsRef.current?.openAddShift(context);
  */
 
-import React, { useState, forwardRef, useImperativeHandle, Suspense, lazy } from 'react';
+import { useState, forwardRef, useImperativeHandle, Suspense, lazy } from 'react';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 
@@ -70,7 +70,8 @@ export interface RosterModalsHandle {
     openAddShift: (context: ShiftContext) => void;
     openEditShift: (shift: any, context: ShiftContext) => void;
 
-    openAutoScheduler: () => void;
+    /** Opens on `range` — the roster period on screen — when given. */
+    openAutoScheduler: (range?: { startDate: string; endDate: string }) => void;
 }
 
 // =============================================================================
@@ -91,6 +92,7 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
     const openShiftForm = useShiftFormNav();
 
     const [isAutoSchedulerOpen, setIsAutoSchedulerOpen] = useState(false);
+    const [autoSchedulerRange, setAutoSchedulerRange] = useState<{ startDate: string; endDate: string } | undefined>();
 
     useImperativeHandle(ref, () => ({
         // Add/Edit now navigate to the dedicated full-page form route
@@ -100,7 +102,10 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
         openEditShift: (shift, context) =>
             openShiftForm({ context, editMode: true, existingShift: shift }),
 
-        openAutoScheduler: () => setIsAutoSchedulerOpen(true),
+        openAutoScheduler: (range) => {
+            setAutoSchedulerRange(range);
+            setIsAutoSchedulerOpen(true);
+        },
     }));
 
     return (
@@ -116,6 +121,7 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
                         onComplete={onAutoScheduleComplete}
                         organizationId={organizationId}
                         queryFilters={queryFilters}
+                        initialRange={autoSchedulerRange}
                     />
                 </Suspense>
             )}

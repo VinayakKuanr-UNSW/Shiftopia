@@ -51,14 +51,14 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, value, accent, b
   <div className="rounded-xl border border-border/60 bg-card/40 backdrop-blur-sm p-6 flex flex-col gap-3 min-w-0 transition-all hover:border-primary/30 hover:bg-card/60 shadow-sm">
     <div className="flex items-center gap-2.5">
       <Icon className={cn('h-5 w-5 flex-shrink-0', accent ?? 'text-muted-foreground')} aria-hidden="true" />
-      <span className="text-sm font-semibold text-muted-foreground truncate">{label}</span>
+      <span className="text-[13px] font-semibold text-muted-foreground truncate">{label}</span>
     </div>
     <div className="flex items-baseline gap-2.5 flex-wrap">
-      <span className={cn('text-2xl font-bold tracking-tight', accent ?? 'text-foreground')}>
+      <span className={cn('text-[20px] font-bold tracking-tight', accent ?? 'text-foreground')}>
         {value}
       </span>
       {badge && (
-        <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider border', badge.className)}>
+        <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border', badge.className)}>
           {badge.text}
         </span>
       )}
@@ -103,16 +103,16 @@ const AwardDashboardHeader: React.FC<AwardDashboardHeaderProps> = ({ schedule, i
       {/* Title row */}
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div>
-          <h2 className="text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-3">
+          <h2 className="text-[20px] font-extrabold text-foreground tracking-tight flex items-center gap-3">
             <Award className="h-6 w-6 text-primary" aria-hidden="true" />
             ICC Sydney EBA (2025–2028)
           </h2>
-          <p className="text-base text-muted-foreground mt-2 font-medium">
+          <p className="text-[14px] text-muted-foreground mt-2 font-medium">
             Enterprise Agreement pay rates, allowances, and award schedules
           </p>
         </div>
         <div className={cn(
-          'rounded-full px-4 py-1.5 text-xs font-bold border flex items-center gap-2 shadow-sm',
+          'rounded-full px-4 py-1.5 text-[11px] font-bold border flex items-center gap-2 shadow-sm',
           statusCfg.bg, statusCfg.color,
         )}>
           <statusCfg.Icon className="h-4 w-4" aria-hidden="true" />

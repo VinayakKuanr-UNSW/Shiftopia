@@ -29,11 +29,26 @@ N = {n["id"]: n for n in GRAPH["nodes"]}
 
 # targets we can bind to
 db_by_label: dict[str, str] = {}
-for i, n in N.items():
+for i in sorted(N):  # sorted: a label shared by a fn and a table must resolve the same way every run
     if i.startswith(("db_fn_", "db_tbl_")):
-        db_by_label.setdefault(re.sub(r"\(\)$", "", n["label"]).lower(), i)
-paths = {(n.get("source_file") or "").lower(): i for i, n in N.items()
-         if n.get("source_file") and not str(n.get("source_file")).endswith(".md")}
+        db_by_label.setdefault(re.sub(r"\(\)$", "", N[i]["label"]).lower(), i)
+
+def _file_nodes(exclude_md: bool) -> dict[str, str]:
+    """source path -> that file's OWN node. Every symbol in a file shares its
+    source_file, so a plain dict comprehension kept whichever symbol came last
+    in graph.json -- an arbitrary function or rationale node, and a different
+    one on each merge. Prefer the node labelled with the file's basename."""
+    out: dict[str, str] = {}
+    for i in sorted(N):
+        sf = N[i].get("source_file")
+        if not sf or (exclude_md and str(sf).endswith(".md")):
+            continue
+        key, base = sf.lower(), sf.rsplit("/", 1)[-1]
+        if key not in out or (N[i].get("label") == base and N[out[key]].get("label") != base):
+            out[key] = i
+    return out
+
+paths = _file_nodes(exclude_md=True)
 
 # heading nodes per doc, ordered by line, so a mention can be attributed to a section
 sections: dict[str, list[tuple[int, str]]] = defaultdict(list)

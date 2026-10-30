@@ -1,7 +1,7 @@
 // src/modules/templates/ui/components/editor/TemplateGroupCard.tsx
 // A card component representing a single template group (e.g., Convention Centre)
 
-import React, { useState } from 'react';
+import React from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -10,7 +10,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/modules/core/ui/primitives/collapsible';
-import { Group, SubGroup } from '../../../model/templates.types';
+import { Group } from '../../../model/templates.types';
 import { GROUP_CONFIG } from '../../constants';
 
 interface TemplateGroupCardProps {
@@ -20,6 +20,8 @@ interface TemplateGroupCardProps {
     onAddSubgroup?: () => void;
     renderSubgroups?: (group: Group) => React.ReactNode;
     className?: string;
+    /** Shown under the subgroup count, e.g. why Office offers no "Add subgroup". */
+    note?: string;
 }
 
 export function TemplateGroupCard({
@@ -29,6 +31,7 @@ export function TemplateGroupCard({
     onAddSubgroup,
     renderSubgroups,
     className,
+    note,
 }: TemplateGroupCardProps) {
     const config = GROUP_CONFIG[group.name] || {
         gradient: 'from-gray-600/20 via-gray-500/10 to-transparent',
@@ -75,10 +78,13 @@ export function TemplateGroupCard({
                                 {config.icon}
                             </div>
                             <div className="min-w-0">
-                                <h3 className="font-bold text-base text-foreground tracking-tight truncate">{group.name}</h3>
-                                <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                <h3 className="font-bold text-[14px] text-foreground tracking-tight truncate">{group.name}</h3>
+                                <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
                                     {group.subGroups.length} subgroups • {shiftCount} shifts
                                 </p>
+                                {note && (
+                                    <p className="text-[11px] text-slate-600 dark:text-slate-300">{note}</p>
+                                )}
                             </div>
                         </button>
                     </CollapsibleTrigger>
@@ -101,7 +107,7 @@ export function TemplateGroupCard({
                     <div className="px-4 pb-4 space-y-3">
                         {group.subGroups.length === 0 ? (
                             <div className="text-center py-8 text-slate-600 dark:text-slate-300">
-                                <p className="text-sm font-medium">No subgroups yet</p>
+                                <p className="text-[13px] font-medium">No subgroups yet</p>
                                 {onAddSubgroup && (
                                     <Button
                                         variant="outline"

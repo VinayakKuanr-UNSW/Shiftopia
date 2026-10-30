@@ -29,7 +29,7 @@ import type { ContractBasis } from '../../domain/contract-basis';
 import { formatEnvelopeDays as formatDays, formatEnvelopeTime as formatTime } from '../envelope-format';
 
 
-export interface ContractBasisBannerProps {
+interface ContractBasisBannerProps {
     basis: ContractBasis;
     /** True while the contract is still being read — renders nothing. */
     loading?: boolean;
@@ -52,7 +52,7 @@ export const ContractBasisBanner: React.FC<ContractBasisBannerProps> = ({ basis,
                 'border-amber-500/20 bg-amber-500/5',
             )}>
                 <CalendarClock className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-                <div className="min-w-0 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+                <div className="min-w-0 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200">
                     <span className="font-semibold">You are only offered shifts you declare for.</span>{' '}
                     Days with no availability on them are treated as unavailable, so add the times
                     you can work to be considered for them.
@@ -67,7 +67,7 @@ export const ContractBasisBanner: React.FC<ContractBasisBannerProps> = ({ basis,
             'border-sky-500/20 bg-sky-500/5',
         )}>
             <CalendarCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />
-            <div className="min-w-0 space-y-1.5 text-xs leading-relaxed text-sky-900 dark:text-sky-200">
+            <div className="min-w-0 space-y-1.5 text-[11px] leading-relaxed text-sky-900 dark:text-sky-200">
                 <p>
                     <span className="font-semibold">
                         You do not need to declare availability

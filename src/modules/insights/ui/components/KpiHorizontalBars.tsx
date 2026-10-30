@@ -7,7 +7,7 @@
 import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface HorizontalBarItem {
+interface HorizontalBarItem {
     id: string;
     label: string;
     value: number; // percentage (0 - 100) or count
@@ -45,8 +45,8 @@ export const KpiHorizontalBars: React.FC<KpiHorizontalBarsProps> = ({
         <div className={cn('flex flex-col justify-between rounded-2xl border border-border/70 bg-card p-5 sm:p-6 shadow-sm', className)}>
             <div>
                 <div className="pb-4 border-b border-border/40">
-                    <h3 className="text-base font-bold text-foreground tracking-tight">{title}</h3>
-                    {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+                    <h3 className="text-[14px] font-bold text-foreground tracking-tight">{title}</h3>
+                    {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
                 </div>
 
                 <div className="py-4 space-y-3.5">
@@ -56,7 +56,7 @@ export const KpiHorizontalBars: React.FC<KpiHorizontalBarsProps> = ({
 
                         return (
                             <div key={item.id} className="space-y-1.5 group">
-                                <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center justify-between text-[11px]">
                                     <span className="font-medium text-foreground group-hover:text-primary transition-colors truncate max-w-[70%]">
                                         {item.label}
                                     </span>
@@ -85,4 +85,3 @@ export const KpiHorizontalBars: React.FC<KpiHorizontalBarsProps> = ({
     );
 };
 
-export default KpiHorizontalBars;

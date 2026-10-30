@@ -16,7 +16,6 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Zap, Plus, Trash2, Pencil, Search } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
-import { cn } from '@/modules/core/lib/utils';
 
 interface SkillsSectionProps {
     employeeId: string;
@@ -97,18 +96,18 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
 
     const getStatusBadge = (status: string, expirationDate?: string) => {
         if (status === 'Expired') {
-            return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-[9px] uppercase shadow-none">Expired</Badge>;
+            return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-[11px] uppercase shadow-none">Expired</Badge>;
         }
         if (expirationDate) {
             const daysUntilExpiry = differenceInDays(parseISO(expirationDate), new Date());
             if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
-                return <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold text-[9px] uppercase shadow-none">Expiring Soon</Badge>;
+                return <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold text-[11px] uppercase shadow-none">Expiring Soon</Badge>;
             }
             if (daysUntilExpiry < 0) {
-                return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-[9px] uppercase shadow-none">Expired</Badge>;
+                return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-[11px] uppercase shadow-none">Expired</Badge>;
             }
         }
-        return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-[9px] uppercase shadow-none">Active</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-[11px] uppercase shadow-none">Active</Badge>;
     };
 
     // Filter skills by search query
@@ -139,22 +138,22 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
             <div className="px-5 py-3.5 border-b border-border/20 bg-card flex flex-col gap-2 shrink-0">
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                        <h3 className="text-sm font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                        <h3 className="text-[13px] font-black uppercase tracking-wider text-foreground flex items-center gap-2">
                             <Zap className="w-4 h-4 text-primary" aria-hidden="true" />
                             Skills ({employeeSkills?.length || 0})
                         </h3>
                     </div>
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs font-bold gap-1.5 rounded-xl border-border/40 hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary shadow-none">
+                            <Button variant="outline" size="sm" className="h-8 px-2.5 text-[11px] font-bold gap-1.5 rounded-xl border-border/40 hover:bg-primary/10 hover:text-primary transition-colors focus-visible:ring-2 focus-visible:ring-primary shadow-none">
                                 <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                                 Add Skill
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="rounded-2xl border border-border/30 bg-popover">
+                        <DialogContent className="bg-popover">
                             <DialogHeader>
-                                <DialogTitle className="text-lg font-black uppercase tracking-tight">Add Skill</DialogTitle>
-                                <DialogDescription className="text-xs text-muted-foreground">Add a new skill for this employee</DialogDescription>
+                                <DialogTitle className="uppercase">Add Skill</DialogTitle>
+                                <DialogDescription>Add a new skill for this employee</DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4 mt-3">
                                 <div>
@@ -173,7 +172,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <Label className="text-xs font-bold">Issue Date *</Label>
+                                        <Label className="text-[11px] font-bold">Issue Date *</Label>
                                         <Input
                                             type="date"
                                             required
@@ -183,7 +182,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                         />
                                     </div>
                                     <div>
-                                        <Label className="text-xs font-bold">Expiry Date (Optional)</Label>
+                                        <Label className="text-[11px] font-bold">Expiry Date (Optional)</Label>
                                         <Input
                                             type="date"
                                             value={newSkill.expiration_date}
@@ -210,7 +209,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                             onChange={(e) => setFilterQuery(e.target.value)}
                             placeholder="Filter skills..."
                             aria-label="Filter employee skills"
-                            className="w-full bg-muted/40 border border-border/20 rounded-xl pl-8 pr-3 py-1 text-xs font-medium placeholder:text-muted-foreground/60 outline-none focus:ring-1 focus:ring-primary text-foreground"
+                            className="w-full bg-muted/40 border border-border/20 rounded-xl pl-8 pr-3 py-1 text-[11px] font-medium placeholder:text-muted-foreground/60 outline-none focus:ring-1 focus:ring-primary text-foreground"
                         />
                     </div>
                 )}
@@ -219,17 +218,17 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
             {/* Edit Skill Dialog */}
             {editingSkill && (
                 <Dialog open={!!editingSkill} onOpenChange={(open) => !open && setEditingSkill(null)}>
-                    <DialogContent className="rounded-2xl border border-border/30 bg-popover">
+                    <DialogContent className="bg-popover">
                         <DialogHeader>
-                            <DialogTitle className="text-lg font-black uppercase tracking-tight">Edit Skill</DialogTitle>
-                            <DialogDescription className="text-xs text-muted-foreground">
+                            <DialogTitle className="uppercase">Edit Skill</DialogTitle>
+                            <DialogDescription>
                                 Update issue & expiry dates for <span className="font-bold text-foreground">{editingSkill.skill?.name}</span>
                             </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 mt-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <Label className="text-xs font-bold">Issue Date *</Label>
+                                    <Label className="text-[11px] font-bold">Issue Date *</Label>
                                     <Input
                                         type="date"
                                         required
@@ -239,7 +238,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                     />
                                 </div>
                                 <div>
-                                    <Label className="text-xs font-bold">Expiry Date (Optional)</Label>
+                                    <Label className="text-[11px] font-bold">Expiry Date (Optional)</Label>
                                     <Input
                                         type="date"
                                         value={editingSkill.expiration_date ? editingSkill.expiration_date.split('T')[0] : ''}
@@ -260,15 +259,15 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
             <div className="p-4 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-full">
-                        <p className="text-muted-foreground text-xs font-medium animate-pulse">Loading skills...</p>
+                        <p className="text-muted-foreground text-[11px] font-medium animate-pulse">Loading skills...</p>
                     </div>
                 ) : !employeeSkills || employeeSkills.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full py-8 text-center text-muted-foreground">
                         <Zap className="w-8 h-8 mb-2 opacity-20" aria-hidden="true" />
-                        <p className="text-xs font-bold">No skills recorded</p>
+                        <p className="text-[11px] font-bold">No skills recorded</p>
                     </div>
                 ) : filteredSkills.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground text-xs font-medium">
+                    <div className="py-8 text-center text-muted-foreground text-[11px] font-medium">
                         No skills matching "{filterQuery}"
                     </div>
                 ) : (
@@ -277,7 +276,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                             const list = skills ?? [];
                             return (
                                 <div key={category} className="space-y-2">
-                                    <h4 className="text-[10px] font-black uppercase tracking-wider text-muted-foreground border-b border-border/10 pb-1">
+                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-muted-foreground border-b border-border/10 pb-1">
                                         {category} ({list.length})
                                     </h4>
                                     <div className="space-y-2">
@@ -287,11 +286,11 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                                 className="bg-muted/30 hover:bg-muted/60 rounded-xl border border-border/20 p-3 transition-colors group flex items-center justify-between gap-2"
                                             >
                                                 <div className="min-w-0 flex-1">
-                                                    <h5 className="font-bold text-xs text-foreground truncate">{skill.skill?.name}</h5>
+                                                    <h5 className="font-bold text-[11px] text-foreground truncate">{skill.skill?.name}</h5>
                                                     {skill.skill?.description && (
-                                                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">{skill.skill.description}</p>
+                                                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">{skill.skill.description}</p>
                                                     )}
-                                                    <div className="flex flex-wrap gap-3 text-[9px] font-semibold text-muted-foreground mt-1.5">
+                                                    <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-muted-foreground mt-1.5">
                                                         {skill.issue_date && (
                                                             <span>Issued: {format(parseISO(skill.issue_date), 'MMM d, yyyy')}</span>
                                                         )}

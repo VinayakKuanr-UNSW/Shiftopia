@@ -39,7 +39,7 @@ export const EmployeeDrillDown: React.FC<EmployeeDrillDownProps> = ({
 
     return (
         <Dialog open={!!employeeId} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="max-h-[85dvh] max-w-3xl overflow-y-auto">
+            <DialogContent className="max-h-[85dvh] overflow-y-auto" size="xl">
                 <DialogHeader>
                     <DialogTitle>{employeeName}</DialogTitle>
                     <DialogDescription>
@@ -58,4 +58,3 @@ export const EmployeeDrillDown: React.FC<EmployeeDrillDownProps> = ({
     );
 };
 
-export default EmployeeDrillDown;

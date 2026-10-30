@@ -14,7 +14,7 @@
 import { create } from 'zustand';
 import type { ShiftContext } from '../ui/dialogs/EnhancedAddShiftModal/types';
 
-export interface OpenShiftFormOptions {
+interface OpenShiftFormOptions {
     context: ShiftContext | null;
     editMode?: boolean;
     existingShift?: any;

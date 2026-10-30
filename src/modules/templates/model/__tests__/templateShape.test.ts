@@ -27,11 +27,32 @@ function shift(over: Partial<TemplateShift> = {}): TemplateShift {
         endTime: '17:30',
         paidBreakDuration: 30,
         unpaidBreakDuration: 30,
+        breakStart: '13:00',
+        breakEnd: '13:30',
         skills: [], licenses: [], siteTags: [], eventTags: [],
         sortOrder: 0,
         targetEmploymentType: 'Casual',
         ...over,
     };
+}
+
+/** No meal break at all. */
+const NO_MEAL = { unpaidBreakDuration: 0, breakStart: null, breakEnd: null } as const;
+
+/**
+ * The meal-break window a manager must now set on a library row: `unpaid`
+ * minutes from the middle of the shift, on the quarter hour. Production rows
+ * were read as minute totals; from 2026-10-25 every row over five hours needs
+ * its window too, so the fixtures carry one.
+ */
+function midWindow(startTime: string, endTime: string, unpaid: number) {
+    if (unpaid === 0) return { breakStart: null, breakEnd: null };
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const toTime = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    const start = toMin(startTime);
+    const gross = (toMin(endTime) - start + 1440) % 1440;
+    const from = start + Math.floor((gross - unpaid) / 2 / 15) * 15;
+    return { breakStart: toTime(from), breakEnd: toTime(from + unpaid) };
 }
 
 function groups(shifts: TemplateShift[]): Group[] {
@@ -47,23 +68,23 @@ describe('template shapes are validated at authoring time', () => {
     });
 
     it('catches a shift with no meal break (cl 36.1)', () => {
-        const failures = validateTemplateShapes(groups([shift({ unpaidBreakDuration: 0 })]));
+        const failures = validateTemplateShapes(groups([shift({ ...NO_MEAL })]));
         expect(failures).toHaveLength(1);
         expect(failures[0].hits.map(h => h.rule_id)).toContain('SHAPE_MEAL_BREAK');
     });
 
     it('reports every failing shift, not just the first', () => {
         const failures = validateTemplateShapes(groups([
-            shift({ id: 1, name: 'Bad A', unpaidBreakDuration: 0 }),
+            shift({ id: 1, name: 'Bad A', ...NO_MEAL }),
             shift({ id: 2, name: 'Good' }),
-            shift({ id: 3, name: 'Bad B', endTime: '10:00', unpaidBreakDuration: 0, paidBreakDuration: 0 }),
+            shift({ id: 3, name: 'Bad B', endTime: '10:00', ...NO_MEAL, paidBreakDuration: 0 }),
         ]));
         expect(failures.map(f => f.shiftName)).toEqual(['Bad A', 'Bad B']);
     });
 
     it('locates each failure by group, subgroup and shift', () => {
         const [line] = describeTemplateShapeFailures(
-            validateTemplateShapes(groups([shift({ name: 'Door 3', unpaidBreakDuration: 0 })])),
+            validateTemplateShapes(groups([shift({ name: 'Door 3', ...NO_MEAL })])),
         );
         expect(line).toContain('Convention');
         expect(line).toContain('Level 2');
@@ -72,7 +93,7 @@ describe('template shapes are validated at authoring time', () => {
     });
 
     it('names an unnamed shift by role and position, so it can still be found', () => {
-        const [f] = validateTemplateShapes(groups([shift({ roleName: 'Usher', unpaidBreakDuration: 0 })]));
+        const [f] = validateTemplateShapes(groups([shift({ roleName: 'Usher', ...NO_MEAL })]));
         expect(f.shiftName).toBe('Usher #1');
     });
 
@@ -94,7 +115,7 @@ describe('Schedule 3 is read from the role name the template already carries', (
     it('accepts a security template shift whose meal break is paid', () => {
         const r = evaluateTemplateShiftShape(shift({
             roleName: 'Security Officer',
-            unpaidBreakDuration: 0, paidBreakDuration: 60,
+            unpaidBreakDuration: 0, paidBreakDuration: 30,
         }));
         expect(r.passed).toBe(true);
     });
@@ -102,7 +123,7 @@ describe('Schedule 3 is read from the role name the template already carries', (
     it('refuses the same shape on a general role', () => {
         const r = evaluateTemplateShiftShape(shift({
             roleName: 'Team Member',
-            unpaidBreakDuration: 0, paidBreakDuration: 60,
+            unpaidBreakDuration: 0, paidBreakDuration: 30,
         }));
         expect(r.blocking).toBe(true);
     });
@@ -112,7 +133,7 @@ describe('the day-typed rules are scoped honestly', () => {
     it('checks a shift stated for Sunday against the Sunday minimum', () => {
         // cl 12.5(c): four hours on a Sunday for a casual.
         const r = evaluateTemplateShiftShape(shift({
-            dayOfWeek: 0, endTime: '12:00', unpaidBreakDuration: 0, paidBreakDuration: 15,
+            dayOfWeek: 0, endTime: '12:00', ...NO_MEAL, paidBreakDuration: 15,
         }));
         expect(r.hits.map(h => h.rule_id)).toContain('SHAPE_MIN_ENGAGEMENT');
     });
@@ -122,7 +143,7 @@ describe('the day-typed rules are scoped honestly', () => {
         // one day be applied to a Sunday would block correct rosters on a
         // hypothetical.
         const r = evaluateTemplateShiftShape(shift({
-            dayOfWeek: null, endTime: '12:00', unpaidBreakDuration: 0, paidBreakDuration: 15,
+            dayOfWeek: null, endTime: '12:00', ...NO_MEAL, paidBreakDuration: 15,
         }));
         expect(r.passed).toBe(true);
     });
@@ -138,7 +159,7 @@ describe('the day-typed rules are scoped honestly', () => {
      */
     it('does not assert the public-holiday minimum against a day-of-week', () => {
         const r = evaluateTemplateShiftShape(shift({
-            dayOfWeek: null, endTime: '12:00', unpaidBreakDuration: 0, paidBreakDuration: 15,
+            dayOfWeek: null, endTime: '12:00', ...NO_MEAL, paidBreakDuration: 15,
         }));
         expect(r.hits.map(h => h.rule_id)).not.toContain('SHAPE_MIN_ENGAGEMENT_PH');
     });
@@ -158,7 +179,7 @@ describe('template application is validated against the real dates', () => {
     }];
 
     /** A three-hour casual engagement: lawful on a weekday, not on a PH. */
-    const THREE_HOURS = { startTime: '09:00', endTime: '12:00', unpaidBreakDuration: 0, paidBreakDuration: 0 };
+    const THREE_HOURS = { startTime: '09:00', endTime: '12:00', ...NO_MEAL, paidBreakDuration: 0 };
 
     it('mirrors the RPC: a null day-of-week lands on EVERY day', () => {
         // `day_of_week IS NULL OR day_of_week = <dow>`. Null is every day, not
@@ -198,7 +219,7 @@ describe('template application is validated against the real dates', () => {
         // The 15m paid pause is cl 37.1, which bites at exactly four hours —
         // an authoring-time rule, but the apply gate runs the full shape
         // evaluation, so the fixture has to be a lawful shift outright.
-        const four = { startTime: '09:00', endTime: '13:00', unpaidBreakDuration: 0, paidBreakDuration: 15 };
+        const four = { startTime: '09:00', endTime: '13:00', ...NO_MEAL, paidBreakDuration: 15 };
         expect(validateTemplateApplication(place(four), '2026-12-25', '2026-12-25')).toEqual([]);
     });
 
@@ -253,6 +274,7 @@ describe('template application is validated against the real dates', () => {
             shift: shift({
                 id: i + 1, startTime, endTime,
                 unpaidBreakDuration: unpaid, paidBreakDuration: paid,
+                ...midWindow(startTime, endTime, unpaid),
                 dayOfWeek: null, targetEmploymentType: 'Casual',
             }),
         }));
@@ -296,6 +318,7 @@ describe('the production template library', () => {
             ([startTime, endTime, paid, unpaid, roleName], i) => shift({
                 id: i, startTime, endTime,
                 paidBreakDuration: paid, unpaidBreakDuration: unpaid,
+                ...midWindow(startTime, endTime, unpaid),
                 roleName, name: `${roleName} ${startTime}`,
                 targetEmploymentType: 'Casual', dayOfWeek: null,
             }),

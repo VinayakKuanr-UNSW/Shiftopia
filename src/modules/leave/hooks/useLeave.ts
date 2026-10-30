@@ -14,7 +14,7 @@ import {
 } from '../api/leave.api';
 import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 
-export const leaveKeys = {
+const leaveKeys = {
     all: ['leave'] as const,
     mine: (employeeId: string) => [...leaveKeys.all, 'mine', employeeId] as const,
     team: (since: string) => [...leaveKeys.all, 'team', since] as const,
@@ -27,7 +27,7 @@ export const leaveKeys = {
 };
 
 /** Everything a leave write can have changed. */
-export function invalidateAfterLeaveWrite(qc: QueryClient): void {
+function invalidateAfterLeaveWrite(qc: QueryClient): void {
     void qc.invalidateQueries({ queryKey: leaveKeys.all });
     void qc.invalidateQueries({ queryKey: shiftKeys.all });
     void qc.invalidateQueries({ queryKey: rosterKeys.all });

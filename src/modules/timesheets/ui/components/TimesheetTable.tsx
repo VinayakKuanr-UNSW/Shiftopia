@@ -1,6 +1,7 @@
+import { PageState } from '@/modules/core/ui/components/PageState';
+import { tableTokens, TableStateRow } from '@/modules/core/ui/primitives/table';
 import React, { useState, useMemo } from "react";
-import { ArrowUp, ArrowDown, XCircle, AlertTriangle } from "lucide-react";
-import { format } from "date-fns";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { useTheme } from "@/modules/core/contexts/ThemeContext";
 import { useToast } from "@/modules/core/hooks/use-toast";
 import type { TimesheetRow } from "../../model/timesheet.types";
@@ -150,7 +151,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                 onClick={() => handleSort(field)}
                 aria-label={`Sort by ${label}${isSorted ? `, currently sorted ${currentSort}` : ''}`}
                 className={cn(
-                    "p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 cursor-pointer hover:bg-muted/50 border-b border-border/50 text-left group transition-colors focus:outline-none focus:ring-1 focus:ring-primary/40",
+                    tableTokens.head, "px-3 cursor-pointer group hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                     className
                 )}
             >
@@ -229,7 +230,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
 
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
-        <div className="md:mt-8 mt-0">
+        <div>
 
             {/* ── Mobile view (< md) ── */}
             <div className="block md:hidden">
@@ -303,40 +304,40 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
 
                 {/* Table View */}
                 {viewMode === "table" && (
-                    <div className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-md overflow-hidden shadow-2xl">
+                    <div className="rounded-2xl border border-border/60 overflow-hidden">
                         <div className="overflow-x-auto">
-                            <table className="w-full border-collapse min-w-[2200px]" aria-label="Timesheets detailed entry table">
-                                <thead>
+                            <table className={cn(tableTokens.table, "min-w-[2200px]")} aria-label="Timesheets detailed entry table">
+                                <thead className={tableTokens.header}>
                                     <tr>
                                         {/* Multi-header groups */}
-                                        <th className="p-3 border-b-2 border-border/50"></th>
-                                        {showDate && <th className="p-3 border-b-2 border-border/50 border-r border-border/30"></th>}
-                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                        <th className={tableTokens.head} />
+                                        {showDate && <th className={cn(tableTokens.head, "border-r border-border/30")} />}
+                                        <th colSpan={2} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
                                             Employee
                                         </th>
-                                        <th colSpan={4} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                        <th colSpan={4} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
                                             Organization & Role
                                         </th>
-                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                        <th colSpan={2} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
                                             Scheduled
                                         </th>
-                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                        <th colSpan={2} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
                                             Attendance (Actual)
                                         </th>
-                                        <th colSpan={6} className="p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 bg-primary/5 border-r border-border/30">
+                                        <th colSpan={6} className={cn(tableTokens.head, "text-center text-primary bg-primary/5 border-r border-border/30")}>
                                             Adjusted (Inline Edit)
                                         </th>
-                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                        <th colSpan={2} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
                                             Payroll & Diff
                                         </th>
-                                        <th colSpan={3} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                        <th colSpan={3} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
                                             Statuses
                                         </th>
-                                        <th className="p-3 border-b-2 border-border/50"></th>
+                                        <th className={tableTokens.head} />
                                     </tr>
-                                    <tr className="bg-muted/20">
+                                    <tr>
                                         {/* Select All */}
-                                        <th className="w-10 p-3 border-b border-border/50 border-r border-border/30">
+                                        <th className={cn(tableTokens.head, "w-10 px-3 border-r border-border/30")}>
                                             <div className="flex justify-center">
                                                 <div className="h-4 w-4 rounded border-border bg-background" />
                                             </div>
@@ -363,8 +364,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <SortableHeader field="adjustedStart" label="Start" className="bg-primary/5" />
                                         <SortableHeader field="adjustedEnd" label="End" className="bg-primary/5" />
                                         <SortableHeader field="length" label="Length" className="bg-primary/5 border-r border-border/30" />
-                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Paid</th>
-                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Unpaid</th>
+                                        <th className={cn(tableTokens.head, "px-3 bg-primary/5")}>Paid</th>
+                                        <th className={cn(tableTokens.head, "px-3 bg-primary/5")}>Unpaid</th>
                                         <SortableHeader field="netLength" label="Net" className="bg-primary/5 border-r border-border/30" />
                                         {/* Estimated cost — award estimate, NOT payroll */}
                                         <SortableHeader field="approximatePay" label={COST_ESTIMATE_LABEL} title={COST_ESTIMATE_DISCLAIMER} />
@@ -372,34 +373,24 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         {/* Statuses */}
                                         <SortableHeader field="liveStatus" label="Time Rules" />
                                         <SortableHeader field="timesheetStatus" label="Live Rules" />
-                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left border-r border-border/30" title="Billable window vs roster — what payroll pays">Payroll Rules</th>
+                                        <th className={cn(tableTokens.head, "px-3 border-r border-border/30")} title="Billable window vs roster — what payroll pays">Payroll Rules</th>
                                         {/* Actions */}
-                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-foreground/70 text-center border-b border-border/50">
+                                        <th className={cn(tableTokens.head, "px-3 text-foreground/70 text-center")}>
                                             Actions
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {sortedEntries.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={showDate ? 25 : 24} className="p-20 text-center text-muted-foreground">
-                                                <div className="flex flex-col items-center gap-4">
-                                                    <div className="h-16 w-16 rounded-full bg-muted/20 flex items-center justify-center">
-                                                        <XCircle className="h-8 w-8 text-muted-foreground/40" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-lg font-black text-foreground">No records found</p>
-                                                        <p className="text-sm">Try adjusting your filters or search query.</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                        <TableStateRow colSpan={showDate ? 25 : 24}>
+                                            <PageState state="empty" scope="section" title="No records found" description="Try adjusting your filters or search query." />
+                                        </TableStateRow>
                                     ) : (
                                         groupedBuckets.map((bucket) => (
                                             <React.Fragment key={bucket.key}>
                                                 {bucket.label && (
-                                                    <tr className="bg-muted/30">
-                                                        <td colSpan={showDate ? 25 : 24} className="px-3 py-2 border-b border-border/40">
+                                                    <tr className="border-b border-border/60">
+                                                        <td colSpan={showDate ? 25 : 24} className="bg-muted/30 px-4 py-1.5">
                                                             <GroupSectionHeader
                                                                 label={bucket.label}
                                                                 count={bucket.items.length}

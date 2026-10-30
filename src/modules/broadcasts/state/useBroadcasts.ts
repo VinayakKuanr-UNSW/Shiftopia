@@ -212,7 +212,7 @@ interface UseBroadcastGroupReturn {
 }
 
 export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupReturn {
-    const { user } = useAuth();
+    const { user, hasPermission } = useAuth();
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
@@ -239,13 +239,15 @@ export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupRetu
 
     const userRole = userRoleQuery.data ?? null;
 
+    // Broadcast rights come from the group role, independent of access level
+    // (access suites decision #10). The one level that counts is zeta: the
+    // database treats it as admin of every group (is_broadcast_system_manager).
+    // The legacy `user.role` used to count too — epsilon read as 'admin', gamma
+    // and delta as 'manager' — and offered controls the database then refused.
+    const isSystemManager = hasPermission('admin');
     const canBroadcast =
-        userRole === 'admin' ||
-        userRole === 'broadcaster' ||
-        user?.role === 'admin' ||
-        user?.role === 'manager';
-    const canManage =
-        userRole === 'admin' || user?.role === 'admin' || user?.role === 'manager';
+        userRole === 'admin' || userRole === 'broadcaster' || isSystemManager;
+    const canManage = userRole === 'admin' || isSystemManager;
 
     // Channel mutations
     const createChannelMutation = useMutation({

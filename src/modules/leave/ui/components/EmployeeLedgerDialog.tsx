@@ -38,10 +38,10 @@ export const EmployeeLedgerDialog: React.FC<{
                 <div className={cn(cardSection, 'flex items-center gap-3 pt-6')}>
                     <Avatar className="h-10 w-10">
                         <AvatarImage src={member.avatarUrl ?? undefined} alt="" />
-                        <AvatarFallback className="bg-primary/10 text-primary text-sm">{initials(member.name)}</AvatarFallback>
+                        <AvatarFallback className="bg-primary/10 text-primary text-[13px]">{initials(member.name)}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                        <DialogTitle className="truncate text-xl font-bold tracking-tight">{member.name}</DialogTitle>
+                        <DialogTitle className="truncate">{member.name}</DialogTitle>
                         <DialogDescription className={text.caption}>
                             {member.isCasual ? 'Casual' : 'Permanent'}
                             {member.contractedWeeklyHours ? ` · ${member.contractedWeeklyHours}h a week` : ''}

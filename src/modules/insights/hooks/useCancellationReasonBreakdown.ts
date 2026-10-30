@@ -10,7 +10,7 @@ import type { ScopeSelection } from '@/platform/auth/types';
  * existed report as `UNSPECIFIED` rather than disappearing from the
  * denominator, so the shares always add to 100%.
  */
-export interface CancellationReasonRow {
+interface CancellationReasonRow {
     reason_code: string;
     reason_label: string;
     total: number;

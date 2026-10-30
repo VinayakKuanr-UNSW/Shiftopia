@@ -6,39 +6,20 @@
  */
 
 import { RULE_REGISTRY } from './rules';
-import type { EmploymentType, RuleLayer, RuleSpec } from './types';
+import type { RuleLayer, RuleSpec } from './types';
 
 export { RULE_REGISTRY };
-export type {
-    EmploymentScope,
-    EmploymentType,
-    RuleAuthority,
-    RuleCategory,
-    RuleEngines,
-    RuleLayer,
-    RuleSpec,
-    RuleTier,
-} from './types';
 
 /** Every rule, in registration order (shape first, then labour). */
 export function allRules(): RuleSpec[] {
     return Object.values(RULE_REGISTRY);
 }
 
-export function getRule(id: string): RuleSpec | undefined {
-    return RULE_REGISTRY[id];
-}
 
 export function rulesForLayer(layer: RuleLayer): RuleSpec[] {
     return allRules().filter(r => r.layer === layer);
 }
 
-/** Rules that bind a given employment type, `'ALL'` scopes included. */
-export function rulesForEmployment(type: EmploymentType): RuleSpec[] {
-    return allRules().filter(
-        r => r.employment === 'ALL' || r.employment.includes(type),
-    );
-}
 
 /**
  * Labour rules the CP-SAT model does not implement.

@@ -1,4 +1,4 @@
-import { V8Employee, V8Shift, V8Config, V8Hit } from '../types';
+import { V8Employee, V8Shift, V8Hit } from '../types';
 import { V8OrchestratorInput, V8OrchestratorShift } from '../orchestrator/types';
 import { v8Engine } from '../engine';
 import { isPublicHoliday } from '@/modules/core/lib/date.utils';
@@ -89,11 +89,6 @@ export function runV8ComplexBridge(
         };
     });
 
-    const v8Config: Partial<V8Config> = {
-        max_daily_hours: input.config?.max_daily_hours,
-        min_rest_gap_minutes: (input.config as any)?.rest_gap_hours ? (input.config as any).rest_gap_hours * 60 : 600,
-        ord_avg_weekly_limit: input.employee_context.contracted_weekly_hours || 38
-    };
 
     const v8Result = v8Engine.evaluate(employee, v8Shifts, input.evaluation_reference_date);
     return v8Result.hits;

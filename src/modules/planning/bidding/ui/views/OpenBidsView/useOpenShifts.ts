@@ -41,7 +41,6 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
     data: shifts = EMPTY_SHIFTS,
     isLoading,
     refetch,
-    isError,
   } = useQuery({
     queryKey: shiftKeys.managerBidShifts(queryFilters.organizationId, queryFilters),
     queryFn: async () => {
@@ -85,8 +84,10 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           }
         }
 
-        // Bid count from the fetched array of IDs
-        const bidCount = Array.isArray(s.shift_bids) ? s.shift_bids.length : 0;
+        // Bid count excludes withdrawn bids, matching the bidder list
+        const bidCount = Array.isArray(s.shift_bids)
+          ? s.shift_bids.filter((b: { status?: string }) => b.status !== 'withdrawn').length
+          : 0;
 
         const assignedProfile = s.assigned_profiles;
         const assignedName = assignedProfile
@@ -153,4 +154,3 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
 }
 
 // Re-export for backward compat
-export { useManagerBidShifts as useOpenShifts };

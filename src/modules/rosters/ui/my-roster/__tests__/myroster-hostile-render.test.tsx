@@ -2,7 +2,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import * as React from 'react';
 
 /** Counts ShiftPill renders: it calls `cn` in its JSX on every render. */
 const cnSpy = vi.fn();

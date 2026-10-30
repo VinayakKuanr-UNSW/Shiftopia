@@ -35,7 +35,7 @@ export const SERIES_COLORS = {
     accent:  '#a855f7',
 } as const;
 
-export interface TrendSeries {
+interface TrendSeries {
     /** Key into each row of `data`. */
     key: string;
     label: string;
@@ -210,4 +210,3 @@ export const KpiTrendChart: React.FC<KpiTrendChartProps> = ({
     );
 };
 
-export default KpiTrendChart;

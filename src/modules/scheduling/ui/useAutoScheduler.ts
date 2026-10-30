@@ -80,6 +80,13 @@ interface UseAutoSchedulerOptions {
     employees: EmployeeMeta[];
     organizationId?: string;
     queryFilters?: ShiftFilters;
+    /**
+     * The window to open on — the roster period on screen. Without it the
+     * window defaulted to the span of the page's unassigned drafts, which is
+     * empty in Month + Group (that view loads no shifts), so the modal opened
+     * on "Please select both start and end dates".
+     */
+    initialRange?: { startDate: string; endDate: string };
 }
 
 /**
@@ -107,7 +114,6 @@ interface ScopeCandidate {
     start_time: string;
     assigned_employee_id?: string | null;
     is_cancelled?: boolean | null;
-    deleted_at?: string | null;
     is_draft?: boolean | null;
 }
 
@@ -120,8 +126,8 @@ interface ScopeCandidate {
  */
 export function summariseScope(shifts: readonly ScopeCandidate[]): ScopeBreakdown {
     return shifts.reduce<ScopeBreakdown>((acc, s) => {
-        // Cancelled/deleted shifts are not shifts anyone is counting.
-        if (s.is_cancelled || s.deleted_at) return acc;
+        // Cancelled shifts are not shifts anyone is counting.
+        if (s.is_cancelled) return acc;
         acc.total += 1;
         if (s.assigned_employee_id) acc.assigned += 1;
         else if (!(s.is_draft ?? true)) acc.published += 1;
@@ -172,6 +178,7 @@ export function useAutoScheduler({
     employees,
     organizationId,
     queryFilters,
+    initialRange,
 }: UseAutoSchedulerOptions) {
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -206,8 +213,8 @@ export function useAutoScheduler({
     const defaultStart = useMemo(() => initialShifts.length > 0 ? [...initialShifts].sort((a, b) => a.shift_date.localeCompare(b.shift_date))[0].shift_date : '', [initialShifts]);
     const defaultEnd = useMemo(() => initialShifts.length > 0 ? [...initialShifts].sort((a, b) => b.shift_date.localeCompare(a.shift_date))[0].shift_date : '', [initialShifts]);
 
-    const [startDate, setStartDate] = useState(defaultStart);
-    const [endDate, setEndDate] = useState(defaultEnd);
+    const [startDate, setStartDate] = useState(initialRange?.startDate ?? defaultStart);
+    const [endDate, setEndDate] = useState(initialRange?.endDate ?? defaultEnd);
 
     const validationError = useMemo(() => {
         if (!startDate || !endDate) {
@@ -244,7 +251,7 @@ export function useAutoScheduler({
         // the time window at run time in case a shift crosses into it.
         return rawShifts
             .filter((s) =>
-                !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
+                !s.assigned_employee_id && !s.is_cancelled
                 && (s.is_draft ?? true)
                 && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
             .map((s) => ({
@@ -259,6 +266,9 @@ export function useAutoScheduler({
                 // rest breaks", so HC-9 and dailySpreadRule both read this.
                 // Already in SHIFT_SELECT; this projection was the only gap.
                 paid_break_minutes: s.paid_break_minutes ?? 0,
+                // Apply returns this to sm_bulk_assign_atomic, which refuses a
+                // shift edited after the preview validated this snapshot.
+                version: s.version,
                 // EVERY field the solver and V8 read must be projected here.
                 // These are optional on ShiftMeta, so omitting one is not a type
                 // error — it silently disables the rule that consumes it. That is
