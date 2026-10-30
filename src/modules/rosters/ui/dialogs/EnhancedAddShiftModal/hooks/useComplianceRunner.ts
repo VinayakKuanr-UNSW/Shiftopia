@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import {
     ComplianceResult,
     ComplianceCheckInput,
@@ -30,7 +30,6 @@ export function useComplianceRunner({
     setHasRun,
     shiftId
 }: UseComplianceRunnerProps) {
-    const [isRunning, setIsRunning] = useState(false);
     // Monotonically-increasing counter. Each call to runChecks captures its
     // own runId. After any async work, we check whether this is still the
     // most-recent invocation before committing state — cancelling stale runs.
@@ -38,7 +37,6 @@ export function useComplianceRunner({
 
     const runChecks = useCallback(async (overrideEmployeeId?: string) => {
         const runId = ++runIdRef.current;
-        setIsRunning(true);
         await new Promise(resolve => setTimeout(resolve, 10));
 
         try {
@@ -178,8 +176,6 @@ export function useComplianceRunner({
             setHasRun(true);
         } catch (error) {
             console.error('[useComplianceRunner] Error running checks:', error);
-        } finally {
-            if (runId === runIdRef.current) setIsRunning(false);
         }
     }, [buildComplianceInput, setComplianceResults, setHasRun, shiftId]);
 
@@ -190,7 +186,6 @@ export function useComplianceRunner({
 
     return {
         runChecks,
-        clearResults,
-        isRunning
+        clearResults
     };
 }

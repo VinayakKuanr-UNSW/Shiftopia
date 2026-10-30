@@ -558,15 +558,12 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
 
     return {
         formData,
-        setFormData,
         editingId,
         loadContract,
         isSubmitting,
         updateField,
         reset,
-        validate,
         submit,
-        weeklyHoursEquivalent,
         hoursRule,
     };
 };

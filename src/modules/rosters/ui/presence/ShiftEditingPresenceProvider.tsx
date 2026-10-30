@@ -219,7 +219,6 @@ export function ShiftEditingPresenceProvider({ children }: { children: React.Rea
 interface UseShiftPresenceResult {
   editors: ShiftEditor[];
   setEditing: (opIntent?: string) => void;
-  clearEditing: () => void;
 }
 
 /**
@@ -268,11 +267,6 @@ export function useShiftPresence(
     [setEditingCtx, scopeKey, shiftId],
   );
 
-  const clearEditing = useCallback(() => {
-    if (clearEditingCtx && scopeKey && shiftId) {
-      clearEditingCtx(scopeKey, shiftId);
-    }
-  }, [clearEditingCtx, scopeKey, shiftId]);
 
-  return { editors, setEditing, clearEditing };
+  return { editors, setEditing };
 }

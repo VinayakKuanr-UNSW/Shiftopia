@@ -36,8 +36,6 @@ interface UseScopeFilterReturn {
     isLoading: boolean;
     /** The places this mode may choose from, built from the user's contracts */
     scopeTree: ScopeTree | null;
-    /** The mode this filter is operating in */
-    mode: ScopeMode;
 }
 
 /**
@@ -93,6 +91,5 @@ export function useScopeFilter(
         isGammaLocked,
         isLoading: isPermissionsLoading,
         scopeTree,
-        mode,
     };
 }

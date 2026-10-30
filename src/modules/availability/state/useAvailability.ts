@@ -24,17 +24,14 @@ import {
 } from "../api/availability.api";
 
 import {
-  createAvailabilityFromForm,
   resolveProfileId,
 } from "../api/availability.service";
 
 import {
   AvailabilityRule,
   AvailabilitySlot,
-  AvailabilityFormPayload,
 } from "../model/availability.types";
 
-import { translateDatabaseError } from "../utils/validation.utils";
 
 // ============================================================================
 // QUERY KEYS
@@ -104,20 +101,11 @@ export interface UseAvailabilityResult {
   // Loading states
   isLoadingRules: boolean;
   isLoadingSlots: boolean;
-
-  // Mutations
-  createRule: (payload: AvailabilityFormPayload) => Promise<void>;
   deleteRule: (ruleId: string) => Promise<void>;
 
   // Manual refresh
   refreshRules: () => Promise<void>;
   refreshSlots: () => Promise<void>;
-
-  // Date range
-  startDate: string;
-  endDate: string;
-  month: Date;
-  getDayAvailability: (date: Date) => AvailabilitySlot[];
   subDepartmentId?: string | null;
 }
 
@@ -188,46 +176,6 @@ export function useAvailability(
   // CREATE RULE
   // ============================================================================
 
-  const createRuleMutation = useMutation({
-    mutationFn: async (payload: AvailabilityFormPayload) => {
-      const resolvedProfileId = await resolveProfileId(profileId);
-      // The VIEW's scope wins unless the payload names one explicitly. A form
-      // that forgot to carry the scope would otherwise write an unscoped rule
-      // — one covering every job — while the page showed a single job's
-      // calendar, and the DB would accept it because unscoped is legal.
-      return createAvailabilityFromForm(resolvedProfileId, {
-        ...payload,
-        sub_department_id: payload.sub_department_id ?? subDepartmentId,
-      });
-    },
-
-    onSuccess: async () => {
-      // Rules are immediately consistent
-      // Rules are immediately consistent
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.rules(profileId, subDepartmentId),
-        }),
-        // Slots may be eventually consistent
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.slots(profileId, startDate, endDate, subDepartmentId),
-        })
-      ]);
-
-      toast({
-        title: "Success",
-        description: "Availability saved",
-      });
-    },
-
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: translateDatabaseError(error),
-        variant: "destructive",
-      });
-    },
-  });
 
   // ============================================================================
   // DELETE RULE
@@ -267,9 +215,6 @@ export function useAvailability(
   // PUBLIC API
   // ============================================================================
 
-  const createRule = async (payload: AvailabilityFormPayload) => {
-    await createRuleMutation.mutateAsync(payload);
-  };
 
   const deleteRule = async (ruleId: string) => {
     await deleteRuleMutation.mutateAsync(ruleId);
@@ -288,17 +233,9 @@ export function useAvailability(
     slots,
     isLoadingRules,
     isLoadingSlots,
-    createRule,
     deleteRule,
     refreshRules,
     refreshSlots,
-    startDate,
-    endDate,
-    month,
-    getDayAvailability: (date: Date) => {
-      const dateStr = format(date, "yyyy-MM-dd");
-      return slots.filter((s) => s.slot_date === dateStr);
-    },
     subDepartmentId: subDepartmentId ?? null,
   };
 }

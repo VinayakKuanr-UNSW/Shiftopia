@@ -161,7 +161,7 @@ export interface VersionCheckResult {
       VALIDATION TYPES
       ============================================================ */
 
-export interface ValidationResult {
+interface ValidationResult {
   valid: boolean;
   errors: string[];
 }

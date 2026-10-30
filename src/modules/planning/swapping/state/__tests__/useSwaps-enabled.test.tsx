@@ -4,11 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as React from 'react';
 
 /**
- * `useSwaps` hangs FIVE read queries off one call. `ShiftDetailsDialog` is
+ * `useSwaps` hangs FOUR read queries off one call (it was five). `ShiftDetailsDialog` is
  * mounted unconditionally by every My Roster calendar view (so Radix can animate
  * it open), and `CreateSwapRequestModal` calls the hook purely to get the
  * `createSwap` mutation — so simply opening My Roster fired all five, including
- * `pendingSwapApprovals`, which is a MANAGER query, for every employee.
+ * `pendingSwapApprovals`, which is a MANAGER query, for every employee. Nothing
+ * read its result, so it is gone; managers' approvals come from their own page.
  *
  * These count real queryFn invocations, so they fail if the gate is removed or
  * if a sixth query is added without one.
@@ -70,8 +71,8 @@ describe('useSwaps read-query gating', () => {
     await waitFor(() => expect(getMySwaps).toHaveBeenCalled());
     unmount();
 
-    // The manager-scoped one is part of the set an employee was paying for.
-    expect(fetchSwapRequests).toHaveBeenCalled();
+    // The manager-scoped approvals query no longer runs from this hook at all.
+    expect(fetchSwapRequests).not.toHaveBeenCalled();
   });
 
   it('gates every read query, not just the first', async () => {

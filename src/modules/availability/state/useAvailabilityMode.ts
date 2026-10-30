@@ -34,11 +34,11 @@ export function useAvailabilityMode(
     employeeId: string | null | undefined,
     enabled = true,
     scope?: AvailabilityScopeRef,
-): { mode: AvailabilityMode; isLoading: boolean } {
+): { mode: AvailabilityMode; } {
     const subDepartmentId = scope?.subDepartmentId ?? null;
     const departmentId = scope?.departmentId ?? null;
 
-    const { data, isLoading } = useQuery({
+    const { data } = useQuery({
         // The scope is part of the KEY, not just the query. Without it, opening
         // the modal against Set-up after Security would serve Security's mode
         // from cache — and on a Capacitor WebView it would never self-correct,
@@ -59,7 +59,6 @@ export function useAvailabilityMode(
         // caller gets `isLoading` so it can hold the banner back rather than
         // flash "no declared availability" at a full-timer for one frame.
         mode: data?.availabilityMode ?? 'OPT_IN',
-        isLoading,
     };
 }
 

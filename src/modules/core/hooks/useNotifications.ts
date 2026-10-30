@@ -37,7 +37,7 @@ export function useNotifications() {
   const [localDemoNotifications, setLocalDemoNotifications] = useState<LocalDemoNotification[]>([]);
   const [loading, setLoading] = useState(true);
   // Local-only "seen" state — no DB round-trip needed
-  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [] = useState<Set<string>>(new Set());
 
   // Initial fetch
   useEffect(() => {
@@ -127,14 +127,6 @@ export function useNotifications() {
   );
 
   // Mark visible unread notifications as "seen" (local state only — no DB write)
-  const markSeen = useCallback((ids: string[]) => {
-    if (ids.length === 0) return;
-    setSeenIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => next.add(id));
-      return next;
-    });
-  }, []);
 
   const markRead = useCallback(async (id: string) => {
     if (user?.id && isLocalDemoNotificationId(id)) {
@@ -176,8 +168,6 @@ export function useNotifications() {
     notifications,
     unreadCount,
     loading,
-    seenIds,
-    markSeen,
     markRead,
     markAllRead,
     dismiss,

@@ -2,11 +2,10 @@
 // FIXED VERSION - Proper role checking with corrected role names
 
 import { useContext } from 'react';
-import { AuthContext, Role } from '@/platform/auth/AuthProvider';
+import { AuthContext } from '@/platform/auth/AuthProvider';
 import {
   FEATURE_RULES,
   allows,
-  hasAdminSuite,
   holdingFrom,
   managerialMode,
 } from './accessSuites';
@@ -21,10 +20,6 @@ export const useAuth = () => {
   const {
     user,
     activeContract,
-    activeContractId,
-    setActiveContractId,
-    activeCertificateId,
-    setActiveCertificateId,
     isLoading
   } = context;
 
@@ -33,11 +28,6 @@ export const useAuth = () => {
      ============================================================ */
 
   // Check if user has a specific role (DEPRECATED: Use access level instead)
-  const hasRole = (role: Role | Role[]): boolean => {
-    if (!user) return false;
-    const roles = Array.isArray(role) ? role : [role];
-    return roles.includes(user.systemRole);
-  };
 
   // Access is decided per suite from both certificates a person can hold —
   // Type X (Personal) and Type Y (Managerial / Admin) — never from a single
@@ -45,7 +35,6 @@ export const useAuth = () => {
   const holding = holdingFrom(user?.certificates, user?.contracts);
 
   // Admin Suite: zeta only.
-  const isAdmin = (): boolean => hasAdminSuite(holding);
 
   // Any managerial page, read-only or full (gamma, delta, epsilon, zeta).
   const isManagerOrAbove = (): boolean => {
@@ -54,7 +43,6 @@ export const useAuth = () => {
   };
 
   // Any managerial page at all, including beta's read-only Timesheets.
-  const isTeamLeadOrAbove = (): boolean => managerialMode(holding) !== 'none';
 
   /* ============================================================
      Role-aware Landing Page
@@ -82,15 +70,7 @@ export const useAuth = () => {
     ...context,
     user,
     activeContract,
-    activeContractId,
-    setActiveContractId,
-    activeCertificateId,
-    setActiveCertificateId,
     isLoading,
-    hasRole,
-    isAdmin,
-    isManagerOrAbove,
-    isTeamLeadOrAbove,
     getLandingPage,
     hasPermission,
   };

@@ -44,7 +44,6 @@ import type {
 interface UseBroadcastGroupsReturn {
     groups: BroadcastGroupWithStats[];
     isLoading: boolean;
-    error: Error | null;
     refetch: () => Promise<void>;
     createGroup: (data: CreateBroadcastGroupRequest) => Promise<any>;
     updateGroup: (groupId: string, data: Partial<CreateBroadcastGroupRequest>) => Promise<void>;
@@ -145,7 +144,6 @@ export function useBroadcastGroups(
     return {
         groups: query.data ?? [],
         isLoading: query.isPending || query.isLoading,
-        error: query.error as Error | null,
         refetch,
         createGroup,
         updateGroup,
@@ -195,10 +193,7 @@ export function useEmployeeBroadcastGroups(
 interface UseBroadcastGroupReturn {
     group: BroadcastGroupFull | null;
     isLoading: boolean;
-    error: Error | null;
     refetch: () => Promise<void>;
-    userRole: BroadcastParticipantRole | null;
-    canBroadcast: boolean;
     canManage: boolean;
 
     // Channel operations
@@ -208,7 +203,6 @@ interface UseBroadcastGroupReturn {
     // Participant operations
     addParticipant: (employeeId: string, role?: BroadcastParticipantRole) => Promise<void>;
     removeParticipant: (employeeId: string) => Promise<void>;
-    updateParticipantRole: (employeeId: string, role: BroadcastParticipantRole) => Promise<void>;
 }
 
 export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupReturn {
@@ -245,8 +239,6 @@ export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupRetu
     // The legacy `user.role` used to count too — epsilon read as 'admin', gamma
     // and delta as 'manager' — and offered controls the database then refused.
     const isSystemManager = hasPermission('admin');
-    const canBroadcast =
-        userRole === 'admin' || userRole === 'broadcaster' || isSystemManager;
     const canManage = userRole === 'admin' || isSystemManager;
 
     // Channel mutations
@@ -297,16 +289,6 @@ export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupRetu
         },
     });
 
-    const updateParticipantRoleMutation = useMutation({
-        mutationFn: ({ employeeId, role }: { employeeId: string; role: BroadcastParticipantRole }) => {
-            if (!groupId) throw new Error('No group selected');
-            return groupParticipantCommands.updateRole(groupId, employeeId, role);
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: broadcastKeys.group.detail(groupId ?? '') });
-            toast({ title: 'Role Updated' });
-        },
-    });
 
     const createChannel = useCallback(
         async (data: Omit<CreateBroadcastChannelRequest, 'groupId'>) => {
@@ -336,26 +318,16 @@ export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupRetu
         [removeParticipantMutation]
     );
 
-    const updateParticipantRole = useCallback(
-        async (employeeId: string, role: BroadcastParticipantRole) => {
-            await updateParticipantRoleMutation.mutateAsync({ employeeId, role });
-        },
-        [updateParticipantRoleMutation]
-    );
 
     return {
         group: groupQuery.data ?? null,
         isLoading: groupQuery.isPending || groupQuery.isLoading,
-        error: groupQuery.error as Error | null,
         refetch,
-        userRole,
-        canBroadcast,
         canManage,
         createChannel,
         deleteChannel,
         addParticipant,
         removeParticipant,
-        updateParticipantRole,
     };
 }
 
@@ -364,19 +336,7 @@ export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupRetu
 // ============================================================
 
 interface UseBroadcastsReturn {
-    broadcasts: BroadcastWithDetails[];
     isLoading: boolean;
-    error: Error | null;
-    refetch: () => Promise<void>;
-
-    // Filters
-    filters: BroadcastFilters;
-    setFilters: (filters: BroadcastFilters) => void;
-
-    // Pagination
-    page: number;
-    totalPages: number;
-    setPage: (page: number) => void;
 
     // Actions
     createBroadcast: (data: Omit<CreateBroadcastRequest, 'channelId'>) => Promise<void>;
@@ -393,8 +353,8 @@ export function useBroadcasts(channelId: string | null): UseBroadcastsReturn {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
-    const [filters, setFilters] = useState<BroadcastFilters>({});
-    const [page, setPage] = useState(1);
+    const [filters] = useState<BroadcastFilters>({});
+    const [page] = useState(1);
 
     // Main broadcasts query
     const broadcastsQuery = useQuery({
@@ -405,9 +365,6 @@ export function useBroadcasts(channelId: string | null): UseBroadcastsReturn {
         staleTime: 30_000,
     });
 
-    const refetch = useCallback(async () => {
-        await broadcastsQuery.refetch();
-    }, [broadcastsQuery]);
 
     // Real-time subscription — invalidates query cache on any change
     useEffect(() => {
@@ -524,7 +481,6 @@ export function useBroadcasts(channelId: string | null): UseBroadcastsReturn {
     );
 
     const broadcasts = broadcastsQuery.data?.data ?? [];
-    const totalPages = broadcastsQuery.data?.totalPages ?? 1;
 
     const pinnedBroadcasts = useMemo(
         () => broadcasts.filter((b) => b.isPinned),
@@ -537,15 +493,7 @@ export function useBroadcasts(channelId: string | null): UseBroadcastsReturn {
     );
 
     return {
-        broadcasts,
         isLoading: broadcastsQuery.isPending || broadcastsQuery.isLoading,
-        error: broadcastsQuery.error as Error | null,
-        refetch,
-        filters,
-        setFilters,
-        page,
-        totalPages,
-        setPage,
         createBroadcast,
         deleteBroadcast,
         togglePin,
@@ -562,8 +510,6 @@ interface UseEmployeeBroadcastsReturn {
     broadcasts: BroadcastWithDetails[];
     isLoading: boolean;
     isLoadingMore: boolean;
-    error: Error | null;
-    refetch: () => Promise<void>;
     loadMore: () => void;
     hasMore: boolean;
 }
@@ -613,11 +559,6 @@ export function useEmployeeBroadcasts(channelId: string | null): UseEmployeeBroa
         setIsLoadingMore(false);
     }, [query.data, page]);
 
-    const refetch = useCallback(async () => {
-        setPage(1);
-        setAccumulatedBroadcasts([]);
-        await query.refetch();
-    }, [query]);
 
     const loadMore = useCallback(() => {
         if (!isLoadingMore && page < totalPages) {
@@ -630,8 +571,6 @@ export function useEmployeeBroadcasts(channelId: string | null): UseEmployeeBroa
         broadcasts: accumulatedBroadcasts,
         isLoading: query.isPending || query.isLoading,
         isLoadingMore,
-        error: query.error as Error | null,
-        refetch,
         loadMore,
         hasMore: page < totalPages,
     };
@@ -645,8 +584,6 @@ interface UseBroadcastNotificationsReturn {
     notifications: BroadcastNotification[];
     unreadCount: number;
     isLoading: boolean;
-    error: Error | null;
-    refetch: () => Promise<void>;
     markAsRead: (notificationId: string) => Promise<void>;
     markAllAsRead: () => Promise<void>;
 }
@@ -663,9 +600,6 @@ export function useBroadcastNotifications(): UseBroadcastNotificationsReturn {
         staleTime: 30_000,
     });
 
-    const refetch = useCallback(async () => {
-        await query.refetch();
-    }, [query]);
 
     // Real-time: new notifications arrive via INSERT — prepend to cache and toast
     useEffect(() => {
@@ -780,8 +714,6 @@ export function useBroadcastNotifications(): UseBroadcastNotificationsReturn {
         notifications,
         unreadCount,
         isLoading: query.isPending || query.isLoading,
-        error: query.error as Error | null,
-        refetch,
         markAsRead,
         markAllAsRead,
     };
