@@ -240,7 +240,7 @@ export function planPublishRoster(
     const nowMs = Date.now();
 
     for (const s of shifts) {
-        if (!s.deleted_at && !s.is_cancelled && s.lifecycle_status === 'Published') {
+        if (!s.is_cancelled && s.lifecycle_status === 'Published') {
             alreadyPublishedCount++;
         }
 
@@ -251,7 +251,7 @@ export function planPublishRoster(
             s.lifecycle_status === 'Cancelled';
 
         // Only DRAFT shifts are in scope.
-        if (s.deleted_at || s.is_cancelled || isPublishedOrTerminal) continue;
+        if (s.is_cancelled || isPublishedOrTerminal) continue;
 
         // Not this manager's to publish: reported, never sent (the server would
         // refuse the whole batch for it).

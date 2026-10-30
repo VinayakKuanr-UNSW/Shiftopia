@@ -176,21 +176,11 @@ function packShifts(demand: DemandAnalysisResult): SynthesizedShift[] {
     const coverageWindow = residualSlots.slice(shiftStart, shiftEnd + 1);
     const minHeadcount = getLowestResidualHeadcount(coverageWindow);
 
-    const uniqueEvents = new Set<string>();
     const uniqueReasons = new Set<string>();
     for (let i = shiftStart; i <= shiftEnd; i++) {
       residualSlots[i].residualHeadcountInt -= minHeadcount;
-      const events = residualSlots[i].contributingEvents;
-      if (events) events.forEach((e) => uniqueEvents.add(e));
       const rsn = residualSlots[i].reasons;
       if (rsn) rsn.forEach((r) => uniqueReasons.add(r));
-    }
-
-    const eventsList = Array.from(uniqueEvents);
-    let reason: string | undefined = undefined;
-    if (eventsList.length > 0) {
-      const joined = eventsList.slice(0, 2).join(', ');
-      reason = `Generated to meet demand for: ${joined}${eventsList.length > 2 ? ` and ${eventsList.length - 2} more` : ''}`;
     }
 
     shifts.push({

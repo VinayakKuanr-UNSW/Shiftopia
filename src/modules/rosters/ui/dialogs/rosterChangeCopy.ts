@@ -8,7 +8,6 @@
 
 import { format, parseISO } from 'date-fns';
 import type {
-  SubgroupClone,
   SubgroupDeletion,
   SubgroupRename,
   TemplateApplicationPreview,
@@ -121,42 +120,6 @@ export function describeSubgroupRename(r: SubgroupRename, oldName: string, newNa
     lines.push(`${plural(r.pastDays, 'earlier day')} in view ${r.pastDays === 1 ? 'keeps' : 'keep'} the name “${oldName}”.`);
   }
   return { ...base, lines, blocked: null };
-}
-
-export function describeSubgroupClone(c: SubgroupClone, sourceName: string, newName: string): ChangeSummary {
-  const base = { warnings: [], needsAcknowledgement: false, confirmLabel: 'Clone' };
-
-  if (c.conflicts.length > 0) {
-    return {
-      ...base,
-      lines: [],
-      blocked: `This group already has a sub-group called “${newName}” on ${listDays(c.conflicts)}. Pick another name.`,
-    };
-  }
-  if (c.days === 0) {
-    return {
-      ...base,
-      lines: [],
-      blocked: `“${sourceName}” is not on any day from today in this range, so there is nothing to clone.`,
-    };
-  }
-
-  const lines = [
-    `Creates “${newName}” on ${plural(c.days, 'day')} (${formatRange(c.fromDate, c.toDate)})` +
-    (c.shiftsCopied > 0 ? ` with ${plural(c.shiftsCopied, 'shift')} copied as unassigned drafts.` : ', with no shifts to copy.'),
-  ];
-  if (c.shiftsSkipped > 0) {
-    lines.push(`${plural(c.shiftsSkipped, 'shift has', 'shifts have')} already started and ${c.shiftsSkipped === 1 ? 'is' : 'are'} not copied.`);
-  }
-  if (c.pastDays > 0) {
-    lines.push(`${plural(c.pastDays, 'earlier day')} in view ${c.pastDays === 1 ? 'is' : 'are'} not copied.`);
-  }
-  return {
-    ...base,
-    lines,
-    blocked: null,
-    confirmLabel: c.shiftsCopied > 0 ? `Clone with ${plural(c.shiftsCopied, 'shift')}` : 'Clone',
-  };
 }
 
 /**

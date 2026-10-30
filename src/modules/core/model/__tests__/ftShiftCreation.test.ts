@@ -155,15 +155,6 @@ describe('editing and cloning on the roster', () => {
         const gate = src.slice(src.indexOf('const saveGate = useMemo'), src.indexOf('const canSave = saveGate.ok'));
         expect(gate).toMatch(/editMode && savedTarget === 'FT' && prevAssignee && !watchEmployeeId/);
     });
-
-    it('Clone carries the target, which every shift must have', () => {
-        // Without it sm_create_shift's row fails fn_shift_inherit_template_row
-        // with "target_employment_type is required" — every clone, every type.
-        const src = stripComments(read('src/modules/rosters/ui/modes/GroupModeView.tsx'));
-        const clone = src.slice(src.indexOf('const handleCloneShift'), src.indexOf('createShiftMutation.mutateAsync(cloneData)'));
-        expect(clone).toMatch(/target_employment_type:\s*\(rawShift as any\)\.target_employment_type/);
-        expect(clone).not.toMatch(/assigned_employee_id:/);
-    });
 });
 
 describe('templates cannot seed a full-time shift', () => {

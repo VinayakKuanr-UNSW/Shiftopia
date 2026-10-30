@@ -510,8 +510,7 @@ async function fetchRosteredMinutes(
     .in('assigned_employee_id', employeeIds)
     .gte('shift_date', bounds.periodStart)
     .lte('shift_date', bounds.periodEnd)
-    .neq('lifecycle_status', 'Cancelled')
-    .is('deleted_at', null);
+    .neq('lifecycle_status', 'Cancelled');
   if (error) {
     console.error('[leaveGrossPay] rostered shifts query error:', error);
     return out;

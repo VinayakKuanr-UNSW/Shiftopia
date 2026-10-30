@@ -19,7 +19,6 @@ const shift = (over: Partial<Shift>): Shift => ({
     lifecycle_status: 'Draft',
     assigned_employee_id: null,
     is_cancelled: false,
-    deleted_at: null,
     net_length_minutes: 360,
     ...over,
 } as unknown as Shift);

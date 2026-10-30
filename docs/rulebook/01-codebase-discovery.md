@@ -213,7 +213,7 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 | Migration files | 65 total: 1 baseline snapshot (`20251015000000_baseline_schema.sql`, 30,031 lines, consolidating pre-Oct-2025 history archived separately) + 60 incremental (Oct 2025 → Jul 2026) + 5 non-applied parity/validation scripts under `_parity/` |
 | Schemas | `public` (~139 tables) + `hr` (7 tables, newer HR/contracts cutover, fronted by `public.*` compatibility views for backward compatibility) |
 | Extensions | `pg_cron`, `pg_net`, `pg_stat_statements`, `pgcrypto`, `supabase_vault`, `uuid-ossp` |
-| Scheduled jobs | `nightly_leave_accrual` (02:00 daily), `shift-state-processor` (every 15 min) and 8 others via `pg_cron`; 5 Edge Function workers (§4.5) driven by DB job queues |
+| Scheduled jobs | `shift-timer-sweep` (every minute — every time-driven shift change), `nightly_leave_accrual` (02:00 daily) and 5 other calendar jobs via `pg_cron`; 5 Edge Function workers (§4.5) driven by DB job queues |
 | RLS | ~433 `CREATE POLICY` statements + 6 dedicated hardening migrations (2026-07-19/20/21) |
 | Raw counts | 139 `CREATE TABLE`, 17 `CREATE VIEW`/`MATERIALIZED VIEW`, ~336 unique functions, 92 `CREATE TRIGGER` |
 
@@ -234,14 +234,14 @@ Full detail (every table/view/function/trigger with source migration) lives in t
 
 ### 4.3 Notable views
 
-`v_shift_assignment_episodes` (reconstructs assignment episodes from `shift_events` — source for KPIs and quarterly performance), `employee_daily_metrics` (materialized), `v_template_full`, `hr.v_headcount_by_level`, `hr.v_org_chart`, `hr.v_promotion_ladder`. Several views (`v_group_all_participants`, `v_broadcast_groups_with_stats`, `v_unread_broadcasts_by_group`, `v_template_full`) were **dropped by the Oct-2025 re-baseline and had to be restored** in follow-up migrations — see §5.
+`v_shift_assignment_episodes` (reconstructs assignment episodes from `shift_events` — source for KPIs and quarterly performance), `v_template_full`. Several views (`v_group_all_participants`, `v_broadcast_groups_with_stats`, `v_unread_broadcasts_by_group`, `v_template_full`) were **dropped by the Oct-2025 re-baseline and had to be restored** in follow-up migrations — see §5.
 
 ### 4.4 App-facing RPCs (called from the frontend, confirmed via grep of `.rpc(`)
 
 **Scheduling gateway:** `sm_apply_shift_op` (unified state-machine entry point — `assign`/`publish`/`unpublish`/`edit`/`delete`/`select_winner`/`approve_trade`/`reject_trade`/`unassign`, with optimistic concurrency + idempotency), `sm_move_shift`, `sm_unassign_shift`, `sm_emergency_assign`, `sm_finalize_planning_request`, `get_shift_lifecycle`.
 **Swaps:** `sm_accept_trade`, `sm_create_swap_request`, `sm_cancel_swap_request`, `sm_expire_offer_now`, `sm_swap_auto_revert`.
 **Bids:** `sm_select_bid_winner` (deprecated wrapper → `sm_apply_shift_op`), `sm_bid_auto_revert`, `withdraw_bid_rpc`.
-**Templates/Rosters:** `add/rename/delete/clone_roster_subgroup_v2`, `toggle_roster_lock_for_range`, `capture_roster_as_template`, `save_template_full`, `check_template_version`, `validate_template_name`, `publish_template_range`, `delete_template_shifts_cascade`, `undo_template_batch`.
+**Templates/Rosters:** `add/rename/delete_roster_subgroup_v2`, `toggle_roster_lock_for_range`, `capture_roster_as_template`, `save_template_full`, `check_template_version`, `validate_template_name`, `publish_template_range`, `delete_template_shifts_cascade`, `undo_template_batch`.
 **RBAC:** `resolve_user_permissions`, `delete_user_entirely`.
 **Insights:** `get_insights_summary/trend`, `get_dept_insights_breakdown`, `get_bidding_kpis`, `get_marketplace_kpis`, `get_manager_scorecard`, `get_metric_detailed_analysis`, `get_quarterly_performance_report`, `get_employee_quarterly_performance`.
 **Broadcasts:** `get_broadcast_ack_stats`, `get_broadcast_analytics`, `get_broadcast_group_role`.
