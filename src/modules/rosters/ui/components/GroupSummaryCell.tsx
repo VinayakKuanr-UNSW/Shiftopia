@@ -74,7 +74,7 @@ const GroupSummaryCellImpl: React.FC<GroupSummaryCellProps> = ({
   const coveragePct = Math.min(100, Math.round((assigned_shifts / total_shifts) * 100));
 
   const Component = isBulkMode ? 'div' : 'button';
-  const handleCellClick = (e: React.MouseEvent) => {
+  const handleCellClick = () => {
     if (isBulkMode) {
       if (!isLoading && selectableCount > 0 && onToggleSelect) {
         onToggleSelect();

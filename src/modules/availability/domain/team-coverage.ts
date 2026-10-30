@@ -413,8 +413,6 @@ export function summarise(
     inputs: TeamAvailabilityInputs,
     cells: Map<string, Map<string, TeamDayCell>>,
     buckets: ReadonlyArray<CoverageBucket>,
-    /** Reference point for "expiring soon"; yyyy-MM-dd. */
-    today: string,
 ): TeamAvailabilitySummary {
     const { members, dates, requiredSource, availability } = inputs;
 

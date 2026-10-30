@@ -64,7 +64,7 @@ const shift = (id: string): ShiftMeta => ({
 
 const casual = (id: string): EmployeeMeta => ({
     id, name: `E-${id}`, contract_type: 'CASUAL',
-    contracted_weekly_hours: 0, remuneration_rate: 25,
+    contracted_weekly_hours: 0,
 });
 
 const slotRow = (over: Record<string, unknown> = {}) => ({

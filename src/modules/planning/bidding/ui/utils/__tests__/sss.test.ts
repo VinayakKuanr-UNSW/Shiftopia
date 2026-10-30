@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeSss, penaltyScore, sssBand, SSS_WEIGHTS, type SssInputs } from '../sss';
+import { computeSss, penaltyScore, SSS_WEIGHTS, type SssInputs } from '../sss';
 
 const full = (over: Partial<SssInputs> = {}): SssInputs => ({
     reliability: 90, attendance: 90, acceptance: 90,
@@ -68,13 +68,5 @@ describe('computeSss — missing data & flags', () => {
         expect(r.score).toBeLessThanOrEqual(100);
         expect(r.breakdown.reliability).toBe(100);
         expect(r.breakdown.acceptance).toBe(0);
-    });
-});
-
-describe('sssBand', () => {
-    it('bands by tuned thresholds', () => {
-        expect(sssBand(90)).toBe('good');
-        expect(sssBand(75)).toBe('warn');
-        expect(sssBand(50)).toBe('poor');
     });
 });

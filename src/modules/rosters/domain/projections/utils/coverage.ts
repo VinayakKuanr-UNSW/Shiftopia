@@ -50,15 +50,3 @@ export function coverageHealth(assigned: number, total: number): CoverageHealth 
   if (ratio >= 0.5) return { ratio, label: 'Low Coverage',   colorClass: 'text-orange-400',  bgClass: 'bg-orange-500/10',  pct };
   return                   { ratio, label: 'Critical',       colorClass: 'text-red-400',     bgClass: 'bg-red-500/10',     pct };
 }
-
-/**
- * Derive the badge variant for a CoverageHealth (maps to shadcn Badge variants).
- */
-export function coverageVariant(
-  health: CoverageHealth,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  const { ratio } = health;
-  if (ratio >= 1)   return 'default';
-  if (ratio >= 0.8) return 'secondary';
-  return 'destructive';
-}

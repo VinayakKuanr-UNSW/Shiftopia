@@ -133,7 +133,7 @@ const InsightsPage: React.FC = () => {
                         <TabsContent value="overview" className="mt-0 outline-none">
                             {activeTab === 'overview' && (
                                 <div className="flex flex-col gap-10">
-                                    <OverviewKpiTab filters={filters} scope={scope} />
+                                    <OverviewKpiTab filters={filters} />
                                     <ManagerScorecardBand filters={filters} scope={scope} />
                                     <EmployeePerformanceTable
                                         scope={scope}

@@ -34,7 +34,6 @@ import {
     X,
 } from 'lucide-react';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
@@ -204,8 +203,6 @@ const OfferItem: React.FC<{
         offer.shift.sub_departments?.name ||
         undefined;
 
-    const urgency = computeShiftUrgency(offer.shift.shift_date, offer.shift.start_time);
-
     const footerActions = showActions ? (
         <div className="flex gap-3 p-4 mt-auto">
             <Button
@@ -294,7 +291,6 @@ const OfferItem: React.FC<{
                 unpaidBreak={offer.shift.unpaid_break_minutes ?? 0}
                 timerText={(showActions && !isProcessingThis && offer.status === 'Pending') ? timerText : null}
                 isExpired={isExpired || isLocked}
-                urgency={urgency}
                 shiftData={{ ...offer.shift, sub_group_name: subGroupName } as any}
                 groupVariant={groupVariantFor(offer.shift.group_type)}
                 footerActions={footerActions}

@@ -132,7 +132,7 @@ const DEPT_COLORS: Record<string, string> = {
   Theatre: 'bg-rose-500',
 };
 
-const ShiftCard: React.FC<{ shift: UnfilledShift; onClick: () => void; disabled?: boolean }> = ({ shift, onClick, disabled }) => {
+const ShiftCard: React.FC<{ shift: UnfilledShift; onClick: () => void }> = ({ shift, onClick }) => {
   const dateObj = new Date(`${shift.date}T00:00:00`);
   const barColor = DEPT_COLORS[shift.department ?? ''] ?? 'bg-amber-400';
 

@@ -3,8 +3,6 @@ import {
   groupKeyOf,
   hasFixedSubgroup,
   OFFICE_SUBGROUP_NAME,
-  sameSubgroupName,
-  uniqueCopyName,
 } from '../subgroupRules';
 
 describe('groupKeyOf', () => {
@@ -28,22 +26,5 @@ describe('hasFixedSubgroup', () => {
 
   it('names the one sub-group the database allows', () => {
     expect(OFFICE_SUBGROUP_NAME).toBe('Administration');
-  });
-});
-
-describe('sameSubgroupName', () => {
-  it('compares trimmed and case-insensitively, like the unique index', () => {
-    expect(sameSubgroupName('AM Base', ' am base ')).toBe(true);
-    expect(sameSubgroupName('AM Base', 'AM Base 2')).toBe(false);
-  });
-});
-
-describe('uniqueCopyName', () => {
-  it('uses "(Copy)" when it is free', () => {
-    expect(uniqueCopyName('AM Base', ['AM Base'])).toBe('AM Base (Copy)');
-  });
-
-  it('counts up past names already taken, in any case', () => {
-    expect(uniqueCopyName('AM Base', ['AM Base', 'am base (copy)', 'AM Base (Copy 2)'])).toBe('AM Base (Copy 3)');
   });
 });

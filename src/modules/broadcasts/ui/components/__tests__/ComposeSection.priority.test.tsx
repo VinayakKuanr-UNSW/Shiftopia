@@ -12,7 +12,6 @@ describe('ComposeSection priority options', () => {
     it('offers only the priorities the database accepts', () => {
         render(
             <ComposeSection
-                channelId="c1"
                 channelName="General"
                 groupName="Front of House"
                 totalRecipients={3}

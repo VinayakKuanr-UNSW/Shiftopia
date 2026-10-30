@@ -69,7 +69,7 @@ export function useRosterPlannerStats(
 ) {
     const queryKey = shiftKeys.plannerStats(orgId!, startDate!, endDate!, filters);
 
-    const { data, isLoading } = useQuery({
+    const { data } = useQuery({
         queryKey,
         queryFn: async () => {
             if (!orgId || !startDate || !endDate) return null;
@@ -97,5 +97,5 @@ export function useRosterPlannerStats(
         };
     }, [data]);
 
-    return { stats, isLoading };
+    return { stats };
 }

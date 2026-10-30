@@ -38,14 +38,3 @@
 export function isSecurityRoleName(name: string | null | undefined): boolean {
     return typeof name === 'string' && name.toLowerCase().includes('security');
 }
-
-/** The subset of `roles` rows denoting Security, as an id set for `.has()` lookups. */
-export function securityRoleIdSet(
-    roles: ReadonlyArray<{ id?: string | null; name?: string | null }>,
-): Set<string> {
-    const ids = new Set<string>();
-    for (const r of roles) {
-        if (r?.id && isSecurityRoleName(r.name)) ids.add(r.id);
-    }
-    return ids;
-}

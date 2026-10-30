@@ -830,7 +830,6 @@ interface OpenBidsViewProps {
   /** Reports filtered counts up so parent can render badges. */
   onCountsChange?: (counts: ToggleCounts) => void;
   /** Reports loaded shifts up so parent can render the footer stats. */
-  onShiftsChange?: (shifts: ManagerBidShift[]) => void;
   /** Hands a ready-to-call auto-assign function back to the parent. */
   onAutoAssignReady?: (fn: { run: () => void; isRunning: boolean }) => void;
   startDate?: Date;
@@ -849,7 +848,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   activeToggle: controlledToggle,
   onToggleChange,
   onCountsChange,
-  onShiftsChange,
   onAutoAssignReady,
   startDate,
   endDate,
@@ -907,9 +905,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
   });
 
-  useEffect(() => {
-    onShiftsChange?.(shifts);
-  }, [shifts, onShiftsChange]);
 
   const { bids, isLoading: isLoadingBids } = useShiftBids(expandedV8ShiftId);
 

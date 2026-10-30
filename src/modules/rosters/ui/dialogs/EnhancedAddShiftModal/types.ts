@@ -209,8 +209,6 @@ export interface Roster {
 export interface ShiftFormDrawerContentProps {
     form: ReturnType<typeof useForm<FormValues>>;
     isReadOnly: boolean;
-    isPast?: boolean;
-    isStarted?: boolean;
     isPublished?: boolean;
     isTemplateMode: boolean;
     editMode: boolean;
@@ -239,7 +237,6 @@ export interface ShiftFormDrawerContentProps {
     netLength: number;
     hardValidation: any;
     isAssignmentEnabled: boolean;
-    minShiftHours: number;
     /** Employee-free EBA shape verdict for the current form values. */
     shape: ShapeResult;
     /** `shape.hits` filtered to the blocking ones, in field order. */
@@ -249,9 +246,6 @@ export interface ShiftFormDrawerContentProps {
     compliancePanel: any;
     runV2Compliance: () => void;
 
-    // Handlers
-    onUnpublish?: () => void;
-    canUnpublish?: boolean;
 
     selectedRemLevel?: RemunerationLevel;
     isRoleLocked?: boolean;
@@ -315,7 +309,6 @@ export interface ShiftFormSheetProps {
     shiftLength: number;
     netLength: number;
     hardValidation: any;
-    minShiftHours: number;
     /** Employee-free EBA shape verdict for the current form values. */
     shape: ShapeResult;
     /** `shape.hits` filtered to the blocking ones, in field order. */

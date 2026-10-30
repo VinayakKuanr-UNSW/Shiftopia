@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     balanceTypeFor, canRevoke, checkApproval,
-    displayStatus, inScope, ledgerFor, splitRequestTabs, summarizeApproval,
+    displayStatus, ledgerFor, splitRequestTabs, summarizeApproval,
 } from '../domain/leave-approval';
 import type { LeaveRequest } from '../model/leave.types';
 
@@ -146,27 +146,6 @@ describe('canRevoke', () => {
     });
     it('does not offer it on pending leave', () => {
         expect(canRevoke({ status: 'pending', endDate: '2026-12-01' }, '2026-10-07')).toBe(false);
-    });
-});
-
-describe('inScope — reads the scope as sets', () => {
-    const units = [
-        { departmentId: 'd1', subDepartmentId: 's1' },
-        { departmentId: 'd2', subDepartmentId: 's9' },
-    ];
-    it('matches ANY of several contracts', () => {
-        expect(inScope(units, ['d2'], [])).toBe(true);
-    });
-    it('uses sub-departments when any are selected', () => {
-        expect(inScope(units, ['d1'], ['s2'])).toBe(false);
-        expect(inScope(units, [], ['s9'])).toBe(true);
-    });
-    it('matches a SECOND selected department, not only the first', () => {
-        // The `[0]` defect class: d1 first, the employee is in d3.
-        expect(inScope([{ departmentId: 'd3', subDepartmentId: null }], ['d1', 'd3'], [])).toBe(true);
-    });
-    it('leaves everything in when nothing is selected', () => {
-        expect(inScope([], [], [])).toBe(true);
     });
 });
 

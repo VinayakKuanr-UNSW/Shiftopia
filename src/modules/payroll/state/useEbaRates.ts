@@ -35,5 +35,5 @@ export function useTraineeRates(enabled = true) {
     enabled,
     staleTime: 60 * 60 * 1000,
   });
-  return { schedule: query.data ?? [], isLoading: query.isLoading };
+  return { schedule: query.data ?? [] };
 }

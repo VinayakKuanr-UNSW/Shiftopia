@@ -14,7 +14,7 @@
  *  - `user?.id || '00000000-...'` NULL UUID fallbacks
  */
 
-import { z, ZodType } from 'zod';
+import { ZodType } from 'zod';
 import { supabase } from '@/platform/supabase/client';
 import {
   AppError,
@@ -110,24 +110,6 @@ export async function callAuthenticatedRpc<TOutput>(
 
 // ── Convenience: RPC returning void / boolean ──────────────────────────────
 
-async function callVoidRpc(
-  rpcName: string,
-  params: Record<string, unknown>,
-): Promise<void> {
-  await callRpc(rpcName, params, z.unknown());
-}
-
-/**
- * Execute an authenticated RPC that returns no meaningful value.
- * Asserts auth, then calls the RPC, discarding the response.
- */
-export async function callAuthenticatedVoidRpc(
-  rpcName: string,
-  paramsFn: (userId: string) => Record<string, unknown>,
-): Promise<void> {
-  const user = await requireUser();
-  await callVoidRpc(rpcName, paramsFn(user.id));
-}
 
 // ── Re-exports ─────────────────────────────────────────────────────────────
 

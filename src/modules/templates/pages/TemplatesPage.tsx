@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTemplates } from '../state/useTemplates';
 
 // Components
-import TemplateExplorer, { ExplorerTemplate } from '../ui/components/TemplateExplorer';
+import { TemplateExplorer, ExplorerTemplate } from '../ui/components/TemplateExplorer';
 import TemplateEditor from '../ui/components/TemplateEditor';
 import CreateTemplateDialog from '../ui/dialogs/CreateTemplateDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -52,7 +52,6 @@ const TemplatesPage: React.FC = () => {
     updateTemplateStatus,
     renameTemplate,
     setCurrentTemplate,
-    updateLocalGroup,
     addLocalSubgroup,
     updateLocalSubgroup,
     deleteLocalSubgroup,
@@ -60,7 +59,6 @@ const TemplatesPage: React.FC = () => {
     addLocalShift,
     updateLocalShift,
     deleteLocalShift,
-    discardChanges,
     checkVersion,
   } = useTemplates();
 
@@ -339,7 +337,6 @@ const TemplatesPage: React.FC = () => {
                 isSaving={isSaving}
                 hasUnsavedChanges={hasUnsavedChanges}
                 onBack={handleBack}
-                onUpdateGroup={updateLocalGroup}
                 onAddSubgroup={addLocalSubgroup}
                 onUpdateSubgroup={updateLocalSubgroup}
                 onDeleteSubgroup={deleteLocalSubgroup}
@@ -349,7 +346,6 @@ const TemplatesPage: React.FC = () => {
                 onDeleteShift={deleteLocalShift}
                 onSaveChanges={handleSaveChanges}
                 onUpdateStatus={handleUpdateStatus}
-                onDiscardChanges={discardChanges}
               />
             </div>
           ) : (

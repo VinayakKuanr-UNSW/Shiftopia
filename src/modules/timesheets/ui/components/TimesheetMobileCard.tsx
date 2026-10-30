@@ -38,9 +38,7 @@ interface TimesheetMobileCardProps {
     onMarkNoShow?: (id: string) => void;
     readOnly?: boolean;
     isManager?: boolean;
-    employeeHeader?: React.ReactNode;
     employeeActions?: React.ReactNode;
-    useGroupColoring?: boolean;
     className?: string;
 }
 
@@ -70,9 +68,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     onMarkNoShow,
     readOnly = false,
     isManager = true,
-    employeeHeader,
     employeeActions,
-    useGroupColoring = false,
     className,
 }, ref) => {
     const [isEditing, setIsEditing] = useState(false);

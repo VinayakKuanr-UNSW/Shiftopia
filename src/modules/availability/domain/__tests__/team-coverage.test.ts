@@ -387,7 +387,7 @@ describe('summarise', () => {
 
         const i = inputs({ members, dates, availability });
         const cells = buildTeamDayCells(i);
-        const summary = summarise(i, cells, buildCoverageBuckets(i), '2026-08-10');
+        const summary = summarise(i, cells, buildCoverageBuckets(i));
 
         expect(summary.avgWeekdayAvailable).toBe(2);
         expect(summary.avgWeekendAvailable).toBe(0);
@@ -405,7 +405,7 @@ describe('summarise', () => {
             ]),
         });
         const cells = buildTeamDayCells(i);
-        const summary = summarise(i, cells, buildCoverageBuckets(i), '2026-08-10');
+        const summary = summarise(i, cells, buildCoverageBuckets(i));
 
         expect(summary.unsetCount).toBe(1);
         expect(summary.declaredCount).toBe(0);
@@ -440,7 +440,7 @@ describe('summarise', () => {
             ],
         });
         const cells = buildTeamDayCells(i);
-        const summary = summarise(i, cells, buildCoverageBuckets(i), '2026-08-10');
+        const summary = summarise(i, cells, buildCoverageBuckets(i));
 
         // 3h assigned + 2h unfilled = 5 required staffed-hours; 3 assigned.
         expect(summary.requiredHours).toBe(5);

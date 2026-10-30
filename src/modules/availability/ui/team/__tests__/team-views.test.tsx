@@ -9,11 +9,11 @@ vi.mock('@/modules/core/contexts/ThemeContext', () => ({
 }));
 
 import TeamAvailabilityGrid from '../TeamAvailabilityGrid';
-import GridBadgeLegendPopover from '../GridBadgeLegendPopover';
+import { GridBadgeLegendPopover } from '../GridBadgeLegendPopover';
 import TeamDayTimeline from '../TeamDayTimeline';
 import CoverageHeatmap from '../CoverageHeatmap';
 import NearMissPanel from '../NearMissPanel';
-import { gapFill, stateStyle } from '../coverage-palette';
+import { gapFill } from '../coverage-palette';
 import {
     buildCoverageBuckets,
     buildTeamDayCells,
@@ -246,17 +246,6 @@ describe('coverage palette', () => {
     it('clamps the ramp beyond its last step instead of running off the end', () => {
         expect(gapFill(4, true, false)).toBe(gapFill(99, true, false));
     });
-
-    it('encodes UNSET as grey fill', () => {
-        expect(stateStyle('unset', false).fill).toBe('#6b7280');
-        expect(stateStyle('unset', true).fill).toBe('#9ca3af');
-    });
-
-    it('returns empty glyph for states', () => {
-        for (const state of ['assigned', 'available', 'leave', 'unavailable', 'unset'] as const) {
-            expect(stateStyle(state, false).glyph).toBe('');
-        }
-    });
 });
 
 // ── Cell modes, week totals, compliance column ──────────────────────────────
@@ -293,7 +282,6 @@ describe('TeamAvailabilityGrid — hours and compliance modes', () => {
                 hours.byProfile.get('p1')!.byWeek,
                 hours.byProfile.get('p1')!.byDate,
                 hours.sortedWeekKeys,
-                'FT',
                 38,
             )],
         ]);

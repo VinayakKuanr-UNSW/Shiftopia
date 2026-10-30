@@ -29,11 +29,6 @@ interface GrossPayPeriodViewProps {
   /** Period bounds (YYYY-MM-DD, inclusive) for the header. */
   periodStart: string;
   periodEnd: string;
-  /**
-   * Optional employee-id → display-name map. When absent, the employeeId is
-   * shown (this surface is presentational and does not fetch profiles).
-   */
-  employeeNames?: Record<string, string>;
   isLoading?: boolean;
   error?: unknown;
   className?: string;
@@ -54,7 +49,6 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
   periods,
   periodStart,
   periodEnd,
-  employeeNames,
   isLoading = false,
   error,
   className,

@@ -7,8 +7,8 @@ import { resolveNotificationLink } from './deepLink';
  * FCM remote-push registration for the native Android shell via
  * `@capacitor/push-notifications`. Registers the device, stores its FCM token
  * in `device_push_tokens`, shows foreground pushes as local notifications, and
- * deep-links on tap. Inert on web and until Firebase (`google-services.json` +
- * the send-push Edge Function) is configured.
+ * deep-links on tap. Inert on web and until Firebase (`google-services.json`) is
+ * configured. Nothing sends pushes yet: there is no server-side sender.
  */
 
 function isPushCapable(): boolean {

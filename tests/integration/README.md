@@ -50,4 +50,3 @@ The older SQL harnesses in `supabase/tests/` don't run against the real schema, 
 | `contract_ordinary_hours_envelope.sql` | `type "employment_status" already exists` | Builds its own stub schema. |
 | `availability_subdepartment_scope.sql` | `"employee_leave_days" is not a table` | Stale: that table is now a view. |
 | `fairness_ledger_parity.sql` | `target_employment_type is required` | Stale: its shift inserts predate that rule. |
-| `implicit_roster_activation.sql` | `function public.sm_resolve_roster(…) does not exist` | Stale: the signature changed. |

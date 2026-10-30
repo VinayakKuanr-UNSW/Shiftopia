@@ -6,7 +6,7 @@ DECLARE r text; x uuid := 'a0000000-0000-4000-8000-000000000006';
 BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub', x, 'role', 'authenticated')::text, true);
   SET LOCAL ROLE authenticated;
-  r := 'X(flag=admin, no cert): is_admin=' || public.is_admin() || ' mgr_or_above=' || public.is_manager_or_above()
+  r := 'X(flag=admin, no cert): is_admin=' || public.is_admin()
      || ' delta_access=' || public.user_has_delta_access(x) || ' bcast_sys=' || public.is_broadcast_system_manager();
   BEGIN
     PERFORM public.sm_require_scope('shift.edit', '00000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003', '6fefad95-9cf9-468c-8724-424cc2f7b640');

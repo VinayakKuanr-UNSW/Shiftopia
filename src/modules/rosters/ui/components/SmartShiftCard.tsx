@@ -112,7 +112,6 @@ interface SmartShiftCardProps {
      */
     editors?: ShiftEditor[];
     isPeopleMode?: boolean;
-    dense?: boolean;
 }
 
 const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
@@ -267,11 +266,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     headerAction,
     groupColor = 'default_yellow',
     className,
-    showStatusIcons,
     detailedCost,
     editors,
-    isPeopleMode = false,
-    dense = false,
 }) => {
 
     const employeeName = (shift as any).employeeName
@@ -296,12 +292,10 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         assignment_outcome: shift.assignment_outcome ?? null,
         trading_status:     shift.trading_status    ?? null,
         is_cancelled:       shift.is_cancelled      ?? false,
-        scheduled_start:    shift.scheduled_start   ?? null,
-        scheduled_end:      shift.scheduled_end     ?? null,
         start_at:           shift.start_at          ?? null,
         end_at:             shift.end_at            ?? null,
         actual_start:       shift.actual_start      ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
+    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.start_at, shift.end_at, shift.actual_start]);
 
     const fsmLock = getLockState(ctx.state);
     const isFullyLocked = isLocked || fsmLock.fullyLocked || isPast;
@@ -478,12 +472,10 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         assignment_outcome: shift.assignment_outcome ?? null,
         trading_status:     shift.trading_status    ?? null,
         is_cancelled:       shift.is_cancelled      ?? false,
-        scheduled_start:    shift.scheduled_start   ?? null,
-        scheduled_end:      shift.scheduled_end     ?? null,
         start_at:           shift.start_at          ?? null,
         end_at:             shift.end_at            ?? null,
         actual_start:       shift.actual_start      ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
+    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.start_at, shift.end_at, shift.actual_start]);
 
     const isBiddingActive = !!(shift.bidding_status && shift.bidding_status !== 'not_on_bidding');
     const biddingUrgency = useMemo(() => {

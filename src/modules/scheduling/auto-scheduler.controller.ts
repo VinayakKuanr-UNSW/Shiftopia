@@ -553,6 +553,63 @@ export function buildGreedyFallbackPriorOrdinaryMap(
     return prior;
 }
 
+// The greedy fallback never calls the optimizer, so it has no solver cost and
+// re-estimates each proposal with the roster cost engine.
+export function estimateGreedyFallbackCost(
+    shift: ShiftMeta,
+    emp: EmployeeMeta,
+    empDet: Partial<OptimizerEmployee> | undefined,
+    priorOrdinaryHoursThisWeek: number | undefined,
+): number {
+    // cl 36.1 vs Sch.3 §3.2/§5.3: the unpaid meal break is
+    // deducted for general staff, but Security meal breaks are
+    // PAID — the full clock span is priced. `durationMinutes()`
+    // alone is the GROSS span with no break subtraction at all;
+    // compliance audit finding (2026-08-02): this previously
+    // priced every fallback shift's unpaid break as paid time.
+    const isSecurityShift = empDet?.is_security_role
+        ?? isSecurityRoleName(shift.roleName);
+    const grossMins = durationMinutes(shift.start_time, shift.end_time);
+    const mins = isSecurityShift
+        ? grossMins
+        : Math.max(0, grossMins - (shift.unpaid_break_minutes ?? 0));
+    const employmentType = emp.contract_type === 'CASUAL' || /casual/i.test(emp.contract_type || '')
+        ? 'Casual'
+        : /part/i.test(emp.contract_type || '') ? 'Part-Time' : 'Full-Time';
+    // Object-based call (replaces the former 32-positional-argument
+    // legacy wrapper — an auditability risk the compliance audit
+    // flagged: a silent argument-order mistake would compile
+    // without error). Also wires cl 42 weekly OT — previously
+    // absent from the AutoScheduler's own pre-commit estimate even
+    // though the roster-grid projection pipeline already had it.
+    return estimateDetailedShiftCostObj({
+        netMinutes: mins,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        // No rate: the engine resolves it from classificationLevel. A supplied
+        // rate would win over the level.
+        rate: null,
+        scheduled_length_minutes: mins,
+        is_overnight: (shift as any).is_overnight ?? false,
+        is_cancelled: false,
+        shift_date: shift.shift_date,
+        // cl 41 / 43 attach to hours WORKED — the break's position moves them.
+        unpaid_break_minutes: isSecurityShift ? 0 : (shift.unpaid_break_minutes ?? 0),
+        break_start: (shift as { break_start?: string | null }).break_start ?? null,
+        employmentType: employmentType as any,
+        isSecurityRole: isSecurityShift,
+        // Prefer the employee's REAL Schedule 1/2 classification
+        // level from their Active user_contracts row (compliance
+        // audit finding — 2026-08-02) over extractLevel()'s
+        // role-name guess, which is now only a fallback for
+        // employees with no resolvable contract level.
+        classificationLevel: (empDet?.level && empDet.level >= 1 && empDet.level <= 7)
+            ? `LEVEL_${empDet.level}`
+            : extractLevel(shift.roleName),
+        priorOrdinaryHoursThisWeek,
+    }).totalCost;
+}
+
 // Upper bound on the initial fatigue score handed to the optimizer. The raw
 // score is unbounded — a single near-38h shift yields ~450 from the
 // -76·ln(1-h/38) curve near its asymptote — and a huge value distorts the
@@ -1322,8 +1379,7 @@ export class AutoSchedulerController {
                 fairShareCapMinutes: fairShareCaps.get(e.id) ?? 0,
             });
 
-            // Classification-resolved rate: explicit per-employee rate wins;
-            // otherwise Schedule 2 by level (casual vs permanent column);
+            // Classification-resolved rate: Schedule 2 by level (casual vs permanent column);
             // unknown level (0/undefined = "not classified") → conservative
             // defaultRate. Never a hardcoded literal (goes stale at each CPI).
             const levelKey = det?.level && det.level >= 1 && det.level <= 7
@@ -1340,7 +1396,7 @@ export class AutoSchedulerController {
                 contracted_role_ids: e.contracted_role_ids ?? [],
                 is_security_role: isSecurityEmployee,
 
-                hourly_rate: e.remuneration_rate ?? securityRate ?? scheduleRate ?? windowRateSet.defaultRate,
+                hourly_rate: securityRate ?? scheduleRate ?? windowRateSet.defaultRate,
                 contract_weekly_minutes: (e.contracted_weekly_hours || 38) * 60,
                 level: det?.level ?? 0,
                 // `employeeDetails` never sets is_flexible (fetchEmployeeContractDetails
@@ -1701,52 +1757,9 @@ export class AutoSchedulerController {
                 // cost exists — in that case we DO re-estimate. Both engines
                 // return dollars, so no unit conversion is needed.
                 if (usedFallback && shift && emp) {
-                    // cl 36.1 vs Sch.3 §3.2/§5.3: the unpaid meal break is
-                    // deducted for general staff, but Security meal breaks are
-                    // PAID — the full clock span is priced. `durationMinutes()`
-                    // alone is the GROSS span with no break subtraction at all;
-                    // compliance audit finding (2026-08-02): this previously
-                    // priced every fallback shift's unpaid break as paid time.
-                    const empDet = employeeDetails.get(emp.id);
-                    const isSecurityShift = empDet?.is_security_role
-                        ?? isSecurityRoleName(shift.roleName);
-                    const grossMins = durationMinutes(shift.start_time, shift.end_time);
-                    const mins = isSecurityShift
-                        ? grossMins
-                        : Math.max(0, grossMins - (shift.unpaid_break_minutes ?? 0));
-                    const employmentType = emp.contract_type === 'CASUAL' || /casual/i.test(emp.contract_type || '')
-                        ? 'Casual'
-                        : /part/i.test(emp.contract_type || '') ? 'Part-Time' : 'Full-Time';
-                    // Object-based call (replaces the former 32-positional-argument
-                    // legacy wrapper — an auditability risk the compliance audit
-                    // flagged: a silent argument-order mistake would compile
-                    // without error). Also wires cl 42 weekly OT — previously
-                    // absent from the AutoScheduler's own pre-commit estimate even
-                    // though the roster-grid projection pipeline already had it.
-                    p.optimizerCost = estimateDetailedShiftCostObj({
-                        netMinutes: mins,
-                        start_time: shift.start_time,
-                        end_time: shift.end_time,
-                        rate: emp.remuneration_rate ?? 25,
-                        scheduled_length_minutes: mins,
-                        is_overnight: (shift as any).is_overnight ?? false,
-                        is_cancelled: false,
-                        shift_date: shift.shift_date,
-                        // cl 41 / 43 attach to hours WORKED — the break's position moves them.
-                        unpaid_break_minutes: isSecurityShift ? 0 : (shift.unpaid_break_minutes ?? 0),
-                        break_start: (shift as { break_start?: string | null }).break_start ?? null,
-                        employmentType: employmentType as any,
-                        isSecurityRole: isSecurityShift,
-                        // Prefer the employee's REAL Schedule 1/2 classification
-                        // level from their Active user_contracts row (compliance
-                        // audit finding — 2026-08-02) over extractLevel()'s
-                        // role-name guess, which is now only a fallback for
-                        // employees with no resolvable contract level.
-                        classificationLevel: (empDet?.level && empDet.level >= 1 && empDet.level <= 7)
-                            ? `LEVEL_${empDet.level}`
-                            : extractLevel(shift.roleName),
-                        priorOrdinaryHoursThisWeek: fallbackPriorOrdinaryMap.get(p.shiftId),
-                    }).totalCost;
+                    p.optimizerCost = estimateGreedyFallbackCost(
+                        shift, emp, employeeDetails.get(emp.id), fallbackPriorOrdinaryMap.get(p.shiftId),
+                    );
                 }
 
                 // 2. Calculate Fatigue

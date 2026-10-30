@@ -44,9 +44,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedSubDeptId, setSelectedSubDeptId] = useState<string>('');
-  const [, setIsLoadingOrgs] = useState(false);
-  const [, setIsLoadingDepts] = useState(false);
-  const [, setIsLoadingSubDepts] = useState(false);
 
   // Generation options (Current month + 24 future months)
 
@@ -153,7 +150,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
     const initializeData = async () => {
       console.log('[CreateTemplateDialog] 🚀 Initializing Data...', { lockedScope });
-      setIsLoadingOrgs(true);
 
       try {
         // Fetch Orgs
@@ -177,12 +173,10 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
           console.log('[CreateTemplateDialog] Phase 1: Applying Locked Scope');
           setSelectedOrgId(lockedScope.organizationId);
 
-          setIsLoadingDepts(true);
           const depts = await enhancedShiftService.getDepartments(lockedScope.organizationId);
           setDepartments(depts);
           setSelectedDeptId(lockedScope.departmentId);
 
-          setIsLoadingSubDepts(true);
           const subDepts = await enhancedShiftService.getSubDepartments(lockedScope.departmentId);
           setSubDepartments(subDepts);
           setSelectedSubDeptId(lockedScope.subDepartmentId);
@@ -192,9 +186,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       } catch (err) {
         console.error('[CreateTemplateDialog] Initialization failed:', err);
       } finally {
-        setIsLoadingOrgs(false);
-        setIsLoadingDepts(false);
-        setIsLoadingSubDepts(false);
       }
     };
 
@@ -207,7 +198,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
     const loadDepts = async () => {
       console.log('[CreateTemplateDialog] 🌳 Loading Departments for Org:', selectedOrgId);
-      setIsLoadingDepts(true);
       try {
         const depts = await enhancedShiftService.getDepartments(selectedOrgId);
         setDepartments(depts);
@@ -216,7 +206,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       } catch (err) {
         console.error('Failed to load departments:', err);
       } finally {
-        setIsLoadingDepts(false);
       }
     };
     loadDepts();
@@ -228,7 +217,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
     const loadSubDepts = async () => {
       console.log('[CreateTemplateDialog] 🌿 Loading Sub-Departments for Dept:', selectedDeptId);
-      setIsLoadingSubDepts(true);
       try {
         const subDepts = await enhancedShiftService.getSubDepartments(selectedDeptId);
         setSubDepartments(subDepts);
@@ -237,7 +225,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       } catch (err) {
         console.error('Failed to load sub-departments:', err);
       } finally {
-        setIsLoadingSubDepts(false);
       }
     };
     loadSubDepts();

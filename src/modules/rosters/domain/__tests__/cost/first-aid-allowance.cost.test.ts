@@ -88,7 +88,6 @@ describe('legacy cost wrappers read the computed field off a raw shift row', () 
     unpaid_break_minutes: 30,
     net_length_minutes: 450,
     scheduled_length_minutes: 480,
-    remuneration_rate: 30,
     target_employment_type: 'PT',
     is_overnight: false,
     is_cancelled: false,

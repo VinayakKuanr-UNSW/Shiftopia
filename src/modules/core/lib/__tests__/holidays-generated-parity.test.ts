@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import Holidays from 'date-holidays';
 import {
-  getPublicHolidayNameISO,
+  getPublicHolidayName,
   isPublicHolidayISO,
   PUBLIC_HOLIDAY_YEAR_RANGE,
 } from '../holidays';
@@ -41,8 +41,10 @@ describe('generated NSW holiday table is faithful to date-holidays', () => {
 
       for (const [key, name] of expected) {
         if (!isPublicHolidayISO(key)) mismatches.push(`${key} missing (${name})`);
-        else if (getPublicHolidayNameISO(key) !== name) {
-          mismatches.push(`${key} name "${getPublicHolidayNameISO(key)}" != "${name}"`);
+        else {
+          const [y, m, d] = key.split('-').map(Number);
+          const actual = getPublicHolidayName(new Date(y, m - 1, d));
+          if (actual !== name) mismatches.push(`${key} name "${actual}" != "${name}"`);
         }
       }
 
@@ -106,6 +108,6 @@ describe('coverage window', () => {
 
   it('answers false, not undefined, outside the window', () => {
     expect(isPublicHolidayISO(`${max + 1}-01-01`)).toBe(false);
-    expect(getPublicHolidayNameISO(`${max + 1}-01-01`)).toBeNull();
+    expect(getPublicHolidayName(new Date(max + 1, 0, 1))).toBeNull();
   });
 });

@@ -48,7 +48,6 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 | Demand synthesizer redundancy purge | Shift synthesizer (`suggestedDeletions`) | `sm_bulk_delete_shifts` | SOFT | ✗ | ✗ |
 | Unassign employee from shift | Roster: assign → nobody | `sm_unassign_shift` | **BID** if Published, else UNASSIGN | ✗ | ✗ — **FT goes to Bidding** |
 | Bulk unassign | Roster | gateway op `unassign` | UNASSIGN | ✗ | ✗ |
-| Cancel shift | Planner card → Cancel | `sm_manager_cancel` | CANCEL | ✗ | ✗ |
 | Unpublish | Card / bulk | `sm_unpublish_shift` | → Draft (not a removal) | client only | — |
 | Delete roster sub-group | Roster sub-group menu (confirm shows a dry run) | `delete_roster_subgroup_v2` | HARD, unstarted shifts of that group and sub-department only (since 2026-10-17; was every same-named shift on the roster) | ✓ days before today untouched; started shifts kept | ✗ |
 | Clear / undo a template application | Roster → Templates → Recent applications → Undo (confirm shows a dry run) | `undo_template_batch`; `sm_clear_template_application` has no caller | HARD, that application's unstarted shifts, plus sub-groups it empties (since 2026-10-17) | ✓ started shifts kept | ✗ |
@@ -71,7 +70,7 @@ Bidding · CANCEL = `is_cancelled` · UNASSIGN = employee removed, shift stays.
 | Pathway | UI entry | Backend | Kind | Past guard | FT guard |
 |---|---|---|---|---|---|
 | Drop / cancel my shift | My Roster → Drop | `sm_employee_drop_shift` | **BID** | ✗ (S3/S4 only) | ✗ — **FT can drop to Bidding** |
-| Request trade | My Roster → Trade | `sm_request_trade`, `sm_create_swap_request` | trade | ✗ | ✗ |
+| Request trade | My Roster → Trade | `sm_create_swap_request` | trade | ✗ | ✗ |
 | Accept trade / swap | Swaps | `sm_accept_trade` | reassign | ✗ | ✗ |
 | Decline / reject / ignore offer | Offers | `sm_decline_offer`, `sm_reject_offer`, offer-expiry cron | → Draft | — | ✗ |
 
@@ -118,3 +117,5 @@ direct API — can bypass them; the UI mirrors them to hide actions that would f
 5. **Deletes are authorised and scoped** (fixes D, E): delete RPCs check `auth.uid()` holds
    `shift.delete` (or equivalent) over the shift's department.
 6. **Test harness removed from production** (F).
+
+> **2026-10-30:** `sm_manager_cancel` and `sm_request_trade` were dropped (`20261030034712`). Neither had a caller: the planner's "Cancel" and People-mode trade actions were wired to handlers the grid never invoked. There is no manager cancel-shift action in the app; managers unpublish or delete.

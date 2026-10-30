@@ -12,7 +12,7 @@ import { join, relative, resolve } from 'node:path';
 
 const ROOT = resolve(__dirname, '../../../..');
 const SCAN = ['src', 'supabase/functions'];
-const SKIP = /(__tests__|node_modules|_retired|platform\/supabase\/types\.ts$)/;
+const SKIP = /(__tests__|node_modules|platform\/supabase\/types\.ts$)/;
 
 function sourceFiles(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import GridFunctionBar, { type ViewKey, type SortOptionKey } from '../GridFunctionBar';
+import { GridFunctionBar, type ViewKey, type SortOptionKey } from '../GridFunctionBar';
 import type { CellMode } from '../TeamAvailabilityGrid';
 
 vi.mock('@/modules/core/contexts/ThemeContext', () => ({

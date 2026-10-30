@@ -4,7 +4,7 @@ import { processInChunks, EMERGENT_WINDOW_MS, DEFAULT_CHUNK_CONCURRENCY } from '
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
 import { complianceService } from '../services/compliance.service';
-import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/platform/supabase/rpc/client';
+import { callRpc, callAuthenticatedRpc, requireUser } from '@/platform/supabase/rpc/client';
 import { shiftsQueries, type PublishCheckRow } from './shifts.queries';
 import { ComplianceError, ComplianceUnavailableError } from '@/platform/supabase/rpc/errors';
 import { assertShapeForRow, assertShapeForShiftId } from './shift-shape-gate';
@@ -16,11 +16,8 @@ import {
     BulkAssignAtomicResponseSchema,
     BulkDeleteResponseSchema,
     DeleteShiftResponseSchema,
-    CancelShiftResponseSchema,
     OfferActionResponseSchema,
-    RequestTradeResponseSchema,
     EmployeeDropResponseSchema,
-    CloseBiddingResponseSchema,
     ApplyShiftOpResponseSchema,
 } from './contracts';
 
@@ -250,7 +247,6 @@ export const shiftsCommands = {
             roster_id: shiftData.roster_id,
             department_id: safeUuid(shiftData.department_id)!,
             shift_date: shiftData.shift_date,
-            roster_date: shiftData.shift_date,
             start_time: shiftData.start_time,
             end_time: shiftData.end_time,
             organization_id: safeUuid(shiftData.organization_id),
@@ -265,7 +261,6 @@ export const shiftsCommands = {
             remuneration_level: shiftData.remuneration_level !== undefined && shiftData.remuneration_level !== null ? Number(shiftData.remuneration_level) : null,
             paid_break_minutes: shiftData.paid_break_minutes || 0,
             unpaid_break_minutes: shiftData.unpaid_break_minutes || 0,
-            break_minutes: (shiftData.paid_break_minutes || 0) + (shiftData.unpaid_break_minutes || 0),
             break_start: shiftData.break_start || null,
             break_end: shiftData.break_end || null,
             timezone: shiftData.timezone || 'Australia/Sydney',
@@ -965,49 +960,8 @@ export const shiftsCommands = {
     },
 
     /* ============================================================
-       ATTENDANCE
-       ============================================================ */
-
-    async checkIn(shiftId: string, location?: { lat: number; lon: number }): Promise<void> {
-        await callAuthenticatedVoidRpc('check_in_shift', (userId) => ({
-            p_shift_id: shiftId,
-            p_user_id: userId,
-            p_lat: location?.lat ?? null,
-            p_lon: location?.lon ?? null,
-        }));
-    },
-
-
-
-    async withdrawShiftFromBidding(shiftId: string) {
-        const result = await callAuthenticatedRpc(
-            'sm_close_bidding',
-            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: 'User declined offer' }),
-            CloseBiddingResponseSchema,
-        );
-
-        if (!result.success) {
-            throw new Error(result.error ?? 'Failed to withdraw shift from bidding');
-        }
-
-        return result;
-    },
-
-    /* ============================================================
        CANCEL SHIFT
        ============================================================ */
-
-    /**
-     * Cancel a shift (employee initiated)
-     * Triggers the cancel_shift RPC which handles bidding logic
-     */
-    async cancelShift(shiftId: string, reason: string) {
-        return callAuthenticatedRpc(
-            'sm_manager_cancel',
-            (userId) => ({ p_shift_id: shiftId, p_reason: reason, p_user_id: userId }),
-            CancelShiftResponseSchema,
-        );
-    },
 
     /* ============================================================
        DELETE SHIFT
@@ -1157,14 +1111,6 @@ export const shiftsCommands = {
     /* ============================================================
        EMPLOYEE ACTIONS (V3)
        ============================================================ */
-
-    async requestTrade(shiftId: string) {
-        return callAuthenticatedRpc(
-            'sm_request_trade',
-            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_target_employee_id: null }),
-            RequestTradeResponseSchema,
-        );
-    },
 
     async acceptOffer(shiftId: string) {
         return callAuthenticatedRpc(

@@ -9,7 +9,6 @@ import type { BidEligibility, EmployeeBid } from './types';
 interface UseShiftBidsReturn {
   bids: EmployeeBid[];
   isLoading: boolean;
-  refetch: () => void;
 }
 
 /** Current calendar quarter (1–4) + year, for the performance report RPC. */
@@ -54,7 +53,6 @@ export function useShiftBids(shiftId: string | null): UseShiftBidsReturn {
   const {
     data: bids = [],
     isLoading,
-    refetch,
   } = useQuery({
     queryKey: shiftKeys.bids(shiftId || ''),
     queryFn: async () => {
@@ -179,5 +177,5 @@ export function useShiftBids(shiftId: string | null): UseShiftBidsReturn {
     staleTime: 10000,
   });
 
-  return { bids, isLoading, refetch };
+  return { bids, isLoading };
 }

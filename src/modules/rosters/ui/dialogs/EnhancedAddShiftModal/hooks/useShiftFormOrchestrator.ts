@@ -88,7 +88,6 @@ export function useShiftFormOrchestrator({
 
     // ── Compliance state ─────────────────────────────────────────────────────
     const [complianceHasRun, setComplianceHasRun] = useState(false);
-    const [complianceNeedsRerun, setComplianceNeedsRerun] = useState(false);
     const [complianceResults, setComplianceResults] = useState<Record<string, any>>({});
 
     // Stable setter with equality guard (takes full results map)
@@ -433,7 +432,6 @@ export function useShiftFormOrchestrator({
 
     // Invalidate compliance whenever any scheduling input changes
     useEffect(() => {
-        setComplianceNeedsRerun(true);
         setComplianceHasRun(false);
         compliancePanel.markStale();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -585,10 +583,7 @@ export function useShiftFormOrchestrator({
         runChecks,
         clearResults    } = useComplianceRunner({
         buildComplianceInput,
-        hardValidation,
         setComplianceResults: setComplianceResultsWithGuard,
-        needsRerun: complianceNeedsRerun,
-        setNeedsRerun: setComplianceNeedsRerun,
         setHasRun: setComplianceHasRun,
         shiftId: existingShift?.id,
     });
@@ -1391,7 +1386,6 @@ export function useShiftFormOrchestrator({
     useEffect(() => {
         if (compliancePanel.status === 'results') {
             setComplianceHasRun(true);
-            setComplianceNeedsRerun(false);
         }
     }, [compliancePanel.status]); // eslint-disable-line react-hooks/exhaustive-deps
 

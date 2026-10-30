@@ -310,22 +310,6 @@ export function dailyHoursFor(contractedWeeklyHours: number | null | undefined):
     return contractedWeeklyHours && contractedWeeklyHours > 0 ? contractedWeeklyHours / 5 : 7.6;
 }
 
-/**
- * The leave types a casual may REQUEST — mirrors the database trigger
- * `enforce_leave_type_eligibility` (2026-10-01), which refuses the rest.
- * cl 12.5(b) excludes paid annual, personal and compassionate leave; cl 51.1,
- * 52.1, 53.2, 55.1, 57.1 and 58.2 exclude casuals by name. What is left:
- * FDV (cl 46, paid), unpaid carer's (cl 45.6(c)), unpaid compassionate
- * (cl 48.8), community service (cl 54) and long service (cl 49).
- */
-export const CASUAL_REQUESTABLE: readonly LeaveTypeCode[] =
-    ['fdv', 'carer', 'compassionate', 'community_service', 'long_service'];
-
-/** Which types this person can ask for. Permanents may request every type. */
-export function requestableLeaveTypes(all: readonly LeaveTypeCode[], isCasual: boolean): LeaveTypeCode[] {
-    return isCasual ? all.filter(t => CASUAL_REQUESTABLE.includes(t)) : [...all];
-}
-
 // ── Entitlement warnings ─────────────────────────────────────────────────────
 
 interface EntitlementCheckInput {

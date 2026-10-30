@@ -188,16 +188,6 @@ export function validateBillableEdit(p: BillableEditInput): BillableEditResult {
     };
 }
 
-/** Variance (beyond ±grace) of a resolved billable window vs the roster. */
-export function billableVarianceVsRoster(
-    billableStart: string | null | undefined,
-    billableEnd: string | null | undefined,
-    scheduledStart: string,
-    scheduledEnd: string,
-): { arrival: boolean; departure: boolean } {
-    return varianceOf(parseHHMM(billableStart), parseHHMM(billableEnd), scheduledStart, scheduledEnd);
-}
-
 function varianceOf(
     startMins: number | null,
     endMins: number | null,

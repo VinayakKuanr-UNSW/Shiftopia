@@ -30,12 +30,7 @@ export function useRosterSummary(
     const queryKey = shiftKeys.summary(orgId!, startDate!, endDate!, filters);
     
     const {
-        data: rawData = [],
-        isLoading,
-        isError,
-        error,
-        refetch
-    } = useQuery({
+        data: rawData = []    } = useQuery({
         queryKey,
         queryFn: async () => {
             if (!orgId || !startDate || !endDate) return [];
@@ -58,12 +53,7 @@ export function useRosterSummary(
     }, [rawData]);
 
     return {
-        summaryMap,
-        rawData,
-        isLoading,
-        isError,
-        error,
-        refetch
+        summaryMap
     };
 }
 

@@ -1,5 +1,4 @@
 import { supabase } from '@/platform/supabase/client';
-import { assertWrote } from '@/platform/supabase/writes';
 
 /**
  * Demand Engine L9 — demand_templates read/write queries.
@@ -48,34 +47,6 @@ interface TemplateInput {
 }
 
 export const demandTemplatesQueries = {
-    /** Return all currently active templates, newest first. */
-    async listActive(): Promise<DemandTemplateRow[]> {
-        const { data, error } = await supabase
-            .from('demand_templates')
-            .select('*')
-            .eq('is_active', true)
-            .order('created_at', { ascending: false });
-        if (error) throw new Error(`demandTemplates.listActive failed: ${error.message}`);
-        return (data ?? []) as unknown as DemandTemplateRow[];
-    },
-
-    /**
-     * Find the first active template whose cluster_key contains all fields of
-     * the given ClusterKey (JSONB @> containment via `.contains()`).
-     * Returns null when no match exists.
-     */
-    async findByClusterKey(clusterKey: ClusterKey): Promise<DemandTemplateRow | null> {
-        const { data, error } = await supabase
-            .from('demand_templates')
-            .select('*')
-            .eq('is_active', true)
-            .contains('cluster_key', clusterKey as unknown as Record<string, unknown>)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        if (error) throw new Error(`demandTemplates.findByClusterKey failed: ${error.message}`);
-        return data as unknown as DemandTemplateRow | null;
-    },
 
     /**
      * Insert a new template or update the existing row with the same
@@ -99,15 +70,5 @@ export const demandTemplatesQueries = {
             .single();
         if (error) throw new Error(`demandTemplates.upsert failed: ${error.message}`);
         return data as unknown as DemandTemplateRow;
-    },
-
-    /** Soft-retire a template by id (set is_active = false). */
-    async deactivate(id: string): Promise<void> {
-        const result = await supabase
-            .from('demand_templates')
-            .update({ is_active: false, updated_at: new Date().toISOString() }, { count: 'exact' })
-            .eq('id', id);
-        if (result.error) throw new Error(`demandTemplates.deactivate failed: ${result.error.message}`);
-        assertWrote(result, 'retire this demand template');
     },
 };

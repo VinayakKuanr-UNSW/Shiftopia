@@ -38,9 +38,7 @@ interface TemplateHeaderProps {
     lastSavedAgo: string;
     onBack: () => void;
     onSave: () => void;
-    onDiscard: () => void;
     onArchive: () => void;
-    onDownload?: () => void;
     onUpdateStatus: (status: 'draft' | 'published' | 'archived') => void;
     /** View-only manager (delta, epsilon): no save, delete, publish or unlock. */
     readOnly?: boolean;
@@ -86,9 +84,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
     lastSavedAgo,
     onBack,
     onSave,
-    onDiscard,
     onArchive,
-    onDownload,
     onUpdateStatus,
     readOnly = false,
 }) => {

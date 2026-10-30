@@ -68,7 +68,7 @@ function inputs(over: Partial<TeamAvailabilityInputs> = {}): TeamAvailabilityInp
 }
 
 function summaryOf(i: TeamAvailabilityInputs) {
-    return summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i), DATE);
+    return summarise(i, buildTeamDayCells(i), buildCoverageBuckets(i));
 }
 
 describe('summarise — the "Not declared" chase-list', () => {

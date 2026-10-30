@@ -27,7 +27,6 @@ import { supabase } from '@/platform/supabase/client';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { useClockIn, useClockOut } from '@/modules/rosters/state/useClockInOut';
-import { useSettings } from '@/modules/settings/hooks/useSettings';
 import { TimesheetMobileCard } from '@/modules/timesheets/ui/components/TimesheetMobileCard';
 import type { TimesheetRow } from '@/modules/timesheets/model/timesheet.types';
 import {
@@ -116,15 +115,6 @@ function toMs(shift: Shift, type: 'start' | 'end'): number {
     end.setDate(end.getDate() + 1);
   }
   return end.getTime();
-}
-
-function formatHM(totalMinutes: number): string {
-  if (totalMinutes <= 0) return '0m';
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
 }
 
 // ── Shift timing ──────────────────────────────────────────────────────────────
@@ -249,31 +239,18 @@ function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null)
 interface AttendanceCardProps {
   shift: Shift;
   now: Date;
-  useGroupColoring?: boolean;
 }
 
-const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupColoring }) => {
+const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
   const { user } = useAuth();
   const clockIn  = useClockIn();
   const clockOut = useClockOut();
 
-  const startMs    = toMs(shift, 'start');
-  const endMs      = toMs(shift, 'end');
-  const windowOpen = startMs - 60 * 60 * 1000;
-  const nowMs      = now.getTime();
-
   const timing   = getShiftTiming(shift, now);
   const status   = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
-  const isAutoClockOut = false;
 
   const canClockIn  = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
   const canClockOut = (status === 'checked_in' || status === 'late') && !shift.actual_end && timing !== 'before_window';
-
-  const minsUntilWindow = timing === 'before_window'
-    ? Math.max(0, Math.floor((windowOpen - nowMs) / 60000)) : 0;
-  const minsRemaining = timing !== 'completed'
-    ? Math.max(0, Math.floor((endMs - nowMs) / 60000)) : 0;
-  const minsElapsed = Math.max(0, Math.floor((nowMs - startMs) / 60000));
 
   // ── GPS pre-capture ────────────────────────────────────────────────────────
   const [gpsCapture, setGpsCapture]   = useState<GPSCapture | null>(null);
@@ -294,9 +271,6 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
     return () => { cancelled = true; };
   }, [canClockIn, canClockOut]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Progress bar for InProgress shifts
-  const progress = shift.lifecycle_status === 'InProgress'
-    ? Math.min(100, ((nowMs - startMs) / (endMs - startMs)) * 100) : 0;
 
   // ── GPS indicator (MapPin + popover) ──────────────────────────────────────
   const gpsIndicator = (canClockIn || canClockOut) ? (
@@ -354,38 +328,6 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
       </PopoverContent>
     </Popover>
   ) : null;
-
-  let topContent: React.ReactNode = null;
-  if (isAutoClockOut) {
-    topContent = (
-      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
-        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
-          <LogOut className="h-3 w-3" />DID NOT CLOCK OUT
-        </span>
-      </div>
-    );
-  } else if (timing === 'before_window' || shift.lifecycle_status === 'InProgress') {
-    topContent = (
-      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
-        {timing === 'before_window' && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-500 dark:text-slate-400 border border-slate-500/30">
-            <Timer className="h-3 w-3" />Opens in {formatHM(minsUntilWindow)}
-          </span>
-        )}
-        {shift.lifecycle_status === 'InProgress' && shift.actual_start && !shift.actual_end && (
-          <div className="w-full mt-1">
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground/60 mb-0.5 font-mono">
-              <span>{formatHM(minsElapsed)} in</span>
-              <span>{formatHM(minsRemaining)} left</span>
-            </div>
-            <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
-              <div className="h-full rounded-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.max(2, progress)}%` }} />
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   /**
    * The clock action row.
@@ -450,13 +392,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
       onToggleSelect={() => {}}
       readOnly={false}
       isManager={false}
-      employeeHeader={
-        <div className="mb-2 space-y-2">
-            {topContent}
-        </div>
-      }
       employeeActions={footerActions}
-      useGroupColoring={useGroupColoring}
     />
   );
 };
@@ -514,8 +450,6 @@ const AttendancePage: React.FC = () => {
   const [sort, setSort] = useState<RowSort>(DEFAULT_ROW_SORT);
   const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
-  const { orgBranding } = useSettings();
-  const useGroupColoring = (orgBranding as any)?.enable_group_coloring || false;
 
   const rangeStart = format(range.start, 'yyyy-MM-dd');
   const rangeEnd   = format(range.end,   'yyyy-MM-dd');
@@ -753,7 +687,7 @@ const AttendancePage: React.FC = () => {
                       />
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
-                      {bucket.items.map(s => <AttendanceCard key={s.id} shift={s} now={now} useGroupColoring={useGroupColoring} />)}
+                      {bucket.items.map(s => <AttendanceCard key={s.id} shift={s} now={now} />)}
                     </div>
                   </div>
                 ))

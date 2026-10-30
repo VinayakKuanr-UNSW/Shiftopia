@@ -54,9 +54,6 @@ export interface ShiftFilters {
 
 export const rosterKeys = {
   all: ['rosters'] as const,
-  structure: (rosterId?: string) => ['rosters', 'structure', rosterId ?? null] as const,
-  lookup: (orgId?: string, filters?: object) =>
-    ['rosters', 'lookup', orgId ?? null, filters ?? null] as const,
 };
 
 // (A deprecated `ROSTER_STRUCTURE_KEY = rosterKeys.all` alias lived here with no
@@ -125,10 +122,6 @@ export const shiftKeys = {
   // ── Level 1: offers — employee offer inbox / history ─────────────────────
   offers: (empId: string) => ['shifts', 'offers', empId] as const,
   offerCount: (empId: string) => ['shifts', 'offerCount', empId] as const,
-
-  // ── Level 1: open / bidding ───────────────────────────────────────────────
-  openShifts: (orgId?: string, filters?: { departmentId?: string | null; subDepartmentId?: string | null }) =>
-    ['shifts', 'open', orgId ?? null, filters?.departmentId ?? null, filters?.subDepartmentId ?? null] as const,
   // Prefix that matches every managerBidShifts variant (any org/dept/date scope).
   // Use this for invalidation — passing the full factory key with trailing nulls
   // would over-specify and fail React Query's partial match against dated keys.

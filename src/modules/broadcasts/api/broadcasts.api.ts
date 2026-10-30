@@ -40,7 +40,6 @@ import { toCamelCase } from './broadcasts.dto';
 import { supabase } from '@/platform/supabase/client';
 import type {
     Broadcast,
-    BroadcastAcknowledgement,
     BroadcastNotification,
 } from '../model/broadcast.types';
 
@@ -92,25 +91,6 @@ export const broadcastRealtimeService = {
                     filter: `channel_id=eq.${channelId}`,
                 },
                 (payload) => onDelete(payload.old.id)
-            )
-            .subscribe();
-    },
-
-    subscribeToAcknowledgements(
-        broadcastId: string,
-        onInsert: (ack: BroadcastAcknowledgement) => void
-    ) {
-        return supabase
-            .channel(`acks:${broadcastId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'broadcast_acknowledgements',
-                    filter: `broadcast_id=eq.${broadcastId}`,
-                },
-                (payload) => onInsert(toCamelCase(payload.new))
             )
             .subscribe();
     },

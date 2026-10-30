@@ -195,31 +195,6 @@ export interface EmployeeUnit {
     subDepartmentId: string | null;
 }
 
-/**
- * Does the header scope cover this employee?
- *
- * Read as SETS, never as the first entry — reading `[0]` is the defect class
- * that showed managers one department of eleven. The narrowest level selected
- * wins: sub-departments if any are chosen, else departments, else everything
- * RLS already let through. An employee with several contracts is in scope if
- * ANY of them is.
- */
-export function inScope(
-    units: readonly EmployeeUnit[],
-    deptIds: readonly string[],
-    subDeptIds: readonly string[],
-): boolean {
-    if (subDeptIds.length > 0) {
-        const s = new Set(subDeptIds);
-        return units.some(u => u.subDepartmentId != null && s.has(u.subDepartmentId));
-    }
-    if (deptIds.length > 0) {
-        const d = new Set(deptIds);
-        return units.some(u => u.departmentId != null && d.has(u.departmentId));
-    }
-    return true;
-}
-
 // ── What an approval did ─────────────────────────────────────────────────────
 
 interface ApprovalOutcome {

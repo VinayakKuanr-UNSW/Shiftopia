@@ -191,7 +191,6 @@ export const BidOpportunityCard: React.FC<Props> = ({
                 unpaidBreak={opp.unpaidBreak}
                 timerText={timerDisplay}
                 isExpired={isTerminal ? false : tr.isExpired}
-                isUrgent={opp.isUrgent}
                 isPast={isPast}
                 lifecycleStatus={opp.lifecycleStatus || 'Published'}
                 estimatedPay={cardPay.estimatedPay}

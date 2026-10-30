@@ -116,7 +116,6 @@ const ShiftPane: React.FC<{
                 estimatedPay={data.estimatedPay > 0 ? `$${data.estimatedPay.toFixed(2)}` : undefined}
                 groupVariant={groupVariantFor(data.groupType)}
                 employeeName={data.employeeName}
-                avatarUrl={data.avatar}
                 topContent={
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">

@@ -46,11 +46,7 @@ type RingColor = 'purple' | 'emerald' | 'yellow' | 'red' | 'orange' | 'blue' | n
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ShiftUIContextInput extends ShiftFSMInput {
-    /** UTC timestamp of the shift start — used for TTS calculation */
-    scheduled_start?: string | Date | null | undefined;
-    /** UTC timestamp of the shift end — used to detect No Show */
-    scheduled_end?: string | Date | null | undefined;
-    /** New UTC-at-Rest fields */
+    /** UTC shift start and end: time-to-start and No-Show detection. */
     start_at?: string | Date | null | undefined;
     end_at?: string | Date | null | undefined;
     /** Actual clock-in time — used to detect "Late" (past start, not clocked in) */
@@ -109,8 +105,8 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
     const state = getShiftFSMState(shift);
 
     const now  = Date.now();
-    const startStr = shift.start_at ?? shift.scheduled_start;
-    const endStr = shift.end_at ?? shift.scheduled_end;
+    const startStr = shift.start_at;
+    const endStr = shift.end_at;
     const start = startStr
         ? new Date(startStr).getTime()
         : 0;

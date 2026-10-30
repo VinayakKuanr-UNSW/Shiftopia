@@ -15,7 +15,6 @@ const EMPTY_SHIFTS: ManagerBidShift[] = [];
 interface UseManagerBidShiftsReturn {
   shifts: ManagerBidShift[];
   isLoading: boolean;
-  refetch: () => void;
 }
 
 interface ManagerBidFilters {
@@ -40,7 +39,6 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
   const {
     data: shifts = EMPTY_SHIFTS,
     isLoading,
-    refetch,
   } = useQuery({
     queryKey: shiftKeys.managerBidShifts(queryFilters.organizationId, queryFilters),
     queryFn: async () => {
@@ -150,7 +148,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
     refetchInterval: 60000,
   });
 
-  return { shifts, isLoading, refetch };
+  return { shifts, isLoading };
 }
 
 // Re-export for backward compat

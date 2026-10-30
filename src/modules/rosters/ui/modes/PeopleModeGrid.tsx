@@ -104,10 +104,6 @@ interface PeopleModeGridProps {
   complianceMap?: Record<string, ComplianceInfo>;
   /** Card variant: compact (default) or detailed */
   cardVariant?: 'compact' | 'detailed';
-  // Interactive Handlers
-  onBidShift?: (shiftId: string) => void;
-  onSwapShift?: (shiftId: string) => void;
-  onCancelShift?: (shiftId: string) => void;
   onUnpublishShift?: (shiftId: string) => void;
 
   /** Called when an unfilled shift is drag-dropped onto an employee date cell */
@@ -291,9 +287,6 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   onViewShift,
   complianceMap,
   cardVariant = 'compact',
-  onBidShift,
-  onSwapShift,
-  onCancelShift,
   onUnpublishShift,
 
   onAssignShift,
@@ -373,11 +366,6 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   // FTG is the PEAK fatigue over the days currently shown (each day computed with
   // a full 7-day history lookback, so a given day reads the same in any zoom).
   // Surface the window in the tooltip so it's clear the number is view-scoped.
-  const fatigueWindowLabel = useMemo(() => {
-    if (dates.length === 0) return '';
-    if (dates.length === 1) return format(dates[0], 'MMM d');
-    return `${format(dates[0], 'MMM d')} – ${format(dates[dates.length - 1], 'MMM d')}`;
-  }, [dates]);
 
   // ── Virtualization: `@tanstack/react-virtual` measures rows dynamically so
   //    rows whose actual height differs from VIRT_ROW_HEIGHT don't drift over
@@ -561,12 +549,10 @@ const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                           gridTemplateColumns={peopleGridCols(dates.length)}
                           employee={employee}
                           empIdx={vi.index}
-                          isLastRow={vi.index === employees.length - 1}
                           dates={dates}
                           canEdit={canEdit}
                           isBulkMode={isBulkMode}
                           showFatigueHeatmap={showFatigueHeatmap}
-                          fatigueWindowLabel={fatigueWindowLabel}
                           cardVariant={cardVariant}
                           complianceMap={complianceMap}
                           currentSelectedShifts={currentSelectedShiftsSet}
@@ -609,13 +595,10 @@ export default PeopleModeGrid;
 interface EmployeeRowProps {
   employee: PeopleModeEmployee;
   empIdx: number;
-  isLastRow: boolean;
   dates: Date[];
   canEdit: boolean;
   isBulkMode: boolean;
   showFatigueHeatmap: boolean;
-  /** Human label for the days shown — surfaced in the FTG tooltip for clarity. */
-  fatigueWindowLabel: string;
   cardVariant: 'compact' | 'detailed';
   complianceMap?: Record<string, ComplianceInfo>;
   currentSelectedShifts: Set<string>;
@@ -641,12 +624,10 @@ interface EmployeeRowProps {
 const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
   employee,
   empIdx,
-  isLastRow,
   dates,
   canEdit,
   isBulkMode,
   showFatigueHeatmap,
-  fatigueWindowLabel,
   cardVariant,
   complianceMap,
   currentSelectedShifts,
@@ -805,7 +786,6 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
           onUnpublishShift={onUnpublishShift}
           onAssign={onAssign}
           onMoveShift={onMoveShift}
-          dense={dates.length > 3}
         />
       ))}
     </div>
@@ -838,7 +818,6 @@ interface EmployeeDateCellProps {
   onUnpublishShift?: (shiftId: string) => void;
   onAssign: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
-  dense?: boolean;
 }
 
 const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
@@ -860,7 +839,6 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   onUnpublishShift,
   onAssign,
   onMoveShift,
-  dense = false,
 }) => {
   const dateKey = format(date, 'yyyy-MM-dd');
   const shifts = employee.shifts[dateKey] ?? [];
@@ -940,8 +918,6 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
                     showStatusIcons={true}
                     detailedCost={shift.detailedCost}
                     onClick={() => onClickShift(shift)}
-                    isPeopleMode={true}
-                    dense={dense}
                   />
                 </DraggableShiftCard>
               );

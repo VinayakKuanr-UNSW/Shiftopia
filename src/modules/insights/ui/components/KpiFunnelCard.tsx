@@ -79,7 +79,7 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
                 <div className="min-w-[600px]">
                     {/* Step Metrics Row */}
                     <div className="grid grid-cols-5 gap-2 mb-4">
-                        {steps.map((s, idx) => (
+                        {steps.map((s) => (
                             <div key={s.id} className="flex flex-col">
                                 <p className="text-[11px] font-semibold text-muted-foreground truncate">
                                     {s.stepNumber}. {s.title}
