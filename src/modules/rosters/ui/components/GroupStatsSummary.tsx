@@ -61,7 +61,7 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     compact = false,
 }) => {
     const stats = useMemo((): GroupStats => {
-        const activeShifts = shifts.filter((s) => !s.is_cancelled && !s.deleted_at);
+        const activeShifts = shifts.filter((s) => !s.is_cancelled);
         const assigned = activeShifts.filter((s) => s.assigned_employee_id);
         const unassigned = activeShifts.filter((s) => !s.assigned_employee_id);
 

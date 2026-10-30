@@ -20,7 +20,6 @@ describe('planPublishRoster', () => {
             id,
             lifecycle_status: 'Draft',
             is_cancelled: false,
-            deleted_at: null,
             assigned_employee_id: null,
             start_at: iso(+30 * HOUR),
             end_at: iso(+38 * HOUR),
@@ -134,14 +133,13 @@ describe('planPublishRoster', () => {
         expect(plan.assignedIds).toEqual(['a']);
     });
 
-    it('leaves published, cancelled and deleted shifts untouched (published counted only)', () => {
+    it('leaves published and cancelled shifts untouched (published counted only)', () => {
         const plan = planPublishRoster([
             mk('pub', { lifecycle_status: 'Published', assigned_employee_id: 'emp-1' }),
             mk('inprog', { lifecycle_status: 'InProgress' }),
             mk('done', { lifecycle_status: 'Completed' }),
             mk('canc', { lifecycle_status: 'Cancelled' }),
             mk('canc2', { is_cancelled: true }),
-            mk('del', { deleted_at: iso(-HOUR) }),
         ]);
         expect(plan).toEqual({ ...empty, alreadyPublishedCount: 1 });
     });

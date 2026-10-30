@@ -19,104 +19,6 @@ import { z } from 'zod';
 // ── Primitives ─────────────────────────────────────────────────────────────
 
 export const UuidSchema = z.string().uuid();
-const DateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
-const TimeStringSchema = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Expected HH:MM[:SS]');
-
-// ── Enum schemas — exact mirror of DB enum values ──────────────────────────
-
-const LifecycleStatusSchema = z.enum([
-  'Draft', 'Published', 'InProgress', 'Completed', 'Cancelled',
-]);
-
-const AssignmentStatusSchema = z.enum(['assigned', 'unassigned']);
-
-// assignment_outcome only ever holds NULL, 'confirmed', or 'no_show'.
-// All other values ('pending', 'offered', 'emergency_assigned', 'declined',
-// 'withdrawn', 'cancelled') are banned by the DB check constraint.
-const AssignmentOutcomeSchema = z.enum([
-  'confirmed', 'no_show',
-]).nullable();
-
-const BiddingStatusSchema = z.enum([
-  'not_on_bidding', 'on_bidding', 'on_bidding_normal', 'on_bidding_urgent', 'bidding_closed_no_winner',
-]);
-
-// TradeApproved has no corresponding FSM state — the FSM uses TradeAccepted (S10)
-// as the manager-approval step. TradeApproved is retained here only for backward
-// compatibility with existing DB rows during migration; treat it as TradeAccepted.
-const TradingStatusSchema = z.enum([
-  'NoTrade', 'TradeRequested', 'TradeAccepted', 'TradeApproved',
-]);
-
-const AttendanceStatusSchema = z.enum([
-  'unknown', 'checked_in', 'no_show', 'late', 'excused',
-]);
-
-const FulfillmentStatusSchema = z.enum([
-  'scheduled', 'bidding', 'offered', 'none',
-]);
-
-// ── Shift state ID (resolved by shiftStateMachine) ────────────────────────
-
-
-// ── Shift core schema — the DB canonical representation ───────────────────
-// Note: We use .passthrough() so that unknown columns (joined relations)
-// don't fail validation — they're just passed through as-is.
-
-const ShiftCoreSchema = z.object({
-  id: UuidSchema,
-  roster_id: UuidSchema,
-  organization_id: UuidSchema.nullable(),
-  department_id: UuidSchema,
-  sub_department_id: UuidSchema.nullable(),
-  role_id: UuidSchema.nullable(),
-  remuneration_level: z.number().nullable(),
-  assigned_employee_id: UuidSchema.nullable(),
-  roster_subgroup_id: UuidSchema,
-  created_by_user_id: UuidSchema.nullable(),
-
-  // Canonical time columns (timestamptz)
-  start_at: z.string().nullable(),
-  end_at: z.string().nullable(),
-  tz_identifier: z.string().nullable(),
-
-  // Legacy time columns — retained for backward compat (deprecated)
-  shift_date: DateStringSchema.nullable().optional(),
-  start_time: TimeStringSchema.nullable().optional(),
-  end_time: TimeStringSchema.nullable().optional(),
-
-  // Breaks
-  paid_break_minutes: z.number().int().min(0),
-  unpaid_break_minutes: z.number().int().min(0),
-  break_minutes: z.number().int().min(0).optional(),
-
-  // State machine dimensions
-  lifecycle_status: LifecycleStatusSchema,
-  assignment_status: AssignmentStatusSchema,
-  assignment_outcome: AssignmentOutcomeSchema,
-  bidding_status: BiddingStatusSchema,
-  trading_status: TradingStatusSchema,
-  attendance_status: AttendanceStatusSchema,
-  fulfillment_status: FulfillmentStatusSchema,
-
-  // Flags
-  is_overnight: z.boolean(),
-  is_cancelled: z.boolean(),
-  is_from_template: z.boolean(),
-  is_locked: z.boolean().nullable().optional(),
-  is_draft: z.boolean().nullable().optional(),
-
-  // Metadata
-  version: z.number().int(),
-  notes: z.string().nullable(),
-  tags: z.array(z.string()).nullable().optional(),
-  required_skills: z.array(z.unknown()).nullable().optional(),
-  required_licenses: z.array(z.unknown()).nullable().optional(),
-
-  created_at: z.string(),
-  updated_at: z.string(),
-}).passthrough(); // allow joined relation fields through without failure
-
 
 // ── RPC Response schemas ───────────────────────────────────────────────────
 
@@ -125,7 +27,7 @@ const ShiftCoreSchema = z.object({
 // will fetch the full row to satisfy the Shift entity interface.
 export const CreateShiftResponseSchema = z.string().uuid();
 
-// sm_publish_shift
+// sm_unpublish_shift (the envelope sm_publish_shift used to share)
 export const PublishShiftResponseSchema = z.object({
   success: z.boolean(),
   from_state: z.string().optional(),
@@ -258,13 +160,3 @@ export const ApplyShiftOpResponseSchema = z.object({
   attempted: z.string().optional(),
 }).passthrough();
 
-// Compliance RPCs
-
-// apply_template_to_date_range_v2
-const ApplyTemplateResponseSchema = z.object({
-  success: z.boolean(),
-  shifts_created: z.number().int(),
-  batch_id: UuidSchema.optional(),
-  roster_id: UuidSchema.optional(),
-  error: z.string().optional(),
-});

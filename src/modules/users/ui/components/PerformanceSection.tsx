@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/prim
 import { usePerformanceMetrics, getMetricStatus, EMPTY_METRICS } from '@/modules/users/hooks/usePerformanceMetrics';
 import { BarChart3, RefreshCw, Shield, Inbox, CheckCircle2, CalendarCheck } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 
 interface PerformanceSectionProps {
     employeeId: string;
@@ -244,7 +245,7 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                 )}
 
                 <p className="text-[11px] text-muted-foreground mt-2 text-right">
-                    Last refreshed: {m.calculated_at ? new Date(m.calculated_at).toLocaleTimeString() : 'Never'}
+                    Last refreshed: {formatClockTime(m.calculated_at, 'h:mm:ss a', 'Never')}
                 </p>
             </CardContent>
         </Card>

@@ -9,6 +9,7 @@ import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { format, parseISO, parse } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { page, surface } from '@/modules/core/ui/layout/pageTokens';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -897,7 +898,7 @@ const ManagerSwapsPage: React.FC = () => {
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
                                                                     <span className="text-[11px] font-mono text-muted-foreground/60 uppercase tracking-wider font-black block">
-                                                                        {format(parseISO(request.requestedAt), 'MMM d, h:mm a')}
+                                                                        {formatInTimezone(parseISO(request.requestedAt), SYDNEY_TZ, 'MMM d, h:mm a')}
                                                                     </span>
                                                                     {request.reason && (
                                                                         <span className="text-[11px] text-foreground/40 italic font-medium max-w-[140px] truncate block ml-auto mt-0.5" title={request.reason}>
@@ -1038,7 +1039,7 @@ const ManagerSwapsPage: React.FC = () => {
                                                             {/* Meta */}
                                                             <div className="lg:flex-1 flex flex-col items-start lg:items-end gap-1.5 w-full">
                                                                 <span className="text-[11px] font-mono text-muted-foreground/50 uppercase tracking-widest font-black">
-                                                                    {format(parseISO(request.requestedAt), 'MMM d, h:mm a')}
+                                                                    {formatInTimezone(parseISO(request.requestedAt), SYDNEY_TZ, 'MMM d, h:mm a')}
                                                                 </span>
                                                                 {request.reason && (
                                                                     <p className="text-[11px] text-foreground/50 line-clamp-2 lg:text-right leading-relaxed max-w-[160px] italic font-medium">

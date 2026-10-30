@@ -14,7 +14,6 @@ const mk = (over: Partial<Shift>): Shift => ({
     lifecycle_status: 'Draft',
     assigned_employee_id: null,
     is_cancelled: false,
-    deleted_at: null,
     net_length_minutes: 360,
     ...over,
 } as unknown as Shift);
@@ -63,11 +62,5 @@ describe('buildRosterSummaryMap — mirrors get_roster_summary', () => {
             '2026-10-05::theatre::Ushers',
             '2026-10-06::theatre::Ushers',
         ]);
-    });
-
-    it('leaves deleted shifts out, as the RPC does', () => {
-        const map = buildRosterSummaryMap([mk({}), mk({ deleted_at: '2026-10-01T00:00:00Z' } as Partial<Shift>)]);
-
-        expect(map.get('2026-10-05::theatre::Ushers')?.total_shifts).toBe(1);
     });
 });

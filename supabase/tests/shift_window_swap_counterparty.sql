@@ -25,7 +25,7 @@ BEGIN
   FROM (
     SELECT s.assigned_employee_id AS emp_id, min(s.id::text)::uuid AS shift_id
     FROM public.shifts s
-    WHERE s.deleted_at IS NULL AND s.assigned_employee_id IS NOT NULL
+    WHERE s.assigned_employee_id IS NOT NULL
       AND NOT EXISTS (SELECT 1 FROM public.app_access_certificates ac
                       JOIN public.rbac_permissions rp ON rp.access_level = ac.access_level
                       WHERE ac.user_id = s.assigned_employee_id AND ac.is_active

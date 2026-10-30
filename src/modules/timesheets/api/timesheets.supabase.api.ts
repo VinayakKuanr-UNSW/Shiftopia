@@ -185,7 +185,6 @@ export async function getShiftsForTimesheet(
                 unpaid_break_minutes,
                 net_length_minutes,
                 scheduled_length_minutes,
-                remuneration_rate,
                 is_training,
                 target_employment_type,
                 user_contract_id,
@@ -206,7 +205,6 @@ export async function getShiftsForTimesheet(
             .gte('shift_date', startDate)
             .lte('shift_date', endDate || startDate)
             .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
-            .is('deleted_at', null)
             .order('start_time');
 
         // Apply filters

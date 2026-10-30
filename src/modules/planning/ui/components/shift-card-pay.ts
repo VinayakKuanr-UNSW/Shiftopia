@@ -29,8 +29,8 @@
  * so a future card gets the contract by construction rather than by copy.
  *
  * INPUT CONTRACT: `shift` must be the RAW shift row (snake_case, `select('*')`)
- * — `target_employment_type`, `remuneration_level`, `remuneration_rate`,
- * `roles.name`. A hand-built camelCase view model silently loses all four and
+ * — `target_employment_type`, `remuneration_level`, `roles.name`. A hand-built
+ * camelCase view model silently loses all three and
  * lands back on the $33.70 default, which is exactly how this broke.
  */
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';

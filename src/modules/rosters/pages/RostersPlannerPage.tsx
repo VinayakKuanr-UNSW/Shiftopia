@@ -456,7 +456,7 @@ const NewRostersPage: React.FC = () => {
   // Derive unfilled shifts from cached query data
   const unfilledShifts: UnfilledShift[] = useMemo(() => {
     return shifts
-      .filter((s: Shift) => !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at && (s.is_draft ?? true))
+      .filter((s: Shift) => !s.assigned_employee_id && !s.is_cancelled && (s.is_draft ?? true))
       .map((s: Shift) => ({
         id: s.id,
         title: s.sub_group_name || 'Shift',
@@ -1147,7 +1147,7 @@ const NewRostersPage: React.FC = () => {
          emergent ones to the emergency-assignment flow. Must stay in
          sync with the filter in AutoSchedulerModal.tsx. */
       .filter((s) =>
-        !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
+        !s.assigned_employee_id && !s.is_cancelled
         && (s.is_draft ?? true)
         && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
       .map((s) => ({

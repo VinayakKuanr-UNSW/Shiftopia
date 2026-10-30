@@ -981,7 +981,6 @@ export function useShiftFormOrchestrator({
             if (isTemplateMode && onShiftCreated) {
                 const role = roles.find(r => r.id === values.role_id);
                 const remLevel = remunerationLevels.find(r => r.level_number === values.remuneration_level);
-                const assignedEmployee = employees.find(e => e.id === values.assigned_employee_id);
 
                 const templateShift = {
                     name: role?.name || 'Shift',
@@ -1008,9 +1007,6 @@ export function useShiftFormOrchestrator({
                     licenses: values.required_licenses || [],
                     notes: values.notes,
                     netLength,
-                    assigned_employee_id: values.assigned_employee_id || null,
-                    assignedEmployeeId: values.assigned_employee_id || null,
-                    assignedEmployeeName: assignedEmployee?.profiles?.full_name || assignedEmployee?.full_name || null,
                     // Groups/SubGroups are inherited by TemplateEditor but we pass them for completeness/UI
                     group_type: values.group_type,
                     sub_group_name: values.sub_group_name,

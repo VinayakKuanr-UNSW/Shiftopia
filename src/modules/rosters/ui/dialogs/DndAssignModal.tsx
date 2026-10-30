@@ -25,6 +25,7 @@ import {
 } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
+import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { buildAssignInput } from '@/modules/planning/unified/compliance/input-builder';
@@ -252,45 +253,6 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   }, [open, scopeReady]); // intentionally excluding panel.run to avoid re-trigger loops
 
   // Format display values
-  const formatTime = (t: string | undefined | null) => {
-    if (!t) return '--:--';
-    
-    let timePart = t;
-    if (t.includes('T')) {
-      const tSplit = t.split('T');
-      if (tSplit[1]) {
-        timePart = tSplit[1].split(/[+-Z]/)[0];
-      }
-    }
-    
-    const parts = timePart.split(':');
-    if (parts.length >= 2) {
-      const hourVal = parseInt(parts[0], 10);
-      const minVal = parts[1];
-      if (!isNaN(hourVal) && minVal) {
-        const ampm = hourVal >= 12 ? 'PM' : 'AM';
-        const displayHour = hourVal % 12 || 12;
-        const displayMin = minVal.substring(0, 2);
-        return `${displayHour}:${displayMin} ${ampm}`;
-      }
-    }
-    
-    try {
-      const d = new Date(t);
-      if (!isNaN(d.getTime())) {
-        const hourVal = d.getHours();
-        const minVal = d.getMinutes().toString().padStart(2, '0');
-        const ampm = hourVal >= 12 ? 'PM' : 'AM';
-        const displayHour = hourVal % 12 || 12;
-        return `${displayHour}:${minVal} ${ampm}`;
-      }
-    } catch {
-      // ignore
-    }
-    
-    return t;
-  };
-
   const formatDate = (d: string | undefined | null) => {
     if (!d) return '---';
     let dateStr = d;
@@ -355,7 +317,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
             <div>
               <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50">Time</p>
               <p className="text-[13px] font-bold text-foreground">
-                {formatTime(shiftStartTime)} – {formatTime(shiftEndTime)}
+                {formatClockTime(shiftStartTime, 'h:mm a', '--:--')} – {formatClockTime(shiftEndTime, 'h:mm a', '--:--')}
               </p>
             </div>
           </div>
