@@ -261,7 +261,6 @@ export const shiftsCommands = {
             remuneration_level: shiftData.remuneration_level !== undefined && shiftData.remuneration_level !== null ? Number(shiftData.remuneration_level) : null,
             paid_break_minutes: shiftData.paid_break_minutes || 0,
             unpaid_break_minutes: shiftData.unpaid_break_minutes || 0,
-            break_minutes: (shiftData.paid_break_minutes || 0) + (shiftData.unpaid_break_minutes || 0),
             break_start: shiftData.break_start || null,
             break_end: shiftData.break_end || null,
             timezone: shiftData.timezone || 'Australia/Sydney',

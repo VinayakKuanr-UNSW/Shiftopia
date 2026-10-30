@@ -4308,9 +4308,7 @@ export type Database = {
           roster_date: string | null
           roster_id: string
           roster_subgroup_id: string
-          scheduled_end: string | null
           scheduled_length_minutes: number | null
-          scheduled_start: string | null
           shift_date: string
           shift_group_id: string | null
           start_at: string | null
@@ -4418,9 +4416,7 @@ export type Database = {
           roster_date?: string | null
           roster_id: string
           roster_subgroup_id: string
-          scheduled_end?: string | null
           scheduled_length_minutes?: number | null
-          scheduled_start?: string | null
           shift_date: string
           shift_group_id?: string | null
           start_at?: string | null
@@ -4528,9 +4524,7 @@ export type Database = {
           roster_date?: string | null
           roster_id?: string
           roster_subgroup_id?: string
-          scheduled_end?: string | null
           scheduled_length_minutes?: number | null
-          scheduled_start?: string | null
           shift_date?: string
           shift_group_id?: string | null
           start_at?: string | null

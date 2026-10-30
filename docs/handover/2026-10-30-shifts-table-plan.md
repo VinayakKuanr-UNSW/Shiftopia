@@ -124,6 +124,35 @@ A generated column **cannot be written**, so every writer must stop writing thes
 2. **3b `scheduled_start` / `scheduled_end`** duplicate `start_at` / `end_at`. Readers to repoint first: `get_manager_scorecard`, `get_marketplace_kpis`, `get_quarterly_performance_report`, `sm_bulk_publish_shifts`, `sm_refresh_shift_snapshots`, `sm_select_bid_winner`, the view `v_shift_assignment_episodes`, and any app select. Then drop the trigger and both columns.
 3. **3c `is_overnight`, `scheduled_length_minutes`, `net_length_minutes`, `break_minutes`** become `GENERATED ALWAYS` (immutable expressions of the times and break minutes), so readers (pay, compliance, insights, leave accrual) need no change. First stop the explicit writers (`_apply_shift_op_write` and `sm_create_shift` set `break_minutes`; app inserts must not send any of them), then a parity test over sample shapes (overnight, breaks, midnight end), then the switch and the trigger simplification.
 
+**3b + 3c APPLIED 2026-10-30** (`20261030091129_shifts_phase3_computed_columns.sql`; test `supabase/tests/shifts_phase3_computed_columns.sql` failed before, passes after). The deployed app never named `scheduled_*` in a select or insert, and sends `break_minutes` only inside the `sm_create_shift` payload, which now ignores it, so neither half had to wait for a deploy. `get_quarterly_performance_report` needed no change: its `snap.scheduled_start` is `assignment_snapshots`' own column.
+- **Bug fixed on the way:** `recalc_shift_utc_timestamps` added `'1 day'` to a timestamptz in the session zone (UTC), so an overnight `end_at` was an hour out on both DST nights (22:00–06:00 on 2026-10-03 ended 20:00Z, not 19:00Z). The dropped Melbourne copy had it right. No overnight rows existed, so no stored data was wrong.
+- `roster_date` now always follows `shift_date` (`compute_shift_fields`), which ends the drift until the column goes.
+
+**3a column drop — PENDING until this branch is deployed and `get-roster-view` is redeployed** (the live app still selects and inserts `roster_date`). Dry-run passed 2026-10-30 (rolled back: no function names `roster_date` afterwards; create and update still work):
+
+```sql
+DO $$
+DECLARE r record; v_def text; v_hits int;
+BEGIN
+  FOR r IN SELECT * FROM (VALUES
+      (1, 'public.compute_shift_fields', '(\nBEGIN)\n\s+-- roster_date mirrors shift_date until the column is dropped \(Phase 3a\)\.\n\s+NEW\.roster_date := NEW\.shift_date;\n', '\1', 1),
+      (2, 'public.sm_create_shift', 'shift_date, roster_date, start_time', 'shift_date, start_time', 1),
+      (3, 'public.sm_create_shift', '\n\s+\(p_shift_data->>''roster_date''\)::date,', '', 1),
+      (4, 'public.sm_move_shift',   '\n\s+roster_date\s+= COALESCE\(p_shift_date, roster_date\),', '', 1)
+    ) AS t(ord, fn, pat, rep, expected) ORDER BY ord
+  LOOP
+    v_def := pg_get_functiondef(r.fn::regproc);
+    SELECT count(*) INTO v_hits FROM regexp_matches(v_def, r.pat, 'g');
+    IF v_hits <> r.expected THEN RAISE EXCEPTION 'patch % on %: % matches, expected %', r.ord, r.fn, v_hits, r.expected; END IF;
+    EXECUTE regexp_replace(v_def, r.pat, r.rep, 'g');
+  END LOOP;
+END $$;
+DROP INDEX public.idx_shifts_roster_date;
+ALTER TABLE public.shifts DROP COLUMN roster_date;
+```
+
+Then prune `roster_date` from the shifts block of `types.ts`.
+
 ### Phase 4 — side-table mirrors
 
 `compliance_snapshot` / `compliance_checked_at` / `compliance_override` live in `shifts` **and** `shift_compliance_snapshots`. About 10 payroll fields are likewise stored twice, with `shift_payroll_records`. The plan:
