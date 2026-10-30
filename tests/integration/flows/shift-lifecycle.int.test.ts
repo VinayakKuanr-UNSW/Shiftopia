@@ -65,8 +65,13 @@ describe('shift gateway (sm_apply_shift_op)', () => {
 
     it('refuses to double-book an employee who already works that time', async () => {
         const r = await gateway('G2', S2, 1, 'assign', { employee_id: personaId('X') });
-        // The gateway runs the EBA engine before writing; its overlap rule refuses.
-        expect(r.data).toMatchObject({ ok: false, code: 'WRITE_REJECTED', note: 'EBA_COMPLIANCE_BREACH', rule_id: 'V8_NO_OVERLAP' });
+        // The gateway runs the EBA engine before writing and reports the first
+        // blocking rule. X also has no contract in S2's sub-department, so check
+        // the engine's whole blocking set for the overlap itself.
+        expect(r.data).toMatchObject({ ok: false, code: 'WRITE_REJECTED', note: 'EBA_COMPLIANCE_BREACH' });
+        const blocking = db(`SELECT rule_id FROM internal.eba_check_assignment('${S2}', '${personaId('X')}')
+                              WHERE tier = 'BLOCKING'`).map(([rule]) => rule);
+        expect(blocking).toContain('V8_NO_OVERLAP');
         expect(shift(S2)).toMatchObject({ assignment: 'unassigned', assignee: '' });
     });
 
