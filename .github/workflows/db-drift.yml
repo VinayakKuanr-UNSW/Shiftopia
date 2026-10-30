@@ -64,4 +64,7 @@ jobs:
 
       - name: Rebuild locally and compare with the deployed database
         if: steps.guard.outputs.ok == 'true'
+        # GHCR, not public.ecr.aws: see the same note in ci.yml.
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
         run: scripts/db/verify-baseline.sh

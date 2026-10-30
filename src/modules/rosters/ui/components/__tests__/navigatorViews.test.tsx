@@ -65,7 +65,7 @@ describe('UnifiedRosterNavigator `views`', () => {
 
     it('renders a Today button in full variant when showToday is true and snaps to today', async () => {
         const handleChange = vi.fn();
-        const { container } = render(
+        render(
             <UnifiedRosterNavigator
                 variant="full"
                 date={new Date(2025, 0, 1)}

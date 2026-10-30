@@ -53,7 +53,7 @@ describe('GridFunctionBar', () => {
   });
 
   it('verifies search input is completely removed from the function row toolbar', () => {
-    const { container } = render(<GridFunctionBar {...defaultProps} />);
+    render(<GridFunctionBar {...defaultProps} />);
     // A labelled group: role=toolbar would promise arrow-key movement the row does not have.
     const toolbar = screen.getByRole('group', { name: /Grid navigation and functions/i });
     expect(toolbar.querySelector('input[type="search"]')).toBeNull();

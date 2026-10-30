@@ -321,8 +321,8 @@ export function mapShiftRowToGrossPayInput(
   // Now: pass the CLASSIFICATION string (rate = null) so the engine resolves
   // the effective-dated Schedule 2 rate, choosing the casual vs permanent
   // column from employment type. There is no per-shift rate override (user
-  // decision 2026-10-08: someone on a level is paid that level; the SQL budget
-  // ignores shifts.remuneration_rate too).
+  // decision 2026-10-08: someone on a level is paid that level), and a shift
+  // carries no rate of its own, so an unclassified row goes in with rate null.
   //
   // Linked: the contract's level is the classification; a higher shift level
   // is cl 29 higher duties, which the engine prices on the whole shift with a
@@ -337,8 +337,6 @@ export function mapShiftRowToGrossPayInput(
     const contractLevel = row._contractRemunerationLevel != null ? Number(row._contractRemunerationLevel) : null;
     classificationLevel = classificationForLevel(shiftLevel ?? contractLevel);
   }
-
-  const rate: number | null = classificationLevel ? null : (row.remuneration_rate != null ? Number(row.remuneration_rate) : null);
 
   // ── hours provenance ──────────────────────────────────────────────────────
   // 'actual' requires BOTH sides to have genuinely snapped from a real clock
@@ -377,7 +375,7 @@ export function mapShiftRowToGrossPayInput(
     payBasis: terms?.payBasis,
     annualSalary: row._payContract?.annualSalary ?? undefined,
     contractedWeeklyHours: row._payContract?.contractedWeeklyHours ?? undefined,
-    rate,
+    rate: null,
     employmentType,
     classificationLevel,
     isSecurityRole,
@@ -513,7 +511,6 @@ async function fetchHydratedShiftRows(
       net_length_minutes,
       scheduled_length_minutes,
       remuneration_level,
-      remuneration_rate,
       target_employment_type,
       user_contract_id,
       assigned_employee_id,
@@ -531,7 +528,6 @@ async function fetchHydratedShiftRows(
     .gte('shift_date', bounds.periodStart)
     .lte('shift_date', bounds.periodEnd)
     .in('lifecycle_status', LIFECYCLE_PAYABLE)
-    .is('deleted_at', null)
     .not('assigned_employee_id', 'is', null)
     .order('shift_date');
 

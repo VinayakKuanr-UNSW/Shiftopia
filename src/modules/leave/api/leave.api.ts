@@ -243,7 +243,6 @@ export async function getLeaveShiftConflicts(
     .gte('shift_date', startDate)
     .lte('shift_date', endDate)
     .neq('lifecycle_status', 'Cancelled')
-    .is('deleted_at', null)
     .order('shift_date', { ascending: true });
 
   if (error) {

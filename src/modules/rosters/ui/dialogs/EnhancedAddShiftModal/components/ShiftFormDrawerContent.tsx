@@ -185,7 +185,6 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     subtitle,
     headerActions,
 }) => {
-    const [] = useState(false);
     const [poolQuery] = useState('');
     const [wizardStep, setWizardStep] = useState<number>(1);
 

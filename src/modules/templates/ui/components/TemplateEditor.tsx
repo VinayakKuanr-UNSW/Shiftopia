@@ -217,9 +217,6 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       siteTags: shiftData.siteTags || [],
       eventTags: shiftData.eventTags || [],
       notes: shiftData.notes,
-      // Employee assignment - CRITICAL!
-      assignedEmployeeId: shiftData.assigned_employee_id || shiftData.assignedEmployeeId || null,
-      assignedEmployeeName: shiftData.assignedEmployeeName || null,
       // NOT NULL in the database with no default. The modal already requires it
       // (a zod enum), so dropping it here was what made every new template shift
       // fail to save with a 400 once the column became mandatory.

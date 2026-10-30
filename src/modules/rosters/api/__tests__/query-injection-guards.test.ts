@@ -130,11 +130,6 @@ describe('the employee scope is applied server-side, not just client-side', () =
     expect(eqs).toContainEqual({ method: 'eq', args: ['assigned_employee_id', EMPLOYEE] });
   });
 
-  it('getEmployeeShifts excludes soft-deleted rows', async () => {
-    await shiftsQueries.getEmployeeShifts(EMPLOYEE, '2026-01-01', '2026-12-31');
-    expect(rec.calls).toContainEqual({ method: 'is', args: ['deleted_at', null] });
-  });
-
   it('getEmployeeShifts is bounded by the requested date window', async () => {
     await shiftsQueries.getEmployeeShifts(EMPLOYEE, '2026-04-01', '2026-04-30');
     expect(rec.calls).toContainEqual({ method: 'gte', args: ['shift_date', '2026-04-01'] });

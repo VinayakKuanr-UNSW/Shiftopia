@@ -42,9 +42,6 @@ export interface TemplateShift {
   eventTags: string[];
   notes?: string;
   sortOrder: number;
-  // Employee assignment
-  assignedEmployeeId?: string | null;
-  assignedEmployeeName?: string | null;
   /**
    * 0 = Sunday .. 6 = Saturday; null means "any day".
    *
@@ -221,9 +218,8 @@ export function dbShiftToFrontend(dbShift: any): TemplateShift {
     eventTags: dbShift.eventTags || dbShift.event_tags || [],
     notes: dbShift.notes || undefined,
     sortOrder: dbShift.sortOrder ?? dbShift.sort_order ?? 0,
-    // Employee assignment
-    assignedEmployeeId: dbShift.assignedEmployeeId || dbShift.assigned_employee_id || null,
-    assignedEmployeeName: dbShift.assignedEmployeeName || dbShift.assigned_employee_name || null,
+    breakStart: dbShift.breakStart ?? dbShift.break_start ?? null,
+    breakEnd: dbShift.breakEnd ?? dbShift.break_end ?? null,
     // `?? null`, never `?? 0` — 0 is Sunday, not "unset". Coercing here made
     // every weekday-less shift claim to be a Sunday shift.
     // Check !== undefined explicitly so null (the "every day" choice) is not skipped.
@@ -349,9 +345,10 @@ export function frontendToDbGroups(groups: Group[]): any[] {
         targetEmploymentType: sh.targetEmploymentType ?? null,
         targetRequiresFlexible: sh.targetRequiresFlexible ?? false,
         sortOrder: shIdx,
-        // Employee assignment
-        assignedEmployeeId: sh.assignedEmployeeId || null,
-        assignedEmployeeName: sh.assignedEmployeeName || null,
+        // save_template_full writes NULLIF(breakStart, ''), so an omitted key
+        // erased the template's meal break on every save.
+        breakStart: sh.breakStart ?? null,
+        breakEnd: sh.breakEnd ?? null,
       })),
     })),
   }));
@@ -450,7 +447,7 @@ export function calculateNetHours(
     return 0;
   }
 
-  let startMins = startH * 60 + startM;
+  const startMins = startH * 60 + startM;
   let endMins = endH * 60 + endM;
 
   if (endMins <= startMins) {

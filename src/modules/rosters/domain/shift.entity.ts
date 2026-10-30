@@ -64,9 +64,6 @@ export interface Shift {
      * open bids; select it explicitly.
      */
     my_shift_pay_terms?: ShiftPayTermsField | null;
-    remuneration_rate: number | null;
-    actual_hourly_rate: number | null;
-    currency: string;
     start_time: string;
     end_time: string;
     scheduled_start: string | null;
@@ -136,8 +133,6 @@ export interface Shift {
     payroll_exported: boolean;
     last_modified_by: string | null;
     last_modified_reason: string | null;
-    deleted_at: string | null;
-    deleted_by: string | null;
     notes: string | null;
     is_training: boolean;
     // Joined Timesheet Data
@@ -269,7 +264,7 @@ export function calculateMinutesBetweenTimes(
     const [startHour, startMin] = startTime.split(':').map(Number);
     const [endHour, endMin] = endTime.split(':').map(Number);
 
-    let startMinutes = startHour * 60 + startMin;
+    const startMinutes = startHour * 60 + startMin;
     let endMinutes = endHour * 60 + endMin;
 
     if (endMinutes <= startMinutes) {

@@ -126,7 +126,7 @@ describe('apply_template_to_date_range_v2 — the caller is the actor', () => {
 
         const r = await personaClient('G2').rpc('apply_template_to_date_range_v2', {
             p_template_id: T9, p_start_date: day, p_end_date: day, p_user_id: personaId('X'),
-            p_source: 'roster_modal', p_target_department_id: D1, p_target_sub_department_id: SUB_S2, p_force_stack: false,
+            p_source: 'roster_modal', p_target_department_id: D1, p_target_sub_department_id: SUB_S2,
         });
         expect(r.error).toBeNull();
         expect(r.data).toMatchObject({ success: true, shifts_created: 1 });

@@ -340,8 +340,7 @@ export async function getTeamShifts(
             .gte('shift_date', format(startDate, 'yyyy-MM-dd'))
             .lte('shift_date', format(endDate, 'yyyy-MM-dd'))
             .neq('lifecycle_status', 'Cancelled')
-            .or('is_cancelled.is.null,is_cancelled.eq.false')
-            .is('deleted_at', null);
+            .or('is_cancelled.is.null,is_cancelled.eq.false');
 
         if (deptIds.length > 0) query = query.in('department_id', deptIds);
         if (subDeptIds.length > 0) query = query.in('sub_department_id', subDeptIds);

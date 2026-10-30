@@ -162,7 +162,7 @@ export interface CreateBroadcastGroupRequest {
     color?: string;
 }
 
-export interface UpdateBroadcastGroupRequest extends Partial<CreateBroadcastGroupRequest> { }
+export type UpdateBroadcastGroupRequest = Partial<CreateBroadcastGroupRequest>;
 
 export interface CreateBroadcastChannelRequest {
     groupId: string;

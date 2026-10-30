@@ -338,7 +338,11 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
         [form],
     );
 
-    const readOnlyBanner = isPublished
+    // A NEW shift with a past start stays editable (the save gate says why it
+    // cannot be saved), so it gets no read-only banner.
+    const readOnlyBanner = !isReadOnly
+        ? null
+        : isPublished
         ? { title: 'Published — read only', body: 'Unpublish to edit.' }
         : isStarted
         ? { title: 'In progress — read only', body: 'This shift has started.' }

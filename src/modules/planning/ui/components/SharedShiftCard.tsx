@@ -1,6 +1,7 @@
 import { cardTokens } from '@/modules/core/ui/primitives/card';
 import React, { forwardRef } from 'react';
 import { cn } from '@/modules/core/lib/utils';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
     Clock,
     Calendar,
@@ -224,7 +225,10 @@ function parseTimeToMinutes(timeStr?: string | null): number | null {
     if (!timeStr || timeStr === '--:--' || timeStr === '-' || timeStr === '—') return null;
     if (timeStr.includes('T')) {
         const d = new Date(timeStr);
-        if (!isNaN(d.getTime())) return d.getHours() * 60 + d.getMinutes();
+        if (!isNaN(d.getTime())) {
+            const [h, m] = formatInTimezone(d, SYDNEY_TZ, 'HH:mm').split(':').map(Number);
+            return h * 60 + m;
+        }
     }
     const clean = timeStr.trim();
     const match = clean.match(/(\d{1,2}):(\d{2})/);

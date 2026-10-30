@@ -31,11 +31,11 @@ import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/ros
 import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOpResult } from '@/modules/rosters/domain/shift-ops.contract';
-import { formatInTimezone, isPastInTimezone, parseZonedDateTime, todayISO } from '@/modules/core/lib/date.utils';
+import { formatInTimezone, parseZonedDateTime, todayISO } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
-import { calculateShiftLength, defaultShiftLevel, isDateInPast, isShiftStarted } from '../utils';
+import { calculateShiftLength, defaultShiftLevel, isDateInPast, isShiftStarted, newShiftStartRefusal } from '../utils';
 import { formSchema, FormValues, EnhancedAddShiftModalProps, ShiftContext } from '../types';
 import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
@@ -793,6 +793,12 @@ export function useShiftFormOrchestrator({
         // Keyed on the shape verdict, not on the fields being non-empty, so a
         // half-typed time counts as "not set yet" rather than as a real shift.
         if (shape.status === 'INCOMPLETE')        return { ok: false, reason: 'Set a start and end time' };
+        // A new shift may not start in the past, earlier today included —
+        // trg_shift_not_started refuses it, so say so before the round trip.
+        const startRefusal = newShiftStartRefusal({
+            editMode, isTemplateMode, date: watchShiftDate, startTime: watchStart, timezone: watchTimezone,
+        });
+        if (startRefusal) return { ok: false, reason: startRefusal };
         if (!hasDepartment)                       return { ok: false, reason: 'Department not resolved — check the context header' };
 
         if (!hardValidation.passed) {
@@ -846,7 +852,7 @@ export function useShiftFormOrchestrator({
         }
         return { ok: true, reason: null };
     }, [
-        isReadOnly, isPublished, watchV8RoleId, watchShiftDate, watchStart, watchEnd,
+        isReadOnly, isPublished, watchTimezone, watchV8RoleId, watchShiftDate, watchStart, watchEnd,
         hasDepartment, isTemplateMode, watchDayOfWeek, watchEmployeeId, hardValidation,
         shape.status, shape.blocking, shapeBlockers, compliancePanel.status, compliancePanel.canProceed,
         compliancePanel.result, editMode, existingShift,
@@ -938,11 +944,12 @@ export function useShiftFormOrchestrator({
         // update path still sends it so the shift keeps its container.
         const rosterId = selectedRosterId || resolvedContext.rosterId || existingShift?.roster_id;
 
-        if (!isTemplateMode && values.shift_date && !editMode) {
-            if (isPastInTimezone(values.shift_date, watchTimezone)) {
-                toast({ title: 'Invalid Date', description: 'Cannot create shifts on past dates.', variant: 'destructive' });
-                return;
-            }
+        const startRefusal = newShiftStartRefusal({
+            editMode, isTemplateMode, date: values.shift_date, startTime: values.start_time, timezone: watchTimezone,
+        });
+        if (startRefusal) {
+            toast({ title: 'Invalid Start', description: startRefusal, variant: 'destructive' });
+            return;
         }
 
         const onMutationSuccess = () => {
@@ -974,7 +981,6 @@ export function useShiftFormOrchestrator({
             if (isTemplateMode && onShiftCreated) {
                 const role = roles.find(r => r.id === values.role_id);
                 const remLevel = remunerationLevels.find(r => r.level_number === values.remuneration_level);
-                const assignedEmployee = employees.find(e => e.id === values.assigned_employee_id);
 
                 const templateShift = {
                     name: role?.name || 'Shift',
@@ -1001,9 +1007,6 @@ export function useShiftFormOrchestrator({
                     licenses: values.required_licenses || [],
                     notes: values.notes,
                     netLength,
-                    assigned_employee_id: values.assigned_employee_id || null,
-                    assignedEmployeeId: values.assigned_employee_id || null,
-                    assignedEmployeeName: assignedEmployee?.profiles?.full_name || assignedEmployee?.full_name || null,
                     // Groups/SubGroups are inherited by TemplateEditor but we pass them for completeness/UI
                     group_type: values.group_type,
                     sub_group_name: values.sub_group_name,
@@ -1106,10 +1109,10 @@ export function useShiftFormOrchestrator({
                 const [sh, sm] = values.start_time.split(':').map(Number);
                 const [eh, em] = values.end_time.split(':').map(Number);
                 const startMin = sh * 60 + sm;
-                let endMin = eh * 60 + em;
+                const endMin = eh * 60 + em;
                 const isOvernight = endMin <= startMin;
 
-                let endAtDate = parseZonedDateTime(shiftDateStr, values.end_time, tzone);
+                const endAtDate = parseZonedDateTime(shiftDateStr, values.end_time, tzone);
                 if (isOvernight) {
                     endAtDate.setDate(endAtDate.getDate() + 1);
                 }

@@ -131,51 +131,6 @@ export async function renameRosterSubgroup(
   };
 }
 
-// ── Clone ──────────────────────────────────────────────────────────────────────
-
-const SubgroupCloneRow = z.object({
-  from_date:      z.string(),
-  to_date:        z.string(),
-  days:           z.number(),
-  shifts_copied:  z.number(),
-  shifts_skipped: z.number(),
-  past_days:      z.number(),
-  conflicts:      z.array(z.string()),
-});
-
-export interface SubgroupClone {
-  fromDate: string;
-  toDate: string;
-  days: number;
-  shiftsCopied: number;
-  /** Shifts that had started, so are not copied. */
-  shiftsSkipped: number;
-  pastDays: number;
-  conflicts: string[];
-}
-
-export async function cloneRosterSubgroup(
-  scope: SubgroupScope,
-  sourceName: string,
-  newName: string,
-  dryRun: boolean,
-): Promise<SubgroupClone> {
-  const r = await callRpc(
-    'clone_roster_subgroup_v2',
-    { ...scopeParams(scope), p_source_name: sourceName, p_new_name: newName, p_dry_run: dryRun },
-    SubgroupCloneRow,
-  );
-  return {
-    fromDate:      r.from_date,
-    toDate:        r.to_date,
-    days:          r.days,
-    shiftsCopied:  r.shifts_copied,
-    shiftsSkipped: r.shifts_skipped,
-    pastDays:      r.past_days,
-    conflicts:     r.conflicts,
-  };
-}
-
 // ── Template application: preview and undo ─────────────────────────────────────
 
 const TemplateApplicationPreviewRow = z.object({
