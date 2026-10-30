@@ -36,7 +36,6 @@ export interface Shift {
     updated_at: string;
     version: number;
     roster_id: string;
-    roster_date: string;
     shift_date: string;
     template_id: string | null;
     template_group: TemplateGroupType | null;
@@ -66,8 +65,6 @@ export interface Shift {
     my_shift_pay_terms?: ShiftPayTermsField | null;
     start_time: string;
     end_time: string;
-    scheduled_start: string | null;
-    scheduled_end: string | null;
     is_overnight: boolean;
     scheduled_length_minutes: number | null;
     break_minutes: number;

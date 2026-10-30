@@ -105,7 +105,6 @@ const SHIFT_SELECT = `
   updated_at,
   version,
   roster_id,
-  roster_date,
   shift_date,
   template_id,
   template_group,
