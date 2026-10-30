@@ -99,27 +99,6 @@ export const EMPTY_METRICS: EmployeeMetricsSnapshot = {
 };
 
 // ---------------------------------------------------------------------------
-// METRIC_THRESHOLDS
-// ---------------------------------------------------------------------------
-export const METRIC_THRESHOLDS = {
-    acceptance_rate:          { good: 80, warn: 50 },
-    reliability_score:        { good: 85, warn: 70 },
-    rejection_rate:           { good: 10, warn: 20 },
-    cancellation_rate_standard: { good: 5,  warn: 15 },
-    cancellation_rate_late:   { good: 3,  warn: 10 },
-    swap_ratio:               { good: 10, warn: 20 },
-    offer_expiration_rate:    { good: 10, warn: 25 },
-    late_clock_in_rate:       { good: 5,  warn: 15 },
-    early_clock_out_rate:     { good: 5,  warn: 15 },
-    early_clock_in_rate:      { good: 5,  warn: 15 },
-    late_clock_out_rate:      { good: 5,  warn: 15 },
-    auto_clock_out_rate:      { good: 5,  warn: 15 },
-    no_show_rate:             { good: 2,  warn: 5  },
-    on_time_in_rate:          { good: 85, warn: 70 },
-    on_time_out_rate:         { good: 85, warn: 70 },
-} as const;
-
-// ---------------------------------------------------------------------------
 // getMetricStatus / getReportCellStatus
 //
 // Both now DELEGATE to statusFor() in the KPI metric registry, which is the
@@ -317,29 +296,6 @@ export const useQuarterlyReport = (year: number, quarter: number, scope: ScopeSe
         enabled: !!year && !!quarter && !!scope,
     });
 };
-
-// ---------------------------------------------------------------------------
-// REPORT_THRESHOLDS — thresholds tuned for the global report table
-// ---------------------------------------------------------------------------
-export const REPORT_THRESHOLDS = {
-    acceptance_rate:  { good: 70, warn: 40 },
-    drop_rate:        { good: 5,  warn: 15 },
-    cancel_rate:      { good: 10, warn: 25 },
-    late_cancel_rate: { good: 5,  warn: 15 },
-    no_show_rate:     { good: 2,  warn: 5  },
-    reliability_score: { good: 90, warn: 75 },
-    bid_success_rate:  { good: 70, warn: 40 },
-    performance_score: { good: 85, warn: 70 },
-    engagement_score:  { good: 60, warn: 30 },
-    attendance_compliance_rate: { good: 95, warn: 85 },
-    standard_drop_rate: { good: 5,  warn: 15 },
-    urgent_drop_rate:   { good: 3,  warn: 10 },
-    early_clock_in_rate: { good: 5,  warn: 15 },
-    late_clock_out_rate: { good: 5,  warn: 15 },
-    auto_clock_out_rate: { good: 5,  warn: 15 },
-    on_time_in_rate:  { good: 85, warn: 70 },
-    on_time_out_rate: { good: 85, warn: 70 },
-} as const;
 
 export const getReportCellStatus = (metricType: string, value: number): 'good' | 'warn' | 'critical' =>
     toLegacyStatus(statusFor(metricType, value));

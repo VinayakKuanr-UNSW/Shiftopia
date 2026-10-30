@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     planPublishRoster,
     processInChunks,
-    processInBatches,
     DEFAULT_CHUNK_CONCURRENCY,
-    DEFAULT_BATCH_PAYLOAD_SIZE,
 } from '../bulk-action-engine';
 import type { Shift } from '../shift.entity';
 
@@ -182,7 +180,6 @@ describe('planPublishRoster', () => {
 describe('bulk-action-engine concurrency controls (F-06)', () => {
     it('exports safe default concurrency and batch payload constants', () => {
         expect(DEFAULT_CHUNK_CONCURRENCY).toBe(5);
-        expect(DEFAULT_BATCH_PAYLOAD_SIZE).toBe(200);
     });
 
     describe('processInChunks', () => {
@@ -243,41 +240,6 @@ describe('bulk-action-engine concurrency controls (F-06)', () => {
 
         it('returns empty array when given empty input', async () => {
             const results = await processInChunks([], async () => 'foo');
-            expect(results).toEqual([]);
-        });
-    });
-
-    describe('processInBatches', () => {
-        it('batches items into chunks of batchSize and bounds batch concurrency', async () => {
-            const items = Array.from({ length: 450 }, (_, i) => i);
-            const batchSizesReceived: number[] = [];
-            let inFlightBatches = 0;
-            let maxInFlightBatches = 0;
-
-            const results = await processInBatches(
-                items,
-                async (batch) => {
-                    batchSizesReceived.push(batch.length);
-                    inFlightBatches++;
-                    maxInFlightBatches = Math.max(maxInFlightBatches, inFlightBatches);
-                    await new Promise((r) => setTimeout(r, 10));
-                    inFlightBatches--;
-                    return batch.map((n) => n * 2);
-                },
-                200,
-                2,
-            );
-
-            expect(results).toHaveLength(450);
-            expect(results[0]).toBe(0);
-            expect(results[449]).toBe(898);
-            // 450 items with batchSize 200 => 3 batches of 200, 200, 50
-            expect(batchSizesReceived).toEqual([200, 200, 50]);
-            expect(maxInFlightBatches).toBeLessThanOrEqual(2);
-        });
-
-        it('returns empty array when given empty items', async () => {
-            const results = await processInBatches([], async (b) => b);
             expect(results).toEqual([]);
         });
     });

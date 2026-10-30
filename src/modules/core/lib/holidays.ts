@@ -107,15 +107,6 @@ export function isPublicHolidayISO(dateStr: string | null | undefined): boolean 
   return getYearIndex(year).has(key);
 }
 
-/** As `getPublicHolidayName`, for a `YYYY-MM-DD` string. */
-export function getPublicHolidayNameISO(dateStr: string | null | undefined): string | null {
-  if (!dateStr) return null;
-  const key = dateStr.slice(0, 10);
-  const year = Number(key.slice(0, 4));
-  if (!Number.isFinite(year)) return null;
-  return getYearIndex(year).get(key) ?? null;
-}
-
 /**
  * Sunday / public-holiday day-typing for a `YYYY-MM-DD` shift date, parsed on
  * LOCAL date parts. Single source of truth for the day-type flags EBA rules key

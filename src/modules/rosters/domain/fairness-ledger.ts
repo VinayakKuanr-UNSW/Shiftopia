@@ -198,18 +198,6 @@ function shiftDayOfWeek(shiftDate: string): number {
 }
 
 /**
- * True if the shift falls on a Saturday or Sunday.
- *
- * Retained as a convenience predicate for callers that genuinely only need
- * "is this a weekend day". The LEDGER no longer uses it — it tracks Saturday
- * and Sunday separately because the EBA prices them differently (Q6).
- */
-export function isWeekendShift(shiftDate: string): boolean {
-    const day = shiftDayOfWeek(shiftDate);
-    return day === 0 || day === 6; // Sunday=0, Saturday=6
-}
-
-/**
  * True if the shift window overlaps the night zone 00:00–06:00.
  * Matches `_is_night` in model_builder.py (lines 1414–1425).
  */

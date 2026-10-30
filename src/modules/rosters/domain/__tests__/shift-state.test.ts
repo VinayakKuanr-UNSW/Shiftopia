@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { determineShiftState, getShiftStateDebugString, type ShiftStateID } from '../shift-state.utils';
+import { determineShiftState, type ShiftStateID } from '../shift-state.utils';
 
 function shift(overrides: Parameters<typeof determineShiftState>[0]) {
     return overrides;
@@ -246,56 +246,6 @@ describe('Priority rules', () => {
             }),
             'S10',
         );
-    });
-});
-
-// ── getShiftStateDebugString ──────────────────────────────────────────────────
-
-describe('getShiftStateDebugString', () => {
-    it('returns the correct state id', () => {
-        const debug = getShiftStateDebugString(shift({
-            lifecycle_status:  'Draft',
-            assignment_status: 'unassigned',
-        }));
-        expect(debug.id).toBe('S1');
-    });
-
-    it('outcome is "-" when no assignment_outcome is provided', () => {
-        const debug = getShiftStateDebugString(shift({
-            lifecycle_status:  'Draft',
-            assignment_status: 'assigned',
-        }));
-        expect(debug.id).toBe('S2');
-        expect(debug.outcome).toBe('-');
-    });
-
-    it('returns trading: Trade Requested when trading_status=TradeRequested', () => {
-        const debug = getShiftStateDebugString(shift({
-            lifecycle_status:   'Published',
-            assignment_status:  'assigned',
-            assignment_outcome: 'confirmed',
-            trading_status:     'TradeRequested',
-        }));
-        // format() applies /\b\w/ → uppercase first char only; PascalCase passes through unchanged.
-        expect(debug.trading).toBe('TradeRequested');
-    });
-
-    it('returns trading: No when trade is not requested', () => {
-        const debug = getShiftStateDebugString(shift({
-            lifecycle_status:   'Published',
-            assignment_status:  'assigned',
-            assignment_outcome: 'confirmed',
-        }));
-        expect(debug.trading).toBe('No');
-    });
-
-    it('formats lifecycle status label correctly', () => {
-        const debug = getShiftStateDebugString(shift({
-            lifecycle_status:  'InProgress',
-            assignment_status: 'assigned',
-            assignment_outcome: 'confirmed',
-        }));
-        expect(debug.lifecycle).toBe('InProgress');
     });
 });
 

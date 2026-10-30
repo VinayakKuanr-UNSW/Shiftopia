@@ -110,29 +110,6 @@ function parseDateMidnightHours(dateStr: string): number {
   return Date.UTC(y, m, d) / (1000 * 3600);
 }
 
-/**
- * Calculates shift hours (net)
- */
-export const calculateShiftHours = (
-    startTime?: string,
-    endTime?: string,
-    unpaidBreakMinutes?: number | null
-): number => {
-    if (!startTime || !endTime) return 0;
-
-    const sh = parseInt(startTime.substring(0, 2), 10);
-    const sm = parseInt(startTime.substring(3, 5), 10);
-    const eh = parseInt(endTime.substring(0, 2), 10);
-    const em = parseInt(endTime.substring(3, 5), 10);
-
-    const startMin = sh * ONE_HOUR + sm;
-    let endMin = eh * ONE_HOUR + em;
-
-    if (endMin <= startMin) endMin += HOURS_IN_DAY * ONE_HOUR;
-
-    return Math.max(0, (endMin - startMin) - (unpaidBreakMinutes || 0)) / ONE_HOUR;
-};
-
 function getShiftTime(timeStr: string): number {
     const h = parseInt(timeStr.substring(0, 2), 10);
     const m = parseInt(timeStr.substring(3, 5), 10);

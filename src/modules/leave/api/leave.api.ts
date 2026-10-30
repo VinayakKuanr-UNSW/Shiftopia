@@ -123,9 +123,9 @@ export async function getLeaveRequests(
  * `leave.approve` through the gate). Pending only unless a status is given.
  *
  * NOT filtered by department here. It used to accept a `departmentId` it never
- * applied, so the header scope silently did nothing; scope is now applied by
- * `inScope` against each employee's contracts, which also handles several
- * selected departments rather than the first.
+ * applied, so the header scope silently did nothing; the Leave Approvals page now
+ * keeps only requests from the employees the header scope selects, across every
+ * selected department rather than the first.
  */
 export async function getTeamLeaveRequests(
   filters?: LeaveRequestFilters,

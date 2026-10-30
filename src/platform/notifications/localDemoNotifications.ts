@@ -11,10 +11,6 @@ export type LocalDemoNotification = {
   source: 'local-demo';
 };
 
-type LocalDemoNotificationInput = Pick<
-  LocalDemoNotification,
-  'type' | 'title' | 'message' | 'link'
->;
 
 type LocalDemoNotificationChange = {
   profileId: string;
@@ -24,15 +20,6 @@ type LocalDemoNotificationChange = {
 const STORAGE_PREFIX = 'shiftopia.demoNotifications';
 const CHANGE_EVENT = 'shiftopia:demo-notifications-changed';
 const MAX_DEMO_NOTIFICATIONS = 50;
-
-export function createLocalDemoNotification(
-  profileId: string,
-  input: LocalDemoNotificationInput,
-): LocalDemoNotification {
-  const notification = toDemoNotification(input);
-  saveLocalDemoNotifications(profileId, [notification, ...readLocalDemoNotifications(profileId)]);
-  return notification;
-}
 
 export function readLocalDemoNotifications(profileId: string): LocalDemoNotification[] {
   try {
@@ -58,10 +45,6 @@ export function markAllLocalDemoNotificationsRead(profileId: string): LocalDemoN
 
 export function dismissLocalDemoNotification(profileId: string, id: string): LocalDemoNotification[] {
   return updateLocalDemoNotifications(profileId, (items) => items.filter((item) => item.id !== id));
-}
-
-export function clearLocalDemoNotifications(profileId: string): void {
-  saveLocalDemoNotifications(profileId, []);
 }
 
 export function isLocalDemoNotificationId(id: string): boolean {
@@ -104,23 +87,7 @@ function saveLocalDemoNotifications(profileId: string, items: LocalDemoNotificat
   );
 }
 
-function toDemoNotification(input: LocalDemoNotificationInput): LocalDemoNotification {
-  return {
-    id: `demo:${createLocalId()}`,
-    ...input,
-    entity_id: null,
-    entity_type: 'demo',
-    read_at: null,
-    created_at: new Date().toISOString(),
-    source: 'local-demo',
-  };
-}
 
-function createLocalId(): string {
-  return typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
 
 function validateNotifications(value: unknown): LocalDemoNotification[] {
   if (!Array.isArray(value)) return [];

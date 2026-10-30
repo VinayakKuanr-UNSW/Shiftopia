@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { isFullTimeEmployee, resolveEmploymentType, hasContractObligation } from '../employment.types';
+import { isFullTimeEmployee, resolveEmploymentType } from '../employment.types';
 
 describe('resolveEmploymentType', () => {
     // 17 of 122 staff in production have a `profiles.employment_type` that
@@ -55,15 +55,5 @@ describe('isFullTimeEmployee', () => {
     it('does not treat an unrecognised status as full-time', () => {
         expect(isFullTimeEmployee('Contractor', null)).toBe(false);
         expect(isFullTimeEmployee('Fully Flexible', null)).toBe(false);
-    });
-});
-
-describe('hasContractObligation', () => {
-    it('is true for FT and PT, false for casual and unknown', () => {
-        expect(hasContractObligation('Full-Time', null)).toBe(true);
-        expect(hasContractObligation('Part-Time', null)).toBe(true);
-        expect(hasContractObligation('Flexible Part-Time', null)).toBe(true);
-        expect(hasContractObligation('Casual', null)).toBe(false);
-        expect(hasContractObligation(null, null)).toBe(false);
     });
 });

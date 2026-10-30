@@ -18,7 +18,6 @@ vi.mock('@/platform/supabase/client', () => ({
 
 import {
   fetchV8EmployeeContext,
-  invalidateEmployeeContextCache,
   clearEmployeeContextCache,
 } from '../employee-context';
 
@@ -75,14 +74,6 @@ describe('fetchV8EmployeeContext cache', () => {
     fromMock.mockClear();
     await fetchV8EmployeeContext('emp-1');
     expect(fromMock).not.toHaveBeenCalled();
-  });
-
-  it('re-fetches after invalidation for that employee', async () => {
-    await fetchV8EmployeeContext('emp-1');
-    invalidateEmployeeContextCache('emp-1');
-    fromMock.mockClear();
-    await fetchV8EmployeeContext('emp-1');
-    expect(fromMock).toHaveBeenCalledTimes(5);
   });
 
   it('caches per-employee independently', async () => {
