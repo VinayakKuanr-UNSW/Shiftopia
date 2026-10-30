@@ -22,7 +22,6 @@ graph TB
 
     subgraph EdgeFn["Supabase Edge Functions"]
         RosterView[get-roster-view]
-        Push[send-push]
     end
 
     subgraph Optimizer["Optimizer microservice (FastAPI + OR-Tools CP-SAT)"]

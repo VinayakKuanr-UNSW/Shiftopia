@@ -83,7 +83,7 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 ### 2.8 `payroll`
 **Purpose:** GROSS-pay calculation engine — prices approved worked hours through the EBA award calculator and rolls them up per employee/pay-period into itemised gross earnings. Explicitly out of scope: tax/super/STP (left to a certified payroll provider).
 **Structure:** `data/` (read/write adapters), `domain/` (`computeShiftGrossPay.ts`, `aggregatePeriodGrossPay.ts`, `cpiRateIncrease.ts` — pure calculation), `export/` (CSV/provider-JSON), `model/gross-pay.types.ts`, `state/`, `ui/` (`GrossPayPage.tsx`, `rate-admin/` sub-app).
-**Entry points:** `ui/GrossPayPage.tsx`, `domain/computeShiftGrossPay.ts`/`aggregatePeriodGrossPay.ts`, `data/grossPay.write.api.ts`.
+**Entry points:** `ui/GrossPayPage.tsx`, `domain/computeShiftGrossPay.ts`/`aggregatePeriodGrossPay.ts`.
 **DB:** `eba_allowance`, `eba_rate`, `eba_trainee_schedule`, `gross_pay_records`, `pay_periods`, `shift_payroll_records`, `timesheets`, `shifts`, `leave_requests`, `profiles`, `user_contracts`. No RPCs.
 **Depends on:** `core`, `rosters` (cost-matrix helpers), `timesheets` (billable-time), `leave` (leave-to-gross-pay mapping).
 **Core types:** `EarningsCode`, `EarningsLine`, `ShiftGrossPay`, `PeriodGrossPay`.
@@ -144,7 +144,7 @@ No orphan top-level dirs (`src/lib`, `src/components` etc.) — everything lives
 
 ### 2.16 `users`
 **Purpose:** Employee/user profiles, contracts, roles, skills, licenses, and performance — the HR/org-structure system of record other modules reference for eligibility and identity.
-**Structure:** `api/`, `domain/` (`casualConversion.ts`, `swsTrial.ts` — business-rule calculators), `hooks/`, `model/`, `pages/`, `ui/`.
+**Structure:** `api/`, `domain/` (`swsTrial.ts` — a business-rule calculator), `hooks/`, `model/`, `pages/`, `ui/`.
 **Entry points:** `pages/UsersPage.tsx` (admin roster), `pages/ProfilePage.tsx`, `api/employee.service.ts`.
 **DB:** `profiles`, `roles`, `departments`, `organizations`, `user_contracts`, `employee_licenses`, `licenses`, `employee_skills`, `skills`, `remuneration_levels`, `app_access_certificates`. RPCs: `delete_user_entirely`, `get_employee_quarterly_performance`, `get_quarterly_performance_report`.
 **Depends on:** `core` only — a relatively "leaf" module, depended on heavily by others but not reaching into rosters/planning itself.

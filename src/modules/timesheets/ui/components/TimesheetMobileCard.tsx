@@ -38,7 +38,6 @@ interface TimesheetMobileCardProps {
     onMarkNoShow?: (id: string) => void;
     readOnly?: boolean;
     isManager?: boolean;
-    employeeHeader?: React.ReactNode;
     employeeActions?: React.ReactNode;
     className?: string;
 }
@@ -69,7 +68,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     onMarkNoShow,
     readOnly = false,
     isManager = true,
-    employeeHeader,
     employeeActions,
     className,
 }, ref) => {

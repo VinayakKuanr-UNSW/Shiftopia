@@ -9,12 +9,12 @@ import { describe, expect, it } from 'vitest';
  * table with that column, so any `deleted_at` in a query is a shifts filter that
  * never filters anything, and once the column is gone it fails the whole select.
  *
- * Scans the app and the deployed edge functions with comments stripped. The
- * generated `types.ts` is regenerated after the drop; `_retired` is not deployed.
+ * Scans the app and the edge functions with comments stripped. The generated
+ * `types.ts` is regenerated after the drop.
  */
 
 const ROOTS = ['src', 'supabase/functions'].map((dir) => resolve(process.cwd(), dir));
-const SKIP_DIRS = new Set(['__tests__', '_retired', 'node_modules']);
+const SKIP_DIRS = new Set(['__tests__', 'node_modules']);
 const ALLOWED = new Set(['src/platform/supabase/types.ts']);
 
 function sourceFiles(dir: string): string[] {

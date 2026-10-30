@@ -7703,10 +7703,6 @@ export type Database = {
         Returns: boolean
       }
       sm_legacy_manager: { Args: { p_user?: string }; Returns: boolean }
-      sm_manager_cancel: {
-        Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
-        Returns: Json
-      }
       sm_materialize_contract_envelope: {
         Args: { p_from?: string; p_profile_ids?: string[]; p_to?: string }
         Returns: {
@@ -7738,14 +7734,6 @@ export type Database = {
             Returns: Json
           }
       sm_request_is_system: { Args: never; Returns: boolean }
-      sm_request_trade: {
-        Args: {
-          p_shift_id: string
-          p_target_employee_id?: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
       sm_require_assignee_or: {
         Args: { p_actor: string; p_manager_action: string; p_shift_id: string }
         Returns: undefined
