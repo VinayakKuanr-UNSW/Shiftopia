@@ -18,16 +18,9 @@ interface RosterMetricsFooterProps {
   stateCounts?: Record<string, number>;
   selectedState?: string | null;
   onSelectState?: (stateId: string | null) => void;
-  scheduledCost: number;
-  actualCost: number;
   scheduledNetMinutes: number;
   actualNetMinutes: number;
-  costedShifts: number;
-  uncostedShifts: number;
   actualShifts: number;
-  budget?: number;
-  remainingBudget?: number;
-  showBudget?: boolean;
   className?: string;
 }
 
@@ -135,16 +128,9 @@ export const RosterMetricsFooter: React.FC<RosterMetricsFooterProps> = ({
   stateCounts,
   selectedState,
   onSelectState,
-  scheduledCost,
-  actualCost,
   scheduledNetMinutes,
   actualNetMinutes,
-  costedShifts,
-  uncostedShifts,
   actualShifts,
-  budget = 0,
-  remainingBudget = 0,
-  showBudget = false,
   className,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -399,20 +385,9 @@ export const RosterMetricsFooter: React.FC<RosterMetricsFooterProps> = ({
                 {formatNetMinutes(scheduledNetMinutes)}
               </span>
             </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-[11px] font-semibold text-slate-900 dark:text-foreground tabular-nums leading-none">
-                ${scheduledCost.toFixed(2)}
-              </span>
-              <span
-                className={cn(
-                  'text-[11px] font-mono truncate max-w-[85px] leading-none',
-                  uncostedShifts > 0 ? 'text-amber-700 dark:text-amber-400 font-medium' : 'text-slate-500 dark:text-muted-foreground'
-                )}
-                title={uncostedShifts > 0 ? 'Some shifts have no resolvable pay rate' : undefined}
-              >
-                {uncostedShifts > 0 ? `${costedShifts}/${totalShifts} priced` : `${totalShifts} shift${totalShifts === 1 ? '' : 's'}`}
-              </span>
-            </div>
+            <span className="text-[11px] font-mono text-slate-500 dark:text-muted-foreground leading-none">
+              {`${totalShifts} shift${totalShifts === 1 ? '' : 's'}`}
+            </span>
           </div>
 
           {/* Actual Panel */}
@@ -425,46 +400,10 @@ export const RosterMetricsFooter: React.FC<RosterMetricsFooterProps> = ({
                 {formatNetMinutes(actualNetMinutes)}
               </span>
             </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <span
-                className={cn(
-                  'text-[11px] font-semibold tabular-nums leading-none',
-                  actualShifts === 0 ? 'text-slate-500 dark:text-muted-foreground' : 'text-slate-900 dark:text-foreground'
-                )}
-              >
-                ${actualCost.toFixed(2)}
-              </span>
-              <span className="text-[11px] font-mono text-slate-500 dark:text-muted-foreground leading-none">
-                {actualShifts === 0 ? 'none worked' : `${actualShifts}/${totalShifts} worked`}
-              </span>
-            </div>
+            <span className="text-[11px] font-mono text-slate-500 dark:text-muted-foreground leading-none">
+              {actualShifts === 0 ? 'none worked' : `${actualShifts}/${totalShifts} worked`}
+            </span>
           </div>
-
-          {showBudget && (
-            <div className="h-10 sm:h-10.5 rounded-xl bg-white dark:bg-[#1c2333] px-3 py-1 min-w-[110px] flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] shadow-none">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-none">
-                  Budget
-                </span>
-                <span className="text-[11px] font-mono text-slate-600 dark:text-muted-foreground tabular-nums leading-none">
-                  ${budget.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-muted-foreground leading-none">
-                  Remaining
-                </span>
-                <span
-                  className={cn(
-                    'text-[11px] font-semibold tabular-nums leading-none',
-                    remainingBudget >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-red-400'
-                  )}
-                >
-                  ${remainingBudget.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </footer>

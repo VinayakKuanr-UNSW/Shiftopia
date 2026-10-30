@@ -8,7 +8,6 @@ import {
     evaluatePayTerms,
     formatBand,
     isLevelInBand,
-    quotePay,
     resolveEbaRate,
     type EbaRateSetLike,
     type PayTermsInput,
@@ -177,7 +176,8 @@ describe('evaluatePayTerms — salary cautions (never blocking)', () => {
         const r = evaluatePayTerms({ ...salaried, annualSalary: 65000, exclusionReason: 'above_threshold' });
         expect(r.errors).toEqual([]);
         expect(clauses(r.warnings)).toEqual(['cl 2.2(b)']);
-        expect(r.warnings[0].message).toContain('$70,998');
+        // Money is shown in Gross Pay alone — the caution names the clause, not the figure.
+        expect(r.warnings[0].message).not.toMatch(/\$/);
     });
 
     it('warns when a manager earns no more than Level 7', () => {
@@ -242,21 +242,5 @@ describe('rates', () => {
 
     it('computes the cl 2.2(b) reading from Level 7', () => {
         expect(eaTopAnnualRate(SCHEDULE, TODAY)).toBe(TOP);
-    });
-
-    it('quotes each basis the way it is paid', () => {
-        const q = (p: Partial<Parameters<typeof quotePay>[0]>) => quotePay({
-            payBasis: 'eba_level', employmentStatus: 'Casual', level: 7, annualSalary: 0,
-            contractedWeeklyHours: 0, schedule: SCHEDULE, onDate: TODAY, ...p,
-        });
-        expect(q({})?.headline).toBe('$44.92/h');
-        expect(q({ level: 0 })?.headline).toBe('$32.79/h');
-        expect(q({ employmentStatus: 'Full-Time' })?.headline).toBe('$1,365.34/week');
-        expect(q({ employmentStatus: 'Part-Time' })?.headline).toBe('$35.93/h');
-        expect(q({ payBasis: 'eba_security_annualised', employmentStatus: 'Full-Time', level: 6 })?.headline).toBe('≈ $90,614/yr');
-        const salary = q({ payBasis: 'salary', employmentStatus: 'Full-Time', level: '', annualSalary: 95000 });
-        expect(salary?.headline).toBe('$95,000/yr');
-        expect(salary?.detail).toContain('≈ $48.08/h over 38h a week');
-        expect(q({ level: '' })).toBeNull();
     });
 });

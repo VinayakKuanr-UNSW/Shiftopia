@@ -45,9 +45,7 @@ import { getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReview
 import { validateBillableEdit, parseHHMM } from "../../domain/billable-edit";
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
-import { COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 
 /* Billable-time provenance icons (F16) — explicit iconography, not a bare `*`. */
 type BillableSource = 'manual' | 'snapped' | 'auto' | null | undefined;
@@ -215,7 +213,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             return {
                 length: '0.00',
                 netLength: '0.00',
-                approximatePay: '$0.00',
                 differential: formatDifferential(0 - calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd)),
             };
         }
@@ -343,21 +340,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
         const { normalizedStart: adjustedStart, normalizedEnd: adjustedEnd, startChanged, endChanged, needArrivalReason: needArrival, needDepartureReason: needDeparture } = v;
 
-        const cost = estimateDetailedCostFromShift({
-            shift_date: String(entry.date),
-            start_time: adjustedStart,
-            end_time: adjustedEnd,
-            roles: { name: entry.role },
-            remuneration_level: entry.remunerationLevelNumber,
-            shift_pay_terms: entry.payTerms,
-            employmentType: entry.employmentType,
-            is_training: entry.isTraining,
-            unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
-            break_start: v.normalizedBreakStart || entry.actualBreakStart || entry.rosteredBreakStart || undefined,
-            scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
-        });
-        const approximatePay = cost.payBasis === 'salary' ? 'Salaried' : `$${cost.totalCost.toFixed(2)}`;
-
         // Persist ONLY the sides the manager changed — an untouched side keeps
         // its snapped/auto provenance and must not become a manual override.
         const payload: Record<string, any> = {
@@ -370,7 +352,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             length: calculatedValues.length,
             netLength: calculatedValues.netLength,
             differential: calculatedValues.differential,
-            approximatePay,
         };
         // A changed side that's back on-roster clears any stale reason.
         if (startChanged && !needArrival) payload.arrivalVarianceReason = null;
@@ -756,11 +737,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         </td>
                     </>
                 )}
-
-                {/* Estimated cost — award estimate, NOT payroll */}
-                <td title={COST_ESTIMATE_DISCLAIMER} className={`${cellClass} font-black text-primary tracking-tight`}>
-                    {entry.approximatePay || '-'}
-                </td>
 
                 {/* Differential */}
                 <td className={`${cellClass} border-r border-border/30`}>

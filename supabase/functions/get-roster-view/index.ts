@@ -203,45 +203,6 @@ function setCache<T>(map: Map<string, CacheEntry<T>>, key: string, data: T, ttlM
   map.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
-// ── Contract pay terms (per caller, never cached) ─────────────────────────────
-// `shift_pay_terms` is a computed field answered by auth.uid(): the assignee or
-// a delta-access manager gets the linked contract's terms, anyone else NULL
-// (migration 20261008232922). The service-role read above has no uid, and the
-// shift cache is shared between callers, so the terms are fetched with the
-// CALLER's token on every request and merged into copies of the cached rows.
-// On failure the cards price on the shift's own terms, as they did before.
-async function withPayTerms(
-  req: Request,
-  shifts: Record<string, unknown>[],
-): Promise<Record<string, unknown>[]> {
-  const ids = shifts
-    .filter((s) => s["user_contract_id"] && s["assigned_employee_id"])
-    .map((s) => s["id"] as string);
-  if (ids.length === 0) return shifts;
-
-  const BATCH_SIZE = 500;
-  const termsById = new Map<string, unknown>();
-
-  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-    const batch = ids.slice(i, i + BATCH_SIZE);
-    const { data, error } = await callerClient(req).rpc("get_shift_pay_terms", { p_shift_ids: batch });
-    if (error) {
-      console.error("[get-roster-view] get_shift_pay_terms failed:", error.message);
-      continue;
-    }
-    for (const r of ((data ?? []) as { shift_id: string; pay_terms: unknown }[])) {
-      if (r.pay_terms !== null) {
-        termsById.set(r.shift_id, r.pay_terms);
-      }
-    }
-  }
-
-  if (termsById.size === 0) return shifts;
-  return shifts.map((s) =>
-    termsById.has(s["id"] as string) ? { ...s, shift_pay_terms: termsById.get(s["id"] as string) } : s
-  );
-}
-
 // ── Helper ──────────────────────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -294,7 +255,7 @@ Deno.serve(async (req: Request) => {
       const cachedShifts = Array.isArray(cachedShiftsEntry) ? cachedShiftsEntry : cachedShiftsEntry.shifts;
       const isTruncated = Array.isArray(cachedShiftsEntry) ? false : !!cachedShiftsEntry.truncated;
       return Response.json(
-        { ...cachedLookups, shifts: await withPayTerms(req, cachedShifts), truncated: isTruncated, _cached: true },
+        { ...cachedLookups, shifts: cachedShifts, truncated: isTruncated, _cached: true },
         { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
       );
     }
@@ -523,7 +484,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return Response.json(
-      { ...lookups, shifts: await withPayTerms(req, shifts), truncated: shiftsRes?.truncated ?? false },
+      { ...lookups, shifts, truncated: shiftsRes?.truncated ?? false },
       { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
     );
   } catch (err: unknown) {

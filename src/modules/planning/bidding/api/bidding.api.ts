@@ -59,7 +59,6 @@ export const biddingApi = {
                 *,
                 dropped_by_id,
                 last_dropped_by,
-                my_shift_pay_terms,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
@@ -103,7 +102,6 @@ export const biddingApi = {
                 *,
                 shift:shifts(
                     *,
-                    my_shift_pay_terms,
                     organizations(name),
                     departments(name),
                     sub_departments(name),

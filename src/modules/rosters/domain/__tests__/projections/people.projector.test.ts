@@ -46,8 +46,6 @@ function makeShift(overrides: Partial<WorkerShiftDTO> = {}): WorkerShiftDTO {
     employeeFirstName: null,
     employeeLastName: null,
     eventIds: [],
-    targetEmploymentType: null,
-    allowances: null,
     rosterSubgroupId: null,
     rosterSubgroupName: null,
     rosterGroupName: null,

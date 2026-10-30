@@ -5,7 +5,6 @@ import { Drawer, DrawerContent, DrawerTitle } from '@/modules/core/ui/primitives
 import { Button } from '@/modules/core/ui/primitives/button';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
-import { buildShiftCardPay } from '../../../ui/components/shift-card-pay';
 import type { ShiftOpportunity } from '../types';
 import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
@@ -125,10 +124,6 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                             </div>
                         );
 
-                        // Was computed and then dropped on the floor — the drawer
-                        // never passed `estimatedPay`, so it showed "—" exactly
-                        // like the card behind it.
-                        const cardPay = buildShiftCardPay(rawShift);
                         const isPast = shiftStart.getTime() < Date.now();
 
                         return (
@@ -157,8 +152,6 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     isExpired={isTerminal ? false : isExpired}
                                     isPast={isPast}
                                     lifecycleStatus={opp.lifecycleStatus || 'Published'}
-                                    estimatedPay={cardPay.estimatedPay}
-                                    estimatedPayBreakdown={cardPay.estimatedPayBreakdown}
                                     groupVariant={groupVariantFor(opp.groupType)}
                                     footerActions={footerActions}
                                     isFlat={false}

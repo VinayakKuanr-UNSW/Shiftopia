@@ -19,7 +19,6 @@ import {
 } from "./TimesheetFilterDrawer";
 import { exportTimesheetXLSX, exportTimesheetPDF } from "./timesheet.export";
 import { isEntryReviewable } from "./TimesheetTable.utils";
-import { COST_ESTIMATE_LABEL, COST_ESTIMATE_DISCLAIMER } from "@/modules/rosters/domain/projections/utils/cost/constants";
 import { groupRows, isTodayBucketKey, type RowGroupBy } from "@/modules/core/lib/row-grouping";
 import { extractTimesheetGroupFields, timesheetGroupLabelFor } from "../../domain/timesheet-grouping";
 import { GroupSectionHeader } from "@/modules/core/ui/components/GroupSectionHeader";
@@ -321,8 +320,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <th colSpan={6} className={cn(tableTokens.head, "text-center text-primary bg-primary/5 border-r border-border/30")}>
                                             Adjusted (Inline Edit)
                                         </th>
-                                        <th colSpan={2} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
-                                            Payroll & Diff
+                                        <th className={cn(tableTokens.head, "text-center border-r border-border/30")}>
+                                            Diff
                                         </th>
                                         <th colSpan={3} className={cn(tableTokens.head, "text-center border-r border-border/30")}>
                                             Statuses
@@ -361,8 +360,6 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <th className={cn(tableTokens.head, "px-3 bg-primary/5")}>Paid</th>
                                         <th className={cn(tableTokens.head, "px-3 bg-primary/5")}>Unpaid</th>
                                         <SortableHeader field="netLength" label="Net" className="bg-primary/5 border-r border-border/30" />
-                                        {/* Estimated cost — award estimate, NOT payroll */}
-                                        <SortableHeader field="approximatePay" label={COST_ESTIMATE_LABEL} title={COST_ESTIMATE_DISCLAIMER} />
                                         <SortableHeader field="differential" label="Diff" className="border-r border-border/30" />
                                         {/* Statuses */}
                                         <SortableHeader field="liveStatus" label="Time Rules" />
@@ -376,7 +373,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                 </thead>
                                 <tbody>
                                     {sortedEntries.length === 0 ? (
-                                        <TableStateRow colSpan={showDate ? 25 : 24}>
+                                        <TableStateRow colSpan={showDate ? 24 : 23}>
                                             <PageState state="empty" scope="section" title="No records found" description="Try adjusting your filters or search query." />
                                         </TableStateRow>
                                     ) : (
@@ -384,7 +381,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                             <React.Fragment key={bucket.key}>
                                                 {bucket.label && (
                                                     <tr className="border-b border-border/60">
-                                                        <td colSpan={showDate ? 25 : 24} className="bg-muted/30 px-4 py-1.5">
+                                                        <td colSpan={showDate ? 24 : 23} className="bg-muted/30 px-4 py-1.5">
                                                             <GroupSectionHeader
                                                                 label={bucket.label}
                                                                 count={bucket.items.length}

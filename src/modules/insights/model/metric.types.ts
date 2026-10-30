@@ -39,7 +39,6 @@ export interface InsightsSummary {
     shifts_no_show: number;
     shifts_emergency: number;
     scheduled_hours: number;
-    estimated_cost: number;
     /** assigned / shifts_total. Label the denominator as TOTAL, not published. */
     shift_fill_rate: number;
     compliance_overrides: number;
@@ -54,7 +53,6 @@ export interface TrendRow {
     shifts_total: number;
     shifts_assigned: number;
     fill_rate: number;
-    estimated_cost: number;
 }
 
 /** Chart-friendly shape after client-side pivot of TrendRow[] */
@@ -70,7 +68,6 @@ export interface DeptBreakdownRow {
     shifts_total: number;
     shifts_assigned: number;
     fill_rate: number;
-    estimated_cost: number;
     no_show_count: number;
     emergency_count: number;
 }

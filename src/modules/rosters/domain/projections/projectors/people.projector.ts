@@ -40,16 +40,8 @@ function makeEmployee(
     currentHours: 0,
     overHoursWarning: false,
     shifts: {},
-    estimatedPay: 0,
     fatigueScore: 0,
     utilization: 0,
-    payBreakdown: {
-      base: 0,
-      penalty: 0,
-      overtime: 0,
-      allowance: 0,
-      leave: 0,
-    }
   };
 }
 
@@ -128,13 +120,6 @@ export function projectPeople(
 
     if (!shift.isCancelled && shift.assignedEmployeeId) {
       emp.currentHours = Math.round((emp.currentHours + ps.hours) * 100) / 100;
-      emp.estimatedPay += ps.pay;
-      
-      emp.payBreakdown.base += ps.costBreakdown.base;
-      emp.payBreakdown.penalty += ps.costBreakdown.penalty;
-      emp.payBreakdown.overtime += ps.costBreakdown.overtime;
-      emp.payBreakdown.allowance += ps.costBreakdown.allowance;
-      emp.payBreakdown.leave += ps.costBreakdown.leave;
     }
   });
 
@@ -199,8 +184,6 @@ export function projectPeople(
         openShifts: 0,
         publishedShifts: 0,
         totalNetMinutes: 0,
-        estimatedCost: 0,
-        costBreakdown: { base: 0, penalty: 0, overtime: 0, allowance: 0, leave: 0 },
     },
   };
 }

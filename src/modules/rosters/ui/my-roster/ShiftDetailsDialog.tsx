@@ -27,9 +27,6 @@ import { useOnlineStatus } from '@/modules/core/hooks/useOnlineStatus';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
-import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useClockValue, isShiftPast, type ClockSnapshot } from '@/modules/core/hooks/useClock';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
@@ -56,8 +53,6 @@ interface ShiftDetailsDialogProps {
   shiftData: ShiftWithDetails | null;
   shiftDate: Date;
 }
-
-// ── Cost Tooltip ──────────────────────────────────────────────────────────
 
 const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   isOpen,
@@ -219,76 +214,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     };
   }, [shiftData?.shift, resolvedBillableStart, resolvedBillableEnd]);
 
-  // ── Cost Calculation ──────────────────────────────────────────────────────
-  // Priced on the SHIFT's employment basis, not the viewer's profile.
-  //
-  // This used to read `user.employmentType`, on the reasoning that the raw
-  // shift row carried nothing better. It does: `target_employment_type` has
-  // been NOT NULL since 20260806120100 and is the basis the shift is paid on.
-  // The profile scalar is a person-level summary that cannot describe someone
-  // holding several contracts at once — a prod employee holds one Full-Time
-  // Security L7 contract alongside four Casual ones, so their profile reads
-  // "Full-Time" while their Casual Team Leader shift must be paid at the loaded
-  // casual rate. Pricing it off the profile charged permanent Level 4
-  // ($30.26/h) instead of casual ($37.82/h): the 25% casual loading dropped
-  // silently, a ~20% understatement. The profile stays as a last-resort
-  // fallback for rows with no persisted shift behind them.
-  const payEmploymentType =
-    (shiftData?.shift as any)?.target_employment_type ?? user?.employmentType ?? null;
-
-  const costBreakdown = React.useMemo(() => {
-    if (!shiftData?.shift) return ZERO_COST_BREAKDOWN;
-    return estimateDetailedCostFromShift({
-      ...shiftData.shift,
-      employmentType: payEmploymentType,
-    } as any);
-  }, [shiftData?.shift, payEmploymentType]);
-
-  // Billable (actual/payroll) estimate — priced off the resolved billable
-  // window above, at the EBA-floored net minutes, mirroring the Timesheets
-  // card's `billableCost`. Only resolves once both sides have a real value.
-  const billableCostBreakdown = React.useMemo(() => {
-    if (!shiftData?.shift || !resolvedBillableStart.hhmm || !resolvedBillableEnd.hhmm || billableFloor == null) return null;
-    try {
-      return estimateDetailedCostFromShift({
-        shift_date: shiftData.shift.shift_date,
-        start_time: resolvedBillableStart.hhmm,
-        end_time: resolvedBillableEnd.hhmm,
-        roles: shiftData.shift.roles,
-        remuneration_level: shiftData.shift.remuneration_level,
-        shift_pay_terms: shiftData.shift.shift_pay_terms,
-        employmentType: payEmploymentType,
-        is_training: (shiftData.shift as any).is_training,
-        unpaid_break_minutes: unpaidBreak,
-        scheduled_length_minutes: (shiftData.shift as any).scheduled_length_minutes ?? netLengthMinutes,
-      }, billableFloor.netMinutes);
-    } catch {
-      return null;
-    }
-  }, [shiftData?.shift, resolvedBillableStart, resolvedBillableEnd, billableFloor, unpaidBreak, payEmploymentType, netLengthMinutes]);
-
-  // Itemised rate-breakdown lines for both figures, via the SAME builder the
-  // Timesheets card uses, so `estimatedPay`/`billablePay` below are plain
-  // "$123.45" strings (not the bespoke Tooltip JSX this dialog used to build)
-  // — that's what SharedShiftCard's own Variance section needs to compute a
-  // Pay delta; a ReactNode there can't be parsed and silently shows "--".
-  const isSecurityRoleForCost = isSecurityRoleName(shiftData?.shift?.roles?.name);
-  // A salaried shift has no per-shift pay — the salary is paid per period.
-  const formatPay = (b: { totalCost?: number; payBasis?: string } | null) =>
-    b ? (b.payBasis === 'salary' ? 'Salaried' : `$${(b.totalCost || 0).toFixed(2)}`) : null;
-  const estimatedPayLines = React.useMemo(
-    () => shiftData?.shift && costBreakdown.payBasis !== 'salary'
-      ? buildOrdinaryEarningsLines(costBreakdown, { isSecurityRole: isSecurityRoleForCost, shiftDate: shiftData.shift.shift_date, startTime: shiftData.shift.start_time })
-      : [],
-    [costBreakdown, isSecurityRoleForCost, shiftData?.shift],
-  );
-  const billablePayLines = React.useMemo(
-    () => billableCostBreakdown && billableCostBreakdown.payBasis !== 'salary'
-      ? buildOrdinaryEarningsLines(billableCostBreakdown, { isSecurityRole: isSecurityRoleForCost, shiftDate: shiftData!.shift.shift_date, startTime: resolvedBillableStart.hhmm ?? undefined })
-      : [],
-    [billableCostBreakdown, isSecurityRoleForCost, shiftData, resolvedBillableStart],
-  );
-
   if (!shiftData) return null;
   const { shift, groupName, groupColor, subGroupName } = shiftData;
 
@@ -389,10 +314,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               adjustedEndSource={resolvedBillableEnd.source === 'missing' ? null : resolvedBillableEnd.source}
               wasToppedUpToMinEngagement={billableFloor?.wasToppedUp}
               requiredEngagementMinutes={billableFloor?.requiredMins || null}
-              estimatedPay={formatPay(costBreakdown) ?? '$0.00'}
-              estimatedPayBreakdown={estimatedPayLines}
-              billablePay={formatPay(billableCostBreakdown)}
-              billablePayBreakdown={billablePayLines}
               statusIcons={null}
               footerActions={
                 <div className="flex flex-col gap-2 w-full">

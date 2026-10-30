@@ -14,13 +14,6 @@ import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/ro
 import { cn } from '@/modules/core/lib/utils';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import type { EventsProjection } from '@/modules/rosters/domain/projections/types';
-import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -242,10 +235,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
         startTime: pe.startTime,
         endTime: pe.endTime,
         location: pe.location,
-        shifts: pe.shifts.map(ps => ({
-          ...ps.raw,
-          detailedCost: ps.detailedCost
-        })) as any,
+        shifts: pe.shifts.map(ps => ps.raw) as any,
         totalHours: pe.totalHours,
         assignedCount: pe.assignedCount,
         unassignedCount: pe.totalCount - pe.assignedCount,
@@ -389,51 +379,6 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
             <>
               <span className="mx-2 text-border">·</span>
               <span className="text-emerald-500/80 font-medium tabular-nums">{(projection.stats.totalNetMinutes / 60).toFixed(1)}h</span>
-              <span className="mx-2 text-border">·</span>
-              <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <span className="text-emerald-500/80 font-bold tabular-nums cursor-help hover:text-emerald-400 transition-colors">
-                            ${projection.stats.estimatedCost.toFixed(0)}
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent className="w-56 p-3 bg-popover text-popover-foreground border-border shadow-xl" side="bottom">
-                        <div className="space-y-2">
-                            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest font-mono">Event Mode Estimate</p>
-                            <div className="space-y-1.5">
-                                <div className="flex justify-between text-[11px]">
-                                    <span className="text-muted-foreground">Base Pay</span>
-                                    <span className="text-foreground font-medium tabular-nums">{formatCost(projection.stats.costBreakdown.base)}</span>
-                                </div>
-                                <div className="flex justify-between text-[11px]">
-                                    <span className="text-muted-foreground">Penalties</span>
-                                    <span className="text-emerald-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.penalty)}</span>
-                                </div>
-                                <div className="flex justify-between text-[11px]">
-                                    <span className="text-muted-foreground">Overtime</span>
-                                    <span className="text-amber-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.overtime)}</span>
-                                </div>
-                                {projection.stats.costBreakdown.allowance > 0 && (
-                                    <div className="flex justify-between text-[11px]">
-                                        <span className="text-muted-foreground">Allowances</span>
-                                        <span className="text-blue-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.allowance)}</span>
-                                    </div>
-                                )}
-                                {projection.stats.costBreakdown.leave > 0 && (
-                                    <div className="flex justify-between text-[11px]">
-                                        <span className="text-muted-foreground">Leave Loading</span>
-                                        <span className="text-purple-500 font-medium tabular-nums">+{formatCost(projection.stats.costBreakdown.leave)}</span>
-                                    </div>
-                                )}
-                                <div className="pt-2 border-t border-border flex justify-between text-[13px] font-bold">
-                                    <span className="text-foreground">Total</span>
-                                    <span className="text-foreground tabular-nums">{formatCost(projection.stats.estimatedCost)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </>
           )}
         </div>
@@ -546,7 +491,6 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                               isDnDActive={isDnDModeActive}
                               showStatusIcons={true}
                               headerAction={buildShiftMenu(shift)}
-                              detailedCost={(shift as any).detailedCost}
                               onClick={() => isPast ? undefined : onEditShift?.(shift)}
                             />
                           </div>

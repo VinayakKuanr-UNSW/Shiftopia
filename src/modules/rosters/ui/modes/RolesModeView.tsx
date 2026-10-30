@@ -151,12 +151,11 @@ interface RoleShiftCardProps {
   isBulkMode: boolean;
   onAssignEmployee: (shiftId: string, employeeId: string, employeeName: string) => void;
   headerAction?: React.ReactNode;
-  detailedCost?: import('@/modules/rosters/domain/projections/utils/cost/types').ShiftCostBreakdown;
 }
 
 // Shared presentational card — identical output whether or not DnD is wired up.
 const RoleShiftCardView: React.FC<RoleShiftCardProps & { isDragging?: boolean }> = ({
-  shift, isDnDModeActive, onEdit, isSelected, onToggleSelection, isBulkMode, headerAction, detailedCost, isDragging,
+  shift, isDnDModeActive, onEdit, isSelected, onToggleSelection, isBulkMode, headerAction, isDragging,
 }) => {
   const { isPast, isLocked: isManagementLocked } = resolveShiftStatus(shift);
   const isLocked = isManagementLocked || (isDnDModeActive && shift.lifecycle_status !== 'Published');
@@ -176,7 +175,6 @@ const RoleShiftCardView: React.FC<RoleShiftCardProps & { isDragging?: boolean }>
       groupColor={resolveGroupType(shift)}
       isSelected={isSelected}
       headerAction={headerAction}
-      detailedCost={detailedCost}
     />
   );
 };
@@ -482,17 +480,11 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     if (projection) {
       projection.levels.forEach(l => l.roles.forEach(r => {
         if (!shiftsByRoleAndDate[r.id]) shiftsByRoleAndDate[r.id] = {};
-        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ({
-          ...ps.raw,
-          detailedCost: ps.detailedCost
-        })));
+        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ps.raw));
       }));
       projection.unassignedRoles.forEach(r => {
         if (!shiftsByRoleAndDate[r.id]) shiftsByRoleAndDate[r.id] = {};
-        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ({
-          ...ps.raw,
-          detailedCost: ps.detailedCost
-        })));
+        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ps.raw));
       });
     } else {
       activeShifts.forEach(shift => {
@@ -643,7 +635,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                               isBulkMode={isBulkMode ?? false}
                               onAssignEmployee={onAssignShift || (() => {})}
                               headerAction={buildShiftMenu(s)}
-                              detailedCost={(s as any).detailedCost}
                             />
                           ))}
                           {/* For cells WITH shifts: Reserved row with + at the bottom right */}

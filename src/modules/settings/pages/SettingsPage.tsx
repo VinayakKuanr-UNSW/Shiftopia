@@ -1,7 +1,7 @@
 import { applyBrandColor } from '@/modules/core/lib/brandColor';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { cn } from '@/modules/core/lib/utils';
 import { page, surface } from '@/modules/core/ui/layout/pageTokens';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
@@ -12,15 +12,13 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import { Tabs, TabsContent } from '@/modules/core/ui/primitives/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Check, User, Shield, Bell, CreditCard, Link, Loader2, Save, Palette } from 'lucide-react';
+import { Check, User, Bell, CreditCard, Link, Loader2, Save, Palette } from 'lucide-react';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { useSettings, SUPPORTED_LOCALES } from '../hooks/useSettings';
 import { supabase } from '@/platform/supabase/client';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/platform/i18n';
-import { useAuth } from '@/platform/auth/useAuth';
-import { PayRatesSettings } from '@/modules/payroll/ui/rate-admin/PayRatesSettings';
 import { BiometricToggle } from '@/modules/settings/ui/components/BiometricToggle';
 import { NotificationToggle } from '@/modules/settings/ui/components/NotificationToggle';
 
@@ -544,13 +542,13 @@ const SettingsPage: React.FC = () => {
   const { section = 'appearance' } = useParams<{ section?: string }>();
 
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
-  // Pay Rates is a management/configuration surface (EBA wage schedule).
-  const canManageRates = hasPermission('configurations');
 
   const handleSectionChange = (newSection: string) => {
     navigate(`/settings/${newSection}`);
   };
+
+  // Pay rates moved to Gross Pay (money lives there alone, 2026-10-09).
+  if (section === 'pay-rates') return <Navigate to="/management/payroll?tab=rates" replace />;
 
   return (
     <PageLayout>
@@ -564,7 +562,6 @@ const SettingsPage: React.FC = () => {
             activeSection={section}
             onSectionChange={handleSectionChange}
             transparent
-            showPayRates={canManageRates}
           />
         }
       />
@@ -586,22 +583,6 @@ const SettingsPage: React.FC = () => {
             <TabsContent value="security">
               <SecuritySettings />
             </TabsContent>
-            <TabsContent value="pay-rates">
-              {canManageRates ? (
-                <PayRatesSettings />
-              ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                  <div className="p-4 rounded-full bg-muted border border-border">
-                    <Shield className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="text-[15px] font-semibold text-foreground">Not authorised</h3>
-                    <p className="text-muted-foreground max-w-sm mt-1 text-[13px]">Pay-rate administration is restricted to managers.</p>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-
             <TabsContent value="notifications">
               <NotificationSettings />
             </TabsContent>

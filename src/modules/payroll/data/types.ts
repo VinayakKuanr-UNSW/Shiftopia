@@ -11,7 +11,7 @@
 import type { ShiftPayContract } from '../domain/shiftPayTerms';
 
 /** Timesheet row joined onto a shift (by shift_id). Only pay-relevant columns. */
-interface GrossPayTimesheetRow {
+export interface GrossPayTimesheetRow {
   id: string;
   shift_id: string | null;
   /** Manager-adjusted billable start — 'HH:MM[:SS]' or null (no manual edit). */
@@ -77,6 +77,10 @@ export interface GrossPayShiftRow {
   is_first_aid_duty?: boolean | null;
   /** Flag for training shifts — drives the EBA minimum-engagement 2h tier. */
   is_training?: boolean | null;
+  is_cancelled?: boolean | null;
+  organization_id?: string | null;
+  department_id?: string | null;
+  sub_department_id?: string | null;
 
   // PostgREST embeds — may arrive as a single object or a one-element array.
   roles?: GrossPayRoleEmbed | GrossPayRoleEmbed[] | null;
@@ -94,6 +98,12 @@ export interface GrossPayShiftRow {
    * shift's own level and target.
    */
   _payContract?: ShiftPayContract | null;
+  /**
+   * The assignee has a contract the shift can be paid on — the linked one, or
+   * an active one. False ⇒ nothing to price on (the ledger's NO CONTRACT);
+   * undefined ⇒ not looked up.
+   */
+  _hasActiveContract?: boolean;
   // ── Apprentice / Trainee / SWS contract fields (H1 audit fix) ──────────
   /** Schedule 4 apprentice. */
   _isApprentice?: boolean;

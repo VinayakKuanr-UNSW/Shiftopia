@@ -43,9 +43,6 @@ import { useShiftPresence } from '../presence/ShiftEditingPresenceProvider';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import { ShiftStateCircleBadge } from './ShiftStateCircleBadge';
-import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
-import { COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
-import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
 import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
     resolveBillableSide,
@@ -53,7 +50,6 @@ import {
     calculateNetMinutes,
     applyMinEngagementFloor,
 } from '@/modules/timesheets/domain/billable-time';
-import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
@@ -99,12 +95,6 @@ interface SmartShiftCardProps {
     className?: string;
     compliancePending?: boolean;
     showStatusIcons?: boolean;
-    /**
-     * Pre-computed cost breakdown. When provided, the card skips its own
-     * call to the payroll engine — meaningful for dense grids where the
-     * projector already computed it once for every shift.
-     */
-    detailedCost?: ShiftCostBreakdown;
     /**
      * OTHER managers currently editing this shift (advisory presence). Rendered as
      * an amber overlay pill. Never gates interaction — the server version CAS is
@@ -184,49 +174,6 @@ function getNormalizedStatus(shift: any): string {
 
 
 /**
- * Renders the cost breakdown tooltip content.
- */
-const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
-    if (!breakdown) return null;
-    
-    const { totalCost, ordinaryCost, overtimeCost, allowanceCost, ordinaryHours, overtimeHours, breakdown: details } = breakdown;
-    
-    return (
-        <div className="space-y-2 p-1 min-w-[180px]">
-            <div className="flex justify-between items-center pb-1 border-b border-white/10">
-                <span className="text-[11px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
-                <span className="text-[11px] font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
-            </div>
-            
-            <div className="space-y-1 text-[11px]">
-                <div className="flex justify-between">
-                    <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
-                    <span>${ordinaryCost.toFixed(2)}</span>
-                </div>
-                
-                {overtimeCost > 0 && (
-                    <div className="flex justify-between text-orange-300">
-                        <span>Overtime ({overtimeHours.toFixed(1)}h)</span>
-                        <span>${overtimeCost.toFixed(2)}</span>
-                    </div>
-                )}
-                
-                {allowanceCost > 0 && (
-                    <div className="flex justify-between text-blue-300">
-                        <span>Night Allowance ({details.nightHours.toFixed(1)}h)</span>
-                        <span>${allowanceCost.toFixed(2)}</span>
-                    </div>
-                )}
-            </div>
-            
-            <div className="pt-1 text-[11px] opacity-40 italic border-t border-white/5">
-                {COST_ESTIMATE_DISCLAIMER}
-            </div>
-        </div>
-    );
-};
-
-/**
  * Simple card shell that replaces the previous 3D tilt version.
  * This ensures UI stability and prevents child components (like dropdowns)
  * from unmounting during hover state transitions.
@@ -266,7 +213,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     headerAction,
     groupColor = 'default_yellow',
     className,
-    detailedCost,
     editors,
 }) => {
 
@@ -302,11 +248,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
     const statusStr = getNormalizedStatus(shift);
     const isPublished = statusStr === 'published';
-
-    const costBreakdown = useMemo(() => {
-        if (detailedCost && detailedCost.totalCost > 0) return detailedCost;
-        return estimateDetailedCostFromShift(shift);
-    }, [detailedCost, shift]);
 
     const groupVariant = useMemo(() => {
         const gc = (groupColor || '').toLowerCase();
@@ -385,7 +326,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 {/* 2. Timings */}
                 <span
                     className={cn('font-medium text-[11px] sm:text-[13px] tabular-nums text-center truncate', tone.secondary)}
-                    title={`${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}${costBreakdown.totalCost > 0 ? ` · Est. $${costBreakdown.totalCost.toFixed(0)}` : ''}`}
+                    title={`${formatTime(shift.start_time)} – ${formatTime(shift.end_time)}`}
                 >
                     {formatTime(shift.start_time)} – {formatTime(shift.end_time)}
                 </span>
@@ -453,7 +394,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     groupColor = 'default_yellow',
     className,
     showStatusIcons,
-    detailedCost,
     isPeopleMode = false,
 }) => {
     const colors = useMemo(
@@ -494,11 +434,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const statusIcons = useMemo(() => 
         showStatusIcons ? getShiftStatusIcons(shift) : [], 
     [shift, showStatusIcons]);
-
-    const costBreakdown = useMemo(() => {
-        if (detailedCost && detailedCost.totalCost > 0) return detailedCost;
-        return estimateDetailedCostFromShift(shift);
-    }, [detailedCost, shift]);
 
     const stateDisplay = useMemo(
         () => getShiftStateDisplay(ctx.state),
@@ -598,20 +533,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             </div>
                             <div className="flex flex-col items-end gap-1">
                                 {totalHours && <Badge variant="secondary" className="text-[11px]">{totalHours}h net</Badge>}
-                                 {costBreakdown.totalCost > 0 && (
-                                     <Tooltip>
-                                         <TooltipTrigger asChild>
-                                             <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
-                                                 <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                                                     ${costBreakdown.totalCost.toFixed(2)}
-                                                 </span>
-                                             </div>
-                                         </TooltipTrigger>
-                                         <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="right">
-                                             <CostBreakdownTooltip breakdown={costBreakdown} />
-                                         </TooltipContent>
-                                     </Tooltip>
-                                 )}
                             </div>
                         </div>
 
@@ -750,21 +671,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                         <div className="flex flex-col items-end gap-1">
                             {totalHours && <Badge variant="secondary" className="text-[11px]">{totalHours}h net</Badge>}
-                             {/* Cost Badge — shown for all shifts */}
-                             {costBreakdown.totalCost > 0 && (
-                                 <Tooltip>
-                                     <TooltipTrigger asChild>
-                                         <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
-                                             <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                                                 {employeeName ? '=' : '≈'} ${costBreakdown.totalCost.toFixed(2)}
-                                             </span>
-                                         </div>
-                                     </TooltipTrigger>
-                                     <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="right">
-                                         <CostBreakdownTooltip breakdown={costBreakdown} />
-                                     </TooltipContent>
-                                 </Tooltip>
-                             )}
                         </div>
                     </div>
 
@@ -855,57 +761,14 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         [shift.adjusted_end, shift.actual_end, billableFinished],
     );
 
-    // Estimated pay for the SCHEDULED roster + the BILLABLE window — same
-    // lightweight estimator + EBA min-engagement floor the Timesheets card
-    // uses (TimesheetMobileCard), so this Roster drill-down card (which
-    // shares the same SharedShiftCard UI) shows real Billable Pay + a
-    // Variance→Pay delta instead of leaving them at 'N/A'/'--'.
+    // The minimum-engagement floor below depends on the basis THIS shift is
+    // worked on — `shifts.target_employment_type` — not the person's profile:
+    // someone can hold several contracts at once. The profile is a fallback
+    // for synthetic/preview rows only.
     const isSecurityRole = isSecurityRoleName(shift.roles?.name);
-    // Price the BASIS THIS SHIFT IS WORKED ON, not a summary of the person.
-    //
-    // The precedence used to run the other way — assigned profile first, on the
-    // reasoning that an assigned shift should be priced for whoever is actually
-    // working it. That reads well and is wrong: someone can hold several
-    // contracts at once, so they work THIS shift under one of them, and
-    // `shifts.target_employment_type` (NOT NULL since 20260806120100) is the one
-    // that names it. A prod employee holds a Full-Time Security L7 contract
-    // alongside four Casual ones; their profile says "Full-Time", so their
-    // Casual shift was priced at permanent Level 4 ($30.26/h) instead of casual
-    // ($37.82/h) — the 25% loading dropped silently.
-    //
-    // The profile stays as a fallback for rows where the target is somehow
-    // absent (synthetic/preview objects only). Falling through to `null` makes
-    // the estimator price as permanent rather than inventing a loading.
     const employmentType = shift.target_employment_type
       ?? (shift as any).assigned_profiles?.employment_type
       ?? null;
-
-    const scheduledCost = useMemo(() => {
-        if (!shift.start_time || !shift.end_time) return null;
-        try {
-            return estimateDetailedCostFromShift({
-                shift_date: shift.shift_date,
-                start_time: shift.start_time,
-                end_time: shift.end_time,
-                roles: { name: roleName },
-                employmentType,
-                // Real classification beats guessing it from the role name.
-                remuneration_level: shift.remuneration_level,
-                is_training: shift.is_training,
-                unpaid_break_minutes: shift.unpaid_break_minutes || 0,
-                scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
-            });
-        } catch {
-            return null;
-        }
-    }, [shift.shift_date, shift.start_time, shift.end_time, roleName, employmentType, shift.remuneration_level, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
-    const estimatedPay = scheduledCost ? `$${scheduledCost.totalCost.toFixed(2)}` : null;
-    const estimatedPayBreakdown = useMemo(
-        () => scheduledCost
-            ? buildOrdinaryEarningsLines(scheduledCost, { isSecurityRole, shiftDate: shift.shift_date, startTime: shift.start_time })
-            : [],
-        [scheduledCost, isSecurityRole, shift.shift_date, shift.start_time],
-    );
 
     /**
      * The EBA minimum-engagement floor.
@@ -930,33 +793,6 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     }, [resolvedStart, resolvedEnd, shift.unpaid_break_minutes, shift.shift_date, shift.is_training, employmentType, isSecurityRole]);
 
     const billableNetMinutes = billableFloor?.netMinutes ?? null;
-
-    const billableCost = useMemo(() => {
-        if (!resolvedStart.hhmm || !resolvedEnd.hhmm || billableNetMinutes == null) return null;
-        try {
-            return estimateDetailedCostFromShift({
-                shift_date: shift.shift_date,
-                start_time: resolvedStart.hhmm,
-                end_time: resolvedEnd.hhmm,
-                roles: { name: roleName },
-                employmentType,
-                // Real classification beats guessing it from the role name.
-                remuneration_level: shift.remuneration_level,
-                is_training: shift.is_training,
-                unpaid_break_minutes: shift.unpaid_break_minutes || 0,
-                scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
-            }, billableNetMinutes);
-        } catch {
-            return null;
-        }
-    }, [shift.shift_date, resolvedStart.hhmm, resolvedEnd.hhmm, billableNetMinutes, roleName, employmentType, shift.remuneration_level, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
-    const billablePay = billableCost ? `$${billableCost.totalCost.toFixed(2)}` : null;
-    const billablePayBreakdown = useMemo(
-        () => billableCost
-            ? buildOrdinaryEarningsLines(billableCost, { isSecurityRole, shiftDate: shift.shift_date, startTime: resolvedStart.hhmm ?? undefined })
-            : [],
-        [billableCost, isSecurityRole, shift.shift_date, resolvedStart.hhmm],
-    );
 
     const shiftDataForCard = useMemo(() => ({
         ...shift,
@@ -998,10 +834,6 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
             requiredEngagementMinutes={billableFloor?.requiredMins || null}
             adjustedStartSource={resolvedStart.source === 'missing' ? null : resolvedStart.source}
             adjustedEndSource={resolvedEnd.source === 'missing' ? null : resolvedEnd.source}
-            estimatedPay={estimatedPay}
-            estimatedPayBreakdown={estimatedPayBreakdown}
-            billablePay={billablePay}
-            billablePayBreakdown={billablePayBreakdown}
             showPayrollRules
             hideBreadcrumbs
             hideSegmentedBox

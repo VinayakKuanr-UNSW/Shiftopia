@@ -2,6 +2,10 @@
 
 **Status:** SQL port applied to prod 2026-08-07 · gates green (type-check, 1860 vitest, build)
 **Scope:** every figure in the app that says what a shift or a roster costs
+**Since 2026-10-09:** money is shown in **Gross Pay alone** (`/management/payroll`) — see §5.
+No shift card, roster view, timesheet, bid, swap, Insights tile or contract screen
+shows a dollar figure any more. (A salaried contract still takes its annual salary
+as an input — that is contract data, not a display.)
 
 ---
 
@@ -11,8 +15,8 @@ There is **one set of award rules** and **two implementations of them**:
 
 | | Where | Answers |
 |---|---|---|
-| **TypeScript** | `rosters/domain/projections/utils/cost/standard.ts` | What does **this shift** cost? (every card, tooltip, timesheet row) |
-| **SQL** | `public.fn_eba_estimate_shift_cost` | What does **this whole view** cost? (planner footer, insights, coverage) |
+| **TypeScript** | `rosters/domain/projections/utils/cost/standard.ts` | What does **this shift** cost? (Gross Pay's shift ledger, labour cost and pay run; the AutoScheduler's cost objective) |
+| **SQL** | `public.fn_eba_estimate_shift_cost` | What does **this whole view** cost? (the cost columns of the planner / Insights / coverage RPCs — **no longer read by the app**, see §5) |
 
 This duplication is deliberate and load-bearing. The Roster Planner's default
 Bucket View **fetches no raw shifts at all** — that is the whole point of the
@@ -129,43 +133,47 @@ across hundreds of shifts. The bound is one cent per shift.
 
 ## 5. Cost surfaces
 
-Every one of these now routes through `public.fn_eba_shift_cost(shifts)`:
+**Gross Pay is the only surface** (decision 2026-10-09). Managers see money
+there and nowhere else; employees see none. Its tabs:
 
-| Surface | RPC | Filter |
+| Tab | `?tab=` | What it shows |
 |---|---|---|
-| Planner footer — Scheduled | `get_roster_planner_stats.scheduled_cost` | all live shifts, **filled or not** |
-| Planner footer — Actual | `get_roster_planner_stats.actual_cost` | only shifts with a worked window |
-| Insights top-line KPI | `get_insights_summary` | assigned only |
-| Insights cost breakdown | `get_dept_insights_breakdown` | assigned only |
-| Insights trend | `get_insights_trend` | assigned only |
-| Labour-cost drilldown | `get_metric_detailed_analysis` | assigned only |
-| Coverage stats | `rpc_shift_coverage_stats` | all live shifts |
+| Shifts | `shifts` | Every shift in the period — unassigned, unworked and unverified included — with **Scheduled**, **Actual** and **Billable** pay. Unassigned rows read *ASSIGN AN EMPLOYEE FIRST* (pay depends on the assignee's contract); an assignee with no contract reads *NO CONTRACT*; cancelled rows are not paid. |
+| Labour cost | `labour` | The same ledger summed by department / sub-department / role / employee, against the pro-rated `department_budgets` (department grouping only). A salary is counted once per period and split by rostered-hours share. Unassigned shifts are reported as *not costed*, never as $0. |
+| Pay run | `payrun` | Gross pay per employee for the period. |
+| Pay rates | `rates` | The EA rate tables (needs `configurations`; was a Settings tab — `/settings?section=pay-rates` redirects here). |
 
-To check nothing has drifted back out:
+The three columns are three **windows**, each priced through the same payroll
+aggregator (`computeEmployeePeriodGrossPay`), seeded from the ISO-week Monday so
+weekly overtime (cl 42), the rest gap (cl 40.1) and the split-shift allowance
+(cl 28.4) see the whole week:
 
-```sql
-select proname, prosrc like '%fn_eba_%' as uses_engine
-from pg_proc
-where proname in ('get_roster_planner_stats','get_dept_insights_breakdown',
-                  'get_insights_trend','rpc_shift_coverage_stats',
-                  'get_insights_summary','get_metric_detailed_analysis');
--- every row must be true
-```
+| Column | Window |
+|---|---|
+| Scheduled | the rostered start/end, less the unpaid break |
+| Actual | the raw clock-in/out, to the minute |
+| Billable | the manager's adjusted times, else the actual snapped to 15 minutes |
 
-**Scheduled vs assigned-only is a real distinction, not an inconsistency.** The
-planner footer answers *what will this plan cost* — an unfilled shift still has to
-be paid for once someone fills it, so it counts. Insights answers *what did this
-period cost* — an unfilled shift cost nothing, so it does not. Getting this
-backwards is what produced the original bug: `est_cost` was assigned-only, so a
-fully-planned 156-shift roster reported **$0.00**.
+All three include the minimum-engagement **payment** floor (cl 12 / 56.2), so
+Actual is what the clocks would pay, not raw minutes × rate. Salaried shifts
+show hours, not a per-shift figure.
 
-### Denominators are part of the number
+### What the RPC cost columns are now
 
-Each footer panel shows what its total is *over* — "156 shifts", "none worked yet",
-or an amber "N of 156 priced" when some shift fails to resolve a rate. A bare
-`$0.00` cannot distinguish *nothing worked yet* from *nothing could be priced* from
-*genuinely free*, and that ambiguity is exactly how the original $0.00 hid for so
-long.
+`get_roster_planner_stats` (`est_cost`, `budget_cost`, `scheduled_cost`,
+`actual_cost`, `costed_shifts`, `uncosted_shifts`), `get_insights_summary`,
+`get_dept_insights_breakdown`, `get_insights_trend`,
+`get_metric_detailed_analysis` and `rpc_shift_coverage_stats` still compute
+cost through `public.fn_eba_shift_cost(shifts)`, but **the app reads none of
+those columns**. The planner-stats schema ignores them (`z.object` strips
+unknown keys), so they can be dropped from the RPCs without an app change. The
+parity contract (§4) still matters for as long as they exist.
+
+The computed fields `my_shift_pay_terms` and `get_prospective_pay_terms` (bid
+and swap pricing) have **no app caller**; `shift_pay_terms` and
+`get_shift_pay_terms` are no longer selected (Gross Pay reads
+`hr.contract_pay_terms` itself). Dropping or narrowing them is a separate,
+prod-side step that must follow the app deploy.
 
 ---
 

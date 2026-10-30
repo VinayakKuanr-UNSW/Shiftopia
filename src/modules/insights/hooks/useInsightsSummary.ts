@@ -12,7 +12,6 @@ const EMPTY_SUMMARY: InsightsSummary = {
     shifts_no_show: 0,
     shifts_emergency: 0,
     scheduled_hours: 0,
-    estimated_cost: 0,
     shift_fill_rate: 0,
     compliance_overrides: 0,
     no_show_rate: 0,

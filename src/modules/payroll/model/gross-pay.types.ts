@@ -47,7 +47,12 @@ export interface EarningsLine {
  * priced from manager-approved actual/adjusted times; `none` = not worked
  * (no-show / cancelled) and therefore not paid.
  */
-export type GrossPayHoursSource = 'actual' | 'adjusted' | 'scheduled_fallback' | 'none';
+/**
+ * Which window a shift's hours were priced from. 'scheduled' is the roster
+ * window priced deliberately (the ledger's Scheduled Pay column), as opposed to
+ * 'scheduled_fallback' — billable pricing that had no attendance to use.
+ */
+export type GrossPayHoursSource = 'actual' | 'adjusted' | 'scheduled' | 'scheduled_fallback' | 'none';
 
 /** Gross pay for a single shift, itemised into earnings lines. */
 export interface ShiftGrossPay {

@@ -128,8 +128,6 @@ export function projectEvents(
       openShifts: 0,
       publishedShifts: 0,
       totalNetMinutes: 0,
-      estimatedCost: 0,
-      costBreakdown: { base: 0, penalty: 0, overtime: 0, allowance: 0, leave: 0 },
     },
   };
 }
