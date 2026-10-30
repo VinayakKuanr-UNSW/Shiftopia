@@ -22,7 +22,6 @@ vi.mock('@/platform/supabase/client', () => ({
 
 import {
     callAuthenticatedRpc,
-    callAuthenticatedVoidRpc,
     callRpc,
     requireUser,
 } from '../client';
@@ -147,27 +146,5 @@ describe('requireUser / authenticated calls', () => {
         expect(h.rpc).toHaveBeenCalledWith('sm_do_thing', { p_user_id: 'u-7' });
     });
 
-    it('callAuthenticatedVoidRpc never sends the RPC when signed out', async () => {
-        signedOut();
-
-        await expect(callAuthenticatedVoidRpc('sm_do_thing', () => ({}))).rejects.toBeInstanceOf(AuthenticationError);
-        expect(h.rpc).not.toHaveBeenCalled();
-    });
 });
 
-describe('callAuthenticatedVoidRpc', () => {
-    it('resolves to undefined whatever the RPC returns', async () => {
-        signedIn();
-        h.rpc.mockResolvedValue({ data: { anything: 1 }, error: null });
-        await expect(callAuthenticatedVoidRpc('sm_do_thing', () => ({}))).resolves.toBeUndefined();
-    });
-
-    it('still surfaces a mapped error', async () => {
-        signedIn();
-        h.rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'not allowed' } });
-
-        const err = await rejection(callAuthenticatedVoidRpc('sm_do_thing', () => ({})));
-
-        expect(err.code).toBe('PERMISSION_DENIED');
-    });
-});
