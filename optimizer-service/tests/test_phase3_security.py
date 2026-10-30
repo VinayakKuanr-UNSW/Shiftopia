@@ -214,6 +214,37 @@ def test_optimize_accepts_valid_token():
     assert 'shifts' in res.json()['detail']
 
 
+def test_optimize_solves_for_valid_token():
+    """Auth on, valid token, solvable body → 200 with the assignment. The
+    test above stops at the 400 an empty body gets; this is the only test
+    that runs a real solve behind real JWT verification."""
+    secret = 'a-32-byte-or-longer-secret-for-hs256'
+    client = reload_app({
+        'OPTIMIZER_AUTH_DISABLED': 'false',
+        'SUPABASE_JWT_SECRET': secret,
+    })
+    token = make_jwt(secret)
+    res = client.post(
+        '/optimize',
+        json={
+            'shifts': [{
+                'id': 's1', 'shift_date': '2026-05-15',
+                'start_time': '09:00', 'end_time': '17:00',
+                'duration_minutes': 480, 'priority': 1,
+            }],
+            'employees': [{
+                'id': 'e1', 'name': 'Alice', 'employment_type': 'FT',
+                'hourly_rate': 25.0, 'max_weekly_minutes': 2400,
+                'min_contract_minutes': 0,
+            }],
+        },
+        headers={'Authorization': f'Bearer {token}'},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert [(a['shift_id'], a['employee_id']) for a in body['assignments']] == [('s1', 'e1')]
+
+
 def test_optimize_503_when_secret_missing_in_prod_mode():
     """Fail-closed posture: if AUTH_DISABLED=false and the secret is
     unset, every request must return 503 (not just unauthenticated

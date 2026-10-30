@@ -24,6 +24,13 @@ import pytest
 # Make the model_builder importable from the tests/ subdirectory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Tests run with auth bypassed. Production deployments must NOT set this env.
+# `security.py` reads it ONCE at import, and test modules such as
+# test_audit_endpoint build their TestClient at import — so it has to be set
+# here, before any test module is collected, or a plain `pytest` run gets 503s.
+# The auth tests in test_phase3_security set it explicitly per test.
+os.environ.setdefault('OPTIMIZER_AUTH_DISABLED', 'true')
+
 from model_builder import (  # noqa: E402
     AvailabilitySlotInput,
     EmployeeInput,

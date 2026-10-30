@@ -2,11 +2,16 @@ name: CI & Deploy
 
 # Single gated pipeline:
 #   verify           → type-check + unit tests + build (runs on every push & PR)
+#   python-tests     → pytest for optimizer-service/ and ml/ (HTTP-level API
+#                      tests via FastAPI TestClient + solver regressions). Not a
+#                      gate on deploy: neither service ships through this
+#                      pipeline (see AGENTS.md §3).
 #   rls-audit        → RLS regression guard against the Supabase dev database
 #   api-integration  → HTTP + SQL access suites on a throwaway Supabase built
 #                      from supabase/migrations + supabase/seeds
-#   deploy           → runs ONLY if all three pass. main push → production,
-#                      PR → preview (URL auto-commented). A red build never ships.
+#   deploy           → runs ONLY if verify, rls-audit and api-integration pass.
+#                      main push → production, PR → preview (URL auto-commented).
+#                      A red build never ships.
 #
 # Activation: the deploy job is guarded on the VERCEL_TOKEN secret. Until that
 # secret exists it skips cleanly (green) so the pipeline is safe to land before
@@ -73,27 +78,42 @@ jobs:
           VITE_SENTRY_RELEASE: ${{ github.sha }}
         run: npm run build
 
-  # The CP-SAT solver's regression suite. Python matches the service image
-  # (optimizer-service/Dockerfile). Not a gate on `deploy`: the Vercel build
-  # does not ship the solver, which deploys as its own container.
-  optimizer-tests:
-    name: Optimizer tests (pytest)
+  # The Python services' suites (the CP-SAT solver's regressions and the ML
+  # service). Python versions match each service's Dockerfile.
+  python-tests:
+    name: pytest (${{ matrix.service }})
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Python versions match each service's Dockerfile base image.
+          - service: optimizer-service
+            python: '3.12'
+            requirements: requirements.txt
+          - service: ml
+            python: '3.13'
+            requirements: requirements-dev.txt
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
           cache: 'pip'
-          cache-dependency-path: optimizer-service/requirements.txt
+          cache-dependency-path: ${{ matrix.service }}/${{ matrix.requirements }}
 
       - name: Install dependencies
-        run: pip install -r optimizer-service/requirements.txt
+        run: python -m pip install -r ${{ matrix.requirements }}
 
-      - name: Run pytest
-        run: python -m pytest optimizer-service/tests -q
+      # Both conftests default the service's auth bypass on; the auth tests
+      # switch it off per test. Nothing here talks to a real database.
+      - name: pytest
+        run: python -m pytest -q
 
   rls-audit:
     name: RLS regression guard
