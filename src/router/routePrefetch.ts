@@ -34,7 +34,10 @@ const routeImporters: Record<string, () => Promise<unknown>> = {
   // ── Management ──
   '/management/bids':    () => import('@/modules/planning/bidding/ui/pages/ManagerBids.page.tsx'),
   '/management/swaps':   () => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page.tsx'),
+  '/grid':               () => import('@/modules/availability/pages/TeamAvailabilityPage.tsx'),
   '/team-availability':  () => import('@/modules/availability/pages/TeamAvailabilityPage.tsx'),
+  '/payroll':            () => import('@/modules/payroll/ui/GrossPayPage.tsx'),
+  '/management/payroll': () => import('@/modules/payroll/ui/GrossPayPage.tsx'),
 
 
 

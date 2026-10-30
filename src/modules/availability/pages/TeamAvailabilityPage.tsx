@@ -596,7 +596,7 @@ const TeamAvailabilityPage: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `team-availability-${format(startDate, 'yyyy-MM-dd')}-to-${format(endDate, 'yyyy-MM-dd')}.csv`;
+        a.download = `grid-${format(startDate, 'yyyy-MM-dd')}-to-${format(endDate, 'yyyy-MM-dd')}.csv`;
         a.click();
         URL.revokeObjectURL(url);
     }, [data, sortedMembers, startDate, endDate, weekColumns, hours, complianceByProfile]);
@@ -694,7 +694,7 @@ const TeamAvailabilityPage: React.FC = () => {
     return (
         <div className="h-full flex flex-col overflow-hidden bg-background">
             <GoldStandardHeader
-                title="Availability Manager"
+                title="Grid"
                 Icon={CalendarDays}
                 mode="managerial"
                 scope={scope}
@@ -1064,4 +1064,5 @@ const TeamAvailabilityPage: React.FC = () => {
     );
 };
 
+export const GridPage = TeamAvailabilityPage;
 export default TeamAvailabilityPage;

@@ -9,6 +9,7 @@ Per-module/feature deep dives, each mirroring a directory under `src/modules/` (
 | **[autoscheduler/](autoscheduler/)** | The OR-Tools CP-SAT optimizer service: solver design, schema-drift contract tests, hardening | `01` → `02` |
 | **[shift-synthesizer/](shift-synthesizer/)** | ML-driven labour-demand forecasting → automatic draft-shift generation | `01` → `02` → `03` |
 | **[full-time-rostering.md](full-time-rostering.md)** | Full-time shifts on the Rosters page (Office group): FSM branch, DB rules, Copy-to, leave, the `office` module | single page |
+| **[toil/](toil/README.md)** | Time off in lieu for salaried class-1 contracts: who earns it (and why EBA overtime never does), the daily + weekly rules, taking, payout/expiry, the append-only ledger | single page |
 | **[shift-integrity.md](shift-integrity.md)** | Every rule the database enforces on `shifts` (placement, overlap, leave, FT, shape, state) and the known gaps | single page |
 
 Each folder has (or should have) its own `README.md`/index — check there first for that module's specifics, current-vs-historical caveats, and file-to-code cross-references.

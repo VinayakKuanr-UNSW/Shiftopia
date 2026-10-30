@@ -22,3 +22,19 @@ graphify-out/
 # Scratch dirs, not knowledge
 1/
 scratch/
+
+# Migrations belong to scripts/graphify/sql_layer.py, which mints ONE node per
+# database object (db_tbl_*, db_fn_*, …) across all 227 migrations. graphify's
+# own SQL extractor (tree-sitter-sql) mints one node per object PER FILE, so a
+# table touched by 30 migrations would appear 30 times next to its real node.
+# Other .sql files (supabase/tests, seed, audits, scripts) are still parsed.
+supabase/migrations/
+# Superseded by the 2026-07-02 re-baseline; parsing it would answer "where is
+# this defined?" with migrations that no longer describe the database.
+supabase/migrations_archive_pre_baseline_20260702/
+# Superseded by the 2026-10-13 re-baseline (docs/operations/database-baseline.md).
+supabase/migrations_archive_pre_baseline_20261013/
+# Draft / scratch SQL that was never applied: its tables and functions do not
+# exist, so parsing it would add phantom definitions next to the real ones.
+docs/**/*.sql
+scratch.sql

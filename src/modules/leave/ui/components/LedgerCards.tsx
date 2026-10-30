@@ -7,6 +7,7 @@
  *   capped    hours left of the calendar-year cap
  *   occasion  occasions and hours taken this year, against the per-occasion figure
  *   unpaid    hours taken this year
+ *   toil      banked time in lieu; held + available, and the next hours to expire
  *
  * Types the person has no entitlement to are not shown at all. A zero card for
  * a casual's annual leave would read as "used up", which is false.
@@ -25,6 +26,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primi
 import type { LedgerEntry } from '../../domain/leave-ledger';
 import type { LeaveTypeCode } from '../../model/leave.types';
 import { fmtH } from '../format';
+import { fmtToil } from '@/modules/toil/domain/toil-rules';
+import { format, parseISO } from 'date-fns';
 
 export function periodLabel(def: LedgerEntry['def']): string {
     switch (def.kind) {
@@ -33,6 +36,7 @@ export function periodLabel(def: LedgerEntry['def']): string {
                 : def.type === 'long_service' ? 'Accrues with service' : 'Balance';
         case 'capped': return def.capPeriod === 'tenure' ? 'Whole of employment' : 'Per calendar year';
         case 'occasion': return 'Per occasion';
+        case 'toil': return 'Banked hours';
         default: return 'Unpaid';
     }
 }
@@ -80,6 +84,35 @@ export function LedgerFigure({ entry }: { entry: LedgerEntry }) {
                         : `${l.years} years' service · available from ${l.availableFrom}`}
                 </p>
                 {l.estimated && <p className={text.caption}>Estimate — casual LSL uses average weekly hours</p>}
+            </>
+        );
+    }
+
+    if (def.kind === 'toil') {
+        const t = entry.toil;
+        if (!t) {
+            return (
+                <>
+                    <p className="text-3xl font-bold tracking-tight tabular-nums text-muted-foreground">—</p>
+                    <p className={text.caption}>Not loaded</p>
+                </>
+            );
+        }
+        return (
+            <>
+                <p className="text-3xl font-bold tracking-tight tabular-nums text-foreground">{fmtToil(t.balanceMinutes)}</p>
+                {t.heldMinutes > 0 && (
+                    <p className="text-[11px] font-medium tabular-nums text-amber-700 dark:text-amber-300">
+                        {fmtToil(t.heldMinutes)} held · {fmtToil(t.availableMinutes)} available
+                    </p>
+                )}
+                {t.nextExpiry ? (
+                    <p className={cn(text.caption, 'tabular-nums')}>
+                        {fmtToil(t.nextExpiry.minutes)} to take by {format(parseISO(t.nextExpiry.date), 'd MMM yyyy')}, or it is paid out
+                    </p>
+                ) : (
+                    <p className={text.caption}>{t.eligible ? 'Nothing banked yet' : 'No current salaried contract'}</p>
+                )}
             </>
         );
     }
@@ -165,9 +198,18 @@ export const LEDGER_TONE: Record<LedgerEntry['def']['kind'], string> = {
     capped: 'bg-violet-50 border-violet-100 dark:bg-violet-400/[0.14] dark:border-violet-300/25',
     occasion: 'bg-orange-50 border-orange-100 dark:bg-orange-300/[0.12] dark:border-orange-200/20',
     unpaid: 'bg-teal-50 border-teal-100 dark:bg-teal-300/[0.10] dark:border-teal-200/20',
+    toil: 'bg-emerald-50 border-emerald-100 dark:bg-emerald-400/[0.12] dark:border-emerald-300/25',
 };
 
-const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCode) => void }> = ({ entry, onRequest }) => {
+const LedgerCard: React.FC<{
+    entry: LedgerEntry;
+    onRequest?: (type: LeaveTypeCode) => void;
+    onOpenToil?: () => void;
+}> = ({ entry, onRequest, onOpenToil }) => {
+    // TOIL can only be requested while a salaried contract is held (hours banked
+    // from an old one are paid out, not taken).
+    const canRequest = onRequest && (entry.def.kind !== 'toil' || Boolean(entry.toil?.eligible));
+    const history = entry.def.kind === 'toil' ? onOpenToil : undefined;
     const [explained, setExplained] = React.useState(false);
     const basisId = `ledger-basis-${entry.def.type}`;
     const negative = Boolean(entry.line && entry.line.balance < 0);
@@ -194,8 +236,8 @@ const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCod
                         <LedgerFigure entry={entry} />
                     </div>
 
-                    <div className={cn('mt-4 flex items-center gap-2', !onRequest && 'sm:hidden')}>
-                        {onRequest && (
+                    <div className={cn('mt-4 flex items-center gap-2', !canRequest && !history && 'sm:hidden')}>
+                        {canRequest && (
                             <button
                                 type="button"
                                 onClick={() => onRequest(entry.def.type)}
@@ -210,9 +252,25 @@ const LedgerCard: React.FC<{ entry: LedgerEntry; onRequest?: (type: LeaveTypeCod
                                 Request
                             </button>
                         )}
+                        {history && (
+                            <button
+                                type="button"
+                                onClick={history}
+                                aria-label={`${entry.def.label} history`}
+                                className={cn(
+                                    'rounded-full px-4 text-sm font-semibold text-foreground',
+                                    'transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                                    'dark:hover:bg-white/10',
+                                    canRequest ? '' : 'flex-1 bg-white shadow-sm dark:bg-white/10',
+                                    touch.targetY,
+                                )}
+                            >
+                                History
+                            </button>
+                        )}
                         <button
                             type="button"
-                            className={cn('sm:hidden px-2 text-xs font-semibold text-primary', !onRequest && '-ml-2', touch.targetY)}
+                            className={cn('sm:hidden px-2 text-xs font-semibold text-primary', !canRequest && !history && '-ml-2', touch.targetY)}
                             aria-expanded={explained}
                             aria-controls={basisId}
                             onClick={() => setExplained(v => !v)}
@@ -235,11 +293,15 @@ export const LedgerCards: React.FC<{
     className?: string;
     /** Personal view only: each card gets a "Request" pill preset to its type. */
     onRequest?: (type: LeaveTypeCode) => void;
-}> = ({ entries, className, onRequest }) => {
+    /** The TOIL card's "History" button — opens the TOIL ledger. */
+    onOpenToil?: () => void;
+}> = ({ entries, className, onRequest, onOpenToil }) => {
     const shown = entries.filter(e => e.applicable);
     return (
         <section aria-label="Leave ledger" className={cn('grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4', className)}>
-            {shown.map(entry => <LedgerCard key={entry.def.type} entry={entry} onRequest={onRequest} />)}
+            {shown.map(entry => (
+                <LedgerCard key={entry.def.type} entry={entry} onRequest={onRequest} onOpenToil={onOpenToil} />
+            ))}
         </section>
     );
 };

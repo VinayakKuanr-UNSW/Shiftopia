@@ -106,6 +106,40 @@ describe('occasion kind', () => {
     });
 });
 
+describe('toil kind — salaried contracts only, from toil_ledger', () => {
+    const toil = (over: Partial<NonNullable<BuildLedgerInput['toil']>> = {}): NonNullable<BuildLedgerInput['toil']> => ({
+        employeeId: 'e1', eligible: true, balanceMinutes: 144, heldMinutes: 0, availableMinutes: 144,
+        earnedMinutes: 144, takenMinutes: 0, paidOutMinutes: 0, nextExpiry: { date: '2027-03-25', minutes: 144 },
+        hasHistory: true, ...over,
+    });
+
+    it('applies to a salaried class-1 contract and carries its position', () => {
+        const e = entry(ledger({ toil: toil() }), 'toil');
+        expect(e.applicable).toBe(true);
+        expect(e.def.kind).toBe('toil');
+        expect(e.toil?.balanceMinutes).toBe(144);
+    });
+
+    it('is absent for anyone without one — an EBA permanent, a casual, or not loaded', () => {
+        expect(entry(ledger({ toil: toil({ eligible: false, balanceMinutes: 0 }) }), 'toil').applicable).toBe(false);
+        expect(entry(ledger({ isCasual: true }), 'toil').applicable).toBe(false);
+        expect(entry(ledger(), 'toil').applicable).toBe(false);
+    });
+
+    it('still shows hours banked under a contract that has ended — they are paid out, never lost', () => {
+        expect(entry(ledger({ toil: toil({ eligible: false, balanceMinutes: 60 }) }), 'toil').applicable).toBe(true);
+    });
+
+    it('counts TOIL requests as used / pending like other leave', () => {
+        const e = entry(ledger({
+            toil: toil(),
+            requests: [r({ leaveType: 'toil', requestedHours: 2 }), r({ leaveType: 'toil', status: 'pending', requestedHours: 1 })],
+        }), 'toil');
+        expect(e.usedHours).toBe(2);
+        expect(e.pendingHours).toBe(1);
+    });
+});
+
 describe('dailyHoursFor', () => {
     it('is weekly ÷ 5, and 7.6h when the contract is silent', () => {
         expect(dailyHoursFor(38)).toBe(7.6);
@@ -159,6 +193,12 @@ describe('requestableLeaveTypes — what a casual may ask for (cl 12.5(b))', () 
         const list = sql.match(/NEW\.leave_type NOT IN \(([^)]*)\)/)![1];
         const refused = [...list.matchAll(/'([a-z_]+)'/g)].map(m => m[1]);
         expect(refused.length).toBeGreaterThan(0);
+        // TOIL is refused for casuals by its own guard: only a salaried
+        // full-time or part-time contract can take it.
+        const toilSql = readFileSync(resolve(process.cwd(),
+            'supabase/migrations/20261010082231_toil_ledger.sql'), 'utf8');
+        expect(toilSql).toMatch(/CREATE TRIGGER trg_toil_leave_guard\s+BEFORE INSERT OR UPDATE ON public\.leave_requests/);
+        refused.push('toil');
         // Refused ∪ casual-requestable = every type, and they never overlap.
         expect(new Set([...refused, ...CASUAL_REQUESTABLE])).toEqual(new Set(all));
         for (const t of refused) expect(CASUAL_REQUESTABLE).not.toContain(t);

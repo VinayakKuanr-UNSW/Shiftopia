@@ -75,6 +75,22 @@ export interface GrossPayShiftInput {
    * no loading, no penalties — and NOT a leave day (no balance consumption).
    */
   isPublicHolidayNotWorked?: boolean;
+  /**
+   * Time off in lieu TAKEN (modules/toil). Only salaried contracts earn it, so
+   * normally priced on the salary branch — paid within the salary, not on top.
+   * Should the contract have changed basis since, it is a flat ordinary-rate
+   * absence. Reported as its own 'toil_taken' line either way.
+   */
+  isToilLeave?: boolean;
+  /**
+   * Time off in lieu PAID OUT (a ledger payout, not a shift): `netMinutes`
+   * hours at `rate` — the salary's hourly equivalent, hour for hour. Never
+   * leave, never worked time, and never a salaried shift: it must not open a
+   * period salary line of its own.
+   */
+  isToilPayout?: boolean;
+  /** The payslip wording for a TOIL payout (why it was paid). */
+  toilPayoutDescription?: string;
 
   // Rate context.
   /**
@@ -336,6 +352,22 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
   // shift is not worked and is not paid.
   if (input.isNoShow || input.isCancelled) return NOT_WORKED(input);
 
+  if (input.isToilPayout) {
+    const hours = round2(Math.max(0, input.netMinutes) / 60);
+    const rate = input.rate ?? 0;
+    const amount = round2(hours * rate);
+    return {
+      ...NOT_WORKED(input),
+      lines: amount > 0 || hours > 0
+        ? [{ code: 'toil_payout', description: input.toilPayoutDescription ?? 'Time in lieu paid out', hours, amount }]
+        : [],
+      grossPay: amount,
+      paidHours: hours,
+      hoursSource: 'actual',
+      ordinaryRate: rate,
+    };
+  }
+
   // A cl 56.4 not-worked public holiday is priced exactly like a personal-leave
   // day (ordinary base rate for the ordinary hours, casual ⇒ $0) but reported
   // under its own earnings code — it is NOT leave and consumes no leave balance.
@@ -347,7 +379,7 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
   // reclassification would all leak into an absence day.
   const isFlatAbsence = isPhAbsence
     || !!(input.isParentalLeave || input.isLongServiceLeave || input.isJuryDuty
-        || input.isSupportingCarer);
+        || input.isSupportingCarer || input.isToilLeave);
   const isLeave = isFlatAbsence
     || !!(input.isAnnualLeave || input.isPersonalLeave || input.isCarerLeave || input.isFdvLeave);
 
@@ -375,6 +407,8 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
     const lines: EarningsLine[] = [];
     if (isPhAbsence) {
       lines.push({ code: 'public_holiday', description: 'Public holiday (not worked)', hours, amount });
+    } else if (input.isToilLeave) {
+      lines.push({ code: 'toil_taken', description: 'Time in lieu taken', hours, amount });
     } else if (input.isAnnualLeave) {
       lines.push({ code: 'annual_leave', description: 'Annual leave', hours, amount });
     } else if (input.isParentalLeave) {
@@ -467,6 +501,8 @@ export function computeShiftGrossPay(input: GrossPayShiftInput): ShiftGrossPay {
     // carries the greater of the 17.5% loading or the shift's penalties).
     if (isPhAbsence) {
       lines.push({ code: 'public_holiday', description: 'Public holiday (not worked)', hours: b.ordinaryHours, amount: round2(b.ordinaryCost) });
+    } else if (input.isToilLeave) {
+      lines.push({ code: 'toil_taken', description: 'Time in lieu taken', hours: b.ordinaryHours, amount: round2(b.ordinaryCost) });
     } else if (input.isAnnualLeave) {
       lines.push({ code: 'annual_leave', description: 'Annual leave', hours: b.ordinaryHours, amount: round2(b.ordinaryCost) });
     } else if (input.isParentalLeave) {

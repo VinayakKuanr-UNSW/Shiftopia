@@ -25,7 +25,6 @@ const NotFound = lazy(() => import('@/modules/core/pages/NotFound.tsx'));
 const ProfilePage = lazy(() => import('@/modules/users/pages/ProfilePage.tsx'));
 const MyRosterPage = lazy(() => import('@/modules/rosters/pages/MyRosterPage.tsx'));
 const AvailabilityPage = lazy(() => import('@/modules/availability/pages/AvailabilityPage.tsx'));
-const TeamAvailabilityPage = lazy(() => import('@/modules/availability/pages/TeamAvailabilityPage.tsx'));
 const EmployeeBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/EmployeeBids.page.tsx'));
 const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/EmployeeSwaps.page.tsx'));
 const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage.tsx'));
@@ -33,7 +32,8 @@ const AttendancePage = lazy(() => import('@/modules/rosters/pages/AttendancePage
 const MyNotificationsPage = lazy(() => import('@/modules/core/pages/MyNotificationsPage.tsx'));
 const MyLeavePage = lazy(() => import('@/modules/leave/ui/pages/MyLeavePage.tsx'));
 const LeaveApprovalsPage = lazy(() => import('@/modules/leave/ui/pages/LeaveApprovalsPage.tsx'));
-const GrossPayPage = lazy(() => import('@/modules/payroll/ui/GrossPayPage.tsx'));
+const GridPage = lazy(() => import('@/modules/availability/pages/TeamAvailabilityPage.tsx'));
+const PayrollPage = lazy(() => import('@/modules/payroll/ui/GrossPayPage.tsx'));
 
 // Rostering
 const TemplatesPage = lazy(() => import('@/modules/templates/pages/TemplatesPage'));
@@ -207,10 +207,12 @@ const AppRouter: React.FC = () => {
                         <Route path="/broadcast" element={<BroadcastManagerPage />} />
                     </Route>
 
-                    {/* ── Leave Approvals (Management) ── */}
+                    {/* ── Payroll & Leave (Management) ── */}
                     <Route element={<FeatureGate feature="management" />}>
                         <Route path="/management/leave" element={<LeaveApprovalsPage />} />
-                        <Route path="/management/payroll" element={<GrossPayPage />} />
+                        <Route path="/payroll" element={<PayrollPage />} />
+                        <Route path="/management/payroll" element={<Navigate to="/payroll" replace />} />
+                        <Route path="/gross-pay" element={<Navigate to="/payroll" replace />} />
                     </Route>
 
                     {/* ── Insights ── */}
@@ -219,18 +221,12 @@ const AppRouter: React.FC = () => {
                         <Route path="/insights/:metricId" element={<AnalysisPage />} />
                     </Route>
 
-                    {/* ── Availability Manager ──
-                        Employer half of the availability pair (see
-                        docs/architecture/persona-toggle-plan.md), and since the
-                        merge, the home of the hours + compliance matrix that
-                        used to be the Annual Shift Grid at /grid. Hence the
-                        two-permission gate and the /grid redirect — see
-                        docs/architecture/availability-manager-grid-merge-plan.md */}
+                    {/* ── Grid Module (formerly Team Availability / Availability Manager) ── */}
                     <Route element={<FeatureGate feature={['management', 'insights']} />}>
-                        <Route path="/team-availability" element={<TeamAvailabilityPage />} />
-                        <Route path="/grid" element={<Navigate to="/team-availability" replace />} />
-                        <Route path="/availability-manager" element={<Navigate to="/team-availability" replace />} />
-                        <Route path="/availibility-manger" element={<Navigate to="/team-availability" replace />} />
+                        <Route path="/grid" element={<GridPage />} />
+                        <Route path="/team-availability" element={<Navigate to="/grid" replace />} />
+                        <Route path="/availability-manager" element={<Navigate to="/grid" replace />} />
+                        <Route path="/availibility-manger" element={<Navigate to="/grid" replace />} />
                     </Route>
 
                     {/* ── Compliance audit ──

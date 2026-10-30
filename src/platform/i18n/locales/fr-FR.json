@@ -35,8 +35,10 @@
     "users": "Utilisateurs",
     "my_leave": "Mes Congés",
     "leave_approvals": "Approbations de Congés",
-    "team_availability": "Disponibilités de l’équipe",
-    "gross_pay": "Salaire Brut",
+    "team_availability": "Grille",
+    "grid": "Grille",
+    "gross_pay": "Paie",
+    "payroll": "Paie",
     "compliance_rejections": "Refus de Conformité"
   },
   "settings": {

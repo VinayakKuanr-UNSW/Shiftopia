@@ -208,6 +208,7 @@ export const TimesheetPage: React.FC = () => {
         isTraining: shift.isTraining,
         wasToppedUpToMinEngagement: shift.wasToppedUpToMinEngagement,
         requiredEngagementMinutes: shift.requiredEngagementMinutes,
+        toilMinutes: shift.toilMinutes,
         employmentType: shift.employmentType,
         isSecurityRole: shift.isSecurityRole,
     })), [shifts, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -17,7 +17,15 @@ import {
     type PayEvaluation,
     type RoleBand,
 } from '../../domain/contractPayTerms';
-import { FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from './useContractForm';
+import {
+    DUPLICATE_CONTRACT_MESSAGE,
+    findContractForRole,
+    UNIQUE_VIOLATION,
+} from '../../domain/contractPlacement';
+
+/** cl 12.4(a) / 35.3(a) — Flexible Part-Time is engaged for 624–1,976 ordinary hours a year. */
+export const FLEXIBLE_PT_ANNUAL_HOURS_MIN = 624;
+export const FLEXIBLE_PT_ANNUAL_HOURS_MAX = 1976;
 
 /** Step 1 — Contract Class. Class 2 (Casual) has no fixed hours. */
 export type ContractClass = 1 | 2;
@@ -97,6 +105,50 @@ const INITIAL_STATE: ContractWizardFormState = {
 };
 
 /**
+ * The form as it stands for an existing contract — the Edit path. Its
+ * placement (organisation › department › sub-department › role) is shown but
+ * not changed: moving someone to another role is ending this contract and
+ * adding a new one. The level note starts empty; the contract's saved notes
+ * are kept unless a new note is written.
+ */
+export function formStateFromContract(c: any): ContractWizardFormState {
+    const status: string = c.employment_status ?? '';
+    return {
+        ...INITIAL_STATE,
+        contractClass: status ? (status === 'Casual' ? 2 : 1) : null,
+        organization_id: c.organization_id ?? '',
+        department_id: c.department_id ?? '',
+        sub_department_id: c.sub_department_id ?? '',
+        role_id: c.role_id ?? '',
+        employment_status: status,
+        contracted_weekly_hours: Number(c.contracted_weekly_hours) || 0,
+        annual_guaranteed_hours: Number(c.annual_guaranteed_hours) || 0,
+        pay_basis: (c.pay_basis ?? 'eba_level') as PayBasis,
+        remuneration_level: c.remuneration_level != null ? Number(c.remuneration_level) : '',
+        annual_salary: Number(c.annual_salary) || 0,
+        eba_exclusion_reason: (c.eba_exclusion_reason ?? '') as EbaExclusionReason | '',
+        multi_hire_request_ref: c.multi_hire_request_ref ?? '',
+        is_apprentice: !!c.is_apprentice,
+        apprentice_type: c.apprentice_type ?? INITIAL_STATE.apprentice_type,
+        apprentice_year: c.apprentice_year ?? INITIAL_STATE.apprentice_year,
+        has_completed_year_12: !!c.has_completed_year_12,
+        is_trainee: !!c.is_trainee,
+        trainee_category: c.trainee_category ?? INITIAL_STATE.trainee_category,
+        trainee_level: c.trainee_level ?? INITIAL_STATE.trainee_level,
+        trainee_exit_year: c.trainee_exit_year ?? INITIAL_STATE.trainee_exit_year,
+        trainee_years_out: c.trainee_years_out ?? INITIAL_STATE.trainee_years_out,
+        trainee_aqf_level: c.trainee_aqf_level ?? INITIAL_STATE.trainee_aqf_level,
+        trainee_year: c.trainee_year ?? INITIAL_STATE.trainee_year,
+        is_training_on_job: !!c.is_training_on_job,
+        prefers_sba_loading: !!c.prefers_sba_loading,
+        is_sws: !!c.is_sws,
+        sws_capacity_percentage: c.sws_capacity_percentage ?? INITIAL_STATE.sws_capacity_percentage,
+        is_sws_trial: !!c.is_sws_trial,
+        sws_trial_start_date: c.sws_trial_start_date ?? '',
+    };
+}
+
+/**
  * Fields that change with the pay basis. Salaried: no level, no EA wage
  * schemes (Sch 4–6). Otherwise: no salary terms. Annualised Security keeps a
  * level only if it is one of Levels 3–6 (Sch 2 §2).
@@ -122,7 +174,7 @@ function onPayBasis(state: ContractWizardFormState, basis: PayBasis): Partial<Co
     };
 }
 
-/** Hours a status implies when first set — mirrors useContractForm's defaultTermsFor. */
+/** Hours a status implies when first set. */
 const defaultHoursFor = (status: string) => {
     if (status === 'Full-Time') return { contracted_weekly_hours: 38, annual_guaranteed_hours: 0 };
     if (status === 'Part-Time') return { contracted_weekly_hours: 20, annual_guaranteed_hours: 0 };
@@ -187,7 +239,7 @@ export function evaluateHoursRule(status: string, weekly: number, annual: number
     return null;
 }
 
-/** Rule text copied verbatim from AddContractDialog.tsx's mixedPermanentConflict. */
+/** cl 12.2(b): a Full-Time engagement is the whole 38 hours; other roles must be casual. */
 export const MIXED_PERMANENT_MESSAGE =
     'A Full-Time engagement is 38 hours and cannot be combined with another permanent (PT/FPT) engagement. Make additional roles Casual.';
 
@@ -310,7 +362,7 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
                 Object.assign(next, onPayBasis(next, value as PayBasis));
             }
 
-            // Mutual exclusivity — same as useContractForm.
+            // Apprentice, trainee and SWS are mutually exclusive.
             if (field === 'is_apprentice' && value) {
                 next.is_trainee = false;
                 next.is_sws = false;
@@ -357,9 +409,15 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
         return missing;
     };
 
+    /**
+     * Adds a contract, or — given `editingId` — saves the terms of that one.
+     * `existingContracts` are the person's OTHER contracts: the caller leaves
+     * out the one being edited, so it is not counted against itself.
+     */
     const submit = async (
         existingContracts: readonly ExistingContract[] = [],
         payContext: WizardPayContext = NO_PAY_CONTEXT,
+        editingId?: string,
     ): Promise<boolean> => {
         const terms = evaluateWizardTerms(formData, existingContracts, payContext);
         const missing = validate(terms);
@@ -369,6 +427,11 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
                 description: `Please select the following: ${missing.join(', ')}`,
                 variant: 'destructive',
             });
+            return false;
+        }
+
+        if (findContractForRole(existingContracts, formData, formData.role_id, editingId)) {
+            toast({ title: 'Contract Already Exists', description: DUPLICATE_CONTRACT_MESSAGE, variant: 'destructive' });
             return false;
         }
 
@@ -439,19 +502,36 @@ export const useContractWizardForm = (employeeId: string, onSuccess?: () => void
                 sws_trial_start_date: formData.sws_trial_start_date || null,
             };
 
-            const { error } = await (supabase as any)
-                .schema('hr').from('user_contracts').insert([row]);
+            const contracts = (supabase as any).schema('hr').from('user_contracts');
+            let error: any;
+            if (editingId) {
+                // The placement is fixed on an existing contract, and its saved
+                // notes stay unless a new level note replaces them.
+                const {
+                    user_id: _user, position_id: _position,
+                    organization_id: _org, department_id: _dept, sub_department_id: _sub, role_id: _role,
+                    notes, ...contractTerms
+                } = row;
+                ({ error } = await contracts
+                    .update(notes ? { ...contractTerms, notes } : contractTerms)
+                    .eq('id', editingId));
+            } else {
+                ({ error } = await contracts.insert([row]));
+            }
 
             if (error) throw error;
 
-            toast({ title: 'Success', description: 'Contract added successfully' });
+            toast({ title: 'Success', description: editingId ? 'Contract updated' : 'Contract added successfully' });
             queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
             reset();
             if (onSuccess) onSuccess();
             return true;
         } catch (error: any) {
-            console.error('Error adding contract:', error);
-            toast({ title: 'Error', description: error.message || 'Failed to add contract', variant: 'destructive' });
+            console.error('Error saving contract:', error);
+            const description = error?.code === UNIQUE_VIOLATION
+                ? DUPLICATE_CONTRACT_MESSAGE
+                : error.message || 'Failed to save contract';
+            toast({ title: 'Error', description, variant: 'destructive' });
             return false;
         } finally {
             setIsSubmitting(false);

@@ -113,8 +113,8 @@ const employeeItems: BottomNavItem[] = [
 /** Manager surfaces, in tab-priority order. All permission-gated. */
 const employerItems: BottomNavItem[] = [
   { label: "Roster", icon: LayoutGrid, path: "/rosters", requiredPermission: "rosters" },
-  // The team's availability, not the user's own.
-  { label: "Team", icon: CalendarDays, path: "/team-availability", requiredPermission: "management" },
+  // The team's schedule and availability grid.
+  { label: "Team", icon: CalendarDays, path: "/grid", requiredPermission: "management" },
   { label: "Requests", icon: Gavel, path: "/management/bids", requiredPermission: "management" },
   // A destination in its own right, and more useful held permanently than
   // Broadcast or Compliance, which sit comfortably in More.

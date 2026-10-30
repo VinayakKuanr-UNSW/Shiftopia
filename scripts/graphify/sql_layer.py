@@ -18,16 +18,14 @@ import json, re, sys
 from collections import defaultdict
 from pathlib import Path
 
+from graph_ids import GRAPH_PATH, file_node_index, load_graph_nodes, resolve_file_id
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "graphify-out" / ".sql_layer.json"
 
 def nid(*parts: str) -> str:
     s = "_".join(str(p) for p in parts if p)
     return re.sub(r"[^a-z0-9_]", "_", s.lower()).strip("_")
-
-def file_node_id(rel: str) -> str:
-    """Match the id the AST extractor assigns to a file node."""
-    return re.sub(r"[^a-z0-9_]", "_", rel.lower()).strip("_")
 
 def strip_sql_comments(t: str) -> str:
     t = re.sub(r"/\*.*?\*/", " ", t, flags=re.S)
@@ -180,6 +178,9 @@ def main() -> int:
     FROM = re.compile(r"""\.from\(\s*['"]([a-zA-Z0-9_]+)['"]""")
     code_roots = [ROOT / "src", ROOT / "supabase" / "functions", ROOT / "optimizer-service", ROOT / "scripts"]
     xrpc = xfrom = xref = xdoc = 0
+    # Bind to the file node graphify actually wrote — never recompute its id
+    # (the scheme changed in graphify 0.9; see graph_ids.py).
+    code_index = file_node_index(load_graph_nodes()) if GRAPH_PATH.exists() else {}
     for croot in code_roots:
         if not croot.exists():
             continue
@@ -193,8 +194,9 @@ def main() -> int:
             if ".rpc(" not in text and ".from(" not in text:
                 continue
             rel = str(f.relative_to(ROOT))
-            src_id = file_node_id(rel)
-            add_node(src_id, rel, rel, "L1")  # path label: bare "index.ts" fuzzy-merges
+            src_id = resolve_file_id(code_index, rel)
+            if rel.lower() not in code_index:
+                add_node(src_id, rel, rel, "L1")  # unseen by graphify; path label: bare "index.ts" fuzzy-merges
             for m in RPC.finditer(text):
                 fid = nid("db_fn", m.group(1))
                 if fid in functions:

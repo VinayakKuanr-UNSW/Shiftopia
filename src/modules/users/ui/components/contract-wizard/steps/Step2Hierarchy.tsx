@@ -23,6 +23,10 @@ export interface Step2HierarchyProps {
     onDeptChange: (id: string) => void;
     onSubDeptChange: (id: string) => void;
     onRoleChange: (id: string) => void;
+    /** Roles the person already holds a contract for in the chosen place — listed, not selectable. */
+    heldRoleIds?: ReadonlySet<string>;
+    /** Editing an existing contract: its placement is shown, not changed. */
+    locked?: boolean;
 }
 
 const cleanRoleName = (name: string) => name.replace(/\s*\(L\d+\)$/i, '').trim();
@@ -33,7 +37,7 @@ const roleSubtitle = (r: any): string => [
     r.typically_salaried ? 'usually salaried' : null,
 ].filter(Boolean).join(' · ');
 
-/** Vertical glow connector, ported verbatim from AddContractDialog.tsx. */
+/** Vertical glow connector between the hierarchy levels. */
 const Connector: React.FC<{ active: boolean }> = ({ active }) => (
     <div className="flex flex-col items-center my-1 select-none">
         <div className={cn(
@@ -56,6 +60,7 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
     organizations, departments, subDepartments, roles,
     organization_id, department_id, sub_department_id, role_id,
     onOrgChange, onDeptChange, onSubDeptChange, onRoleChange,
+    heldRoleIds, locked = false,
 }) => {
     const isOrgSelected = !!organization_id;
     const isDeptSelected = !!department_id;
@@ -66,16 +71,21 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
 
     // Remuneration level is chosen independently in Step 3, so roles are
     // listed by name — no level badge, no level ordering — with their EA band
-    // shown as guidance.
+    // shown as guidance. A role the person already holds here stays listed but
+    // cannot be picked: one contract per role (contractPlacement.ts).
     const roleOptions = useMemo(() => roles
         .filter(r => r.sub_department_id === sub_department_id)
-        .map(r => ({
-            id: r.id as string,
-            name: cleanRoleName(r.name),
-            subtitle: roleSubtitle(r),
-        }))
+        .map(r => {
+            const held = r.id !== role_id && !!heldRoleIds?.has(r.id);
+            return {
+                id: r.id as string,
+                name: cleanRoleName(r.name),
+                subtitle: held ? 'Already has a contract for this role' : roleSubtitle(r),
+                disabled: held,
+            };
+        })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [roles, sub_department_id]);
+    [roles, sub_department_id, role_id, heldRoleIds]);
 
     return (
         <div className="max-w-md mx-auto flex flex-col items-center justify-center text-center w-full">
@@ -83,6 +93,11 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
                 <span className="text-[10px] font-black tracking-[0.25em] uppercase text-primary bg-primary/10 px-3.5 py-1 rounded-full border border-primary/20">
                     Hierarchy Selection
                 </span>
+                {locked && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                        A contract's role and place don't change. To move someone, end this contract and add a new one.
+                    </p>
+                )}
             </div>
 
             <div className="w-full relative z-40 shadow-md">
@@ -90,6 +105,7 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
                     label="Organization"
                     placeholder="Select organization"
                     value={organization_id}
+                    locked={locked}
                     options={organizations.map(o => ({ id: o.id, name: o.name }))}
                     onValueChange={onOrgChange}
                     icon={<Building2 className="w-5 h-5 text-primary" />}
@@ -103,6 +119,7 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
                     label="Department"
                     placeholder={isOrgSelected ? "Select department" : "Select organization first"}
                     value={department_id}
+                    locked={locked}
                     disabled={!isOrgSelected}
                     options={filteredDepartments.map(d => ({ id: d.id, name: d.name }))}
                     onValueChange={onDeptChange}
@@ -117,6 +134,7 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
                     label="Sub-Department"
                     placeholder={isDeptSelected ? "Select sub-department" : "Select department first"}
                     value={sub_department_id}
+                    locked={locked}
                     disabled={!isDeptSelected}
                     options={filteredSubDepartments.map(sd => ({ id: sd.id, name: sd.name }))}
                     onValueChange={onSubDeptChange}
@@ -145,6 +163,7 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
                         ? (roleOptions.length === 0 ? 'No roles catalogued here' : 'Select role')
                         : 'Select sub-department first'}
                     value={role_id}
+                    locked={locked}
                     disabled={!isSubDeptSelected || roleOptions.length === 0}
                     options={roleOptions}
                     onValueChange={onRoleChange}

@@ -49,6 +49,7 @@ export const PAIRED_ROUTES: Array<{
     employerPermission?: string;
 }> = [
     { employee: '/my-roster', employer: '/rosters', employerPermission: 'rosters' },
+    { employee: '/my-availabilities', employer: '/grid', employerPermission: 'management' },
     { employee: '/my-availabilities', employer: '/team-availability', employerPermission: 'management' },
     { employee: '/my-bids', employer: '/management/bids', employerPermission: 'management' },
     { employee: '/my-swaps', employer: '/management/swaps', employerPermission: 'management' },
@@ -72,6 +73,7 @@ export const SHARED_ROUTES = [
  */
 export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
     { path: '/rosters', permission: 'rosters' },
+    { path: '/grid', permission: 'management' },
     { path: '/team-availability', permission: 'management' },
     { path: '/management/bids', permission: 'management' },
     { path: '/insights', permission: 'insights' },
@@ -88,7 +90,7 @@ export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }
  * Employer surfaces with no employee counterpart, so they cannot be derived
  * from PAIRED_ROUTES. `/management` covers the paired /management/* routes and
  * /management/payroll alike; the three availability aliases all redirect to
- * /team-availability but are classified anyway so the persona is right on the
+ * /grid but are classified anyway so the persona is right on the
  * first frame rather than after the redirect.
  */
 const EMPLOYER_ONLY_ROUTES = [
@@ -97,7 +99,9 @@ const EMPLOYER_ONLY_ROUTES = [
     '/labor-demand',
     '/compliance',
     '/management',
+    '/payroll',
     '/grid',
+    '/team-availability',
     '/availability-manager',
     '/availibility-manger',
 ];

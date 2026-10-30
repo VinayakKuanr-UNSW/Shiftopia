@@ -23,17 +23,19 @@ from bisect import bisect_right
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-GRAPH = json.loads((ROOT / "graphify-out/graph.json").read_text())
-N = {n["id"]: n for n in GRAPH["nodes"]}
+from graph_ids import db_label_index, file_node_index, load_graph_nodes, load_sql_layer_nodes
 
-# targets we can bind to
-db_by_label: dict[str, str] = {}
-for i, n in N.items():
-    if i.startswith(("db_fn_", "db_tbl_")):
-        db_by_label.setdefault(re.sub(r"\(\)$", "", n["label"]).lower(), i)
-paths = {(n.get("source_file") or "").lower(): i for i, n in N.items()
-         if n.get("source_file") and not str(n.get("source_file")).endswith(".md")}
+ROOT = Path(__file__).resolve().parents[2]
+# Code from graph.json; DB objects from sql_layer's own output, which does not
+# depend on them surviving a graphify rebuild (see graph_ids.py).
+N = load_graph_nodes()
+for _i, _n in load_sql_layer_nodes().items():
+    N.setdefault(_i, _n)
+
+# targets we can bind to — a path resolves to its FILE node, not a symbol in it
+db_by_label = db_label_index(N)
+paths = file_node_index({i: n for i, n in N.items()
+                         if n.get("source_file") and not str(n.get("source_file")).endswith(".md")})
 
 # heading nodes per doc, ordered by line, so a mention can be attributed to a section
 sections: dict[str, list[tuple[int, str]]] = defaultdict(list)

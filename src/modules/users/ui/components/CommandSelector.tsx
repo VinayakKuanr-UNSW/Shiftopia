@@ -19,6 +19,8 @@ export interface CommandSelectorOption {
     description?: string;
     subtitle?: string;
     icon?: React.ReactNode;
+    /** Listed but not selectable — the subtitle should say why. */
+    disabled?: boolean;
 }
 
 interface CommandSelectorProps {
@@ -208,7 +210,9 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                                                 <CommandItem
                                                     key={option.id}
                                                     value={option.id}
+                                                    disabled={option.disabled}
                                                     onSelect={() => {
+                                                        if (option.disabled) return;
                                                         onValueChange(option.id);
                                                         setOpen(false);
                                                     }}

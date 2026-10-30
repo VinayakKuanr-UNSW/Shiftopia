@@ -119,6 +119,8 @@ export interface TimesheetRow {
     wasToppedUpToMinEngagement?: boolean;
     /** The EBA minimum (minutes) that applied, or null when it doesn't (no-show/cancelled). */
     requiredEngagementMinutes?: number | null;
+    /** Time in lieu this approved day earned (daily rule, salaried contracts only), in minutes. */
+    toilMinutes?: number;
     /** Raw `profiles.employment_type` — feeds the min-engagement floor and pay-estimate calls. */
     employmentType?: string | null;
     /** Role name (lowercased) includes 'security' — selects the Security Sch 3 pay tiers. */
