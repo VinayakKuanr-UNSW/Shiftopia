@@ -20,6 +20,7 @@ const ORG = '00000000-0000-0000-0000-000000000001';
 const DEPT_D1 = '54c4c466-8d56-41c1-bf36-98ee4d7364f3';
 const DEPT_D2 = 'c0000000-0000-0000-0000-000000000003';
 const EMPLOYEE_X = 'a0000000-0000-4000-8000-000000000006';
+const fixtureShift = (k: number) => `b1000000-0000-4000-8000-00000000000${k}`;
 
 type Caller = Persona | 'anon' | 'none';
 
@@ -70,7 +71,11 @@ describe('edge function get-roster-view', () => {
         const r = await invoke('get-roster-view', roster(DEPT_D1), 'D');
         expect(r.status).toBe(200);
         const shifts = r.json.shifts as { id: string; organization_id: string; department_id: string }[];
-        expect(shifts.map((s) => s.id.slice(-1)).sort()).toEqual(['1', '2']);
+        // Other test files also write D1 shifts on these dates, so check the
+        // fixtures by id rather than the exact set: S1 and S2 are D1, S3 is D2.
+        const ids = shifts.map((s) => s.id);
+        expect(ids).toEqual(expect.arrayContaining([fixtureShift(1), fixtureShift(2)]));
+        expect(ids).not.toContain(fixtureShift(3));
         expect(new Set(shifts.map((s) => s.department_id))).toEqual(new Set([DEPT_D1]));
         expect(new Set(shifts.map((s) => s.organization_id))).toEqual(new Set([ORG]));
     });
