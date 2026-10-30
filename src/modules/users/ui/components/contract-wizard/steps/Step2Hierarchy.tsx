@@ -14,7 +14,7 @@ interface RefRow {
     [key: string]: any;
 }
 
-export interface Step2HierarchyProps {
+interface Step2HierarchyProps {
     organizations: RefRow[];
     departments: RefRow[];
     subDepartments: RefRow[];
@@ -144,4 +144,3 @@ export const Step2Hierarchy: React.FC<Step2HierarchyProps> = ({
     );
 };
 
-export default Step2Hierarchy;

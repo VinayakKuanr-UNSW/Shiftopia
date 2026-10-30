@@ -26,7 +26,7 @@ import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 // TYPES
 // =============================================================================
 
-export interface GuardViolation {
+interface GuardViolation {
     /** Machine-readable code for programmatic handling. */
     code: GuardViolationCode;
     message: string;
@@ -34,7 +34,7 @@ export interface GuardViolation {
     entity_id?: string;
 }
 
-export type GuardViolationCode =
+type GuardViolationCode =
     | 'SHIFT_NOT_FOUND'          // #16, #25
     | 'SHIFT_CANCELLED'          // #16
     | 'SHIFT_LOCKED'             // #20
@@ -43,12 +43,12 @@ export type GuardViolationCode =
     | 'EMPLOYEE_NOT_FOUND'       // #25
     | 'SCHEDULE_DRIFTED';        // #2  — shift changed since snapshot
 
-export interface GuardResult {
+interface GuardResult {
     passed: boolean;
     violations: GuardViolation[];
 }
 
-export interface SwapGuardInput {
+interface SwapGuardInput {
     /** Shift IDs involved in the swap (requester + offerer shifts). */
     shiftIds: string[];
     /** Employee IDs involved in the swap (requester + offerer). */
@@ -79,13 +79,13 @@ export class SwapGuardError extends Error {
 // INDIVIDUAL GUARDS
 // =============================================================================
 
-/** #16, #25 — Verify shifts exist, are not deleted, and are not cancelled. */
+/** #16, #25 — Verify shifts exist and are not cancelled. */
 async function checkShiftsValid(shiftIds: string[]): Promise<GuardViolation[]> {
     const violations: GuardViolation[] = [];
 
     const { data, error } = await (supabase as any)
         .from('shifts')
-        .select('id, is_cancelled, deleted_at, lifecycle_status')
+        .select('id, is_cancelled, lifecycle_status')
         .in('id', shiftIds);
 
     if (error) return violations; // Fail open — let solver catch it
@@ -98,8 +98,8 @@ async function checkShiftsValid(shiftIds: string[]): Promise<GuardViolation[]> {
             continue;
         }
         const row = (data || []).find((s: any) => s.id === id);
-        if (row?.deleted_at || row?.is_cancelled) {
-            violations.push({ code: 'SHIFT_CANCELLED', message: `Shift ${id} has been cancelled or deleted.`, entity_id: id });
+        if (row?.is_cancelled) {
+            violations.push({ code: 'SHIFT_CANCELLED', message: `Shift ${id} has been cancelled.`, entity_id: id });
         }
     }
 

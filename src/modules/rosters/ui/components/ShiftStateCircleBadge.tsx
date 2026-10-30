@@ -16,13 +16,13 @@ import {
 import { cn } from '@/modules/core/lib/utils';
 import { SHIFT_STATE_BADGE_TOKENS, type ShiftStateID } from '../../domain/shift-fsm';
 
-export interface ShiftStateCircleBadgeProps {
+interface ShiftStateCircleBadgeProps {
   stateId: ShiftStateID | string;
   className?: string;
   title?: string;
 }
 
-export const STATE_ICONS: Record<ShiftStateID, LucideIcon> = {
+const STATE_ICONS: Record<ShiftStateID, LucideIcon> = {
   S1: FileText,           // Draft: document
   S2: User,               // Draft (Assigned): single person
   S3: Send,               // Offered: paper airplane
@@ -89,4 +89,3 @@ export const ShiftStateCircleBadge: React.FC<ShiftStateCircleBadgeProps> = ({
   );
 };
 
-export default ShiftStateCircleBadge;

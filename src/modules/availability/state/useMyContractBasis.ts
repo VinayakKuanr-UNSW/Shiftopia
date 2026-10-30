@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchScopedContractBasis, type ContractBasisRead } from '../api/contract-basis.api';
 import { resolveComplianceBasis, type AvailabilityScopeRef } from '../domain/contract-basis';
 
-export interface MyContractBasis {
+interface MyContractBasis {
     basis: ContractBasisRead;
     loading: boolean;
     refresh: () => Promise<void>;

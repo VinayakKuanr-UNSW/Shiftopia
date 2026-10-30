@@ -165,7 +165,6 @@ independent of the status tab. Same definitions as My Attendance + Insights.
 
 | Component | Role |
 |-----------|------|
-| `TimesheetStatusBadge` / `ShiftStatusBadge` | Colored status pills. |
 | `TimesheetHeader` (`TimesheetFunctionBar`) | Desktop function bar (view/search/filter/export/bulk). |
 | `TimesheetFilterDrawer` | Categorical filters + `applyTimesheetFilters`/`countActiveFilters` helpers. |
 | `TimesheetTimecardView` | Card grid view with per-card AutoPilot chip + selection. |

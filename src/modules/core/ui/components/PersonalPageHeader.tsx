@@ -135,4 +135,3 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
     );
 };
 
-export default PersonalPageHeader;

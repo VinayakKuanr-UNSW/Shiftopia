@@ -13,7 +13,7 @@ import {
   CommandShortcut,
 } from '@/modules/core/ui/primitives/command';
 
-export interface RosterMetricsFooterProps {
+interface RosterMetricsFooterProps {
   totalShifts: number;
   assignedShifts?: number;
   unfilledShifts?: number;
@@ -475,5 +475,4 @@ export const RosterMetricsFooter: React.FC<RosterMetricsFooterProps> = ({
   );
 };
 
-export default RosterMetricsFooter;
 

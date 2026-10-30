@@ -125,7 +125,7 @@ export const calculateShiftHours = (
     const eh = parseInt(endTime.substring(0, 2), 10);
     const em = parseInt(endTime.substring(3, 5), 10);
 
-    let startMin = sh * ONE_HOUR + sm;
+    const startMin = sh * ONE_HOUR + sm;
     let endMin = eh * ONE_HOUR + em;
 
     if (endMin <= startMin) endMin += HOURS_IN_DAY * ONE_HOUR;

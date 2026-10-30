@@ -192,7 +192,7 @@ export function computeCostForShift(
  * past ~38h in a week; split-shift: only same-day PT/Flex-PT pairs), so
  * recomputing them per projection is cheap.
  */
-export function computeCostForShiftAdjusted(
+function computeCostForShiftAdjusted(
   shift: WorkerShiftDTO,
   netMinutes: number,
   overrides: { priorOrdinaryHoursThisWeek?: number; isSplitShiftEligible?: boolean },
@@ -213,7 +213,7 @@ function netMinutesFromDTO(shift: WorkerShiftDTO): number {
   if (shift.netLengthMinutes != null && shift.netLengthMinutes > 0) return shift.netLengthMinutes;
   const [sh, sm] = shift.startTime.split(':').map(Number);
   const [eh, em] = shift.endTime.split(':').map(Number);
-  let start = sh * 60 + sm;
+  const start = sh * 60 + sm;
   let end = eh * 60 + em;
   if (end <= start) end += 24 * 60;
   return Math.max(0, (end - start) - shift.unpaidBreakMinutes);

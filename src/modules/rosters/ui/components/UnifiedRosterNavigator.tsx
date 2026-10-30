@@ -48,7 +48,7 @@ export type { ViewType, DateRange };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export interface UnifiedRosterNavigatorProps {
+interface UnifiedRosterNavigatorProps {
   date: Date;
   viewType: ViewType;
   /**
@@ -364,4 +364,3 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
   );
 };
 
-export default UnifiedRosterNavigator;

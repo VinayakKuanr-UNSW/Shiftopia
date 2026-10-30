@@ -119,5 +119,3 @@ function _evaluate(input: V8OrchestratorInput): V8OrchestratorResult {
 
 // Re-exports
 export * from './types';
-export { validateV8State }   from './validate-combined-state';
-export { isV8Eligible }      from './eligibility';

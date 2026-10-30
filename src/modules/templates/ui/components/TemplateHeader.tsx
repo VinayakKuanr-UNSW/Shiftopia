@@ -339,4 +339,3 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
     );
 };
 
-export default TemplateHeader;

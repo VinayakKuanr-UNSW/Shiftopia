@@ -6,11 +6,10 @@
  */
 
 import React from 'react';
-import { ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { text } from '@/modules/core/ui/typography';
 
 export interface FunnelStep {
     id: string;
@@ -22,7 +21,7 @@ export interface FunnelStep {
     color?: string;
 }
 
-export interface KpiFunnelCardProps {
+interface KpiFunnelCardProps {
     title: string;
     badgeText?: string;
     subtitle?: string;
@@ -172,4 +171,3 @@ export const KpiFunnelCard: React.FC<KpiFunnelCardProps> = ({
     );
 };
 
-export default KpiFunnelCard;

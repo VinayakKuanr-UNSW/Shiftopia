@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { AttendanceMetricsBar } from '../AttendanceMetricsBar';
 import type { AttendanceMetrics } from '@/modules/rosters/domain/attendance-metrics';

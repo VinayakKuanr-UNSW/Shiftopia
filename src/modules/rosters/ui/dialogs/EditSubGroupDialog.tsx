@@ -197,4 +197,3 @@ export const EditSubGroupDialog: React.FC<EditSubGroupDialogProps> = ({
   );
 };
 
-export default EditSubGroupDialog;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface WizardStepHeaderProps {
+interface WizardStepHeaderProps {
     currentStep: 1 | 2 | 3 | 4;
     labels: [string, string, string, string];
 }
@@ -48,4 +48,3 @@ export const WizardStepHeader: React.FC<WizardStepHeaderProps> = ({ currentStep,
     );
 };
 
-export default WizardStepHeader;

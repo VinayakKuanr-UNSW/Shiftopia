@@ -17,7 +17,6 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
 import { todayISO } from '@/modules/core/lib/date.utils';
 import { Calendar, Clock, Repeat, AlertCircle, Save, X } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -25,7 +24,6 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { GlobalStyleSelect } from '@/modules/core/ui/components/GlobalStyleSelect';
-import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -39,7 +37,7 @@ import { validateAvailabilityForm } from '../../utils/validation.utils';
 // TYPES
 // ============================================================================
 
-export interface ConfigurePaneProps {
+interface ConfigurePaneProps {
   mode: 'create' | 'edit' | null;
   ruleBeingEdited: AvailabilityRule | null;
   isSubmitting: boolean;
@@ -445,4 +443,3 @@ export function ConfigurePane({
   );
 }
 
-export default ConfigurePane;

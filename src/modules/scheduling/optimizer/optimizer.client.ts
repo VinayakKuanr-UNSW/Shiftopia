@@ -54,7 +54,7 @@ async function getAuthHeader(): Promise<string | null> {
 // CLIENT
 // =============================================================================
 
-export class OptimizerClient {
+class OptimizerClient {
     private readonly baseUrl: string;
 
     constructor(baseUrl?: string) {

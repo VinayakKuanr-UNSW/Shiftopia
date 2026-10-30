@@ -33,7 +33,7 @@ import type { EmployeeAvailability } from '@/modules/rosters/domain/availability
 const MINUTES_PER_DAY = 1440;
 
 /** "HH:mm" | "HH:mm:ss" -> minutes from midnight. */
-export function toMinutes(time: string | null | undefined): number {
+function toMinutes(time: string | null | undefined): number {
     if (!time) return 0;
     const [h, m] = time.split(':');
     return (parseInt(h, 10) || 0) * 60 + (parseInt(m, 10) || 0);
@@ -60,7 +60,7 @@ export function addDaysISO(date: string, days: number): string {
 }
 
 /** ISO day-of-week, 1 = Monday … 7 = Sunday. Local date parts, never UTC. */
-export function isoDayOfWeek(date: string): number {
+function isoDayOfWeek(date: string): number {
     const [y, m, d] = date.split('-').map((n) => parseInt(n, 10));
     const dow = new Date(y, m - 1, d).getDay(); // 0 = Sun
     return dow === 0 ? 7 : dow;

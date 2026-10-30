@@ -12,7 +12,6 @@ import {
   RefreshCw,
   TrendingUp,
   User,
-  Shield,
   ShieldX,
   Sparkles,
   Radio,
@@ -44,7 +43,7 @@ import { useAuth } from '@/platform/auth/useAuth';
 import { usePersona } from '@/platform/auth/PersonaProvider';
 import { prefetchRouteChunk } from '@/router/routePrefetch';
 
-export interface SearchPageItem {
+interface SearchPageItem {
   id: string;
   title: string;
   description: string;
@@ -471,4 +470,3 @@ export const QuickSearchDialog: React.FC<QuickSearchDialogProps> = ({
   );
 };
 
-export default QuickSearchDialog;

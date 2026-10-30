@@ -7,7 +7,7 @@ import { insightsApi } from '../api/insights.api';
  * Read-only to employees (RLS allows SELECT to authenticated and nothing
  * else). Seeded in migration 20260823090200.
  */
-export interface CancellationReason {
+interface CancellationReason {
     code: string;
     label: string;
     description: string | null;

@@ -10,12 +10,10 @@ import { ComplianceError, ComplianceUnavailableError } from '@/platform/supabase
 import { assertShapeForRow, assertShapeForShiftId } from './shift-shape-gate';
 import {
     CreateShiftResponseSchema,
-    UpdateShiftResponseSchema,
     PublishShiftResponseSchema,
     BulkPublishResponseSchema,
     BulkAssignAtomicResponse,
     BulkAssignAtomicResponseSchema,
-    BulkDeleteResponse,
     BulkDeleteResponseSchema,
     DeleteShiftResponseSchema,
     CancelShiftResponseSchema,
@@ -101,7 +99,7 @@ function complianceFailureReason(v: { status: string; violations: string[] }): s
 // ============================================================
 
 /** Publish — compliance checked per-shift, partial success supported. */
-export type BulkPublishPartialResult = {
+type BulkPublishPartialResult = {
     /** IDs that were fully published in the DB */
     publishedIds: string[];
     /** IDs that failed the client-side compliance pre-check */
@@ -111,13 +109,13 @@ export type BulkPublishPartialResult = {
 };
 
 /** Unpublish — per-shift via processInChunks, partial success supported. */
-export type BulkUnpublishPartialResult = {
+type BulkUnpublishPartialResult = {
     unpublishedIds: string[];
     failed: Array<{ id: string; reason: string }>;
 };
 
 /** Delete — per-item via processInChunks, partial success supported. */
-export type BulkDeletePartialResult = {
+type BulkDeletePartialResult = {
     deletedIds: string[];
     failed: Array<{ id: string; reason: string }>;
 };
@@ -126,7 +124,7 @@ export type BulkDeletePartialResult = {
  * Publish validation result — returned by validateBulkPublishCompliance.
  * Mirrors the shape expected by BulkActionsToolbar's onValidatePublish prop.
  */
-export type BulkPublishValidationResult = {
+type BulkPublishValidationResult = {
     eligible: string[];
     complianceFailed: Array<{ id: string; reason: string }>;
     skipped: Array<{ id: string; reason: string }>;
@@ -605,21 +603,24 @@ export const shiftsCommands = {
     },
 
     /* ============================================================
-       ATOMIC BULK ASSIGN SHIFTS (multi-employee, idempotent)
+       ATOMIC BULK ASSIGN SHIFTS (multi-employee)
        ============================================================ */
 
     /**
      * Assign multiple (employee → shifts[]) pairs in a single atomic DB
      * transaction via the sm_bulk_assign_atomic RPC.
      *
-     * @param assignments     Array of { employeeId, shiftIds } pairs.
-     * @param idempotencyKey  Optional UUID — if supplied and the key already
-     *                        exists in bulk_assign_idempotency, the stored
-     *                        result is returned without re-applying anything.
+     * @param assignments       Array of { employeeId, shiftIds } pairs.
+     * @param expectedVersions  shift id → the version the caller's compliance
+     *                          check saw. A shift changed since then (or absent
+     *                          from the map) is not booked and comes back in
+     *                          `conflicts`. A shift already assigned to the
+     *                          intended employee counts as booked, so a retry
+     *                          is safe.
      */
     async bulkAssignShiftsAtomic(
         assignments: { employeeId: string; shiftIds: string[] }[],
-        idempotencyKey?: string,
+        expectedVersions?: Record<string, number>,
     ): Promise<BulkAssignAtomicResponse> {
         if (assignments.length === 0) {
             return {
@@ -643,8 +644,8 @@ export const shiftsCommands = {
             'sm_bulk_assign_atomic',
             (userId) => ({
                 p_assignments,
-                p_user_id:         userId,
-                p_idempotency_key: idempotencyKey ?? null,
+                p_user_id:           userId,
+                p_expected_versions: expectedVersions ?? null,
             }),
             BulkAssignAtomicResponseSchema,
         );

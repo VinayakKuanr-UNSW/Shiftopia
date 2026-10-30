@@ -66,7 +66,6 @@ const row = (i: number) => ({
     end_time: '15:00:00',
     lifecycle_status: 'Draft',
     assigned_employee_id: null,
-    deleted_at: null,
 });
 const page = (from: number, n: number) => ({ data: Array.from({ length: n }, (_, i) => row(from + i)), error: null });
 const ops = (req: number, method: string) => h.requests[req].filter(o => o.method === method);
@@ -140,7 +139,7 @@ describe('getShiftsForDateRangeStrict — the Publish plan read', () => {
         expect(rows).toHaveLength(12500);
     });
 
-    it('scopes the read exactly as the grid does: organisation, dates, live rows, departments', async () => {
+    it('scopes the read exactly as the grid does: organisation, dates, departments', async () => {
         h.setQueue([page(0, 3)]);
 
         await shiftsQueries.getShiftsForDateRangeStrict(ORG, '2099-11-01', '2099-11-30', { departmentIds: [DEPT] });
@@ -150,7 +149,6 @@ describe('getShiftsForDateRangeStrict — the Publish plan read', () => {
             { method: 'eq', args: ['organization_id', ORG] },
             { method: 'gte', args: ['shift_date', '2099-11-01'] },
             { method: 'lte', args: ['shift_date', '2099-11-30'] },
-            { method: 'is', args: ['deleted_at', null] },
             { method: 'in', args: ['department_id', [DEPT]] },
         ]));
     });

@@ -39,8 +39,6 @@ function makeShift(overrides: Partial<WorkerShiftDTO> = {}): WorkerShiftDTO {
     roleId: 'role-1',
     roleName: 'Stage Hand',
     remunerationLevel: null,
-    remunerationRate: 25,
-    actualHourlyRate: null,
     levelName: null,
     levelNumber: null,
     groupType: null,

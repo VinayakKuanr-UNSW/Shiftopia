@@ -1,28 +1,19 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/platform/supabase/client';
-import { getSydneyNow, isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
-  Plus,
-  Check,
   Loader2,
   MoreHorizontal,
   MoreVertical,
   Edit2,
   Trash2,
-  Gavel,
   Send,
   Undo2,
   Ban,
-  ArrowLeftRight,
   ChevronDown,
   ChevronRight,
   Zap,
-  Lock,
-  Wand2,
   Users,
-  CopyPlus,
-  Maximize2,
   Layers,
   ShieldCheck,
 } from 'lucide-react';
@@ -38,8 +29,8 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes, parse } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { format, addDays, isToday, isBefore, startOfDay, differenceInHours, parse } from 'date-fns';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import {
   ShiftContext,
@@ -49,17 +40,14 @@ import { useAllTemplates } from '@/modules/templates/hooks/queries/useTemplateQu
 
 import {
   RenameSubGroupDialog,
-  CloneSubGroupDialog,
   DeleteSubGroupDialog
 } from '@/modules/rosters/ui/dialogs/SubGroupActionsDialogs';
 import {
-  describeSubgroupClone,
   describeSubgroupDeletion,
   describeSubgroupRename,
   formatRange,
 } from '@/modules/rosters/ui/dialogs/rosterChangeCopy';
 import {
-  cloneRosterSubgroup,
   deleteRosterSubgroup,
   renameRosterSubgroup,
   type SubgroupScope,
@@ -70,43 +58,32 @@ import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/compon
 // React.memo() const through a namespace object, so on hot update the member
 // read back as undefined and React threw "type is invalid ... got: undefined"
 // at the call site below.
-import { GroupSummaryCell } from '@/modules/rosters/ui/components/GroupSummaryCell';
 import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
 import { GroupStatsSummary } from '@/modules/rosters/ui/components/GroupStatsSummary';
-import { ShiftCardLegend } from '@/modules/rosters/ui/components/ShiftCardLegend';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import {
   Shift,
   TemplateGroupType,
 } from '@/modules/rosters/api/shifts.api';
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
-import { RosterStructure, RosterGroupStructure, RosterSubGroupStructure } from '@/modules/rosters/model/roster.types';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
   useDeleteShift,
-  useUpdateShift,
-  useBulkDeleteShifts,
-  useBulkPublishShifts,
-  useBulkUnpublishShifts,
   usePublishShift,
   useUnpublishShift,
-  useCreateShift,
   useEmployees,
   snapshotLists,
   rollbackLists,
   patchLists,
 } from '@/modules/rosters/state/useRosterShifts';
 import {
-  useAddSubGroup,
-  useAddSubGroupRange,
   useDeleteSubGroup,
   useRenameSubGroup,
-  useCloneSubGroup
 } from '@/modules/rosters/state/useRosterMutations';
-import { computeShiftUrgency, computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
+import { computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
-import { startOfMonth, endOfMonth, endOfWeek } from 'date-fns';
+import { startOfMonth, endOfMonth } from 'date-fns';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -122,15 +99,12 @@ import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShif
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import {
-  PeopleModeEmployee,
-  PeopleModeShift,
   DND_SHIFT_TYPE,
   DND_EMPLOYEE_TYPE,
   EmployeeDragItem,
   ShiftDragItem,
 } from './people-mode.types';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
-import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 // complianceService and calculateMinutesBetweenTimes removed — handleShiftDrop now
@@ -138,13 +112,10 @@ import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 
 import { canDragShift, canDropOnTarget } from '@/modules/rosters/utils/dnd.utils';
 import { ToastAction } from '@/modules/core/ui/primitives/toast';
-import type { GroupProjection } from '@/modules/rosters/domain/projections/types';
 import { ALL_GROUP_TYPES } from '@/modules/rosters/domain/projections/constants';
-import { CopyShiftFlow, type CopyShiftSource } from '@/modules/office/ui/components/CopyShiftFlow';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 
 // ============================================================================
 // DRAG & DROP TYPE
@@ -602,13 +573,6 @@ const UNASSIGNED_GLASS_STYLE = {
 };
 
 // Default sub-groups per group type - Empty by default, populated by templates
-const DEFAULT_SUB_GROUPS_MAP: Record<TemplateGroupType, string[]> = {
-  convention_centre: [],
-  exhibition_centre: [],
-  theatre: [],
-  the_cutaway: [],
-  office: [],
-};
 
 // Human-readable group names
 const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
@@ -624,111 +588,10 @@ const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
    COVERAGE SIGNAL BAR — segmented LED strip for group headers
    ============================================================ */
 
-/** `420` → `7h 0m`; used as each cost panel's supporting hours figure. */
-const formatNetMinutes = (mins: number): string => {
-  const safe = Math.max(0, Math.round(mins));
-  return `${Math.floor(safe / 60)}h ${safe % 60}m`;
-};
 
-interface CostPanelProps {
-  label: string;
-  amount: number;
-  minutes: number;
-  /** Denominator line — what the amount is actually over. */
-  countLabel: string;
-  /** Amber tint: some shifts in scope resolved no rate, so the total is short. */
-  warn?: boolean;
-  /** Dim the amount when it is a structural zero rather than a real $0. */
-  muted?: boolean;
-  tone: 'planned' | 'actual';
-}
 
-/**
- * One cost total for the CURRENT view, with its own denominator.
- *
- * The denominator is the point: a bare "$0.00" cannot distinguish "nothing has
- * been worked yet" from "nothing could be priced" from "genuinely free". The
- * previous single Est. Cost read $0.00 across a fully-costed 156-shift roster
- * because it silently counted only ASSIGNED shifts.
- */
-const CostPanel: React.FC<CostPanelProps> = ({
-  label, amount, minutes, countLabel, warn = false, muted = false, tone,
-}) => (
-  <div
-    className={cn(
-      'rounded-lg border px-3 py-1.5 min-w-[132px]',
-      tone === 'planned'
-        ? 'border-blue-400/25 bg-blue-400/[0.06]'
-        : 'border-emerald-400/25 bg-emerald-400/[0.06]',
-    )}
-  >
-    <div className="flex items-baseline justify-between gap-3">
-      <span
-        className={cn(
-          'text-[11px] font-bold uppercase tracking-wider',
-          tone === 'planned' ? 'text-blue-300/80' : 'text-emerald-300/80',
-        )}
-      >
-        {label}
-      </span>
-      <span className="text-[11px] text-muted-foreground/60 tabular-nums">
-        {formatNetMinutes(minutes)}
-      </span>
-    </div>
-    <div
-      className={cn(
-        'font-semibold tabular-nums leading-tight',
-        muted ? 'text-muted-foreground/50' : 'text-foreground',
-      )}
-    >
-      ${amount.toFixed(2)}
-    </div>
-    <div
-      className={cn(
-        'text-[11px] leading-tight',
-        warn ? 'text-amber-400' : 'text-muted-foreground/50',
-      )}
-      title={warn ? 'Some shifts in view have no resolvable pay rate and contribute $0 to this total.' : undefined}
-    >
-      {countLabel}
-    </div>
-  </div>
-);
 
-interface CoverageSignalBarProps {
-  pct: number;      // 0-100
-  accent: string;   // 'blue' | 'emerald' | 'red' | 'amber' | 'cyan' | 'gray'
-  segments?: number;
-}
 
-const CoverageSignalBar: React.FC<CoverageSignalBarProps> = ({ pct, accent, segments = 10 }) => {
-  const filled = Math.round((pct / 100) * segments);
-  const colorMap: Record<string, string> = {
-    blue: 'bg-blue-400',
-    emerald: 'bg-emerald-400',
-    red: 'bg-red-400',
-    amber: 'bg-amber-400',
-    cyan: 'bg-cyan-400',
-    gray: 'bg-slate-400',
-  };
-  const barColor = colorMap[accent] ?? 'bg-white/40';
-  return (
-    <div className="flex items-center gap-[2px]" aria-label={`${pct}% staffed`}>
-      {Array.from({ length: segments }).map((_, i) => (
-        <div
-          key={i}
-          style={{ animationDelay: `${i * 40}ms` }}
-          className={cn(
-            'h-[5px] w-[14px] rounded-sm transition-all duration-300',
-            i < filled
-              ? cn(barColor, 'opacity-90 animate-[signalFill_0.3s_ease_forwards]')
-              : 'bg-muted-foreground/10 dark:bg-white/10'
-          )}
-        />
-      ))}
-    </div>
-  );
-};
 
 /* ============================================================
    SUBGROUP BODY
@@ -843,10 +706,6 @@ interface GroupSectionProps {
   isBulkMode: boolean;
   externalShifts: Shift[];
   isDateInTemplate: (date: Date) => boolean;
-  shiftsByBucketKey: Map<string, Shift[]>;
-  selectedV8ShiftIdsSet: Set<string>;
-  onDeselectShiftIds?: (ids: string[]) => void;
-  onSelectShiftIds?: (ids: string[]) => void;
   isDnDModeActive: boolean;
   summaryData: any;
   onDrillDown?: (dateKey: string, groupType: string, subGroupName: string) => void;
@@ -862,10 +721,9 @@ interface GroupSectionProps {
   handleEmployeeDrop: (shiftId: string, dragItem: EmployeeDragItem) => void;
   setActiveSubGroup: (subGroup: { id: string; name: string; groupExternalId: string } | null) => void;
   setIsRenameOpen: (open: boolean) => void;
-  setIsCloneOpen: (open: boolean) => void;
   setIsDeleteOpen: (open: boolean) => void;
   getSubGroupTemplateLabel: (subGroup: VisualSubGroup) => string | null;
-  /** Why Rename / Clone / Delete are unavailable right now, or null when they are. */
+  /** Why Rename / Delete are unavailable right now, or null when they are. */
   subGroupActionsBlockedReason: string | null;
 
   // Persisted collapse props
@@ -881,10 +739,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   isBulkMode,
   externalShifts,
   isDateInTemplate,
-  shiftsByBucketKey,
-  selectedV8ShiftIdsSet,
-  onDeselectShiftIds,
-  onSelectShiftIds,
   isDnDModeActive,
   summaryData,
   onDrillDown,
@@ -895,7 +749,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   handleEmployeeDrop,
   setActiveSubGroup,
   setIsRenameOpen,
-  setIsCloneOpen,
   setIsDeleteOpen,
   getSubGroupTemplateLabel,
   subGroupActionsBlockedReason,
@@ -960,7 +813,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
     return 0;
   }, [summaryData, summaryCellsForGroup]);
 
-  const coveragePct = totalShifts > 0 ? Math.min(100, Math.round((assignedShifts / totalShifts) * 100)) : 100;
 
   const filteredShiftsForStats = useMemo(() =>
     externalShifts.filter(s => s.group_type === group.type),
@@ -1170,21 +1022,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                             <Edit2 className="h-3.5 w-3.5" />
                             Rename
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="gap-2 focus:bg-white/5 cursor-pointer"
-                            disabled={!!subGroupActionsBlockedReason}
-                            onClick={() => {
-                              setActiveSubGroup({
-                                id: subGroup.id,
-                                name: subGroup.name,
-                                groupExternalId: group.type || ''
-                              });
-                              setIsCloneOpen(true);
-                            }}
-                          >
-                            <ArrowLeftRight className="h-3.5 w-3.5" />
-                            Clone
-                          </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-white/10" />
                           <DropdownMenuItem
                             className="gap-2 text-red-500 focus:text-red-500 focus:bg-red-500/10 cursor-pointer"
@@ -1220,32 +1057,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                     const isGhost = !isDateInTemplate(date);
                     const holidayName = getPublicHolidayName(date);
 
-                    const bucketKey = `${dateKey}::${group.type}::${subGroup.name}`;
-                    const bucketShifts = shiftsByBucketKey.get(bucketKey) || [];
-                    const eligibleIds = bucketShifts
-                      .filter(s => !isShiftLocked(s.shift_date, s.start_time, 'roster_management'))
-                      .map(s => s.id);
-                    const selectableCount = eligibleIds.length;
-                    
-                    let cellSelectionState: 'all' | 'some' | 'none' = 'none';
-                    if (selectableCount > 0) {
-                      const selectedCount = eligibleIds.filter(id => selectedV8ShiftIdsSet.has(id)).length;
-                      if (selectedCount === selectableCount) {
-                        cellSelectionState = 'all';
-                      } else if (selectedCount > 0) {
-                        cellSelectionState = 'some';
-                      }
-                    }
-
-                    const handleToggleSelect = () => {
-                      if (selectableCount === 0) return;
-                      const selectedCount = eligibleIds.filter(id => selectedV8ShiftIdsSet.has(id)).length;
-                      if (selectedCount === selectableCount) {
-                        onDeselectShiftIds?.(eligibleIds);
-                      } else {
-                        onSelectShiftIds?.(eligibleIds);
-                      }
-                    };
 
                     return (
                       <div
@@ -1405,11 +1216,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   showBudget = false,
 }) => {
   const { toast } = useToast();
-  const { isDark } = useTheme();
+  useTheme();
   // Get enhanced filters and selection state from context
   const {
     advancedFilters,
-    hasActiveFilters,
   } = useRosterUI();
 
   const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
@@ -1426,31 +1236,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   );
 
   // The shifts the toolbar filters let through — the same rule every view uses.
-  // Bulk bucket-selection and the legacy branch read this, so selecting a bucket
-  // never picks up shifts the filter is hiding.
+  // The legacy branch reads this, so it never shows shifts the filter is hiding.
   const visibleShifts = React.useMemo(
     () => (externalShifts ? applyAdvancedFilters(externalShifts, advancedFilters) : externalShifts),
     [externalShifts, advancedFilters],
   );
-
-  // Index shifts by key: `${shift_date}::${group_type||'unassigned'}::${sub_group_name||'General'}`
-  const shiftsByBucketKey = React.useMemo(() => {
-    const map = new Map<string, Shift[]>();
-    if (!visibleShifts) return map;
-    
-    visibleShifts.forEach(shift => {
-      const dateKey = shift.shift_date;
-      const groupKey = shift.group_type || 'unassigned';
-      const subGroupKey = shift.sub_group_name || 'General';
-      const key = `${dateKey}::${groupKey}::${subGroupKey}`;
-      
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-      map.get(key)!.push(shift);
-    });
-    return map;
-  }, [visibleShifts]);
 
   // Collapsible group state (persisted to localStorage)
   const [collapsedGroups, toggleGroupCollapse] = useCollapsedGroups();
@@ -1483,15 +1273,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // TanStack Query mutation hooks (auto-invalidate caches on success)
   const deleteShiftMutation = useDeleteShift();
-  const updateShiftMutation = useUpdateShift(); // For DnD group changes
-  const bulkDeleteMutation = useBulkDeleteShifts();
-  const bulkPublishMutation = useBulkPublishShifts();
-  const bulkUnpublishMutation = useBulkUnpublishShifts();
   const publishShiftMutation = usePublishShift();
   const unpublishShiftMutation = useUnpublishShift();
-  const createShiftMutation = useCreateShift();
-  const addSubGroupMutation = useAddSubGroup();
-  const addSubGroupRangeMutation = useAddSubGroupRange();
   const queryClient = useQueryClient();
 
   // ==================== UNDO HANDLER ====================
@@ -1767,8 +1550,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // ==================== DELETE CONFIRMATION ====================
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [shiftToDelete, setShiftToDelete] = useState<ShiftDisplay | null>(null);
-  /** A full-time shift being copied onto a range (the Office page's Copy, shared). */
-  const [copySource, setCopySource] = useState<CopyShiftSource | null>(null);
   /** A full-time shift shown expanded: Scheduled · Actual · Payroll · Variance. */
   const [expandedShift, setExpandedShift] = useState<Shift | null>(null);
   /** A shift being audited for ICC Sydney EBA compliance. */
@@ -1787,17 +1568,15 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // ==================== EMERGENCY ALERT STATE ====================
   const [isEmergencyAlertOpen, setIsEmergencyAlertOpen] = useState(false);
-  const [emergencyAlertMessage, setEmergencyAlertMessage] = useState('');
+  const [emergencyAlertMessage] = useState('');
 
   // ==================== SUB-GROUP ACTIONS STATE ====================
   const [activeSubGroup, setActiveSubGroup] = useState<{ id: string, name: string, groupExternalId: string } | null>(null);
   const [isRenameOpen, setIsRenameOpen] = useState(false);
-  const [isCloneOpen, setIsCloneOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   const deleteSubGroupMutation = useDeleteSubGroup();
   const renameSubGroupMutation = useRenameSubGroup();
-  const cloneSubGroupMutation = useCloneSubGroup();
 
 
 
@@ -1826,10 +1605,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       case '3day':
         for (let i = 0; i < 3; i++) result.push(addDays(selectedDate, i));
         break;
-      case 'week':
+      case 'week': {
         const weekStart = startOfWeekAU(selectedDate);
         for (let i = 0; i < 7; i++) result.push(addDays(weekStart, i));
         break;
+      }
       case 'month': {
         // Bound to the selected month ± a small buffer (matches the parent
         // fetch window in RostersPlannerPage). Previously this extended to
@@ -1876,7 +1656,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }
   );
 
-  // Sub-group Rename / Clone / Delete act on ONE sub-department's roster. With
+  // Sub-group Rename / Delete act on ONE sub-department's roster. With
   // several in scope the grid merges their rows, and acting on "the first" would
   // quietly change one team and not the others — so the actions ask for one.
   const singleSubDepartmentId = selectedSubDepartmentIds.length === 1 ? selectedSubDepartmentIds[0] : null;
@@ -2124,19 +1904,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     return 'Open';
   };
 
-  const getDefaultGroups = (): VisualGroup[] => {
-    return ALL_GROUP_TYPES.map((type) => ({
-      id: type,
-      name: GROUP_DISPLAY_NAMES[type],
-      type,
-      color: GLASS_STYLES[type].accent,
-      subGroups: DEFAULT_SUB_GROUPS_MAP[type].map((name) => ({
-        id: `${type}-${name}`,
-        name,
-        shifts: {},
-      })),
-    }));
-  };
 
   // ==================== BUILD VISUAL GROUPS (BUCKET VIEW / SUMMARY) ====================
   // Scalability path: in the Group-mode default Bucket View the grid renders
@@ -2148,102 +1915,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // templates always render even when empty. Per-cell totals still resolve via
   // the existing `summaryData.get(`${dateKey}::${group.type}::${subGroup.name}`)`
   // lookup in the render path; rows just need to exist without shift data.
-  const buildVisualGroupsFromSummary = (
-    summary: Map<string, import('@/modules/rosters/api/rosterSummary.queries').RosterSummaryCellDTO>,
-  ): VisualGroup[] => {
-    // Start from the three default template groups (guaranteed to render).
-    const base = getDefaultGroups();
-    const byType = new Map<string, VisualGroup>(base.map(g => [g.type, g]));
-
-    // Track subgroup names already present per group so we don't duplicate.
-    const subNamesByType = new Map<string, Set<string>>();
-    for (const g of base) {
-      subNamesByType.set(g.type, new Set(g.subGroups.map(sg => sg.name)));
-    }
-
-    // Populate subgroups from database structure (rosterStructures) first
-    // so empty subgroups render in the summary bucket view.
-    rosterStructures.forEach(roster => {
-      roster.groups.forEach(group => {
-        const type = (group.externalId || 'unassigned') as TemplateGroupType | 'unassigned';
-        let groupEntry = byType.get(type);
-        if (!groupEntry) {
-          const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
-          groupEntry = {
-            id: group.id || type,
-            name: GROUP_DISPLAY_NAMES[type] ?? group.name ?? type,
-            type,
-            color: isTemplate
-              ? GLASS_STYLES[type as TemplateGroupType].accent
-              : UNASSIGNED_GLASS_STYLE.accent,
-            subGroups: [],
-          };
-          byType.set(type, groupEntry);
-          subNamesByType.set(type, new Set());
-        }
-
-        group.subGroups.forEach(sg => {
-          const existingNames = subNamesByType.get(type)!;
-          if (!existingNames.has(sg.name)) {
-            existingNames.add(sg.name);
-            groupEntry.subGroups.push({
-              id: sg.id,
-              name: sg.name,
-              shifts: {},
-            });
-          }
-        });
-      });
-    });
-
-    // Collect distinct (group_type, sub_group_name) pairs from the summary.
-    for (const cell of summary.values()) {
-      const type = (cell.group_type || 'unassigned') as TemplateGroupType | 'unassigned';
-      const subName = cell.sub_group_name || 'General';
-
-      let group = byType.get(type);
-      if (!group) {
-        // A group present in the summary but not in the default templates
-        // (e.g. an ad-hoc / unassigned bucket). Create it so its rows render.
-        const isTemplate = (ALL_GROUP_TYPES as string[]).includes(type);
-        group = {
-          id: type,
-          name: GROUP_DISPLAY_NAMES[type] ?? type,
-          type,
-          color: isTemplate
-            ? GLASS_STYLES[type as TemplateGroupType].accent
-            : UNASSIGNED_GLASS_STYLE.accent,
-          subGroups: [],
-        };
-        byType.set(type, group);
-        subNamesByType.set(type, new Set());
-      }
-
-      const existingNames = subNamesByType.get(type)!;
-      if (!existingNames.has(subName)) {
-        existingNames.add(subName);
-        group.subGroups.push({
-          id: `summary-${type}-${subName}`,
-          name: subName,
-          shifts: {}, // Bucket View renders aggregate cells — no per-shift data.
-        });
-      }
-    }
-
-    // Stable ordering: templates first (in canonical order), then any extras.
-    const order: Record<string, number> = {
-      convention_centre: 0,
-      exhibition_centre: 1,
-      theatre: 2,
-      the_cutaway: 3,
-      office: 4,
-    };
-    const groups = Array.from(byType.values()).sort(
-      (a, b) => (order[a.type] ?? 99) - (order[b.type] ?? 99),
-    );
-    groups.forEach(g => g.subGroups.sort((a, b) => a.name.localeCompare(b.name)));
-    return groups;
-  };
 
   // ==================== DERIVE VISUAL GROUPS VIA MEMO ====================
   const visualGroups = useMemo((): VisualGroup[] => {
@@ -2467,76 +2138,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }
   };
 
-  /**
-   * Copy a full-time shift onto a range of dates — offered only on an assigned
-   * FT shift. The flow checks leave, existing shifts, writable rosters and the
-   * employee's cycle ceiling (cl 35.1(a)) for the range, and writes into
-   * Office / Administration.
-   */
-  const openCopyShift = (shift: ShiftDisplay) => {
-    const raw = shift.rawShift;
-    if (raw.target_employment_type !== 'FT' || !raw.assigned_employee_id
-      || !raw.role_id || !raw.organization_id || !raw.department_id || !raw.sub_department_id) return;
-    setCopySource({
-      employeeId: raw.assigned_employee_id,
-      employeeName: shift.employeeName ?? '',
-      dateKey: raw.shift_date,
-      shift: raw,
-      roleId: raw.role_id,
-      organizationId: raw.organization_id,
-      departmentId: raw.department_id,
-      subDepartmentId: raw.sub_department_id,
-    });
-  };
-
-  const handleCloneShift = async (shift: ShiftDisplay) => {
-    try {
-      const { rawShift } = shift;
-      const cloneData: any = {
-        roster_id: rawShift.roster_id,
-        department_id: rawShift.department_id,
-        sub_department_id: rawShift.sub_department_id,
-        shift_date: rawShift.shift_date,
-        start_time: rawShift.start_time,
-        end_time: rawShift.end_time,
-        organization_id: rawShift.organization_id,
-        group_type: rawShift.group_type,
-        sub_group_name: rawShift.sub_group_name,
-        shift_group_id: (rawShift as any).shift_group_id,
-        shift_subgroup_id: (rawShift as any).shift_subgroup_id || (rawShift as any).roster_subgroup_id,
-        role_id: rawShift.role_id,
-        remuneration_level: rawShift.remuneration_level,
-        paid_break_minutes: rawShift.paid_break_minutes,
-        unpaid_break_minutes: rawShift.unpaid_break_minutes,
-        timezone: rawShift.timezone,
-        required_skills: rawShift.required_skills || [],
-        required_licenses: rawShift.required_licenses || [],
-        event_ids: rawShift.event_ids || [],
-        tags: rawShift.tags || [],
-        notes: rawShift.notes,
-        is_training: rawShift.is_training,
-        // Mandatory on every shift (fn_shift_inherit_template_row raises 23502
-        // without it), and the clone is for the same people as its source.
-        // Omitted, every Clone failed with "target_employment_type is required".
-        target_employment_type: (rawShift as any).target_employment_type,
-        target_requires_flexible: (rawShift as any).target_requires_flexible,
-        // assigned_employee_id is NOT copied as per refined requirements
-      };
-
-      await createShiftMutation.mutateAsync(cloneData);
-      toast({
-        title: 'Shift Cloned',
-        description: 'A new draft replica has been created (unassigned).',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Clone Failed',
-        description: error.message || 'Could not clone shift.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   // Push to Bidding - marks shift as available for bidding
   // Bidding window auto-closes 4 hours before shift start
   const handleRequestPublish = (shift: ShiftDisplay) => {
@@ -2652,7 +2253,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
     const now = new Date();
     const hoursToStart = differenceInHours(shiftStart, now);
-    const minutesToStart = differenceInMinutes(shiftStart, now);
     const isEmergency = hoursToStart < 4;
 
     // DEBUG: Log calculation for shifts starting soon
@@ -2663,7 +2263,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const groupConfig = GROUP_COLORS[shift.groupColor as TemplateGroupType] || GROUP_COLORS.convention_centre;
     const accentColor = groupConfig.accent === 'emerald' ? 'green' : groupConfig.accent;
 
-    const lifecycleStatus = shift.isPublished ? 'published' : shift.isDraft ? 'draft' : 'draft';
 
     const menu = (
       <DropdownMenu modal={false}>
@@ -2682,20 +2281,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
             return (
               <>
-                {/* 1. Clone */}
-                <DropdownMenuItem
-                  disabled={hasStarted || !canEdit}
-                  onClick={() => handleCloneShift(shift)}
-                  className={cn(
-                    "text-popover-foreground hover:bg-accent cursor-pointer",
-                    (hasStarted || !canEdit) && "text-muted-foreground/50 cursor-not-allowed"
-                  )}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Clone Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
-                </DropdownMenuItem>
-
-                {/* 2. Edit */}
+                {/* 1. Edit */}
                 <DropdownMenuItem
                   disabled={hasStarted || !canEdit}
                   onClick={() => handleEditShift(shift, group, subGroup, date)}
@@ -2708,7 +2294,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   Edit Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
                 </DropdownMenuItem>
 
-                {/* 3. Audit */}
+                {/* 2. Audit */}
                 <DropdownMenuItem
                   onClick={() => setAuditedShift(shift.rawShift)}
                   className="text-popover-foreground hover:bg-accent cursor-pointer"
@@ -2717,7 +2303,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   Audit Compliance
                 </DropdownMenuItem>
 
-                {/* 4. More: Scheduled vs Actual vs Billable & Variance */}
+                {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
                 {shift.rawShift.target_employment_type === 'FT' && (
                   <DropdownMenuItem
                     onClick={() => setExpandedShift(shift.rawShift)}
@@ -2764,20 +2350,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   </DropdownMenuItem>
                 )}
 
-                {/* Copy to... on FT shifts */}
-                {canEdit && shift.rawShift.target_employment_type === 'FT' && shift.rawShift.assigned_employee_id && (
-                  <DropdownMenuItem
-                    onClick={() => openCopyShift(shift)}
-                    className="text-popover-foreground hover:bg-accent cursor-pointer"
-                  >
-                    <CopyPlus className="h-4 w-4 mr-2" />
-                    Copy to…
-                  </DropdownMenuItem>
-                )}
-
                 <DropdownMenuSeparator className="bg-border" />
 
-                {/* 5. Delete */}
+                {/* 4. Delete */}
                 <DropdownMenuItem
                   disabled={hasStarted || !canEdit}
                   onClick={() => handleDeleteShift(shift)}
@@ -2882,10 +2457,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   isBulkMode={isBulkMode}
                   externalShifts={externalShifts}
                   isDateInTemplate={isDateInTemplate}
-                  shiftsByBucketKey={shiftsByBucketKey}
-                  selectedV8ShiftIdsSet={selectedV8ShiftIdsSet}
-                  onDeselectShiftIds={onDeselectShiftIds}
-                  onSelectShiftIds={onSelectShiftIds}
                   isDnDModeActive={isDnDModeActive}
                   summaryData={summaryData}
                   onDrillDown={onDrillDown}
@@ -2896,7 +2467,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   handleEmployeeDrop={handleEmployeeDrop}
                   setActiveSubGroup={setActiveSubGroup}
                   setIsRenameOpen={setIsRenameOpen}
-                  setIsCloneOpen={setIsCloneOpen}
                   setIsDeleteOpen={setIsDeleteOpen}
                   getSubGroupTemplateLabel={getSubGroupTemplateLabel}
                   subGroupActionsBlockedReason={subGroupActionsBlockedReason}
@@ -2917,17 +2487,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
         <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
         <ShiftAuditDialog shift={auditedShift} onOpenChange={(o) => { if (!o) setAuditedShift(null); }} />
-
-        {/* Copy a full-time shift onto a range */}
-        <CopyShiftFlow
-          source={copySource}
-          defaultEndDate={copySource
-            ? format(endOfWeek(parseISO(copySource.dateKey), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-            : ''}
-          referenceDate={format(getSydneyNow(), 'yyyy-MM-dd')}
-          onClose={() => setCopySource(null)}
-          onCopied={() => { void queryClient.invalidateQueries({ queryKey: shiftKeys.all }); }}
-        />
 
         {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -3066,21 +2625,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
               await renameSubGroupMutation.mutateAsync({ scope: activeSubGroupScope, oldName: activeSubGroup.name, newName });
             }}
           />
-          <CloneSubGroupDialog
-            currentName={activeSubGroup.name}
-            scopeLabel={activeSubGroupScopeLabel}
-            isOpen={isCloneOpen}
-            onOpenChange={setIsCloneOpen}
-            onPreview={async (newName) =>
-              describeSubgroupClone(
-                await cloneRosterSubgroup(activeSubGroupScope, activeSubGroup.name, newName, true),
-                activeSubGroup.name,
-                newName,
-              )}
-            onClone={async (newName) => {
-              await cloneSubGroupMutation.mutateAsync({ scope: activeSubGroupScope, sourceName: activeSubGroup.name, newName });
-            }}
-          />
           <DeleteSubGroupDialog
             subGroupName={activeSubGroup.name}
             scopeLabel={activeSubGroupScopeLabel}
@@ -3118,4 +2662,3 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   );
 };
 
-export default GroupModeView;

@@ -1,16 +1,12 @@
 import { PageState } from '@/modules/core/ui/components/PageState';
-import React, { useMemo, useState, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, addDays } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { Loader2 } from 'lucide-react';
-import { Badge } from '@/modules/core/ui/primitives/badge';
-import { Button } from '@/modules/core/ui/primitives/button';
-import { Separator } from '@/modules/core/ui/primitives/separator';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { cn } from '@/modules/core/lib/utils';
-import { page, surface } from '@/modules/core/ui/layout/pageTokens';
+import { surface } from '@/modules/core/ui/layout/pageTokens';
 
 // Components
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
@@ -23,7 +19,7 @@ import PeopleModeGrid, { EmployeeShift } from '@/modules/rosters/ui/modes/People
 import { RosterPaginationFooter } from '@/modules/rosters/ui/components/RosterPaginationFooter';
 import { RosterMetricsFooter } from '@/modules/rosters/ui/components/RosterMetricsFooter';
 import { RosterHorizontalFilterBar } from '@/modules/rosters/ui/components/RosterHorizontalFilterBar';
-import type { PeopleModeEmployee, PeopleModeShift } from '@/modules/rosters/ui/modes/people-mode.types';
+import type { PeopleModeShift } from '@/modules/rosters/ui/modes/people-mode.types';
 import UnfilledShiftsPanel, {
   UnfilledShift,
 } from '@/modules/rosters/ui/modes/UnfilledShiftsPanel';
@@ -46,16 +42,13 @@ import { prefetchRouteChunk } from '@/router/routePrefetch';
 // Hooks & Services - Enterprise TanStack Query hooks
 import { useAuth } from '@/platform/auth/useAuth';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
   useShiftsByDateRange,
   useEmployees,
   useRoles,
   useRemunerationLevels,
   useEvents,
-  useCreateShift,
   useUpdateShift,
-  useDeleteShift,
   useBulkPublishShifts,
   useBulkDeleteShifts,
   useBulkUnpublishShifts,
@@ -74,7 +67,7 @@ import {
 import {
   GROUP_DISPLAY_NAMES,
 } from '@/modules/rosters/domain/projections/constants';
-import { useRosterUI, RosterMode, CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
+import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import {
   Shift,
 } from '@/modules/rosters/api/shifts.api';
@@ -82,9 +75,8 @@ import { useRosterProjections } from '@/modules/rosters/hooks/useRosterProjectio
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
 import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPrefetch';
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { soleOrgId, soleId } from '@/platform/auth/scope-narrowing';
+import { soleOrgId, soleId, orgIdOnceSynced } from '@/platform/auth/scope-narrowing';
 import {
   preflightPublish,
   preflightUnpublish,
@@ -96,26 +88,18 @@ import { reloadRosterData } from '@/modules/rosters/state/reloadRoster';
 import { computeRangeKeys } from '@/modules/rosters/domain/view-range';
 import { allowsShiftWriteAt } from '@/platform/auth/accessSuites';
 import type { PublishRosterResult } from '@/modules/rosters/ui/components/PublishRosterButton';
-import { shiftsQueries, INTERACTIVE_ROW_CAP } from '@/modules/rosters/api/shifts.queries';
+import { INTERACTIVE_ROW_CAP } from '@/modules/rosters/api/shifts.queries';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
-import { LayoutGrid, Search } from 'lucide-react';
-import { Input } from '@/modules/core/ui/primitives/input';
+import { LayoutGrid } from 'lucide-react';
 import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
-import { resolveGroupType } from '@/modules/rosters/utils/roster-utils';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import { describeShiftMutationError } from '@/modules/rosters/domain/shiftMutationError';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
 
 // Server-side pagination cap on the employee lookup. Hoisted to module
 // scope so the BFF prefetch hook can reuse it as part of the cache key
@@ -146,7 +130,7 @@ const MONTH_INTERACTIVE_SHIFT_LIMIT = 1500;
 const NewRostersPage: React.FC = () => {
   const { toast } = useToast();
   const { hasPermission, user } = useAuth();
-  const { scope, setScope, isGammaLocked, scopeTree } = useScopeFilter('managerial');
+  const { scope, setScope, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('managerial');
   const queryClient = useQueryClient();
 
   const { showUnfilledPanel, setShowUnfilledPanel, isDnDModeActive } = useRosterStore(
@@ -161,17 +145,13 @@ const NewRostersPage: React.FC = () => {
   // These persist across navigation but reset on browser refresh
   const {
     activeMode,
-    setActiveMode,
     viewType,
     setViewType,
     selectedDate,
     setSelectedDate,
     selectedOrganizationId,
-    setSelectedOrganizationId,
     selectedDepartmentIds,
-    setSelectedDepartmentIds,
     selectedSubDepartmentIds,
-    setSelectedSubDepartmentIds,
     toggleShiftSelection,
     clearSelection,
     bulkModeActive,
@@ -235,8 +215,17 @@ const NewRostersPage: React.FC = () => {
     });
   }, [scope.org_ids.join(','), scope.dept_ids.join(','), scope.subdept_ids.join(',')]);
 
+  // Data queries key off this, so they wait until the store above holds the
+  // resolved scope rather than a persisted or half-synced one — see
+  // `orgIdOnceSynced`.
+  const scopedOrgId = orgIdOnceSynced(
+    scope,
+    { orgId: selectedOrganizationId, deptIds: selectedDepartmentIds, subDeptIds: selectedSubDepartmentIds },
+    isScopeLoading,
+  );
+
   // ==================== CONTEXT STATE ====================
-  const [selectedRosterId, setSelectedRosterId] = useState<string | null>(null);
+  const [selectedRosterId] = useState<string | null>(null);
 
   // ==================== TEMPLATE DATE BOUNDS (for Ghost Cell navigation) ====================
   const [templateStartDate, setTemplateStartDate] = useState<Date | undefined>(undefined);
@@ -247,7 +236,7 @@ const NewRostersPage: React.FC = () => {
   // All modal open/close state lives in RosterModals; page calls imperative methods.
   const modalsRef = useRef<RosterModalsHandle>(null);
 
-  const [dayZoom, setDayZoom] = useState<60>(60);
+  const [dayZoom] = useState<60>(60);
 
   // ==================== DERIVED ====================
 
@@ -315,7 +304,7 @@ const NewRostersPage: React.FC = () => {
   // individual hooks fire. On navigation back to this page the caches are
   // already warm — no waterfall of 5-7 separate network requests.
   useRosterViewPrefetch({
-    orgId: selectedOrganizationId,
+    orgId: scopedOrgId,
     startDate,
     endDate,
     deptIds: selectedDepartmentIds,
@@ -342,7 +331,6 @@ const NewRostersPage: React.FC = () => {
   // The previous useRostersByDateRange fetch fed nothing (isLocked is hardcoded
   // false and the fetched rosters had no consumers) — removed to drop a wasted
   // network round-trip on every roster view.
-  const isLocked = false;
   const canEdit = hasPermission('update');
 
   // Query shifts for date range (supports day, week, month views)
@@ -350,7 +338,6 @@ const NewRostersPage: React.FC = () => {
     data: shifts = [],
     isLoading,
     isFetching: isRefreshing,
-    refetch,
   } = useShiftsByDateRange(
     // Group Bucket View renders aggregate summary cells only — skip the heavy
     // per-shift fetch by gating the query off (null orgId → enabled = false).
@@ -360,7 +347,7 @@ const NewRostersPage: React.FC = () => {
     // that currently exists, so it looked harmless — but it would silently query
     // the wrong org's shifts for anyone else. A null orgId gates the query off,
     // which is exactly what the comment above describes.
-    isGroupBucketView ? null : (selectedOrganizationId || soleOrgId(scope)),
+    isGroupBucketView ? null : scopedOrgId,
     startDate,
     endDate,
     queryFilters
@@ -387,9 +374,8 @@ const NewRostersPage: React.FC = () => {
     (activeMode === 'group' || (activeMode === 'roles' && viewType !== 'day')) && !hasActiveFilters;
   const {
     summaryMap,
-    isLoading: isSummaryLoading,
   } = useRosterSummary(
-    selectedOrganizationId,
+    scopedOrgId,
     startDate,
     endDate,
     queryFilters,
@@ -401,7 +387,7 @@ const NewRostersPage: React.FC = () => {
   // across ALL modes/views (replaces the old bucket-vs-projection branch which
   // showed inconsistent totals and counted cancelled shifts in bucket view).
   const { stats: plannerStats } = useRosterPlannerStats(
-    selectedOrganizationId,
+    scopedOrgId,
     startDate,
     endDate,
     queryFilters,
@@ -455,7 +441,7 @@ const NewRostersPage: React.FC = () => {
   // Lookup data for projections (stable TanStack Query cache refs)
   const { data: roles = [] } = useRoles(selectedOrganizationId || undefined, selectedDepartmentIds[0], selectedSubDepartmentIds[0]);
   const { data: levels = [] } = useRemunerationLevels();
-  const { data: eventsData = [] } = useEvents(selectedOrganizationId || undefined);
+  const { data: eventsData = [] } = useEvents(scopedOrgId || undefined);
 
   // ==================== PROJECTION ENGINE ====================
   const projection = useRosterProjections({
@@ -470,7 +456,7 @@ const NewRostersPage: React.FC = () => {
   // Derive unfilled shifts from cached query data
   const unfilledShifts: UnfilledShift[] = useMemo(() => {
     return shifts
-      .filter((s: Shift) => !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at && (s.is_draft ?? true))
+      .filter((s: Shift) => !s.assigned_employee_id && !s.is_cancelled && (s.is_draft ?? true))
       .map((s: Shift) => ({
         id: s.id,
         title: s.sub_group_name || 'Shift',
@@ -536,18 +522,6 @@ const NewRostersPage: React.FC = () => {
   }, [isInteractiveMode, viewType, plannerStats.totalShifts, selectedDate, setSelectedDate, setViewType, toast]);
 
   // ==================== MODAL HANDLERS ====================
-  const handleAddShift = () => {
-    const context: ShiftContext = {
-      mode: activeMode as ShiftContext['mode'],
-      launchSource: 'global', // Date will be editable
-      date: format(selectedDate, 'yyyy-MM-dd'),
-      organizationId: selectedOrganizationId || undefined,
-      rosterId: selectedRosterId || undefined,
-      departmentIds: selectedDepartmentIds,
-      subDepartmentIds: selectedSubDepartmentIds,
-    };
-    modalsRef.current?.openAddShift(context);
-  };
 
   const handleAddShiftWithGroup = (
     groupName: string,
@@ -1173,7 +1147,7 @@ const NewRostersPage: React.FC = () => {
          emergent ones to the emergency-assignment flow. Must stay in
          sync with the filter in AutoSchedulerModal.tsx. */
       .filter((s) =>
-        !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
+        !s.assigned_employee_id && !s.is_cancelled
         && (s.is_draft ?? true)
         && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
       .map((s) => ({

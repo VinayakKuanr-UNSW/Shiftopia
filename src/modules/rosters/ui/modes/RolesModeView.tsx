@@ -1,15 +1,12 @@
 import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo } from 'react';
-import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import { format, addDays, parse, isToday } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import { 
-  Plus, 
   MoreHorizontal,
   Edit2,
   Undo2,
-  Loader2,
   Briefcase,
   Zap,
   ChevronDown,
@@ -21,19 +18,11 @@ import {
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
-import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
-import * as import_GroupSummaryCell from '@/modules/rosters/ui/components/GroupSummaryCell';
 import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
-import { useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
+import { useRemunerationLevels, useRoles, useUnpublishShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -330,7 +319,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   selectedDate, viewType, canEdit, organizationId, departmentIds = [], subDepartmentIds = [], rosterId, shifts: parentShifts, projection, onEditShift, onMoveShift, onAssignShift, selectedV8ShiftIds: propsSelectedV8ShiftIds, isBulkMode, onToggleShiftSelection, summaryData, onDrillDown 
 }) => {
   const { toast } = useToast();
-  const createShiftMutation = useCreateShift();
   const activeDeptId = departmentIds[0];
   const activeSubDeptId = subDepartmentIds[0];
 
@@ -381,51 +369,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const [collapsedLevels, setCollapsedLevels] = useState<Set<number>>(new Set());
 
 
-  const handleCloneShift = async (shift: Shift) => {
-    try {
-      const cloneData: any = {
-        roster_id: shift.roster_id,
-        department_id: shift.department_id,
-        sub_department_id: shift.sub_department_id,
-        shift_date: shift.shift_date,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        organization_id: shift.organization_id,
-        group_type: (shift as any).group_type,
-        sub_group_name: (shift as any).sub_group_name,
-        shift_group_id: (shift as any).shift_group_id,
-        shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
-        role_id: shift.role_id,
-        remuneration_level: shift.remuneration_level,
-        paid_break_minutes: shift.paid_break_minutes,
-        unpaid_break_minutes: shift.unpaid_break_minutes,
-        timezone: shift.timezone,
-        required_skills: shift.required_skills || [],
-        required_licenses: shift.required_licenses || [],
-        event_ids: shift.event_ids || [],
-        tags: shift.tags || [],
-        notes: shift.notes,
-        is_training: shift.is_training,
-        // Mandatory on every shift — without it every Clone failed with
-        // "target_employment_type is required" (fn_shift_inherit_template_row).
-        target_employment_type: (shift as any).target_employment_type,
-        target_requires_flexible: (shift as any).target_requires_flexible,
-      };
-
-      await createShiftMutation.mutateAsync(cloneData);
-      toast({
-        title: 'Shift Cloned',
-        description: 'A new draft replica has been created (unassigned).',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Clone Failed',
-        description: error.message || 'Could not clone shift.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleDeleteShift = async (shift: any) => {
     try {
       await deleteShiftMutation.mutateAsync({
@@ -462,20 +405,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
-          {/* 1. Clone */}
-          <DropdownMenuItem
-            disabled={isPast}
-            onClick={() => handleCloneShift(shift)}
-            className={cn(
-              "text-popover-foreground hover:bg-accent cursor-pointer",
-              isPast && "text-muted-foreground/50 cursor-not-allowed"
-            )}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Clone Shift {isPast && '(Locked)'}
-          </DropdownMenuItem>
-
-          {/* 2. Edit */}
+          {/* 1. Edit */}
           <DropdownMenuItem
             disabled={isPast}
             onClick={() => onEditShift?.(shift)}
@@ -488,7 +418,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             Edit Shift {isPast && '(Locked)'}
           </DropdownMenuItem>
 
-          {/* 3. Audit */}
+          {/* 2. Audit */}
           <DropdownMenuItem
             onClick={() => setAuditedShift(shift)}
             className="text-popover-foreground hover:bg-accent cursor-pointer"
@@ -497,7 +427,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             Audit Compliance
           </DropdownMenuItem>
 
-          {/* 4. More: Scheduled vs Actual vs Billable & Variance */}
+          {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
           <DropdownMenuItem
             onClick={() => setExpandedShift(shift)}
             className="text-popover-foreground hover:bg-accent cursor-pointer"
@@ -521,7 +451,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
 
           <DropdownMenuSeparator className="bg-border" />
 
-          {/* 5. Delete */}
+          {/* 4. Delete */}
           <DropdownMenuItem
             disabled={isPast}
             onClick={() => {
@@ -607,7 +537,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const handleConfirmUnpublish = async () => {
     if (!confirmV8ShiftId) return;
     try { await unpublishMutation.mutateAsync({ shiftId: confirmV8ShiftId, reason: 'Unpublished via Roles view' }); } 
-    catch {} finally { setIsConfirmOpen(false); setConfirmV8ShiftId(null); }
+    catch { /* mutation onError handles rollback; toast not needed here */ } finally { setIsConfirmOpen(false); setConfirmV8ShiftId(null); }
   };
 
   const handleCellClick = (roleId: string, date: Date) => {
@@ -629,8 +559,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const isLoading = !projection && (isLoadingLevels || isLoadingRoles);
   if (isLoading) return <PageState state="loading" className="h-[400px]" title="Loading roles" />;
 
-  const totalHours = projection?.stats?.totalNetMinutes != null ? (projection.stats.totalNetMinutes / 60).toFixed(1) : '—';
-  const estCost = projection?.stats?.estimatedCost ?? 0;
 
   return (
     <div className="flex flex-col h-full bg-background relative overflow-hidden">
@@ -801,4 +729,3 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   );
 };
 
-export default RolesModeView;

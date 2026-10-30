@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { swapsApi, ShiftSwap, CreateSwapData } from '../api/swaps.api';
+import { swapsApi, CreateSwapData } from '../api/swaps.api';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
@@ -124,7 +124,6 @@ export const useSwaps = (
     });
 
     // Query key factory for offers to manual invalidation
-    const offersQueryKey = (swapId: string) => ['swapOffers', swapId];
 
     // Mutation: Make an offer on a swap
     const makeOfferMutation = useMutation({

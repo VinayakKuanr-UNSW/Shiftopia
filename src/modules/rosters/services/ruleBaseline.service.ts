@@ -26,11 +26,6 @@ import { compileRule, evaluateRule, type CompiledRule } from '../domain/ruleEval
 import { ruleApplies } from '../domain/ruleMatcher';
 import type { FunctionCode } from '../api/supervisorFeedback.dto';
 
-interface CellKey {
-    slice_idx: number;
-    function_code: FunctionCode;
-    level: number;
-}
 
 const NUM_LEVELS = 8;
 
@@ -54,7 +49,7 @@ export function compileRules(rules: readonly DemandRuleRow[]): {
     return { compiled, errors };
 }
 
-export interface RuleBaselineResult {
+interface RuleBaselineResult {
     cells: RuleBaselineCell[];
     /** Rules that applied to this event but evaluated to 0 (kept for diagnostics). */
     zeroRules: string[];

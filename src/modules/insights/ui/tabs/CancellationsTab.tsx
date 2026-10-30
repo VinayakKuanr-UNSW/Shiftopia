@@ -8,7 +8,7 @@
  *  - Shift outcome count strips and per-employee drop rate table
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { CalendarX, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';

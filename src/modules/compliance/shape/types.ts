@@ -68,7 +68,7 @@ export type ShapeEmploymentTarget = 'FT' | 'PT' | 'Casual';
  * every one of them about a field the user had not filled in yet. Rules only
  * describe a shift that exists.
  */
-export type ShapeStatus = 'PASS' | 'WARNING' | 'BLOCKING' | 'INCOMPLETE';
+type ShapeStatus = 'PASS' | 'WARNING' | 'BLOCKING' | 'INCOMPLETE';
 
 /**
  * Every rule id this layer can emit.
@@ -82,7 +82,7 @@ export type ShapeStatus = 'PASS' | 'WARNING' | 'BLOCKING' | 'INCOMPLETE';
  * Kept in emission order so this list can be diffed against `evaluate.ts`
  * top-to-bottom; `shape-rule-ids.test.ts` asserts the two agree.
  */
-export type ShapeRuleId =
+type ShapeRuleId =
     | 'SHAPE_VALID_RANGE'
     | 'SHAPE_BREAK_EXCEEDS_SHIFT'
     | 'SHAPE_SPREAD_GUARDRAIL'
@@ -117,7 +117,7 @@ export const DAY_TYPED_SHAPE_RULES: readonly ShapeRuleId[] = Object.freeze([
 ]);
 
 /** A hit is only ever raised on an evaluable shift, so it cannot be INCOMPLETE. */
-export type ShapeHitStatus = 'WARNING' | 'BLOCKING';
+type ShapeHitStatus = 'WARNING' | 'BLOCKING';
 
 /**
  * A shape finding. Structurally compatible with `V8Hit` so the existing
@@ -144,13 +144,13 @@ export interface ShapeHit {
     calculation?: Record<string, unknown>;
 }
 
-export type ShapeField =
+type ShapeField =
     | 'start_time' | 'end_time'
     | 'break_start' | 'break_end'
     | 'unpaid_break_minutes' | 'paid_break_minutes'
     | 'target_employment_type';
 
-export interface ShapeFix {
+interface ShapeFix {
     /**
      * Never the meal break: WHEN it is taken is the manager's call (user
      * decision 2026-10-25), so the meal-break rules state the requirement and

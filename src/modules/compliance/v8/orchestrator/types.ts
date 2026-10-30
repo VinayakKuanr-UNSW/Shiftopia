@@ -5,20 +5,20 @@
  */
 
 import type { OrdinaryCycleWeeks } from '@/modules/compliance/ordinary-hours-cycle';
-import { V8ShiftId, V8EmpId, V8RoleId, V8ContractType, V8Status, V8Hit, V8Config, V8Shift, V8Employee } from '../types';
+import { V8ShiftId, V8EmpId, V8ContractType, V8Status, V8Hit, V8Config, V8Shift } from '../types';
 
-export type { V8ShiftId, V8EmpId, V8RoleId, V8ContractType, V8Status, V8Hit, V8Config, V8Shift, V8Employee };
+export type { V8Status, V8Hit };
 
 export type V8OperationType = 'ASSIGN' | 'BID' | 'SWAP';
-export type V8EvalMode      = 'CURRENT' | 'SIMULATED';
+type V8EvalMode      = 'CURRENT' | 'SIMULATED';
 export type V8Stage         = 'DRAFT' | 'PUBLISH' | 'LIVE';
 
-export interface V8CandidateChanges {
+interface V8CandidateChanges {
     add_shifts:    V8OrchestratorShift[];
     remove_shifts: V8ShiftId[];
 }
 
-export interface V8AvailabilitySlot {
+interface V8AvailabilitySlot {
     slot_date:   string;
     start_time:  string;
     end_time:    string;

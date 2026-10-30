@@ -10,7 +10,7 @@ interface Props {
     limit?: number;
 }
 
-export const NearMissPanel: React.FC<Props> = ({ nearMisses, limit = 40 }) => {
+const NearMissPanel: React.FC<Props> = ({ nearMisses, limit = 40 }) => {
     const { isDark } = useTheme();
 
     const groups = React.useMemo(() => {

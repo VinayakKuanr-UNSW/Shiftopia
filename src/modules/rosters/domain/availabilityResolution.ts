@@ -20,7 +20,6 @@ import {
     EmployeeAvailability,
     AvailabilityWindow,
     AVAILABILITY_PRIORITY,
-    AvailabilityType,
 } from './availabilityResolution.types';
 
 /* ============================================================
@@ -112,7 +111,6 @@ function buildTimeWindows(
     targetDate: Date
 ): TimeWindow[] {
     const windows: TimeWindow[] = [];
-    const targetDateStr = format(targetDate, 'yyyy-MM-dd');
 
     for (const rule of rules) {
         const ruleStart = parseISO(rule.start_date);

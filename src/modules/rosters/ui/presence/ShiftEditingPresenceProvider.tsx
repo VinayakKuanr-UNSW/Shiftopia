@@ -64,7 +64,7 @@ const EMPTY_EDITORS: ShiftEditor[] = [];
 const PresenceContext = createContext<PresenceContextValue | null>(null);
 
 /** `${departmentId}:${shiftDate}` → the Realtime channel topic suffix. */
-export function presenceScopeKey(departmentId: string, shiftDate: string): string {
+function presenceScopeKey(departmentId: string, shiftDate: string): string {
   return `${departmentId}:${shiftDate}`;
 }
 

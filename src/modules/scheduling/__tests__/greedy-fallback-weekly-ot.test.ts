@@ -120,4 +120,25 @@ describe('buildGreedyFallbackPriorOrdinaryMap', () => {
     expect(prior.get('s1')).toBe(0);
     expect(prior.get('s2')).toBe(0); // e2's own week, unaffected by e1
   });
+
+  // A meal break is not worked. Counting it as ordinary time pushed staff into
+  // weekly overtime early and overstated the fallback's cost; the roster
+  // pipeline (`netMinutesFromDTO`) has always netted it out.
+  it('accrues hours net of the unpaid break, for existing and proposed shifts alike', () => {
+    const existingRoster = new Map<string, ExistingShiftRef[]>([
+      ['e1', [existingShift({ id: 'x1', shift_date: '2026-07-06', unpaid_break_minutes: 30 })]], // 8h gross
+    ]);
+    const proposals = [
+      proposal({ shiftId: 's1', shiftDate: '2026-07-07' }),                     // 8h gross
+      proposal({ shiftId: 's2', shiftDate: '2026-07-08' }),
+    ];
+    const shifts = [
+      { id: 's1', shift_date: '2026-07-07', start_time: '09:00', end_time: '17:00', unpaid_break_minutes: 60 },
+    ];
+
+    const prior = buildGreedyFallbackPriorOrdinaryMap(proposals, existingRoster, shifts);
+
+    expect(prior.get('s1')).toBe(7.5);   // Monday: 8h − 30m
+    expect(prior.get('s2')).toBe(14.5);  // + Tuesday: 8h − 60m
+  });
 });

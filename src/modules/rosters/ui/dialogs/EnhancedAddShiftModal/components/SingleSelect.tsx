@@ -3,7 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primi
 import { CommandItem, CommandShortcut } from '@/modules/core/ui/primitives/command';
 import { PICKER_CONTENT_CLASS, PICKER_ROW, PickerPanel, PickerTick, PickerTrigger } from '@/modules/core/ui/components/PickerField';
 
-export interface SingleSelectProps {
+interface SingleSelectProps {
     label?: string;
     options: Array<{ id: string; name: string }>;
     value: string | null | undefined;

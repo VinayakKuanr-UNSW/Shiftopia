@@ -30,7 +30,7 @@ export class WriteRefusedError extends AppError {
     }
 }
 
-export interface WriteResult {
+interface WriteResult {
     error: unknown;
     /** Present when the write asked for `{ count: 'exact' }`. */
     count?: number | null;

@@ -5,7 +5,7 @@ import { listItemSpring } from '@/modules/core/ui/motion/presets';
 import { cn } from '@/modules/core/lib/utils';
 import { text } from '@/modules/core/ui/typography';
 import { isTodayInTimezone } from '@/modules/core/lib/date.utils';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
 import { useNavigate } from 'react-router-dom';
 import { CalendarX2 } from 'lucide-react';
 import { PageState } from '@/modules/core/ui/components/PageState';

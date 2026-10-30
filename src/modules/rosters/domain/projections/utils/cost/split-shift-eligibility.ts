@@ -25,7 +25,7 @@
  * minimum-engagement floor).
  */
 
-export interface SplitShiftCandidate {
+interface SplitShiftCandidate {
   /** Stable identifier for the shift — the value returned in the marked set. */
   id: string;
   /** The employee this shift is assigned to. Required — grouping is per (employee, date). */

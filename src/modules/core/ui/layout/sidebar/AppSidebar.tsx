@@ -1,35 +1,21 @@
-import React, { memo, useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLocation, NavLink } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { biddingApi, swapsApi } from '@/modules/planning';
 import { prefetchRouteChunk } from '@/router/routePrefetch';
 import {
-  Calendar,
-  Clock,
-  Users,
-  Workflow,
-  CalendarDays,
-  FileSpreadsheet,
   BellRing,
   BadgeCheck,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  TrendingUp,
   UserCircle2,
   Shield,
-  ShieldX,
   FolderKanban,
   Sparkles,
   Radio,
   LucideIcon,
-  Activity,
-  Palmtree,
-  Wallet,
-  Grid3x3,
   Search,
-  Fingerprint,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -70,7 +56,7 @@ const AppCrossLogo: React.FC<{ className?: string }> = ({ className }) => (
 /* ============================================================
    TYPES FOR NAVIGATION TREE
    ============================================================ */
-export interface NavLeafItem {
+interface NavLeafItem {
   to: string;
   label: string;
   description?: string;
@@ -79,7 +65,7 @@ export interface NavLeafItem {
   onMouseEnter?: () => void;
 }
 
-export interface NavGroupSection {
+interface NavGroupSection {
   id: string;
   title: string;
   icon: LucideIcon;

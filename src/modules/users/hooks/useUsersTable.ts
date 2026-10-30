@@ -14,7 +14,7 @@ import type { ContractRow } from '../domain/contractRows';
 import { groupUsers, type LicenceRef, type PersonRef, type SkillRef } from '../domain/usersTable';
 import { attachContractNames } from './useUserContracts';
 
-export const USERS_TABLE_KEY = ['users_table'] as const;
+const USERS_TABLE_KEY = ['users_table'] as const;
 
 export function useUsersTable(scope: ScopeSelection, options: { includeUnplaced?: boolean } = {}) {
     const { includeUnplaced } = options;

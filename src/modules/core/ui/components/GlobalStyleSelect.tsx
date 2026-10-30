@@ -12,7 +12,7 @@ import {
     CommandShortcut,
 } from '@/modules/core/ui/primitives/command';
 
-export interface GlobalStyleSelectOption {
+interface GlobalStyleSelectOption {
     id: string;
     name: string;
     description?: string;
@@ -20,7 +20,7 @@ export interface GlobalStyleSelectOption {
     disabled?: boolean;
 }
 
-export interface GlobalStyleSelectProps {
+interface GlobalStyleSelectProps {
     label: string;
     value: string;
     onChange: (value: string) => void;
@@ -229,4 +229,3 @@ export const GlobalStyleSelect: React.FC<GlobalStyleSelectProps> = ({
     );
 };
 
-export default GlobalStyleSelect;

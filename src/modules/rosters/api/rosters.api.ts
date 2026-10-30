@@ -11,7 +11,7 @@ const EnsureRostersResultSchema = z.object({
     days_existing: z.number(),
     days_skipped:  z.number(),
 });
-export type EnsureRostersResult = z.infer<typeof EnsureRostersResultSchema>;
+type EnsureRostersResult = z.infer<typeof EnsureRostersResultSchema>;
 
 export const rostersApi = {
     /**

@@ -43,8 +43,8 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
   onDelete,
   onClone,
 }) => {
-  const { data: skillsLookup } = useSkills();
-  const { data: licensesLookup } = useLicenses();
+  useSkills();
+  useLicenses();
 
   const roleLabel = shift.roleName || shift.name || 'Unnamed Shift';
   const remunerationLabel =
@@ -87,7 +87,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
     >
       {/* 1. Badge + Role */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <ShiftStateCircleBadge stateId={shift.assignedEmployeeId ? 'S2' : 'S1'} />
+        <ShiftStateCircleBadge stateId="S1" />
         <span
           className="font-medium text-slate-100 dark:text-slate-100 truncate text-[11px] sm:text-[13px]"
           title={`${roleDisplay}${remunerationLabel ? ` (${remunerationLabel})` : ''}`}
@@ -131,14 +131,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
 
       {/* 3. Assignment */}
       <div className="flex items-center min-w-0 max-w-[180px] flex-1">
-        {shift.assignedEmployeeName ? (
-          <span
-            className="text-slate-200 dark:text-slate-200 truncate font-normal text-[11px] sm:text-[13px]"
-            title={shift.assignedEmployeeName}
-          >
-            {shift.assignedEmployeeName}
-          </span>
-        ) : employmentTypeLabel ? (
+        {employmentTypeLabel ? (
           <span className="text-slate-300 dark:text-slate-300 truncate font-medium text-[11px] sm:text-[13px]">
             {employmentTypeLabel}
           </span>

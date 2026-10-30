@@ -135,4 +135,3 @@ export const InviteUserDialog: React.FC<{ className?: string }> = ({ className }
     );
 };
 
-export default InviteUserDialog;

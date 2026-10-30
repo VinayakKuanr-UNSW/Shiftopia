@@ -3,7 +3,6 @@ import { XCircle, Ban, CheckCircle, Clock, ThumbsUp, Loader2 } from 'lucide-reac
 import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { Drawer, DrawerContent, DrawerTitle } from '@/modules/core/ui/primitives/drawer';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 import { buildShiftCardPay } from '../../../ui/components/shift-card-pay';

@@ -100,4 +100,3 @@ export const ScheduleReferenceTables: React.FC<{ traineeSet: TraineeRateSet }> =
   );
 };
 
-export default ScheduleReferenceTables;

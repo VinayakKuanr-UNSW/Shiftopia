@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { RosterHorizontalFilterBar } from '../RosterHorizontalFilterBar';
 import { useRosterStore, DEFAULT_ADVANCED_FILTERS } from '@/modules/rosters/state/useRosterStore';

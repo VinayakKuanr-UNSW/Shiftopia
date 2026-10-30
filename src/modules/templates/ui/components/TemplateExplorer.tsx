@@ -5,7 +5,6 @@ import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useState, useMemo } from 'react';
 import {
   FileText,
-  Plus,
   Search,
   MoreVertical,
   Pencil,
@@ -83,10 +82,10 @@ export interface ExplorerTemplate {
   subDepartmentName?: string;
 }
 
-export type SortField = 'name' | 'updated' | 'created' | 'shifts' | 'groups' | 'version';
-export type SortDirection = 'asc' | 'desc';
+type SortField = 'name' | 'updated' | 'created' | 'shifts' | 'groups' | 'version';
+type SortDirection = 'asc' | 'desc';
 
-export interface TemplateExplorerProps {
+interface TemplateExplorerProps {
   templates: ExplorerTemplate[];
   selectedTemplateId: string | null;
   onSelectTemplate: (id: string) => void;

@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { RefreshCw, GitCompareArrows, Calendar, Sparkles } from 'lucide-react';
+import { RefreshCw, Calendar } from 'lucide-react';
 import { ToolbarRow, ToolbarIconButton, toolbar } from '@/modules/core/ui/components/Toolbar';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -127,4 +127,3 @@ export const KpiFunctionBar: React.FC<KpiFunctionBarProps> = ({
     );
 };
 
-export default KpiFunctionBar;

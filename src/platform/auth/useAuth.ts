@@ -2,7 +2,7 @@
 // FIXED VERSION - Proper role checking with corrected role names
 
 import { useContext } from 'react';
-import { AuthContext, Role, AccessScope } from '@/platform/auth/AuthProvider';
+import { AuthContext, Role } from '@/platform/auth/AuthProvider';
 import {
   FEATURE_RULES,
   allows,
@@ -23,7 +23,6 @@ export const useAuth = () => {
     activeContract,
     activeContractId,
     setActiveContractId,
-    activeCertificate,
     activeCertificateId,
     setActiveCertificateId,
     isLoading

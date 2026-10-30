@@ -35,7 +35,7 @@ function parseHex(hex: string): [number, number, number] | null {
 }
 
 /** `#RRGGBB` → `"H S% L%"` (the format Tailwind's `hsl(var(--x))` expects). */
-export function hexToHsl(hex: string): string | null {
+function hexToHsl(hex: string): string | null {
   const rgb = parseHex(hex);
   if (!rgb) return null;
   const [r, g, b] = rgb.map((c) => c / 255);

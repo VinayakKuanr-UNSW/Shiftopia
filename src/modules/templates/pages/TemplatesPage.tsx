@@ -2,14 +2,13 @@
 import { PageState } from '@/modules/core/ui/components/PageState';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTemplates } from '../state/useTemplates';
-import { TemplateConflict } from '../model/templates.types';
 
 // Components
 import TemplateExplorer, { ExplorerTemplate } from '../ui/components/TemplateExplorer';
 import TemplateEditor from '../ui/components/TemplateEditor';
 import CreateTemplateDialog from '../ui/dialogs/CreateTemplateDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Loader2, AlertTriangle, FileText } from 'lucide-react';
+import { AlertTriangle, FileText } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +30,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 
 const TemplatesPage: React.FC = () => {
-  const { toast } = useToast();
+  useToast();
   const { scope, setScope, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('managerial');
   // Delta and epsilon see every template in scope but change none (access suites).
   const canEdit = useAuth().hasPermission('managerial-write');
@@ -62,7 +61,6 @@ const TemplatesPage: React.FC = () => {
     updateLocalShift,
     deleteLocalShift,
     discardChanges,
-    validateName,
     checkVersion,
   } = useTemplates();
 

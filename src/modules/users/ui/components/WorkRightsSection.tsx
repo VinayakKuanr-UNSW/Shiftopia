@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { useEmployeeLicenses, useRemoveEmployeeLicense } from '@/modules/users/hooks/useEmployeeLicenses';
 import { Shield, CheckCircle, XCircle, AlertTriangle, AlertOctagon, Loader2, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { AddLicenseDialog } from './AddLicenseDialog';
 import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
@@ -73,7 +73,7 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                             <p className="font-medium">VEVO Verified</p>
                             {workRight.last_checked_at && (
                                 <p className="text-[11px] text-muted-foreground">
-                                    Last checked: {format(parseISO(workRight.last_checked_at), 'MMM d, yyyy HH:mm')}
+                                    Last checked: {formatInTimezone(parseISO(workRight.last_checked_at), SYDNEY_TZ, 'MMM d, yyyy HH:mm')}
                                 </p>
                             )}
                         </div>

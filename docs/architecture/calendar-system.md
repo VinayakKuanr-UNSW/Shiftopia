@@ -160,7 +160,6 @@ by nothing.
 **Migrated to `DatePicker` / `DateRangePicker`**
 - `rosters/ui/components/UnifiedRosterNavigator.tsx` (both variants)
 - `core/ui/components/UnifiedModuleFunctionBar.tsx`
-- `rosters/ui/components/RosterHeader.tsx`
 - `timesheets/ui/components/TimesheetHeader.tsx`
 - `rosters/pages/MyRosterPage.tsx`
 

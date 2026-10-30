@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import * as React from 'react';
 
 /**
  * `React.memo` is only worth anything if the props are referentially stable, and

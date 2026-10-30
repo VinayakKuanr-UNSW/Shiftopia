@@ -1,7 +1,7 @@
 // src/modules/templates/ui/components/editor/TemplateGroupCard.tsx
 // A card component representing a single template group (e.g., Convention Centre)
 
-import React, { useState } from 'react';
+import React from 'react';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -10,7 +10,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/modules/core/ui/primitives/collapsible';
-import { Group, SubGroup } from '../../../model/templates.types';
+import { Group } from '../../../model/templates.types';
 import { GROUP_CONFIG } from '../../constants';
 
 interface TemplateGroupCardProps {

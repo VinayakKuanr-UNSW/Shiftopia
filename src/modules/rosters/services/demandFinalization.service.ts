@@ -44,7 +44,7 @@ import {
 
 // ── L6 constraint floor (Phase-1 minimal) ─────────────────────────────────
 
-export interface L6ConstraintFloor {
+interface L6ConstraintFloor {
     function_code: string;
     level: number;
     /** Minimum headcount. Applied as max(formula_result, floor). */
@@ -57,7 +57,7 @@ export interface L6ConstraintFloor {
  * Global floor across multiple function/level buckets.
  * E.g., "Min 2 Supervisors across ALL F&B functions".
  */
-export interface L6GlobalFloor {
+interface L6GlobalFloor {
     functions: string[];
     levels: number[];
     floor: number;
@@ -66,7 +66,7 @@ export interface L6GlobalFloor {
 
 // ── Finalization inputs / output ───────────────────────────────────────────
 
-export interface FinalizeParams {
+interface FinalizeParams {
     synthesis_run_id: string | null;
     event_id: string | null;
     /** All L3 cells for this event, all functions and levels. */
@@ -95,7 +95,7 @@ export interface FinalizeParams {
     demandCv?: number;
 }
 
-export interface FinalizeResult {
+interface FinalizeResult {
     /** Rows ready for demand_tensor bulk insert. */
     rows: DemandTensorInsertRow[];
     /** Buckets where the feedback multiplier was in cold-start (≥1 rows but < minRowsForSignal). */

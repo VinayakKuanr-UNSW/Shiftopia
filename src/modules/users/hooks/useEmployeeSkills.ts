@@ -4,7 +4,7 @@ import { assertWrote, WriteRefusedError } from '@/platform/supabase/writes';
 import { useToast } from '@/modules/core/hooks/use-toast';
 
 // Types
-export interface Skill {
+interface Skill {
     id: string;
     name: string;
     description?: string;
@@ -29,7 +29,7 @@ export interface EmployeeSkill {
     skill?: Skill;
 }
 
-export interface NewEmployeeSkill {
+interface NewEmployeeSkill {
     employee_id: string;
     skill_id: string;
     proficiency_level?: 'Novice' | 'Competent' | 'Proficient' | 'Expert';

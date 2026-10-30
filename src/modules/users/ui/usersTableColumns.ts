@@ -7,7 +7,7 @@
 import { useCallback, useState } from 'react';
 import type { UsersColumnId } from '../domain/usersTable';
 
-export interface UsersColumn {
+interface UsersColumn {
     id: UsersColumnId;
     label: string;
     /** Shown until the viewer hides it. */

@@ -35,7 +35,7 @@ const PERSONA_TONE: Record<Persona, string> = {
 
 const focusRing = 'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background';
 
-export interface SidebarUserProps {
+interface SidebarUserProps {
     isCollapsed?: boolean;
 }
 

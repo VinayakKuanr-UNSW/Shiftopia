@@ -20,7 +20,7 @@
 export const MAX_CONTRACTED_WEEKLY_HOURS = 38;
 
 /** Employment statuses whose contracted_weekly_hours count toward the ceiling. */
-export const CEILING_COUNTED_STATUSES = [
+const CEILING_COUNTED_STATUSES = [
     'Full-Time',
     'Part-Time',
     'Flexible Part-Time',
@@ -41,7 +41,7 @@ export interface ExistingContract {
     end_date?: string | null;
 }
 
-export interface CapacityResult {
+interface CapacityResult {
     /** Total contracted hours from existing Active FT/PT/Flexible PT contracts. */
     existingHours: number;
     /** How many more hours can be added before hitting the ceiling. */
@@ -50,7 +50,7 @@ export interface CapacityResult {
     isAtCapacity: boolean;
 }
 
-export interface ValidationResult {
+interface ValidationResult {
     valid: boolean;
     message?: string;
     existingHours: number;

@@ -18,9 +18,6 @@ src/modules/timesheets/
 │   ├── billable-edit.ts             # pure edit validation + variance detection
 │   ├── variance-reasons.ts          # arrival/departure reason lists + ±5m grace
 │   └── __tests__/…
-├── state/
-│   ├── timesheet.hooks.ts           # legacy hooks over the mock store (vestigial)
-│   └── TimesheetContext.tsx         # legacy provider (vestigial)
 └── ui/
     ├── TimesheetPage.tsx            # ★ page: scope, date, fetch, actions
     └── components/                  # Table, Row, Timecard, Mobile, History, badges, export, filters
@@ -104,7 +101,7 @@ flowchart TD
 - **React + Zustand-free page state.** `TimesheetPage` holds local `useState` for
   scope, date/range, view mode (`table`/`timecard`), search, status filter,
   loaded `shifts`, and the AutoPilot decisions map. It fetches directly via
-  `getShiftsForTimesheet` (it does **not** use `TimesheetContext`/`useTimesheets`).
+  `getShiftsForTimesheet` (the legacy `TimesheetContext`/`useTimesheets` store was deleted on 2026-10-28).
 - **Scope-aware.** `useScopeFilter(scopeMode)` drives org/dept/subdept selection;
   managers get `'managerial'` mode, everyone else `'personal'`. See
   [TimesheetPage.tsx#L57-L64](../../src/modules/timesheets/ui/TimesheetPage.tsx#L57).
@@ -197,7 +194,7 @@ The module ships **two parallel APIs**:
 | Lineage | Files | Backing store | Status |
 |---------|-------|---------------|--------|
 | **Live (used)** | `timesheets.supabase.api.ts` | Supabase `shifts` + `timesheets` | Active — the page calls this directly. |
-| **Legacy (vestigial)** | `timesheets.read.api.ts`, `timesheets.write.api.ts`, `timesheet.hooks.ts`, `TimesheetContext.tsx` | In-memory array seeded **empty** | Not wired to the page. `useTimesheets` would return `[]`. Retains the `DRAFT→SUBMITTED→APPROVED→LOCKED` transition table and the `LOCKED` terminal state, which the live path does **not** implement. |
+| **Legacy (deleted 2026-10-28)** | `timesheets.read.api.ts`, `timesheets.write.api.ts`, `timesheet.hooks.ts`, `TimesheetContext.tsx` | In-memory array seeded **empty** | Not wired to the page. `useTimesheets` would return `[]`. Retains the `DRAFT→SUBMITTED→APPROVED→LOCKED` transition table and the `LOCKED` terminal state, which the live path does **not** implement. |
 
 The `LOCKED` status and the strict client-side transition validator therefore
 exist only in the vestigial lineage. The live status set is

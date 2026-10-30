@@ -30,7 +30,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export interface EligibilityContext {
+interface EligibilityContext {
     organizationId?: string;
     departmentId?: string;
     subDepartmentId?: string;
@@ -43,7 +43,7 @@ export interface EligibilityContext {
     limit?: number;
 }
 
-export interface EligibleEmployee {
+interface EligibleEmployee {
     id: string;
     first_name: string;
     last_name: string;
@@ -76,7 +76,7 @@ export interface EligibleEmployee {
     contracted_weekly_hours?: number;
 }
 
-export interface EligibleContract {
+interface EligibleContract {
     user_id: string;
     role_id: string | null;
 }

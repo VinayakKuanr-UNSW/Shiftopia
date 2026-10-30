@@ -43,7 +43,7 @@ const STORAGE_KEY = 'shiftopia.persona';
 /**
  * 1-to-1 route pairings across Employee and Employer personas.
  */
-export const PAIRED_ROUTES: Array<{
+const PAIRED_ROUTES: Array<{
     employee: string;
     employer: string;
     employerPermission?: string;
@@ -61,7 +61,7 @@ export const PAIRED_ROUTES: Array<{
 /**
  * Shared workspace pages that belong to the user/session, valid in both personas.
  */
-export const SHARED_ROUTES = [
+const SHARED_ROUTES = [
     '/profile',
     '/settings',
     '/my-notifications',
@@ -70,7 +70,7 @@ export const SHARED_ROUTES = [
 /**
  * Prioritized employer route fallback list when user lacks permission for the primary paired route.
  */
-export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
+const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
     { path: '/rosters', permission: 'rosters' },
     { path: '/team-availability', permission: 'management' },
     { path: '/management/bids', permission: 'management' },
@@ -87,7 +87,7 @@ export const EMPLOYER_FALLBACK_ORDER: Array<{ path: string; permission: string }
  * (access suites, 2026-10-14); each page still names its own key so a route
  * guard and its nav entry can never disagree.
  */
-export const ADMIN_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
+const ADMIN_FALLBACK_ORDER: Array<{ path: string; permission: string }> = [
     { path: '/labor-demand', permission: 'labor-demand' },
     { path: '/users', permission: 'users' },
     { path: '/compliance/rejections', permission: 'compliance' },
@@ -96,7 +96,7 @@ export const ADMIN_FALLBACK_ORDER: Array<{ path: string; permission: string }> =
 /**
  * Admin surfaces moved out of employer mode into dedicated admin mode.
  */
-export const ADMIN_ROUTES = [
+const ADMIN_ROUTES = [
     '/labor-demand',
     '/users',
     '/compliance',
@@ -201,7 +201,7 @@ export function resolvePersonaRoute(
  * these can switch personas — see the header note on why this is `hasPermission`
  * and not "holds a Type Y certificate".
  */
-export const EMPLOYER_FEATURES = [
+const EMPLOYER_FEATURES = [
     'templates',
     'rosters',
     'timesheet-view',
@@ -214,7 +214,7 @@ export const EMPLOYER_FEATURES = [
  * The Admin suite's surfaces. Holding any of them is what puts the admin hat
  * within reach — today that means a zeta certificate, nothing else.
  */
-export const ADMIN_FEATURES = [
+const ADMIN_FEATURES = [
     'labor-demand',
     'users',
     'compliance',
@@ -224,7 +224,7 @@ export const ADMIN_FEATURES = [
  * Personal-suite surfaces. A person with no Type X certificate and no contract
  * (a zeta who is not on any roster) has no employee hat to wear.
  */
-export const EMPLOYEE_FEATURES = [
+const EMPLOYEE_FEATURES = [
     'my-roster',
 ] as const;
 

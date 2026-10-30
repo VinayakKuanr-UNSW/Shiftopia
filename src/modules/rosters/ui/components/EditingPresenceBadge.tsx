@@ -11,7 +11,6 @@
  *   2+ editors → "Sarah +N editing"
  */
 
-import React from 'react';
 import { Pencil } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -21,7 +20,7 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 
-export interface EditingPresenceBadgeProps {
+interface EditingPresenceBadgeProps {
   editors: ShiftEditor[];
   className?: string;
 }

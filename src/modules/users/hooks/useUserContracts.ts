@@ -2,34 +2,9 @@
  * A person's contracts, with role and place names attached — shared by the
  * Contracts and Access sections of the Users page (one fetch, one cache entry).
  */
-import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 
-export function userContractsQueryKey(employeeId: string) {
-    return ['user_contracts', employeeId] as const;
-}
 
-export function useUserContracts(employeeId: string) {
-    return useQuery({
-        queryKey: userContractsQueryKey(employeeId),
-        queryFn: async () => {
-            // public.user_contracts is a VIEW over hr.user_contracts (no FK metadata),
-            // so embeds fail. Fetch scalar rows, then resolve names in a second pass
-            // and re-attach them under the same keys the render expects.
-            const { data: rawContracts, error } = await supabase
-                .from('user_contracts')
-                .select('*')
-                .eq('user_id', employeeId)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            const rows = (rawContracts ?? []) as any[];
-
-            return attachContractNames(rows);
-        },
-        enabled: !!employeeId,
-    });
-}
 
 /**
  * Attach role and place names to contract rows under the keys the tables read

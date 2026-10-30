@@ -4,10 +4,10 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, UserRound } from 'lucide-
 import { getReportCellStatus, type QuarterlyReportRow } from '@/modules/users/hooks/usePerformanceMetrics';
 import { cn } from '@/modules/core/lib/utils';
 
-export type PerformanceSortKey = keyof QuarterlyReportRow;
-export type PerformanceSortDirection = 'asc' | 'desc';
+type PerformanceSortKey = keyof QuarterlyReportRow;
+type PerformanceSortDirection = 'asc' | 'desc';
 
-export interface PerformanceColumn {
+interface PerformanceColumn {
     key: PerformanceSortKey;
     label: string;
     group: string;
@@ -28,7 +28,7 @@ interface PerformanceReportCardsProps {
     sort: PerformanceSortState;
 }
 
-export const performanceStatusTextColor = {
+const performanceStatusTextColor = {
     good: 'text-emerald-600 dark:text-emerald-400',
     warn: 'text-amber-600 dark:text-amber-400',
     critical: 'text-red-600 dark:text-red-400',

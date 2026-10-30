@@ -63,7 +63,7 @@ const ROSTER_MODES: ReadonlyArray<ToolbarSegmentedOption<RosterMode>> = [
   { id: 'roles', icon: <Briefcase className="h-3.5 w-3.5" />, label: 'Roles' },
 ];
 
-export interface RosterFunctionBarProps {
+interface RosterFunctionBarProps {
   selectedOrganizationId: string | null;
 
   onTemplateDatesChange?: (startDate: Date | undefined, endDate: Date | undefined) => void;
@@ -388,4 +388,3 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   );
 };
 
-export default RosterFunctionBar;

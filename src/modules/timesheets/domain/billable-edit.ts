@@ -24,14 +24,14 @@ export function parseHHMM(t: string | null | undefined): number | null {
 }
 
 /** Auto-format a bare "1600" / "930" into "16:00" / "09:30"; leave others as-is. */
-export function formatTimeStr(t: string): string {
+function formatTimeStr(t: string): string {
     if (/^\d{3,4}$/.test(t)) {
         return t.length === 3 ? `0${t.slice(0, 1)}:${t.slice(1)}` : `${t.slice(0, 2)}:${t.slice(2)}`;
     }
     return t;
 }
 
-export interface BillableEditInput {
+interface BillableEditInput {
     editedStart: string;
     editedEnd: string;
     initialStart: string;
@@ -57,7 +57,7 @@ export interface BillableEditInput {
     rosteredBreakEnd?: string | null;
 }
 
-export interface BillableEditResult {
+interface BillableEditResult {
     ok: boolean;
     /** validation message when !ok */
     error?: string;

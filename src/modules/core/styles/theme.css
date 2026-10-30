@@ -178,30 +178,6 @@ body {
 }
 
 /* ============================================================
-   MODERN CARD
-   ============================================================ */
-.modern-card {
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border) / var(--border-opacity-soft));
-  border-radius: var(--radius);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  will-change: transform;
-}
-
-.modern-card:hover {
-  transform: translateY(-2px);
-  border-color: hsl(var(--border) / var(--border-opacity-strong));
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-    0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-.dark .modern-card {
-  background: hsl(var(--card) / 0.95);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-
-/* ============================================================
    SCROLLBAR
    ============================================================ */
 ::-webkit-scrollbar {
@@ -244,41 +220,6 @@ body {
 }
 
 /* ============================================================
-   ANIMATIONS
-   ============================================================ */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.3s ease-out;
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.animate-scale-in {
-  animation: scale-in 0.2s ease-out;
-}
-
-/* ============================================================
    REDUCED MOTION
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
@@ -286,64 +227,4 @@ body {
     animation: none !important;
     transition: none !important;
   }
-}
-
-/* ============================================================
-   STATUS BADGES
-   ============================================================ */
-.status-badge-open,
-.status-badge-offered,
-.status-badge-filled,
-.status-badge-draft {
-  border: 1px solid transparent;
-}
-
-/* Light */
-.light .status-badge-open {
-  background: rgba(59, 130, 246, 0.1);
-  color: rgb(29, 78, 216);
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-.light .status-badge-offered {
-  background: rgba(245, 158, 11, 0.1);
-  color: rgb(180, 83, 9);
-  border-color: rgba(245, 158, 11, 0.3);
-}
-
-.light .status-badge-filled {
-  background: rgba(16, 185, 129, 0.1);
-  color: rgb(4, 120, 87);
-  border-color: rgba(16, 185, 129, 0.3);
-}
-
-.light .status-badge-draft {
-  background: rgba(107, 114, 128, 0.1);
-  color: rgb(55, 65, 81);
-  border-color: rgba(107, 114, 128, 0.3);
-}
-
-/* Dark */
-.dark .status-badge-open {
-  background: rgba(59, 130, 246, 0.2);
-  color: rgb(147, 197, 253);
-  border-color: rgba(59, 130, 246, 0.4);
-}
-
-.dark .status-badge-offered {
-  background: rgba(245, 158, 11, 0.2);
-  color: rgb(252, 211, 77);
-  border-color: rgba(245, 158, 11, 0.4);
-}
-
-.dark .status-badge-filled {
-  background: rgba(16, 185, 129, 0.2);
-  color: rgb(110, 231, 183);
-  border-color: rgba(16, 185, 129, 0.4);
-}
-
-.dark .status-badge-draft {
-  background: rgba(107, 114, 128, 0.2);
-  color: rgb(209, 213, 219);
-  border-color: rgba(107, 114, 128, 0.4);
 }

@@ -233,4 +233,3 @@ export const OrgSelectionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 };
 
-export default OrgSelectionContext;

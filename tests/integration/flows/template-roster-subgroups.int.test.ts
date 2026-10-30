@@ -68,6 +68,11 @@ function setUp(): void {
                        ('${R_F2}', 'theatre', 'PM Base')) AS s(roster_id, ext, name)
           JOIN public.roster_groups g ON g.roster_id = s.roster_id::uuid AND g.external_id = s.ext;
 
+        -- SH_TH_P stands for a shift written before its day passed. Nothing may
+        -- create one now (trg_shift_not_started), so only that trigger is off,
+        -- and only inside this transaction: an error rolls the DISABLE back too.
+        BEGIN;
+        ALTER TABLE public.shifts DISABLE TRIGGER trg_shift_not_started;
         INSERT INTO public.shifts (id, roster_id, roster_subgroup_id, organization_id, department_id, sub_department_id,
                                    shift_date, start_time, end_time, target_employment_type)
         SELECT s.id::uuid, r.id, rs.id, '${ORG}', '${D1}', '${S2}', r.start_date, '09:00', '12:00', 'Casual'
@@ -77,6 +82,11 @@ function setUp(): void {
           JOIN public.rosters r          ON r.id = s.roster_id::uuid
           JOIN public.roster_groups g    ON g.roster_id = r.id AND g.external_id = s.ext
           JOIN public.roster_subgroups rs ON rs.roster_group_id = g.id AND rs.name = 'AM Base';
+        -- The INSERT queued the deferred overlap/EBA checks, and ALTER TABLE is
+        -- refused while events are pending (55006). Run them now, not at COMMIT.
+        SET CONSTRAINTS ALL IMMEDIATE;
+        ALTER TABLE public.shifts ENABLE TRIGGER trg_shift_not_started;
+        COMMIT;
     `);
     const [[f, f2, p]] = db(`SELECT (SELECT start_date FROM public.rosters WHERE id = '${R_F}'),
                                     (SELECT start_date FROM public.rosters WHERE id = '${R_F2}'),
@@ -128,29 +138,14 @@ describe('deleting a roster sub-group', () => {
     });
 });
 
-describe('cloning a roster sub-group', () => {
-    // Regression: clone_roster_subgroup_v2 had no permission check at all until 2026-10-17.
-    it('refuses an employee', async () => {
-        const r = await personaClient('X').rpc('clone_roster_subgroup_v2', {
-            ...scope('theatre'), p_source_name: 'AM Base', p_new_name: 'Copy',
-        });
-        expect(r.error?.code).toBe('42501');
-        expect(db(`SELECT count(*) FROM public.roster_subgroups WHERE name = 'Copy'`)[0][0]).toBe('0');
-    });
-
-    it('copies that group\'s shifts from today on, and only that group\'s', async () => {
+describe('a roster sub-group cannot be cloned', () => {
+    // Copying lives in Templates only; clone_roster_subgroup_v2 was dropped
+    // (20261029051734), so no caller can reach it.
+    it('the RPC no longer exists', async () => {
         const r = await personaClient('G2').rpc('clone_roster_subgroup_v2', {
-            ...scope('theatre'), p_source_name: 'AM Base', p_new_name: 'AM Base 2',
+            ...scope('theatre'), p_source_name: 'AM Base', p_new_name: 'Copy', p_dry_run: true,
         });
-        expect(r.error).toBeNull();
-        expect(r.data).toMatchObject({ days: 2, shifts_copied: 1, past_days: 1 });
-        const [[copies, inConvention]] = db(`
-            SELECT count(*) FILTER (WHERE g.external_id = 'theatre'), count(*) FILTER (WHERE g.external_id = 'convention_centre')
-              FROM public.shifts s
-              JOIN public.roster_subgroups rs ON rs.id = s.roster_subgroup_id
-              JOIN public.roster_groups g ON g.id = rs.roster_group_id
-             WHERE rs.name = 'AM Base 2'`);
-        expect([copies, inConvention]).toEqual(['1', '0']);
+        expect(r.error?.code).toBe('PGRST202');
     });
 });
 
@@ -215,7 +210,7 @@ describe('a second template adds on top', () => {
     }
     const apply = (templateId: string) => personaClient('G2').rpc('apply_template_to_date_range_v2', {
         p_template_id: templateId, p_start_date: F2, p_end_date: F2, p_user_id: personaId('G2'),
-        p_source: 'roster_modal', p_target_department_id: D1, p_target_sub_department_id: S2, p_force_stack: false,
+        p_source: 'roster_modal', p_target_department_id: D1, p_target_sub_department_id: S2,
     });
     const preview = (templateId: string) => personaClient('G2').rpc('preview_template_application', {
         p_template_id: templateId, p_start_date: F2, p_end_date: F2,

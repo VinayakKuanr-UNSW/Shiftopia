@@ -65,11 +65,3 @@ class CorrectionEngine:
         """
         factor = self.factors.get((event_type, role), 1.0)
         return predicted * factor, factor
-
-    def get_factor(self, event_type: str, role: str) -> float:
-        """Get the correction factor for a given event type and role."""
-        return self.factors.get((event_type, role), 1.0)
-
-    def all_factors(self) -> dict[tuple[str, str], float]:
-        """Return a copy of all loaded factors for inspection."""
-        return dict(self.factors)

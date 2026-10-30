@@ -15,9 +15,6 @@ import {
   SlidersHorizontal,
   Lock,
   X,
-  Target,
-  Sparkles,
-  Zap,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -26,7 +23,6 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
@@ -34,7 +30,7 @@ import { RULE_REGISTRY } from '@/modules/compliance/registry/rules';
 import type { RuleSpec, RuleCategory, RuleTier } from '@/modules/compliance/registry/types';
 import { ComplianceArchitectureDiagram } from './ComplianceArchitectureDiagram';
 
-export interface TechnicalRuleData {
+interface TechnicalRuleData {
   id: string;
   name: string;
   category: RuleCategory;
@@ -1210,4 +1206,3 @@ export const V8RulesTable: React.FC<V8RulesTableProps> = ({
   );
 };
 
-export default V8RulesTable;

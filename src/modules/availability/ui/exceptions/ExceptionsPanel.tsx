@@ -49,7 +49,7 @@ function describe(exception: AvailabilityException): string {
     return `${when} · ${exception.startTime}–${exception.endTime}`;
 }
 
-export interface ExceptionsPanelProps {
+interface ExceptionsPanelProps {
     profileId: string;
     /**
      * Which job this exception applies to. NULL means unscoped / person-wide.

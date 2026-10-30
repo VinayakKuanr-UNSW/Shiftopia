@@ -4,7 +4,7 @@
  * push-notification tap handlers so the deep-link map is never duplicated.
  */
 
-export type NotificationRoute = {
+type NotificationRoute = {
   type: string;
   link?: string | null;
 };

@@ -30,7 +30,7 @@
 
 export type DispersionModel = 'poisson' | 'normal' | 'none';
 
-export interface ServiceLevelInput {
+interface ServiceLevelInput {
   /** Target P(scheduled >= demand), in (0,1). <= 0.5 means "no buffer". */
   serviceLevel: number;
   /** Point estimate of demand (model path). Used when `samples` is absent/empty. */
@@ -52,7 +52,7 @@ export interface ServiceLevelInput {
   minHeadcount?: number;
 }
 
-export interface ServiceLevelResult {
+interface ServiceLevelResult {
   /** The unbuffered point estimate (median of samples, or mean), rounded. */
   base: number;
   /** Service-level-adjusted required headcount (integer, never below base). */

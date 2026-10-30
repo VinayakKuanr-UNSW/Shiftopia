@@ -55,7 +55,7 @@ describe('useRosterViewPrefetch', () => {
 
         const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData');
 
-        const { result } = renderHook(
+        renderHook(
             () =>
                 useRosterViewPrefetch({
                     orgId: 'org-1',

@@ -20,7 +20,7 @@
 
 import type { FeedbackVerdict, SupervisorFeedbackRow } from '../api/supervisorFeedback.dto';
 
-export const FEEDBACK_MULT_DEFAULTS = {
+const FEEDBACK_MULT_DEFAULTS = {
     /** Decay factor per row (newer = more weight). 0.85 → ~10 rows of meaningful signal. */
     lambda: 0.85,
     /** Per-severity boost for an UNDER verdict. */
@@ -36,7 +36,7 @@ export const FEEDBACK_MULT_DEFAULTS = {
     minRowsForSignal: 3,
 } as const;
 
-export interface FeedbackMultiplierConfig {
+interface FeedbackMultiplierConfig {
     lambda?: number;
     underStep?: number;
     overStep?: number;
@@ -46,7 +46,7 @@ export interface FeedbackMultiplierConfig {
     minRowsForSignal?: number;
 }
 
-export interface FeedbackMultiplierResult {
+interface FeedbackMultiplierResult {
     multiplier: number;
     rowsConsidered: number;
     contributions: Array<{

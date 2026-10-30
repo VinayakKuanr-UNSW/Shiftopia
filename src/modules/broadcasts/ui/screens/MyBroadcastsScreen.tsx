@@ -57,7 +57,7 @@ import { ChannelView } from '../views/ChannelView.view';
 // TYPES
 // ============================================================================
 
-export interface MyBroadcastsScreenProps {
+interface MyBroadcastsScreenProps {
   layout: 'desktop' | 'tablet' | 'mobile';
   scope?: import('@/platform/auth/types').ScopeSelection;
   searchQuery?: string;
@@ -86,9 +86,8 @@ export function MyBroadcastsScreen({
   
   // Use hoisted search for group filtering, internal search for channel filtering
   const effectiveGroupSearch = hoistedSearchQuery;
-  const effectiveChannelSearch = internalSearchQuery;
 
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [, setIsOnline] = useState(navigator.onLine);
   const [channelSheetOpen, setChannelSheetOpen] = useState(false);
 
   // Data
@@ -457,4 +456,3 @@ export function MyBroadcastsScreen({
   );
 }
 
-export default MyBroadcastsScreen;

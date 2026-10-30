@@ -19,7 +19,6 @@ const L2_CASUAL_SHIFT = {
   is_overnight: false,
   is_cancelled: false,
   remuneration_level: 2,
-  remuneration_rate: null,
   target_employment_type: 'Casual',
   roles: { name: 'Team Member' },
 };

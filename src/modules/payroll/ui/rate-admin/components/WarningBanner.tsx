@@ -6,10 +6,10 @@
  */
 
 import React from 'react';
-import { AlertTriangle, Clock, CalendarClock } from 'lucide-react';
+import { Clock, CalendarClock } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface PayRateWarning {
+interface PayRateWarning {
   id: string;
   severity: 'warning' | 'error';
   icon: React.ElementType;

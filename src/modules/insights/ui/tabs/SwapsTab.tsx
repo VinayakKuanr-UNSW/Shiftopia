@@ -9,8 +9,8 @@
  *  - Per-employee trading detail table
  */
 
-import React, { useState } from 'react';
-import { ArrowLeftRight, Inbox, Timer, XCircle, AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeftRight, Inbox, Timer, XCircle } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
@@ -24,7 +24,7 @@ import { formatBucket } from '../../hooks/useBehaviourTrend';
 import { KpiTrendChart, SERIES_COLORS } from '../components/KpiTrendChart';
 import { KpiDetailTable, type KpiDetailRow } from '../components/KpiDetailTable';
 import { EmployeeDrillDown } from '../components/EmployeeDrillDown';
-import { KpiBand, KpiTileGrid } from '../components/KpiBand';
+import { KpiBand } from '../components/KpiBand';
 import { KpiFunnelCard, type FunnelStep } from '../components/KpiFunnelCard';
 import { KpiSmartInsights, type InsightItem } from '../components/KpiSmartInsights';
 import type { ScopeSelection } from '@/platform/auth/types';

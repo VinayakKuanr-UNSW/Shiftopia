@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import { useEmployeeLicenses, useUpdateEmployeeLicense, useRemoveEmployeeLicense, EmployeeLicense } from '@/modules/users/hooks/useEmployeeLicenses';
-import { Award, AlertCircle, Trash2, Pencil } from 'lucide-react';
+import { Award, Trash2, Pencil } from 'lucide-react';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { AddLicenseDialog } from './AddLicenseDialog';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
-import { cn } from '@/modules/core/lib/utils';
 
 interface LicensesSectionProps {
     employeeId: string;

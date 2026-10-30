@@ -1,7 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Input } from '@/modules/core/ui/primitives/input';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 
 import {
     Dialog,
@@ -12,38 +10,22 @@ import {
     DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
-import {
     ArrowLeftRight,
     Loader2,
     Eye,
     X,
     Clock,
     Calendar,
-    Building2,
     CheckCircle2,
     XCircle,
-    ShieldCheck,
     AlertTriangle,
-    Lock,
     Zap,
     Signal,
-    Filter,
     Flame,
-    Gavel,
-    UserPlus,
-    Circle,
     UserCheck as LucideUserCheck,
-    Megaphone,
-    Hourglass,
     Ban,
     ThumbsUp,
     CheckCircle,
-    Minus,
-    ChevronRight,
     ListChecks,
     Check
 } from 'lucide-react';
@@ -53,17 +35,17 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useSwaps } from '../../state/useSwaps';
 import { ShiftSwap, swapsApi } from '../../api/swaps.api';
-import { format, differenceInMinutes, parse } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
+import { SYDNEY_TZ, parseZonedDateTime, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
 import { ViewOffersModal } from '../components/ViewOffersModal';
 import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
 import { SwapSelectionToolbar } from '../components/SwapSelectionToolbar';
-import { Drawer, DrawerContent, DrawerTitle, DrawerDescription, DrawerClose } from '@/modules/core/ui/primitives/drawer';
+import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from '@/modules/core/ui/primitives/drawer';
 import { useQuery } from '@tanstack/react-query';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
-import { ToolbarIconButton, toolbar } from '@/modules/core/ui/components/Toolbar';
+import { toolbar } from '@/modules/core/ui/components/Toolbar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { soleOrgId, deptIds, subDeptIds } from '@/platform/auth/scope-narrowing';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
@@ -78,39 +60,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableSta
 import { groupVariantFor } from '@/modules/rosters/domain/shift-ui';
 
 type TabType = 'available-swaps' | 'my-offers' | 'my-swaps';
-type SortOption = 'date-soonest' | 'date-latest';
 
 // Helper to format time
-const formatTime = (time: string): string => {
-    if (!time) return '';
-    const [h, m] = time.split(':').map(Number);
-    const period = h >= 12 ? 'PM' : 'AM';
-    const display = h % 12 || 12;
-    return `${display}:${m?.toString().padStart(2, '0') || '00'} ${period}`;
-};
 
 // Premium Department Color Styling (Badges)
-function getDeptColor(groupType: string | null | undefined, dept: string): string {
-    if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
-        return 'dept-badge-convention';
-    if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
-        return 'dept-badge-exhibition';
-    if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
-        return 'dept-badge-theatre';
-    return 'dept-badge-default';
-}
 
 // Premium Card Background Styling — semantic CSS classes handle light/dark
-function getCardBg(groupType: string | null | undefined, dept: string): string {
-    const base = 'dept-card-glass-base';
-    if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
-        return `${base} dept-card-glass-convention`;
-    if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
-        return `${base} dept-card-glass-exhibition`;
-    if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
-        return `${base} dept-card-glass-theatre`;
-    return `${base} dept-card-glass-default`;
-}
 
 function getRowClass(groupType: string | null | undefined, dept: string): string {
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
@@ -123,59 +78,6 @@ function getRowClass(groupType: string | null | undefined, dept: string): string
 }
 
 // Status configuration with icons, colors, and labels
-const getStatusConfig = (status: string) => {
-    switch (status) {
-        case 'OPEN':
-            return {
-                icon: Clock,
-                label: 'Open',
-                helperText: 'Awaiting offers',
-                textColor: 'text-amber-400',
-            };
-        case 'MANAGER_PENDING':
-            return {
-                icon: LucideUserCheck,
-                label: 'Pending Manager',
-                helperText: 'Awaiting approval',
-                textColor: 'text-blue-400',
-            };
-        case 'APPROVED':
-            return {
-                icon: CheckCircle2,
-                label: 'Approved',
-                helperText: 'Approved',
-                textColor: 'text-emerald-400',
-            };
-        case 'REJECTED':
-            return {
-                icon: XCircle,
-                label: 'Rejected',
-                helperText: 'Rejected',
-                textColor: 'text-red-400',
-            };
-        case 'CANCELLED':
-            return {
-                icon: X,
-                label: 'Cancelled',
-                helperText: 'Cancelled',
-                textColor: 'text-gray-400',
-            };
-        case 'EXPIRED':
-            return {
-                icon: Clock,
-                label: 'Expired',
-                helperText: 'Expired',
-                textColor: 'text-gray-400',
-            };
-        default:
-            return {
-                icon: Clock,
-                label: status,
-                helperText: '',
-                textColor: 'text-gray-400',
-            };
-    }
-};
 
 // =============================================================================
 // SWAP PRIORITY — unified TTS derivation via shared bidding-urgency utility
@@ -223,7 +125,7 @@ export type SwapPriority = ShiftUrgency;
  * Compute swap/offer priority — delegates to the shared TTS utility.
  * Accepts either (shiftDate, startTime) or an ISO startAt datetime.
  */
-export const getSwapPriority = (
+const getSwapPriority = (
     _now: Date,
     shiftDate?: string,
     startTime?: string,
@@ -343,15 +245,8 @@ const getSwapClose = (
 };
 
 // Simplified check for styling
-const isSwapExpired = (now: Date, startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string): boolean => {
-    const start = startAt
-        ? new Date(startAt)
-        : (shiftDate && startTime ? parseZonedDateTime(shiftDate, startTime, tzIdentifier ?? SYDNEY_TZ) : null);
-    if (!start || isNaN(start.getTime())) return false;
-    return now.getTime() >= start.getTime() - EMERGENT_WINDOW_MS;
-};
 
-export const EmployeeSwapsPage: React.FC = () => {
+const EmployeeSwapsPage: React.FC = () => {
     const now = useMinuteTick();
     const { toast } = useToast();
     const { isDark } = useTheme();
@@ -368,7 +263,6 @@ export const EmployeeSwapsPage: React.FC = () => {
         declineOffer,
         cancelSwap,
         refetchMySwaps,
-        refetchAvailable,
         isMakingOffer,
         isAccepting,
         isDeclining,
@@ -381,21 +275,10 @@ export const EmployeeSwapsPage: React.FC = () => {
     });
 
     // §2 Combined State helper — derive C1-C7 from swap status
-    const getCombinedState = (status: string): string => {
-        switch (status) {
-            case 'OPEN': return 'C2: S9/OPEN';
-            case 'MANAGER_PENDING': return 'C3: S10/MGR_PENDING';
-            case 'APPROVED': return 'C4: S4/APPROVED';
-            case 'REJECTED': return 'C5: S4/REJECTED';
-            case 'CANCELLED': return 'C6: S4/CANCELLED';
-            case 'EXPIRED': return 'C7: S4/EXPIRED';
-            default: return `?/${status}`;
-        }
-    };
 
     // State
     const [activeTab, setActiveTab] = useState<TabType>('available-swaps');
-    const [priorityFilter, setPriorityFilter] = useState<ShiftUrgency | 'all'>('all');
+    const [priorityFilter] = useState<ShiftUrgency | 'all'>('all');
     // Default to the current week (Mon–Sun) preset on every load.
     const [startDate, setStartDate] = useState<Date>(() => startOfWeekAU(new Date()));
     const [endDate, setEndDate]     = useState<Date>(() => endOfWeekAU(new Date()));
@@ -446,7 +329,6 @@ export const EmployeeSwapsPage: React.FC = () => {
     }, [confirmDialog, cancelSwap]);
 
     // 1. Manager Review Swaps — includes requests I created AND swaps where I offered
-    const managerReviewSwaps = mySwapRequests.filter(s => s.status === 'MANAGER_PENDING');
 
     // 2. Filter my swap requests (Consolidated View)
     //    Include: OPEN, MANAGER_PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED
@@ -620,24 +502,6 @@ export const EmployeeSwapsPage: React.FC = () => {
         const offerGroupVariant = groupVariantFor(shift?.group_type);
 
         // Derive status icon + label for the icon grid
-        const isAwaitingMgr = myOffer?.status === 'SELECTED' && swap.status === 'MANAGER_PENDING';
-        const isAwaitingPeer = myOffer?.status === 'SUBMITTED';
-        const offerStatusIcon = isExpired || myOffer?.status === 'WITHDRAWN' || swap.status === 'REJECTED' || myOffer?.status === 'REJECTED'
-            ? <Ban className="w-3.5 h-3.5 text-slate-400 dark:text-white/30" />
-            : swap.status === 'APPROVED'
-                ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500/60" />
-                : isAwaitingMgr
-                    ? <LucideUserCheck className="w-3.5 h-3.5 text-amber-500/60" />
-                    : isAwaitingPeer
-                        ? <Hourglass className="w-3.5 h-3.5 text-blue-500/60" />
-                        : <Clock className="w-3.5 h-3.5 text-muted-foreground/40" />;
-        const offerStatusLabel = isExpired ? 'Expired'
-            : myOffer?.status === 'WITHDRAWN' ? 'Withdrawn'
-            : swap.status === 'APPROVED' ? 'Accepted'
-            : swap.status === 'REJECTED' || myOffer?.status === 'REJECTED' ? 'Rejected'
-            : isAwaitingMgr ? 'Pending Manager Review'
-            : isAwaitingPeer ? 'Pending Peer Review'
-            : 'Pending';
 
         return (
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
@@ -690,8 +554,6 @@ export const EmployeeSwapsPage: React.FC = () => {
     // Render swap card for "My Requests" and "Manager Review" tab
     const renderMySwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
-        const statusConfig = getStatusConfig(swap.status);
-        const StatusIcon = statusConfig.icon;
         
         // Offer close = shift start − 4h (T−4h lockout), tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
@@ -797,7 +659,6 @@ export const EmployeeSwapsPage: React.FC = () => {
     // Render available swap card
     const renderAvailableSwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
-        const requesterName = (swap as any).requested_by?.full_name || (swap as any).requested_by?.email || 'Someone';
         
         // Offer close = shift start − 4h (T−4h lockout), tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
@@ -869,7 +730,6 @@ export const EmployeeSwapsPage: React.FC = () => {
     // ========================================================================
     const renderSwapListItem = (swap: ShiftSwap, tab: TabType) => {
         const shift = (swap as any).requester_shift;
-        const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         
         // Offer close = shift start − 4h (T−4h lockout), tz-correct.
@@ -1880,17 +1740,6 @@ const SwapCardOfferButton: React.FC<{ swapId: string; onClick: () => void }> = (
 };
 
 // Empty State Component
-const EmptyState: React.FC<{
-    icon: React.ElementType;
-    title: string;
-    description: string;
-}> = ({ icon: Icon, title, description }) => (
-    <div className="text-center py-16 bg-slate-100/60 dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-slate-700">
-        <Icon className="h-12 w-12 text-muted-foreground mx-auto mb-4" aria-hidden="true" />
-        <h3 className="text-[15px] font-medium text-foreground mb-2">{title}</h3>
-        <p className="text-[13px] text-muted-foreground max-w-md mx-auto">{description}</p>
-    </div>
-);
 
 export default EmployeeSwapsPage;
 

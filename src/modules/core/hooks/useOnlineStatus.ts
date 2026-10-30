@@ -124,5 +124,4 @@ export function useOnlineStatus(): boolean {
   return online;
 }
 
-export default useOnlineStatus;
 

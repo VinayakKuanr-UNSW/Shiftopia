@@ -1,22 +1,13 @@
 import React from 'react';
 import {
-  Calendar,
   Clock,
-  Coffee,
-  Megaphone,
-  UserPlus,
   UserCheck as LucideUserCheck,
-  Circle,
-  Gavel,
-  Flame,
-  Minus,
   CheckSquare,
   Square,
   Users,
 } from 'lucide-react';
 import { SharedShiftCard } from '../../../../ui/components/SharedShiftCard';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 
 import type { ManagerBidShift, OpenShift, TimeRemaining } from './types';

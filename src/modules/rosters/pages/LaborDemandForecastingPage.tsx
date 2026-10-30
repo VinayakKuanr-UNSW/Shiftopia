@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/modules/core
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { formatClockTime } from "@/modules/core/lib/date.utils";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ComposedChart,
@@ -32,7 +33,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 // Domain
@@ -63,13 +64,6 @@ import {
   DropdownMenuTrigger,
 } from "@/modules/core/ui/primitives/dropdown-menu";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/modules/core/ui/primitives/select";
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -90,18 +84,12 @@ import {
   AlertTriangle,
   AlertCircle,
   ArrowRightLeft,
-  Award,
-  Building2,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   Database,
   DollarSign,
   Eye,
-  GitBranch,
   Info,
-  Layers,
-  Lock,
   Layout,
   Minus,
   Plus,
@@ -126,7 +114,6 @@ import {
   buildScopeDemand,
   type ScopeDemandResult,
 } from "../services/demandTensorBuilder.service";
-import { synthesizeShifts } from "../services/shiftSynthesizer.service";
 import {
   ConfirmGenerationModal,
   type GenerationOptions,
@@ -234,10 +221,6 @@ interface EventsOnDatePanelProps {
   isLoading: boolean;
 }
 
-function formatEventTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Australia/Sydney' });
-}
 
 const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading }) => {
   if (isLoading) {
@@ -290,7 +273,7 @@ const EventsOnDatePanel: React.FC<EventsOnDatePanelProps> = ({ events, isLoading
               </span>
               <span className="inline-flex items-center gap-1">
                 <Clock className="h-3 w-3" />
-                {formatEventTime(event.start_date_time)} → {formatEventTime(event.end_date_time)}
+                {formatClockTime(event.start_date_time, 'HH:mm', '')} → {formatClockTime(event.end_date_time, 'HH:mm', '')}
               </span>
               {(event.venue_name || event.room_name) && (
                 <span className="inline-flex items-center gap-1">
@@ -803,7 +786,6 @@ const LaborDemandForecastingPage: React.FC = () => {
     setScope,
     scopeKey,
     isGammaLocked,
-    isLoading: isScopeLoading,
   } = useScopeFilter("managerial");
 
   // Multi-department derived IDs
@@ -820,7 +802,6 @@ const LaborDemandForecastingPage: React.FC = () => {
   // Use the first selected dept name if available (simple fallback)
   const departmentName = departmentId ? "Selected Department" : null; 
   const subDepartmentName = subDepartmentId ? "Selected Sub-Department" : null;
-  const hasCompleteSelection = scope.org_ids.length > 0 && scope.dept_ids.length > 0;
 
   // ── Local state ─────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState(() =>
@@ -1250,7 +1231,6 @@ const LaborDemandForecastingPage: React.FC = () => {
   // ── Computation: Budget ──────────────────────────────────────
   const budgetData = useMemo(() => {
     const getAvgRate = (shift: Shift): number => {
-      if (shift.remuneration_rate) return Number(shift.remuneration_rate);
       const lvlNum = shift.remuneration_level ?? (shift.remuneration_levels as any)?.level_number;
       if (lvlNum != null) {
         const rateSet = resolveRateSet(shift.shift_date || '2026-07-01');
@@ -2533,7 +2513,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         )}
                       </Badge>
                       <span className="text-muted-foreground">
-                        {format(new Date(run.created_at), "HH:mm")}
+                        {formatClockTime(run.created_at, 'HH:mm', '')}
                       </span>
                       <button
                         onClick={() => handleRollback(run.id)}

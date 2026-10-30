@@ -58,4 +58,3 @@ export const EmployeeDrillDown: React.FC<EmployeeDrillDownProps> = ({
     );
 };
 
-export default EmployeeDrillDown;

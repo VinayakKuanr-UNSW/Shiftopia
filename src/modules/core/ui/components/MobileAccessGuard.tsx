@@ -131,4 +131,4 @@ const MobileAccessGuard: React.FC = () => {
   return <Outlet />;
 };
 
-export { MobileAccessGuard, DesktopOnlyScreen };
+export { MobileAccessGuard };

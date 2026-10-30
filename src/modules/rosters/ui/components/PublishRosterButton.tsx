@@ -73,7 +73,7 @@ type State =
  * reason repeats, the rest summarised. Without it the toast said "3 skipped"
  * and the manager could not tell a compliance block from a timeout.
  */
-export function summariseReasons(reasons: readonly string[], max = 2): string {
+function summariseReasons(reasons: readonly string[], max = 2): string {
   const counts = new Map<string, number>();
   for (const r of reasons) {
     if (!r) continue;
@@ -437,4 +437,3 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   );
 };
 
-export default PublishRosterButton;

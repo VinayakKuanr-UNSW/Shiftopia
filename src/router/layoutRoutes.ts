@@ -7,6 +7,6 @@
  * got ~24px — the "zoomed out" look. Canvas is therefore the default; a route
  * opts INTO main padding only by being listed here.
  */
-export const PADDED_ROUTES: ReadonlySet<string> = new Set<string>();
+const PADDED_ROUTES: ReadonlySet<string> = new Set<string>();
 
 export const isCanvasRoute = (pathname: string): boolean => !PADDED_ROUTES.has(pathname);

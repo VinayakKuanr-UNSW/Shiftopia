@@ -19,7 +19,7 @@ import type { Shift } from '../domain/shift.entity';
 
 const log = createModuleLogger('shiftSynthesis');
 
-export interface GenerateShiftsInput extends Omit<
+interface GenerateShiftsInput extends Omit<
   SynthesizeAndInsertParams,
   'synthesisRunId'
 > {
@@ -32,7 +32,7 @@ export interface GenerateShiftsInput extends Omit<
   suggestedDeletions?: string[];
 }
 
-export interface GenerateShiftsSuccess extends SynthesizeAndInsertResult {
+interface GenerateShiftsSuccess extends SynthesizeAndInsertResult {
   runId: string;
 }
 

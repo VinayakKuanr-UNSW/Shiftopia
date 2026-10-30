@@ -88,16 +88,3 @@ export async function authenticateBiometric(
 }
 
 // ── Step-up authentication for sensitive actions ─────────────────────────────
-/**
- * Require a biometric (or device-credential) check before a sensitive action —
- * e.g. revealing pay, or a manager approving a shift. This is independent of the
- * app-lock toggle: sensitive data always re-verifies identity. On the web, or on
- * a device with no enrolled biometrics, it resolves `true` so a user is never
- * locked out of their own data.
- */
-export async function requireBiometricStepUp(reason: string): Promise<boolean> {
-  if (!isBiometricSupportedPlatform()) return true;
-  const available = await checkBiometricAvailable();
-  if (!available) return true;
-  return authenticateBiometric(reason);
-}

@@ -89,7 +89,6 @@ export const WEEKDAY_LABELS = {
   long: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
 } as const;
 
-export type WeekdayLabelWidth = keyof typeof WEEKDAY_LABELS;
 
 /**
  * Column index (0 = Monday … 6 = Sunday) for a date.

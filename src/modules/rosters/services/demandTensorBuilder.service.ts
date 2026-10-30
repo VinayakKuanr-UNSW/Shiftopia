@@ -32,7 +32,6 @@ import {
   buildDemandAnalysisForRoles,
   resolveMLRoleById,
   resolveMLRoleByNameFallback,
-  ML_KNOWN_ROLES,
   type EventInput,
   type MLKnownRole,
 } from './mlClient.service';
@@ -51,9 +50,9 @@ import type { SupervisorFeedbackRow, FunctionCode } from '../api/supervisorFeedb
 const log = createModuleLogger('demandTensorBuilder');
 
 // ── Demand engine mode flag ────────────────────────────────────────────────
-export type DemandEngineMode = 'ml_only' | 'rules_shadow' | 'rules_primary';
+type DemandEngineMode = 'ml_only' | 'rules_shadow' | 'rules_primary';
 
-export function getDemandEngineMode(): DemandEngineMode {
+function getDemandEngineMode(): DemandEngineMode {
   const raw = (import.meta.env.VITE_DEMAND_ENGINE_MODE as string | undefined)?.toLowerCase();
   if (raw === 'rules_shadow' || raw === 'rules_primary') return raw;
   return 'ml_only'; // safe default — no behavior change
@@ -65,7 +64,7 @@ export function getDemandEngineMode(): DemandEngineMode {
  * sane range. Defaults to 0.5 (median / no buffer) so behaviour is unchanged
  * until an operator opts in via the slider or env. Callers may override per run.
  */
-export function getDefaultServiceLevel(): number {
+function getDefaultServiceLevel(): number {
   const raw = Number(import.meta.env.VITE_DEMAND_SERVICE_LEVEL);
   if (!Number.isFinite(raw)) return 0.5;
   return Math.min(0.999, Math.max(0, raw));
@@ -73,7 +72,7 @@ export function getDefaultServiceLevel(): number {
 
 const FUNCTION_CODES: FunctionCode[] = ['F&B', 'Logistics', 'AV', 'FOH', 'Security'];
 
-export interface BuildScopeDemandParams {
+interface BuildScopeDemandParams {
   organizationId: string;
   date: string; // YYYY-MM-DD
   departmentId?: string;
@@ -284,7 +283,7 @@ function sydneyMinutesSinceMidnight(utcMs: number): number {
  * @param eventStartMs  Event start time in epoch ms.
  * @param eventEndMs    Event end time in epoch ms.
  */
-export function derivePerSliceFlags(
+function derivePerSliceFlags(
   sliceIndex: number,
   eventStartMs: number,
   eventEndMs: number,
@@ -487,7 +486,7 @@ export async function buildScopeDemand(
   // Hoisted: referenced by the return statement below regardless of engineMode.
   // In ml_only mode this stays empty; in shadow/primary it is populated inside
   // the try block and read both for DB persistence and the return payload.
-  let allFinalizedRows: import('../api/demandTensor.queries').DemandTensorInsertRow[] = [];
+  const allFinalizedRows: import('../api/demandTensor.queries').DemandTensorInsertRow[] = [];
 
   if (engineMode !== 'ml_only' && events.length > 0) {
     try {

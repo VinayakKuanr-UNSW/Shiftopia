@@ -8,7 +8,6 @@ import {
   DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import {
   X,
   ArrowLeftRight,
@@ -16,9 +15,8 @@ import {
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { text, touch } from '@/modules/core/ui/typography';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
-import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge';
 
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -31,7 +29,7 @@ import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
 import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useClockValue, isShiftPast, type ClockSnapshot } from '@/modules/core/hooks/useClock';
@@ -61,39 +59,6 @@ interface ShiftDetailsDialogProps {
 }
 
 // ── Cost Tooltip ──────────────────────────────────────────────────────────
-export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
-  if (!breakdown) return null;
-  const { totalCost, ordinaryCost, overtimeCost, allowanceCost, ordinaryHours, overtimeHours, breakdown: details } = breakdown;
-  return (
-      <div className="space-y-2 p-1 min-w-[180px]">
-          <div className="flex justify-between items-center pb-1 border-b border-white/10">
-              <span className="text-[11px] font-bold uppercase tracking-[0.12em] opacity-90">{COST_ESTIMATE_TITLE}</span>
-              <span className="text-[11px] font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
-          </div>
-          <div className="space-y-1 text-[11px] tabular-nums">
-              <div className="flex justify-between">
-                  <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
-                  <span>${ordinaryCost.toFixed(2)}</span>
-              </div>
-              {overtimeCost > 0 && (
-                  <div className="flex justify-between text-orange-300">
-                      <span>Overtime ({overtimeHours.toFixed(1)}h)</span>
-                      <span>${overtimeCost.toFixed(2)}</span>
-                  </div>
-              )}
-              {allowanceCost > 0 && (
-                  <div className="flex justify-between text-blue-300">
-                      <span>Night Allowance ({details.nightHours.toFixed(1)}h)</span>
-                      <span>${allowanceCost.toFixed(2)}</span>
-                  </div>
-              )}
-          </div>
-          <div className="pt-1 text-[11px] opacity-80 italic border-t border-white/10">
-              {COST_ESTIMATE_DISCLAIMER}
-          </div>
-      </div>
-  );
-};
 
 const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   isOpen,

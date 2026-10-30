@@ -226,4 +226,3 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
   );
 };
 
-export default AddSubGroupDialog;

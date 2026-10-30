@@ -1,5 +1,5 @@
 export type AccessLevel = 'alpha' | 'beta' | 'gamma' | 'delta' | 'epsilon' | 'zeta';
-export type CertificateType = 'X' | 'Y';
+type CertificateType = 'X' | 'Y';
 export type Role = 'admin' | 'manager' | 'teamlead' | 'member';
 
 export interface UserContract {
@@ -38,18 +38,18 @@ export interface AccessCertificate {
 // Scope Tree types (from resolve_user_permissions RPC)
 // =============================================
 
-export interface ScopeSubDept {
+interface ScopeSubDept {
     id: string;
     name: string;
 }
 
-export interface ScopeDept {
+interface ScopeDept {
     id: string;
     name: string;
     subdepartments: ScopeSubDept[];
 }
 
-export interface ScopeOrg {
+interface ScopeOrg {
     id: string;
     name: string;
     departments: ScopeDept[];
@@ -59,7 +59,7 @@ export interface ScopeTree {
     organizations: ScopeOrg[];
 }
 
-export interface PermissionCert {
+interface PermissionCert {
     id: string;
     level: AccessLevel;
     org_id: string;
@@ -107,24 +107,6 @@ export interface ScopeSelection {
     subdept_ids: string[];
 }
 
-// =============================================
-// Resolved Scope (output of Scope Resolution Engine)
-// =============================================
-
-export interface ResolvedScope {
-    /** The scope tree of allowed options */
-    allowedScopeTree: ScopeTree;
-    /** Whether the organization field is locked (not selectable) */
-    organizationLocked: boolean;
-    /** Whether the department field is locked */
-    departmentLocked: boolean;
-    /** Whether the sub-department field is locked */
-    subDepartmentLocked: boolean;
-    /** Whether multi-select is enabled (true for Alpha/Beta personal certs) */
-    multiSelectEnabled: boolean;
-    /** Whether the entire filter should be hidden (e.g. Gamma fully locked) */
-    hidden: boolean;
-}
 
 export interface User {
     id: string;

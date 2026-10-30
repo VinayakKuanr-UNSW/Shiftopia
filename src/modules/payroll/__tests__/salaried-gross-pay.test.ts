@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeShiftGrossPay, type GrossPayShiftInput } from '../domain/computeShiftGrossPay';
 import {
-  aggregatePeriodGrossPay,
   computeEmployeePeriodGrossPay,
 } from '../domain/aggregatePeriodGrossPay';
 

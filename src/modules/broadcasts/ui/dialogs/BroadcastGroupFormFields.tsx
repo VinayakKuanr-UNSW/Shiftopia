@@ -1,7 +1,7 @@
 import React from 'react';
 import { Input } from '@/modules/core/ui/primitives/input';
 
-export interface BroadcastGroupFormFieldsProps {
+interface BroadcastGroupFormFieldsProps {
     name: string;
     onNameChange: (value: string) => void;
     description: string;

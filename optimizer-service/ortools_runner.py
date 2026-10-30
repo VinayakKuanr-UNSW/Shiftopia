@@ -146,6 +146,7 @@ class ExistingShiftReq(BaseModel):
     end_time: str
     duration_minutes: int
     unpaid_break_minutes: int = 0
+    paid_break_minutes: int = 0
 
 
 class AvailabilityOverrideReq(BaseModel):

@@ -7,17 +7,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitive
 import {
   Camera,
   Mail,
-  Building,
   UserCircle,
-  Shield,
-  Calendar,
-  Shuffle,
-  X,
-  Hourglass,
-  CheckCircle2,
   ChevronRight,
 } from 'lucide-react';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
@@ -42,10 +34,6 @@ const pageVariants: Variants = {
 const itemVariants: Variants = {
   hidden: { opacity: 0, y: 8 },
   show: { opacity: 1, y: 0, transition: { ease: [0.16, 1, 0.3, 1], duration: 0.4 } },
-};
-const cardInteractive = {
-  whileHover: { y: -2, transition: { duration: 0.15 } },
-  whileTap: { scale: 0.98, transition: { duration: 0.1 } },
 };
 
 const ProfilePage: React.FC = () => {

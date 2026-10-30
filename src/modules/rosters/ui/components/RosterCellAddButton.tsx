@@ -2,7 +2,7 @@ import React from 'react';
 import { Plus } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface RosterCellAddButtonProps {
+interface RosterCellAddButtonProps {
   onClick?: (e: React.MouseEvent) => void;
   hasShifts?: boolean;
   holidayName?: string | null;
@@ -64,4 +64,3 @@ export const RosterCellAddButton: React.FC<RosterCellAddButtonProps> = ({
   );
 };
 
-export default RosterCellAddButton;

@@ -47,7 +47,7 @@ export const KpiTileGrid: React.FC<{ children: React.ReactNode; className?: stri
     </div>
 );
 
-export interface CountStripItem {
+interface CountStripItem {
     label: string;
     value: number | string;
     /** Optional emphasis colour class for the value. */

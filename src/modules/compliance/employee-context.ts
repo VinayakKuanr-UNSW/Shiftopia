@@ -382,7 +382,17 @@ export async function fetchEmployeeShiftsV2(
         p_exclude_id:  excludeV8ShiftId,
     });
 
-    if (error || !data) return [];
+    if (error) {
+        // An empty history makes every cumulative rule pass, so a refusal
+        // (42501: not this employee's roster) or a failure must not read as
+        // "no shifts". Callers (useCompliancePanel, the assign command, swap
+        // approval) already treat a throw as "cannot proceed".
+        throw Object.assign(
+            new Error(`Could not load the shift history for ${employeeId}: ${error.message}`),
+            { cause: error },
+        );
+    }
+    if (!data) return [];
 
     return (data as Array<{
         id:                   string;
@@ -390,6 +400,7 @@ export async function fetchEmployeeShiftsV2(
         start_time:           string;
         end_time:             string;
         unpaid_break_minutes: number | null;
+        paid_break_minutes:   number | null;
         user_contract_id?:    string | null;
     }>).map(s => ({
         id:                      s.id,
@@ -404,5 +415,7 @@ export async function fetchEmployeeShiftsV2(
         required_qualifications: [],
         break_minutes:           s.unpaid_break_minutes ?? 0,
         unpaid_break_minutes:    s.unpaid_break_minutes ?? 0,
+        // cl 39.2 nets rest pauses out of the split-shift spread.
+        paid_break_minutes:      s.paid_break_minutes ?? 0,
     }));
 }

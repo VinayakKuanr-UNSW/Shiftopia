@@ -1,7 +1,7 @@
 import { supabase } from '@/platform/supabase/client';
 import type { MLKnownRole } from '../services/mlClient.service';
 
-export type RoleMLClassMap = ReadonlyMap<string, MLKnownRole>;
+type RoleMLClassMap = ReadonlyMap<string, MLKnownRole>;
 
 export async function fetchRoleMLClassMap(): Promise<RoleMLClassMap> {
   const { data, error } = await supabase

@@ -27,7 +27,6 @@ import { useAvailabilityScope } from '../state/useAvailabilityScope';
 import { resolveComplianceBasis, type ContractBasis } from '../domain/contract-basis';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import type { ScopeSelection } from '@/platform/auth/types';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { formatEnvelopeDaysClause, formatEnvelopeTime } from '../ui/envelope-format';
@@ -71,12 +70,12 @@ function useBreakpoint(): Breakpoint {
   return breakpoint;
 }
 
-export const AvailabilityPage: React.FC = () => {
+const AvailabilityPage: React.FC = () => {
   const breakpoint = useBreakpoint();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isDark } = useTheme();
-  const { toast } = useToast();
+  useToast();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 

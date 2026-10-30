@@ -22,7 +22,7 @@ import type { PeriodBounds } from '../domain/aggregatePeriodGrossPay';
 import { getPeriodGrossPay } from '../data/grossPay.read.api';
 
 /** Optional scoping/filter options passed straight through to the read module. */
-export interface GrossPayReadOptions {
+interface GrossPayReadOptions {
   /** Restrict to specific organizations / departments / sub-departments. */
   orgIds?: string[];
   deptIds?: string[];
@@ -33,7 +33,7 @@ export interface GrossPayReadOptions {
   approvedOnly?: boolean;
 }
 
-export interface UseGrossPayArgs {
+interface UseGrossPayArgs {
   bounds: PeriodBounds;
   options?: GrossPayReadOptions;
   /** Set false to hold the fetch (e.g. before bounds are known). Default true. */
@@ -67,4 +67,3 @@ export function useGrossPay({ bounds, options, enabled = true }: UseGrossPayArgs
   });
 }
 
-export default useGrossPay;

@@ -32,7 +32,7 @@ interface Props {
 
 const hourLabel = (hour: number) => `${String(hour).padStart(2, '0')}:00`;
 
-export const TeamMobileCoverage: React.FC<Props> = ({ buckets, date }) => {
+const TeamMobileCoverage: React.FC<Props> = ({ buckets, date }) => {
     const { isDark } = useTheme();
     const headingId = `coverage-${date}`;
 

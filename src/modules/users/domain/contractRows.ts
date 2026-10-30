@@ -84,7 +84,7 @@ export function remunerationText(c: ContractRow): string {
     return scheme ? `${base} · ${scheme}` : base;
 }
 
-export const placeOf = (c: ContractRow) => ({
+const placeOf = (c: ContractRow) => ({
     organization: c.organizations?.name ?? null,
     department: c.departments?.name ?? null,
     subDepartment: c.sub_departments?.name ?? null,

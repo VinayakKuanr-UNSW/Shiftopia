@@ -5,7 +5,7 @@ import { isValidUuid } from '../domain/shift.entity';
 
 // ── DTOs & Schemas ────────────────────────────────────────────────────────────
 
-export const RosterSummaryCellSchema = z.object({
+const RosterSummaryCellSchema = z.object({
     shift_date: z.string(),
     group_type: z.string().nullable(),
     sub_group_name: z.string().nullable(),
@@ -31,7 +31,7 @@ const RosterSummaryResponseSchema = z.array(RosterSummaryCellSchema);
 // coercing here makes it explicit and keeps the new cost fields consistent.
 const numeric = z.coerce.number();
 
-export const RosterPlannerStatsSchema = z.object({
+const RosterPlannerStatsSchema = z.object({
     total_shifts: z.number(),
     assigned_shifts: z.number(),
     open_shifts: z.number(),
@@ -52,7 +52,7 @@ export const RosterPlannerStatsSchema = z.object({
     actual_shifts: z.number(),
 });
 
-export type RosterPlannerStatsDTO = z.infer<typeof RosterPlannerStatsSchema>;
+type RosterPlannerStatsDTO = z.infer<typeof RosterPlannerStatsSchema>;
 
 // The RPC RETURNS TABLE → an array with (at most) one row.
 const RosterPlannerStatsResponseSchema = z.array(RosterPlannerStatsSchema);

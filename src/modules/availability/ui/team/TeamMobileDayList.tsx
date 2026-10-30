@@ -105,7 +105,7 @@ const Fact: React.FC<{ label: string; children: React.ReactNode }> = ({ label, c
     </div>
 );
 
-export const TeamMobileDayList: React.FC<Props> = ({
+const TeamMobileDayList: React.FC<Props> = ({
     members,
     date,
     cells,

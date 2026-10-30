@@ -22,16 +22,13 @@ import {
   CheckCircle2,
   Clock,
   User,
-  Building,
   Briefcase,
-  Layers,
   X,
   FileCheck2,
   Calendar,
 } from 'lucide-react';
 
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
-import { formatClockTime } from '@/modules/core/lib/date.utils';
 import { parseTimeToMinutes } from '@/modules/compliance/utils';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
@@ -44,7 +41,7 @@ import {
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface ShiftAuditDialogProps {
+interface ShiftAuditDialogProps {
   shift: Shift | null;
   onOpenChange: (open: boolean) => void;
 }
@@ -88,9 +85,6 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
   const durationHours = durationMins / 60;
 
   const unpaidBreakMins = Number(row.unpaid_break_minutes ?? 0);
-  const paidBreakMins = Number(row.paid_break_minutes ?? 0);
-  const netMins = Math.max(0, durationMins - unpaidBreakMins);
-  const netHours = netMins / 60;
 
   // Run ICC Sydney EBA Audit Rules
   // Plain computation, not useMemo: it sits after the `!shift` early return,
@@ -421,4 +415,3 @@ export const ShiftAuditDialog: React.FC<ShiftAuditDialogProps> = ({
   );
 };
 
-export default ShiftAuditDialog;

@@ -1,7 +1,6 @@
 import { Dialog, DialogContent, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import React, { useState, useEffect, useMemo } from 'react';
-import { useIsMobile } from '@/modules/core/hooks/use-mobile';
-import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, ScanSearch, Megaphone, UserCheck as LucideUserCheck, Circle, Minus, Undo2, Layers } from 'lucide-react';
+import { Check, X, ArrowLeftRight, CheckCircle, XCircle, Gavel, ShieldCheck, ShieldAlert, ShieldX, ScanSearch, Circle, Layers } from 'lucide-react';
 import { ManagerComplianceApprovalModal } from '../components/ManagerComplianceApprovalModal';
 
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -9,7 +8,8 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { format, differenceInHours, parseISO, parse } from 'date-fns';
+import { format, parseISO, parse } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { page, surface } from '@/modules/core/ui/layout/pageTokens';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -47,13 +47,6 @@ import { groupVariantFor, resolveGroupVariant, type GroupVariant } from '@/modul
    HELPERS
    ============================================================ */
 
-const formatTime = (time: string): string => {
-    if (!time) return '';
-    const [h, m] = time.split(':').map(Number);
-    const period = h >= 12 ? 'PM' : 'AM';
-    const display = h % 12 || 12;
-    return `${display}:${m?.toString().padStart(2, '0') || '00'} ${period}`;
-};
 
 
 
@@ -80,21 +73,7 @@ function getDeptAccent(tag?: string | null): string {
    STATUS TABS
    ============================================================ */
 
-const STATUS_TABS = [
-    { id: 'MANAGER_PENDING', label: 'Pending', icon: Clock, accent: 'amber' },
-    { id: 'OPEN', label: 'Open', icon: ArrowLeftRight, accent: 'blue' },
-    { id: 'APPROVED', label: 'Approved', icon: CheckCircle, accent: 'emerald' },
-    { id: 'REJECTED', label: 'Rejected', icon: XCircle, accent: 'red' },
-    { id: 'all', label: 'All', icon: Shield, accent: 'slate' },
-] as const;
 
-const accentMap: Record<string, { bg: string; text: string; ring: string; glow: string }> = {
-    amber: { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', ring: 'ring-amber-500/20', glow: 'shadow-amber-500/10' },
-    blue: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400', ring: 'ring-blue-500/20', glow: 'shadow-blue-500/10' },
-    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20', glow: 'shadow-emerald-500/10' },
-    red: { bg: 'bg-red-500/10', text: 'text-rose-600 dark:text-rose-400', ring: 'ring-rose-500/20', glow: 'shadow-rose-500/10' },
-    slate: { bg: 'bg-muted/50', text: 'text-muted-foreground', ring: 'ring-border', glow: 'shadow-sm' },
-};
 
 /* ============================================================
    EMPLOYEE SHIFT PANE (within card)
@@ -306,16 +285,6 @@ interface SwapRequestManagement {
     complianceSnapshot: any | null;
 }
 
-/** Compute duration hours from camelCase timing strings */
-const computeShiftHours = (s: { startTime: string; endTime: string; unpaidBreakMinutes?: number }): number => {
-    try {
-        const [sh, sm] = s.startTime.slice(0, 5).split(':').map(Number);
-        const [eh, em] = s.endTime.slice(0, 5).split(':').map(Number);
-        let mins = (eh * 60 + em) - (sh * 60 + sm);
-        if (mins < 0) mins += 1440;
-        return Math.max(0, mins - (s.unpaidBreakMinutes || 0)) / 60;
-    } catch { return 0; }
-};
 
 /** Exported for tests (swap pay delta). */
 export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement => {
@@ -498,15 +467,14 @@ const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId
    MAIN COMPONENT
    ============================================================ */
 
-export const ManagerSwapsPage: React.FC = () => {
+const ManagerSwapsPage: React.FC = () => {
     const { toast } = useToast();
-    const { user, activeContract, hasPermission } = useAuth();
+    const { hasPermission } = useAuth();
     // Delta and epsilon see every swap request in scope but decide none (access suites).
     const canEdit = hasPermission('managerial-write');
-    const isMobile = useIsMobile();
     const orgSelection = useOrgSelection();
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
-    const { isDark } = useTheme();
+    useTheme();
 
     // The dept/sub-dept lines were already the correct pattern, spelled inline;
     // `soleOrgId` extends it to the organisation, which was still taking `[0]`.
@@ -930,7 +898,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
                                                                     <span className="text-[11px] font-mono text-muted-foreground/60 uppercase tracking-wider font-black block">
-                                                                        {format(parseISO(request.requestedAt), 'MMM d, h:mm a')}
+                                                                        {formatInTimezone(parseISO(request.requestedAt), SYDNEY_TZ, 'MMM d, h:mm a')}
                                                                     </span>
                                                                     {request.reason && (
                                                                         <span className="text-[11px] text-foreground/40 italic font-medium max-w-[140px] truncate block ml-auto mt-0.5" title={request.reason}>
@@ -1071,7 +1039,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                             {/* Meta */}
                                                             <div className="lg:flex-1 flex flex-col items-start lg:items-end gap-1.5 w-full">
                                                                 <span className="text-[11px] font-mono text-muted-foreground/50 uppercase tracking-widest font-black">
-                                                                    {format(parseISO(request.requestedAt), 'MMM d, h:mm a')}
+                                                                    {formatInTimezone(parseISO(request.requestedAt), SYDNEY_TZ, 'MMM d, h:mm a')}
                                                                 </span>
                                                                 {request.reason && (
                                                                     <p className="text-[11px] text-foreground/50 line-clamp-2 lg:text-right leading-relaxed max-w-[160px] italic font-medium">

@@ -28,7 +28,7 @@ import type { TimesheetRow } from '../../model/timesheet.types';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
-export interface TimesheetFunctionBarProps {
+interface TimesheetFunctionBarProps {
     // View
     viewMode: 'table' | 'timecard';
     onViewChange: (view: 'table' | 'timecard') => void;

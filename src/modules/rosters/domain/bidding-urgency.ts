@@ -12,8 +12,6 @@
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 export type ShiftUrgency = 'normal' | 'urgent' | 'emergent';
-/** @deprecated use ShiftUrgency */
-export type BiddingUrgency = ShiftUrgency;
 
 /** TTS ≤ this = 'emergent': bids/swaps are locked server-side and the autoscheduler skips the shift. */
 export const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;

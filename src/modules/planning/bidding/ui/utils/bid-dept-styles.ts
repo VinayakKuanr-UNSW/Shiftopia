@@ -16,22 +16,6 @@ export function getDeptColor(groupType: string | null | undefined, dept: string)
     return 'dept-badge-default';
 }
 
-export function getCardBg(groupType: string | null | undefined, dept: string): string {
-    const base = 'dept-card-base';
-    const gt = (groupType || '').toLowerCase();
-    const d = (dept || '').toLowerCase();
-    if (gt === 'office')
-        return `${base} dept-card-glass-office`;
-    if (gt === 'convention_centre' || d.includes('convention'))
-        return `${base} dept-card-convention`;
-    if (gt === 'exhibition_centre' || d.includes('exhibition'))
-        return `${base} dept-card-exhibition`;
-    if (gt === 'theatre' || d.includes('theatre'))
-        return `${base} dept-card-theatre`;
-    if (gt === 'the_cutaway' || gt.includes('cutaway') || d.includes('cutaway'))
-        return `${base} dept-card-glass-cutaway`;
-    return `${base} dept-card-default`;
-}
 
 export function getRowClass(groupType: string | null | undefined, dept: string): string {
     const gt = (groupType || '').toLowerCase();

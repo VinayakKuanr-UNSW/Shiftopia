@@ -20,8 +20,8 @@ Ch. 2 §9 presented the compliance engine as a single funnel: every caller → o
 graph TB
     subgraph FullEngine["Full 15-rule ACTIVE_RULES (v8/engine.ts)"]
         Manual["Manual assign<br/>(assignShift.command.ts)"]
-        BidAccept["Bid accept/winner-select<br/>(planning-request.service.ts)"]
-        SwapAccept["Swap accept/approve<br/>(planning-request.service.ts, x2 — one per party)"]
+        BidAccept["Bid accept/winner-select<br/>(OpenBidsView; planning-request.service.ts was deleted 2026-10-28)"]
+        SwapAccept["Swap accept/approve<br/>(swaps.api.ts validateSwapCompliance, x2 — one per party)"]
         AutoCommit["Autoscheduler commit validation<br/>(bulk-assignment/compliance-evaluator.ts, via V8SwapEngine)"]
     end
     subgraph FixedSubset["Fixed 4-check subset: overlap + 48h weekly + 11h rest + qualification (Edge Function evaluate-compliance)"]
@@ -51,7 +51,7 @@ graph TB
 
 **✓ Finding (RESOLVED 2026-10-26 — see the note above):** the Edge Function subset covers roughly 4 of the 15 rules — daily-hours cap, 20-in-28, streak limit, spread-of-hours, split-shift, meal-break, min-engagement, multi-hire eligibility, student-visa, and leave-conflict are **not** enforced on the AutoPilot paths. Both AutoPilot workers' own READMEs explicitly call this out as an accepted v1 gap and warn that if a new BLOCKING rule is ever added to `ACTIVE_RULES`, nothing mechanically propagates it to the deployed Edge Function — no test or CI gate keeps them in sync.
 
-**⚠ Finding (OPEN, dormant infrastructure):** `src/modules/compliance/v8/orchestrator/{batch,bidding,swapping,conflict-resolver}/` implement a genuinely sophisticated global-optimization layer — dependency-graph batch execution, greedy fairness-aware bid selection across all shifts simultaneously, structural swap-conflict resolution, and a resource-contention graph solver with GREEDY/SOLVER/HYBRID strategy selection. **None of it has any caller outside its own package** (confirmed by repo-wide grep) and none of it is re-exported from the module's public `index.ts`. The live bid-accept and swap-accept paths bypass this entirely, calling `runV8Orchestrator` per-employee directly instead. This is real, working, seemingly-tested-in-isolation code with zero production callers — worth confirming with the team whether it's future infrastructure being staged or safe to remove.
+**⚠ Finding (RESOLVED 2026-10-28: deleted in the dead-code sweep; recover from git history if this lineage is revived):** `src/modules/compliance/v8/orchestrator/{batch,bidding,swapping,conflict-resolver}/` implement a genuinely sophisticated global-optimization layer — dependency-graph batch execution, greedy fairness-aware bid selection across all shifts simultaneously, structural swap-conflict resolution, and a resource-contention graph solver with GREEDY/SOLVER/HYBRID strategy selection. **None of it has any caller outside its own package** (confirmed by repo-wide grep) and none of it is re-exported from the module's public `index.ts`. The live bid-accept and swap-accept paths bypass this entirely, calling `runV8Orchestrator` per-employee directly instead. This is real, working, seemingly-tested-in-isolation code with zero production callers — worth confirming with the team whether it's future infrastructure being staged or safe to remove.
 
 ### 1.3 A global kill switch exists that can silently downgrade every BLOCKING result to WARNING
 
@@ -89,7 +89,7 @@ graph TB
 | `V8_ORD_HOURS_AVG` | ordinary-hours-avg.ts | **BLOCKING** | Worst rolling-cycle-window ordinary hours vs. hard cap | General: 4wk/152h cap; FT Security: 8wk/336h cap | EBA cl 35; Sch 3 §3 (Security) | Excludes CASUAL; branches by `is_security_role` |
 | `V8_ORD_HOURS_PEAK` | ordinary-hours-avg.ts | WARNING | Worst 7/14/21-day window vs. pro-rated weekly limit | `(days/7) × weeklyLimit` (38h general, 42h Security) | EBA cl 35.1(a) | Same scope as above; **suppressed if the hard cap already fired** |
 | `V8_ORD_HOURS_CONTRACTED` | ordinary-hours-avg.ts | WARNING | PT/flexi rostered above individually contracted hours | worst 7-day window `> contracted_weekly_hours` | EBA cl 12.3(d) | Only when `contracted_weekly_hours` set and below the general weekly limit |
-| `V8_AVAILABILITY_CONFLICT` | availability-rules.ts | WARNING | Candidate shift overlaps another shift/declared unavailability same day | interval overlap | Advisory, no clause | All, incl. history |
+| `V8_AVAILABILITY_CONFLICT` | OpenBidsView (inline; `availability-rules.ts` was never registered and was deleted 2026-10-28) | WARNING | Candidate shift overlaps another shift/declared unavailability same day | interval overlap | Advisory, no clause | All, incl. history |
 
 **Two disambiguation notes worth keeping visible** (both concepts are easy to conflate by name):
 - **`rest-pause` vs. `rest-requirements`**: rest-pause is *intra-shift* (is this one shift long enough to owe a paid break during it — cl 37); rest-requirements is *inter-shift, cross-day* (is there enough downtime between the end of one shift and the start of the next on a different day — cl 40). Same-day pairs are explicitly excluded from rest-requirements and owned by split-shift instead.

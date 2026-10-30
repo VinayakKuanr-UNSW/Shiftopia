@@ -91,7 +91,7 @@ export interface KpiFilters {
     comparison: QuarterRef | null;
 }
 
-export interface UseKpiFiltersResult {
+interface UseKpiFiltersResult {
     filters: KpiFilters;
     period: QuarterRef;
     quarters: QuarterRef[];

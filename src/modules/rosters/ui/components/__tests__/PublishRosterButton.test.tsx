@@ -11,7 +11,6 @@
  *  - a disabled Publish button stays reachable by keyboard and says why.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const h = vi.hoisted(() => ({ toast: vi.fn() }));

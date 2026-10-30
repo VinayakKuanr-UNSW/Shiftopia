@@ -40,7 +40,7 @@ export interface ShiftFSMInput {
 
 // ─── State metadata ───────────────────────────────────────────────────────────
 
-export interface ShiftFSMStateInfo {
+interface ShiftFSMStateInfo {
     /**
      * Canonical state ID. This is a stable TS↔PL/pgSQL contract — DB transition
      * guards (`sm_*`, `publish_shift`) branch on these exact strings returned by
@@ -76,7 +76,7 @@ export const FSM_STATE_META: Record<ShiftStateID, ShiftFSMStateInfo> = {
 };
 
 /** Hex colours for the Tailwind tokens above — for inline-styled badges/rows. */
-export const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
+const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
     slate:   '#64748B',
     blue:    '#3B82F6',
     violet:  '#8B5CF6',
@@ -91,7 +91,7 @@ export const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
  * Semantic state color palette tokens for circular shift state badges (canonical S1...S15).
  * Features dark tinted backgrounds with high-contrast text derived from the corresponding state palette.
  */
-export interface ShiftStateBadgeToken {
+interface ShiftStateBadgeToken {
     bg: string;
     text: string;
     border?: string;
@@ -148,8 +148,9 @@ export function getShiftStateDisplay(state: ShiftStateID): ShiftStateDisplay {
  * data; the `validate_shift_state_invariants` trigger enforces this server-side).
  */
 export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
-    // 1. Cancelled — highest priority, short-circuits everything
-    if (shift.is_cancelled) return 'S15';
+    // 1. Cancelled — highest priority, short-circuits everything. Either signal
+    //    counts, as in get_shift_fsm_state().
+    if (shift.is_cancelled || shift.lifecycle_status === 'Cancelled') return 'S15';
 
     // 2. Completed
     if (shift.lifecycle_status === 'Completed') return 'S13';
@@ -195,10 +196,6 @@ export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
 
 // ─── Convenience helpers ──────────────────────────────────────────────────────
 
-/** Returns state metadata alongside the derived state ID. */
-export function getShiftFSMStateInfo(shift: ShiftFSMInput): ShiftFSMStateInfo {
-    return FSM_STATE_META[getShiftFSMState(shift)];
-}
 
 /** True if the shift is in any terminal state (no further transitions possible). */
 export function isShiftTerminal(shift: ShiftFSMInput): boolean {

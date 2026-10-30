@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
     contractsInScope,
-    contractsInRoleScope,
-    hasConflictingEmploymentTypes,
     resolveComplianceBasis,
     resolveScopedBasis,
     sortByComplianceBasis,

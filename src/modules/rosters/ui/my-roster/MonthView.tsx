@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/modules/core/ui/primitives/dialog';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
 import { MobileShiftCard } from './MobileShiftCard';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import MyRosterShift from './MyRosterShift';

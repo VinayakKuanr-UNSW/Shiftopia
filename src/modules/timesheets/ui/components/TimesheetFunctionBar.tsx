@@ -37,7 +37,7 @@ import type { TimesheetRow } from '../../model/timesheet.types';
    STATUS TABS CONFIGURATION
    ============================================================ */
 
-export const TIMESHEET_STATUS_TABS = [
+const TIMESHEET_STATUS_TABS = [
   { id: 'all', label: 'All', icon: Shield, accent: 'slate' },
   { id: 'pending', label: 'Pending', icon: Clock, accent: 'amber' },
   { id: 'auto_approved', label: 'Auto-Approved', icon: Bot, accent: 'emerald' },
@@ -46,12 +46,6 @@ export const TIMESHEET_STATUS_TABS = [
   { id: 'no_show', label: 'No-Show', icon: UserX, accent: 'slate' },
 ] as const;
 
-export const timesheetAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
-  amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
-  emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
-  red:     { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
-  slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
-};
 
 const TIMESHEET_VIEWS: ReadonlyArray<ToolbarSegmentedOption<'table' | 'timecard'>> = [
   { id: 'table', icon: <List className="h-3.5 w-3.5" />, label: 'List' },
@@ -62,7 +56,7 @@ const TIMESHEET_VIEWS: ReadonlyArray<ToolbarSegmentedOption<'table' | 'timecard'
    TYPES
    ============================================================ */
 
-export interface TimesheetFunctionBarProps {
+interface TimesheetFunctionBarProps {
   // Views toggle (List / Card)
   viewMode: 'table' | 'timecard';
   onViewModeChange: (mode: 'table' | 'timecard') => void;
@@ -188,4 +182,3 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
   );
 };
 
-export default TimesheetFunctionBar;

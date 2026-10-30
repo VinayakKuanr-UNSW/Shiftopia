@@ -11,7 +11,7 @@ import type { TrendGrain } from './useBehaviourTrend';
  * week". Bucketing bids by their own timestamp would separate a bid from the
  * shift it was for.
  */
-export interface MarketplaceTrendRow {
+interface MarketplaceTrendRow {
     bucket_start: string;
     open_shifts: number;
     bids_placed: number;

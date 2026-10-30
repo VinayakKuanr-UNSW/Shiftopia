@@ -1,51 +1,5 @@
 
-// Organization & Core Domain Types
-// Extracted from src/api/models/types.ts
 
-export interface Department {
-    id: string;
-    organizationId: string;
-    name: string;
-    createdAt: string;
-    updatedAt: string;
-}
 
-export interface SubDepartment {
-    id: string;
-    departmentId: string;
-    name: string;
-    createdAt: string;
-    updatedAt: string;
-}
 
-export interface Role {
-    id: string;
-    name: string;
-    departmentId?: string;
-    subDepartmentId?: string;
-    level: number;
-    remunerationLevelId?: string;
-    createdAt: string;
-    updatedAt: string;
-}
 
-export interface RemunerationLevel {
-    level: number;
-    description?: string;
-    hourlyRate: number;
-    createdAt: string;
-    updatedAt: string;
-}
-
-export interface Organization {
-    id: string;
-    name: string;
-    createdAt: string;
-    updatedAt: string;
-    branding?: {
-        brand_color?: string;
-        chart_style?: string;
-        language?: string;
-        cookie_banner?: string;
-    };
-}

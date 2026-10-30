@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
@@ -41,7 +41,7 @@ import { useSubmitFeedback } from '../../state/useSupervisorFeedback';
  * For multi-bucket feedback, render the modal multiple times.
  */
 
-export interface SupervisorFeedbackPromptModalProps {
+interface SupervisorFeedbackPromptModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** VenueOps event_id (text). Null is allowed for ad-hoc feedback. */

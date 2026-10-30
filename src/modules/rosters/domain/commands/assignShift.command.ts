@@ -49,9 +49,9 @@ import { evaluateShapeForRow }           from '@/modules/rosters/api/shift-shape
 // refused or vanished shift must not read as assigned.
 const NOT_CHANGED = "Nothing changed: you can't change this shift, or it no longer exists. Refresh and try again.";
 
-export type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
+type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
 
-export interface AssignShiftInput {
+interface AssignShiftInput {
     shiftId:   string;
     employeeId: string | null;
     /** Assignment context — controls availability enforcement. Default: 'MANUAL' */
@@ -66,7 +66,7 @@ export interface AssignShiftInput {
     ignoreWarnings?: boolean;
 }
 
-export interface AssignShiftOutput {
+interface AssignShiftOutput {
     success:    boolean;
     error?:     string;
     /** Non-blocking warnings surfaced to caller */
@@ -442,12 +442,3 @@ export async function executeAssignShift(
     }
 }
 
-/**
- * Execute unassign shift command.
- * No compliance checks required for unassignment.
- */
-export async function executeUnassignShift(
-    shiftId: string,
-): Promise<AssignShiftOutput> {
-    return executeAssignShift({ shiftId, employeeId: null });
-}

@@ -18,89 +18,15 @@ import type {
   WorkerRosterStructureDTO,
   ProjectedShiftResult,
 } from '../worker/protocol';
-import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { GROUP_COLORS, UNASSIGNED_COLORS, GROUP_DISPLAY_NAMES, ALL_GROUP_TYPES } from '../constants';
 import { minutesToHours } from '../utils/duration';
-import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
-import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
 import { coverageHealth } from '../utils/coverage';
-import { determineShiftState } from '../../shift-state.utils';
 import { statsFromProjectedShifts } from './stats.util';
+import { toProjectedShift } from './shared';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function resolveEmployeeName(shift: WorkerShiftDTO): string | null {
-  if (shift.employeeFirstName || shift.employeeLastName) {
-    return `${shift.employeeFirstName ?? ''} ${shift.employeeLastName ?? ''}`.trim() || null;
-  }
-  if (shift.assignedEmployeeId) return 'Assigned';
-  return null;
-}
 
-function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
-  const isAssigned = !!shift.assignedEmployeeId;
-  const netMinutes = shift.netLengthMinutes ?? shift.scheduledLengthMinutes;
-  
-  const key = makeCacheKey(shift.id, shift.updatedAtMs);
-  const detail = isAssigned ? (getCachedCost(key) ?? ZERO_COST_BREAKDOWN) : ZERO_COST_BREAKDOWN;
-  const estimatedCost = detail.totalCost;
-
-  const groupType = shift.groupType ?? null;
-  const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
-    ? GROUP_COLORS[groupType]
-    : UNASSIGNED_COLORS;
-
-  const stateId = determineShiftState({
-    lifecycle_status: shift.lifecycleStatus as any,
-    assignment_status: (shift.assignmentStatus ?? 'unassigned') as any,
-    assignment_outcome: shift.assignmentOutcome as any,
-    trading_status: shift.tradingStatus as any,
-    is_cancelled: shift.isCancelled,
-  });
-
-  return {
-    id: shift.id,
-    date: shift.shiftDate,
-    startTime: shift.startTime,
-    endTime: shift.endTime,
-    netMinutes,
-    estimatedCost,
-    costBreakdown: {
-      base: detail.ordinaryCost,
-      penalty: detail.penaltyCost,
-      overtime: detail.overtimeCost,
-      allowance: detail.allowanceCost ?? 0,
-      leave: 0,
-    },
-    detailedCost: detail,
-    stateId,
-    roleName: shift.roleName ?? 'Shift',
-    roleId: shift.roleId,
-    levelName: shift.levelName ?? '',
-    levelNumber: shift.levelNumber ?? 0,
-    levelId: shift.remunerationLevel !== null && shift.remunerationLevel !== undefined ? shift.remunerationLevel.toString() : null,
-    groupType,
-    subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
-    groupColorKey: groupType ?? 'unassigned',
-    employeeName: resolveEmployeeName(shift),
-    employeeId: shift.assignedEmployeeId,
-    isLocked: shift.isLocked,
-    isUrgent: isOnBidding(shift.biddingStatus) && computeBiddingUrgency(shift.shiftDate, shift.startTime) === 'urgent',
-    isOnBidding: isOnBidding(shift.biddingStatus),
-    isTrading: !!shift.tradeRequestedAt,
-    isCancelled: shift.isCancelled,
-    isPublished: shift.isPublished,
-    isDraft: shift.isDraft,
-
-    role: shift.roleName ?? 'Shift',
-    hours: minutesToHours(netMinutes),
-    pay: estimatedCost,
-    status: shift.isCancelled ? 'Draft' : (shift.assignedEmployeeId ? (shift.isDraft ? 'Draft' : 'Assigned') : 'Open'),
-    lifecycleStatus: shift.isPublished ? 'published' : 'draft',
-    assignmentStatus: shift.assignedEmployeeId ? 'assigned' : 'unassigned',
-    fulfillmentStatus: shift.fulfillmentStatus,
-  };
-}
 
 function subGroupStats(shifts: ProjectedShiftResult[]): SubGroupStats {
   const assigned  = shifts.filter(s => !!s.employeeId).length;
@@ -182,7 +108,7 @@ function toGroupKey(externalId: string | null, name: string): TemplateGroupType 
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export interface GroupProjectorContext {
+interface GroupProjectorContext {
   rosterStructures?: WorkerRosterStructureDTO[];
 }
 

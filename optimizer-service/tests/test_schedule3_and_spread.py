@@ -13,6 +13,7 @@ from datetime import date, timedelta
 
 from .conftest import make_employee, make_shift, solve
 from model_builder import (
+    ExistingShiftInput,
     ORD_AVG_CYCLE_DAYS,
     ORD_AVG_CYCLE_MINUTES,
     ORD_AVG_SECURITY_CYCLE_DAYS,
@@ -544,3 +545,83 @@ def test_the_allowance_survives_the_http_boundary():
         if k in ConstraintsDC.__dataclass_fields__
     })
     assert dc.split_shift_allowance_cents == ALLOWANCE_CENTS
+
+
+def test_pt_split_shift_allowance_charged_against_existing_pinned_shift():
+    # Pairing a candidate shift with an already-committed shift within <= 3h gap
+    # constitutes a split shift under cl 39.4 and attracts the split-shift allowance.
+    existing = [
+        ExistingShiftInput(
+            id="ex1",
+            shift_date=day(0),
+            start_time="08:00",
+            end_time="12:00",
+            duration_minutes=240,
+        )
+    ]
+    candidate = [
+        make_shift(sid="s1", date=day(0), start="14:00", end="18:00")
+    ]
+    emp = make_employee("e1", employment_type="PT", existing_shifts=existing)
+    cost_with = _cost_of(_solve_with_allowance(candidate, [emp], ALLOWANCE_CENTS))
+    cost_without = _cost_of(_solve_with_allowance(candidate, [emp], 0))
+    assert cost_with - cost_without == ALLOWANCE_CENTS
+
+
+def test_pt_spread_cap_binds_against_existing_pinned_shift():
+    # cl 39.2: 12-hour spread cap. An existing shift from 06:00 to 10:00 (4h)
+    # paired with a candidate shift 19:30 to 22:30 (3h) has a 16.5h spread (> 12h).
+    # The candidate shift must NOT be assigned to e1.
+    existing = [
+        ExistingShiftInput(
+            id="ex1",
+            shift_date=day(0),
+            start_time="06:00",
+            end_time="10:00",
+            duration_minutes=240,
+            unpaid_break_minutes=0,
+        )
+    ]
+    shift_breach = make_shift(sid="s_breach", date=day(0), start="19:30", end="22:30", unpaid_break_minutes=0)
+    e1 = make_employee("e1", employment_type="PT", existing_shifts=existing)
+    out = solve([shift_breach], [e1])
+    assert "s_breach" in out.unassigned_shift_ids or legal_penalty(out) > 0
+
+
+def test_ft_one_per_day_blocks_second_ft_target_shift_against_existing_shift():
+    # EBA cl 39.1 + trigger fn_shift_ft_one_per_day: An FT-targeted shift cannot
+    # be assigned to an employee who already holds an existing shift on that date.
+    existing = [
+        ExistingShiftInput(
+            id="ex1",
+            shift_date=day(0),
+            start_time="09:00",
+            end_time="17:00",
+            duration_minutes=480,
+        )
+    ]
+    s_ft = make_shift(sid="s_ft", date=day(0), start="18:00", end="22:00", target_employment_type="FT")
+    e1 = make_employee("e1", employment_type="FT", existing_shifts=existing)
+    out = solve([s_ft], [e1])
+    assert "s_ft" in out.unassigned_shift_ids
+
+
+def test_daily_pairing_meal_break_enforced_against_existing_shift():
+    # cl 36.1: More than 5h worked on one day requires a 30m break.
+    # An existing shift of 3h worked + candidate of 3h worked separated by 15m
+    # is 6h worked with a 15m gap (longest break 15m < 30m).
+    existing = [
+        ExistingShiftInput(
+            id="ex1",
+            shift_date=day(0),
+            start_time="08:00",
+            end_time="11:00",
+            duration_minutes=180,
+            unpaid_break_minutes=0,
+        )
+    ]
+    s_pair = make_shift(sid="s_pair", date=day(0), start="11:15", end="14:15", unpaid_break_minutes=0)
+    e1 = make_employee("e1", employment_type="Casual", is_security_role=False, existing_shifts=existing)
+    out = solve([s_pair], [e1])
+    assert "s_pair" in out.unassigned_shift_ids or legal_penalty(out) > 0
+

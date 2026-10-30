@@ -39,7 +39,7 @@ import { itemVariants } from '@/modules/core/ui/motion/presets';
 // TYPES
 // ============================================================================
 
-export interface CalendarPaneProps {
+interface CalendarPaneProps {
   slots: AvailabilitySlot[];
   /** Assigned shifts for this month — derive locked intervals from here */
   assignedShifts?: AssignedShiftInterval[];
@@ -359,4 +359,3 @@ export function CalendarPane({
   );
 }
 
-export default CalendarPane;

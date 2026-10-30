@@ -22,7 +22,7 @@ const STATUS_WORD: Record<MetricStatus, string> = {
     good: 'on target', warn: 'needs attention', critical: 'off target', neutral: '',
 };
 
-export interface RateStripItem {
+interface RateStripItem {
     metricId: string;
     value: number;
     /** Overrides the registry label when the surface needs a shorter word. */
@@ -60,4 +60,3 @@ export const RateStrip: React.FC<{ items: RateStripItem[]; className?: string }>
     </dl>
 );
 
-export default RateStrip;

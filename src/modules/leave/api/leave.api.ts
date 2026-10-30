@@ -18,7 +18,6 @@ import type {
 } from '../model/leave.types';
 import { LEAVE_POLICIES } from '../domain/leave-policy';
 import type { EmployeeUnit } from '../domain/leave-approval';
-import { fetchContractBasis } from '@/modules/availability/api/contract-basis.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 
 // ── Balances ─────────────────────────────────────────────────────────────────
@@ -81,7 +80,7 @@ function mapBalanceRow(row: any): LeaveBalance {
 
 // ── Requests ─────────────────────────────────────────────────────────────────
 
-export interface LeaveRequestFilters {
+interface LeaveRequestFilters {
   status?: LeaveRequestStatus | LeaveRequestStatus[];
   leaveType?: LeaveTypeCode;
   startAfter?: string; // YYYY-MM-DD
@@ -213,7 +212,7 @@ export interface LeaveShiftConflict {
  * clock-in and timesheet that payroll pays from, and deleting it would erase
  * hours the person really worked.
  */
-export function isWorkedShift(s: { actualStart: string | null; lifecycleStatus: string | null }): boolean {
+function isWorkedShift(s: { actualStart: string | null; lifecycleStatus: string | null }): boolean {
   return s.actualStart != null || s.lifecycleStatus === 'InProgress' || s.lifecycleStatus === 'Completed';
 }
 
@@ -244,7 +243,6 @@ export async function getLeaveShiftConflicts(
     .gte('shift_date', startDate)
     .lte('shift_date', endDate)
     .neq('lifecycle_status', 'Cancelled')
-    .is('deleted_at', null)
     .order('shift_date', { ascending: true });
 
   if (error) {
@@ -268,7 +266,7 @@ export async function getLeaveShiftConflicts(
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-export interface MutationResult<T = void> {
+interface MutationResult<T = void> {
   data?: T;
   error?: string;
 }
@@ -544,7 +542,7 @@ export async function cancelLeaveRequest(requestId: string): Promise<MutationRes
   return {};
 }
 
-export interface UnassignConflictsResult {
+interface UnassignConflictsResult {
   /** How many shift IDs were submitted for unassignment. */
   attempted: number;
   /** How many actually transitioned to unassigned (the rest were skipped). */

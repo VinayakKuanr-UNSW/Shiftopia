@@ -5,21 +5,19 @@ import { useAuth } from '@/platform/auth/useAuth';
 import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO, addDays } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
+import { SYDNEY_TZ, parseZonedDateTime, formatShiftTime, formatShiftDate, getShiftDateKey, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
 import { validateCompliance, type ComplianceResult, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import {
-    Info, User,
+    
     Calendar, Clock, ThumbsUp, Ban,
-    Megaphone, UserPlus, UserCheck as LucideUserCheck, Circle, Minus, Gavel, Coffee, Shield, Loader2, CheckCircle, XCircle,
-    X, Filter, History, ListChecks, Settings2
+    Gavel, Loader2, CheckCircle, XCircle,
+    ListChecks, Settings2
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { BidStatusBadge } from '../components/BidStatusBadge';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -29,9 +27,6 @@ import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsVi
 
 import { BidComplianceModal } from '../components/BidComplianceModal';
 import { BidConfirmComplianceDialog } from '../components/BidConfirmComplianceDialog';
-import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
-import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
-import { fetchScopedContractBasis } from '@/modules/availability/api/contract-basis.api';
 import { BidOpportunityDrawer } from '../components/BidOpportunityDrawer';
 import { BidOpportunityCard } from '../components/BidOpportunityCard';
 import { BidOpportunityListItem } from '../components/BidOpportunityListItem';
@@ -49,7 +44,6 @@ import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primitives/popover';
 import { Check } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
-import { getBidPriority } from '../utils/bid-priority';
 import { getDeptColor, getRowClass } from '../utils/bid-dept-styles';
 import { getParticipationStatus } from '../utils/bid-participation';
 import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
@@ -79,7 +73,7 @@ const itemVariants = {
 // ============================================================================
 // COMPONENT
 // ============================================================================
-export const EmployeeBidsPage: React.FC = () => {
+const EmployeeBidsPage: React.FC = () => {
     const { user } = useAuth();
     const breakpoint = useBreakpoint();
     const isMobile = breakpoint === 'mobile';
@@ -98,18 +92,11 @@ export const EmployeeBidsPage: React.FC = () => {
     const [showExpired, setShowExpired] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-    const todayStr = formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd');
-    const todayDate = React.useMemo(() => {
-        const d = new Date(); d.setHours(0, 0, 0, 0); return d;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [todayStr]);
-
     // Selection (for bulk bid on not_participated eligible shifts)
     const [selectedV8ShiftIds, setSelectedV8ShiftIds] = useState<any[]>([]);
     const [isBulkModeActive, setIsBulkModeActive] = useState<boolean>(false);
 
     // Compliance Check State
-    const [checkingV8ShiftId, setCheckingV8ShiftId] = useState<string | null>(null);
     const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(null);
     const [showComplianceDialog, setShowComplianceDialog] = useState(false);
     const [pendingBidShift, setPendingBidShift] = useState<ShiftData | null>(null);
@@ -364,7 +351,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 remunerationLevel: s.remuneration_levels?.level_name || 'Level-4',
                 status: b.status as any,
                 lifecycleStatus: s.lifecycle_status,
-                bidTime: format(parseISO(b.created_at), 'yyyy-MM-dd HH:mm'),
+                bidTime: formatInTimezone(parseISO(b.created_at), SYDNEY_TZ, 'yyyy-MM-dd HH:mm'),
                 notes: b.notes,
                 groupType: s.group_type,
                 subGroupColor: getDeptColor(s.group_type, s.departments?.name || '')
@@ -397,17 +384,6 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     // SHIFT COUNTS BY DATE (dot indicators — pre-date-filter)
     // ========================================================================
-    const shiftsByDate = React.useMemo(() => {
-        const map = new Map<string, { count: number; hasUrgent: boolean }>();
-        shiftsTableSort.sortedData.forEach(shift => {
-            const existing = map.get(shift.date) || { count: 0, hasUrgent: false };
-            map.set(shift.date, {
-                count: existing.count + 1,
-                hasUrgent: existing.hasUrgent || getBidPriority(shift) === 'urgent',
-            });
-        });
-        return map;
-    }, [shiftsTableSort.sortedData]);
 
     // ========================================================================
     // DATE-FILTERED BID OPPORTUNITIES
@@ -465,58 +441,6 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     // COMPLIANCE HANDLERS
     // ========================================================================
-    const runV8LegacyBridgeAndBid = async (shift: ShiftData) => {
-        if (!user) return;
-        setCheckingV8ShiftId(shift.id);
-        try {
-            const result = await validateCompliance({
-                employeeId: user.id,
-                shiftDate: shift.date,
-                startTime: shift.startTime + ':00',
-                endTime: shift.endTime + ':00',
-                netLengthMinutes: shift.netLength,
-                shiftId: shift.id,
-            });
-            setCheckingV8ShiftId(null);
-
-            // Warn-only availability self-check — never blocks a bid, but if the
-            // shift falls outside the bidder's declared availability we route
-            // through the same confirmation dialog so they acknowledge it.
-            //
-            // TWO BUGS FIXED HERE (sub-department scoping work):
-            //   1. `evaluateShiftAvailabilityFromSlots` defaults to OPT_IN when
-            //      mode is omitted, so every FT/PT bidder got a spurious "no
-            //      declared availability" warning — the most reliable staff
-            //      saw a warning on every bid.
-            //   2. The slots read was PERSON-WIDE: a FT Security employee's
-            //      slots were counted as coverage for a Set-up bid shift.
-            let availWarn: string | null = null;
-            try {
-                const [slots, basis] = await Promise.all([
-                    getAvailabilitySlots(user.id, shift.date, shift.date, shift.subDepartmentId),
-                    fetchScopedContractBasis(user.id, { subDepartmentId: shift.subDepartmentId ?? null }),
-                ]);
-                const a = evaluateShiftAvailabilityFromSlots(
-                    slots, shift.date, shift.startTime + ':00', shift.endTime + ':00',
-                    basis.availabilityMode,
-                );
-                if (a.isWarning) availWarn = a.message;
-            } catch { /* availability lookup never blocks a bid */ }
-
-            if (result.status === 'violated' || result.status === 'warned' || availWarn) {
-                setComplianceResult(result.status === 'violated' || result.status === 'warned' ? result : null);
-                setAvailabilityWarning(availWarn);
-                setPendingBidShift(shift);
-                setShowComplianceDialog(true);
-            } else {
-                placeBidMutation.mutate(shift.id);
-            }
-        } catch {
-            setCheckingV8ShiftId(null);
-            toast({ title: 'Compliance Check Unavailable', description: 'Proceeding with bid.', variant: 'default' });
-            placeBidMutation.mutate(shift.id);
-        }
-    };
 
     const handleConfirmBidWithWarning = () => {
         if (pendingBidShift) placeBidMutation.mutate(pendingBidShift.id);

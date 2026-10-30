@@ -24,7 +24,7 @@ import { getShiftFSMState, getShiftStateDisplay } from '../../rosters/domain/shi
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 
-export interface GrossPayPeriodViewProps {
+interface GrossPayPeriodViewProps {
   periods: PeriodGrossPay[];
   /** Period bounds (YYYY-MM-DD, inclusive) for the header. */
   periodStart: string;
@@ -211,7 +211,6 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
               <TableBody>
                 {sortedShifts.map((shift) => {
                   const isOpen = !!expanded[shift.shiftId];
-                  const contentId = `gross-pay-detail-${shift.shiftId}`;
 
                   const dateLabel = formatShiftDate(shift.shiftDate);
                   const shiftIdLabel = shift.shiftId.slice(0, 8);
@@ -435,4 +434,3 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
   );
 };
 
-export default GrossPayPeriodView;

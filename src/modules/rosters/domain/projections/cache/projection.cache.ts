@@ -64,17 +64,4 @@ export function setCachedCost(key: string, value: ShiftCostBreakdown): void {
   cache.set(key, value);
 }
 
-/**
- * Clear all cached entries. Called on worker termination or when the
- * entire roster dataset is replaced (e.g. department switch).
- */
-export function clearCostCache(): void {
-  cache.clear();
-}
 
-/**
- * Current cache size — useful for diagnostics / logging.
- */
-export function getCacheSize(): number {
-  return cache.size;
-}
