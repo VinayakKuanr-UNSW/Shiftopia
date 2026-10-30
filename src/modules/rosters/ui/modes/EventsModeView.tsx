@@ -445,7 +445,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
       <ScrollArea className="flex-1">
         <div className="p-4 md:p-5 space-y-4">
-          {eventGroups.map((group, groupIdx) => {
+          {eventGroups.map((group) => {
             const isCollapsed = collapsedEvents.has(group.eventId);
             const badgeVariant = getBadgeVariant(group);
             const badgeLabel = getBadgeLabel(group);

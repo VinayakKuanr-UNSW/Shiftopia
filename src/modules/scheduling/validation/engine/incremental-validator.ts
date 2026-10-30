@@ -153,7 +153,6 @@ function checkRoleContractMatch(
 }
 
 function checkQualificationMatch(
-    shift: CandidateShift,
     employee: EmployeeInfo,
     shiftRequiredQuals: string[],
     skipQualChecks: boolean,
@@ -258,7 +257,7 @@ class IncrementalValidator {
         if (roleViolation) violations.push(roleViolation);
 
         // Rule 5: Qualification match
-        const qualMatchViolation = checkQualificationMatch(shift, employee, shiftRequiredQuals, skipQualChecks);
+        const qualMatchViolation = checkQualificationMatch(employee, shiftRequiredQuals, skipQualChecks);
         if (qualMatchViolation) violations.push(qualMatchViolation);
 
         // Rule 6: Qualification expiry

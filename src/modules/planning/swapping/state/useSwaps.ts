@@ -159,7 +159,7 @@ export const useSwaps = (
     const acceptOfferMutation = useMutation({
         mutationFn: ({ swapId, offerId, offererId, offeredV8ShiftId }: { swapId: string; offerId: string; offererId: string; offeredV8ShiftId?: string }) =>
             swapsApi.acceptTrade(swapId, offerId, offererId, offeredV8ShiftId),
-        onSuccess: async (_, variables) => {
+        onSuccess: async () => {
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['mySwapRequests'] }),
                 queryClient.invalidateQueries({ queryKey: ['pendingSwapApprovals'] }),

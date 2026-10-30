@@ -35,7 +35,7 @@ describe('projectBalance', () => {
 
   it('projects forward correctly with no requests', () => {
     // 365 days later = 1 full year = 152 hours accrued
-    const proj = projectBalance(baseBal, [], '2027-01-01', '2020-01-01');
+    const proj = projectBalance(baseBal, [], '2027-01-01');
     expect(proj).toBeCloseTo(252, 1);
   });
 
@@ -61,7 +61,7 @@ describe('projectBalance', () => {
       },
     ];
 
-    const proj = projectBalance(baseBal, reqs, '2027-01-01', '2020-01-01');
+    const proj = projectBalance(baseBal, reqs, '2027-01-01');
     // 252 expected - 15.2 (pending only) = 236.8
     expect(proj).toBeCloseTo(236.8, 1);
   });
@@ -69,13 +69,13 @@ describe('projectBalance', () => {
   it('applies max balance caps', () => {
     const fdvBal: LeaveBalance = { ...baseBal, leaveType: 'fdv', balanceHours: 70 };
     // FDV cap is 76 but it's upfront, so it shouldn't accrue further than current balance.
-    const proj = projectBalance(fdvBal, [], '2027-01-01', '2020-01-01');
+    const proj = projectBalance(fdvBal, [], '2027-01-01');
     expect(proj).toBe(70);
   });
 
   it('does not accrue for per-occasion or one-off types', () => {
     const parentalBal: LeaveBalance = { ...baseBal, leaveType: 'parental', balanceHours: 380 };
-    const proj = projectBalance(parentalBal, [], '2027-01-01', '2020-01-01');
+    const proj = projectBalance(parentalBal, [], '2027-01-01');
     expect(proj).toBe(380);
   });
 });

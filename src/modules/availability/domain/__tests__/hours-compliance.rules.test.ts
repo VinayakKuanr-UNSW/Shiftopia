@@ -41,47 +41,47 @@ const FORTNIGHT = 2;
 
 describe('computeEmpComp — declared cycle + contracted-hours basis', () => {
     it('holds a CASUAL to the same ceiling — cl 35.4(a) is worded like 35.1(a)', () => {
-        const r = computeEmpComp(byWeek, {}, weekKeys, 'CASUAL', undefined, FORTNIGHT);
+        const r = computeEmpComp(byWeek, {}, weekKeys, undefined, FORTNIGHT);
         expect(r.overallV8Severity).toBe('violation');
         expect(r.weeks['2026-W12'].windows.some(w => w.kind === 'cycle')).toBe(true);
     });
 
     it('flags FT for the same 78h fortnight (over the 76h 2-week cap)', () => {
-        const r = computeEmpComp(byWeek, {}, weekKeys, 'FT', undefined, FORTNIGHT);
+        const r = computeEmpComp(byWeek, {}, weekKeys, undefined, FORTNIGHT);
         expect(r.overallV8Severity).toBe('violation');
         expect(r.weeks['2026-W12'].windows.some(w => w.kind === 'cycle' && w.severity === 'violation')).toBe(true);
     });
 
     it('raises the cap when contracted_weekly_hours is higher (FT@40h → 80h/2wk, 78h is not a violation)', () => {
-        const r = computeEmpComp(byWeek, {}, weekKeys, 'FT', 40, FORTNIGHT);
+        const r = computeEmpComp(byWeek, {}, weekKeys, 40, FORTNIGHT);
         expect(r.overallV8Severity).not.toBe('violation');
     });
 
     it('lowers the cap for a part-timer (PT@20h → 40h/2wk, 78h is a violation)', () => {
-        const r = computeEmpComp(byWeek, {}, weekKeys, 'PT', 20, FORTNIGHT);
+        const r = computeEmpComp(byWeek, {}, weekKeys, 20, FORTNIGHT);
         expect(r.overallV8Severity).toBe('violation');
     });
 
     it('keeps rolling checks for unknown/null contract type (conservative — do not hide issues)', () => {
-        const r = computeEmpComp(byWeek, {}, weekKeys, null, undefined, FORTNIGHT);
+        const r = computeEmpComp(byWeek, {}, weekKeys, undefined, FORTNIGHT);
         expect(r.overallV8Severity).toBe('violation');
     });
 
     it('still enforces the daily hard cap (>12h/day) for CASUAL', () => {
         const byDate = { '2026-03-10': [pill(13)] };
-        const r = computeEmpComp({}, byDate, [], 'CASUAL');
+        const r = computeEmpComp({}, byDate, []);
         expect(r.overallV8Severity).toBe('violation');
         expect(r.dailyViolations.has('2026-03-10')).toBe(true);
     });
 
     it('warns rather than violates between the soft and hard daily caps', () => {
-        const r = computeEmpComp({}, { '2026-03-10': [pill(11)] }, [], 'CASUAL');
+        const r = computeEmpComp({}, { '2026-03-10': [pill(11)] }, []);
         expect(r.overallV8Severity).toBe('warning');
         expect(r.dailyWarnings.has('2026-03-10')).toBe(true);
     });
 
     it('sums a split day before applying the daily cap', () => {
-        const r = computeEmpComp({}, { '2026-03-10': [pill(7), pill(6)] }, [], 'CASUAL');
+        const r = computeEmpComp({}, { '2026-03-10': [pill(7), pill(6)] }, []);
         expect(r.dailyViolations.has('2026-03-10')).toBe(true);
     });
 });
@@ -107,7 +107,7 @@ describe('computeEmpComp — the cycle needs its lookback', () => {
     const visibleOnly = ['2026-W32'];
 
     it('reports a violation when the three prior weeks are in scope', () => {
-        const r = computeEmpComp(fourWeeks, {}, widened, 'FT');
+        const r = computeEmpComp(fourWeeks, {}, widened);
         expect(r.overallV8Severity).toBe('violation');
     });
 
@@ -115,13 +115,13 @@ describe('computeEmpComp — the cycle needs its lookback', () => {
     // same breach — but computed from the single visible week, no window has
     // enough entries to evaluate and the page reports a confident all-clear.
     it('reports a false all-clear from the visible week alone', () => {
-        const r = computeEmpComp(fourWeeks, {}, visibleOnly, 'FT');
+        const r = computeEmpComp(fourWeeks, {}, visibleOnly);
         expect(r.overallV8Severity).toBe('ok');
         expect(r.weeks['2026-W32'].windows).toHaveLength(0);
     });
 
     it('attributes the window to the week it ENDS in, so the badge lands on screen', () => {
-        const r = computeEmpComp(fourWeeks, {}, widened, 'FT');
+        const r = computeEmpComp(fourWeeks, {}, widened);
         expect(r.weeks['2026-W32'].windows.length).toBeGreaterThan(0);
         // The badge lands on the LAST week of the cycle that is in scope, so it
         // is drawn on screen rather than in the invisible lookback.
@@ -129,7 +129,7 @@ describe('computeEmpComp — the cycle needs its lookback', () => {
     });
 
     it('holds a casual to the same four-week cycle', () => {
-        expect(computeEmpComp(fourWeeks, {}, widened, 'CASUAL').overallV8Severity)
+        expect(computeEmpComp(fourWeeks, {}, widened).overallV8Severity)
             .toBe('violation');
     });
 });
@@ -152,7 +152,7 @@ describe('computeEmpComp — week keys crossing a year boundary', () => {
     });
 
     it('sums a cycle that begins in the previous calendar year', () => {
-        const r = computeEmpComp(acrossNewYear, {}, keys, 'FT');
+        const r = computeEmpComp(acrossNewYear, {}, keys);
         expect(r.overallV8Severity).toBe('violation');
         expect(r.weeks['2026-W04'].windows.some(w => w.kind === 'cycle')).toBe(true);
     });

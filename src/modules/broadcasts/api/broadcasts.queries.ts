@@ -436,7 +436,6 @@ export const groupParticipantQueries = {
      */
     async getUserRole(
         groupId: string,
-        employeeId: string
     ): Promise<BroadcastParticipantRole | null> {
         // Use the RPC for hierarchy-aware role resolution
         const { data, error } = await supabase

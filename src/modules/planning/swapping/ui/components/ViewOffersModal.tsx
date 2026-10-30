@@ -622,7 +622,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                         { id: 'offered', label: 'Offer Received', icon: Inbox, active: timeline.offerReceived, desc: 'Teammates have sent offers.' },
                                         { id: 'selected', label: 'Selection Made', icon: UserCheck, active: timeline.selection, desc: 'Awaiting manager approval.' },
                                         { id: 'manager', label: 'Final Approval', icon: CheckCircle2, active: timeline.manager, desc: 'Swap is fully completed.' }
-                                    ].map((step, idx) => (
+                                    ].map((step) => (
                                         <div key={step.id} className="relative">
                                             <div className={cn(
                                                 "absolute left-[-30px] top-0 h-4 w-4 rounded-full border-2 border-background transition-all duration-500 flex items-center justify-center",

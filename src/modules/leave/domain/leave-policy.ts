@@ -244,7 +244,6 @@ export function projectBalance(
   balance: LeaveBalance,
   requests: LeaveRequest[],
   projectionDate: string,
-  serviceStartDate: string,
   policies: Record<LeaveTypeCode, LeavePolicy> = LEAVE_POLICIES,
 ): number {
   const policy = policies[balance.leaveType];

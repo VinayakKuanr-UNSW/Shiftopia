@@ -1494,7 +1494,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     });
   }, [externalShifts, toast, onAssignShift]);
 
-  const handleDndAssignConfirm = useCallback(async (options: { ignoreWarnings: boolean }) => {
+  const handleDndAssignConfirm = useCallback(async () => {
     if (!pendingDndAssign) return;
     setIsDndAssigning(true);
     try {
@@ -1502,7 +1502,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         shiftId: pendingDndAssign.shiftId,
         employeeId: pendingDndAssign.employeeId,
         context: 'MANUAL',
-        ignoreWarnings: options.ignoreWarnings,
       });
       if (!result.success) {
         toast({

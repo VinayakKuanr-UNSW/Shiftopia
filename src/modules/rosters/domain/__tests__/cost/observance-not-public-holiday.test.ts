@@ -39,7 +39,7 @@ const CASES: Array<[string, string, string]> = [
   ["Father's Day",              '2026-09-06', '2026-09-13'], // both Sunday
 ];
 
-describe.each(CASES)('%s is not a public holiday', (label, day, control) => {
+describe.each(CASES)('%s is not a public holiday', (_label, day, control) => {
   it('carries no public-holiday hours in the standard engine', () => {
     const onDay = estimateDetailedShiftCost(base({ shift_date: day }));
     const onControl = estimateDetailedShiftCost(base({ shift_date: control }));

@@ -974,7 +974,7 @@ const NewRostersPage: React.FC = () => {
     [updateShiftMutation, toast, queryClient],
   );
 
-  const executePendingAssignment = async (options: { ignoreWarnings: boolean }) => {
+  const executePendingAssignment = async () => {
     if (!pendingDndAssign) return;
     setIsExecutingDnd(true);
     try {
@@ -987,7 +987,6 @@ const NewRostersPage: React.FC = () => {
         employeeId,
         context: 'MANUAL',
         targetDate: dateChanged ? dateKey : undefined,
-        ignoreWarnings: options.ignoreWarnings,
       });
 
       if (!result.success) {

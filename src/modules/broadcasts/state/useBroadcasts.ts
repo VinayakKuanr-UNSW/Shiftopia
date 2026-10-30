@@ -227,7 +227,7 @@ export function useBroadcastGroup(groupId: string | null): UseBroadcastGroupRetu
     // Fetch the current user's role in this group
     const userRoleQuery = useQuery({
         queryKey: [...broadcastKeys.group.detail(groupId ?? ''), 'userRole', user?.id ?? ''],
-        queryFn: () => groupParticipantQueries.getUserRole(groupId!, user!.id),
+        queryFn: () => groupParticipantQueries.getUserRole(groupId!),
         enabled: !!groupId && !!user?.id,
         staleTime: 60_000,
     });

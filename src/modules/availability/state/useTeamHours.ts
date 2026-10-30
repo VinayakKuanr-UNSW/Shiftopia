@@ -147,7 +147,6 @@ export function useTeamHours(
                     entry.byWeek,
                     entry.byDate,
                     hours.sortedWeekKeys,
-                    member.contractType ?? null,
                     member.contractedWeeklyHours,
                     member.cycleWeeks,
                     member.cycleAnchor,

@@ -66,7 +66,8 @@ const BillableSourceIcon: React.FC<{
     const effectiveSource = source || (varianceReason ? 'manual' : null);
     if (!effectiveSource || (effectiveSource !== 'auto' && !hasValue && !varianceReason)) return null;
     const meta = BILLABLE_SOURCE_META[effectiveSource] ?? BILLABLE_SOURCE_META.manual;
-    const { Icon, cls, label } = meta;
+    const { Icon, cls } = meta;
+    const label = labelPrefix ? `${labelPrefix}: ${meta.label}` : meta.label;
     return (
         <TooltipProvider>
             <Tooltip>

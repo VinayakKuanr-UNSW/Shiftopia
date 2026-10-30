@@ -78,39 +78,6 @@ export const useAuth = () => {
     return allows(holding, feature);
   };
 
-  /* ============================================================
-     Shift Eligibility (placeholder for your business logic)
-     ============================================================ */
-
-  const isEligibleForShift = (
-    shiftDepartment: string,
-    shiftRole: string
-  ): boolean => {
-    if (!user) return false;
-
-    // Admin can bid on any shift
-    if (user.systemRole === 'admin') return true;
-
-    // Add your business logic here
-    return true;
-  };
-
-  /* ============================================================
-     Work Hour Compliance (placeholder)
-     ============================================================ */
-
-  const checkWorkHourCompliance = (shiftDate: string, shiftHours: number) => {
-    return {
-      compliant: true,
-      dailyHours: shiftHours,
-      weeklyHours: shiftHours * 5,
-      monthlyHours: shiftHours * 20,
-      dailyLimit: 12,
-      weeklyLimit: 48,
-      monthlyLimit: 152,
-    };
-  };
-
   return {
     ...context,
     user,
@@ -126,7 +93,5 @@ export const useAuth = () => {
     isTeamLeadOrAbove,
     getLandingPage,
     hasPermission,
-    isEligibleForShift,
-    checkWorkHourCompliance,
   };
 };
