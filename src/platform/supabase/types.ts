@@ -7639,10 +7639,6 @@ export type Database = {
         }
         Returns: Json
       }
-      sm_close_bidding: {
-        Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
-        Returns: Json
-      }
       sm_create_shift: {
         Args: { p_shift_data: Json; p_user_id: string }
         Returns: string

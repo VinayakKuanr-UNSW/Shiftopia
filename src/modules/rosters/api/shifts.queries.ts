@@ -1,7 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
 import { Shift, ShiftStatus, TemplateGroupType, isValidUuid } from '../domain/shift.entity';
-import { callAuthenticatedRpc } from '@/platform/supabase/rpc/client';
-import { OfferActionResponseSchema } from './contracts';
 import { getTodayInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 /**
@@ -672,60 +670,6 @@ export const shiftsQueries = {
     },
 
     /* ============================================================
-       GET SHIFTS FOR SEVERAL EMPLOYEES OVER A RANGE — EVERY STATUS
-       ============================================================ */
-
-    /**
-     * Every shift these employees hold in the window, whatever its status.
-     *
-     * DIFFERENT FROM `getEmployeeShifts` IN TWO WAYS THAT BOTH MATTER:
-     *
-     *   • No lifecycle filter. That one reads Published/InProgress/Completed,
-     *     because it answers "what am I working". The Office grid edits shifts
-     *     while they are still DRAFT, so filtering those out would show an empty
-     *     week over a roster full of them.
-     *
-     *   • Every sub-department, not just the caller's. The grid enforces one FT
-     *     shift per person per day (cl 39.1), and that guard is only correct if
-     *     it can see a shift the person holds on another team that day.
-     *
-     * Uses SHIFT_SELECT, deliberately. A hand-rolled select here would drop
-     * `remuneration_level` and `roles(name)`, and the cost
-     * engine does not fail on their absence — it falls through to a flat default
-     * rate. See `shift-card-pay.ts` for where that shipped.
-     */
-    async getShiftsForEmployeesInRange(
-        employeeIds: readonly string[],
-        startDate: string,
-        endDate: string,
-    ): Promise<Shift[]> {
-        const ids = employeeIds.filter(isValidUuid);
-        // A bare `.in()` on an empty array returns EVERY row, which here would
-        // be every shift in the window for the whole organisation.
-        if (ids.length === 0) return [];
-
-        try {
-            const { data, error } = await supabase
-                .from('shifts')
-                .select(SHIFT_SELECT)
-                .in('assigned_employee_id', ids)
-                .gte('shift_date', startDate)
-                .lte('shift_date', endDate)
-                .order('shift_date')
-                .order('start_time');
-
-            if (error) {
-                console.error('Error fetching shifts for employees in range:', error);
-                return [];
-            }
-            return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
-        } catch (error) {
-            console.error('Exception in getShiftsForEmployeesInRange:', error);
-            return [];
-        }
-    },
-
-    /* ============================================================
        GET SHIFTS FOR EMPLOYEE — ATTENDANCE (includes InProgress + Completed)
        Used by AttendancePage so shifts are visible after cron moves them
        out of 'Published' into 'InProgress' or 'Completed'.
@@ -1123,41 +1067,6 @@ export const shiftsQueries = {
         }
     },
 
-    async getPlanningPeriods(organizationId: string, departmentId?: string): Promise<{
-        id: string;
-        department_id: string;
-        sub_department_ids: string[];
-        start_date: string;
-        end_date: string;
-        status: string;
-    }[]> {
-        try {
-            if (!isValidUuid(organizationId)) return [];
-
-            let query = supabase
-                .from('planning_periods')
-                .select('id, department_id, sub_department_ids, start_date, end_date, status')
-                .eq('organization_id', organizationId)
-                .order('start_date', { ascending: false });
-
-            if (departmentId && isValidUuid(departmentId)) {
-                query = query.eq('department_id', departmentId);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                console.error('[getPlanningPeriods] Error:', error);
-                return [];
-            }
-
-            return data || [];
-        } catch (error) {
-            console.error('[getPlanningPeriods] Exception:', error);
-            return [];
-        }
-    },
-
     /**
      * Get the full structure for a specific roster (groups and subgroups)
      */
@@ -1230,56 +1139,6 @@ export const shiftsQueries = {
             console.error('Exception in getPendingOfferCount:', error);
             return 0;
         }
-    },
-
-    /**
-     * L4 — Labor Demand Timecard Adjustment.
-     * Calculates the historical attendance ratio (actual_minutes / scheduled_minutes)
-     * for completed shifts in the last 14 days.
-     */
-    async getTimecardMultipliers(organizationId: string, daysBack: number = 14): Promise<Map<string, number>> {
-        if (!isValidUuid(organizationId)) return new Map<string, number>();
-
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - daysBack);
-        const startDateStr = startDate.toISOString().split('T')[0];
-
-        const { data, error } = await supabase
-            .from('shifts')
-            .select('role_id, scheduled_length_minutes, actual_net_minutes')
-            .eq('organization_id', organizationId)
-            .eq('lifecycle_status', 'Completed')
-            .gte('shift_date', startDateStr)
-            .not('actual_net_minutes', 'is', null)
-            .not('role_id', 'is', null);
-
-        if (error) {
-            console.error('Error fetching timecard multipliers:', error);
-            return new Map<string, number>();
-        }
-
-        const totals = new Map<string, { actual: number; scheduled: number }>();
-        for (const row of data || []) {
-            const roleId = row.role_id as string;
-            const actual = row.actual_net_minutes || 0;
-            const scheduled = row.scheduled_length_minutes || 0;
-            if (scheduled === 0) continue;
-
-            const existing = totals.get(roleId) ?? { actual: 0, scheduled: 0 };
-            totals.set(roleId, {
-                actual: existing.actual + actual,
-                scheduled: existing.scheduled + scheduled,
-            });
-        }
-
-        const result = new Map<string, number>();
-        totals.forEach((v, roleId) => {
-            const ratio = v.actual / v.scheduled;
-            // Clamp to sensible range [0.5, 1.5] to prevent data outliers from wrecking the engine
-            result.set(roleId, Math.max(0.5, Math.min(1.5, ratio)));
-        });
-
-        return result;
     },
 
     /**
@@ -1481,106 +1340,6 @@ export const shiftsQueries = {
         } catch (error) {
             console.error('Exception in getMyOfferHistory:', error);
             throw error;
-        }
-    },
-
-    /**
-     * Accept a shift offer — delegates to the typed RPC client.
-     * Prefer shiftsCommands.acceptOffer() for new code; this alias is kept
-     * for backward compatibility with components that import from shiftsQueries.
-     */
-    async acceptOffer(shiftId: string) {
-        return callAuthenticatedRpc(
-            'sm_accept_offer',
-            (userId) => ({ p_shift_id: shiftId, p_user_id: userId }),
-            OfferActionResponseSchema,
-        );
-    },
-
-    /**
-     * Get all open shifts available for bidding (S5/S6)
-     * Enforces Access Control: Org -> Dept -> SubDept
-     */
-    async getOpenShifts(filters: {
-        organizationId: string;
-        departmentId?: string;
-        subDepartmentId?: string;
-    }): Promise<Shift[]> {
-        try {
-            const { organizationId, departmentId, subDepartmentId } = filters;
-
-            if (!isValidUuid(organizationId)) {
-                console.warn('Invalid organization ID for getOpenShifts:', organizationId);
-                return [];
-            }
-
-            let query = supabase
-                .from('shifts')
-                .select(`
-                *,
-                organizations(name),
-                departments(name),
-                sub_departments(name),
-                roles(name),
-                remuneration_levels(level_name)
-            `)
-                .eq('organization_id', organizationId)
-                .in('bidding_status', ['on_bidding', 'on_bidding_normal', 'on_bidding_urgent'])
-                .eq('is_cancelled', false);
-
-            if (subDepartmentId && isValidUuid(subDepartmentId)) {
-                query = query.eq('sub_department_id', subDepartmentId);
-            } else if (departmentId && isValidUuid(departmentId)) {
-                query = query.eq('department_id', departmentId);
-            }
-
-            const { data, error } = await query
-                .order('shift_date', { ascending: true });
-
-            if (error) {
-                console.error('Error fetching open shifts:', error);
-                return [];
-            }
-            return (data || []) as unknown as Shift[];
-        } catch (error) {
-            console.error('Exception in getOpenShifts:', error);
-            return [];
-        }
-    },
-
-    /**
-     * Get all bids for a specific shift
-     */
-    async getShiftBids(shiftId: string): Promise<{
-        id: string;
-        shift_id: string;
-        employee_id: string;
-        status: string;
-        created_at: string;
-        profiles: { id: string; full_name: string | null; first_name: string | null; last_name: string | null; employment_type: string | null } | null;
-    }[]> {
-        try {
-            if (!isValidUuid(shiftId)) return [];
-
-            const { data, error } = await supabase
-                .from('shift_bids')
-                .select(`
-                    id, shift_id, employee_id, status, created_at,
-                    profiles!shift_bids_employee_id_fkey(
-                        id, full_name, first_name, last_name, employment_type
-                    )
-                `)
-                .eq('shift_id', shiftId)
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error('Error fetching shift bids:', error);
-                return [];
-            }
-            return data || [];
-        } catch (error) {
-            console.error('Exception in getShiftBids:', error);
-            return [];
         }
     },
 

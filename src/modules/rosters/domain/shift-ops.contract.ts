@@ -81,7 +81,7 @@ export interface ShiftOpResult {
  * switching on raw result codes, so toast copy + refresh/diff behavior stay
  * consistent across every call site.
  */
-export interface ShiftOpUx {
+interface ShiftOpUx {
     kind: 'success' | 'rejected' | 'conflict' | 'illegal' | 'gone' | 'forbidden' | 'auto_owned' | 'error';
     /** Toast copy to surface, if any. `undefined` ⇒ no toast (silent success). */
     toast?: string;

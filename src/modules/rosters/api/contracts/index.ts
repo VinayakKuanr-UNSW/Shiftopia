@@ -108,14 +108,6 @@ export const EmployeeDropResponseSchema = z.object({
   error: z.string().optional(),
 });
 
-// sm_close_bidding
-export const CloseBiddingResponseSchema = z.object({
-  success: z.boolean(),
-  from_state: z.string().optional(),
-  to_state: z.string().optional(),
-  error: z.string().optional(),
-});
-
 // sm_apply_shift_op — the optimistic-concurrency mutation gateway.
 // Returns a jsonb envelope: ok + a discriminating `code`. The shape varies by
 // code (VERSION_CONFLICT carries current_version/server_row, WRITE_REJECTED a

@@ -61,20 +61,4 @@ export const demandTensorDbQueries = {
             .eq('synthesis_run_id', synthesisRunId);
         if (error) throw new Error(`demandTensor.deleteForRun failed: ${error.message}`);
     },
-
-    /**
-     * Fetch all demand_tensor rows for a given event, keyed by
-     * (slice_idx, function_code, level). Used by the shadow-compare UI.
-     */
-    async listForEvent(eventId: string): Promise<DemandTensorInsertRow[]> {
-        const { data, error } = await supabase
-            .from('demand_tensor')
-            .select('*')
-            .eq('event_id', eventId)
-            .order('slice_idx', { ascending: true })
-            .order('function_code', { ascending: true })
-            .order('level', { ascending: true });
-        if (error) throw new Error(`demandTensor.listForEvent failed: ${error.message}`);
-        return (data ?? []) as DemandTensorInsertRow[];
-    },
 };

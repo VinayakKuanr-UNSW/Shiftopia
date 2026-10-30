@@ -24,17 +24,6 @@ interface FairnessLedgerRow {
     updated_by_run: string | null;
 }
 
-interface FairnessLedgerUpsertRow {
-    organization_id: string;
-    employee_id: string;
-    metric: string;
-    window_start: string;
-    window_end: string;
-    rolling_value: number;
-    team_average: number;
-    debt: number;
-    updated_by_run?: string | null;
-}
 
 // ─── Queries ────────────────────────────────────────────────────────────────────
 
@@ -119,71 +108,6 @@ export const fairnessLedgerQueries = {
     },
 
     /**
-     * Fetch ledger rows for an EXACT window_end.
-     *
-     * Retained for the write path only: `updateAfterCommit` reads the rows it is
-     * about to increment, and must never blend two different windows into one
-     * upsert. Read-only consumers want `getLatestDebts` instead.
-     */
-    async getAllForWindow(
-        organizationId: string,
-        windowEnd: string,
-    ): Promise<FairnessLedgerRow[]> {
-        const { data, error } = await (supabase as any)
-            .from('fairness_ledger')
-            .select('*')
-            .eq('organization_id', organizationId)
-            .eq('window_end', windowEnd);
-
-        if (error) {
-            console.error('[FairnessLedger] getAllForWindow failed:', error.message);
-            return [];
-        }
-
-        return (data ?? []) as FairnessLedgerRow[];
-    },
-
-    /**
-     * Bulk upsert ledger rows. Uses the composite unique index
-     * (organization_id, employee_id, metric, window_end) for conflict resolution.
-     */
-    async upsertBatch(rows: FairnessLedgerUpsertRow[]): Promise<void> {
-        if (rows.length === 0) return;
-
-        // Supabase upsert needs the conflict columns specified
-        const { error } = await (supabase as any)
-            .from('fairness_ledger')
-            .upsert(rows, {
-                onConflict: 'organization_id,employee_id,metric,window_end',
-                ignoreDuplicates: false,
-            });
-
-        if (error) {
-            console.error('[FairnessLedger] upsertBatch failed:', error.message);
-            throw new Error(`fairnessLedger.upsertBatch failed: ${error.message}`);
-        }
-    },
-
-    /**
-     * Delete all ledger rows for an organization at a given window end.
-     * Used before a full rebuild.
-     */
-    async deleteForWindow(
-        organizationId: string,
-        windowEnd: string,
-    ): Promise<void> {
-        const { error } = await (supabase as any)
-            .from('fairness_ledger')
-            .delete()
-            .eq('organization_id', organizationId)
-            .eq('window_end', windowEnd);
-
-        if (error) {
-            console.error('[FairnessLedger] deleteForWindow failed:', error.message);
-        }
-    },
-
-    /**
      * Fetch assigned shifts for a set of employees in a date range.
      * Used by the full-rebuild path to recompute the ledger from source.
      */
@@ -227,42 +151,6 @@ export const fairnessLedgerQueries = {
             end_time: row.end_time,
             assigned_employee_id: row.assigned_employee_id,
             unpaid_break_minutes: row.unpaid_break_minutes ?? 0,
-        }));
-    },
-
-    /**
-     * Fetch all denied preferences (rejected bids) for an organization in a date range.
-     * Used by the full-rebuild path to compute the `denied_preferences` metric.
-     */
-    async fetchDeniedPreferences(
-        organizationId: string,
-        startDate: string,
-        endDate: string,
-    ): Promise<Array<{
-        employee_id: string;
-        shift_id: string;
-    }>> {
-        // Inner join with shifts to filter by date range and org
-        const { data, error } = await (supabase as any)
-            .from('shift_bids')
-            .select(`
-                employee_id,
-                shift_id,
-                shift:shifts!inner(organization_id, shift_date)
-            `)
-            .eq('status', 'rejected')
-            .eq('shift.organization_id', organizationId)
-            .gte('shift.shift_date', startDate)
-            .lte('shift.shift_date', endDate);
-
-        if (error) {
-            console.error('[FairnessLedger] fetchDeniedPreferences failed:', error.message);
-            return [];
-        }
-
-        return (data ?? []).map((row: any) => ({
-            employee_id: row.employee_id,
-            shift_id: row.shift_id,
         }));
     },
 };

@@ -4,7 +4,7 @@ import { processInChunks, EMERGENT_WINDOW_MS, DEFAULT_CHUNK_CONCURRENCY } from '
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
 import { complianceService } from '../services/compliance.service';
-import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/platform/supabase/rpc/client';
+import { callRpc, callAuthenticatedRpc, requireUser } from '@/platform/supabase/rpc/client';
 import { shiftsQueries, type PublishCheckRow } from './shifts.queries';
 import { ComplianceError, ComplianceUnavailableError } from '@/platform/supabase/rpc/errors';
 import { assertShapeForRow, assertShapeForShiftId } from './shift-shape-gate';
@@ -18,7 +18,6 @@ import {
     DeleteShiftResponseSchema,
     OfferActionResponseSchema,
     EmployeeDropResponseSchema,
-    CloseBiddingResponseSchema,
     ApplyShiftOpResponseSchema,
 } from './contracts';
 
@@ -957,35 +956,6 @@ export const shiftsCommands = {
 
         if (!result.success) {
             throw new Error(result.error ?? 'Failed to unpublish shift');
-        }
-
-        return result;
-    },
-
-    /* ============================================================
-       ATTENDANCE
-       ============================================================ */
-
-    async checkIn(shiftId: string, location?: { lat: number; lon: number }): Promise<void> {
-        await callAuthenticatedVoidRpc('check_in_shift', (userId) => ({
-            p_shift_id: shiftId,
-            p_user_id: userId,
-            p_lat: location?.lat ?? null,
-            p_lon: location?.lon ?? null,
-        }));
-    },
-
-
-
-    async withdrawShiftFromBidding(shiftId: string) {
-        const result = await callAuthenticatedRpc(
-            'sm_close_bidding',
-            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: 'User declined offer' }),
-            CloseBiddingResponseSchema,
-        );
-
-        if (!result.success) {
-            throw new Error(result.error ?? 'Failed to withdraw shift from bidding');
         }
 
         return result;

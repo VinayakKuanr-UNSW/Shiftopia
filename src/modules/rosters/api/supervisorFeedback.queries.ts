@@ -2,7 +2,6 @@ import { supabase } from '@/platform/supabase/client';
 import { requireUser } from '@/platform/supabase/rpc/client';
 import type {
     CreateFeedbackInput,
-    FeedbackWindowParams,
     SupervisorFeedbackRow,
 } from './supervisorFeedback.dto';
 
@@ -35,33 +34,6 @@ export const supervisorFeedbackQueries = {
             .single();
         if (error) throw new Error(`supervisorFeedback.create failed: ${error.message}`);
         return data as SupervisorFeedbackRow;
-    },
-
-    /** All feedback rows for a single event, newest first. */
-    async listForEvent(eventId: string): Promise<SupervisorFeedbackRow[]> {
-        const { data, error } = await supabase
-            .from('supervisor_feedback')
-            .select('*')
-            .eq('event_id', eventId)
-            .order('created_at', { ascending: false });
-        if (error) throw new Error(`supervisorFeedback.listForEvent failed: ${error.message}`);
-        return (data ?? []) as SupervisorFeedbackRow[];
-    },
-
-    async listForBucket(params: FeedbackWindowParams): Promise<SupervisorFeedbackRow[]> {
-        let q = supabase
-            .from('supervisor_feedback')
-            .select('*')
-            .eq('function_code', params.function_code)
-            .eq('level', params.level)
-            .order('created_at', { ascending: false })
-            .limit(params.limit ?? 10);
-        if (params.sinceIso) q = q.gte('created_at', params.sinceIso);
-        if (params.ruleVersion !== undefined) q = q.eq('rule_version_at_event', params.ruleVersion);
-
-        const { data, error } = await q;
-        if (error) throw new Error(`supervisorFeedback.listForBucket failed: ${error.message}`);
-        return (data ?? []) as SupervisorFeedbackRow[];
     },
 
     /**
