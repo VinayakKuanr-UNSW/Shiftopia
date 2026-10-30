@@ -7,6 +7,7 @@ import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { getDailyToilByDay } from '@/modules/toil/api/toil.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import {
     snapToQuarterHour,
@@ -126,6 +127,15 @@ export interface TimesheetShiftRow {
     // Billable variance reasons (per-side; null when on-roster)
     arrivalVarianceReason: string | null;
     departureVarianceReason: string | null;
+
+    /**
+     * Time in lieu this approved timesheet's DAY earned under the daily rule
+     * (billable over 7.6h), in minutes — 0 when none. Salaried class-1 contracts
+     * only; read back from `toil_ledger`, never computed here. A day of several
+     * shifts shows the day's figure on each of them. Weekly top-ups are in the
+     * TOIL ledger, not on a row.
+     */
+    toilMinutes: number;
 }
 
 export interface TimesheetFilters {
@@ -446,8 +456,26 @@ export async function getShiftsForTimesheet(
 
                 notes: timesheet?.notes || null,
                 rejectedReason: timesheet?.rejected_reason || null,
+                toilMinutes: 0,
             };
         });
+
+        // Time in lieu booked by the database for these days (best-effort: a
+        // failed read only hides the badge).
+        try {
+            const approved = rows.filter(r => r.timesheetStatus === 'approved' && r.timesheetId && r.employeeId);
+            if (approved.length > 0) {
+                const dates = approved.map(r => r.shiftDate).sort();
+                const toil = await getDailyToilByDay(
+                    approved.map(r => r.employeeId!), dates[0], dates[dates.length - 1]);
+                for (const r of approved) {
+                    const day = toil.get(`${r.employeeId}:${r.shiftDate}`);
+                    if (day && day.minutes > 0 && day.timesheetIds.includes(r.timesheetId!)) r.toilMinutes = day.minutes;
+                }
+            }
+        } catch (e) {
+            console.error('[getShiftsForTimesheet] TOIL read failed:', e);
+        }
 
         // Apply search filter client-side (searches name, role, department, sub-group)
         if (filters.searchQuery) {
@@ -790,7 +818,7 @@ export async function updateTimesheetEntry(
             // Get shift details for new timesheet
             const { data: shift } = await supabase
                 .from('shifts')
-                .select('assigned_employee_id, shift_date, start_time, end_time, start_at, end_at, actual_start, actual_end')
+                .select('assigned_employee_id, shift_date, start_time, end_time, start_at, end_at, actual_start, actual_end, unpaid_break_minutes')
                 .eq('id', shiftId)
                 .single();
 
@@ -804,6 +832,14 @@ export async function updateTimesheetEntry(
             const clockOutTs: string | null = updates.clockOut
                 ? (isIsoTimestamp(updates.clockOut) ? updates.clockOut : null)
                 : (shift.actual_end ?? shift.end_at ?? null);
+
+            // The new row starts with the SHIFT'S unpaid break. Left out, the
+            // column defaults to 0 and every reader (this page, Gross Pay, TOIL)
+            // takes the timesheet's 0 over the shift's break — a row created by
+            // a plain "Approve" was billed with no unpaid break at all.
+            if (payload.unpaid_break_minutes === undefined && shift.unpaid_break_minutes != null) {
+                payload.unpaid_break_minutes = shift.unpaid_break_minutes;
+            }
 
             let insertRes = await supabase
                 .from('timesheets')

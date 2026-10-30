@@ -7,6 +7,7 @@
  *   capped    hours left of the cap
  *   occasion  occasions this year, hours under it
  *   unpaid    hours taken this year
+ *   toil      banked time in lieu, "+Nh held" under it (salaried contracts only)
  *   —         no entitlement (e.g. annual leave for a casual)
  *
  * TWO COMPOSITIONS. From `md` up: the matrix — CSS grid, never <table>,
@@ -23,6 +24,7 @@ import { text, touch } from '@/modules/core/ui/typography';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import { LEDGER_TYPES, type LedgerEntry } from '../../domain/leave-ledger';
 import { fmtH, initials } from '../format';
+import { fmtToil } from '@/modules/toil/domain/toil-rules';
 
 export interface LedgerGridRow {
     employeeId: string;
@@ -61,6 +63,19 @@ function Cell({ entry }: { entry: LedgerEntry | undefined }) {
                     {d.left}d
                 </span>
                 <span className="block text-[11px] text-muted-foreground">of 10</span>
+            </>
+        );
+    }
+    if (def.kind === 'toil') {
+        const t = entry.toil;
+        if (!t) return <span className="text-muted-foreground/50" aria-label="Not loaded">—</span>;
+        return (
+            <>
+                <span className="font-semibold text-foreground">{fmtToil(t.balanceMinutes)}</span>
+                {t.heldMinutes > 0 && (
+                    <span className="block text-[11px] font-medium text-amber-600 dark:text-amber-400">+{fmtToil(t.heldMinutes)} held</span>
+                )}
+                {!t.eligible && <span className="block text-[11px] text-muted-foreground">to pay out</span>}
             </>
         );
     }

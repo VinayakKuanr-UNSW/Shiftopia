@@ -20,7 +20,8 @@ export type LeaveTypeCode =
   | 'community_service' // NES ss108-112 — unpaid (except jury duty)
   | 'unpaid'            // unpaid leave by arrangement
   | 'religious_cultural' // cl 55 — up to 5 days/calendar year (incl. NAIDOC)
-  | 'gender_affirmation'; // cl 58 — up to 10 days/calendar year
+  | 'gender_affirmation' // cl 58 — up to 10 days/calendar year
+  | 'toil';             // time off in lieu — SALARIED class-1 contracts only (EBA overtime is paid, cl 42)
 
 /** Human-readable labels for leave type codes. */
 export const LEAVE_TYPE_LABELS: Record<LeaveTypeCode, string> = {
@@ -37,6 +38,7 @@ export const LEAVE_TYPE_LABELS: Record<LeaveTypeCode, string> = {
   unpaid: 'Unpaid Leave',
   religious_cultural: 'Religious, Cultural & Ceremonial Leave',
   gender_affirmation: 'Gender Affirmation Leave',
+  toil: 'Time in Lieu (TOIL)',
 };
 
 /**

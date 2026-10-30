@@ -47,6 +47,12 @@ export interface LeaveFlags {
   /** cl 46 / NES Div 11 — FDV leave; the ONLY paid-leave flag for casuals. */
   isFdvLeave?: boolean;
   /**
+   * Time off in lieu taken (salaried class-1 contracts only — see modules/toil).
+   * Taken in HOURS, often part of a day, so its days carry the request's hours
+   * spread evenly (`toilLeaveDayMinutes`), not the contracted daily hours.
+   */
+  isToilLeave?: boolean;
+  /**
    * cl 48 — compassionate/bereavement, 2 paid days PER OCCASION. INTERNAL to
    * this module: it exists so `paidDayCapFor` can cap the occasion; on the
    * emitted `GrossPayShiftInput` it is translated to `isCarerLeave` so the
@@ -79,6 +85,8 @@ export function leaveTypeToFlags(
   electionMode?: string | null,
 ): LeaveFlags | null {
   const t = (leaveType ?? '').toLowerCase();
+  // Checked first: "time in lieu" must not fall into a broader match.
+  if (/^toil$|time.?(off.?)?in.?lieu/.test(t)) return { isToilLeave: true };
   if (/annual|recreation|holiday/.test(t)) return { isAnnualLeave: true };
   // cl 52 supporting carer (secondary carer / partner / paternity). Checked
   // before the parental and carer families so "supporting carer" and
@@ -208,6 +216,41 @@ export function paidDaysFromLeaveStart(
 }
 
 /**
+ * TOIL leave days inside the period, each with the minutes it carries. TOIL is
+ * requested in hours (part of a day is common), so the request's minutes are
+ * spread evenly over its Mon–Fri, non-public-holiday days — or over every day
+ * of it when it has none (TOIL taken on a rostered Saturday). Whole minutes;
+ * the remainder goes to the earliest days, so the parts always add up.
+ */
+export function toilLeaveDayMinutes(
+  leaveStart: string,
+  leaveEnd: string,
+  requestedHours: number,
+  periodStart: string,
+  periodEnd: string,
+  isHoliday?: (ymd: string) => boolean,
+): Map<string, number> {
+  const s = toYmd(leaveStart);
+  const e = toYmd(leaveEnd);
+  let days = eligibleLeaveDays(s, e, s, e, isHoliday);
+  if (days.length === 0) {
+    days = [];
+    const cur = new Date(s + 'T00:00:00');
+    const end = new Date(e + 'T00:00:00');
+    while (cur <= end) { days.push(fmtLocal(cur)); cur.setDate(cur.getDate() + 1); }
+  }
+  const out = new Map<string, number>();
+  const total = Math.max(0, Math.round((requestedHours || 0) * 60));
+  if (days.length === 0 || total === 0) return out;
+  const base = Math.floor(total / days.length);
+  const remainder = total - base * days.length;
+  days.forEach((d, i) => {
+    if (d >= periodStart && d <= periodEnd) out.set(d, base + (i < remainder ? 1 : 0));
+  });
+  return out;
+}
+
+/**
  * The PUBLIC-HOLIDAY days (Mon–Fri) in the intersection of a leave range and the
  * pay period. cl 44.8 makes annual leave exclusive of public holidays, and
  * cl 56.4 pays the not-worked PH at the ordinary rate — so these days are paid
@@ -274,6 +317,8 @@ export interface LeaveRequestRow {
   end_date: string;
   /** cl 55.1 / 58.2 election — 'annual' | 'unpaid' | null. See `leaveTypeToFlags`. */
   election_mode?: string | null;
+  /** The request's hours — TOIL is spread by these (`toilLeaveDayMinutes`). */
+  requested_hours?: number | string | null;
 }
 
 /**
@@ -387,6 +432,12 @@ export function buildPublicHolidayInputs(
     scheduledLengthMinutes: dailyMinutesOverrides?.get(shiftDate) ?? ctx.dailyOrdinaryMinutes,
     isOvernight: false,
     hoursSource: 'actual' as const,
+    // A salaried person's holiday is inside the salary. Without the pay basis
+    // the day was priced as an EBA absence ON TOP of the full salary — a week
+    // of annual leave with a public holiday paid that day twice.
+    payBasis: ctx.payBasis,
+    annualSalary: ctx.annualSalary,
+    contractedWeeklyHours: ctx.contractedWeeklyHours,
     rate: ctx.rate,
     classificationLevel: ctx.classificationLevel,
     employmentType: ctx.employmentType,
@@ -397,6 +448,33 @@ export function buildPublicHolidayInputs(
 // ── I/O: fetch approved leave + resolve contexts ────────────────────────────
 
 const APPROVED_LEAVE_STATUSES = new Set(['approved', 'accepted', 'taken']);
+
+/**
+ * PURE: per employee, the contract leave is priced on for a period — one that
+ * has not ended before the period starts, PERMANENT first (leave accrues on
+ * it: someone who also holds a casual job takes their leave from the permanent
+ * contract), then the latest start. Ranking by start date alone picked
+ * arbitrarily between two contracts started the same day, and landing on the
+ * casual one priced every leave day at $0.
+ */
+export function pickLeaveContracts<C extends {
+  user_id: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  employment_status?: string | null;
+}>(contracts: readonly C[], periodStart: string): Map<string, C> {
+  const isPermanent = (c: C) => !/casual/i.test(String(c.employment_status ?? ''));
+  const best = new Map<string, C>();
+  for (const c of contracts) {
+    if (c.end_date && toYmd(c.end_date) < periodStart) continue;
+    const prev = best.get(c.user_id);
+    const better = !prev
+      || (isPermanent(c) && !isPermanent(prev))
+      || (isPermanent(c) === isPermanent(prev) && String(c.start_date ?? '') > String(prev.start_date ?? ''));
+    if (better) best.set(c.user_id, c);
+  }
+  return best;
+}
 
 /**
  * Fetch approved leave requests overlapping the period and synthesise the
@@ -414,7 +492,7 @@ interface LeaveFetchBounds {
 export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<GrossPayShiftInput[]> {
   const { data: leaves, error } = await (supabase as any)
     .from('leave_requests')
-    .select('id, employee_id, leave_type, start_date, end_date, status, election_mode')
+    .select('id, employee_id, leave_type, start_date, end_date, status, election_mode, requested_hours')
     .lte('start_date', `${bounds.periodEnd}T23:59:59`)
     .gte('end_date', bounds.periodStart);
   if (error) {
@@ -438,6 +516,15 @@ export async function getLeaveGrossPayInputs(bounds: LeaveFetchBounds): Promise<
     const ctx = ctxById.get(req.employee_id);
     if (!ctx) continue; // no resolvable contract/rate — skip rather than guess.
     const flags = leaveTypeToFlags(req.leave_type, req.election_mode)!; // non-null: filtered above
+    if (flags.isToilLeave) {
+      // Hours, not days: each day carries its share of the request. No separate
+      // public-holiday line — a salaried person's holiday is in the salary.
+      const perDay = toilLeaveDayMinutes(
+        req.start_date, req.end_date, Number(req.requested_hours ?? 0),
+        bounds.periodStart, bounds.periodEnd, isHoliday);
+      out.push(...buildLeaveInputs(req, ctx, Array.from(perDay.keys()), perDay));
+      continue;
+    }
     const cap = paidDayCapFor(flags);
     const roster = rosterByEmp.get(req.employee_id);
 
@@ -548,7 +635,7 @@ async function resolveLeaveContexts(
   let cQuery = (supabase as any)
     .from('user_contracts')
     .select(
-      'user_id, remuneration_level, contracted_weekly_hours, status, start_date, end_date, ' +
+      'user_id, remuneration_level, contracted_weekly_hours, status, start_date, end_date, employment_status, ' +
       'pay_basis, annual_salary, ' +
       'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
       'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
@@ -561,16 +648,7 @@ async function resolveLeaveContexts(
   const { data: contracts, error: cErr } = await cQuery;
   if (cErr) console.error('[leaveGrossPay] user_contracts query error:', cErr);
 
-  // Pick, per employee, the contract in effect during the period (latest start
-  // that has not ended before the period), preferring active status.
-  const bestByUser = new Map<string, any>();
-  for (const c of contracts ?? []) {
-    const uid = c.user_id as string;
-    const endsBefore = c.end_date && toYmd(c.end_date) < bounds.periodStart;
-    if (endsBefore) continue;
-    const prev = bestByUser.get(uid);
-    if (!prev || String(c.start_date ?? '') > String(prev.start_date ?? '')) bestByUser.set(uid, c);
-  }
+  const bestByUser = pickLeaveContracts<any>(contracts ?? [], bounds.periodStart);
 
   // Employment type from profiles (parity with the shift path).
   const empTypeById = new Map<string, string | null>();

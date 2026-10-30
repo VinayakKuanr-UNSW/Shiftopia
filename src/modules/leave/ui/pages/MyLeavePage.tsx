@@ -14,6 +14,10 @@
  * generic request button — every request starts from the leave it draws on), which warns — but
  * never stops — a request that takes a balance below zero; the manager decides.
  * Who else is on leave is deliberately not shown here.
+ *
+ * TOIL (salaried contracts only) is one more card, read from `toil_ledger`. It
+ * may not go negative, and its "History" opens the TOIL ledger, where a payout
+ * can be asked for at any time.
  */
 import React from 'react';
 import { format } from 'date-fns';
@@ -41,6 +45,8 @@ import { LeaveRequestCards } from '../components/LeaveRequestCards';
 import { REQUEST_TABS } from '../components/Segmented';
 import { ToolbarRow, ToolbarSegmented } from '@/modules/core/ui/components/Toolbar';
 import { RequestLeaveDialog } from '../components/RequestLeaveDialog';
+import { ToilLedgerDialog } from '@/modules/toil/ui/ToilLedgerDialog';
+import { useToilPositions } from '@/modules/toil/hooks/useToil';
 
 type View = 'ledger' | 'requests';
 const VIEWS: ReadonlyArray<{ key: View; label: string; Icon: typeof ClipboardList }> = [
@@ -62,6 +68,10 @@ const MyLeavePage: React.FC = () => {
     const contractBasis = useMyContractBasis(meId || undefined);
     const isCasual = contractBasis.basis.contractType === 'CASUAL';
     const policies = React.useMemo(() => getLeavePolicies(mine.data?.isFtSecurity ?? false), [mine.data?.isFtSecurity]);
+    const meIds = React.useMemo(() => (meId ? [meId] : []), [meId]);
+    const toilPositions = useToilPositions(meIds, Boolean(meId));
+    const toil = toilPositions.data?.get(meId) ?? null;
+    const [toilOpen, setToilOpen] = React.useState(false);
 
     const entries = React.useMemo(() => buildLedger({
         balances: mine.data?.balances ?? [],
@@ -71,7 +81,8 @@ const MyLeavePage: React.FC = () => {
         year: Number(today.slice(0, 4)),
         serviceStart: mine.data?.serviceStart ?? null,
         today,
-    }), [mine.data, isCasual, contractBasis.basis.contractedWeeklyHours, today]);
+        toil,
+    }), [mine.data, isCasual, contractBasis.basis.contractedWeeklyHours, today, toil]);
 
     // Live: a manager's decision lands without a reload.
     useRealtimeInvalidate(`my-leave-rt-${meId}`, ['leave_requests', 'leave_balances'], invalidate, Boolean(meId));
@@ -137,7 +148,11 @@ const MyLeavePage: React.FC = () => {
                             <h2 id="ledger-h" className={text.heading}>Ledger</h2>
                             <p className={cn(text.caption, 'hidden sm:block')}>ICC Sydney EBA 2025 · hover a card for how it's counted</p>
                         </div>
-                        <LedgerCards entries={entries} onRequest={meId ? openRequest : undefined} />
+                        <LedgerCards
+                            entries={entries}
+                            onRequest={meId ? openRequest : undefined}
+                            onOpenToil={() => setToilOpen(true)}
+                        />
                     </section>
                 ) : (
                     <section aria-labelledby="my-leaves-h" className="space-y-3">
@@ -169,6 +184,16 @@ const MyLeavePage: React.FC = () => {
                     serviceStart={mine.data?.serviceStart ?? null}
                     leaveType={requestType}
                     entries={entries}
+                    toil={toil}
+                />
+            )}
+            {meId && (
+                <ToilLedgerDialog
+                    open={toilOpen}
+                    onOpenChange={setToilOpen}
+                    employeeId={meId}
+                    position={toil ?? undefined}
+                    mode="self"
                 />
             )}
         </LeavePageShell>

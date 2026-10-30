@@ -540,7 +540,7 @@ export class RosterFetcher {
      * purposes), `is_security_role` true if ANY contract's role is
      * Security-named, and the apprentice/trainee/SWS fields from whichever
      * contract has one of those flags set (mirroring the mutual exclusivity
-     * `useContractForm.ts` already enforces at entry).
+     * `useContractWizardForm.ts` already enforces at entry).
      */
     /**
      * Contract ordinary-hours envelopes for the pool (solver HC-5e).

@@ -18,6 +18,10 @@
  * balances are fetched once and the tabs are two views of it, so the Grid and
  * the queue can never disagree about a number.
  *
+ * TOIL (salaried contracts only) is one more Grid column, read from
+ * `toil_ledger`; an employee's ledger opens their TOIL history, where a manager
+ * can pay out or adjust (never their own).
+ *
  * SCOPE IS A SET. The employee list comes from the narrowest level selected in
  * the header — every selected department, not the first — and requests are
  * kept only for those people.
@@ -45,6 +49,8 @@ import { ToolbarRow, ToolbarSegmented } from '@/modules/core/ui/components/Toolb
 import { LeaveLedgerGrid, type LedgerGridRow } from '../components/LeaveLedgerGrid';
 import { LeaveReviewDialog } from '../components/LeaveReviewDialog';
 import { EmployeeLedgerDialog } from '../components/EmployeeLedgerDialog';
+import { ToilLedgerDialog } from '@/modules/toil/ui/ToilLedgerDialog';
+import { useToilPositions } from '@/modules/toil/hooks/useToil';
 
 type View = 'requests' | 'grid';
 
@@ -82,6 +88,9 @@ const LeaveApprovalsPage: React.FC = () => {
     /* Gender affirmation is one allowance for the whole of employment, so its
        card needs every request ever made, not just this year's. */
     const tenure = useTenureLeave(employeeIds, employeeIds.length > 0);
+    // Optional to the page: a failed TOIL read leaves the TOIL column blank, not the Grid.
+    const toil = useToilPositions(employeeIds, employeeIds.length > 0);
+    const toilByEmployee = toil.data;
     const tenureByEmployee = React.useMemo(() => {
         const m = new Map<string, LeaveRequest[]>();
         for (const r of tenure.data ?? []) {
@@ -124,9 +133,10 @@ const LeaveApprovalsPage: React.FC = () => {
                 year,
                 serviceStart: m?.serviceStart ?? null,
                 today,
+                toil: toilByEmployee?.get(id) ?? null,
             }),
         };
-    }), [employeeIds, members, requestsByEmployee, tenureByEmployee, year, today]);
+    }), [employeeIds, members, requestsByEmployee, tenureByEmployee, toilByEmployee, year, today]);
 
     const nameOf = React.useCallback(
         (id: string) => (id === meId ? 'You' : members.get(id)?.name ?? '…'),
@@ -137,6 +147,7 @@ const LeaveApprovalsPage: React.FC = () => {
 
     const [reviewing, setReviewing] = React.useState<LeaveRequest | null>(null);
     const [employeeOpen, setEmployeeOpen] = React.useState<string | null>(null);
+    const [toilOpenFor, setToilOpenFor] = React.useState<string | null>(null);
     const openRow = gridRows.find(r => r.employeeId === employeeOpen);
     const openMember = employeeOpen ? members.get(employeeOpen) : undefined;
 
@@ -200,7 +211,19 @@ const LeaveApprovalsPage: React.FC = () => {
                     members={members}
                     today={today}
                     onOpenRequest={setReviewing}
+                    onOpenToil={() => setToilOpenFor(openRow.employeeId)}
                     onClose={() => setEmployeeOpen(null)}
+                />
+            )}
+
+            {toilOpenFor && (
+                <ToilLedgerDialog
+                    open
+                    onOpenChange={(o) => { if (!o) setToilOpenFor(null); }}
+                    employeeId={toilOpenFor}
+                    employeeName={members.get(toilOpenFor)?.name}
+                    position={toilByEmployee?.get(toilOpenFor)}
+                    mode={toilOpenFor === meId ? 'self' : 'manager'}
                 />
             )}
 
@@ -217,6 +240,7 @@ const LeaveApprovalsPage: React.FC = () => {
                     today={today}
                     onClose={() => setReviewing(null)}
                     readOnly={!canDecide}
+                    toil={toilByEmployee?.get(reviewing.employeeId) ?? null}
                 />
             )}
         </LeavePageShell>

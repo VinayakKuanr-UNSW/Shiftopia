@@ -46,6 +46,7 @@ import { validateBillableEdit, parseHHMM } from "../../domain/billable-edit";
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
+import { fmtToil } from '@/modules/toil/domain/toil-rules';
 
 /* Billable-time provenance icons (F16) — explicit iconography, not a bare `*`. */
 type BillableSource = 'manual' | 'snapped' | 'auto' | null | undefined;
@@ -849,6 +850,21 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                         Clocked hours were below the EBA minimum engagement
                                         {entry.requiredEngagementMinutes ? ` (${entry.requiredEngagementMinutes / 60}h)` : ''} for this shift —
                                         pay was automatically topped up to the guaranteed minimum.
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                        {(entry.toilMinutes ?? 0) > 0 && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap cursor-default text-emerald-700 bg-emerald-500/10 border-emerald-500/20 dark:text-emerald-300">
+                                            +{fmtToil(entry.toilMinutes ?? 0)} TOIL
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs text-[11px]">
+                                        Billable time over 7.6h on this day, banked as time in lieu — salaried contracts
+                                        earn TOIL instead of overtime pay. Weekly top-ups are in the employee&apos;s TOIL ledger.
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>

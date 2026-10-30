@@ -168,6 +168,12 @@ describe('summarizeApproval', () => {
         expect(summarizeApproval({ removed: 0, removalFailed: 0, unassignAttempted: 0, unassignSucceeded: 0 }).description)
             .toBe('Nothing was rostered on those dates.');
     });
+
+    it('says the shift stays when TOIL covered only part of the day', () => {
+        const s = summarizeApproval({ removed: 0, removalFailed: 0, unassignAttempted: 0, unassignSucceeded: 0, keptPartial: 1 });
+        expect(s.description).toBe('1 shift kept — the time in lieu covers part of the day, so shorten it on the roster if the finish changes.');
+        expect(s.needsAction).toBe(false);
+    });
 });
 
 describe('splitRequestTabs — Pending / Approved / Rejected', () => {

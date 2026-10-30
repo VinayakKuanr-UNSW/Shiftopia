@@ -27,8 +27,10 @@ export const EmployeeLedgerDialog: React.FC<{
     members: ReadonlyMap<string, TeamMemberContext>;
     today: string;
     onOpenRequest: (r: LeaveRequest) => void;
+    /** Opens this person's TOIL ledger (the TOIL card's "History"). */
+    onOpenToil?: () => void;
     onClose: () => void;
-}> = ({ member, entries, requests, members, today, onOpenRequest, onClose }) => {
+}> = ({ member, entries, requests, members, today, onOpenRequest, onOpenToil, onClose }) => {
     const [tab, setTab] = React.useState<RequestTab>('pending');
     const tabs = React.useMemo(() => splitRequestTabs(requests, today), [requests, today]);
 
@@ -52,7 +54,7 @@ export const EmployeeLedgerDialog: React.FC<{
 
                 <section aria-labelledby="emp-ledger-h" className={cn(cardSection, 'space-y-3')}>
                     <h3 id="emp-ledger-h" className={text.heading}>Ledger</h3>
-                    <LedgerCards entries={entries} className="sm:grid-cols-2 xl:grid-cols-3" />
+                    <LedgerCards entries={entries} className="sm:grid-cols-2 xl:grid-cols-3" onOpenToil={onOpenToil} />
                 </section>
 
                 <section aria-labelledby="emp-requests-h" className={cn(cardSection, 'space-y-3')}>

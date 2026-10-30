@@ -3,6 +3,8 @@ import { computeShiftGrossPay, type GrossPayShiftInput } from '../domain/compute
 import {
   computeEmployeePeriodGrossPay,
 } from '../domain/aggregatePeriodGrossPay';
+import { dailyAccrualMinutes, weeklyTopupMinutes } from '../../toil/domain/toil-rules';
+import { buildLeaveInputs, buildPublicHolidayInputs } from '../data/leaveGrossPay';
 
 describe('Salaried Gross Pay & Time in Lieu (cl 2.2 / NES)', () => {
   const ANNUAL_SALARY = 95000;
@@ -109,7 +111,13 @@ describe('Salaried Gross Pay & Time in Lieu (cl 2.2 / NES)', () => {
       rate: null,
     }));
 
-    const period = computeEmployeePeriodGrossPay(EMP_ID, inputs, bounds);
+    // What the TOIL ledger books for this week: 5 × (9h − 7.6h) = 7h daily,
+    // and the weekly rule adds nothing more (45 − 38 − 7 = 0).
+    const daily = days.reduce((s) => s + dailyAccrualMinutes([540]), 0);
+    const weekly = weeklyTopupMinutes({ workedMinutes: 2700, contractedMinutes: 2280, absenceCreditMinutes: 0, dailyAccruedMinutes: daily });
+    expect(daily + weekly).toBe(420);
+
+    const period = computeEmployeePeriodGrossPay(EMP_ID, inputs, bounds, { toil: { accruedHours: (daily + weekly) / 60 } });
     expect(period.grossPay).toBe(1826.92);
     expect(period.paidHours).toBe(38);
     expect(period.salariedHours).toBe(45);
@@ -201,11 +209,44 @@ describe('Salaried Gross Pay & Time in Lieu (cl 2.2 / NES)', () => {
       rate: null,
     }));
 
-    const period = computeEmployeePeriodGrossPay(EMP_ID, [leaveInput, ...workedInputs], bounds);
+    // Ledger: 4 × 1.4h daily = 5.6h; the week requires 38 − 7.6 (leave) = 30.4h,
+    // 36 − 30.4 − 5.6 = 0 more from the weekly rule.
+    const period = computeEmployeePeriodGrossPay(EMP_ID, [leaveInput, ...workedInputs], bounds, { toil: { accruedHours: 5.6 } });
     expect(period.grossPay).toBe(1826.92);
     expect(period.paidHours).toBe(38);
     expect(period.salariedHours).toBe(36);
-    // Required balance hours = 38 - 7.6 = 30.4h. TIL = 36 - 30.4 = 5.6h
     expect(period.timeInLieuHours).toBe(5.6);
+  });
+
+  it('a public holiday inside salaried annual leave is paid once, inside the salary', () => {
+    const ctx = {
+      employeeId: EMP_ID, employmentType: 'Full-Time' as const, payBasis: 'salary' as const,
+      annualSalary: ANNUAL_SALARY, contractedWeeklyHours: WEEKLY_HOURS,
+      rate: ANNUAL_SALARY / 52 / WEEKLY_HOURS, dailyOrdinaryMinutes: 456,
+    };
+    const req = { id: 'r', employee_id: EMP_ID, leave_type: 'annual', start_date: '2026-07-06', end_date: '2026-07-10' };
+    const leave = buildLeaveInputs(req, ctx, ['2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10']);
+    const ph = buildPublicHolidayInputs(req, ctx, ['2026-07-06']);
+    const period = computeEmployeePeriodGrossPay(EMP_ID, [...leave, ...ph], bounds);
+    // One week's salary — it used to be $2,192.30, the holiday paid on top.
+    expect(period.grossPay).toBe(1826.92);
+    expect(period.lines.find(l => l.code === 'public_holiday')?.hours).toBe(7.6);
+  });
+
+  it('time in lieu is the LEDGER figure, not worked − contracted over the period', () => {
+    // Mon 10h, Tue 5h, Wed–Fri 7.6h = 37.8h. Worked − contracted would say 0;
+    // the daily rule banks Monday's 2.4h — a long day is not cancelled by a short one.
+    const nets = [600, 300, 456, 456, 456];
+    const days = ['2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10'];
+    const inputs: GrossPayShiftInput[] = days.map((date, i) => ({
+      shiftId: `shift:${i}`, employeeId: EMP_ID, shiftDate: date, netMinutes: nets[i],
+      startTime: '08:00', endTime: '18:00', payBasis: 'salary', annualSalary: ANNUAL_SALARY,
+      contractedWeeklyHours: WEEKLY_HOURS, rate: null,
+    }));
+    const banked = nets.reduce((s, n) => s + dailyAccrualMinutes([n]), 0);
+    expect(banked).toBe(144);
+
+    expect(computeEmployeePeriodGrossPay(EMP_ID, inputs, bounds).timeInLieuHours).toBe(0);
+    expect(computeEmployeePeriodGrossPay(EMP_ID, inputs, bounds, { toil: { accruedHours: banked / 60 } }).timeInLieuHours).toBe(2.4);
   });
 });

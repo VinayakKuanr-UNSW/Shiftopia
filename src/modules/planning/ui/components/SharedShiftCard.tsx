@@ -30,6 +30,7 @@ import {
 } from '@/modules/rosters/domain/shift-ui';
 import { ShiftRuleHeader } from '@/modules/rosters/ui/components/ShiftRuleHeader';
 import { GROUP_DISPLAY_NAMES } from '@/modules/rosters/domain/projections/constants';
+import { fmtToil } from '@/modules/toil/domain/toil-rules';
 
 export type ShiftIdentityField =
     | 'org' | 'dept' | 'subDept'
@@ -85,6 +86,8 @@ interface SharedShiftCardProps {
     wasToppedUpToMinEngagement?: boolean;
     /** The EBA minimum (minutes) that applied when `wasToppedUpToMinEngagement` is true. */
     requiredEngagementMinutes?: number | null;
+    /** Time in lieu the approved day earned (salaried contracts only), in minutes. Badge when > 0. */
+    toilMinutes?: number;
     /** When true, passes showPayrollRules to ShiftRuleHeader. */
     showPayrollRules?: boolean;
     /** Custom hex color (e.g. from groupColor) to style the department accent bar and theme */
@@ -301,6 +304,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     departureVarianceReason,
     wasToppedUpToMinEngagement,
     requiredEngagementMinutes,
+    toilMinutes,
     showPayrollRules,
     customColor,
     timesheetStatus,
@@ -943,6 +947,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                             title={`Clocked hours were below the EBA minimum engagement${requiredEngagementMinutes ? ` (${requiredEngagementMinutes / 60}h)` : ''} — pay was automatically topped up to the guaranteed minimum.`}
                                         >
                                             Topped Up to Min
+                                        </div>
+                                    )}
+                                    {(toilMinutes ?? 0) > 0 && (
+                                        <div
+                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold font-mono tracking-tight uppercase border w-fit text-emerald-700 bg-emerald-500/10 border-emerald-500/20 dark:text-emerald-300"
+                                            title="Billable time over 7.6h on this day, banked as time in lieu (salaried contract). Weekly top-ups are in the TOIL ledger."
+                                        >
+                                            +{fmtToil(toilMinutes ?? 0)} TOIL
                                         </div>
                                     )}
                                     {(arrivalVarianceReason || departureVarianceReason || shiftData?.notes || shiftData?.attendance_note) && (
