@@ -6800,9 +6800,7 @@ export type Database = {
       }
       fn_eba_resolve_shift_rate: {
         Args: {
-          p_actual_hourly_rate?: number
           p_remuneration_level: number
-          p_remuneration_rate?: number
           p_shift_date: string
           p_target_employment_type: string
         }
