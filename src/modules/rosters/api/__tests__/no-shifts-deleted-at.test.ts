@@ -11,7 +11,8 @@ import { describe, expect, it } from 'vitest';
  *
  * `roster_date` (Phase 3) is the same kind of column: written on every insert,
  * never read, and left stale when a shift moves to another day, so it is being
- * dropped too.
+ * dropped too, as are `scheduled_start` / `scheduled_end`, copies of `start_at` /
+ * `end_at` the app never loads.
  *
  * Scans the app and the edge functions with comments stripped. The generated
  * `types.ts` is regenerated after the drop.
@@ -41,11 +42,11 @@ describe('nothing reads or writes the dropped shifts columns', () => {
         expect(files.length).toBeGreaterThan(500);
     });
 
-    it('no source file names deleted_at or roster_date', () => {
+    it('no source file names deleted_at, roster_date, scheduled_start or scheduled_end', () => {
         const offenders = files
             .map((path) => relative(process.cwd(), path))
             .filter((rel) => !ALLOWED.has(rel))
-            .filter((rel) => /\b(deleted_at|roster_date)\b/.test(stripComments(readFileSync(rel, 'utf8'))));
+            .filter((rel) => /\b(deleted_at|roster_date|scheduled_start|scheduled_end)\b/.test(stripComments(readFileSync(rel, 'utf8'))));
         expect(offenders).toEqual([]);
     });
 });

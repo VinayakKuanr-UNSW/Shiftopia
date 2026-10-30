@@ -65,8 +65,6 @@ export interface Shift {
     my_shift_pay_terms?: ShiftPayTermsField | null;
     start_time: string;
     end_time: string;
-    scheduled_start: string | null;
-    scheduled_end: string | null;
     is_overnight: boolean;
     scheduled_length_minutes: number | null;
     break_minutes: number;

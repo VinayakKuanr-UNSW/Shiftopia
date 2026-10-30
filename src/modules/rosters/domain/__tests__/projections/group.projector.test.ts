@@ -39,8 +39,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     cost_center_id: null,
     start_time: '09:00',
     end_time: '17:00',
-    scheduled_start: null,
-    scheduled_end: null,
     is_overnight: false,
     scheduled_length_minutes: null,
     break_minutes: 0,
