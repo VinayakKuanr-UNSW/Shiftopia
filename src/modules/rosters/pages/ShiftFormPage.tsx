@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { Loader2, X, Plus, Save, Undo2, Zap, ArrowLeft } from 'lucide-react';
+import { Loader2, X, Plus, Save, Undo2, Zap } from 'lucide-react';
 
 import { Form } from '@/modules/core/ui/primitives/form';
 import { cn } from '@/modules/core/lib/utils';
@@ -106,8 +106,6 @@ const ShiftFormPage: React.FC = () => {
         compliancePanel,
         runChecks,
 
-        // Emergency state
-        isEmergencyAssignment,
         isScheduleDefined,
 
         // Handlers

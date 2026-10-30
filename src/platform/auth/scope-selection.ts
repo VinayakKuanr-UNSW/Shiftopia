@@ -44,7 +44,7 @@ function sameIds(a: readonly string[], b: readonly string[]): boolean {
     return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
-export function sameSelection(a: ScopeSelection, b: ScopeSelection): boolean {
+function sameSelection(a: ScopeSelection, b: ScopeSelection): boolean {
     return sameIds(a.org_ids, b.org_ids) && sameIds(a.dept_ids, b.dept_ids) && sameIds(a.subdept_ids, b.subdept_ids);
 }
 

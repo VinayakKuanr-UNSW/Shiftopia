@@ -16,7 +16,6 @@ import type {
     BroadcastGroupWithStats,
     BroadcastGroupFull,
     EmployeeBroadcastGroup,
-    BroadcastChannelWithStats,
     BroadcastWithDetails,
     BroadcastAckStats,
     BroadcastNotification,
@@ -191,22 +190,6 @@ export const broadcastGroupQueries = {
 
 // ── Broadcast Channels ────────────────────────────────────────────────────────
 
-export const broadcastChannelQueries = {
-    /**
-     * Get channels for a group
-     */
-    async getByGroupId(groupId: string): Promise<BroadcastChannelWithStats[]> {
-        const { data, error } = await supabase
-            .from('v_channels_with_stats')
-            .select('*')
-            .eq('group_id', groupId)
-            .eq('is_active', true)
-            .order('name');
-
-        if (error) throw error;
-        return toCamelCase(data || []);
-    },
-};
 
 // ── Broadcasts ────────────────────────────────────────────────────────────────
 
@@ -272,7 +255,7 @@ export const broadcastQueries = {
         const authorIds = [...new Set(rows.map((b: any) => b.author_id).filter(Boolean))];
 
         // Single query for all relevant group_participants (covers all authors + groups)
-        let roleMap = new Map<string, string>(); // key = `${groupId}:${employeeId}`
+        const roleMap = new Map<string, string>(); // key = `${groupId}:${employeeId}`
         if (groupIds.length > 0 && authorIds.length > 0) {
             const { data: participants } = await supabase
                 .from('group_participants')
@@ -377,7 +360,7 @@ export const broadcastQueries = {
         const groupIds  = [...new Set(rows.map((b: any) => b.broadcast_channels?.group_id).filter(Boolean))];
         const authorIds = [...new Set(rows.map((b: any) => b.author_id).filter(Boolean))];
 
-        let roleMap = new Map<string, string>();
+        const roleMap = new Map<string, string>();
         if (groupIds.length > 0 && authorIds.length > 0) {
             const { data: participants } = await supabase
                 .from('group_participants')

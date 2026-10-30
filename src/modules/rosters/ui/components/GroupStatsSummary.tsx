@@ -13,7 +13,6 @@
  */
 
 import React, { useMemo } from 'react';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Clock, DollarSign, Users, BarChart3 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import type { Shift } from '../../domain/shift.entity';
@@ -29,7 +28,7 @@ import {
 // TYPES
 // ============================================================================
 
-export interface GroupStatsSummaryProps {
+interface GroupStatsSummaryProps {
     shifts: Shift[];
     className?: string;
     /** Compact mode shows fewer stats (for narrow headers) */
@@ -62,7 +61,7 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     compact = false,
 }) => {
     const stats = useMemo((): GroupStats => {
-        const activeShifts = shifts.filter((s) => !s.is_cancelled && !s.deleted_at);
+        const activeShifts = shifts.filter((s) => !s.is_cancelled);
         const assigned = activeShifts.filter((s) => s.assigned_employee_id);
         const unassigned = activeShifts.filter((s) => !s.assigned_employee_id);
 
@@ -197,4 +196,3 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     );
 };
 
-export default GroupStatsSummary;

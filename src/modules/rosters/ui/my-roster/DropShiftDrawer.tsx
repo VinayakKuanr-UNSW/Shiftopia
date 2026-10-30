@@ -16,7 +16,7 @@ import { MobileShiftCard } from './MobileShiftCard';
 import { cn } from '@/modules/core/lib/utils';
 import { useCancellationReasons } from '@/modules/insights/hooks/useCancellationReasons';
 
-export interface DropShiftDrawerProps {
+interface DropShiftDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   shift: Shift | null;

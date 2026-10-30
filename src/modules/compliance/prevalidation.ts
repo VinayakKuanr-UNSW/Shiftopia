@@ -19,7 +19,7 @@ import { getSydneyNow } from '@/modules/core/lib/date.utils';
 // TYPES
 // =============================================================================
 
-export interface HardValidationError {
+interface HardValidationError {
     field: string;      // Which field has the error
     rule: string;       // Rule ID
     message: string;    // Human-readable error message
@@ -30,7 +30,7 @@ export interface HardValidationResult {
     errors: HardValidationError[];
 }
 
-export interface HardValidationInput {
+interface HardValidationInput {
     shift_date: string;           // YYYY-MM-DD
     start_time: string;           // HH:mm
     end_time: string;             // HH:mm
@@ -224,17 +224,4 @@ export function runHardValidation(input: HardValidationInput): HardValidationRes
     };
 }
 
-/**
- * Get error message for a specific field
- */
-export function getFieldError(result: HardValidationResult, field: string): string | null {
-    const error = result.errors.find(e => e.field === field);
-    return error?.message || null;
-}
 
-/**
- * Check if a specific rule failed
- */
-export function hasRuleError(result: HardValidationResult, rule: string): boolean {
-    return result.errors.some(e => e.rule === rule);
-}

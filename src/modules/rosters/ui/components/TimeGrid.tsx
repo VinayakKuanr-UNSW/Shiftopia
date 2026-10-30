@@ -6,8 +6,8 @@ import { cn } from '@/modules/core/lib/utils';
 import { getPublicHolidayName, isPublicHoliday } from '@/modules/core/lib/holidays';
 
 export const HOUR_HEIGHT = 48;
-export const TIME_LABEL_WIDTH = 56;
-export const HEADER_HEIGHT = 64;
+const TIME_LABEL_WIDTH = 56;
+const HEADER_HEIGHT = 64;
 
 interface TimeGridProps {
   days: Date[];

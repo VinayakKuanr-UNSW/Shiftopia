@@ -14,7 +14,7 @@
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import type { BulkAssignAtomicResponse } from '@/modules/rosters/api/contracts';
 
-export interface AtomicCommitResult {
+interface AtomicCommitResult {
     success: boolean;
     totalCommitted: number;
     /** Shift IDs not applied: another employee now holds them, or they changed

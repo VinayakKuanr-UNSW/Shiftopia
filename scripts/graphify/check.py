@@ -45,9 +45,9 @@ check(mem >= 100, f"memory nodes {mem}")
 #    sm_delete_shift (it no longer calls sm_apply_shift_op).
 #    Node ids lost their "_ts" suffix in the graphify upgrade (2026-10-25).
 #    shifts.commands.ts also calls it but the AST layer misses that edge.
+#    The auto-assign-bids edge function was deleted 2026-10-28 (never deployed).
 truth = {"src_modules_rosters_api_shifts_api",
-         "src_modules_rosters_api_shifts_commands",
-         "supabase_functions_auto_assign_bids_index"}
+         "src_modules_rosters_api_shifts_commands"}
 got = {e["source"] for e in E
        if e.get("target") == "db_fn_sm_apply_shift_op" and e.get("relation") == "calls_rpc"}
 check(got == truth, f"sm_apply_shift_op callers exact ({len(got)} found)"

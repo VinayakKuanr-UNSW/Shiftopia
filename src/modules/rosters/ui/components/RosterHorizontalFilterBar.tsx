@@ -15,7 +15,7 @@ import {
 } from '@/modules/core/ui/primitives/command';
 import { useRosterUI, type AdvancedFilters } from '@/modules/rosters/contexts/RosterUIContext';
 
-export interface RosterHorizontalFilterBarProps {
+interface RosterHorizontalFilterBarProps {
   onClose: () => void;
   className?: string;
 }
@@ -430,4 +430,3 @@ export const RosterHorizontalFilterBar: React.FC<RosterHorizontalFilterBarProps>
   );
 };
 
-export default RosterHorizontalFilterBar;

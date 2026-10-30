@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface RemunerationLevelBadgeProps {
+interface RemunerationLevelBadgeProps {
     /** -1, null, or undefined render as the unlevelled "—" badge. */
     level: number | null | undefined;
     className?: string;
@@ -36,4 +36,3 @@ export const RemunerationLevelBadge: React.FC<RemunerationLevelBadgeProps> = ({ 
     );
 };
 
-export default RemunerationLevelBadge;

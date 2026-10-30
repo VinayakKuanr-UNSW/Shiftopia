@@ -3521,7 +3521,6 @@ class ScheduleModelBuilder:
         # tier; the wall/deterministic budget is split across tiers so total
         # solve time stays bounded. Defensive fallback to a single combined solve
         # if tiers were never assembled.
-        import math
         tiers = self._objective_tiers or [
             ('all', cp_model.LinearExpr.Sum(
                 [t for lst in self._term_categories.values() for t in lst]))

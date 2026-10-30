@@ -49,7 +49,7 @@ interface RosterViewPayload {
 
 // ── BFF query key factory ─────────────────────────────────────────────────────
 
-export const rosterViewBffKey = (
+const rosterViewBffKey = (
     orgId: string | null,
     startDate: string | null,
     endDate: string | null,

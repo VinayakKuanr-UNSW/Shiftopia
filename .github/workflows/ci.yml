@@ -148,6 +148,10 @@ jobs:
         run: npm run type-check:integration
 
       - name: Start local Supabase (migrations + seeds + edge runtime)
+        # Pull from GHCR, not the CLI's default public.ecr.aws: ECR's anonymous
+        # quota is per runner IP and refuses shared runners ("Data limit exceeded").
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
         run: npx supabase start -x studio,imgproxy,mailpit,logflare,vector,postgres-meta,supavisor,realtime
 
       - name: API integration tests

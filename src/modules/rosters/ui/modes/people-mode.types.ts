@@ -80,8 +80,3 @@ export interface ShiftDragItem {
   is_cancelled: boolean;
 }
 
-// ============================================================================
-// DRAG & DROP TYPE
-// ============================================================================
-
-type DragItem = ShiftDragItem;

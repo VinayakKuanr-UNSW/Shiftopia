@@ -24,7 +24,6 @@
  */
 import type { AccessCertificate, AccessLevel } from './types';
 
-export type Suite = 'personal' | 'managerial' | 'admin';
 
 /**
  * What the Managerial suite lets this person do.
@@ -33,7 +32,7 @@ export type Suite = 'personal' | 'managerial' | 'admin';
  * - `timesheets-view`: the Timesheets page only, read-only (beta)
  * - `none`: no managerial page (alpha, or no certificate)
  */
-export type ManagerialMode = 'none' | 'timesheets-view' | 'view' | 'full';
+type ManagerialMode = 'none' | 'timesheets-view' | 'view' | 'full';
 
 export interface AccessHolding {
     /** The highest active Type X level (beta, a team lead somewhere), if any. */

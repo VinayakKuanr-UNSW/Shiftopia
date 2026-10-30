@@ -95,8 +95,6 @@ export const isOrgAmbiguous = (scope: ScopeSelection | null | undefined): boolea
 export const isDeptAmbiguous = (scope: ScopeSelection | null | undefined): boolean =>
   deptIds(scope).length > 1;
 
-export const isSubDeptAmbiguous = (scope: ScopeSelection | null | undefined): boolean =>
-  subDeptIds(scope).length > 1;
 
 /**
  * The organisation a page may query with, or null until its own copy of the

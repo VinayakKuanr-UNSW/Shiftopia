@@ -20,7 +20,7 @@ import { runHardValidation } from '@/modules/compliance';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type ComplianceStatus =
+type ComplianceStatus =
   | 'passed'       // All checks passed — safe to save
   | 'violated'     // Hard violation — save MUST be blocked
   | 'warned'       // Soft warning — save can proceed with acknowledgment
@@ -56,7 +56,7 @@ export interface ComplianceResult {
   qualificationViolations: QualificationViolation[];
 }
 
-export interface EbaCheckRow {
+interface EbaCheckRow {
   is_compliant: boolean;
   rule_id: string | null;
   rule_name: string | null;
@@ -156,7 +156,7 @@ function calculateUnpaidBreakMinutes(
   return Math.max(0, gross - Number(netLengthMinutes));
 }
 
-export interface ComplianceInput {
+interface ComplianceInput {
   employeeId: string;
   shiftDate: string;
   startTime: string;

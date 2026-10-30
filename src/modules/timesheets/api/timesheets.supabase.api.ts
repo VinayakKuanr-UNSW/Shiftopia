@@ -5,7 +5,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
-import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
@@ -20,7 +20,6 @@ import {
 
 // Re-exported for existing external consumers (AttendancePage.tsx et al.) —
 // the canonical implementation now lives in ../domain/billable-time.
-export { snapToQuarterHour, isShiftFinished };
 
 
 export interface TimesheetShiftRow {
@@ -186,7 +185,6 @@ export async function getShiftsForTimesheet(
                 unpaid_break_minutes,
                 net_length_minutes,
                 scheduled_length_minutes,
-                remuneration_rate,
                 is_training,
                 target_employment_type,
                 user_contract_id,
@@ -207,7 +205,6 @@ export async function getShiftsForTimesheet(
             .gte('shift_date', startDate)
             .lte('shift_date', endDate || startDate)
             .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
-            .is('deleted_at', null)
             .order('start_time');
 
         // Apply filters
@@ -287,8 +284,6 @@ export async function getShiftsForTimesheet(
 
             const scheduledMins = shift.scheduled_length_minutes ||
                 calculateMinutes(shift.start_time, shift.end_time);
-            const netMins = shift.net_length_minutes ||
-                (scheduledMins - (shift.unpaid_break_minutes || 0));
 
 
             // Resolve each side ONCE — every field below (net minutes, adjusted
@@ -520,7 +515,7 @@ function calculateMinutes(start: string, end: string): number {
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
 
-    let startMins = sh * 60 + sm;
+    const startMins = sh * 60 + sm;
     let endMins = eh * 60 + em;
 
     // Handle overnight

@@ -67,7 +67,7 @@ function candidateToRosterShift(s: CandidateShift): RosterShift {
 // EVALUATOR
 // =============================================================================
 
-export class ComplianceEvaluator {
+class ComplianceEvaluator {
     /**
      * Evaluate scheduling constraints (rules 7–10) for a single candidate shift.
      *

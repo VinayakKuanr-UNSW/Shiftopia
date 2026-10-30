@@ -3,7 +3,6 @@ import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import {
     Dialog,
     DialogContent,
-    DialogHeader,
     DialogTitle,
     DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
@@ -41,14 +40,12 @@ import {
     UserCheck,
     CheckCircle2,
     Inbox,
-    ChevronRight,
     Sparkles,
     Building,
     History as HistoryIcon,
     X,
     AlertCircle,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { SwapOffer, swapsApi } from '../../api/swaps.api';
 import { useQuery } from '@tanstack/react-query';
@@ -67,7 +64,6 @@ interface ViewOffersModalProps {
     isDeclining: boolean;
 }
 
-const SYDNEY_TZ = 'Australia/Sydney';
 
 const formatTime = (time: string): string => {
     if (!time) return '';
@@ -127,7 +123,6 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
     });
 
     const myShift = currentSwap?.originalShift;
-    const pendingOffers = offers?.filter(o => o.status === 'SUBMITTED') || [];
     const acceptedOffer = offers?.find(o => o.status === 'SELECTED');
 
     // Determine what to display based on status

@@ -34,9 +34,9 @@ export const LEDGER_STALE_AFTER_DAYS = 7;
  *                   applied (stale debts beat no debts), but surfaced.
  * - `unavailable` — no rows at all. Longitudinal fairness is NOT being applied.
  */
-export type FairnessLedgerStatus = 'ok' | 'stale' | 'unavailable';
+type FairnessLedgerStatus = 'ok' | 'stale' | 'unavailable';
 
-export interface FairnessLedgerRead {
+interface FairnessLedgerRead {
     debts: FairnessDebt[];
     status: FairnessLedgerStatus;
     /** `window_end` of the freshest row used, or null when unavailable. */

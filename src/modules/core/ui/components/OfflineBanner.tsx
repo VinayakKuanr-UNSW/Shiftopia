@@ -24,4 +24,3 @@ export function OfflineBanner() {
   );
 }
 
-export default OfflineBanner;

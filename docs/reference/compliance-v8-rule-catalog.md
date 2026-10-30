@@ -85,4 +85,3 @@ The V8 Compliance Engine operates on a high-fidelity asynchronous bridge:
 *   **Real-time Hydration**: Every check automatically hydrates the `V8Employee` context from the Supabase `profiles` and `user_contracts` tables to ensure accurate FT/PT/Casual logic.
 *   **Calendar Awareness**: The bridge automatically detects Sundays and Public Holidays from `shift_date` to enforce the 4h minimum engagement rule.
 *   **Batch Optimization**: The `BulkComplianceEngine` utilizes parallel context fetching to evaluate hundreds of shifts across multiple employees without N+1 performance penalties.
-*   **Async-First Hook**: The `useCompliance` hook supports full promise-based evaluation, ensuring the UI remains responsive during deep compliance audits.

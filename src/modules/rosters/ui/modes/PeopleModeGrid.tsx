@@ -4,19 +4,16 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import {
-  Plus,
   MoreHorizontal,
   Undo2,
   Edit2,
   Zap,
   Flame,
-  Maximize2,
   Users,
   Search,
   X,
   ShieldCheck,
   Layers,
-  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
@@ -32,15 +29,11 @@ import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialo
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import type { RawLeaveDay } from '@/modules/office/domain/types';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
-import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
-import { useToast } from '@/modules/core/hooks/use-toast';
-import { useCreateShift } from '@/modules/rosters/state/useRosterShifts';
 import { 
   PeopleModeEmployee, 
   PeopleModeShift, 
-  DND_UNFILLED_SHIFT, 
   DND_SHIFT_TYPE,
   ShiftDragItem
 } from './people-mode.types';
@@ -54,7 +47,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
@@ -72,7 +64,6 @@ import {
 
 // Re-export for backward compatibility if needed, or just use the imported ones
 export type EmployeeShift = PeopleModeShift;
-export type Employee = PeopleModeEmployee;
 
 // ── Module-scope no-op so that an absent onAssignShift prop doesn't bust
 //    referential equality on every render of every DroppableDateCell.
@@ -205,13 +196,12 @@ const DraggableShiftCard = React.memo(DraggableShiftCardImpl);
 interface ShiftRowMenuProps {
   shift: PeopleModeShift;
   onEdit: (shift: PeopleModeShift) => void;
-  onClone: (shift: PeopleModeShift) => void;
   onUnpublish?: (shiftId: string) => void;
   onExpand?: (shift: PeopleModeShift) => void;
   onAudit?: (shift: PeopleModeShift) => void;
 }
 
-const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, onUnpublish, onExpand, onAudit }) => {
+const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onUnpublish, onExpand, onAudit }) => {
   const { isPast } = resolveShiftStatus(shift);
 
   return (
@@ -228,20 +218,7 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, on
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
-        {/* 1. Clone */}
-        <DropdownMenuItem
-          disabled={isPast}
-          onClick={() => onClone(shift)}
-          className={cn(
-            "text-popover-foreground hover:bg-accent cursor-pointer",
-            isPast && "text-muted-foreground/50 cursor-not-allowed"
-          )}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Clone Shift {isPast && '(Locked)'}
-        </DropdownMenuItem>
-
-        {/* 2. Edit */}
+        {/* 1. Edit */}
         <DropdownMenuItem
           disabled={isPast}
           onClick={() => onEdit(shift)}
@@ -254,7 +231,7 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, on
           Edit Shift {isPast && '(Locked)'}
         </DropdownMenuItem>
 
-        {/* 3. Audit */}
+        {/* 2. Audit */}
         {onAudit && (
           <DropdownMenuItem
             onClick={() => onAudit(shift)}
@@ -265,7 +242,7 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, on
           </DropdownMenuItem>
         )}
 
-        {/* 4. More: Scheduled vs Actual vs Billable & Variance */}
+        {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
         {onExpand && shift.rawShift?.target_employment_type === 'FT' && (
           <DropdownMenuItem
             onClick={() => onExpand(shift)}
@@ -303,7 +280,7 @@ ShiftRowMenu.displayName = 'ShiftRowMenu';
 /* ============================================================
    MAIN COMPONENT
    ============================================================ */
-export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
+const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   employees,
   dates,
   canEdit,
@@ -329,11 +306,8 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     if (searchTerm) setIsSearchOpen(true);
   }, [searchTerm]);
 
-  const { toast } = useToast();
-  const createShiftMutation = useCreateShift();
   const {
     bulkModeActive: globalBulkModeActive,
-    selectedV8ShiftIds: globalSelectedV8ShiftIds,
     toggleShiftSelection: globalToggleShiftSelection,
   } = useRosterStore(
     useShallow((s) => ({
@@ -365,57 +339,6 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   const handleAuditShift = useCallback((shift: PeopleModeShift) => {
     if (shift.rawShift) setAuditedShift(shift.rawShift as Shift);
   }, []);
-
-  const handleCloneShift = useCallback(async (shift: PeopleModeShift) => {
-    try {
-      const { rawShift } = shift;
-      if (!rawShift) {
-        toast({ title: 'Error', description: 'Could not find raw shift data to clone.', variant: 'destructive' });
-        return;
-      }
-
-      const cloneData: any = {
-        roster_id: rawShift.roster_id,
-        department_id: rawShift.department_id,
-        sub_department_id: rawShift.sub_department_id,
-        shift_date: rawShift.shift_date,
-        start_time: rawShift.start_time,
-        end_time: rawShift.end_time,
-        organization_id: rawShift.organization_id,
-        group_type: rawShift.group_type,
-        sub_group_name: rawShift.sub_group_name,
-        shift_group_id: rawShift.shift_group_id,
-        shift_subgroup_id: rawShift.shift_subgroup_id || (rawShift as any).roster_subgroup_id,
-        role_id: rawShift.role_id,
-        remuneration_level: rawShift.remuneration_level,
-        paid_break_minutes: rawShift.paid_break_minutes,
-        unpaid_break_minutes: rawShift.unpaid_break_minutes,
-        timezone: rawShift.timezone,
-        required_skills: rawShift.required_skills || [],
-        required_licenses: rawShift.required_licenses || [],
-        event_ids: rawShift.event_ids || [],
-        tags: rawShift.tags || [],
-        notes: rawShift.notes,
-        is_training: rawShift.is_training,
-        // Mandatory on every shift — without it every Clone failed with
-        // "target_employment_type is required" (fn_shift_inherit_template_row).
-        target_employment_type: (rawShift as any).target_employment_type,
-        target_requires_flexible: (rawShift as any).target_requires_flexible,
-      };
-
-      await createShiftMutation.mutateAsync(cloneData);
-      toast({
-        title: 'Shift Cloned',
-        description: 'A new draft replica has been created (unassigned).',
-      });
-    } catch (error: any) {
-      toast({
-        title: 'Clone Failed',
-        description: error.message || 'Could not clone shift.',
-        variant: 'destructive',
-      });
-    }
-  }, [createShiftMutation, toast]);
 
   const handleEditShift = useCallback((shift: PeopleModeShift) => {
     onViewShift?.(shift);
@@ -652,7 +575,6 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                           onAddShift={onAddShift}
                           onClickShift={handleShiftClick}
                           onEditShift={handleEditShift}
-                          onCloneShift={handleCloneShift}
                           onExpandShift={handleExpandShift}
                           onAuditShift={handleAuditShift}
                           onUnpublishShift={onUnpublishShift}
@@ -702,7 +624,6 @@ interface EmployeeRowProps {
   onAddShift: (employee: PeopleModeEmployee, date: Date) => void;
   onClickShift: (shift: PeopleModeShift) => void;
   onEditShift: (shift: PeopleModeShift) => void;
-  onCloneShift: (shift: PeopleModeShift) => void;
   onExpandShift?: (shift: PeopleModeShift) => void;
   onAuditShift?: (shift: PeopleModeShift) => void;
   onUnpublishShift?: (shiftId: string) => void;
@@ -734,7 +655,6 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
   onAddShift,
   onClickShift,
   onEditShift,
-  onCloneShift,
   onExpandShift,
   onAuditShift,
   onUnpublishShift,
@@ -880,7 +800,6 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
           onAddShift={onAddShift}
           onClickShift={onClickShift}
           onEditShift={onEditShift}
-          onCloneShift={onCloneShift}
           onExpandShift={onExpandShift}
           onAuditShift={onAuditShift}
           onUnpublishShift={onUnpublishShift}
@@ -914,7 +833,6 @@ interface EmployeeDateCellProps {
   onAddShift: (employee: PeopleModeEmployee, date: Date) => void;
   onClickShift: (shift: PeopleModeShift) => void;
   onEditShift: (shift: PeopleModeShift) => void;
-  onCloneShift: (shift: PeopleModeShift) => void;
   onExpandShift?: (shift: PeopleModeShift) => void;
   onAuditShift?: (shift: PeopleModeShift) => void;
   onUnpublishShift?: (shiftId: string) => void;
@@ -937,7 +855,6 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   onAddShift,
   onClickShift,
   onEditShift,
-  onCloneShift,
   onExpandShift,
   onAuditShift,
   onUnpublishShift,
@@ -1006,7 +923,6 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
                         <ShiftRowMenu
                           shift={shift}
                           onEdit={onEditShift}
-                          onClone={onCloneShift}
                           onExpand={onExpandShift}
                           onAudit={onAuditShift}
                           onUnpublish={onUnpublishShift}

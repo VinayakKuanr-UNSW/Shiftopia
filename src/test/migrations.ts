@@ -16,13 +16,13 @@ import { fileURLToPath } from 'node:url';
 // From a string, not `new URL(…)`: the jsdom environment replaces the global URL.
 const SUPABASE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../supabase');
 
-export const LIVE_MIGRATIONS_DIR = join(SUPABASE_DIR, 'migrations');
+const LIVE_MIGRATIONS_DIR = join(SUPABASE_DIR, 'migrations');
 
 /** The current baseline: everything production ran up to the last re-baseline. */
 export const BASELINE_FILE = '20251015000000_baseline_schema.sql';
 
 /** The live directory first, then every archive, newest first. */
-export function migrationDirs(): string[] {
+function migrationDirs(): string[] {
     const archives = readdirSync(SUPABASE_DIR)
         .filter((d) => d.startsWith('migrations_archive_pre_baseline_'))
         .sort()

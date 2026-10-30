@@ -1,6 +1,4 @@
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/primitives/card';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { usePerformanceMetrics, EMPTY_METRICS } from '@/modules/users/hooks/usePerformanceMetrics';
 import { useEmployeeSkills } from '@/modules/users/hooks/useEmployeeSkills';
 import { useEmployeeLicenses } from '@/modules/users/hooks/useEmployeeLicenses';

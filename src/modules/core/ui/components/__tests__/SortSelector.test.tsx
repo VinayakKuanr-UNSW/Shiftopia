@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SortSelector } from '../SortSelector';
 import { DEFAULT_ROW_SORT, type RowSort } from '@/modules/core/lib/row-sorting';

@@ -58,17 +58,13 @@ import {
 import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
 import {
     AlertTriangle,
-    CalendarPlus,
     CalendarRange,
     Check,
-    ChevronRight,
     FileStack,
     History,
-    Layers,
     Loader2,
     RotateCcw,
     Search,
-    Send,
     User,
     Sparkles,
 } from 'lucide-react';
@@ -375,7 +371,6 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
             source: 'roster_modal',
             targetDepartmentId: departmentId,
             targetSubDepartmentId: subDepartmentId || undefined,
-            includeStartedShifts: false,
         });
         onOpenChange(false);
     };
@@ -745,5 +740,4 @@ export const RosterTemplatesDialog: React.FC<RosterTemplatesDialogProps> = ({
     );
 };
 
-export default RosterTemplatesDialog;
 

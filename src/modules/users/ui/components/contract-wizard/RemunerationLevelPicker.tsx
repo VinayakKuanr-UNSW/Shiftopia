@@ -10,7 +10,7 @@ export interface RemunerationLevelRow {
     description?: string | null;
 }
 
-export interface RemunerationLevelPickerProps {
+interface RemunerationLevelPickerProps {
     value: number | '';
     onChange: (level: number) => void;
     levels: RemunerationLevelRow[];
@@ -63,4 +63,3 @@ export const RemunerationLevelPicker: React.FC<RemunerationLevelPickerProps> = (
     );
 };
 
-export default RemunerationLevelPicker;

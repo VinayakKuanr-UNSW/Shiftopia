@@ -17,15 +17,12 @@ graph TB
         Tables["~139 tables (public) + 7 (hr)"]
         RPCs["~336 functions incl. sm_* gateway RPCs"]
         Triggers["92 triggers → audit/notify/derive"]
-        Cron["pg_cron: nightly_leave_accrual, dead_shift_cleanup"]
+        Cron["pg_cron: shift-timer-sweep (every minute), nightly_leave_accrual, …"]
     end
 
     subgraph EdgeFn["Supabase Edge Functions"]
-        AutoSwap[auto-approve-swaps]
-        AutoBid[auto-assign-bids]
-        AutoTS[auto-verify-timesheets]
-        StateProc[shift-state-processor]
-        PartMgr[partition-manager]
+        RosterView[get-roster-view]
+        Push[send-push]
     end
 
     subgraph Optimizer["Optimizer microservice (FastAPI + OR-Tools CP-SAT)"]
@@ -41,7 +38,7 @@ graph TB
     RPCs --> Triggers
     Triggers --> Tables
     Cron --> RPCs
-    EdgeFn -- "claim/decide/complete via sm_*_queue_* RPCs" --> RPCs
+    EdgeFn -- "roster view reads, push delivery" --> RPCs
     UI -- "scheduling/auto-scheduler.controller.ts" --> OptAPI
     OptAPI -- "proposals validated by compliance/v8, committed via" --> RPCs
 ```
@@ -220,7 +217,7 @@ sequenceDiagram
     end
     Ctrl->>Comp: validate each proposal (V8 orchestrator)
     Comp-->>Ctrl: ValidatedProposal[] (pass/fail per shift, with rationale)
-    Ctrl-->>Mgr: preview (PillarScores, ParetoAlternative, WhyThisPerson)
+    Ctrl-->>Mgr: preview (PillarScores, ParetoAlternative)
     Mgr->>Commit: approve/commit selected proposals
     Commit->>DB: concurrency re-check (shift not since modified/taken)
     Commit->>DB: rosters/bulk-assignment engine → sm_apply_shift_op(assign) per shift
@@ -282,7 +279,7 @@ graph TB
     subgraph V8["compliance/v8"]
         Rules["rules/ — 15 files, 21 rule IDs<br/>(rest-pause, meal-break, student-visa,<br/>ordinary-hours-avg, min-engagement, ...)"]
         Orchestrator["runV8Orchestrator (orchestrator/index.ts)"]
-        Dormant["orchestrator/{batch,bidding,swapping,conflict-resolver}<br/>— built, zero callers, NOT part of the live path"]
+        Dormant["orchestrator/{batch,bidding,swapping,conflict-resolver}<br/>— deleted 2026-10-28 (had zero callers)"]
     end
     subgraph DbEngine["Database EBA engine (2026-10-26)"]
         DbCheck["eba_check_assignment → internal.eba_evaluate<br/>enforced at COMMIT by trg_shift_eba_compliance"]
@@ -348,7 +345,7 @@ All notification delivery is **database-trigger-driven, not application-code-dri
 sequenceDiagram
     participant U as User
     participant SB as Supabase Auth
-    participant AC as AuthContext (auth module)
+    participant AC as AuthProvider (platform/auth)
     participant AS as auth.service.ts (platform/auth)
     participant PG as Postgres
 

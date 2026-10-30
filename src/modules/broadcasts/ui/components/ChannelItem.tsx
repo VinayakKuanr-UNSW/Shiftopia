@@ -3,7 +3,7 @@ import { Hash } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import type { BroadcastChannelWithStats } from '../../model/broadcast.types';
 
-export interface ChannelItemProps {
+interface ChannelItemProps {
   channel: BroadcastChannelWithStats;
   isActive: boolean;
   onClick: () => void;
@@ -39,4 +39,3 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({ channel, isActive, onC
   </div>
 );
 
-export default ChannelItem;

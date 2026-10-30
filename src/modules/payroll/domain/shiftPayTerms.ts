@@ -81,7 +81,7 @@ export interface ShiftPayContract {
   usesWageScheme: boolean;
 }
 
-export interface ShiftPayTermsInput {
+interface ShiftPayTermsInput {
   shiftDate: string;
   shiftLevel: number | null;
   /** shifts.target_employment_type — 'FT' | 'PT' | 'Casual'. */

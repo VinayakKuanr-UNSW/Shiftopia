@@ -5,31 +5,20 @@
  * auditing, and swap feasibility logic in Shiftopia.
  */
 
-export { v8Engine } from './engine';
 export * from './types';
 import { V8_RULE_METADATA } from './metadata';
-export { V8_RULE_METADATA };
 
 // Transmission Adapters (Bridges)
 import { runV8Compliance } from './adapters/v1-to-v8';
-export { runV8Compliance as runV8LegacyBridge };
 export { runV8ComplexBridge } from './adapters/v2-to-v8';
 
 // Orchestration & Solving
 export { runV8Orchestrator } from './orchestrator/index';
 export type {
-    V8OrchestratorInput,
     V8OrchestratorShift,
-    V8OrchestratorResult,
-    V8EmployeeContext,
-    V8AvailabilityData,
 } from './orchestrator/types';
-export { V8SwapEngine }      from './swap-engine/constraint-engine';
-export { applyV8Simulation } from './orchestrator/simulation';
 
 // Eligibility & Validation
-export { isV8Eligible, checkV8AvailabilityOnly } from './orchestrator/eligibility';
-export { validateV8State }                       from './orchestrator/validate-combined-state';
 export { getScenarioWindow }                     from './swap-engine/utils/scenario-window';
 export {
     assignmentEvaluator,
@@ -39,7 +28,6 @@ export {
     swapEvaluator,
     runSwapGuards,
     SwapGuardError,
-    solverResultToComplianceResults
 } from './swap-engine/index';
 export type {
     RosterShift,

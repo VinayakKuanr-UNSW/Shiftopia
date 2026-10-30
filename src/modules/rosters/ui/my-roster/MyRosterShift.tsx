@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shift, ShiftWithDetails } from '@/modules/rosters';
+import { ShiftWithDetails } from '@/modules/rosters';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { useClockValue, isShiftPast, type ClockSnapshot } from '@/modules/core/hooks/useClock';

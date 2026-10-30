@@ -25,7 +25,6 @@ import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 import { isFullTimeEmployee } from '@/modules/core/model/employment.types';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { normaliseCycleAnchor, resolveGoverningCycleWeeks } from '@/modules/compliance/ordinary-hours-cycle';
-import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 // =============================================================================
 // SHARED UTILITIES — pure functions, no I/O
@@ -58,11 +57,33 @@ export function durationMinutes(start: string, end: string): number {
     return mins;
 }
 
+/** A shift row as both fetch paths read it, in the shape the scheduler checks against. */
+function toExistingShiftRef(r: {
+    id: string;
+    shift_date: string;
+    start_time: string;
+    end_time: string;
+    unpaid_break_minutes: number | null;
+    paid_break_minutes: number | null;
+}): ExistingShiftRef {
+    const start = normalizeTime(r.start_time);
+    const end = normalizeTime(r.end_time);
+    return {
+        id: r.id,
+        shift_date: r.shift_date,
+        start_time: start,
+        end_time: end,
+        duration_minutes: durationMinutes(start, end),
+        unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
+        paid_break_minutes: r.paid_break_minutes ?? 0,
+    };
+}
+
 // =============================================================================
 // AVAILABILITY RESULT TYPE
 // =============================================================================
 
-export interface AvailabilityResult {
+interface AvailabilityResult {
     slots: Array<{
         slot_date: string;
         start_time: string;
@@ -138,18 +159,7 @@ export class RosterFetcher {
                     const empRows = rows.filter(r => r.assigned_employee_id === emp.id);
                     const refs: ExistingShiftRef[] = empRows
                         .filter(r => !candidateV8ShiftIds.has(r.id))
-                        .map(r => ({
-                            id: r.id,
-                            shift_date: r.shift_date,
-                            start_time: normalizeTime(r.start_time),
-                            end_time: normalizeTime(r.end_time),
-                            duration_minutes: durationMinutes(
-                                normalizeTime(r.start_time),
-                                normalizeTime(r.end_time),
-                            ),
-                            unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
-                            paid_break_minutes: r.paid_break_minutes ?? 0,
-                        }));
+                        .map(toExistingShiftRef);
                     result.set(emp.id, refs);
                 }
                 console.debug('[RosterFetcher] Bulk roster fetch successful (%d total shifts)', rows.length);
@@ -182,18 +192,7 @@ export class RosterFetcher {
                     const rows = (data ?? []) as any[];
                     const refs: ExistingShiftRef[] = rows
                         .filter(r => !candidateV8ShiftIds.has(r.id))
-                        .map(r => ({
-                            id: r.id,
-                            shift_date: r.shift_date,
-                            start_time: normalizeTime(r.start_time),
-                            end_time: normalizeTime(r.end_time),
-                            duration_minutes: durationMinutes(
-                                normalizeTime(r.start_time),
-                                normalizeTime(r.end_time),
-                            ),
-                            unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
-                            paid_break_minutes: r.paid_break_minutes ?? 0,
-                        }));
+                        .map(toExistingShiftRef);
                     result.set(emp.id, refs);
                 } catch (err) {
                     console.warn('[RosterFetcher] Roster fetch threw for', emp.id, err);

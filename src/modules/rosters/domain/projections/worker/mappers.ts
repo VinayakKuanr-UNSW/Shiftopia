@@ -71,8 +71,6 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     roleId: shift.role_id,
     roleName: shift.roles?.name ?? null,
     remunerationLevel: shift.remuneration_level,
-    remunerationRate: shift.remuneration_rate,
-    actualHourlyRate: shift.actual_hourly_rate,
     payTerms: shift.shift_pay_terms ?? null,
 
     // Level info
@@ -134,7 +132,7 @@ export function shiftsToDTO(shifts: Shift[]): WorkerShiftDTO[] {
 
 // ── Employee → WorkerEmployeeDTO ──────────────────────────────────────────────
 
-export function employeeToDTO(emp: EmployeeRecord, contractedHours?: number): WorkerEmployeeDTO {
+function employeeToDTO(emp: EmployeeRecord, contractedHours?: number): WorkerEmployeeDTO {
   return {
     id: emp.id,
     // Human-facing staff number when present, else the profile UUID.
@@ -158,7 +156,7 @@ export function employeesToDTO(
 
 // ── Role → WorkerRoleDTO ──────────────────────────────────────────────────────
 
-export function roleToDTO(role: RoleRecord): WorkerRoleDTO {
+function roleToDTO(role: RoleRecord): WorkerRoleDTO {
   return {
     id: role.id,
     name: role.name,
@@ -173,7 +171,7 @@ export function rolesToDTO(roles: RoleRecord[]): WorkerRoleDTO[] {
 
 // ── Level → WorkerLevelDTO ────────────────────────────────────────────────────
 
-export function levelToDTO(level: LevelRecord): WorkerLevelDTO {
+function levelToDTO(level: LevelRecord): WorkerLevelDTO {
   return {
     id: level.level_number.toString(),
     levelName: level.level_name,
@@ -187,7 +185,7 @@ export function levelsToDTO(levels: LevelRecord[]): WorkerLevelDTO[] {
 
 // ── Event → WorkerEventDTO ────────────────────────────────────────────────────
 
-export function eventToDTO(event: EventRecord): WorkerEventDTO {
+function eventToDTO(event: EventRecord): WorkerEventDTO {
   return {
     id: event.id,
     name: event.name,
@@ -204,7 +202,7 @@ export function eventsToDTO(events: EventRecord[]): WorkerEventDTO[] {
 
 // ── RosterStructure → WorkerRosterStructureDTO ────────────────────────────────
 
-export function rosterStructureToDTO(structure: RosterStructure): WorkerRosterStructureDTO {
+function rosterStructureToDTO(structure: RosterStructure): WorkerRosterStructureDTO {
   return {
     groups: structure.groups.map(g => ({
       externalId: g.externalId ?? '',

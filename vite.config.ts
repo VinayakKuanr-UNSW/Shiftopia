@@ -150,7 +150,6 @@ export default defineConfig(({ mode }) => ({
           'vendor-data': ['@tanstack/react-query', 'zustand'],
           'vendor-dnd': ['react-dnd', 'react-dnd-html5-backend'],
           'vendor-ui': [
-            '@radix-ui/react-accordion',
             '@radix-ui/react-alert-dialog',
             '@radix-ui/react-avatar',
             '@radix-ui/react-checkbox',

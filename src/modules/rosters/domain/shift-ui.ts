@@ -20,19 +20,16 @@ import {
 } from './shift-fsm';
 import { type ShiftUrgency } from './bidding-urgency';
 import { 
-    ShieldCheck, 
     Lock, 
-    Edit, 
     Shield,
     Clock,
-    CheckCircle2,
 } from 'lucide-react';
 import { type Shift } from './shift.entity';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ─── Tone ────────────────────────────────────────────────────────────────────
 
-export type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
+type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
 
 /**
  * Priority-ordered ring color for shift cards across all views.
@@ -44,11 +41,11 @@ export type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
  * orange  — Urgent: TTS ≤ 24h
  * blue    — Normal: everything else
  */
-export type RingColor = 'purple' | 'emerald' | 'yellow' | 'red' | 'orange' | 'blue' | null;
+type RingColor = 'purple' | 'emerald' | 'yellow' | 'red' | 'orange' | 'blue' | null;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface ShiftUIContextInput extends ShiftFSMInput {
+interface ShiftUIContextInput extends ShiftFSMInput {
     /** UTC timestamp of the shift start — used for TTS calculation */
     scheduled_start?: string | Date | null | undefined;
     /** UTC timestamp of the shift end — used to detect No Show */
@@ -74,19 +71,19 @@ export interface ShiftUIContext {
     ringColor: RingColor;
 }
 
-export interface ShiftBadge {
+interface ShiftBadge {
     label: string;
     tone: BadgeTone;
 }
 
-export interface ShiftLockState {
+interface ShiftLockState {
     /** All fields locked — offer sent, in progress, terminal */
     fullyLocked: boolean;
     /** Schedule locked but notes/comments still editable */
     partialLock: boolean;
 }
 
-export type ShiftAction =
+type ShiftAction =
     | 'PUBLISH' | 'UNPUBLISH' | 'DELETE'
     | 'ASSIGN' | 'UNASSIGN'
     | 'ACCEPT' | 'REJECT'
@@ -95,21 +92,8 @@ export type ShiftAction =
     | 'CLOCK_IN' | 'CLOCK_OUT' | 'MARK_NO_SHOW'
     | 'CANCEL';
 
-export interface ProtectionContext {
-    status: 'LOCKED' | 'PROTECTED' | 'DRAFT';
-    label: string;
-    isLocked: boolean;
-    isProtected: boolean;
-    icon: React.ComponentType<{ className?: string, size?: number | string }> | undefined;
-    colorClass: string;
-    icons: Array<{
-        Icon: React.ComponentType<{ className?: string, size?: number | string }>;
-        label: string;
-        colorClass: string;
-    }>;
-}
 
-export interface ShiftStatusIcon {
+interface ShiftStatusIcon {
     icon: React.ComponentType<{ className?: string; size?: string | number }>;
     tooltip: string;
     color: string;
@@ -222,85 +206,6 @@ export function getLockState(state: ShiftStateID | string): ShiftLockState {
     return { fullyLocked: true, partialLock: false };
 }
 
-/**
- * Get protection and lock state context for a shift
- */
-export function getProtectionContext(
-    shift: Partial<Shift>, 
-    isPast: boolean
-): ProtectionContext {
-    const status = (shift.lifecycle_status || '').toLowerCase();
-    const tsStatus = (shift.timesheet_status || '').toLowerCase();
-    const attStatus = (shift.attendance_status || '').toLowerCase();
-
-    const icons: ProtectionContext['icons'] = [];
-
-    // 1. Clock Icon: Finalized or No Show
-    const isNoShow = attStatus === 'no_show' || tsStatus === 'no_show';
-    const isFinalized = ['submitted', 'verified', 'approved', 'rejected'].includes(tsStatus);
-
-    if (isFinalized || isNoShow) {
-        icons.push({ 
-            Icon: Clock, 
-            label: isNoShow ? 'No Show' : 'Finalized',
-            colorClass: 'text-slate-400'
-        });
-    }
-
-    // 2. Shield Icon: Published
-    if (status === 'published' || status === 'completed') {
-        icons.push({ 
-            Icon: Shield, 
-            label: 'Published',
-            colorClass: 'text-slate-400'
-        });
-    }
-
-    // 3. Lock Icon: Past
-    if (isPast) {
-        icons.push({ 
-            Icon: Lock, 
-            label: 'Past',
-            colorClass: 'text-slate-400'
-        });
-    }
-
-    // Legacy return for backward compatibility if still used as single object
-    // Default to the most "important" state for the legacy fields
-    if (isPast) {
-        return {
-            status: 'LOCKED',
-            label: 'Locked',
-            isLocked: true,
-            isProtected: false,
-            icon: Lock,
-            colorClass: 'text-slate-500',
-            icons
-        };
-    }
-
-    if (status === 'published' || status === 'completed') {
-        return {
-            status: 'PROTECTED',
-            label: 'Protected',
-            isLocked: false,
-            isProtected: true,
-            icon: Shield,
-            colorClass: 'text-slate-400',
-            icons
-        };
-    }
-
-    return {
-        status: 'DRAFT',
-        label: 'Open',
-        isLocked: false,
-        isProtected: false,
-        icon: undefined,
-        colorClass: '',
-        icons
-    };
-}
 
 /**
  * Derives specific status icons for Roster Planner cards.
@@ -314,12 +219,6 @@ export function getShiftStatusIcons(shift: Partial<Shift>): ShiftStatusIcon[] {
     const now = Date.now();
     const schedStartMs = shift.start_at ? new Date(shift.start_at).getTime() : 
                         (shift.shift_date && shift.start_time ? parseZonedDateTime(shift.shift_date, shift.start_time).getTime() : null);
-    const schedEndMs = shift.end_at ? new Date(shift.end_at).getTime() :
-                      (shift.shift_date && shift.end_time ? parseZonedDateTime(shift.shift_date, shift.end_time).getTime() : null);
-    
-    // Use the actual end time if available, otherwise scheduled end
-    const hasActualEnd = shift.actual_end && shift.actual_end !== '-' && shift.actual_end !== '—';
-    const effectiveEndMs = hasActualEnd ? new Date(shift.actual_end!).getTime() : (schedEndMs || 0);
     
     // A shift is considered "Past" (Locked) as soon as it starts for Manager view
     // But for general status, we use start time for the Lock icon consistency
@@ -535,19 +434,19 @@ function isShiftAttendanceFinished(shift: ShiftDotInput, start: number, end: num
     );
 }
 
-export type TimeRule = 'Standard' | 'Urgent' | 'Emergent' | 'Live' | 'Closed';
+type TimeRule = 'Standard' | 'Urgent' | 'Emergent' | 'Live' | 'Closed';
 
 /** Arrival half of the two-badge Live Rules model. */
-export type ArrivalRule =
+type ArrivalRule =
     | 'Scheduled' | 'Awaiting Check-In' | 'Missing' | 'No Show'
     | 'Early In' | 'On Time In' | 'Late In';
 
 /** Departure half of the two-badge Live Rules model. */
-export type DepartureRule =
+type DepartureRule =
     | 'Early Out' | 'On Time Out' | 'Late Out'
     | 'Working Overtime' | 'Missing';
 
-export type LiveRule = ArrivalRule | DepartureRule;
+type LiveRule = ArrivalRule | DepartureRule;
 
 export interface ShiftRuleBadge {
     label: TimeRule | LiveRule | string;
@@ -560,7 +459,7 @@ export interface ShiftRuleBadge {
  * been marked missing at 12.5h. A genuine No Show carries an arrival badge and no
  * departure.
  */
-export interface LiveRuleBadges {
+interface LiveRuleBadges {
     arrival: ShiftRuleBadge | null;
     departure: ShiftRuleBadge | null;
 }
@@ -692,13 +591,9 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     return { arrival, departure };
 }
 
-/** Arrival / departure halves of the Payroll Rules model — mirrors Live Rules labels. */
-export type PayrollArrivalRule = 'Early In' | 'On Time In' | 'Late In';
-export type PayrollDepartureRule = 'Early Out' | 'On Time Out' | 'Late Out';
-export type PayrollRule = PayrollArrivalRule | PayrollDepartureRule;
 
 /** The two-badge Payroll Rules result — billable IN vs start, billable OUT vs end. */
-export interface PayrollRuleBadges {
+interface PayrollRuleBadges {
     arrival: ShiftRuleBadge | null;
     departure: ShiftRuleBadge | null;
 }
@@ -863,7 +758,7 @@ export type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' |
  *  - cutaway:    AMBER    office:     CYAN
  *
  * There is NO fallback colour. The database allows exactly these five groups
- * (`enforce_exactly_three_groups`, `template_group_type`), so a shift that maps
+ * (`enforce_standard_roster_groups`, `template_group_type`), so a shift that maps
  * to none of them is a data or wiring bug: it renders neutral ('default') and
  * says so in the console during development, instead of being painted a
  * plausible-looking colour (it used to be purple, which is how Office shifts on

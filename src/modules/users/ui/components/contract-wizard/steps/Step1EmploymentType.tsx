@@ -4,7 +4,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { text } from '@/modules/core/ui/typography';
 import { EMPLOYMENT_TYPES, type EmploymentType } from '../../../hooks/useContractWizardForm';
 
-export interface Step1EmploymentTypeProps {
+interface Step1EmploymentTypeProps {
     value: string;
     onSelect: (type: EmploymentType) => void;
 }
@@ -74,4 +74,3 @@ export const Step1EmploymentType: React.FC<Step1EmploymentTypeProps> = ({ value,
     </fieldset>
 );
 
-export default Step1EmploymentType;

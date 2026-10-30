@@ -23,7 +23,7 @@
  * prints 21.10 / 24.55. The baseline below uses the EBA figures.
  */
 
-export interface TraineeWageRequest {
+interface TraineeWageRequest {
   category: 'junior' | 'adult' | 'school_based';
   level: 'A' | 'B';
   exitYear?: 10 | 11 | 12;
@@ -34,7 +34,7 @@ export interface TraineeWageRequest {
 }
 
 /** A matrix indexed by highest-year-of-schooling (10|11|12) → by years-out (0..5). */
-export type SchoolingMatrix = Record<10 | 11 | 12, number[]>;
+type SchoolingMatrix = Record<10 | 11 | 12, number[]>;
 
 export interface TraineeRateMatrix {
   weeklyLevelA: SchoolingMatrix;   // cl 1.4.1 — full-time weekly, Wage Level A

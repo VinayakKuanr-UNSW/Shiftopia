@@ -14,8 +14,6 @@ import type {
 } from '../model/leave.types';
 import { isPublicHoliday } from '@/modules/core/lib/holidays';
 
-const HOURS_PER_DAY = 7.6;   // 38h / 5 days
-const DAYS_PER_WEEK = 5;
 
 // Schedule 3 §8.2/8.3 — Full-Time Security gets a DIFFERENT, more generous
 // entitlement than general staff: 210h (5 weeks) annual leave and 84h
@@ -284,7 +282,7 @@ export function projectBalance(
 }
 
 /** Adjacency context for the cl 45.4 certificate rule (audit M-12). */
-export interface CertificateAdjacency {
+interface CertificateAdjacency {
   /** The day immediately before the leave start, or immediately after the
    *  leave end, is a Saturday or Sunday. */
   adjacentToWeekend?: boolean;
@@ -300,7 +298,7 @@ export interface CertificateAdjacency {
 }
 
 /** What `computeCertificateAdjacency` can use beyond the calendar. */
-export interface CertificateContext {
+interface CertificateContext {
   /** yyyy-MM-dd dates the person is rostered, covering at least a week either side. */
   rosteredDates?: ReadonlySet<string>;
   /** Their OTHER pending or approved leave (this request excluded). */
@@ -413,15 +411,6 @@ export function computeCertificateAdjacency(
     adjacentToOtherLeave: touchesOtherLeave,
   };
 }
-
-/**
- * Leave types that have a trackable balance (for display in the balance cards).
- */
-export const BALANCE_TRACKED_TYPES: LeaveTypeCode[] = (
-  Object.values(LEAVE_POLICIES) as LeavePolicy[]
-)
-  .filter((p) => p.balanceTracked)
-  .map((p) => p.leaveType);
 
 
 /**

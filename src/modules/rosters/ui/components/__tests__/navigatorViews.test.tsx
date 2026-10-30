@@ -8,7 +8,6 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import * as React from 'react';
 import {
     UnifiedRosterNavigator, type ViewType,
 } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
@@ -66,7 +65,7 @@ describe('UnifiedRosterNavigator `views`', () => {
 
     it('renders a Today button in full variant when showToday is true and snaps to today', async () => {
         const handleChange = vi.fn();
-        const { container } = render(
+        render(
             <UnifiedRosterNavigator
                 variant="full"
                 date={new Date(2025, 0, 1)}

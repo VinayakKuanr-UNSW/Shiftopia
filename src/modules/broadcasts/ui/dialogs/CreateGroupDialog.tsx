@@ -3,7 +3,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { BroadcastGroupFormFields } from './BroadcastGroupFormFields';
 
-export interface CreateGroupDialogProps {
+interface CreateGroupDialogProps {
     isOpen: boolean;
     onClose: () => void;
     initialOrganizationId?: string | null;

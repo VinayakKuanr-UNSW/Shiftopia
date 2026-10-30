@@ -42,10 +42,10 @@ export const EXCLUSION_REASON_LABELS: Record<EbaExclusionReason, string> = {
 export const SECURITY_ANNUALISED_LEVELS: readonly number[] = [3, 4, 5, 6];
 
 /** Ordinary hours in a full-time week (cl 12.2(b)). */
-export const ORDINARY_WEEK_HOURS = 38;
+const ORDINARY_WEEK_HOURS = 38;
 
 /** Average weekly hours of the Full-Time Security roster: 38 + 4 (Sch 3 §3.1(d)). */
-export const SECURITY_ROSTER_WEEK_HOURS = 42;
+const SECURITY_ROSTER_WEEK_HOURS = 42;
 
 const WEEKS_PER_YEAR = 52;
 
@@ -236,7 +236,7 @@ function salaryThreshold(top: number | null, employmentStatus: string, weeklyHou
 
 // ── Engagement (cl 13 multi-hire) ──────────────────────────────────────────
 
-export interface HeldContract {
+interface HeldContract {
     status: string | null;
     employment_status: string | null;
     role_id?: string | null;
@@ -282,7 +282,7 @@ export function evaluateEngagement(
 // ── Rates ──────────────────────────────────────────────────────────────────
 
 /** Structural subset of payroll's EbaRateRow / EbaRateSet. */
-export interface EbaRateLike {
+interface EbaRateLike {
     classification: string;
     employmentBasis: 'permanent' | 'casual' | 'annualised';
     ordinaryHourlyRate: number;
@@ -394,7 +394,7 @@ export function quotePay(params: {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function formatMoney(amount: number, fractionDigits = 2): string {
+function formatMoney(amount: number, fractionDigits = 2): string {
     return new Intl.NumberFormat('en-AU', {
         style: 'currency',
         currency: 'AUD',

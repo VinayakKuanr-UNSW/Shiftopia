@@ -3,7 +3,7 @@ import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
 import { broadcastKeys } from '../api/queryKeys';
 
-export interface AnalyticsData {
+interface AnalyticsData {
     totalGroups: number;
     totalBroadcasts: number;
     totalMembers: number;

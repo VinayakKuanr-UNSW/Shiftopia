@@ -50,7 +50,7 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({
 
                 let profileRows: Employee[] = [];
                 if (userIds.length > 0) {
-                    let profilesQuery = supabase
+                    const profilesQuery = supabase
                         .from('profiles')
                         .select('id, first_name, last_name, email')
                         .in('id', userIds)

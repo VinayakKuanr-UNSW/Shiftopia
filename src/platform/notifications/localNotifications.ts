@@ -25,7 +25,7 @@ import {
 
 const DEVICE_ENABLED_KEY = 'shiftopia.deviceNotifications';
 
-export type LocalNotificationInput = {
+type LocalNotificationInput = {
   id: string;
   title: string;
   body: string | null;
@@ -34,7 +34,7 @@ export type LocalNotificationInput = {
   scopeId?: string;
 };
 
-export type LocalNotificationPresentation =
+type LocalNotificationPresentation =
   | 'scheduled'
   | 'in_app_only'
   | 'permission_denied'

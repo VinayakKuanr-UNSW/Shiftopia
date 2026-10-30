@@ -58,7 +58,7 @@ export interface MonthGridDayContext {
   holidayName: string | null;
 }
 
-export interface MonthGridProps {
+interface MonthGridProps {
   /** The month to display. */
   month: Date;
   /** Fired when the user pages to another month via the built-in navigation. */

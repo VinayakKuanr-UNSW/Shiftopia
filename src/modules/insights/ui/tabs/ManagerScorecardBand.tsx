@@ -8,7 +8,6 @@
  * and the RPC intersects the request with their allowed scope tree regardless.
  */
 
-import React from 'react';
 import { Clock3, Repeat, Siren, Percent } from 'lucide-react';
 import { KpiTile } from '@/modules/core/ui/components/KpiTile';
 import { useManagerScorecard } from '../../hooks/useManagerScorecard';

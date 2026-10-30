@@ -54,13 +54,13 @@ import type { RawTeamShift, TeamMember } from '../model/team-availability.types'
  */
 export const COMPLIANCE_LOOKBACK_DAYS = 21;
 
-export interface HoursRange {
+interface HoursRange {
     /** Inclusive, widened. What is FETCHED. */
     start: Date;
     end: Date;
 }
 
-export interface UseTeamHoursResult {
+interface UseTeamHoursResult {
     shifts: RawTeamShift[];
     /** The widened range these shifts cover — not the range on screen. */
     range: HoursRange;

@@ -37,7 +37,6 @@ const sources = tsxFiles(SRC).map((f) => ({
  */
 const GRID_CARDS = [
   'rosters/ui/components/SmartShiftCard.tsx',
-  'rosters/ui/components/ShiftCardCompact.tsx',
   'rosters/ui/components/ShiftCardLegend.tsx',
   'templates/ui/components/ShiftCard.tsx',
   'templates/ui/components/editor/TemplateGroupCard.tsx',

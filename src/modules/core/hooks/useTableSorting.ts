@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 
 export type SortDirection = 'asc' | 'desc' | null;
 
-export interface SortConfig {
+interface SortConfig {
   key: string;
   direction: SortDirection;
 }

@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { shiftKeys, ShiftFilters } from '../api/queryKeys';
 import { rosterSummaryQueries, RosterSummaryCellDTO } from '../api/rosterSummary.queries';
 import { useMemo } from 'react';

@@ -17,13 +17,13 @@ import { getScenarioWindow } from '@/modules/compliance';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import type { CandidateShift, EmployeeInfo, InjectedSimulationData } from '../types';
 
-export interface LoadedScenario {
+interface LoadedScenario {
     candidateShifts: CandidateShift[];
     existingShifts: CandidateShift[];
     employee: EmployeeInfo;
 }
 
-export class ScenarioLoader {
+class ScenarioLoader {
     /**
      * Load all data needed to validate proposed assignments for a single employee.
      *
@@ -71,8 +71,7 @@ export class ScenarioLoader {
             // V8_EMPLOYMENT_TARGET; without them the rule cannot fire and this
             // path validates assignments the DB trigger will reject.
             .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, organization_id, department_id, sub_department_id, unpaid_break_minutes, paid_break_minutes, required_skills, required_licenses, start_at, end_at, target_employment_type, target_requires_flexible')
-            .in('id', shiftIds)
-            .is('deleted_at', null);
+            .in('id', shiftIds);
 
         if (error) {
             console.error('[ScenarioLoader] Error fetching candidate shifts:', error);

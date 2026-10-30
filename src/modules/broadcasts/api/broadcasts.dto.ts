@@ -88,35 +88,6 @@ export function normalizeAuthor(
     };
 }
 
-/**
- * Normalise a raw broadcast row that was joined using the relational select
- * pattern (with nested profiles and broadcast_attachments).
- * Produces the full BroadcastWithDetails shape before the final toCamelCase pass.
- */
-export function normalizeBroadcastRow(
-    broadcast: any,
-    authorRole: string,
-    extras: {
-        isRead?: boolean;
-        acknowledgementStatus?: string;
-        acknowledgedAt?: string;
-    } = {}
-): any {
-    const rawAuthor = broadcast.profiles ?? broadcast.employees ?? null;
-    return {
-        ...broadcast,
-        author: normalizeAuthor(rawAuthor),
-        authorRole,
-        attachments: broadcast.broadcast_attachments ?? [],
-        isRead: extras.isRead,
-        acknowledgementStatus: extras.acknowledgementStatus,
-        acknowledgedAt: extras.acknowledgedAt,
-    };
-}
 
 // ── Legacy class (kept for backwards-compat — do NOT expand) ──────────────────
 
-/** @deprecated Legacy class — exists only for backwards compatibility. */
-export class BroadcastDbClient {
-    // intentionally empty — superseded by the functional service objects
-}

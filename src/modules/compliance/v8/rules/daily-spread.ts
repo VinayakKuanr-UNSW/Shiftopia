@@ -58,8 +58,6 @@ export const DAILY_SPREAD_LIMIT_MINUTES = 720;
 /** Sch 3 §5.3(g) — the flat floor for each engagement of a two-shift day. */
 export const CASUAL_SECURITY_MIN_ENGAGEMENT_MINUTES = 180;
 
-/** Back-compat alias: the cl 39.2 limb keeps its own name for the parity test. */
-export const SPLIT_SHIFT_SPREAD_MINUTES = DAILY_SPREAD_LIMIT_MINUTES;
 
 interface DayGroup {
     date:     string;
@@ -215,5 +213,3 @@ export const dailySpreadRule: V8RuleEvaluator = (ctx) => {
     return hits;
 };
 
-/** Previous name. Kept so the engine's rule list needs no churn. */
-export const spreadOfHoursRule = dailySpreadRule;

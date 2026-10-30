@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Group, SubGroup, Template, TemplateShift } from '../templates.types';
+import type { SubGroup, Template, TemplateShift } from '../templates.types';
 import { deepClone, generateTempId } from '../templates.types';
 
 describe('template cloning property fidelity', () => {
@@ -25,8 +25,8 @@ describe('template cloning property fidelity', () => {
     dayOfWeek: 3, // Wednesday
     targetEmploymentType: 'PT',
     targetRequiresFlexible: true,
-    assignedEmployeeId: null,
-    assignedEmployeeName: null,
+    breakStart: '12:00',
+    breakEnd: '12:30',
   };
 
   const sampleSubGroup: SubGroup = {
@@ -87,8 +87,6 @@ describe('template cloning property fidelity', () => {
         dayOfWeek: shiftData.dayOfWeek !== undefined ? shiftData.dayOfWeek : null,
         targetEmploymentType: shiftData.targetEmploymentType ?? null,
         targetRequiresFlexible: shiftData.targetRequiresFlexible ?? false,
-        assignedEmployeeId: shiftData.assignedEmployeeId ?? null,
-        assignedEmployeeName: shiftData.assignedEmployeeName ?? null,
       };
 
       // ID must be fresh
@@ -127,6 +125,8 @@ describe('template cloning property fidelity', () => {
       expect(clonedShift.siteTags).not.toBe(sampleShift.siteTags);
 
       expect(clonedShift.eventTags).toEqual(sampleShift.eventTags);
+      expect(clonedShift.breakStart).toBe('12:00');
+      expect(clonedShift.breakEnd).toBe('12:30');
       expect(clonedShift.eventTags).not.toBe(sampleShift.eventTags);
     });
 
@@ -217,8 +217,6 @@ describe('template cloning property fidelity', () => {
           dayOfWeek: s.dayOfWeek !== undefined ? s.dayOfWeek : null,
           targetEmploymentType: s.targetEmploymentType ?? null,
           targetRequiresFlexible: s.targetRequiresFlexible ?? false,
-          assignedEmployeeId: s.assignedEmployeeId ?? null,
-          assignedEmployeeName: s.assignedEmployeeName ?? null,
         })),
       };
 
@@ -234,6 +232,8 @@ describe('template cloning property fidelity', () => {
       expect(clonedChildShift.targetEmploymentType).toBe('PT');
       expect(clonedChildShift.targetRequiresFlexible).toBe(true);
       expect(clonedChildShift.skills).toEqual(sampleShift.skills);
+      expect(clonedChildShift.breakStart).toBe('12:00');
+      expect(clonedChildShift.breakEnd).toBe('12:30');
       expect(clonedChildShift.skills).not.toBe(sampleShift.skills);
     });
   });

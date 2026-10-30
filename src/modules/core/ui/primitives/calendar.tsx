@@ -36,9 +36,9 @@ import { WEEK_STARTS_ON } from '@/modules/core/lib/date/week';
  * `MonthGrid` for the supported pattern.
  */
 
-export type CalendarSize = 'popover' | 'surface';
+type CalendarSize = 'popover' | 'surface';
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
+type CalendarProps = React.ComponentProps<typeof DayPicker> & {
   /** Day-cell scale. See the note above. Default `popover`. */
   size?: CalendarSize;
 };

@@ -66,12 +66,9 @@ interface RoleResult {
  * Must match ROLES in ml/predict.py. Any other role passed to buildDemandAnalysis
  * will throw — callers should filter to this set first.
  */
-export const ML_KNOWN_ROLES = ['Usher', 'Security', 'Food Staff', 'Supervisor'] as const;
+const ML_KNOWN_ROLES = ['Usher', 'Security', 'Food Staff', 'Supervisor'] as const;
 export type MLKnownRole = typeof ML_KNOWN_ROLES[number];
 
-export function isMLKnownRole(role: string): role is MLKnownRole {
-  return (ML_KNOWN_ROLES as readonly string[]).includes(role);
-}
 
 /**
  * DB-backed lookup: returns the ML class for a role by its id, or null if unmapped.
@@ -147,26 +144,12 @@ function toApiPayload(request: EventInput): ApiSlicePayload {
   };
 }
 
-export async function predictSlice(request: EventInput): Promise<RoleResult[]> {
-  const response = await fetch(`${ML_URL}/predict/demand`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(toApiPayload(request)),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `ML prediction failed for event ${request.eventId ?? 'unknown'} slice ${request.timeSliceIndex}: HTTP ${response.status} ${response.statusText}`,
-    );
-  }
-  return response.json();
-}
 
 /**
  * Batch endpoint binding. Sends N slice requests in ONE POST and returns the
  * server-ordered list of per-slice results. Server cap is 500 items.
  */
-export async function predictBatch(requests: EventInput[]): Promise<Record<string, RoleResult>[]> {
+async function predictBatch(requests: EventInput[]): Promise<Record<string, RoleResult>[]> {
   if (requests.length === 0) return [];
   const response = await fetch(`${ML_URL}/predict/demand/batch`, {
     method: 'POST',
@@ -260,21 +243,3 @@ export async function buildDemandAnalysisForRoles(
   });
 }
 
-/**
- * Thin back-compat wrapper around buildDemandAnalysisForRoles.
- * Callers that pass a single role continue to work unchanged.
- * New callers should use buildDemandAnalysisForRoles directly to avoid
- * redundant HTTP round-trips when processing multiple roles per event.
- */
-export async function buildDemandAnalysis(
-  event: EventInput,
-  role: string,
-  derivePerSliceFlags?: (sliceIndex: number) => {
-    entryPeakFlag: boolean;
-    exitPeakFlag: boolean;
-    mealWindowFlag: boolean;
-  },
-): Promise<DemandTensor> {
-  const results = await buildDemandAnalysisForRoles(event, [role], derivePerSliceFlags);
-  return results[0];
-}

@@ -8,15 +8,14 @@ import { authService, AuthSessionError, isRejectedCredential } from './auth.serv
 import { setSentryUser } from '@/platform/observability/sentry';
 
 // Re-export types for backward compatibility with existing imports
-export type { User, AccessLevel, Role };
-export type { UserContract, AccessCertificate, PermissionObject } from './types';
+export type { Role };
 
 /**
  * AccessScope represents the organizational boundaries derived from the user's
  * Access Certificate (NOT Position Contract). This determines what data the user
  * can view/edit across the application.
  */
-export interface AccessScope {
+interface AccessScope {
   organizationId: string | null;
   organizationName: string;
   departmentId: string | null;

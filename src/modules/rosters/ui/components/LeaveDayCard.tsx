@@ -26,7 +26,7 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import type { RawLeaveDay } from '@/modules/office/domain/types';
 
-export interface LeaveDayCardProps {
+interface LeaveDayCardProps {
     leave: RawLeaveDay;
     /**
      * True when a shift still exists on this day.
@@ -114,4 +114,3 @@ export const LeaveDayCard: React.FC<LeaveDayCardProps> = ({ leave, hasConflictin
     );
 };
 
-export default LeaveDayCard;

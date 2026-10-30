@@ -94,8 +94,6 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         compliancePanel,
         runChecks,
 
-        // Emergency state
-        isEmergencyAssignment,
         isScheduleDefined,
 
         // Handlers

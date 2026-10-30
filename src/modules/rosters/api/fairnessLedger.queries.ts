@@ -10,7 +10,7 @@ import type { FairnessMetric } from '@/modules/rosters/domain/fairness-ledger';
 
 // ─── Row types ──────────────────────────────────────────────────────────────────
 
-export interface FairnessLedgerRow {
+interface FairnessLedgerRow {
     id: string;
     organization_id: string;
     employee_id: string;
@@ -24,7 +24,7 @@ export interface FairnessLedgerRow {
     updated_by_run: string | null;
 }
 
-export interface FairnessLedgerUpsertRow {
+interface FairnessLedgerUpsertRow {
     organization_id: string;
     employee_id: string;
     metric: string;

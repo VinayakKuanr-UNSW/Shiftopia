@@ -14,8 +14,6 @@ export * from '../domain/shift.entity';
 export * from './shifts.dto';
 
 // Re-export services for direct usage if needed
-export { shiftsCommands } from './shifts.commands';
-export { shiftsQueries } from './shifts.queries';
 
 // Combined API for backward compatibility with existing code
 export const shiftsApi = {

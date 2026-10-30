@@ -143,4 +143,3 @@ export const DroppableDateCell: React.FC<DroppableDateCellProps> = ({ active = t
   if (!active) return <DroppableDateCellInert {...props} />;
   return <DroppableDateCellActive {...props} />;
 };
-export default DroppableDateCell;

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ScopeTree, ScopeOrg, ScopeDept, ScopeSelection } from '@/platform/auth/types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ScopeTree, ScopeSelection } from '@/platform/auth/types';
 import type { ScopeMode } from '@/platform/auth/scope-selection';
-import { ChevronDown, Lock, Building2, Layers, Users2, Filter, MoreHorizontal, Check, Settings2 } from 'lucide-react';
+import { ChevronDown, Lock, Building2, Layers, Users2, Filter, Check, Settings2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import {
@@ -12,7 +12,6 @@ import {
     SheetTrigger,
     SheetDescription,
 } from '@/modules/core/ui/primitives/sheet';
-import { Button } from '@/modules/core/ui/primitives/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primitives/popover';
 import {
     Command,
@@ -30,13 +29,13 @@ import {
 // ... (LockConfig and GlobalScopeFilterProps interfaces remain same, eliding for brevity if possible, but tool rules say exact match or replace block)
 // I'll replace the whole file for safety if needed, or just the main component and imports.
 
-export interface LockConfig {
+interface LockConfig {
     orgLocked: boolean;
     deptLocked: boolean;
     subDeptLocked: boolean;
 }
 
-export interface GlobalScopeFilterProps {
+interface GlobalScopeFilterProps {
     /** The allowed scope tree from the permission object */
     allowedScopeTree: ScopeTree;
     /** Which fields are locked (derived from certificate level) */
@@ -672,4 +671,3 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     );
 };
 
-export default GlobalScopeFilter;

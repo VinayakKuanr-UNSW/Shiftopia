@@ -35,7 +35,7 @@
 import type { EmployeeAvailability } from './availabilityResolution.types';
 import { toTargetEmploymentType } from '@/modules/core/model/employment.types';
 
-export type AvailabilityVerdict =
+type AvailabilityVerdict =
   | 'available'
   /**
    * No declaration on file, and none is expected — the employee is available by
@@ -68,7 +68,7 @@ export function availabilityModeForEmploymentStatus(
   return toTargetEmploymentType(employmentStatus) === 'Casual' ? 'OPT_IN' : 'OPT_OUT';
 }
 
-export interface ShiftAvailabilityResult {
+interface ShiftAvailabilityResult {
   verdict: AvailabilityVerdict;
   /** True when a manual assignment should surface a warning. */
   isWarning: boolean;
@@ -151,7 +151,7 @@ export function evaluateShiftAvailability(
 }
 
 /** A declared availability slot as stored in the `availability_slots` table. */
-export interface DeclaredSlot {
+interface DeclaredSlot {
   slot_date: string;
   start_time: string;
   end_time: string;

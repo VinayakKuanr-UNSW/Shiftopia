@@ -40,7 +40,7 @@ import type { Group, TemplateShift } from './templates.types';
  */
 const NO_DATE = '1970-01-01';
 
-export interface TemplateShapeFailure {
+interface TemplateShapeFailure {
     groupName:    string;
     subGroupName: string;
     /** The shift's own name, or a positional fallback so it can still be found. */
@@ -128,7 +128,7 @@ export interface PlacedTemplateShift {
     shift:        TemplateShift;
 }
 
-export interface TemplateApplicationFailure extends TemplateShapeFailure {
+interface TemplateApplicationFailure extends TemplateShapeFailure {
     /** The date this instance would be stamped onto. */
     date:    string;
     /** Why that date is special — what the authoring gate could not know. */
@@ -149,7 +149,7 @@ export interface TemplateApplicationFailure extends TemplateShapeFailure {
  * the caller finds out that the range exceeds what can be verified rather than
  * receiving a verdict about a prefix of it.
  */
-export const MAX_APPLICATION_DAYS = 366;
+const MAX_APPLICATION_DAYS = 366;
 
 export class TemplateRangeTooLongError extends Error {
     constructor(readonly days: number) {

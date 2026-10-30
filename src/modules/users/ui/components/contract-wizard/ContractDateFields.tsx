@@ -7,7 +7,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { DatePicker } from '@/modules/core/ui/calendar/DatePicker';
 import { todayISO } from '@/modules/core/lib/date.utils';
 
-export interface ContractDateFieldsProps {
+interface ContractDateFieldsProps {
     /** ISO yyyy-MM-dd */
     start_date: string;
     /** ISO yyyy-MM-dd, or '' for an ongoing contract */
@@ -94,4 +94,3 @@ export const ContractDateFields: React.FC<ContractDateFieldsProps> = ({ start_da
     );
 };
 
-export default ContractDateFields;

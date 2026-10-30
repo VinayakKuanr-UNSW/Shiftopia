@@ -4,19 +4,11 @@ import {
     Hash,
     Users,
     MessageSquare,
-    Loader2,
     Search,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import { cn } from '@/modules/core/lib/utils';
 import { useBroadcastGroup, useBroadcasts } from '../../../state/useBroadcasts';
 import { BroadcastItem } from '../../components/BroadcastItem';

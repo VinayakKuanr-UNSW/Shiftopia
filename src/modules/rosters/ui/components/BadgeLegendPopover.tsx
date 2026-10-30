@@ -10,7 +10,7 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import { BADGE_CODES } from './ShiftCardLegend';
 
-export interface BadgeLegendPopoverProps {
+interface BadgeLegendPopoverProps {
   className?: string;
 }
 
@@ -131,4 +131,3 @@ export const BadgeLegendPopover: React.FC<BadgeLegendPopoverProps> = ({ classNam
   );
 };
 
-export default BadgeLegendPopover;

@@ -11,7 +11,7 @@ import {
 } from '../../model/team-availability.types';
 import { stateSoft } from './coverage-palette';
 
-export const TEAM_DAY_STATE_DESCRIPTIONS: Record<TeamDayState, string> = {
+const TEAM_DAY_STATE_DESCRIPTIONS: Record<TeamDayState, string> = {
   assigned: 'Rostered onto at least one shift that day',
   leave: 'Approved leave covers the day',
   available: 'Declared one or more available working windows',
@@ -28,7 +28,7 @@ function useSafeIsDark(): boolean {
   }
 }
 
-export interface GridBadgeLegendPopoverProps {
+interface GridBadgeLegendPopoverProps {
   className?: string;
 }
 

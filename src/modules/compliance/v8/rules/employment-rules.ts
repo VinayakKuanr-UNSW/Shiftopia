@@ -1,4 +1,4 @@
-import { V8RuleContext, V8Hit, V8RuleEvaluator, QualificationV2 } from '../types';
+import { V8Hit, V8RuleEvaluator, QualificationV2 } from '../types';
 
 /**
  * V8 Rule: Qualifications & Skills

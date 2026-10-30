@@ -11,7 +11,7 @@
  * Full compliance (A+B+C+D) now runs on the Manager's Swap Requests page.
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -33,17 +33,16 @@ import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { format, addDays, parse, differenceInHours } from 'date-fns';
+import { format, addDays, parse } from 'date-fns';
 import {
     Loader2, Calendar, Clock, ArrowLeftRight, Info,
-    Send, Building, Lock, Sparkles,
+    Send, Building, Sparkles,
     History as HistoryIcon, Check, ShieldCheck,
     AlertTriangle, XCircle, CheckCircle2,
-    Zap, Signal, Inbox,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
-import { getTodayInTimezone, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { getTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
 import { swapsApi } from '../../api/swaps.api';
 import { shiftsApi } from '@/modules/rosters';
@@ -56,7 +55,7 @@ import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCar
 // TYPES
 // =============================================================================
 
-export interface UnifiedSwapModalProps {
+interface UnifiedSwapModalProps {
     isOpen: boolean;
     onClose: () => void;
     onConfirmOffer: (shiftId: string | undefined) => void;
@@ -639,4 +638,3 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
     );
 };
 
-export default UnifiedSwapModal;

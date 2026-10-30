@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ScopeSelection } from '@/platform/auth/types';
 import { insightsApi } from '../api/insights.api';
-import type { BiddingKpis } from '../model/bidding-kpis.types';
 
-export type { BiddingKpis };
 
 /**
  * Org-level bidding KPIs for a window. The RPC contract lives in

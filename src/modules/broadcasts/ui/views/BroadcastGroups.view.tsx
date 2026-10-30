@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/modules/core/ui/primitives/card';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
-import { Megaphone, Trash2, Edit, MoreVertical, Settings, Users, MessageSquare } from 'lucide-react';
+import { Megaphone, Trash2, Edit, MoreVertical, Users, MessageSquare } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -11,7 +10,6 @@ import {
     DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { BroadcastGroupWithStats } from '../../model/broadcast.types';
-import { cn } from '@/modules/core/lib/utils';
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { formatDistanceToNow } from 'date-fns';
 

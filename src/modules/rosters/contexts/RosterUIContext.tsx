@@ -25,7 +25,7 @@
  * (useRosterStore partialize): a reload returns to the date last viewed.
  */
 
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   useRosterStore,
   selectDepartmentId,
@@ -38,13 +38,11 @@ import {
   type RosterMode,
   type AdvancedFilters,
   type DateRange,
-  type ComplianceFilterStatus,
 } from '../state/useRosterStore';
-import { eachDayOfInterval } from 'date-fns';
 
 // ── Re-export types (callers import from this path) ──────────────────────────
 
-export type { CalendarView, RosterMode, ComplianceFilterStatus, AdvancedFilters, DateRange };
+export type { CalendarView, RosterMode, AdvancedFilters };
 
 // ── Context value interface (unchanged public API) ────────────────────────────
 
@@ -205,14 +203,3 @@ export const useRosterUI = (): RosterUIContextValue => {
   ]);
 };
 
-/**
- * Optional variant — returns null if called before store hydrates.
- * Kept for backward compat only; prefer useRosterUI() in new code.
- */
-export const useRosterUIOptional = (): RosterUIContextValue | null => {
-  try {
-    return useRosterUI();
-  } catch {
-    return null;
-  }
-};

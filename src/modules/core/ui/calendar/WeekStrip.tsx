@@ -17,7 +17,7 @@ import { getWeekDays } from '@/modules/core/lib/date/week';
  *
  * `days` is optional: pass an anchor date and the Monday-based week is derived.
  */
-export interface WeekStripProps {
+interface WeekStripProps {
   /** Anchor date — the Mon–Sun week containing it is rendered. */
   date?: Date;
   /** Explicit day columns. Overrides `date`; use for 3-day or custom spans. */

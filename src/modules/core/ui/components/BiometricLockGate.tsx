@@ -133,4 +133,3 @@ export function BiometricLockGate() {
   );
 }
 
-export default BiometricLockGate;

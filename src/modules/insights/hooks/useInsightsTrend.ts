@@ -24,7 +24,7 @@ function pivotTrend(rows: TrendRow[]): TrendChartPoint[] {
 }
 
 /** Returns unique dept names present in the trend rows */
-export function extractDeptNames(rows: TrendRow[]): string[] {
+function extractDeptNames(rows: TrendRow[]): string[] {
     return [...new Set(rows.map(r => r.dept_name))];
 }
 

@@ -92,7 +92,7 @@ export interface TeamDayCell {
     note?: string;
 }
 
-export interface MemberContractInfo {
+interface MemberContractInfo {
     roleId: string | null;
     roleName: string | null;
     employmentStatus: string | null;
@@ -294,4 +294,3 @@ export interface TeamAvailabilityInputs {
     requiredSource: RequiredSource;
 }
 
-export type { EmployeeAvailability };

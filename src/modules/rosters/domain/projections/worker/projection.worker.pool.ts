@@ -36,7 +36,6 @@ import type {
   ProjectionRequest,
   ProjectionResult,
   ProjectionStatsResult,
-  WorkerShiftDTO,
   WorkerInboundMessage,
   WorkerOutboundMessage,
 } from './protocol';

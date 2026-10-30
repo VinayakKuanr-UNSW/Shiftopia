@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-r
 import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 
-export interface RosterPaginationFooterProps {
+interface RosterPaginationFooterProps {
   currentPage: number;
   totalPages: number;
   totalItems: number;
@@ -203,4 +203,3 @@ export const RosterPaginationFooter: React.FC<RosterPaginationFooterProps> = ({
   );
 };
 
-export default RosterPaginationFooter;

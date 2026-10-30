@@ -30,9 +30,9 @@ import { validateAvailabilityForm } from '../utils/validation.utils';
 // TYPES
 // ============================================================================
 
-export type EditMode = 'create' | 'edit' | null;
+type EditMode = 'create' | 'edit' | null;
 
-export interface EditState {
+interface EditState {
   mode: EditMode;
   ruleBeingEdited: AvailabilityRule | null;
   isSubmitting: boolean;

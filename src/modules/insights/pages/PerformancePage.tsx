@@ -16,7 +16,7 @@
  */
 
 import React from 'react';
-import { Activity, Gavel, ArrowLeftRight, CalendarX, TrendingUp, UserCircle } from 'lucide-react';
+import { Activity, ArrowLeftRight, CalendarX, TrendingUp, UserCircle } from 'lucide-react';
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/modules/core/ui/primitives/select';

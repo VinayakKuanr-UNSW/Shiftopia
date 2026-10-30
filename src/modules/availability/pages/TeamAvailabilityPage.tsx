@@ -49,7 +49,6 @@ import CoverageHeatmap from '../ui/team/CoverageHeatmap';
 import NearMissPanel from '../ui/team/NearMissPanel';
 import { RosterPaginationFooter } from '@/modules/rosters/ui/components/RosterPaginationFooter';
 import GridFunctionBar, {
-    VIEWS,
     CELL_MODES,
     type ViewKey,
     type SortOptionKey,
@@ -154,9 +153,9 @@ const SkeletonRows: React.FC<{ rows?: number }> = ({ rows = 8 }) => (
 
 const TeamAvailabilityPage: React.FC = () => {
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
-    const { user } = useAuth();
-    const { isDark } = useTheme();
-    const { toast } = useToast();
+    useAuth();
+    useTheme();
+    useToast();
     const isMobile = useIsMobile();
 
     const [anchorDate, setAnchorDate] = React.useState<Date>(() => new Date());

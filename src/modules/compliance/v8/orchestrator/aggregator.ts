@@ -12,7 +12,6 @@ import {
     V8Hit,
     V8ConsolidatedGroup,
     V8Status,
-    V8OrchestratorResult,
 } from './types';
 import { V8ShiftId } from '../types';
 import { V8_RULE_METADATA } from '../metadata';
@@ -88,16 +87,3 @@ export function deriveV8Status(hits: V8Hit[]): V8Status {
     return 'PASS';
 }
 
-export function combineV8SwapResults(
-    result_a: V8OrchestratorResult,
-    result_b: V8OrchestratorResult,
-): { status: V8Status; per_employee: [V8OrchestratorResult, V8OrchestratorResult] } {
-    const rank = (s: V8Status) => s === 'BLOCKING' ? 2 : s === 'WARNING' ? 1 : 0;
-
-    const status: V8Status =
-        rank(result_a.overall_status) >= rank(result_b.overall_status)
-            ? result_a.overall_status
-            : result_b.overall_status;
-
-    return { status, per_employee: [result_a, result_b] };
-}

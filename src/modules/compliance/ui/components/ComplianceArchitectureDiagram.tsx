@@ -1,19 +1,11 @@
 import React, { useState } from 'react';
 import {
-  Layers,
-  ArrowRight,
   ShieldCheck,
   Cpu,
   Database,
-  Lock,
-  Sparkles,
-  GitBranch,
   ChevronDown,
   ChevronUp,
-  FileCode,
   Scale,
-  CheckCircle2,
-  AlertCircle,
   Clock,
   Workflow,
 } from 'lucide-react';
@@ -135,7 +127,6 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative">
             {stages.map((stage, idx) => {
               const Icon = stage.icon;
-              const isLast = idx === stages.length - 1;
               const isActive = activeStage === idx;
 
               return (
@@ -238,4 +229,3 @@ export const ComplianceArchitectureDiagram: React.FC<ComplianceArchitectureDiagr
   );
 };
 
-export default ComplianceArchitectureDiagram;

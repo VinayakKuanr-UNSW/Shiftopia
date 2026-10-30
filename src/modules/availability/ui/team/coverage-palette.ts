@@ -67,7 +67,7 @@ export const GAP_OVER_STEPS = {
 export const GAP_NEUTRAL = { light: '#f0efec', dark: '#383835' } as const;
 
 /** Hours with no demand at all — recedes fully into the surface. */
-export const GAP_EMPTY = { light: '#f7f7f5', dark: '#1b2233' } as const;
+const GAP_EMPTY = { light: '#f7f7f5', dark: '#1b2233' } as const;
 
 /**
  * Fill for one coverage bucket.
@@ -84,7 +84,7 @@ export function gapFill(gap: number, hasDemand: boolean, isDark: boolean): strin
 
 // ── Day-state hues ──────────────────────────────────────────────────────────
 
-export interface StateStyle {
+interface StateStyle {
     /** Background fill, or null when the state is encoded as an absence. */
     fill: string | null;
     /** Single-character glyph — the secondary encoding. Never colour alone. */
@@ -130,7 +130,7 @@ export function stateStyle(state: TeamDayState, isDark: boolean): StateStyle {
 // DARKER step for the mark, because the validated light hues sit at 2.5–2.9:1
 // against a near-white surface and would not survive on a pale tint.
 
-export interface StateSoftStyle {
+interface StateSoftStyle {
     /** Low-alpha wash for the cell background. */
     bg: string;
     /** Border colour; `null` renders as a neutral outline (unset). */
@@ -226,7 +226,7 @@ export type StatusRole = keyof typeof STATUS;
 
 export type ComplianceSeverity = 'violation' | 'warning' | 'ok';
 
-export interface SeverityStyle {
+interface SeverityStyle {
     /** Low-alpha wash for the cell background. */
     bg: string;
     border: string;
@@ -269,7 +269,7 @@ export function severityStyle(severity: ComplianceSeverity, isDark: boolean): Se
 // deliberately low-contrast so a dense month of cells stays readable as a
 // field, with the day's figure printed on top in a text token.
 
-export const HOURS_STEPS = {
+const HOURS_STEPS = {
     light: ['#eef1f5', '#dbe2ec', '#c2cedd', '#a3b4cb'],
     dark: ['#1b2233', '#25304a', '#324065', '#425584'],
 } as const;

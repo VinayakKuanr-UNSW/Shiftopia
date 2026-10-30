@@ -6,7 +6,7 @@ import { Check } from 'lucide-react';
 import { TARGET_EMPLOYMENT_TYPE_LABELS } from '@/modules/core/model/employment.types';
 import { PICKER_CONTENT_CLASS, PICKER_ROW, PickerPanel, PickerTrigger } from '@/modules/core/ui/components/PickerField';
 
-export interface EmployeeSelectProps {
+interface EmployeeSelectProps {
     label?: string;
     employees: Array<any>;
     value: string | null | undefined;

@@ -16,7 +16,6 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Zap, Plus, Trash2, Pencil, Search } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
-import { cn } from '@/modules/core/lib/utils';
 
 interface SkillsSectionProps {
     employeeId: string;

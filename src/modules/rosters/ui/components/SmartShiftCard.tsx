@@ -6,12 +6,11 @@
  * - Detailed: Full info card with compliance warnings, skills, and actions
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
     Clock,
     User,
     AlertTriangle,
-    Megaphone,
     Edit,
     XCircle,
     CheckCircle,
@@ -19,10 +18,7 @@ import {
     GripVertical,
     MoreHorizontal,
     MoreVertical,
-    Flame,
-    Lock,
     CopyPlus,
-    Shield,
     Sparkles,
     Gavel,
     Briefcase,
@@ -39,10 +35,7 @@ import type { Shift } from '../../domain/shift.entity';
 import { 
     getShiftUIContext, 
     getLockState, 
-    getProtectionContext,
     getShiftStatusIcons,
-    getTimeRule,
-    getLiveRuleBadges,
     resolveGroupVariant,
 } from '../../domain/shift-ui';
 import { EditingPresenceBadge } from './EditingPresenceBadge';
@@ -51,7 +44,7 @@ import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import { ShiftStateCircleBadge } from './ShiftStateCircleBadge';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
-import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
+import { COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
 import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
@@ -69,7 +62,7 @@ import { isSecurityRoleName } from '@/modules/compliance/security-role';
 // TYPES & HELPERS
 // ============================================================================
 
-export type ShiftCardVariant = 'compact' | 'detailed' | 'comfortable';
+type ShiftCardVariant = 'compact' | 'detailed' | 'comfortable';
 export interface ComplianceInfo {
     status: 'compliant' | 'warning' | 'violation';
     violations: string[];
@@ -78,7 +71,7 @@ export interface ComplianceInfo {
     maxWeeklyHours?: number;
 }
 
-export interface SmartShiftCardProps {
+interface SmartShiftCardProps {
     shift: Shift;
     variant?: ShiftCardVariant;
     compliance?: ComplianceInfo;
@@ -280,10 +273,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     isPeopleMode = false,
     dense = false,
 }) => {
-    const colors = useMemo(
-        () => GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow,
-        [groupColor],
-    );
 
     const employeeName = (shift as any).employeeName
         || (shift as any).employee_name
@@ -314,15 +303,10 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         actual_start:       shift.actual_start      ?? null,
     }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
-    const stateDisplay = useMemo(
-        () => getShiftStateDisplay(ctx.state),
-        [ctx.state],
-    );
     const fsmLock = getLockState(ctx.state);
     const isFullyLocked = isLocked || fsmLock.fullyLocked || isPast;
 
     const statusStr = getNormalizedStatus(shift);
-    const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
     const costBreakdown = useMemo(() => {
@@ -512,8 +496,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
     
     // Centralized protection logic
-    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
-    const isProtected = protection.isProtected || fsmLock.partialLock;
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
@@ -864,18 +846,6 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
     const roleName = shift.roles?.name || 'No Role';
 
-    const ctx = useMemo(() => getShiftUIContext({
-        lifecycle_status:   shift.lifecycle_status  ?? 'Draft',
-        assignment_status:  shift.assignment_status ?? 'unassigned',
-        assignment_outcome: shift.assignment_outcome ?? null,
-        trading_status:     shift.trading_status    ?? null,
-        is_cancelled:       shift.is_cancelled      ?? false,
-        scheduled_start:    shift.scheduled_start   ?? null,
-        scheduled_end:      shift.scheduled_end     ?? null,
-        start_at:           shift.start_at          ?? null,
-        end_at:             shift.end_at            ?? null,
-        actual_start:       shift.actual_start      ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
 
 
@@ -1083,4 +1053,3 @@ const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
 
 export const SmartShiftCard = React.memo(SmartShiftCardImpl);
 
-export default SmartShiftCard;

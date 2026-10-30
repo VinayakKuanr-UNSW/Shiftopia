@@ -42,7 +42,7 @@ interface HoverState {
 
 const TIME_COL = 80;
 
-export const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
+const CoverageHeatmap: React.FC<Props> = ({ buckets, dates }) => {
     const { isDark } = useTheme();
     const [hover, setHover] = React.useState<HoverState | null>(null);
 

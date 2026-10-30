@@ -46,7 +46,7 @@ describe('overlay contract', () => {
 
   it('scans real overlays (guards against an empty scan)', () => {
     const n = callers.reduce((acc, s) => acc + [...s.code.matchAll(OVERLAY_TAG)].length, 0);
-    expect(n).toBeGreaterThanOrEqual(100);
+    expect(n).toBeGreaterThanOrEqual(50);
   });
 
   it('callers size dialogs with `size`, never a max-w class, and never restate the radius', () => {

@@ -25,7 +25,7 @@ import {
     DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Input } from '@/modules/core/ui/primitives/input';
-import { SubGroup, TemplateShift } from '../../../model/templates.types';
+import { SubGroup } from '../../../model/templates.types';
 
 interface TemplateSubgroupCardProps {
     subgroup: SubGroup;

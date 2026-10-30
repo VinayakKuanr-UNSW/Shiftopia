@@ -16,7 +16,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/modules/core/ui/primitives/select';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import {
     Loader2,
     FolderPlus,
@@ -24,7 +23,6 @@ import {
     ChevronRight,
     Sparkles,
 } from 'lucide-react';
-import { cn } from '@/modules/core/lib/utils';
 import {
     format,
     startOfMonth,

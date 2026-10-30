@@ -23,30 +23,9 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { cn } from '@/modules/core/lib/utils';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/modules/core/ui/primitives/select';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/modules/core/ui/primitives/popover';
-import {
-    Command,
-    CommandInput,
-    CommandList,
-    CommandEmpty,
-    CommandGroup,
-    CommandItem,
-} from '@/modules/core/ui/primitives/command';
-import {
     Clock,
     AlertCircle,
     AlertTriangle,
-    Lock as LockIcon,
     Shield,
     GraduationCap,
     Coffee,
@@ -56,17 +35,14 @@ import {
     CheckCircle2,
     X,
     Briefcase,
-    StickyNote,
     Plus,
     Check,
     ChevronLeft,
     ChevronRight,
     Save,
     Calendar,
-    Sparkles,
 } from 'lucide-react';
 import { Switch } from '@/modules/core/ui/primitives/switch';
-import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { MultiSelect } from './MultiSelect';
@@ -96,7 +72,7 @@ const GROUP_LABEL: Record<string, string> = {
     office: 'Office',
 };
 
-export const STEP = {
+const STEP = {
     role: 1,
     requirements: 2,
     timings: 3,
@@ -104,7 +80,7 @@ export const STEP = {
     compliance: 5,
 } as const;
 
-export const STEP_META = [
+const STEP_META = [
     { n: 1, key: 'role', label: 'Role & Context', shortLabel: 'Role', icon: Briefcase },
     { n: 2, key: 'requirements', label: 'Requirements & Notes', shortLabel: 'Requirements', icon: GraduationCap },
     { n: 3, key: 'timings', label: 'Timings & Breaks', shortLabel: 'Timings', icon: Clock },
@@ -209,8 +185,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     subtitle,
     headerActions,
 }) => {
-    const [poolOpen, setPoolOpen] = useState(false);
-    const [poolQuery, setPoolQuery] = useState('');
+    const [poolQuery] = useState('');
     const [wizardStep, setWizardStep] = useState<number>(1);
 
     const stepHeadingRef = useRef<HTMLHeadingElement>(null);

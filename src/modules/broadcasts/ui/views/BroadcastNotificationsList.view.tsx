@@ -10,14 +10,12 @@ import { useBroadcastNotifications } from '../../state/useBroadcasts';
 import { PageState } from '@/modules/core/ui/components/PageState';
 
 export const BroadcastNotificationsList: React.FC = () => {
-    const { user } = useAuth();
+    useAuth();
     const {
         notifications,
         isLoading,
         markAsRead,
-        markAllAsRead,
-        refetch
-    } = useBroadcastNotifications();
+        markAllAsRead    } = useBroadcastNotifications();
 
     // Derived state for local loading of specific actions if needed
     const [isMarkingAll, setIsMarkingAll] = useState(false);

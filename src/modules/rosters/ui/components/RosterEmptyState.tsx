@@ -2,7 +2,7 @@ import React from 'react';
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 
-export interface RosterEmptyStateProps {
+interface RosterEmptyStateProps {
   icon: LucideIcon;
   title: string;
   description: string;

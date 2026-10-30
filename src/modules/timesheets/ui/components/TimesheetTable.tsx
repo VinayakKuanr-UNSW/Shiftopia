@@ -1,8 +1,7 @@
 import { PageState } from '@/modules/core/ui/components/PageState';
 import { tableTokens, TableStateRow } from '@/modules/core/ui/primitives/table';
 import React, { useState, useMemo } from "react";
-import { ArrowUp, ArrowDown, XCircle, AlertTriangle } from "lucide-react";
-import { format } from "date-fns";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { useTheme } from "@/modules/core/contexts/ThemeContext";
 import { useToast } from "@/modules/core/hooks/use-toast";
 import type { TimesheetRow } from "../../model/timesheet.types";

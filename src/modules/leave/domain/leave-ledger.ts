@@ -42,7 +42,7 @@ import type { LeaveBalance, LeaveRequest, LeaveTypeCode } from '../model/leave.t
 
 export type LedgerKind = 'balance' | 'capped' | 'occasion' | 'unpaid';
 
-export interface LedgerTypeDef {
+interface LedgerTypeDef {
     type: LeaveTypeCode;
     label: string;
     clause: string;
@@ -124,7 +124,7 @@ export interface LedgerEntry {
     lsl?: LslPosition;
 }
 
-export interface LslPosition {
+interface LslPosition {
     serviceRecorded: boolean;
     /** Years of continuous service to today, to 2 decimals. */
     years: number;
@@ -141,7 +141,7 @@ export interface LslPosition {
 }
 
 /** NSW LSL Act / cl 49.2: 8.667 weeks for 10 years ⇒ 0.8667 weeks per year of service. */
-export const LSL_WEEKS_PER_YEAR = 8.667 / 10;
+const LSL_WEEKS_PER_YEAR = 8.667 / 10;
 
 /** What the ledger needs from a request. `id` lets two reads be merged without double counting. */
 export type LedgerRequest =
@@ -328,7 +328,7 @@ export function requestableLeaveTypes(all: readonly LeaveTypeCode[], isCasual: b
 
 // ── Entitlement warnings ─────────────────────────────────────────────────────
 
-export interface EntitlementCheckInput {
+interface EntitlementCheckInput {
     leaveType: LeaveTypeCode;
     requestedHours: number;
     startDate: string;

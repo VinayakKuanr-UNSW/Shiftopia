@@ -29,7 +29,7 @@ import type { ContractBasis } from '../../domain/contract-basis';
 import { formatEnvelopeDays as formatDays, formatEnvelopeTime as formatTime } from '../envelope-format';
 
 
-export interface ContractBasisBannerProps {
+interface ContractBasisBannerProps {
     basis: ContractBasis;
     /** True while the contract is still being read — renders nothing. */
     loading?: boolean;

@@ -20,8 +20,7 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2, Edit3, Copy, Check, ArrowLeft } from 'lucide-react';
-import { sameSubgroupName } from '@/modules/rosters/domain/subgroupRules';
+import { Loader2, Edit3, Check, ArrowLeft } from 'lucide-react';
 import { ImpactConfirmDialog, ImpactSummaryView, canConfirmSummary } from './ImpactConfirmDialog';
 import type { ChangeSummary } from './rosterChangeCopy';
 
@@ -35,7 +34,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-// ── Name → review, shared by Rename and Clone ─────────────────────────────────
+// ── Name → review, used by Rename ─────────────────────────────────────────────
 //
 // Both change a sub-group on every day in view from today on, so neither goes
 // straight from typing a name to writing. The first step takes the name; the
@@ -281,41 +280,6 @@ export const RenameSubGroupDialog: React.FC<RenameSubGroupDialogProps> = ({
     preview={onPreview}
     commit={onRename}
     busyLabel="Renaming…"
-  />
-);
-
-// ── Clone ─────────────────────────────────────────────────────────────────────
-
-interface CloneSubGroupDialogProps {
-  currentName: string;
-  scopeLabel: string;
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onPreview: (newName: string) => Promise<ChangeSummary>;
-  onClone: (newName: string) => Promise<void>;
-}
-
-export const CloneSubGroupDialog: React.FC<CloneSubGroupDialogProps> = ({
-  currentName,
-  scopeLabel,
-  isOpen,
-  onOpenChange,
-  onPreview,
-  onClone,
-}) => (
-  <NameThenReviewDialog
-    isOpen={isOpen}
-    onOpenChange={onOpenChange}
-    icon={<Copy className="h-5 w-5" aria-hidden="true" />}
-    title="Clone Subgroup"
-    description={<>Copies “{currentName}” and its shifts in {scopeLabel}, from today on.</>}
-    inputLabel="New Subgroup Name"
-    placeholder="e.g., Morning Shift Copy"
-    initialName={`${currentName} (Copy)`}
-    validateName={name => (sameSubgroupName(name, currentName) ? 'Pick a name different from the original.' : null)}
-    preview={onPreview}
-    commit={onClone}
-    busyLabel="Cloning…"
   />
 );
 

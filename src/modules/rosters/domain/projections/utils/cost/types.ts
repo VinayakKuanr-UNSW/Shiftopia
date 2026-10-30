@@ -1,5 +1,4 @@
 
-import type { Shift } from '../../../shift.entity';
 
 export interface ShiftCostBreakdown {
   totalCost: number;
@@ -184,7 +183,3 @@ export interface CostCalculatorOptions {
   priorOrdinaryHoursThisWeek?: number;
 }
 
-export interface CostEngine {
-  estimateDetailedShiftCost(options: CostCalculatorOptions): ShiftCostBreakdown;
-  estimateShiftCost(options: CostCalculatorOptions): number;
-}

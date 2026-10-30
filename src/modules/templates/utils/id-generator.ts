@@ -10,9 +10,3 @@ export function generateTempId(prefix: string = 'temp'): string {
     return `${cleanPrefix}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
-/**
- * Check if an ID is a temporary (client-generated) ID.
- */
-export function isTempId(id: string | number): boolean {
-    return String(id).startsWith('temp-');
-}

@@ -62,7 +62,6 @@ import type {
     OptimizerStrategy,
     OptimizerHealth,
     OptimizerStatus,
-    UncoveredAudit,
     CapacityCheck,
     CapacityDayBreakdown,
     PillarScores,
@@ -310,7 +309,7 @@ export function buildFairShareCaps(
     return caps;
 }
 
-export interface ContractObligationInput {
+interface ContractObligationInput {
     /** Weekly contracted minimum, in minutes. 0 for casuals. */
     weeklyContractMinutes: number;
     /** Window length in weeks — `diffDays / 7`, the same scale the caps use. */
@@ -411,7 +410,7 @@ export function inWindowScheduledMinutes(
 }
 
 /** The greedy scorer's utilization term. Neutral when there is no contract. */
-export interface GreedyUtilizationTerms {
+interface GreedyUtilizationTerms {
     /** Percent of the window obligation already scheduled. 0 when undefined. */
     utilization: number;
     /** Subtracted from the candidate score. Over-cap only. */
@@ -604,8 +603,8 @@ function priorEffectiveMinutesForHorizon(
 
 // Mirrors the Python service guards (ortools_runner.py). Surface to the user
 // before we serialize a giant payload and round-trip to the optimizer.
-export const MAX_OPTIMIZER_SHIFTS = 2000;
-export const MAX_OPTIMIZER_EMPLOYEES = 500;
+const MAX_OPTIMIZER_SHIFTS = 2000;
+const MAX_OPTIMIZER_EMPLOYEES = 500;
 
 export class AutoSchedulerInputTooLargeError extends Error {
     constructor(message: string) {
@@ -618,7 +617,7 @@ export class AutoSchedulerInputTooLargeError extends Error {
 // INPUT / OPTIONS
 // =============================================================================
 
-export interface AutoSchedulerInput {
+interface AutoSchedulerInput {
     shifts: ShiftMeta[];
     employees: EmployeeMeta[];
     employeeDetails?: Map<string, Partial<OptimizerEmployee>>;
@@ -642,7 +641,7 @@ export interface AutoSchedulerInput {
     computeAlternatives?: boolean;
 }
 
-export interface CommitResult {
+interface CommitResult {
     success: boolean;
     totalCommitted: number;
     failedEmployees: string[];
@@ -875,7 +874,6 @@ async function greedyFallback(
             // No overqualification penalty (single-mode policy): holding a
             // role's contract makes that shift a legitimate assignment, so a
             // multi-role employee is not penalised for taking a lower role.
-            const finalScore = candidate.score;
 
             const existingV8ShiftIds = assignedByEmployee.get(emp.id) ?? [];
             const candidateIds = [...existingV8ShiftIds, shift.id];

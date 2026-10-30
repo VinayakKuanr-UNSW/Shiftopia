@@ -11,7 +11,7 @@ import type { ScopeSelection } from '@/platform/auth/types';
  * the per-employee table reconcile. Averaging the per-employee rates instead
  * would weight a one-shift casual the same as a full-timer.
  */
-export interface BehaviourSummary {
+interface BehaviourSummary {
     // Counts
     held: number;
     worked: number;

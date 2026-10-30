@@ -9,7 +9,7 @@ import {
   synthesizeShifts,
   getCoverageWindow,
 } from './shiftSynthesizer.service';
-import { SLOT_MINUTES, type DemandSlot } from '../domain/shiftSynthesizer.policy';
+import { SLOT_MINUTES } from '../domain/shiftSynthesizer.policy';
 import type { DemandTensorInsertRow } from '../api/demandTensor.queries';
 import { shiftsCommands } from '../api/shifts.commands';
 import { synthesisRunsQueries } from '../api/synthesisRuns.queries';
@@ -38,7 +38,7 @@ import { runV8Orchestrator } from '@/modules/compliance/v8/index';
 import { evaluateShiftShape } from '@/modules/compliance/shape';
 import type { ShapeEmploymentTarget } from '@/modules/compliance/shape';
 import { buildSkeletonInput } from '@/modules/planning/unified/compliance/input-builder';
-import type { V8OrchestratorInput, V8OrchestratorShift } from '@/modules/compliance/v8/index';
+import type { V8OrchestratorShift } from '@/modules/compliance/v8/index';
 
 const logger = createModuleLogger('shiftSynthesizer.orchestrator');
 

@@ -74,7 +74,7 @@ export const calculateHoursBetween = (startStr?: string, endStr?: string): numbe
         const [startH, startM] = startStr.split(':').map(Number);
         const [endH, endM] = endStr.split(':').map(Number);
 
-        let startMinutes = startH * 60 + startM;
+        const startMinutes = startH * 60 + startM;
         let endMinutes = endH * 60 + endM;
 
         // Handle overnight shift (end time before start time)

@@ -45,7 +45,7 @@ import { fmtH, formatRange, initials } from '../format';
 import { periodLabel } from './LedgerCards';
 import { CardDialogClose, LeaveCardDialog, cardDivide, cardField, cardSection } from './LeaveCardDialog';
 
-export interface LeaveReviewDialogProps {
+interface LeaveReviewDialogProps {
     request: LeaveRequest | null;
     member: TeamMemberContext | undefined;
     /** This person's other requests (any period, incl. all-time gender affirmation) — for the entitlement checks. */

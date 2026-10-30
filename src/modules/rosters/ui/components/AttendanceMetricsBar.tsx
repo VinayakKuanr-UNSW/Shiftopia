@@ -28,7 +28,7 @@ interface RateTile {
   thresholdKey: string;
 }
 
-export interface AttendanceMetricsBarProps {
+interface AttendanceMetricsBarProps {
   metrics: AttendanceMetrics;
   className?: string;
 }
@@ -86,4 +86,3 @@ export const AttendanceMetricsBar: React.FC<AttendanceMetricsBarProps> = ({ metr
   );
 };
 
-export default AttendanceMetricsBar;

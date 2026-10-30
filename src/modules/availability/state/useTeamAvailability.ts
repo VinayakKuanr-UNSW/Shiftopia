@@ -39,7 +39,7 @@ export interface TeamAvailabilityFilters {
     employmentStatuses?: string[];
 }
 
-export interface UseTeamAvailabilityResult {
+interface UseTeamAvailabilityResult {
     data: TeamAvailabilityData | null;
     nearMisses: NearMiss[];
     isLoading: boolean;

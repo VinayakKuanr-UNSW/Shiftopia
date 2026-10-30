@@ -10,7 +10,7 @@
  *   modalsRef.current?.openAddShift(context);
  */
 
-import React, { useState, forwardRef, useImperativeHandle, Suspense, lazy } from 'react';
+import { useState, forwardRef, useImperativeHandle, Suspense, lazy } from 'react';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 

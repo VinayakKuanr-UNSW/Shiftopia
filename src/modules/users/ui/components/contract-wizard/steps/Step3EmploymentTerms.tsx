@@ -29,7 +29,7 @@ const fieldLabel = 'text-[11px] font-bold uppercase tracking-widest text-muted-f
 const fmtHours = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 
-export interface Step3EmploymentTermsProps {
+interface Step3EmploymentTermsProps {
     employment_status: string;
     contracted_weekly_hours: number;
     annual_guaranteed_hours: number;
@@ -334,4 +334,3 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
     );
 };
 
-export default Step3EmploymentTerms;

@@ -12,7 +12,7 @@ import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { ROSTER_STRUCTURE_KEY } from '@/modules/rosters/state/useRosterStructure';
 
 /** Every cache the grid renders from. */
-export const ROSTER_RELOAD_KEYS: readonly QueryKey[] = [
+const ROSTER_RELOAD_KEYS: readonly QueryKey[] = [
     shiftKeys.lists,
     shiftKeys.summaries,
     shiftKeys.plannerStatsRoot,

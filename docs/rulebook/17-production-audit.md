@@ -32,7 +32,7 @@
 
 | Item | Detail | Source |
 |---|---|---|
-| Four overlapping automatic shift-state sweep mechanisms | `process_shift_timers()`, `sm_run_state_processor()`, `sm_handle_auto_clock_out()`, and two edge functions — subtly different guards on the same transitions | Ch.7 §1.3 |
+| ~~Four overlapping automatic shift-state sweep mechanisms~~ **RESOLVED 2026-10-29** | Now one: `process_shift_timers()` every minute (`20261029065518`); the 15-min processor and both 5-min jobs retired, edge copies retired earlier | Ch.7 §1.3 |
 | Two competing client permission specs | `access.policy.ts` vs. `useAuth.hasPermission` — disagree on the Insights threshold | Ch.8 §2 |
 | Two edit-count badges that can disagree | `timesheets.edit_count` (DB column) vs. History popover's independently-computed count | Ch.7 §2.4 |
 | Six files locally redeclare the Sydney timezone constant | Instead of importing the one canonical export from `date.utils.ts` — three more name it `ICC_TIMEZONE` | New, this chapter |

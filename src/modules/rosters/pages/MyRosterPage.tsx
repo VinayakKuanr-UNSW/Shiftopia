@@ -5,7 +5,7 @@ import MyRosterCalendar from '@/modules/rosters/ui/my-roster/MyRosterCalendar';
 import { MyOffersModal } from '@/modules/rosters/ui/my-roster/MyOffersModal';
 import { useMyRoster } from '@/modules/rosters';
 import { usePendingOfferCount, useMyOffers } from '@/modules/rosters/state/useRosterShifts';
-import { CalendarDays, Info, Loader2, Mail } from 'lucide-react';
+import { CalendarDays, Info, Mail } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { surface } from '@/modules/core/ui/layout/pageTokens';
 import { text, touch } from '@/modules/core/ui/typography';
@@ -16,10 +16,8 @@ import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { EmployeeFunctionBar } from '@/modules/core/ui/components/EmployeeFunctionBar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
-import { format, startOfMonth, startOfDay, isWithinInterval } from 'date-fns';
-import { startOfWeekAU, endOfWeekAU } from '@/modules/core/lib/date/week';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-import { DatePicker } from '@/modules/core/ui/calendar';
+import { startOfMonth } from 'date-fns';
+import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { 
   computeRange, 
   navigateDate, 

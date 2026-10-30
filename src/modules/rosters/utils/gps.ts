@@ -19,13 +19,13 @@ export interface GPSCapture {
   capturedAt: number;    // epoch ms from Date.now() at the moment of capture
 }
 
-export type GPSFlag =
+type GPSFlag =
   | 'LOW_ACCURACY'      // accuracy > 200 m (coarse cell / Wi-Fi fix)
   | 'FAR_FROM_SITE'     // >500 m from known venue coordinates
   | 'IMPOSSIBLE_SPEED'  // implied travel speed vs clock-in > 150 km/h
   | 'TIME_MISMATCH';    // GPS clock diverges from device clock by > 5 min
 
-export type GPSConfidence = 'high' | 'medium' | 'low';
+type GPSConfidence = 'high' | 'medium' | 'low';
 
 export interface GPSAnalysis {
   hasLocation: boolean;
@@ -44,7 +44,7 @@ const TIME_MISMATCH_MS      = 5 * 60_000;  // GPS clock vs device clock toleranc
 
 // ── Haversine distance ────────────────────────────────────────────────────────
 
-export function haversineMeters(
+function haversineMeters(
   lat1: number, lon1: number,
   lat2: number, lon2: number,
 ): number {

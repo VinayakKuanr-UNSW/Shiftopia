@@ -74,7 +74,7 @@ export interface EmployeeMeta {
 // ENRICHED PROPOSAL
 // =============================================================================
 
-export interface EnrichedProposal {
+interface EnrichedProposal {
     shiftId: string;
     employeeId: string;
     employeeName: string;
@@ -102,7 +102,7 @@ export interface EnrichedProposal {
 // GROUPED ASSIGNMENTS (by employee, for AssignmentValidator)
 // =============================================================================
 
-export interface EmployeeProposalGroup {
+interface EmployeeProposalGroup {
     employeeId: string;
     employeeName: string;
     shiftIds: string[];
@@ -113,7 +113,7 @@ export interface EmployeeProposalGroup {
 // PARSER
 // =============================================================================
 
-export class SolutionParser {
+class SolutionParser {
     /**
      * Parse the raw optimizer response into enriched, grouped proposals.
      *

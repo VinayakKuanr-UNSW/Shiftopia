@@ -1,5 +1,4 @@
 import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
-import { Shift } from '@/modules/rosters/api/shifts.api';
 
 /**
  * Page context for determining lock rules.
@@ -79,7 +78,3 @@ export const isShiftCommenced = (
 };
 
 // Helper for policies
-export const canEditShiftPolicy = (shift: Shift): boolean => {
-    // Manager view - locked only if shift has started
-    return !isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
-};

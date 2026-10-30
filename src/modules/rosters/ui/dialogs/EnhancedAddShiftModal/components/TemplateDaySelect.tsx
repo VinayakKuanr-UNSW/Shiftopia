@@ -44,7 +44,7 @@ export const TEMPLATE_WEEKDAYS: ReadonlyArray<{ value: number; label: string; sh
 ]);
 
 /** `undefined` = not chosen yet; `null` = every day; otherwise the chosen days. */
-export type TemplateDays = number[] | null | undefined;
+type TemplateDays = number[] | null | undefined;
 
 const WEEKDAYS = [1, 2, 3, 4, 5];
 const WEEKEND = [6, 0];
@@ -76,7 +76,7 @@ export function toggleTemplateDay(days: TemplateDays, day: number, multiple: boo
     return next.length === TEMPLATE_WEEKDAYS.length ? null : next;
 }
 
-export interface TemplateDaySelectProps {
+interface TemplateDaySelectProps {
     value: TemplateDays;
     onChange: (value: TemplateDays) => void;
     /** Several days at once (adding). Off when editing one existing row. */

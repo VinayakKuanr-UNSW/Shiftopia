@@ -12,7 +12,6 @@
 
 import type { Shift } from './shift.entity';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { getTimeRule } from './shift-ui';
 
 // ============================================================
 // TYPES
@@ -23,20 +22,12 @@ import { getTimeRule } from './shift-ui';
  * `blocked`  = shifts that CANNOT be processed (will be skipped).
  * `warned`   = shifts that WILL be processed but carry a risk/side-effect.
  */
-export interface BulkPreflightSummary {
+interface BulkPreflightSummary {
     eligibleIds: string[];
     blocked: Array<{ id: string; reason: string }>;
     warned: Array<{ id: string; reason: string }>;
 }
 
-/**
- * Structured result returned by every bulk execution.
- * Enables partial-success UX — never treat a partial failure as total failure.
- */
-export interface BulkExecutionResult {
-    successIds: string[];
-    failed: Array<{ id: string; reason: string }>;
-}
 
 // ============================================================
 // PRE-FLIGHT VALIDATORS (sync — no network calls)
@@ -249,7 +240,7 @@ export function planPublishRoster(
     const nowMs = Date.now();
 
     for (const s of shifts) {
-        if (!s.deleted_at && !s.is_cancelled && s.lifecycle_status === 'Published') {
+        if (!s.is_cancelled && s.lifecycle_status === 'Published') {
             alreadyPublishedCount++;
         }
 
@@ -260,7 +251,7 @@ export function planPublishRoster(
             s.lifecycle_status === 'Cancelled';
 
         // Only DRAFT shifts are in scope.
-        if (s.deleted_at || s.is_cancelled || isPublishedOrTerminal) continue;
+        if (s.is_cancelled || isPublishedOrTerminal) continue;
 
         // Not this manager's to publish: reported, never sent (the server would
         // refuse the whole batch for it).

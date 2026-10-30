@@ -2,25 +2,13 @@ import React, { useState, useMemo } from 'react';
 import {
     CheckCircle,
     XCircle,
-    CheckSquare,
-    X,
-    ChevronRight,
     AlertTriangle,
     Clock,
-    Search,
-    ChevronLeft,
-    Download,
-    RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format, addDays, subDays } from 'date-fns';
-import { todayISO } from '@/modules/core/lib/date.utils';
-import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Input } from '@/modules/core/ui/primitives/input';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { TimesheetMobileCard } from './TimesheetMobileCard';
-import { TimesheetFilterDrawer } from './TimesheetFilterDrawer';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import type { ActiveFilters } from './TimesheetFilterDrawer';
 import { applyTimesheetFilters } from './TimesheetFilterDrawer';
@@ -104,12 +92,6 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
 
     const handleClearSelection = () => setSelectedIds([]);
 
-    const handleToggleSelectMode = () => {
-        setIsSelectMode(v => {
-            if (v) setSelectedIds([]);
-            return !v;
-        });
-    };
 
     const handleBulkApprove = () => {
         if (selectedIds.length === 0) return;

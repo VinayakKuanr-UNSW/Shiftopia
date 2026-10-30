@@ -21,7 +21,6 @@ import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Ban, ChevronDown, Chevr
 import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
 import { ACCESS_LEVEL_CONFIG, accessLevelLabel } from '@/platform/auth/constants';
-import type { AccessLevel } from '@/platform/auth/types';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import {
@@ -78,7 +77,7 @@ import {
     PageMenuTrigger,
 } from './PageMenu';
 
-export interface UsersTableProps {
+interface UsersTableProps {
     /** In scope and matching the search. */
     groups: readonly PersonGroup[];
     /** In scope before the search: "Showing 2 of 9 people". Defaults to `groups`. */
@@ -245,8 +244,7 @@ const STICKY_ACTIONS = 'sticky right-0 shadow-[-1px_0_0_hsl(var(--border))]';
 
 const SORT_WORDS: Record<UsersSort['direction'], string> = { ascending: 'ascending', descending: 'descending' };
 
-export const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100] as const;
-export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
+const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100] as const;
 
 // ── The table ────────────────────────────────────────────────────────────────
 
@@ -440,7 +438,6 @@ export const UsersTable: React.FC<UsersTableProps> = ({
         const { group: g, contract: c } = row;
         const triggerKey = `${surface}:${row.key}`;
         const what = c ? `${g.person.name}, ${roleOf(c)}` : g.person.name;
-        const item = 'min-h-11 md:min-h-9 gap-2';
         return (
             <PageMenu modal={false}>
                 <PageMenuTrigger asChild>
@@ -881,4 +878,3 @@ function revokeWords(person: PersonRef, c: ContractRow, today: string): string {
         + ' From tomorrow it shows as Expired. Shifts rostered under it after today must be reassigned or unassigned first.';
 }
 
-export default UsersTable;

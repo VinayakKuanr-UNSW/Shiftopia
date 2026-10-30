@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowUpDown, Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -23,7 +23,7 @@ import {
     type SortDirection,
 } from '@/modules/core/lib/row-sorting';
 
-export interface SortSelectorProps {
+interface SortSelectorProps {
     value: RowSort;
     onChange: (value: RowSort) => void;
     options?: RowSortBy[];
@@ -231,4 +231,3 @@ export function SortSelector({
     );
 }
 
-export default SortSelector;

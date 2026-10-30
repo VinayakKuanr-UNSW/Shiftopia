@@ -193,7 +193,7 @@ export function classifyShift(
  * Parsed at LOCAL NOON, never `new Date(dateStr)` — the latter parses as UTC
  * midnight and reads back a day earlier anywhere west of UTC (audit F-11).
  */
-export function shiftDayOfWeek(shiftDate: string): number {
+function shiftDayOfWeek(shiftDate: string): number {
     return new Date(shiftDate + 'T12:00:00').getDay(); // noon to avoid TZ edge
 }
 
@@ -374,7 +374,7 @@ export function aggregateShiftsToEntries(
 // ─── Denial rate (Q5) ───────────────────────────────────────────────────────────
 
 /** Bids an employee submitted in the window, and how many were rejected. */
-export interface BidOutcomeCounts {
+interface BidOutcomeCounts {
     /** Bids with status = 'rejected'. Withdrawn and expired do NOT count. */
     denied: number;
     /** All bids submitted in the window, whatever their outcome. */
@@ -387,7 +387,7 @@ export interface BidOutcomeCounts {
  * An employee needs roughly this many real bids before their own record
  * outweighs the org-wide baseline. Five is about one bidding cycle.
  */
-export const DENIAL_RATE_PRIOR_STRENGTH = 5;
+const DENIAL_RATE_PRIOR_STRENGTH = 5;
 
 /** Org-wide denials ÷ submissions — the baseline a thin record shrinks toward. */
 export function orgDenialRate(bidOutcomes?: Map<string, BidOutcomeCounts>): number {
@@ -431,7 +431,7 @@ export function smoothedDenialRate(counts: BidOutcomeCounts | undefined, priorRa
 // ─── What-if Impact Projection (bid review preview) ─────────────────────────────
 
 /** One metric's rolling value + team-relative debt. */
-export interface MetricImpact {
+interface MetricImpact {
     value: number;
     /** value − team average. Positive = above the team's fair share. */
     debt: number;
@@ -446,7 +446,7 @@ export interface FairnessImpact {
 }
 
 /** Minimal candidate shift for the impact projection. */
-export interface FairnessCandidateShift {
+interface FairnessCandidateShift {
     shiftDate: string;   // YYYY-MM-DD
     startTime: string;   // HH:MM
     endTime: string;     // HH:MM
@@ -463,10 +463,6 @@ const zeroValues = (): Record<FairnessMetric, number> => ({
     denial_rate: 0,
 });
 
-/** Contracted minutes across the whole rolling window. */
-export function contractedWindowMinutes(contractedWeekly: number, windowWeeks: number): number {
-    return contractedWeekly * 60 * windowWeeks;
-}
 
 /**
  * Overtime minutes over the window's contracted total (same formula as
@@ -479,7 +475,7 @@ export function contractedWindowMinutes(contractedWeekly: number, windowWeeks: n
  * made the threshold zero and booked 100% of every committed minute as overtime
  * (audit F-02); it now re-derives through this helper instead.
  */
-export function overtimeFromHours(totalHours: number, contractedTotalMinutes: number): number {
+function overtimeFromHours(totalHours: number, contractedTotalMinutes: number): number {
     return Math.max(0, Math.round(totalHours * 60 - contractedTotalMinutes));
 }
 

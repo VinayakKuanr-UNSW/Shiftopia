@@ -15,14 +15,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import React, { useMemo, useState } from 'react';
 import {
   TrendingUp, ArrowRight, ArrowLeft, Check, Copy, Info,
-  Database, Code2, Lock, Loader2, ChevronDown, ChevronUp,
+  Database, Code2, Lock, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
 import { cn } from '@/modules/core/lib/utils';
-import type { EbaRateSet, EbaRateRow, TraineeRateSet } from '../../../data/ebaRates.read.api';
+import type { EbaRateSet, TraineeRateSet } from '../../../data/ebaRates.read.api';
 import {
   projectCpiIncrease, toMigrationSql, toRateScheduleSnippet, cpiFactor,
   projectTraineeCpiIncrease, toTraineeMigrationSql, toTraineeSnippet,

@@ -1,7 +1,6 @@
 import type * as React from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { ShiftTimeRange, HardValidationResult, ComplianceResult } from '@/modules/compliance';
 import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
 import type { ShapeResult, ShapeHit } from '@/modules/compliance/shape';
 

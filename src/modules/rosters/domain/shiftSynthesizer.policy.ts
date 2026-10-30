@@ -2,11 +2,11 @@ import type { TemplateGroupType } from "./shift.entity";
 import type { TargetEmploymentType } from "@/modules/core/model/employment.types";
 export { timeToMinutes, minutesToTime } from "./availabilityResolution";
 
-export const MIN_SHIFT_MINUTES = 180; // 3 hrs min
-export const MAX_SHIFT_MINUTES = 720; // 12 hrs max
+const MIN_SHIFT_MINUTES = 180; // 3 hrs min
+const MAX_SHIFT_MINUTES = 720; // 12 hrs max
 export const SLOT_DURATION_MINUTES = 30;
 
-export type ShiftType = "core" | "peak_buffer"; // core = main shift, peak_buffer = extra shift for busy periods (PRD section 8)
+type ShiftType = "core" | "peak_buffer"; // core = main shift, peak_buffer = extra shift for busy periods (PRD section 8)
 
 export const SHIFT_POLICY = {
   minMinutes: MIN_SHIFT_MINUTES,
@@ -131,10 +131,10 @@ export function mergeMicroPeaks(
   return result;
 }
 
-export type EventPhase = "pre" | "during" | "post";
+type EventPhase = "pre" | "during" | "post";
 
 // Which phase each role peaks in. Lowercase keys. Unknown roles default to 'during'.
-export const ROLE_PHASE_MAP: Record<string, EventPhase[]> = {
+const ROLE_PHASE_MAP: Record<string, EventPhase[]> = {
   usher: ["during"],
   security: ["during"],
   "food staff": ["during"],
@@ -182,7 +182,7 @@ export function detectPeaks(
 
 // if shift > 12hr, splits at midpoint into two equal halves
 //  both stay unassigned (ask client if midpoint is correct split point)
-export function splitShift(shift: SynthesizedShift): SynthesizedShift[] {
+function splitShift(shift: SynthesizedShift): SynthesizedShift[] {
   const duration = shift.endMinutes - shift.startMinutes;
   if (duration <= SHIFT_POLICY.maxMinutes) return [shift];
 
@@ -298,7 +298,7 @@ export function enforceMaxDuration(
 
 // --- Step 6: Supervisor Ratio Enforcement ---
 
-export interface SupervisoryRatioRule {
+interface SupervisoryRatioRule {
   subDepartmentId: string;
   ratio: number; // 1 supervisor per N staff
   supervisorV8RoleId: string;
@@ -360,7 +360,7 @@ export function applySupervisorRatios(
         (s) => s.subDepartmentId === rule.subDepartmentId && s.roleId === rule.supervisorV8RoleId
       );
 
-      for (const [key, win] of windows) {
+      for (const [, win] of windows) {
         const supervisorsNeeded = Math.ceil(win.headcount / rule.ratio);
         const alreadyHave = existingSupervisors
           .filter((s) => s.startMinutes === win.start && s.endMinutes === win.end)
@@ -394,7 +394,7 @@ export function applySupervisorRatios(
 
 // --- Step 7: Minimum Staff Enforcement ---
 
-export interface MinimumStaffRule {
+interface MinimumStaffRule {
   subDepartmentId: string;
   roleId: string;
   minimumHeadcount: number;

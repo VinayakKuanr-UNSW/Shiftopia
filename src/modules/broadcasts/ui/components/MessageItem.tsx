@@ -1,5 +1,4 @@
 import React from 'react';
-import { format } from 'date-fns';
 import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Pin, Paperclip, Download } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -21,7 +20,7 @@ import type {
   BroadcastParticipantRole,
 } from '../../model/broadcast.types';
 
-export interface MessageItemProps {
+interface MessageItemProps {
   message: BroadcastWithDetails;
   compact?: boolean;
 }
@@ -152,4 +151,3 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) =>
   );
 };
 
-export default MessageItem;

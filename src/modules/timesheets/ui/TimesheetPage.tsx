@@ -16,7 +16,6 @@ import {
 } from './components/TimesheetFilterDrawer';
 import {
     TimesheetFunctionBar,
-    TIMESHEET_STATUS_TABS,
 } from './components/TimesheetFunctionBar';
 import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
 import {
@@ -42,7 +41,7 @@ import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/Attendance
  *
  * Owns: scope, date, search query, filter state, raw data fetch.
  */
-export const TimesheetPage: React.FC = () => {
+const TimesheetPage: React.FC = () => {
     const { hasPermission, user } = useAuth();
 
     // Everyone here holds the page (route gate `timesheet-view`): the places are

@@ -8,7 +8,7 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
 import {
-    Mail, Lock, User, Loader2, AlertCircle,
+    Loader2, AlertCircle,
     CheckCircle2, ShieldCheck, Eye, EyeOff
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';

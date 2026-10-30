@@ -59,14 +59,14 @@ import {
 
 export type WageRateTable = typeof WAGE_RATES;
 
-export interface AllowanceTable {
+interface AllowanceTable {
   meal: number;            // per occasion (cl 28.1 / Sch 2 §3)
   firstAidPerHour: number; // per ordinary hour (cl 28.2)
   proteinSpill: number;    // per shift (cl 28.3)
   splitShift: number;      // per shift (cl 28.4)
 }
 
-export interface SecurityRateTable {
+interface SecurityRateTable {
   /** Full-time security annualised hourly rate (Schedule 2 §2). */
   annualisedHourly: Record<'level3' | 'level4' | 'level5' | 'level6', number>;
   /** Map an annualised hourly rate → the equivalent ordinary hourly rate. */

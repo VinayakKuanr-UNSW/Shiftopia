@@ -83,7 +83,7 @@ interface Props {
     className?: string;
 }
 
-export const TeamCoverageSummary: React.FC<Props> = ({ summary, className }) => {
+const TeamCoverageSummary: React.FC<Props> = ({ summary, className }) => {
     const { isDark } = useTheme();
     const {
         memberCount,

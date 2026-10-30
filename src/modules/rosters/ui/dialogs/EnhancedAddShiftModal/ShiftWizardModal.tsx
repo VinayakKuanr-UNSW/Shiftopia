@@ -28,5 +28,4 @@ export const ShiftWizardModal: React.FC = () => {
     );
 };
 
-export default ShiftWizardModal;
 

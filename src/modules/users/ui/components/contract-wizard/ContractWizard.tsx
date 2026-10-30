@@ -32,7 +32,7 @@ import { Step4AwardSchedules } from './steps/Step4AwardSchedules';
  * The contract wizard: add a contract, or edit one, in four steps. Renders no
  * dialog of its own, so it fits the Users page's edit panel (Contract tab).
  */
-export interface ContractWizardProps {
+interface ContractWizardProps {
     employeeId: string;
     employeeName: string;
     /** All of the person's contracts: the 38-hour and Full-Time rules weigh every one. */
@@ -369,4 +369,3 @@ export const ContractWizard: React.FC<ContractWizardProps> = ({
     );
 };
 
-export default ContractWizard;
