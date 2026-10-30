@@ -393,53 +393,18 @@ interface GroupModeViewProps {
   ) => void;
   // Bulk Mode
   isBulkMode: boolean;
-  onBulkModeToggle: (enabled: boolean) => void;
   /** Shifts data from parent useRosterShifts hook. Required for presentational mode. */
   shifts: Shift[];
   /** Loading state from parent */
   isShiftsLoading?: boolean;
   /** Compliance data map for SmartShiftCard rendering */
   complianceMap?: Record<string, ComplianceInfo>;
-  /** Show the shift card legend panel */
-  showLegend?: boolean;
-  /** Zoom level for Day Timeline View (1h fixed) */
-  dayZoom?: 60;
   selectedV8ShiftIds?: string[];
   onToggleShiftSelection?: (shiftId: string) => void;
-  onSelectShiftIds?: (ids: string[]) => void;
-  onDeselectShiftIds?: (ids: string[]) => void;
   /** Centralized employee-to-shift assignment handler (from RostersPlannerPage) */
   onAssignShift?: (shiftId: string, employeeId: string, employeeName: string) => void;
   /** Phase-3: pre-aggregated server-side summary map for month view */
   summaryData?: Map<string, import('@/modules/rosters/api/rosterSummary.queries').RosterSummaryCellDTO>;
-  /** Callback to open drill-down panel */
-  onDrillDown?: (date: string, groupType: string, subGroupName?: string) => void;
-  footerStats?: {
-    totalShifts: number;
-    assignedShifts: number;
-    unfilledShifts: number;
-    estimatedCost: number;
-    budget: number;
-    remainingBudget: number;
-    /** Roster as planned — all live shifts in view, filled or not. */
-    scheduledCost: number;
-    /** What was actually worked. */
-    actualCost: number;
-    scheduledNetMinutes: number;
-    actualNetMinutes: number;
-    costedShifts: number;
-    /** Live shifts with no resolvable rate — they silently contribute $0. */
-    uncostedShifts: number;
-    /** Live shifts actually worked — denominator for actualCost. */
-    actualShifts: number;
-  };
-  /**
-   * Show the Budget / Remaining stat blocks in the footer. Defaults to false:
-   * budget hidden until a real budget source (e.g. planning_periods) is wired —
-   * the current budget is a hardcoded placeholder that yields a fake negative
-   * "Remaining". Est. Cost is always shown regardless of this flag.
-   */
-  showBudget?: boolean;
 }
 
 interface VisualGroup {
@@ -708,7 +673,6 @@ interface GroupSectionProps {
   isDateInTemplate: (date: Date) => boolean;
   isDnDModeActive: boolean;
   summaryData: any;
-  onDrillDown?: (dateKey: string, groupType: string, subGroupName: string) => void;
   onNavigateToMonth?: (date: Date) => void;
   renderShiftCard: (
     shift: ShiftDisplay,
@@ -741,7 +705,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   isDateInTemplate,
   isDnDModeActive,
   summaryData,
-  onDrillDown,
   onNavigateToMonth,
   renderShiftCard,
   handleAddShift,
@@ -1197,23 +1160,15 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   onNavigateToMonth,
   onAddShift,
   isBulkMode,
-  onBulkModeToggle,
   // Data props from parent (required)
   shifts: externalShifts,
   isShiftsLoading = false,
   complianceMap,
-  showLegend = false,
-  dayZoom = 60,
   projection,
   selectedV8ShiftIds: propsSelectedV8ShiftIds, // Destructure the prop and rename it
   onToggleShiftSelection,
-  onSelectShiftIds,
-  onDeselectShiftIds,
   onAssignShift,
   summaryData,
-  onDrillDown,
-  footerStats,
-  showBudget = false,
 }) => {
   const { toast } = useToast();
   useTheme();
@@ -2072,7 +2027,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     group: VisualGroup,
     subGroup: VisualSubGroup,
     date: Date,
-    launchSource: 'grid' | 'edit' | 'global' = 'grid'
   ) => {
     // SECURITY: prevent editing started shifts even if the modal logic is bypassed
     const startTimeStr = shift.rawShift.start_time;
@@ -2458,7 +2412,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   isDateInTemplate={isDateInTemplate}
                   isDnDModeActive={isDnDModeActive}
                   summaryData={summaryData}
-                  onDrillDown={onDrillDown}
                   onNavigateToMonth={onNavigateToMonth}
                   renderShiftCard={renderShiftCard}
                   handleAddShift={handleAddShift}

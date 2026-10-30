@@ -40,7 +40,6 @@ interface TimesheetMobileCardProps {
     isManager?: boolean;
     employeeHeader?: React.ReactNode;
     employeeActions?: React.ReactNode;
-    useGroupColoring?: boolean;
     className?: string;
 }
 
@@ -72,7 +71,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     isManager = true,
     employeeHeader,
     employeeActions,
-    useGroupColoring = false,
     className,
 }, ref) => {
     const [isEditing, setIsEditing] = useState(false);

@@ -80,10 +80,6 @@ interface RolesModeViewProps {
   selectedV8ShiftIds?: string[];
   isBulkMode?: boolean;
   onToggleShiftSelection?: (shiftId: string) => void;
-  /** Phase-3: pre-aggregated server-side summary map for month view */
-  summaryData?: Map<string, import('@/modules/rosters/api/rosterSummary.queries').RosterSummaryCellDTO>;
-  /** Callback to open drill-down panel */
-  onDrillDown?: (date: string, groupType: string, subGroupName?: string) => void;
 }
 
 interface FlatRole {
@@ -316,7 +312,7 @@ const DroppableRoleCell: React.FC<DroppableRoleCellProps> = (props) => {
 };
 
 export const RolesModeView: React.FC<RolesModeViewProps> = ({ 
-  selectedDate, viewType, canEdit, organizationId, departmentIds = [], subDepartmentIds = [], rosterId, shifts: parentShifts, projection, onEditShift, onMoveShift, onAssignShift, selectedV8ShiftIds: propsSelectedV8ShiftIds, isBulkMode, onToggleShiftSelection, summaryData, onDrillDown 
+  selectedDate, viewType, canEdit, organizationId, departmentIds = [], subDepartmentIds = [], rosterId, shifts: parentShifts, projection, onEditShift, onMoveShift, onAssignShift, selectedV8ShiftIds: propsSelectedV8ShiftIds, isBulkMode, onToggleShiftSelection 
 }) => {
   const { toast } = useToast();
   const activeDeptId = departmentIds[0];

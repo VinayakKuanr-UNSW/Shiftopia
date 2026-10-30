@@ -27,7 +27,6 @@ import { supabase } from '@/platform/supabase/client';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { useClockIn, useClockOut } from '@/modules/rosters/state/useClockInOut';
-import { useSettings } from '@/modules/settings/hooks/useSettings';
 import { TimesheetMobileCard } from '@/modules/timesheets/ui/components/TimesheetMobileCard';
 import type { TimesheetRow } from '@/modules/timesheets/model/timesheet.types';
 import {
@@ -249,10 +248,9 @@ function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null)
 interface AttendanceCardProps {
   shift: Shift;
   now: Date;
-  useGroupColoring?: boolean;
 }
 
-const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupColoring }) => {
+const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
   const { user } = useAuth();
   const clockIn  = useClockIn();
   const clockOut = useClockOut();
@@ -456,7 +454,6 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
         </div>
       }
       employeeActions={footerActions}
-      useGroupColoring={useGroupColoring}
     />
   );
 };
@@ -514,8 +511,6 @@ const AttendancePage: React.FC = () => {
   const [sort, setSort] = useState<RowSort>(DEFAULT_ROW_SORT);
   const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
   const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
-  const { orgBranding } = useSettings();
-  const useGroupColoring = (orgBranding as any)?.enable_group_coloring || false;
 
   const rangeStart = format(range.start, 'yyyy-MM-dd');
   const rangeEnd   = format(range.end,   'yyyy-MM-dd');
@@ -753,7 +748,7 @@ const AttendancePage: React.FC = () => {
                       />
                     )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
-                      {bucket.items.map(s => <AttendanceCard key={s.id} shift={s} now={now} useGroupColoring={useGroupColoring} />)}
+                      {bucket.items.map(s => <AttendanceCard key={s.id} shift={s} now={now} />)}
                     </div>
                   </div>
                 ))

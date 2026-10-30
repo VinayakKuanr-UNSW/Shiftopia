@@ -557,7 +557,6 @@ const EmployeeSwapsPage: React.FC = () => {
         
         // Offer close = shift start − 4h (T−4h lockout), tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
-        const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
 
         const isExpired = isClosed;
         const isTerminalRequest = swap.status === 'APPROVED' || swap.status === 'REJECTED' || swap.status === 'CANCELLED' || swap.status === 'MANAGER_PENDING';
@@ -583,7 +582,6 @@ const EmployeeSwapsPage: React.FC = () => {
                     unpaidBreak={shift?.unpaid_break_minutes || 0}
                     timerText={timerDisplay}
                     isExpired={isExpired}
-                    urgency={priority}
                     lifecycleStatus={shift?.lifecycle_status}
                     groupVariant={groupVariant}
 
@@ -664,7 +662,6 @@ const EmployeeSwapsPage: React.FC = () => {
         const { isClosed, timerText } = getSwapClose(shift, now);
         const isExpired = isClosed;
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
-        const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
 
         const groupVariant = groupVariantFor(shift?.group_type);
 
@@ -686,7 +683,6 @@ const EmployeeSwapsPage: React.FC = () => {
                 unpaidBreak={shift?.unpaid_break_minutes || 0}
                 timerText={timerText}
                 isExpired={isExpired}
-                urgency={priority}
                 lifecycleStatus={shift?.lifecycle_status}
                 groupVariant={groupVariant}
 
@@ -736,8 +732,6 @@ const EmployeeSwapsPage: React.FC = () => {
         const { isClosed, timerText } = getSwapClose(shift, now);
         const isExpired = isClosed;
 
-        const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
-        
         const groupVariant = groupVariantFor(shift?.group_type);
 
         const isSelected = selectedSwapIds.includes(swap.id);
@@ -797,7 +791,6 @@ const EmployeeSwapsPage: React.FC = () => {
                         unpaidBreak={shift?.unpaid_break_minutes || 0}
                         timerText={isExpired ? 'Closed' : timerText}
                         isExpired={isExpired}
-                        urgency={priority}
                         groupVariant={groupVariant}
                         shiftData={{
                             lifecycle_status: swap.status,
@@ -1647,7 +1640,6 @@ const EmployeeSwapsPage: React.FC = () => {
                                         unpaidBreak={shift?.unpaid_break_minutes}
                                         timerText={isExpired ? 'Swap Closed' : `Closes in ${timerStr}`}
                                         isExpired={isExpired}
-                                        isUrgent={swap.priority === 'URGENT'}
                                         lifecycleStatus={swap.status}
                                         footerActions={footerActions}
                                         isFlat={false}

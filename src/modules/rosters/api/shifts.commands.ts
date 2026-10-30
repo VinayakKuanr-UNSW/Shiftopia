@@ -16,9 +16,7 @@ import {
     BulkAssignAtomicResponseSchema,
     BulkDeleteResponseSchema,
     DeleteShiftResponseSchema,
-    CancelShiftResponseSchema,
     OfferActionResponseSchema,
-    RequestTradeResponseSchema,
     EmployeeDropResponseSchema,
     CloseBiddingResponseSchema,
     ApplyShiftOpResponseSchema,
@@ -997,18 +995,6 @@ export const shiftsCommands = {
        CANCEL SHIFT
        ============================================================ */
 
-    /**
-     * Cancel a shift (employee initiated)
-     * Triggers the cancel_shift RPC which handles bidding logic
-     */
-    async cancelShift(shiftId: string, reason: string) {
-        return callAuthenticatedRpc(
-            'sm_manager_cancel',
-            (userId) => ({ p_shift_id: shiftId, p_reason: reason, p_user_id: userId }),
-            CancelShiftResponseSchema,
-        );
-    },
-
     /* ============================================================
        DELETE SHIFT
        ============================================================ */
@@ -1157,14 +1143,6 @@ export const shiftsCommands = {
     /* ============================================================
        EMPLOYEE ACTIONS (V3)
        ============================================================ */
-
-    async requestTrade(shiftId: string) {
-        return callAuthenticatedRpc(
-            'sm_request_trade',
-            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_target_employee_id: null }),
-            RequestTradeResponseSchema,
-        );
-    },
 
     async acceptOffer(shiftId: string) {
         return callAuthenticatedRpc(

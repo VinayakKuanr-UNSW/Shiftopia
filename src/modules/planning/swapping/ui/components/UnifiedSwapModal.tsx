@@ -370,7 +370,6 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                                 netLength={calcNetMinutes(s)}
                                                 paidBreak={0}
                                                 unpaidBreak={s.unpaid_break_minutes || 0}
-                                                urgency={urgency}
                                                 groupVariant={groupVariant}
                                                 onClick={isUnavailable ? undefined : () => setSelectedV8ShiftId(shift.id)}
                                                 className={cn(

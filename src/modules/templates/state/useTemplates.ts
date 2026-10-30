@@ -8,7 +8,6 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
   Template,
-  Group,
   SubGroup,
   TemplateShift,
   CreateTemplateInput,
@@ -114,7 +113,6 @@ interface UseTemplatesReturn {
   // Local editing
   setCurrentTemplate: (template: Template | null) => void;
   updateLocalTemplate: (updates: Partial<Template>) => void;
-  updateLocalGroup: (groupId: string | number, updates: Partial<Group>) => void;
   addLocalSubgroup: (groupId: string | number, name: string) => void;
   updateLocalSubgroup: (
     groupId: string | number,
@@ -145,7 +143,6 @@ interface UseTemplatesReturn {
     subgroupId: string | number,
     shiftId: string | number
   ) => void;
-  discardChanges: () => void;
 
   // Validation
   validateName: (name: string, excludeId?: string) => Promise<ValidationResult>;
@@ -471,22 +468,6 @@ export function useTemplates(): UseTemplatesReturn {
     setHasUnsavedChanges(true);
   }, []);
 
-  const updateLocalGroup = useCallback(
-    (groupId: string | number, updates: Partial<Group>) => {
-      setLocalTemplate((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          groups: prev.groups.map((g) =>
-            g.id === groupId ? { ...g, ...updates } : g
-          ),
-        };
-      });
-      setHasUnsavedChanges(true);
-    },
-    []
-  );
-
   const addLocalSubgroup = useCallback(
     (groupId: string | number, name: string) => {
       const sanitizedName = sanitizeString(name);
@@ -764,25 +745,6 @@ export function useTemplates(): UseTemplatesReturn {
     },
     []
   );
-
-  const discardChanges = useCallback(() => {
-    if (lastSavedTemplateRef.current) {
-      const restored = deepClone(lastSavedTemplateRef.current);
-      setLocalTemplate(restored);
-      setHasUnsavedChanges(false);
-      log('info', 'Discarded changes, restored to last saved state');
-      toast({
-        title: 'Changes discarded',
-        description: 'Reverted to last saved version',
-      });
-    } else {
-      toast({
-        title: 'Nothing to discard',
-        description: 'No saved version to restore',
-        variant: 'destructive',
-      });
-    }
-  }, [toast]);
 
   /* ============================================================
      SAVE TEMPLATE (ATOMIC VIA RPC)
@@ -1358,7 +1320,6 @@ export function useTemplates(): UseTemplatesReturn {
     // Local editing
     setCurrentTemplate,
     updateLocalTemplate,
-    updateLocalGroup,
     addLocalSubgroup,
     updateLocalSubgroup,
     deleteLocalSubgroup,
@@ -1366,7 +1327,6 @@ export function useTemplates(): UseTemplatesReturn {
     addLocalShift,
     updateLocalShift,
     deleteLocalShift,
-    discardChanges,
 
     // Validation
     validateName,

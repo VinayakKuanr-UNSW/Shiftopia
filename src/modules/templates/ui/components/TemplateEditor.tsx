@@ -26,10 +26,8 @@ interface TemplateEditorProps {
   isSaving: boolean;
   hasUnsavedChanges: boolean;
   onBack: () => void;
-  onDiscardChanges: () => void;
   onSaveChanges: () => Promise<boolean>;
   onUpdateStatus: (id: string, status: string) => Promise<boolean>;
-  onUpdateGroup: (groupId: string | number, updates: Partial<Group>) => void;
   onAddSubgroup: (groupId: string | number, name: string) => void;
   onUpdateSubgroup: (
     groupId: string | number,
@@ -68,9 +66,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
   isSaving,
   hasUnsavedChanges,
   onBack,
-  onDiscardChanges,
   onSaveChanges,
-  onUpdateGroup,
   onAddSubgroup,
   onUpdateSubgroup,
   onDeleteSubgroup,
@@ -283,9 +279,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
         lastSavedAgo={lastSavedAgo}
         onBack={onBack}
         onSave={onSaveChanges}
-        onDiscard={onDiscardChanges}
         onArchive={() => onUpdateStatus(String(template.id), 'archived')}
-        onDownload={() => console.log('[TemplateEditor] Download requested')}
         onUpdateStatus={(status) => onUpdateStatus(String(template.id), status)}
         readOnly={readOnly}
       />

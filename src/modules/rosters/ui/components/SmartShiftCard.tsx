@@ -112,7 +112,6 @@ interface SmartShiftCardProps {
      */
     editors?: ShiftEditor[];
     isPeopleMode?: boolean;
-    dense?: boolean;
 }
 
 const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
@@ -267,11 +266,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     headerAction,
     groupColor = 'default_yellow',
     className,
-    showStatusIcons,
     detailedCost,
     editors,
-    isPeopleMode = false,
-    dense = false,
 }) => {
 
     const employeeName = (shift as any).employeeName

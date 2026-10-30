@@ -29,7 +29,6 @@ function renderFilter() {
             allowedScopeTree={TREE as any}
             lockConfig={{ orgLocked: true, deptLocked: false, subDeptLocked: false }}
             onScopeChange={onScopeChange}
-            mode="managerial"
             multiSelect
         />,
     );

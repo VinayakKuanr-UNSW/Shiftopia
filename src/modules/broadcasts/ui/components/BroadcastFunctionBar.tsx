@@ -12,7 +12,6 @@ interface BroadcastFunctionBarProps {
    * rather than rendering a button with nothing behind it.
    */
   canCreateGroup?: boolean;
-  isLoading?: boolean;
   className?: string;
 }
 
@@ -21,7 +20,6 @@ export const BroadcastFunctionBar: React.FC<BroadcastFunctionBarProps> = ({
   searchQuery,
   onCreateGroup,
   canCreateGroup = true,
-  isLoading,
   className,
 }) => {
   // No views or modes: search and create are zone-3 actions.

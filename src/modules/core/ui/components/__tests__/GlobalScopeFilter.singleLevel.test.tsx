@@ -60,7 +60,6 @@ function renderFilter(props: Record<string, unknown> = {}) {
             allowedScopeTree={TREE as any}
             lockConfig={LOCKS}
             onScopeChange={onScopeChange}
-            mode="personal"
             {...props}
         />,
     );

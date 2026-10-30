@@ -31,7 +31,6 @@ export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
 
     return (
         <GlobalScopeFilter
-            mode={mode}
             allowedScopeTree={scopeTree}
             lockConfig={{
                 // Nothing to choose with one organization (ICC Sydney). A zeta, or
