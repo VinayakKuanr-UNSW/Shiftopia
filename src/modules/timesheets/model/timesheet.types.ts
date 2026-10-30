@@ -7,7 +7,6 @@
  * REJECTED -> DRAFT
  * APPROVED -> LOCKED
  */
-import type { ShiftPayTermsField } from '@/modules/rosters/domain/projections/utils/cost/types';
 
 
 
@@ -33,10 +32,8 @@ export interface TimesheetRow {
     subGroup: string;
     role: string;
     remunerationLevel: string;
-    /** The shift's stored level as a number (0 = Introductory) — what the cost engine prices on. */
+    /** The shift's stored level as a number (0 = Introductory). */
     remunerationLevelNumber?: number | null;
-    /** The linked contract's pay terms, when the viewer may see them (shifts.shift_pay_terms). */
-    payTerms?: ShiftPayTermsField | null;
     // Scheduled
     scheduledStart: string;
     scheduledEnd: string;
@@ -70,10 +67,8 @@ export interface TimesheetRow {
     breakVarianceMinutes?: number | null;
     hasBreakVarianceFlag?: boolean;
     netLength: string; // Auto-calculated
-    /** Raw minutes behind `netLength` (already EBA-floored) — feeds the Billable Pay estimate. */
+    /** Raw minutes behind `netLength` (already EBA-floored). */
     netLengthMinutes?: number;
-    // Payroll
-    approximatePay: string;
     // Differential
     differential: string; // Scheduled vs Adjusted (financial) difference
     // Statuses
@@ -106,6 +101,8 @@ export interface TimesheetRow {
     wasToppedUpToMinEngagement?: boolean;
     /** The EBA minimum (minutes) that applied, or null when it doesn't (no-show/cancelled). */
     requiredEngagementMinutes?: number | null;
+    /** Time in lieu this approved day earned (daily rule, salaried contracts only), in minutes. */
+    toilMinutes?: number;
     /** Raw `profiles.employment_type` — feeds the min-engagement floor and pay-estimate calls. */
     employmentType?: string | null;
     /** Role name (lowercased) includes 'security' — selects the Security Sch 3 pay tiers. */

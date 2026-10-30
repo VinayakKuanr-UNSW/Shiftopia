@@ -12,7 +12,6 @@ import {
     type EbaExclusionReason,
     type PayBasis,
     type PayIssue,
-    type PayQuote,
     type RoleBand,
 } from '../../../../domain/contractPayTerms';
 import { FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../../../hooks/useContractWizardForm';
@@ -50,8 +49,6 @@ interface Step3EmploymentTermsProps {
     band: RoleBand | null;
     /** Levels on offer (annualised Security: 3–6); undefined = all. */
     allowedLevels?: readonly number[];
-    rateFor: (level: number) => string | null;
-    quote: PayQuote | null;
     levelOutsideBand: boolean;
     level_note: string;
     onLevelNoteChange: (note: string) => void;
@@ -73,7 +70,7 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
     remuneration_level, remLevels,
     onHoursChange, onLevelChange,
     hoursRule, existingWeeklyHours, isCeilingExceeded, ceilingProposedTotal, mixedPermanentConflict,
-    pay_basis, allowedPayBases, onPayBasisChange, band, allowedLevels, rateFor, quote,
+    pay_basis, allowedPayBases, onPayBasisChange, band, allowedLevels,
     levelOutsideBand, level_note, onLevelNoteChange,
     annual_salary, onAnnualSalaryChange, eba_exclusion_reason, onExclusionReasonChange,
     payErrors, payWarnings,
@@ -250,7 +247,6 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
                         levels={remLevels}
                         allowedLevels={allowedLevels}
                         band={band}
-                        rateFor={rateFor}
                     />
                     <span className="text-[11px] text-muted-foreground pl-1">
                         {formatBand(band)
@@ -269,13 +265,6 @@ export const Step3EmploymentTerms: React.FC<Step3EmploymentTermsProps> = ({
                             />
                         </div>
                     )}
-                </div>
-            )}
-
-            {quote && (
-                <div className="px-4 py-3 rounded-xl border border-border bg-muted/20 flex items-baseline justify-between gap-3">
-                    <span className="text-[15px] font-bold tabular-nums text-foreground">{quote.headline}</span>
-                    <span className="text-[11px] text-muted-foreground text-right">{quote.detail}</span>
                 </div>
             )}
 

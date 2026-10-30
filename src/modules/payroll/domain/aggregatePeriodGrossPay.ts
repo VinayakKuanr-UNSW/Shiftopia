@@ -24,8 +24,8 @@ function round2(x: number): number {
 const CODE_ORDER: EarningsCode[] = [
   'ordinary', 'penalty', 'overtime', 'night_allowance', 'other_allowance',
   'annual_leave', 'personal_leave', 'parental_leave', 'long_service_leave',
-  'jury_duty', 'supporting_carer', 'public_holiday', 'leave_loading',
-  'rest_gap_penalty',
+  'jury_duty', 'supporting_carer', 'toil_taken', 'public_holiday', 'leave_loading',
+  'toil_payout', 'rest_gap_penalty',
 ];
 
 /** cl 40.1 — double-time floor multiplier for rest-gap breach hours. */
@@ -82,6 +82,7 @@ function isLeaveInput(input: GrossPayShiftInput): boolean {
     input.isAnnualLeave || input.isPersonalLeave || input.isCarerLeave
     || input.isParentalLeave || input.isLongServiceLeave || input.isJuryDuty
     || input.isSupportingCarer || input.isFdvLeave || input.isPublicHolidayNotWorked
+    || input.isToilLeave || input.isToilPayout
   );
 }
 
@@ -100,6 +101,16 @@ interface SalariedContractConfig {
   contractedWeeklyHours?: number;
 }
 
+export interface PeriodToilFacts {
+  /**
+   * Time in lieu EARNED in the period, from `toil_ledger` (daily + weekly
+   * rules, net of corrections). The ledger is the one source: this used to be
+   * worked − contracted hours over the period, which disagreed with what was
+   * actually banked (it netted short days against long ones and ignored leave).
+   */
+  accruedHours?: number;
+}
+
 /**
  * Aggregate already-computed per-shift gross pay for one employee into a single
  * period record. Shifts outside [periodStart, periodEnd] or for another employee
@@ -110,6 +121,7 @@ export function aggregatePeriodGrossPay(
   shifts: ShiftGrossPay[],
   bounds: PeriodBounds,
   salariedContract?: SalariedContractConfig,
+  toil?: PeriodToilFacts,
 ): PeriodGrossPay {
   const inPeriod = shifts.filter(
     (s) => s.employeeId === employeeId
@@ -143,7 +155,6 @@ export function aggregatePeriodGrossPay(
     })();
 
   let totalSalariedWorkedHours = 0;
-  let timeInLieuHours: number | undefined;
   let balanceHours = 0;
 
   if (contractSalary) {
@@ -167,7 +178,6 @@ export function aggregatePeriodGrossPay(
 
     balanceHours = round2(Math.max(0, periodContractedHours - salariedLeaveHours));
     const balanceSalaryAmount = round2(Math.max(0, periodSalary - salariedLeaveAmount));
-    timeInLieuHours = round2(Math.max(0, totalSalariedWorkedHours - balanceHours));
 
     if (balanceSalaryAmount > 0 || balanceHours > 0) {
       const key = 'ordinary::Salary';
@@ -201,7 +211,9 @@ export function aggregatePeriodGrossPay(
     paidHours,
     shiftCount: inPeriod.length,
     salariedHours: contractSalary ? totalSalariedWorkedHours : undefined,
-    timeInLieuHours: contractSalary ? timeInLieuHours : undefined,
+    timeInLieuHours: toil?.accruedHours != null
+      ? round2(toil.accruedHours)
+      : (contractSalary ? 0 : undefined),
   };
 }
 
@@ -222,8 +234,10 @@ interface PeriodConfig {
    * `bounds.periodStart` (no lead-in) when omitted or not earlier than it.
    */
   leadInStart?: string;
-  /** Salaried contract terms for period salary and time-in-lieu calculation. */
+  /** Salaried contract terms for the period salary. */
   salariedContract?: SalariedContractConfig;
+  /** Time in lieu earned in the period, from the TOIL ledger. */
+  toil?: PeriodToilFacts;
 }
 
 /**
@@ -317,7 +331,7 @@ export function computeEmployeePeriodGrossPay(
   const salariedContract = config?.salariedContract
     ?? (salInput ? { annualSalary: salInput.annualSalary!, contractedWeeklyHours: salInput.contractedWeeklyHours } : undefined);
 
-  return aggregatePeriodGrossPay(employeeId, priced, bounds, salariedContract);
+  return aggregatePeriodGrossPay(employeeId, priced, bounds, salariedContract, config?.toil);
 }
 
 /**

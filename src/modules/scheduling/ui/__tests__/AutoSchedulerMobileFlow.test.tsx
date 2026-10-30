@@ -25,7 +25,6 @@ function group(over: Partial<EmployeeGroup> = {}): EmployeeGroup {
         name: 'Ada Lovelace',
         proposals: [proposal()],
         roleDistribution: [{ name: 'Barista', value: 1 }],
-        totalCost: 240,
         avgFatigue: 3.2,
         utilization: 62,
         employmentType: 'Casual',

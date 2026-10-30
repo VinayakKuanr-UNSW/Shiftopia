@@ -31,6 +31,8 @@ export type EarningsCode =
   | 'long_service_leave'// cl 49 / LSL Act 1955 (NSW) — paid at ordinary rate
   | 'jury_duty'         // cl 53 — make-up pay (first 10 days; court-pay offset is a manual adjustment)
   | 'supporting_carer'  // cl 52 — ONE week paid, permanents only
+  | 'toil_taken'        // time off in lieu taken — salaried contracts only (paid within the salary)
+  | 'toil_payout'       // time off in lieu paid out: on request, at 6 months, or when the salaried contract ends
   | 'rest_gap_penalty'; // cl 40.1 — double-time floor when rest gap breached
 
 export interface EarningsLine {
@@ -47,7 +49,12 @@ export interface EarningsLine {
  * priced from manager-approved actual/adjusted times; `none` = not worked
  * (no-show / cancelled) and therefore not paid.
  */
-export type GrossPayHoursSource = 'actual' | 'adjusted' | 'scheduled_fallback' | 'none';
+/**
+ * Which window a shift's hours were priced from. 'scheduled' is the roster
+ * window priced deliberately (the ledger's Scheduled Pay column), as opposed to
+ * 'scheduled_fallback' — billable pricing that had no attendance to use.
+ */
+export type GrossPayHoursSource = 'actual' | 'adjusted' | 'scheduled' | 'scheduled_fallback' | 'none';
 
 /** Gross pay for a single shift, itemised into earnings lines. */
 export interface ShiftGrossPay {

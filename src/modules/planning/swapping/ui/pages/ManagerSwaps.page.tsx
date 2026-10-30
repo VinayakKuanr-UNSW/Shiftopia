@@ -23,7 +23,6 @@ import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { soleOrgId, soleDeptId, soleSubDeptId } from '@/platform/auth/scope-narrowing';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
@@ -113,7 +112,6 @@ const ShiftPane: React.FC<{
                 paidBreak={data.paidBreakMinutes}
                 unpaidBreak={data.unpaidBreakMinutes}
                 lifecycleStatus={data.lifecycleStatus}
-                estimatedPay={data.estimatedPay > 0 ? `$${data.estimatedPay.toFixed(2)}` : undefined}
                 groupVariant={groupVariantFor(data.groupType)}
                 employeeName={data.employeeName}
                 topContent={
@@ -158,9 +156,8 @@ const COMPLIANCE_STYLES: Record<'PASS' | 'WARNING' | 'BLOCKING', {
     BLOCKING: { ring: 'bg-rose-500/10 border-rose-500/20',     icon: <ShieldX      className="h-3.5 w-3.5 text-rose-500"   />, label: 'Compliance Blocked' },
 };
 
-const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: ComplianceStatus }> = ({ hoursDiff, payDiff, compliance }) => {
+const SwapDivider: React.FC<{ hoursDiff: number; compliance: ComplianceStatus }> = ({ hoursDiff, compliance }) => {
     const hoursColor = hoursDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : hoursDiff < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/30';
-    const payColor = payDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : payDiff < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/30';
     const cStyle = compliance ? COMPLIANCE_STYLES[compliance] : null;
 
     return (
@@ -176,11 +173,6 @@ const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: Co
                 <Badge variant="secondary" className={cn("text-[11px] font-black font-mono shadow-none px-2", hoursColor)}>
                     {hoursDiff > 0 ? '+' : ''}{hoursDiff.toFixed(1)}h
                 </Badge>
-                {payDiff !== 0 && (
-                    <span className={cn("text-[11px] font-mono font-black opacity-60", payColor)}>
-                        {payDiff > 0 ? '+' : ''}${payDiff.toFixed(0)}
-                    </span>
-                )}
                 {cStyle && (
                     <TooltipProvider>
                         <Tooltip>
@@ -218,11 +210,9 @@ interface SwapRequestManagement {
         time: string;
         duration: string;
         durationNum: number;
-        hourlyRate: number;
         netLengthMinutes: number;
         paidBreakMinutes: number;
         unpaidBreakMinutes: number;
-        estimatedPay: number;
         avatar?: string;
         deptName?: string;
         subGroupName?: string;
@@ -245,11 +235,9 @@ interface SwapRequestManagement {
         time: string;
         duration: string;
         durationNum: number;
-        hourlyRate: number;
         netLengthMinutes: number;
         paidBreakMinutes: number;
         unpaidBreakMinutes: number;
-        estimatedPay: number;
         avatar?: string;
         deptName?: string;
         subGroupName?: string;
@@ -269,7 +257,6 @@ interface SwapRequestManagement {
     requestedAt: string;
     tags: string[];
     hoursDiff: number;
-    payDiff: number;
     complianceStatus: ComplianceStatus;
     priority?: SwapPriority;
     shiftStateId: string;
@@ -285,22 +272,14 @@ interface SwapRequestManagement {
 }
 
 
-/** Exported for tests (swap pay delta). */
+/**
+ * Swap request → the manager view's model. Hours only: a swap's pay effect is
+ * not shown here — pay is shown in Gross Pay alone (decision 2026-10-09).
+ */
 export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement => {
-    // `asRequester` prices the shift on the REQUESTER's contract
-    // (requester_pay_terms, attached by swapsApi.fetchSwapRequests) — the pay
-    // delta is the requester's, beside their change in hours. Without it, the
-    // shift's own linked terms: what its current holder is paid.
-    const getShiftValue = (shift?: any, asRequester = false) => {
-        if (!shift) return { rate: 0, durationHours: 0, value: 0 };
+    const getShiftValue = (shift?: any) => {
         const netLength = shift?.net_length_minutes ?? shift?.netLength ?? 0;
-        const durationHours = netLength / 60;
-        const priced = asRequester && shift.requester_pay_terms
-            ? { ...shift, shift_pay_terms: shift.requester_pay_terms }
-            : shift;
-        const totalCost = estimateDetailedCostFromShift(priced).totalCost || 0;
-        const rate = durationHours > 0 ? totalCost / durationHours : 0;
-        return { rate, durationHours, value: totalCost };
+        return { durationHours: netLength / 60 };
     };
 
     const reqVal = getShiftValue(apiData.originalShift);
@@ -323,19 +302,14 @@ export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManage
         }
     }
 
-    // Duration / pay delta — use offered_shift when requestedShift absent
-    const offerVal = activeOffer?.offered_shift ? getShiftValue(activeOffer.offered_shift) : { rate: 0, durationHours: 0, value: 0 };
+    // Duration delta — use offered_shift when requestedShift absent
+    const offerVal = getShiftValue(activeOffer?.offered_shift);
     const offerDurationHours = offerVal.durationHours;
     const hoursDiff = apiData.requestedShift
         ? (recVal.durationHours - reqVal.durationHours)
         : activeOffer?.offered_shift
             ? (offerDurationHours - reqVal.durationHours)
             : -reqVal.durationHours;
-    const payDiff = apiData.requestedShift
-        ? (getShiftValue(apiData.requestedShift, true).value - reqVal.value)
-        : activeOffer?.offered_shift
-            ? (getShiftValue(activeOffer.offered_shift, true).value - reqVal.value)
-            : -reqVal.value;
 
     // Auto-compute priority from shift date/time (shared TTS utility)
     const priority: SwapPriority = computeShiftUrgency(
@@ -355,11 +329,9 @@ export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManage
             time: apiData.requestedShift ? `${apiData.requestedShift.startTime} - ${apiData.requestedShift.endTime}` : 'No Shift',
             duration: recVal.durationHours > 0 ? `${recVal.durationHours.toFixed(1)}h` : '0h',
             durationNum: recVal.durationHours,
-            hourlyRate: recVal.rate,
             netLengthMinutes: recNet,
             paidBreakMinutes: apiData.requestedShift?.paidBreakDuration ?? 0,
             unpaidBreakMinutes: apiData.requestedShift?.unpaidBreakDuration ?? 0,
-            estimatedPay: recVal.value,
             avatar: apiData.targetEmployee?.avatarUrl,
             deptName: apiData.requestedShift?.departments?.name || 'General',
             subGroupName: apiData.requestedShift?.sub_departments?.name,
@@ -388,11 +360,9 @@ export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManage
             time: `${osStart} - ${osEnd}`,
             duration: `${offerDurationHours.toFixed(1)}h`,
             durationNum: offerDurationHours,
-            hourlyRate: offerVal.rate,
             netLengthMinutes: osNet,
             paidBreakMinutes: 0,
             unpaidBreakMinutes: os.unpaidBreakMinutes ?? 0,
-            estimatedPay: offerVal.value,
             avatar: activeOffer.offerer?.avatar_url,
             deptName: os.departments?.name || 'General',
             subGroupName: undefined,
@@ -415,11 +385,9 @@ export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManage
             time: `${apiData.originalShift?.startTime} - ${apiData.originalShift?.endTime}`,
             duration: `${reqVal.durationHours.toFixed(1)}h`,
             durationNum: reqVal.durationHours,
-            hourlyRate: reqVal.rate,
             netLengthMinutes: apiData.originalShift?.netLength ?? Math.round(reqVal.durationHours * 60),
             paidBreakMinutes: apiData.originalShift?.paidBreakDuration ?? 0,
             unpaidBreakMinutes: apiData.originalShift?.unpaidBreakDuration ?? 0,
-            estimatedPay: reqVal.value,
             avatar: apiData.requestorEmployee?.avatarUrl,
             deptName: apiData.originalShift?.departments?.name || 'General',
             subGroupName: apiData.originalShift?.sub_departments?.name,
@@ -436,7 +404,6 @@ export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManage
         requestedAt: apiData.created_at,
         tags: [apiData.originalShift?.departments?.name || 'General'],
         hoursDiff,
-        payDiff,
         complianceStatus,
         priority,
         deptName: apiData.originalShift?.departments?.name || 'General',
@@ -854,18 +821,6 @@ const ManagerSwapsPage: React.FC = () => {
                                                                         >
                                                                             {request.hoursDiff > 0 ? '+' : ''}{request.hoursDiff.toFixed(1)}h
                                                                         </Badge>
-                                                                        {request.payDiff !== 0 ? (
-                                                                            <span className={cn(
-                                                                                "text-[11px] font-mono font-black",
-                                                                                request.payDiff > 0 
-                                                                                    ? "text-emerald-600 dark:text-emerald-400" 
-                                                                                    : "text-rose-600 dark:text-rose-400"
-                                                                            )}>
-                                                                                {request.payDiff > 0 ? '+' : ''}${request.payDiff.toFixed(2)}
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="text-muted-foreground/30 font-mono text-[11px]">—</span>
-                                                                        )}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
@@ -1026,7 +981,6 @@ const ManagerSwapsPage: React.FC = () => {
                                                             <ShiftPane data={request.requestor} label="REQUESTER" isRequester={true} />
                                                             <SwapDivider
                                                                 hoursDiff={request.hoursDiff}
-                                                                payDiff={request.payDiff}
                                                                 compliance={request.complianceStatus}
                                                             />
                                                             <ShiftPane data={request.recipient} label="OFFERER" isRequester={false} />

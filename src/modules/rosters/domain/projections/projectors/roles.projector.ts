@@ -37,13 +37,11 @@ function emptyRoleAccum(id: string, name: string, code: string): RoleAccum {
 function finaliseRole(r: RoleAccum): ProjectedRole {
   const shiftsByDate: Record<string, ProjectedShiftResult[]> = {};
   let totalMins = 0;
-  let totalCost = 0;
 
   r.shiftsByDate.forEach((dayShifts, date) => {
     shiftsByDate[date] = dayShifts;
     dayShifts.forEach(s => {
       totalMins += s.netMinutes;
-      totalCost += s.estimatedCost;
     });
   });
 
@@ -54,7 +52,6 @@ function finaliseRole(r: RoleAccum): ProjectedRole {
     // Cast to any for the pipeline (hook maps it back)
     shiftsByDate: shiftsByDate as any,
     totalHours: minutesToHours(totalMins),
-    totalCost: Math.round(totalCost * 100) / 100,
   };
 }
 
@@ -150,7 +147,6 @@ export function projectRoles(
       .sort((a, b) => a.name.localeCompare(b.name));
 
     const totalHours = projectedRoles.reduce((acc, r) => acc + r.totalHours, 0);
-    const totalCost = projectedRoles.reduce((acc, r) => acc + r.totalCost, 0);
 
     projectedLevels.push({
       id: levelId.toString(),
@@ -159,7 +155,6 @@ export function projectRoles(
       colorClass: levelColorClass(levelNumber),
       roles: projectedRoles,
       totalHours: Math.round(totalHours * 100) / 100,
-      totalCost: Math.round(totalCost * 100) / 100,
     });
   });
 

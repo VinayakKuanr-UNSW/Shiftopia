@@ -20,7 +20,9 @@ workforce-health signals:
 | **Hours / Contract** | `30.0h / 38h` + progress bar | Scheduled hours vs. period-scaled contracted hours |
 | **FTG** (Fatigue) | `FTG 14` | Peak projected fatigue score across the roster window |
 | **UTL** (Utilization) | `UTL 79%` | Scheduled hours as a % of the period-scaled contract |
-| **Pay** | `$1,234` | Estimated labour cost for the employee's assigned shifts |
+
+There is no pay signal: money is shown in Gross Pay alone (decision 2026-10-09;
+per-employee cost is Gross Pay → Labour cost, grouped by employee).
 
 Two People-Mode-only toggles live in the function bar
 ([RosterFunctionBar.tsx:415-438](../../src/modules/rosters/ui/components/RosterFunctionBar.tsx#L415-L438)):
@@ -58,10 +60,10 @@ rendered by a virtualized grid.
         │  • splits shifts into chunks (≥100 shifts → multi-worker)
         ├──▶ projection.worker.ts ──▶ runProjectionPipeline()   [pipeline/runProjectionPipeline.ts]
         │        1. applyFilters(shifts)
-        │        2. buildStats(shifts)  ← populates the per-worker cost cache
+        │        2. buildStats(shifts)  ← counts and net minutes
         │        3. projectPeople(shifts, {employees, rangeDays})  [projectors/people.projector.ts]
         │              • bucket shifts by assignedEmployeeId (or "Open Shifts")
-        │              • sum currentHours / estimatedPay / payBreakdown
+        │              • sum currentHours
         │              • utilization  = computeUtilizationPct()    ┐  [utils/workload.ts]
         │              • fatigueScore = computePeakFatigue()       ┘  [utils/fatigue.ts]
         └──▶ pool merges chunk partials (mergePeople) — recomputes
@@ -121,7 +123,7 @@ code paths can never diverge.
 
 ## 4. Key data types
 
-- **`ProjectedEmployee`** ([types.ts:209-236](../../src/modules/rosters/domain/projections/types.ts#L209-L236)) — the runtime object per row: `id`, `name`, `avatar`, `contractedHours`, `periodContractedHours`, `currentHours`, `overHoursWarning`, `estimatedPay`, `fatigueScore`, `utilization`, `payBreakdown`, `shifts`.
+- **`ProjectedEmployee`** ([types.ts:209-236](../../src/modules/rosters/domain/projections/types.ts#L209-L236)) — the runtime object per row: `id`, `name`, `avatar`, `contractedHours`, `periodContractedHours`, `currentHours`, `overHoursWarning`, `fatigueScore`, `utilization`, `shifts`.
 - **`PeopleModeEmployee`** ([people-mode.types.ts:30-53](../../src/modules/rosters/ui/modes/people-mode.types.ts#L30-L53)) — the *UI* type the grid is typed against. **Superset of `ProjectedEmployee`** — it additionally declares `employeeId`. The projection never produces that field (see [01-audit-report.md](./01-audit-report.md) H1).
 - **Employee source**: `useEmployees` → `EligibilityService.getEligibleEmployees` returns only staff with an **Active `user_contract`**, defaulting `contracted_weekly_hours` to **38** ([eligibility.service.ts:221](../../src/modules/rosters/services/eligibility.service.ts#L221)).
 

@@ -223,7 +223,6 @@ function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null)
     employmentType,
     isTraining: shift.is_training === true,
     isSecurityRole: isSecurityRoleForFloor,
-    approximatePay: '',
     differential: '0',
     liveStatus: shift.lifecycle_status || '',
     timesheetStatus: shift.timesheet_status || 'draft',

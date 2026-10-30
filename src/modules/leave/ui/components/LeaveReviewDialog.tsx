@@ -14,6 +14,10 @@
  * (in `approveLeaveRequest`); the part-time and casual ones are then unassigned
  * in the same action, so no shift is left under approved leave to mark the
  * employee No-Show. The toast accounts for every one (`summarizeApproval`).
+ *
+ * TOIL IS THE ONE HARD STOP on balance: it cannot be approved past what is
+ * banked (the database refuses it too). And TOIL covering only part of the
+ * rostered day leaves the roster alone — the person works the rest of it.
  */
 import React from 'react';
 import { addDays, format, parseISO } from 'date-fns';
@@ -44,6 +48,8 @@ import { LeaveStatusBadge } from './LeaveStatusBadge';
 import { fmtH, formatRange, initials } from '../format';
 import { periodLabel } from './LedgerCards';
 import { CardDialogClose, LeaveCardDialog, cardDivide, cardField, cardSection } from './LeaveCardDialog';
+import type { ToilPosition } from '@/modules/toil/model/toil.types';
+import { fmtToil, isPartialDayToil, rosteredSpanMinutes, toilApprovalCheck } from '@/modules/toil/domain/toil-rules';
 
 interface LeaveReviewDialogProps {
     request: LeaveRequest | null;
@@ -56,12 +62,14 @@ interface LeaveReviewDialogProps {
     onClose: () => void;
     /** View-only manager (delta, epsilon): reads the request, decides nothing. */
     readOnly?: boolean;
+    /** The requester's TOIL position — a TOIL request is approved against it. */
+    toil?: ToilPosition | null;
 }
 
 type Mode = 'idle' | 'reject' | 'revoke';
 
 export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
-    request, member, personRequests = [], nameOf, meId, today, onClose, readOnly = false,
+    request, member, personRequests = [], nameOf, meId, today, onClose, readOnly = false, toil = null,
 }) => {
     const { toast } = useToast();
     const invalidate = useLeaveInvalidation();
@@ -119,6 +127,10 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
     const ftShifts = shifts.filter(s => !s.started && s.targetEmploymentType === 'FT');
     const otherShifts = shifts.filter(s => !s.started && s.targetEmploymentType !== 'FT');
     const revocable = canRevoke(request, today);
+    const isToil = request.leaveType === 'toil';
+    const toilCheck = isToil && request.status === 'pending' ? toilApprovalCheck(request.requestedHours, toil) : null;
+    // Mirrors `approveLeaveRequest`: part-day TOIL keeps every shift.
+    const partialToil = isToil && isPartialDayToil(request.requestedHours, rosteredSpanMinutes(ftShifts));
 
     const approve = async () => {
         setBusy(true);
@@ -128,7 +140,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
             toast({ variant: 'destructive', title: 'Could not approve', description: res.error });
             return;
         }
-        const { conflictingShifts = [], removedShifts = [], removalFailures = [], keptWorked = [] } = res.data ?? {};
+        const { conflictingShifts = [], removedShifts = [], removalFailures = [], keptWorked = [], keptPartial = [] } = res.data ?? {};
         let attempted = 0;
         let succeeded = 0;
         if (conflictingShifts.length > 0) {
@@ -142,6 +154,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
             unassignAttempted: attempted,
             unassignSucceeded: succeeded,
             keptWorked: keptWorked.length,
+            keptPartial: keptPartial.length,
         });
         setBusy(false);
         toast({
@@ -196,7 +209,7 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                                 <Button variant="ghost" className={cn('rounded-full', touch.targetY)} disabled={busy || isSelf} onClick={() => setMode('reject')}>
                                     <X className="mr-1.5 h-4 w-4" aria-hidden="true" /> Reject
                                 </Button>
-                                <Button className={cn('rounded-full px-6', touch.targetY)} disabled={busy || isSelf} onClick={() => void approve()}>
+                                <Button className={cn('rounded-full px-6', touch.targetY)} disabled={busy || isSelf || Boolean(toilCheck?.blockedReason)} onClick={() => void approve()}>
                                     {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="mr-1.5 h-4 w-4" aria-hidden="true" />}
                                     Approve
                                 </Button>
@@ -254,7 +267,20 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                 {request.status === 'pending' && (
                     <section className={cardSection}>
                         <p className={heading}>Balance</p>
-                        {check.draw ? (
+                        {toilCheck ? (
+                            <>
+                                <p className={cn('mt-1 text-[24px] font-bold tracking-tight tabular-nums',
+                                    toilCheck.blockedReason && 'text-red-600 dark:text-red-400')}>
+                                    {fmtToil(toilCheck.afterMinutes)}
+                                </p>
+                                <p className={cn(text.caption, 'tabular-nums')}>
+                                    Time in lieu after approval · from {fmtToil(toilCheck.availableMinutes)}
+                                </p>
+                                {toilCheck.blockedReason && (
+                                    <p role="alert" className="mt-1 text-[11px] font-medium text-red-700 dark:text-red-300">{toilCheck.blockedReason}</p>
+                                )}
+                            </>
+                        ) : check.draw ? (
                             <>
                                 <p className={cn('mt-1 text-[24px] font-bold tracking-tight tabular-nums',
                                     check.warning && 'text-red-600 dark:text-red-400')}>
@@ -303,7 +329,8 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                             <>
                                 <p className={text.caption}>
                                     {request.status === 'pending' ? 'Approving will ' : 'Still rostered: '}
-                                    {request.status === 'pending' && ([
+                                    {request.status === 'pending' && partialToil && 'keep every shift — the time in lieu covers part of the day'}
+                                    {request.status === 'pending' && !partialToil && ([
                                         ftShifts.length > 0 && `remove ${ftShifts.length} full-time shift${ftShifts.length === 1 ? '' : 's'}`,
                                         otherShifts.length > 0 && `unassign ${otherShifts.length} shift${otherShifts.length === 1 ? '' : 's'} for re-offer`,
                                         workedShifts.length > 0 && `keep ${workedShifts.length} already-started shift${workedShifts.length === 1 ? '' : 's'}`,
@@ -319,7 +346,9 @@ export const LeaveReviewDialog: React.FC<LeaveReviewDialogProps> = ({
                                                 {format(parseISO(s.shiftDate), 'EEE d MMM')} · {formatClockTime(s.startTime, 'h:mm a', s.startTime ?? '')}–{formatClockTime(s.endTime, 'h:mm a', s.endTime ?? '')}
                                             </span>
                                             <span className={s.started ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}>
-                                                {s.worked ? 'kept — worked' : s.started ? 'kept — started' : s.targetEmploymentType === 'FT' ? 'removed' : 'unassigned'}
+                                                {s.worked ? 'kept — worked' : s.started ? 'kept — started'
+                                                    : partialToil ? 'kept — part day'
+                                                        : s.targetEmploymentType === 'FT' ? 'removed' : 'unassigned'}
                                             </span>
                                         </li>
                                     ))}

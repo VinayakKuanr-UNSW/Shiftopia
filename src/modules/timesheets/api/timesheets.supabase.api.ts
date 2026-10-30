@@ -7,9 +7,8 @@ import { supabase } from '@/platform/supabase/client';
 import { assertWrote } from '@/platform/supabase/writes';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
+import { getDailyToilByDay } from '@/modules/toil/api/toil.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import type { ShiftPayTermsField } from '@/modules/rosters/domain/projections/utils/cost/types';
 import {
     snapToQuarterHour,
     isShiftFinished,
@@ -50,8 +49,6 @@ export interface TimesheetShiftRow {
     remunerationLevel: string;
     /** The shift's stored level as a number (0 = Introductory). */
     remunerationLevelNumber: number | null;
-    /** The linked contract's pay terms, when the viewer may see them (shifts.shift_pay_terms). */
-    payTerms: ShiftPayTermsField | null;
 
     // Scheduled times
     shiftDate: string;
@@ -119,12 +116,6 @@ export interface TimesheetShiftRow {
     clockOutVarianceMinutes: number | null;
     varianceMinutes: number | null; // Legacy for clock-in
 
-    // Pay
-    hourlyRate: number | null;
-    estimatedPay: number | null;
-    /** 'salary' when the shift is worked on a salaried contract — no per-shift pay. */
-    payBasis: 'salary' | null;
-
     // Manager notes (override reason on approve / rejection reason)
     notes: string | null;
     rejectedReason: string | null;
@@ -136,6 +127,15 @@ export interface TimesheetShiftRow {
     // Billable variance reasons (per-side; null when on-roster)
     arrivalVarianceReason: string | null;
     departureVarianceReason: string | null;
+
+    /**
+     * Time in lieu this approved timesheet's DAY earned under the daily rule
+     * (billable over 7.6h), in minutes — 0 when none. Salaried class-1 contracts
+     * only; read back from `toil_ledger`, never computed here. A day of several
+     * shifts shows the day's figure on each of them. Weekly top-ups are in the
+     * TOIL ledger, not on a row.
+     */
+    toilMinutes: number;
 }
 
 export interface TimesheetFilters {
@@ -188,7 +188,6 @@ export async function getShiftsForTimesheet(
                 is_training,
                 target_employment_type,
                 user_contract_id,
-                shift_pay_terms,
                 organization_id,
                 department_id,
                 sub_department_id,
@@ -320,28 +319,6 @@ export async function getShiftsForTimesheet(
                 : { netMinutes: 0, requiredMins: 0, wasToppedUp: false };
             const calculatedNetMins = flooredNet.netMinutes;
 
-            // Priced by the shared engine on the same terms as the cards, the
-            // budget and payroll: the linked contract's when visible, else the
-            // shift's own level. This used to be net hours × remuneration_rate —
-            // NULL on every shift, so the column only ever showed "-".
-            const payEstimate = calculatedNetMins > 0
-                ? estimateDetailedCostFromShift({
-                    shift_date: shift.shift_date,
-                    start_time: resolvedStart.hhmm ?? shift.start_time,
-                    end_time: resolvedEnd.hhmm ?? shift.end_time,
-                    roles: role ? { name: role.name } : undefined,
-                    remuneration_level: shift.remuneration_level,
-                    target_employment_type: shift.target_employment_type,
-                    is_training: shift.is_training,
-                    unpaid_break_minutes: unpaidBreakForNet,
-                    break_start: timesheet?.actual_break_start ?? shift.break_start ?? null,
-                    scheduled_length_minutes: scheduledMins,
-                    shift_pay_terms: shift.shift_pay_terms ?? null,
-                }, calculatedNetMins)
-                : null;
-            const currentEstimatedPay = payEstimate ? payEstimate.totalCost : null;
-            const hourlyRate = payEstimate ? payEstimate.breakdown.baseRate : null;
-
             // ── Variances (drive attendance/performance metrics) ────────────
             // A manually adjusted time OVERRIDES the raw clock for its own side
             // only — mirrors the per-side `*` on the Live Rules badges. Sched-
@@ -390,7 +367,6 @@ export async function getShiftsForTimesheet(
                 remunerationLevelId: shift.remuneration_level != null ? shift.remuneration_level.toString() : null,
                 remunerationLevel: remLevel?.level_name || '',
                 remunerationLevelNumber: shift.remuneration_level ?? null,
-                payTerms: shift.shift_pay_terms ?? null,
 
                 shiftDate: shift.shift_date,
                 scheduledStart: shift.start_time,
@@ -478,14 +454,28 @@ export async function getShiftsForTimesheet(
                 clockOutVarianceMinutes: clockOutVariance,
                 varianceMinutes: clockInVariance, // legacy alias for clock-in variance
 
-                hourlyRate,
-                estimatedPay: currentEstimatedPay,
-                payBasis: payEstimate?.payBasis ?? null,
-
                 notes: timesheet?.notes || null,
                 rejectedReason: timesheet?.rejected_reason || null,
+                toilMinutes: 0,
             };
         });
+
+        // Time in lieu booked by the database for these days (best-effort: a
+        // failed read only hides the badge).
+        try {
+            const approved = rows.filter(r => r.timesheetStatus === 'approved' && r.timesheetId && r.employeeId);
+            if (approved.length > 0) {
+                const dates = approved.map(r => r.shiftDate).sort();
+                const toil = await getDailyToilByDay(
+                    approved.map(r => r.employeeId!), dates[0], dates[dates.length - 1]);
+                for (const r of approved) {
+                    const day = toil.get(`${r.employeeId}:${r.shiftDate}`);
+                    if (day && day.minutes > 0 && day.timesheetIds.includes(r.timesheetId!)) r.toilMinutes = day.minutes;
+                }
+            }
+        } catch (e) {
+            console.error('[getShiftsForTimesheet] TOIL read failed:', e);
+        }
 
         // Apply search filter client-side (searches name, role, department, sub-group)
         if (filters.searchQuery) {
@@ -560,7 +550,6 @@ export async function updateTimesheetEntry(
         rejectedReason?: string;
         length?: string;
         netLength?: string;
-        approximatePay?: string;
         paidBreak?: string;
         unpaidBreak?: string;
         actualBreakStart?: string | null;
@@ -631,8 +620,7 @@ export async function updateTimesheetEntry(
             updates.clockIn !== undefined ||
             updates.clockOut !== undefined ||
             updates.length !== undefined ||
-            updates.netLength !== undefined ||
-            updates.approximatePay !== undefined;
+            updates.netLength !== undefined;
         const isMetadataOnlyEdit = touchesMetadata && statusUnchanged && !touchesPayAffecting;
 
         if (['approved', 'rejected', 'no_show'].includes(currentStatus)) {
@@ -737,10 +725,10 @@ export async function updateTimesheetEntry(
         if (updates.actualBreakStart !== undefined) payload.actual_break_start = updates.actualBreakStart || null;
         if (updates.actualBreakEnd !== undefined) payload.actual_break_end = updates.actualBreakEnd || null;
         
-        // NOTE: Length / Net / Pay are DERIVED on read (billable minutes × rate);
-        // the `timesheets` table has NO length/net_length/approximate_pay columns,
-        // so writing them 400s (PGRST204) and fails the whole save. The
-        // updates.length/netLength/approximatePay fields are intentionally ignored.
+        // NOTE: Length / Net are DERIVED on read (billable minutes); the
+        // `timesheets` table has NO length/net_length columns, so writing them
+        // 400s (PGRST204) and fails the whole save. updates.length/netLength
+        // are intentionally ignored. Pay is shown in Gross Pay alone.
 
         // 4. Completeness guard: refuse to move a FINISHED shift to 'approved'
         // while either side of the billable window is still unresolved (no
@@ -830,7 +818,7 @@ export async function updateTimesheetEntry(
             // Get shift details for new timesheet
             const { data: shift } = await supabase
                 .from('shifts')
-                .select('assigned_employee_id, shift_date, start_time, end_time, start_at, end_at, actual_start, actual_end')
+                .select('assigned_employee_id, shift_date, start_time, end_time, start_at, end_at, actual_start, actual_end, unpaid_break_minutes')
                 .eq('id', shiftId)
                 .single();
 
@@ -844,6 +832,14 @@ export async function updateTimesheetEntry(
             const clockOutTs: string | null = updates.clockOut
                 ? (isIsoTimestamp(updates.clockOut) ? updates.clockOut : null)
                 : (shift.actual_end ?? shift.end_at ?? null);
+
+            // The new row starts with the SHIFT'S unpaid break. Left out, the
+            // column defaults to 0 and every reader (this page, Gross Pay, TOIL)
+            // takes the timesheet's 0 over the shift's break — a row created by
+            // a plain "Approve" was billed with no unpaid break at all.
+            if (payload.unpaid_break_minutes === undefined && shift.unpaid_break_minutes != null) {
+                payload.unpaid_break_minutes = shift.unpaid_break_minutes;
+            }
 
             let insertRes = await supabase
                 .from('timesheets')

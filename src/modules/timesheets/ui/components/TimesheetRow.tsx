@@ -45,9 +45,8 @@ import { getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReview
 import { validateBillableEdit, parseHHMM } from "../../domain/billable-edit";
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
 import { getShiftDayType } from "@/modules/core/lib/holidays";
-import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
-import { COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { fmtToil } from '@/modules/toil/domain/toil-rules';
 
 /* Billable-time provenance icons (F16) — explicit iconography, not a bare `*`. */
 type BillableSource = 'manual' | 'snapped' | 'auto' | null | undefined;
@@ -215,7 +214,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             return {
                 length: '0.00',
                 netLength: '0.00',
-                approximatePay: '$0.00',
                 differential: formatDifferential(0 - calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd)),
             };
         }
@@ -343,21 +341,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
         const { normalizedStart: adjustedStart, normalizedEnd: adjustedEnd, startChanged, endChanged, needArrivalReason: needArrival, needDepartureReason: needDeparture } = v;
 
-        const cost = estimateDetailedCostFromShift({
-            shift_date: String(entry.date),
-            start_time: adjustedStart,
-            end_time: adjustedEnd,
-            roles: { name: entry.role },
-            remuneration_level: entry.remunerationLevelNumber,
-            shift_pay_terms: entry.payTerms,
-            employmentType: entry.employmentType,
-            is_training: entry.isTraining,
-            unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
-            break_start: v.normalizedBreakStart || entry.actualBreakStart || entry.rosteredBreakStart || undefined,
-            scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
-        });
-        const approximatePay = cost.payBasis === 'salary' ? 'Salaried' : `$${cost.totalCost.toFixed(2)}`;
-
         // Persist ONLY the sides the manager changed — an untouched side keeps
         // its snapped/auto provenance and must not become a manual override.
         const payload: Record<string, any> = {
@@ -370,7 +353,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             length: calculatedValues.length,
             netLength: calculatedValues.netLength,
             differential: calculatedValues.differential,
-            approximatePay,
         };
         // A changed side that's back on-roster clears any stale reason.
         if (startChanged && !needArrival) payload.arrivalVarianceReason = null;
@@ -757,11 +739,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     </>
                 )}
 
-                {/* Estimated cost — award estimate, NOT payroll */}
-                <td title={COST_ESTIMATE_DISCLAIMER} className={`${cellClass} font-black text-primary tracking-tight`}>
-                    {entry.approximatePay || '-'}
-                </td>
-
                 {/* Differential */}
                 <td className={`${cellClass} border-r border-border/30`}>
                     <div className={`px-2 py-1 rounded-lg text-[11px] font-black text-center w-fit ${getDifferentialColor(isEditingAdjusted ? calculatedValues.differential : displayValues.differential).replace('text-', 'bg-').replace('-400', '/10 text-')}`}>
@@ -873,6 +850,21 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                         Clocked hours were below the EBA minimum engagement
                                         {entry.requiredEngagementMinutes ? ` (${entry.requiredEngagementMinutes / 60}h)` : ''} for this shift —
                                         pay was automatically topped up to the guaranteed minimum.
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                        {(entry.toilMinutes ?? 0) > 0 && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap cursor-default text-emerald-700 bg-emerald-500/10 border-emerald-500/20 dark:text-emerald-300">
+                                            +{fmtToil(entry.toilMinutes ?? 0)} TOIL
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs text-[11px]">
+                                        Billable time over 7.6h on this day, banked as time in lieu — salaried contracts
+                                        earn TOIL instead of overtime pay. Weekly top-ups are in the employee&apos;s TOIL ledger.
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>

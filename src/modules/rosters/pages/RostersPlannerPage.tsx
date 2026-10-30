@@ -92,7 +92,6 @@ import { LayoutGrid } from 'lucide-react';
 import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
-import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import { describeShiftMutationError } from '@/modules/rosters/domain/shiftMutationError';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
@@ -998,24 +997,17 @@ const NewRostersPage: React.FC = () => {
   // ==================== COMPUTED STATS (server-sourced) ====================
   // Footer numbers read from the single server-sourced planner-stats hook so
   // every mode/view shows identical, correct totals (cancelled shifts excluded).
+  // No cost or budget here: labour cost is shown in Gross Pay alone
+  // (decision 2026-10-09).
   const {
     totalAssignedShifts,
     totalUnfilledShifts,
     totalShifts,
-    estimatedCost,
   } = useMemo(() => ({
     totalShifts: plannerStats.totalShifts,
     totalAssignedShifts: plannerStats.assignedShifts,
     totalUnfilledShifts: plannerStats.openShifts,
-    estimatedCost: plannerStats.estimatedCost,
   }), [plannerStats]);
-
-  // Budget now comes from `department_budgets` (pro-rated to the visible window
-  // by the stats RPC). When no budget row overlaps the range, `budget` is 0 and
-  // we hide the Budget/Remaining UI entirely rather than show a fake number.
-  const budget = plannerStats.budget;
-  const remainingBudget = budget - estimatedCost;
-  const showBudget = budget > 0;
 
   // Breakdown of all FSM states for shifts in the current view
   const advancedFilters = useRosterStore(s => s.advancedFilters);
@@ -1228,27 +1220,16 @@ const NewRostersPage: React.FC = () => {
         {/* Mobile-only stats strip. The desktop footer is `hidden md:block`
             below — it is a wide multi-column row that does not survive a phone
             — so these numbers would otherwise be invisible on mobile.
-            Budget/Left follow the same `showBudget` rule as the footer: when
-            no department_budgets row overlaps the window, budget is 0 and we
-            show nothing rather than a fabricated figure. */}
+            No cost or budget: labour cost is shown in Gross Pay alone. */}
         <div
           data-testid="mobile-roster-summary"
-          className={cn(
-            'grid flex-shrink-0 divide-x divide-slate-300 border-b border-slate-300 bg-slate-50/80 px-1.5 py-1.5 dark:divide-white/5 dark:border-white/5 dark:bg-black/10 md:hidden',
-            showBudget ? 'grid-cols-5' : 'grid-cols-3',
-          )}
+          className="grid grid-cols-3 flex-shrink-0 divide-x divide-slate-300 border-b border-slate-300 bg-slate-50/80 px-1.5 py-1.5 dark:divide-white/5 dark:border-white/5 dark:bg-black/10 md:hidden"
           aria-label="Roster summary"
         >
           {[
             { label: 'Total', value: String(totalShifts), tone: 'text-slate-900 dark:text-foreground' },
             { label: 'Assigned', value: String(totalAssignedShifts), tone: 'text-emerald-700 dark:text-emerald-400' },
             { label: 'Open', value: String(totalUnfilledShifts), tone: 'text-amber-700 dark:text-amber-400' },
-            ...(showBudget
-              ? [
-                  { label: 'Cost', value: formatCost(estimatedCost), tone: 'text-slate-900 dark:text-foreground' },
-                  { label: 'Left', value: formatCost(remainingBudget), tone: remainingBudget < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400' },
-                ]
-              : []),
           ].map((metric) => (
             <div key={metric.label} className="flex min-w-0 flex-col items-center justify-center px-1">
               <span className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-600 dark:text-muted-foreground">
@@ -1432,16 +1413,9 @@ const NewRostersPage: React.FC = () => {
                 stateCounts={viewShiftStateCounts}
                 selectedState={advancedFilters.stateId}
                 onSelectState={(stateId) => setAdvancedFilters({ stateId })}
-                scheduledCost={plannerStats.scheduledCost}
-                actualCost={plannerStats.actualCost}
                 scheduledNetMinutes={plannerStats.scheduledNetMinutes}
                 actualNetMinutes={plannerStats.actualNetMinutes}
-                costedShifts={plannerStats.costedShifts}
-                uncostedShifts={plannerStats.uncostedShifts}
                 actualShifts={plannerStats.actualShifts}
-                budget={budget}
-                remainingBudget={remainingBudget}
-                showBudget={showBudget}
               />
             )}
           </>

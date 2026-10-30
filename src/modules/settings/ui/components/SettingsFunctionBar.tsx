@@ -6,7 +6,6 @@ import {
   Bell,
   CreditCard,
   Link,
-  DollarSign,
 } from "lucide-react";
 import { cn } from "@/modules/core/lib/utils";
 import { ToolbarRow, ToolbarSegmented, toolbar } from "@/modules/core/ui/components/Toolbar";
@@ -16,15 +15,12 @@ interface SettingsFunctionBarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
   transparent?: boolean;
-  /** Show the manager-only Pay Rates section (gated by the caller). */
-  showPayRates?: boolean;
 }
 
 export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
   activeSection,
   onSectionChange,
   transparent,
-  showPayRates,
 }) => {
   const { t } = useTranslation();
 
@@ -35,7 +31,6 @@ export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
     { id: "appearance", label: t("settings.appearance"), icon: Palette },
     { id: "billing", label: t("settings.billing"), icon: CreditCard },
     { id: "integrations", label: t("settings.integrations"), icon: Link },
-    ...(showPayRates ? [{ id: "pay-rates", label: t("settings.pay_rates"), icon: DollarSign }] : []),
   ];
 
   return (

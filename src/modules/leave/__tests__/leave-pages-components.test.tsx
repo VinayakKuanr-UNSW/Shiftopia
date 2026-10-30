@@ -182,7 +182,7 @@ describe('LeaveLedgerGrid', () => {
             expect.stringContaining('Compassionate Leave'),
             expect.stringContaining('Jury Service'),
         ]));
-        expect(headers).toHaveLength(14); // Employee + 13 types
+        expect(headers).toHaveLength(15); // Employee + 13 EBA types + TOIL
     });
 
     it('sorts the lowest annual balance first, casuals last', () => {

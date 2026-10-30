@@ -7,12 +7,8 @@ describe('RosterMetricsFooter', () => {
     totalShifts: 134,
     assignedShifts: 87,
     unfilledShifts: 47,
-    scheduledCost: 35444.96,
-    actualCost: 0,
     scheduledNetMinutes: 952 * 60,
     actualNetMinutes: 0,
-    costedShifts: 133,
-    uncostedShifts: 1,
     actualShifts: 0,
   };
 
@@ -49,13 +45,17 @@ describe('RosterMetricsFooter', () => {
     // Far right Scheduled and Actual cards
     expect(screen.getByText('Scheduled')).toBeInTheDocument();
     expect(screen.getByText('952h 00m')).toBeInTheDocument();
-    expect(screen.getByText('$35444.96')).toBeInTheDocument();
-    expect(screen.getByText('133/134 priced')).toBeInTheDocument();
+    expect(screen.getByText('134 shifts')).toBeInTheDocument();
 
     expect(screen.getByText('Actual')).toBeInTheDocument();
     expect(screen.getByText('0h 00m')).toBeInTheDocument();
-    expect(screen.getByText('$0.00')).toBeInTheDocument();
     expect(screen.getByText('none worked')).toBeInTheDocument();
+  });
+
+  it('shows hours only — labour cost lives in Gross Pay alone', () => {
+    const { container } = render(<RosterMetricsFooter {...baseProps} stateCounts={sampleStateCounts} />);
+    expect(container.textContent).not.toMatch(/\$/);
+    expect(screen.queryByText('Budget')).not.toBeInTheDocument();
   });
 
   it('updates display when a specific state is selected', () => {
@@ -139,21 +139,5 @@ describe('RosterMetricsFooter', () => {
     fireEvent.click(trigger);
 
     expect(screen.getByText('UNKNOWN — Unknown')).toBeInTheDocument();
-  });
-
-  it('renders budget panel when showBudget is true', () => {
-    render(
-      <RosterMetricsFooter
-        {...baseProps}
-        budget={50000}
-        remainingBudget={14555.04}
-        showBudget={true}
-      />
-    );
-
-    expect(screen.getByText('Budget')).toBeInTheDocument();
-    expect(screen.getByText('$50000.00')).toBeInTheDocument();
-    expect(screen.getByText('Remaining')).toBeInTheDocument();
-    expect(screen.getByText('$14555.04')).toBeInTheDocument();
   });
 });

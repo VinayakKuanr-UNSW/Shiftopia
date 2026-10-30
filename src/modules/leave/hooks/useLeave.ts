@@ -13,6 +13,7 @@ import {
     getAllTimeLeaveRequests, getScopedEmployeeIds, getServiceStartDate, getTeamLeaveContext, getTeamLeaveRequests, isFullTimeSecurityEmployee,
 } from '../api/leave.api';
 import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
+import { toilKeys } from '@/modules/toil/hooks/useToil';
 
 const leaveKeys = {
     all: ['leave'] as const,
@@ -32,6 +33,8 @@ function invalidateAfterLeaveWrite(qc: QueryClient): void {
     void qc.invalidateQueries({ queryKey: shiftKeys.all });
     void qc.invalidateQueries({ queryKey: rosterKeys.all });
     void qc.invalidateQueries({ queryKey: ['office'] });
+    // TOIL leave writes to the TOIL ledger through a trigger.
+    void qc.invalidateQueries({ queryKey: toilKeys.all });
 }
 
 export function useLeaveInvalidation() {

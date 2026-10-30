@@ -38,8 +38,6 @@ function makeDto(overrides: Partial<WorkerShiftDTO>): WorkerShiftDTO {
     employeeFirstName: overrides.employeeFirstName ?? null,
     employeeLastName: overrides.employeeLastName ?? null,
     eventIds: [],
-    targetEmploymentType: 'Casual',
-    allowances: null,
     requiredSkills: [],
     rosterSubgroupId: null,
     rosterSubgroupName: null,
