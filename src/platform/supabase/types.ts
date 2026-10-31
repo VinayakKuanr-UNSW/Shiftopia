@@ -4301,7 +4301,6 @@ export type Database = {
           required_licenses: Json | null
           required_skills: Json | null
           role_id: string | null
-          roster_date: string | null
           roster_id: string
           roster_subgroup_id: string
           scheduled_length_minutes: number | null
@@ -4405,7 +4404,6 @@ export type Database = {
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
-          roster_date?: string | null
           roster_id: string
           roster_subgroup_id: string
           scheduled_length_minutes?: number | null
@@ -4509,7 +4507,6 @@ export type Database = {
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
-          roster_date?: string | null
           roster_id?: string
           roster_subgroup_id?: string
           scheduled_length_minutes?: number | null
@@ -6858,7 +6855,6 @@ export type Database = {
           dept_id: string
           dept_name: string
           emergency_count: number
-          estimated_cost: number
           fill_rate: number
           no_show_count: number
           shifts_assigned: number
@@ -6965,7 +6961,6 @@ export type Database = {
         Returns: {
           dept_id: string
           dept_name: string
-          estimated_cost: number
           fill_rate: number
           period_date: string
           shifts_assigned: number
@@ -7141,14 +7136,6 @@ export type Database = {
           phone: string
         }[]
       }
-      get_prospective_pay_terms: {
-        Args: { p_employee_ids: string[]; p_shift_ids: string[] }
-        Returns: {
-          employee_id: string
-          pay_terms: Json
-          shift_id: string
-        }[]
-      }
       get_quarterly_performance_report: {
         Args: {
           p_dept_ids?: string[]
@@ -7217,20 +7204,14 @@ export type Database = {
           p_sub_department_ids?: string[]
         }
         Returns: {
-          actual_cost: number
           actual_net_minutes: number
           actual_shifts: number
           assigned_shifts: number
-          budget_cost: number
           cancelled_shifts: number
-          costed_shifts: number
-          est_cost: number
           open_shifts: number
           published_shifts: number
-          scheduled_cost: number
           total_net_minutes: number
           total_shifts: number
-          uncosted_shifts: number
           unique_employees: number
         }[]
       }
@@ -7290,13 +7271,6 @@ export type Database = {
         }
         Returns: string
       }
-      get_shift_pay_terms: {
-        Args: { p_shift_ids: string[] }
-        Returns: {
-          pay_terms: Json
-          shift_id: string
-        }[]
-      }
       get_shift_start_time: { Args: { p_shift_id: string }; Returns: string }
       get_shift_state_id: { Args: { p_shift_id: string }; Returns: string }
       get_time_category: {
@@ -7349,10 +7323,6 @@ export type Database = {
       leave_accrual_days: {
         Args: { p_employee: string; p_from: string }
         Returns: number
-      }
-      my_shift_pay_terms: {
-        Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
-        Returns: Json
       }
       notify_user:
         | {
@@ -7499,13 +7469,6 @@ export type Database = {
       }
       shift_pay_terms: {
         Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
-        Returns: Json
-      }
-      shift_pay_terms_for: {
-        Args: {
-          p_employee: string
-          s: Database["public"]["Tables"]["shifts"]["Row"]
-        }
         Returns: Json
       }
       sm_accept_offer: {

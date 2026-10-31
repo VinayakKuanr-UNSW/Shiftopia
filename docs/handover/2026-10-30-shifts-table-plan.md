@@ -118,7 +118,7 @@ A generated column **cannot be written**, so every writer must stop writing thes
 - **Bug fixed on the way:** `recalc_shift_utc_timestamps` added `'1 day'` to a timestamptz in the session zone (UTC), so an overnight `end_at` was an hour out on both DST nights (22:00–06:00 on 2026-10-03 ended 20:00Z, not 19:00Z). The dropped Melbourne copy had it right. No overnight rows existed, so no stored data was wrong.
 - `roster_date` now always follows `shift_date` (`compute_shift_fields`), which ends the drift until the column goes.
 
-**3a column drop — PENDING until this branch is deployed and `get-roster-view` is redeployed** (the live app still selects and inserts `roster_date`). Dry-run passed 2026-10-30 (rolled back: no function names `roster_date` afterwards; create and update still work):
+**3a column drop — APPLIED 2026-10-30** as `20261030120614_shifts_phase3a_drop_roster_date` (after the deploy and `get-roster-view` v18; test `supabase/tests/shifts_phase3a_roster_date_dropped.sql`). The SQL as planned (the live app still selects and inserts `roster_date`). Dry-run passed 2026-10-30 (rolled back: no function names `roster_date` afterwards; create and update still work):
 
 ```sql
 DO $$

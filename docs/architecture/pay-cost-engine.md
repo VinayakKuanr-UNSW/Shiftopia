@@ -158,22 +158,18 @@ All three include the minimum-engagement **payment** floor (cl 12 / 56.2), so
 Actual is what the clocks would pay, not raw minutes × rate. Salaried shifts
 show hours, not a per-shift figure.
 
-### What the RPC cost columns are now
+### The RPCs no longer compute cost
 
-`get_roster_planner_stats` (`est_cost`, `budget_cost`, `scheduled_cost`,
-`actual_cost`, `costed_shifts`, `uncosted_shifts`), `get_insights_summary`,
-`get_dept_insights_breakdown`, `get_insights_trend`,
-`get_metric_detailed_analysis` and `rpc_shift_coverage_stats` still compute
-cost through `public.fn_eba_shift_cost(shifts)`, but **the app reads none of
-those columns**. The planner-stats schema ignores them (`z.object` strips
-unknown keys), so they can be dropped from the RPCs without an app change. The
-parity contract (§4) still matters for as long as they exist.
+Applied 2026-10-31 (`20261031054015_stats_rpcs_without_cost`): `get_roster_planner_stats`,
+`get_insights_summary`, `get_insights_trend`, `get_dept_insights_breakdown` and
+`get_metric_detailed_analysis` return counts and hours only; none calls
+`fn_eba_shift_cost` / `internal.shift_cost` any more. Labour cost lives in Gross Pay.
 
-The computed fields `my_shift_pay_terms` and `get_prospective_pay_terms` (bid
-and swap pricing) have **no app caller**; `shift_pay_terms` and
-`get_shift_pay_terms` are no longer selected (Gross Pay reads
-`hr.contract_pay_terms` itself). Dropping or narrowing them is a separate,
-prod-side step that must follow the app deploy.
+The dead pay-terms endpoints went the same day (`20261031053518`):
+`get_shift_pay_terms`, `my_shift_pay_terms`, `get_prospective_pay_terms`,
+`shift_pay_terms_for` and `internal.prospective_pay_terms`. **Kept on purpose:**
+`public.shift_pay_terms` (get-roster-view still selects it) and
+`internal.shift_pay_terms` (`internal.shift_cost` prices with it).
 
 ---
 
