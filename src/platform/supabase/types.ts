@@ -7309,7 +7309,6 @@ export type Database = {
         Args: { s: Database["public"]["Tables"]["shifts"]["Row"] }
         Returns: boolean
       }
-      is_manager_or_above: { Args: never; Returns: boolean }
       is_org_admin: { Args: { p_org_id: string }; Returns: boolean }
       is_shift_timesheet_reviewable: {
         Args: { p_shift_id: string }
