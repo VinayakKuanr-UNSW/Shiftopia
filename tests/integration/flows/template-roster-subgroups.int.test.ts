@@ -229,6 +229,7 @@ describe('a second template adds on top', () => {
 
         expect((await preview(T1)).data).toMatchObject({ would_create: 1, already_applied: 0, duplicates: 0 });
         const a1 = await apply(T1);
+        expect(a1.error).toBeNull();
         expect(a1.data).toMatchObject({ shifts_created: 1 });
         expect(amBaseOnF2()).toEqual(['1', '1']); // into the existing "AM Base", no second sub-group
 
