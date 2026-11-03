@@ -22,11 +22,16 @@
  *
  * WHY A NAME MATCH. There is no `is_security` column on `roles`, and no category
  * or `forecasting_bucket` value that separates them — the name is the only signal
- * the schema carries. In production it is a clean one: 24 of 200 roles match, and
- * all 24 are genuine Security roles ("Security Officer", "Security Team Member
- * Level 3", "Senior Security Manager", …) with no false positives. If a
- * discriminating column is ever added, this is the single place that changes.
+ * the schema carries. It is nearly clean: on 2026-11-04 the one name containing
+ * "security" that is not Security staff was "Executive Assistant to the Directors
+ * of Building Services & Security" (user: not Schedule 3), excluded below by
+ * prefix — "Security Assistant" and "Assistant Building Security Manager" are
+ * genuine. If a discriminating column is ever added, this is the single place
+ * that changes, together with its SQL twin `public.role_name_is_security`.
  */
+
+/** Names containing "security" whose holders are not Security staff. */
+const NOT_SECURITY_PREFIXES = ['executive assistant'] as const;
 
 /**
  * True when a role name denotes a Security role under EBA Schedule 3.
@@ -36,5 +41,7 @@
  * the absent-name case silently falling through to a default.
  */
 export function isSecurityRoleName(name: string | null | undefined): boolean {
-    return typeof name === 'string' && name.toLowerCase().includes('security');
+    if (typeof name !== 'string') return false;
+    const lower = name.toLowerCase();
+    return lower.includes('security') && !NOT_SECURITY_PREFIXES.some(p => lower.startsWith(p));
 }

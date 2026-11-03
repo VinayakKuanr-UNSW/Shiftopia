@@ -7,6 +7,13 @@ import type { ShapeResult, ShapeHit } from '@/modules/compliance/shape';
 /* ============================================================
    FORM SCHEMA
    ============================================================ */
+export const scheduledBreakSchema = z.object({
+    sno: z.number().int().min(1).optional(),
+    start: z.string(),
+    end: z.string(),
+    duration: z.number().optional(),
+});
+
 export const formSchema = z.object({
     group_type: z.string().min(1, 'Group is required'),
     sub_group_name: z.string().min(1, 'Sub-group is required'),
@@ -15,14 +22,18 @@ export const formSchema = z.object({
     shift_date: z.date().optional(),
     start_time: z.string().min(1, 'Start time is required'),
     end_time: z.string().min(1, 'End time is required'),
-    /** The paid rest pauses (cl 37) only. */
+    /** The paid rest pauses (cl 37) only, in 15-minute increments. */
     paid_break_minutes: z.number().min(0).optional(),
     /**
-     * The meal break, `HH:mm`. There is no unpaid-minutes field: those are the
-     * window's length (none for security), derived rather than typed.
+     * Primary meal break (`HH:mm`), kept synced with `unpaid_breaks[0]`.
      */
     break_start: z.string().optional().nullable(),
     break_end: z.string().optional().nullable(),
+    /**
+     * Ordered scheduled unpaid breaks (`[{ sno, start, end, duration }]`).
+     * Supports multiple dispersed breaks across long or overnight shifts.
+     */
+    unpaid_breaks: z.array(scheduledBreakSchema).optional(),
     timezone: z.string().default('Australia/Sydney'),
     assigned_employee_id: z.string().optional().nullable(),
     required_skills: z.array(z.string()).optional(),

@@ -35,6 +35,8 @@ export interface TemplateShift {
   /** Meal-break start and end, `HH:mm`. Required once the shift runs over 5 hours (cl 36.1). */
   breakStart?: string | null;
   breakEnd?: string | null;
+  /** Ordered scheduled unpaid breaks (`[{ sno, start, end, duration }]`). */
+  unpaidBreaks?: Array<{ sno?: number; start: string; end: string; duration?: number }> | null;
   requiredStaff?: number;
   skills: string[];
   licenses: string[];
@@ -220,6 +222,14 @@ export function dbShiftToFrontend(dbShift: any): TemplateShift {
     sortOrder: dbShift.sortOrder ?? dbShift.sort_order ?? 0,
     breakStart: dbShift.breakStart ?? dbShift.break_start ?? null,
     breakEnd: dbShift.breakEnd ?? dbShift.break_end ?? null,
+    unpaidBreaks: Array.isArray(dbShift.unpaidBreaks ?? dbShift.unpaid_breaks)
+      ? (dbShift.unpaidBreaks ?? dbShift.unpaid_breaks).map((b: any, i: number) => ({
+          sno: typeof b?.sno === 'number' ? b.sno : i + 1,
+          start: typeof b?.start === 'string' ? b.start.slice(0, 5) : '',
+          end: typeof b?.end === 'string' ? b.end.slice(0, 5) : '',
+          ...(typeof b?.duration === 'number' ? { duration: b.duration } : {}),
+        }))
+      : null,
     // `?? null`, never `?? 0` — 0 is Sunday, not "unset". Coercing here made
     // every weekday-less shift claim to be a Sunday shift.
     // Check !== undefined explicitly so null (the "every day" choice) is not skipped.
@@ -349,6 +359,7 @@ export function frontendToDbGroups(groups: Group[]): any[] {
         // erased the template's meal break on every save.
         breakStart: sh.breakStart ?? null,
         breakEnd: sh.breakEnd ?? null,
+        unpaidBreaks: sh.unpaidBreaks ?? null,
       })),
     })),
   }));

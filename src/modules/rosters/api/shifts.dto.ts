@@ -23,6 +23,8 @@ export interface CreateShiftData {
     /** Meal-break start and end, `HH:mm`. Required once a shift runs over 5 hours (cl 36.1). */
     break_start?: string | null;
     break_end?: string | null;
+    /** Multi-break scheduled unpaid breaks (`[{ sno, start, end, duration }]`). */
+    unpaid_breaks?: Array<{ sno?: number; start: string; end: string; duration?: number }> | null;
     timezone?: string;
     start_at?: string | null;
     end_at?: string | null;
@@ -33,14 +35,10 @@ export interface CreateShiftData {
     tags?: string[];
     notes?: string | null;
     template_id?: string | null;
-    template_group?: TemplateGroupType | null;
-    template_sub_group?: string | null;
     is_from_template?: boolean;
     template_instance_id?: string | null;
     /** How the shift was created: 'manual' | 'template' | 'autoscheduler' */
     creation_source?: string;
-    /** How the employee was assigned: 'direct' | 'manual' | 'autoscheduler' | 'dnd' */
-    assignment_source?: string | null;
     assignment_outcome?: 'confirmed' | 'no_show' | 'emergency_assigned' | 'pending' | null;
     is_training?: boolean;
     synthesis_run_id?: string | null;
@@ -52,7 +50,6 @@ export interface CreateShiftData {
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {
-    cancellation_reason?: string | null;
     /** Current version read from the shift — enables optimistic concurrency.
      *  If provided and the DB version has moved on, the server returns a
      *  VERSION_CONFLICT error (SQLSTATE 40001 → AppError code 'CONFLICT').

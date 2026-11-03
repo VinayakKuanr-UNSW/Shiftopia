@@ -60,7 +60,7 @@ interface ShiftData {
     isUrgent?: boolean;
     stateId?: string;
     subGroupColor?: string;
-    droppedById?: string | null;
+    last_dropped_by?: string | null;
 }
 
 interface BidComplianceModalProps {
@@ -270,8 +270,8 @@ export function BidComplianceModal({
     }, [isOpen]);
 
     const isDroppedByMe = useMemo(() => {
-        return user?.id === shift?.droppedById;
-    }, [user?.id, shift?.droppedById]);
+        return Boolean(user?.id && shift?.last_dropped_by && user.id === shift.last_dropped_by);
+    }, [user?.id, shift?.last_dropped_by]);
 
     // Determine if user can proceed
     const canProceed = useMemo(() => {

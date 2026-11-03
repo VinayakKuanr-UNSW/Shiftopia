@@ -23,6 +23,9 @@ export interface ShiftTimeRange {
     shift_date: string;  // YYYY-MM-DD format
     unpaid_break_minutes?: number;  // Optional break time to subtract for net hours
     paid_break_minutes?: number;    // Optional paid break time (e.g. rest pauses)
+    break_start?: string | null;
+    break_end?: string | null;
+    unpaid_breaks?: Array<{ sno?: number; start: string; end: string; duration?: number }> | null;
     shift_id?: string;   // Unique identifier for database lookups
     user_contract_id?: string | null;  // The contract a committed shift is linked to
 }

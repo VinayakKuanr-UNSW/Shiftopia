@@ -85,15 +85,16 @@ type ShapeStatus = 'PASS' | 'WARNING' | 'BLOCKING' | 'INCOMPLETE';
 type ShapeRuleId =
     | 'SHAPE_VALID_RANGE'
     | 'SHAPE_BREAK_EXCEEDS_SHIFT'
+    | 'SHAPE_BREAK_WINDOW'
     | 'SHAPE_SPREAD_GUARDRAIL'
     | 'SHAPE_MAX_DURATION'
     | 'SHAPE_MIN_ENGAGEMENT_PH'
     | 'SHAPE_FT_MIN_DAY'
     | 'SHAPE_MIN_ENGAGEMENT'
-    | 'SHAPE_BREAK_WINDOW'
     | 'SHAPE_MEAL_BREAK'
     | 'SHAPE_MEAL_BREAK_CEILING'
     | 'SHAPE_MEAL_BREAK_TIMING'
+    | 'SHAPE_REST_PAUSE_INCREMENT'
     | 'SHAPE_REST_PAUSE_1'
     | 'SHAPE_REST_PAUSE_2'
     | 'SHAPE_SECURITY_PAID_BREAK';
@@ -170,6 +171,16 @@ interface ShapeFix {
     options?: Array<{ value: number; label: string }>;
 }
 
+export interface ScheduledBreakItem {
+    sno?: number;
+    /** HH:mm */
+    start: string;
+    /** HH:mm */
+    end: string;
+    /** Optional precomputed duration in minutes (derived from start..end across midnight). */
+    duration?: number;
+}
+
 /** Everything the shape layer needs. Deliberately no employee, no async, no DB. */
 export interface ShapeInput {
     /** YYYY-MM-DD. Used only to derive Sunday / public-holiday day typing. */
@@ -194,6 +205,12 @@ export interface ShapeInput {
      */
     break_start?:          string | null;
     break_end?:            string | null;
+    /**
+     * Ordered list of scheduled break windows (`[{ sno, start, end, duration }]`).
+     * Supports multiple dispersed breaks on longer shifts, resolved across midnight.
+     * When omitted or empty, falls back to `[break_start, break_end]`.
+     */
+    unpaid_breaks?:        ScheduledBreakItem[] | null;
     is_training?:          boolean;
     /** Mandatory on the shifts table; drives which minimum applies. */
     target_employment_type: ShapeEmploymentTarget;

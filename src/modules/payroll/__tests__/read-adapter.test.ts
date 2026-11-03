@@ -155,20 +155,38 @@ describe('mapShiftRowToGrossPayInput — two-tier billable hours', () => {
     expect(input.hoursSource).toBe('scheduled_fallback');
   });
 
-  it('subtracts the shift-level unpaid break when the timesheet omits one', () => {
+  it('honors zero-fallback: unpunched break does NOT fall back to shift unpaid break', () => {
     const row = baseRow({
       actual_end: '2026-07-06T17:00:00Z',
       unpaid_break_minutes: 45,
+      _actualUnpaidBreakMinutes: null,
       _timesheet: {
         id: 't1', shift_id: 's1',
         start_time: '09:00', end_time: '17:00',
-        unpaid_break_minutes: null as any, // absent → fall back to shift.unpaid_break_minutes
+        unpaid_break_minutes: null as any, // absent and no actual punch → 0 deducted
         status: 'approved',
       },
     });
     const input = mapShiftRowToGrossPayInput(row)!;
-    // 480 − 45 = 435
-    expect(input.netMinutes).toBe(435);
+    // 480 − 0 = 480 (zero-fallback)
+    expect(input.netMinutes).toBe(480);
+  });
+
+  it('subtracts actual punched break when billables omits manager override', () => {
+    const row = baseRow({
+      actual_end: '2026-07-06T17:00:00Z',
+      unpaid_break_minutes: 45,
+      _actualUnpaidBreakMinutes: 30, // punched 30m break
+      _timesheet: {
+        id: 't1', shift_id: 's1',
+        start_time: '09:00', end_time: '17:00',
+        unpaid_break_minutes: null as any,
+        status: 'approved',
+      },
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    // 480 − 30 = 450
+    expect(input.netMinutes).toBe(450);
   });
 });
 
@@ -586,5 +604,56 @@ describe('mapShiftRowToGrossPayInput — where the meal break was taken', () => 
     const earlyBreak = computeShiftGrossPay(mapShiftRowToGrossPayInput(evening('18:00', null))!);
     expect(earlyBreak.paidHours).toBe(lateBreak.paidHours);
     expect(earlyBreak.grossPay).toBeGreaterThan(lateBreak.grossPay);
+  });
+
+  it('hydrates 3-table split (_attendance from timesheets + _billable from billables)', () => {
+    const splitRow = baseRow({
+      attendance_status: null,
+      actual_start: null,
+      actual_end: null,
+      unpaid_break_minutes: 60,
+      break_start: '13:00',
+      _attendance: {
+        id: 'att-1',
+        shift_id: 's1',
+        clock_in: '2026-07-06T08:55:00Z',
+        clock_out: '2026-07-06T17:04:00Z',
+        arrival_track: 'on_time',
+        departure_track: 'on_time',
+        is_no_show: false,
+      },
+      _billable: {
+        id: 'bil-1',
+        shift_id: 's1',
+        billable_start: '09:15',
+        billable_end: '17:00',
+        unpaid_break_minutes: 30,
+        break_start: '12:30',
+        status: 'approved',
+        payroll_exported: false,
+      },
+    });
+    const input = mapShiftRowToGrossPayInput(splitRow)!;
+    expect(input.startTime).toBe('09:15');
+    expect(input.endTime).toBe('17:00');
+    expect(input.netMinutes).toBe(435); // 7h45m (465m) - 30m break = 435m
+    expect(input.breakStart).toBe('12:30');
+    expect(input.hoursSource).toBe('adjusted');
+    expect(input.isNoShow).toBe(false);
+
+    const noShowSplit = baseRow({
+      attendance_status: null,
+      _attendance: {
+        id: 'att-2',
+        shift_id: 's1',
+        clock_in: null,
+        clock_out: null,
+        arrival_track: 'missing',
+        departure_track: 'missing',
+        is_no_show: true,
+      },
+      _billable: null,
+    });
+    expect(mapShiftRowToGrossPayInput(noShowSplit)!.isNoShow).toBe(true);
   });
 });

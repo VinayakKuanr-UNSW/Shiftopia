@@ -40,7 +40,7 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     shiftDate: shift.shift_date,
     startTime: shift.start_time,
     endTime: shift.end_time,
-    isOvernight: shift.is_overnight,
+    isOvernight: shift.is_overnight ?? (shift.start_time && shift.end_time ? shift.end_time < shift.start_time : false),
     scheduledLengthMinutes: shift.scheduled_length_minutes ?? 0,
     netLengthMinutes: shift.net_length_minutes,
     unpaidBreakMinutes: shift.unpaid_break_minutes,
@@ -54,9 +54,9 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     // Lifecycle
     lifecycleStatus: shift.lifecycle_status,
     isCancelled: shift.is_cancelled,
-    isLocked: shift.is_locked,
-    isPublished: shift.is_published || ['Published', 'InProgress', 'Completed'].includes(shift.lifecycle_status),
-    isDraft: shift.is_draft,
+    isLocked: false,
+    isPublished: ['Published', 'InProgress', 'Completed'].includes(shift.lifecycle_status),
+    isDraft: shift.lifecycle_status === 'Draft',
 
     // Bidding / Trading
     biddingStatus: shift.bidding_status,
@@ -69,11 +69,11 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     subDepartmentId: shift.sub_department_id,
     roleId: shift.role_id,
     roleName: shift.roles?.name ?? null,
-    remunerationLevel: shift.remuneration_level,
+    remunerationLevel: (shift as any).remuneration_level ?? (shift.roles as any)?.remuneration_level ?? null,
 
     // Level info
-    levelName: shift.remuneration_levels?.level_name ?? null,
-    levelNumber: shift.remuneration_levels?.level_number ?? null,
+    levelName: (shift as any).remuneration_levels?.level_name ?? null,
+    levelNumber: (shift as any).remuneration_levels?.level_number ?? (shift.roles as any)?.remuneration_level ?? null,
 
     // Group / Subgroup
     groupType: shift.group_type ?? null,

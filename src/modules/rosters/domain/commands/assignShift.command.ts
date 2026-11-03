@@ -202,7 +202,6 @@ export async function executeAssignShift(
             .select(`
                 id,
                 lifecycle_status,
-                is_published,
                 is_cancelled,
                 assignment_status,
                 bidding_status,
@@ -414,7 +413,6 @@ export async function executeAssignShift(
             updatePayload.assigned_employee_id = employeeId;
             updatePayload.assigned_at = new Date().toISOString();
             updatePayload.assignment_status = 'assigned';
-            updatePayload.assignment_source = 'manual';
         }
 
         const { error: updateError, count: assigned } = await supabase

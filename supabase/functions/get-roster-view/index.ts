@@ -90,7 +90,7 @@ async function authoriseRosterRead(
 
 // Lean projection for roster view (Phase 5: frontend memory & wire payload hardening).
 // Replaces wildcard `*` which previously loaded all 108 columns including heavy
-// JSONB blobs (compliance_snapshot, eligibility_snapshot, audit logs, recurrence rules)
+// JSONB blobs (compliance_snapshot, audit logs, recurrence rules)
 // reducing edge function wire payload from ~46.5 MB to ~10 MB on full-month views.
 const SHIFT_SELECT = `
   id,
@@ -103,26 +103,21 @@ const SHIFT_SELECT = `
   roster_id,
   shift_date,
   template_id,
-  template_group,
-  template_sub_group,
   is_from_template,
   template_instance_id,
-  group_type,
-  sub_group_name,
   display_order,
   shift_group_id,
   roster_subgroup_id,
   role_id,
-  remuneration_level,
   start_time,
   end_time,
-  is_overnight,
   scheduled_length_minutes,
-  break_minutes,
   paid_break_minutes,
   unpaid_break_minutes,
+  break_start,
+  break_end,
+  unpaid_breaks,
   net_length_minutes,
-  total_hours,
   timezone,
   start_at,
   end_at,
@@ -132,18 +127,10 @@ const SHIFT_SELECT = `
   assignment_status,
   assignment_outcome,
   fulfillment_status,
-  is_draft,
   is_cancelled,
-  is_on_bidding,
-  is_published,
-  is_locked,
   bidding_status,
   trade_requested_at,
   trading_status,
-  attendance_status,
-  attendance_note,
-  actual_start,
-  actual_end,
   offer_expires_at,
   event_ids,
   tags,
@@ -161,12 +148,12 @@ const SHIFT_SELECT = `
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
-  roles!shifts_role_id_fkey(id, name),
-  remuneration_levels(level_number, level_name),
+  roles!shifts_role_id_fkey(id, name, remuneration_level),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
-  timesheets(status, start_time, end_time)
+  timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
+  billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
 `;
 
 // ── In-memory TTL cache ───────────────────────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@
 
 import type { OrdinaryCycleWeeks } from '../ordinary-hours-cycle';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
+import type { ScheduledBreakItem } from '../shape/types';
 
 
 export type V8ShiftId = string;
@@ -45,6 +46,8 @@ export interface V8Shift {
     /** The meal-break window (shifts.break_start/break_end). Optional: not every caller hydrates it. */
     break_start?:          string | null;
     break_end?:            string | null;
+    /** Multi-break scheduled break windows (`[{ sno, start, end, duration }]`). */
+    unpaid_breaks?:        ScheduledBreakItem[] | null;
     role_id?:              V8RoleId;
     /**
      * Which job this shift is for. Needed by V8_EMPLOYMENT_TARGET to pick the

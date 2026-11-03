@@ -20,7 +20,6 @@ export const cleanTime = (val: string | null | undefined): string | null => {
 export const timesheetEntryToShiftInput = (entry: TimesheetRow): ShiftDotInput => ({
     lifecycle_status: entry.liveStatus,
     attendance_status: entry.attendanceStatus,
-    attendance_note: entry.attendanceNote,
     actual_start: cleanTime(entry.rawActualStart) ?? cleanTime(entry.clockIn),
     actual_end: cleanTime(entry.rawActualEnd) ?? cleanTime(entry.clockOut),
     adjusted_start: entry.adjustedStart,

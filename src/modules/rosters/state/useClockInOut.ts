@@ -32,7 +32,9 @@ import {
 const CheckInResponseSchema = z.discriminatedUnion('success', [
   z.object({
     success:           z.literal(true),
-    attendance_status: z.string(),
+    arrival_track:     z.enum(['early_in', 'on_time', 'late_in', 'missing']).optional(),
+    attendance_status: z.string().optional(),
+    clock_in:          z.string().nullable().optional(),
     actual_start:      z.string().nullable().optional(),
     distance_m:        z.number().nullable().optional(),
   }),
@@ -46,6 +48,8 @@ const CheckInResponseSchema = z.discriminatedUnion('success', [
 const ClockOutResponseSchema = z.discriminatedUnion('success', [
   z.object({
     success:             z.literal(true),
+    departure_track:     z.enum(['early_out', 'on_time', 'late_out', 'missing']).optional(),
+    clock_out:           z.string().nullable().optional(),
     actual_end:          z.string().nullable().optional(),
     early_out:           z.boolean().optional(),
     actual_net_minutes:  z.number().nullable().optional(),
@@ -106,7 +110,7 @@ export function useClockIn() {
     },
 
     onSuccess: ({ raw, analysis }) => {
-      const isLate = raw.success && raw.attendance_status === 'late';
+      const isLate = raw.success && (raw.arrival_track === 'late_in' || raw.attendance_status === 'late');
       const flagNote = analysis.flags.length > 0
         ? ` (GPS: ${analysis.confidence})`
         : '';
@@ -196,6 +200,86 @@ export function useClockOut() {
         description: error.message,
         variant:     'destructive',
       });
+    },
+  });
+}
+
+// ── useStartBreak / useEndBreak ─────────────────────────────────────────────
+//
+// Unpaid break punches. Geofencing is OFF for breaks by design: no GPS capture,
+// no venue distance, nothing that could make an employee wait for a fix before
+// they can stop working. Double-taps are made harmless at the database level —
+// `idx_unique_open_break` (one open break per timesheet) and the atomic
+// `WHERE break_end IS NULL` close — and `isPending` disables the button in the UI.
+
+const StartBreakResponseSchema = z.discriminatedUnion('success', [
+  z.object({
+    success:     z.literal(true),
+    break_id:    z.string(),
+    break_seq:   z.number(),
+    break_start: z.string(),
+  }),
+  z.object({ success: z.literal(false), error: z.string() }),
+]);
+
+const EndBreakResponseSchema = z.discriminatedUnion('success', [
+  z.object({
+    success:          z.literal(true),
+    break_id:         z.string(),
+    break_seq:        z.number(),
+    break_start:      z.string(),
+    break_end:        z.string(),
+    duration_minutes: z.number().nullable(),
+  }),
+  z.object({ success: z.literal(false), error: z.string() }),
+]);
+
+export function useStartBreak() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ shiftId }: { shiftId: string }) => {
+      const raw = await callRpc('start_break_shift', { p_shift_id: shiftId }, StartBreakResponseSchema);
+      if (raw.success === false) throw new Error(raw.error);
+      return raw;
+    },
+    onSuccess: (raw) => {
+      toast({
+        title:       'Unpaid Break Started',
+        description: `Break #${raw.success ? raw.break_seq : ''} started. End it before you clock out.`,
+      });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Could Not Start Break', description: error.message, variant: 'destructive' });
+      // A double-tap loser still needs the winner's state on screen.
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+    },
+  });
+}
+
+export function useEndBreak() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ shiftId }: { shiftId: string }) => {
+      const raw = await callRpc('end_break_shift', { p_shift_id: shiftId }, EndBreakResponseSchema);
+      if (raw.success === false) throw new Error(raw.error);
+      return raw;
+    },
+    onSuccess: (raw) => {
+      const mins = raw.success ? raw.duration_minutes : null;
+      toast({
+        title:       'Unpaid Break Ended',
+        description: mins !== null ? `Break lasted ${mins} minutes.` : 'Break ended.',
+      });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Could Not End Break', description: error.message, variant: 'destructive' });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
     },
   });
 }

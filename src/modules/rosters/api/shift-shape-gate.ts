@@ -47,6 +47,7 @@ import {
     evaluateShiftShape,
     type ShapeEmploymentTarget,
     type ShapeResult,
+    type ScheduledBreakItem,
 } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { ComplianceError } from '@/platform/supabase/rpc/errors';
@@ -123,6 +124,7 @@ export interface ShapeGateInput {
     paid_break_minutes?:     number | null;
     break_start?:            string | null;
     break_end?:              string | null;
+    unpaid_breaks?:          ScheduledBreakItem[] | null;
     is_training?:            boolean | null;
     target_employment_type?: string | null;
     target_requires_flexible?: boolean | null;
@@ -165,6 +167,7 @@ export async function evaluateShapeForRow(input: ShapeGateInput): Promise<ShapeR
         paid_break_minutes:     input.paid_break_minutes ?? 0,
         break_start:            input.break_start ?? null,
         break_end:              input.break_end ?? null,
+        unpaid_breaks:          input.unpaid_breaks ?? null,
         is_training:            input.is_training ?? false,
         target_employment_type: normaliseTarget(input.target_employment_type),
         target_requires_flexible: input.target_requires_flexible ?? false,
@@ -206,7 +209,7 @@ export async function assertShapeForRow(
 /** The columns a shape verdict needs from a stored shift. */
 const SHAPE_COLUMNS =
     'id, shift_date, start_time, end_time, unpaid_break_minutes, paid_break_minutes, ' +
-    'break_start, break_end, ' +
+    'break_start, break_end, unpaid_breaks, ' +
     'is_training, target_employment_type, target_requires_flexible, role_id, roles(name)';
 
 /** The subset of a shift a caller may be changing. Absent ⇒ unchanged. */
@@ -248,6 +251,7 @@ export async function assertShapeForShiftId(
         shift_date: string; start_time: string; end_time: string;
         unpaid_break_minutes: number | null; paid_break_minutes: number | null;
         break_start: string | null; break_end: string | null;
+        unpaid_breaks?: ScheduledBreakItem[] | null;
         is_training: boolean | null; target_employment_type: string | null;
         target_requires_flexible: boolean | null; role_id: string | null;
         roles?: { name?: string | null } | null;
@@ -265,6 +269,12 @@ export async function assertShapeForShiftId(
             paid_break_minutes:       pick('paid_break_minutes') as number | null,
             break_start:              pick('break_start') as string | null,
             break_end:                pick('break_end') as string | null,
+            unpaid_breaks:
+                patch.unpaid_breaks !== undefined
+                    ? patch.unpaid_breaks
+                    : (patch.break_start !== undefined || patch.break_end !== undefined)
+                        ? null
+                        : (current.unpaid_breaks ?? null),
             is_training:              pick('is_training') as boolean | null,
             target_employment_type:   pick('target_employment_type') as string | null,
             target_requires_flexible: pick('target_requires_flexible') as boolean | null,

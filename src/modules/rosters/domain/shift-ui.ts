@@ -262,7 +262,6 @@ export interface ShiftDotInput {
     shift_date?:        string | null;
     start_time?:        string | null;
     end_time?:          string | null;
-    attendance_note?:   string | null;
     adjusted_start?:    string | null;
     adjusted_end?:      string | null;
     actual_start?:      string | null;
@@ -270,6 +269,9 @@ export interface ShiftDotInput {
     start_at?:          string | Date | null;
     end_at?:            string | Date | null;
     attendance_status?: string | null;
+    arrival_track?:     string | null;
+    departure_track?:   string | null;
+    is_no_show?:        boolean | null;
     lifecycle_status?:  string | null;
     is_cancelled?:      boolean | null;
     /**
@@ -417,7 +419,7 @@ export function isShiftAssigned(shift: ShiftDotInput): boolean {
 function isShiftAttendanceFinished(shift: ShiftDotInput, start: number, end: number | null): boolean {
     const hasActualEnd = shift.actual_end && shift.actual_end !== '-' && shift.actual_end !== '—';
     const isPastEnd = end !== null && Date.now() > end;
-    const isNoShowStatus = (shift.attendance_status ?? '').toLowerCase() === 'no_show';
+    const isNoShowStatus = Boolean(shift.is_no_show) || (shift.attendance_status ?? '').toLowerCase() === 'no_show';
     const isPast12_5h = Date.now() >= resolveAutoClockoutAnchorMs(shift, start) + AUTO_CLOCKOUT_MS;
 
     return Boolean(
@@ -635,7 +637,7 @@ export function getPayrollRuleBadges(shift: ShiftDotInput): PayrollRuleBadges {
     if (bOut !== null && bOut < start - GRACE_MS) bOut += 24 * 60 * 60 * 1000;
 
     const isFinished = isShiftAttendanceFinished(shift, start, end);
-    const isNoShowStatus = (shift.attendance_status ?? '').toLowerCase() === 'no_show';
+    const isNoShowStatus = Boolean(shift.is_no_show) || (shift.attendance_status ?? '').toLowerCase() === 'no_show';
 
     const ci = parseToMs(shift.actual_start, shift.shift_date);
     const co = parseToMs(shift.actual_end, shift.shift_date);
@@ -698,7 +700,9 @@ export function getLiveRule(shift: ShiftDotInput): ShiftRuleBadge | null {
  */
 export function isTimesheetReviewable(shift: ShiftDotInput): boolean {
     // An explicitly-marked no-show is always terminal, regardless of clocks.
-    if ((shift.attendance_status ?? '').toLowerCase() === 'no_show') return true;
+    if (Boolean(shift.is_no_show) || (shift.attendance_status ?? '').toLowerCase() === 'no_show') return true;
+    // Scheduled end reached without clock-out (departure_track = 'missing' from system timer).
+    if (shift.departure_track === 'missing') return true;
 
     const { arrival, departure } = getLiveRuleBadges(shift);
 
@@ -801,7 +805,6 @@ export function resolveGroupVariant(
     const groupFields: unknown[] = s
         ? [
             s.group_type, s.groupType, s.group_name, s.groupName,
-            s.template_group, s.templateGroup,
             s.roster_groups?.external_id, s.roster_groups?.name,
             s.shift_groups?.external_id, s.shift_groups?.name,
         ]

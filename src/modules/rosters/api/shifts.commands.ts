@@ -209,6 +209,7 @@ export const shiftsCommands = {
                 paid_break_minutes:       shiftData.paid_break_minutes,
                 break_start:              shiftData.break_start,
                 break_end:                shiftData.break_end,
+                unpaid_breaks:            shiftData.unpaid_breaks,
                 is_training:              shiftData.is_training,
                 target_employment_type:   shiftData.target_employment_type,
                 target_requires_flexible: shiftData.target_requires_flexible,
@@ -263,6 +264,7 @@ export const shiftsCommands = {
             unpaid_break_minutes: shiftData.unpaid_break_minutes || 0,
             break_start: shiftData.break_start || null,
             break_end: shiftData.break_end || null,
+            ...(shiftData.unpaid_breaks !== undefined ? { unpaid_breaks: shiftData.unpaid_breaks ?? [] } : {}),
             timezone: shiftData.timezone || 'Australia/Sydney',
             start_at: shiftData.start_at || null,
             end_at: shiftData.end_at || null,
@@ -273,15 +275,12 @@ export const shiftsCommands = {
             tags: shiftData.tags || [],
             notes: shiftData.notes || null,
             template_id: safeUuid(shiftData.template_id),
-            template_group: shiftData.template_group || null,
-            template_sub_group: shiftData.template_sub_group || null,
             is_from_template: shiftData.is_from_template || false,
             template_instance_id: safeUuid(shiftData.template_instance_id),
             lifecycle_status: 'Draft',
             is_draft: true,
             created_by_user_id: user.id,
             creation_source: shiftData.creation_source ?? (shiftData.is_from_template ? 'template' : 'manual'),
-            assignment_source: shiftData.assigned_employee_id ? (shiftData.assignment_source ?? 'direct') : null,
             is_training: shiftData.is_training ?? false,
             // Planning target. `null` = "Any employment type". Persisted by
             // sm_create_shift as of 20260805060000 — before that migration this
@@ -337,7 +336,7 @@ export const shiftsCommands = {
             const TOUCHES_SHAPE = [
                 'start_time', 'end_time', 'shift_date',
                 'unpaid_break_minutes', 'paid_break_minutes',
-                'break_start', 'break_end',
+                'break_start', 'break_end', 'unpaid_breaks',
                 'is_training', 'role_id',
                 'target_employment_type', 'target_requires_flexible',
             ] as const;
@@ -360,6 +359,12 @@ export const shiftsCommands = {
                         paid_break_minutes:       pick('paid_break_minutes') as number,
                         break_start:              pick('break_start') as string | null,
                         break_end:                pick('break_end') as string | null,
+                        unpaid_breaks:
+                            updates.unpaid_breaks !== undefined
+                                ? updates.unpaid_breaks
+                                : (updates.break_start !== undefined || updates.break_end !== undefined)
+                                    ? null
+                                    : (currentShift.unpaid_breaks ?? null),
                         is_training:              pick('is_training') as boolean,
                         target_employment_type:   pick('target_employment_type') as string | null,
                         target_requires_flexible: pick('target_requires_flexible') as boolean,
@@ -395,7 +400,7 @@ export const shiftsCommands = {
         //   notes, role_id, sub_department_id,
         //   remuneration_level_id, group_type, sub_group_name, display_order,
         //   shift_group_id, shift_subgroup_id, timezone, is_training,
-        //   assigned_employee_id, assignment_source
+        //   assigned_employee_id
         const editPayload: Record<string, unknown> = {};
 
         if (updates.start_time !== undefined) editPayload.start_time = updates.start_time;
@@ -408,6 +413,7 @@ export const shiftsCommands = {
         // null passes through: shortening a shift under five hours clears its break.
         if (updates.break_start !== undefined) editPayload.break_start = updates.break_start;
         if (updates.break_end !== undefined) editPayload.break_end = updates.break_end;
+        if (updates.unpaid_breaks !== undefined) editPayload.unpaid_breaks = updates.unpaid_breaks ?? [];
         // notes: pass through even when null so it can be explicitly cleared
         // (the gateway uses the `?` operator to allow clearing).
         if (updates.notes !== undefined) editPayload.notes = updates.notes;
@@ -449,15 +455,12 @@ export const shiftsCommands = {
         if (updates.assigned_employee_id !== undefined) {
             const empId = safeUuid(updates.assigned_employee_id);
             editPayload.assigned_employee_id = empId ?? null;
-            editPayload.assignment_source = empId
-                ? (updates.assignment_source ?? 'manual')
-                : null;
         }
 
         // ── Non-whitelist fields: preserve the existing direct-update path ─────
         // These are NOT silently dropped. roster_id/department_id/organization_id
         // are structural moves; start_at/end_at are canonical timestamps; the jsonb
-        // arrays + cancellation_reason are owned by other pipelines. (Assignment
+        // arrays are owned by other pipelines. (Assignment
         // now flows through the audited `edit` op above, not here.)
         const excludedPayload: Record<string, unknown> = {};
 
@@ -476,8 +479,6 @@ export const shiftsCommands = {
         if (updates.event_ids !== undefined)
             editPayload.event_ids = updates.event_ids;
         if (updates.tags !== undefined) excludedPayload.tags = updates.tags;
-        if (updates.cancellation_reason !== undefined)
-            excludedPayload.cancellation_reason = updates.cancellation_reason;
 
         // Employment target: a PLANNING attribute, in the same family as `tags`.
         // It is deliberately NOT routed through the gateway `edit` op — that op's

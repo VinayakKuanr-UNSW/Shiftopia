@@ -1,29 +1,53 @@
 /**
  * DB-row shapes for the gross-pay read adapter.
  *
- * These are the SUBSET of `shifts` / `timesheets` / `profiles` columns the
- * adapter selects — hand-typed so the pure mapper is unit-testable WITHOUT the
- * generated Supabase types (which pull in the whole schema and aren't stable
- * across sibling-agent edits). They mirror the real column names/casing exactly
- * (see supabase baseline: shift_attendance_status, timesheet_status enums).
+ * These are the SUBSET of `shifts` / `timesheets` / `billables` / `profiles`
+ * columns the adapter selects — hand-typed so the pure mapper is unit-testable
+ * WITHOUT the generated Supabase types (which pull in the whole schema and
+ * aren't stable across sibling-agent edits). They mirror the real column
+ * names/casing exactly (see attendance_arrival_track, attendance_departure_track,
+ * and timesheet_status enums).
  */
 
 import type { ShiftPayContract } from '../domain/shiftPayTerms';
 
-/** Timesheet row joined onto a shift (by shift_id). Only pay-relevant columns. */
-export interface GrossPayTimesheetRow {
+/** Ground-truth attendance actuals row from `public.timesheets` (1:1 by shift_id). */
+export interface GrossPayAttendanceRow {
+  id: string;
+  shift_id: string;
+  clock_in: string | null;
+  clock_out: string | null;
+  arrival_track?: 'early_in' | 'on_time' | 'late_in' | 'missing' | string | null;
+  departure_track?: 'early_out' | 'on_time' | 'late_out' | 'missing' | string | null;
+  is_no_show?: boolean | null;
+}
+
+/** Manager-verified billable & payroll row from `public.billables` (1:1 by shift_id). */
+export interface GrossPayBillableRow {
   id: string;
   shift_id: string | null;
   /** Manager-adjusted billable start — 'HH:MM[:SS]' or null (no manual edit). */
-  start_time: string | null;
+  billable_start?: string | null;
   /** Manager-adjusted billable end — 'HH:MM[:SS]' or null. */
-  end_time: string | null;
+  billable_end?: string | null;
+  /** Legacy alias for billable_start in pure unit-test fixtures. */
+  start_time?: string | null;
+  /** Legacy alias for billable_end in pure unit-test fixtures. */
+  end_time?: string | null;
   unpaid_break_minutes: number | null;
-  /** When the meal break was actually taken — 'HH:MM[:SS]' or null (not recorded). */
+  paid_break_minutes?: number | null;
+  /** Manager-verified meal-break start — 'HH:MM[:SS]' or null. */
+  break_start?: string | null;
+  break_end?: string | null;
+  /** Legacy alias for break_start in pure unit-test fixtures. */
   actual_break_start?: string | null;
   /** timesheet_status enum: 'draft'|'submitted'|'approved'|'rejected'|'no_show'. */
   status: string | null;
+  payroll_exported?: boolean | null;
 }
+
+/** Compatibility alias for billable overlay rows attached to a shift. */
+export type GrossPayTimesheetRow = GrossPayBillableRow;
 
 /** Nested remuneration_levels embed (PostgREST returns object OR array). */
 export interface GrossPayRemLevelEmbed {
@@ -56,9 +80,12 @@ export interface GrossPayShiftRow {
   lifecycle_status?: string | null;
   /** shift_assignment_status: 'unassigned'|'assigned'|'pending'|'declined'. */
   assignment_status?: string | null;
-  /** shift_attendance_status: 'unknown'|'checked_in'|'no_show'|'late'|'excused'|'auto_clock_out'. */
+  assignment_outcome?: string | null;
+  /** Hydrated attendance status (derived from `public.timesheets` + `public.billables`). */
   attendance_status?: string | null;
+  /** Hydrated raw clock-in from `public.timesheets.clock_in`. */
   actual_start?: string | null;
+  /** Hydrated raw clock-out from `public.timesheets.clock_out`. */
   actual_end?: string | null;
   paid_break_minutes?: number | null;
   unpaid_break_minutes?: number | null;
@@ -87,6 +114,10 @@ export interface GrossPayShiftRow {
   remuneration_levels?: GrossPayRemLevelEmbed | GrossPayRemLevelEmbed[] | null;
 
   // ── Attached by the fetcher (not selected columns) ──────────────────────
+  /** Actual unpaid break minutes summed from completed `timesheet_breaks`. */
+  _actualUnpaidBreakMinutes?: number | null;
+  /** True when manager explicitly entered/overrode unpaid break on billables. */
+  _unpaidBreakIsManual?: boolean;
   /** The employee's employment_type from `profiles` (raw DB value, e.g. 'casual'). */
   _employmentType?: string | null;
   /** The employee's substantive contract remuneration level. */
@@ -121,7 +152,11 @@ export interface GrossPayShiftRow {
   /** Schedule 6 SWS. */
   _isSws?: boolean;
   _swsCapacityPercentage?: number;
-  /** The APPROVED timesheet overlay for this shift, if any. */
+  /** Ground-truth attendance actuals from `public.timesheets` for this shift, if any. */
+  _attendance?: GrossPayAttendanceRow | null;
+  /** Manager-verified billables overlay from `public.billables` for this shift, if any. */
+  _billable?: GrossPayBillableRow | null;
+  /** Compatibility alias for `_billable` (used by existing pure unit tests). */
   _timesheet?: GrossPayTimesheetRow | null;
 }
 

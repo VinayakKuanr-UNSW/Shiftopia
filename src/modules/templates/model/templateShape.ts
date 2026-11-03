@@ -60,6 +60,7 @@ export function evaluateTemplateShiftShape(shift: TemplateShift) {
         paid_break_minutes:       shift.paidBreakDuration ?? 0,
         break_start:              shift.breakStart ?? null,
         break_end:                shift.breakEnd ?? null,
+        unpaid_breaks:            shift.unpaidBreaks ?? null,
         target_employment_type:   shift.targetEmploymentType ?? 'Casual',
         target_requires_flexible: shift.targetRequiresFlexible ?? false,
         // The role name rides along on the template shift, so Schedule 3 is
@@ -241,6 +242,7 @@ export function validateTemplateApplication(
             paid_break_minutes:       shift.paidBreakDuration ?? 0,
             break_start:              shift.breakStart ?? null,
             break_end:                shift.breakEnd ?? null,
+            unpaid_breaks:            shift.unpaidBreaks ?? null,
             target_employment_type:   shift.targetEmploymentType ?? 'Casual',
             target_requires_flexible: shift.targetRequiresFlexible ?? false,
             is_security:              isSecurityRoleName(shift.roleName),
@@ -289,6 +291,7 @@ export interface TemplateShiftRow {
     paid_break_minutes:       number | null;
     break_start:              string | null;
     break_end:                string | null;
+    unpaid_breaks?:           Array<{ sno?: number; start: string; end: string; duration?: number }> | null;
     day_of_week:              number | null;
     target_employment_type:   string | null;
     target_requires_flexible: boolean | null;
@@ -306,6 +309,7 @@ export function templateShiftFromRow(row: TemplateShiftRow): TemplateShift {
         unpaidBreakDuration:      row.unpaid_break_minutes ?? 0,
         breakStart:               row.break_start?.slice(0, 5) ?? null,
         breakEnd:                 row.break_end?.slice(0, 5) ?? null,
+        unpaidBreaks:             Array.isArray(row.unpaid_breaks) ? row.unpaid_breaks : null,
         dayOfWeek:                row.day_of_week,
         targetEmploymentType:     (row.target_employment_type ?? 'Casual') as TemplateShift['targetEmploymentType'],
         targetRequiresFlexible:   row.target_requires_flexible ?? false,

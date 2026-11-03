@@ -187,7 +187,7 @@ async function loadPlacedTemplateShifts(templateId: string): Promise<PlacedTempl
     .from('template_shifts')
     .select(
       'id, name, role_name, start_time, end_time, unpaid_break_minutes, ' +
-      'paid_break_minutes, break_start, break_end, day_of_week, target_employment_type, target_requires_flexible',
+      'paid_break_minutes, break_start, break_end, unpaid_breaks, day_of_week, target_employment_type, target_requires_flexible',
     )
     .in('subgroup_id', subGroups.map(sg => sg.id));
   if (sErr) throw sErr;

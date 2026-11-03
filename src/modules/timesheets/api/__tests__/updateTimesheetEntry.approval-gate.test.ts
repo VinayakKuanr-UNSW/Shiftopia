@@ -33,19 +33,40 @@ beforeEach(() => {
 });
 
 const FINISHED_SHIFT_ROW = {
-  attendance_status: null,
+  assignment_outcome: null,
   start_time: '09:00',
   end_time: '17:00',
-  actual_start: '2024-01-01T09:07:00Z',
-  actual_end: null, // never clocked out
   shift_date: '2024-01-01', // safely in the past
+  timesheets: {
+    id: 'ts-raw-1',
+    clock_in: '2024-01-01T09:07:00Z',
+    clock_out: null, // never clocked out
+    arrival_track: 'on_time',
+    departure_track: 'missing',
+    is_no_show: false,
+  },
 };
+
+const RESOLVED_SHIFT_ROW = {
+  ...FINISHED_SHIFT_ROW,
+  timesheets: {
+    id: 'ts-raw-1',
+    clock_in: '2024-01-01T09:07:00Z',
+    clock_out: '2024-01-01T17:05:00Z',
+    arrival_track: 'on_time',
+    departure_track: 'on_time',
+    is_no_show: false,
+  },
+};
+
+// The untouched billable trg_sync_timesheets_on_shift_change creates with the shift.
+const DRAFT_EXISTING = { id: 'bil-1', status: 'draft', billable_start: null, billable_end: null, payroll_exported: false, version: 1, timesheet_id: 'ts-raw-1', unpaid_break_minutes: null };
 
 describe('updateTimesheetEntry — approval completeness guard', () => {
   it('refuses to approve a finished shift with a missing clock-out and no manager edit', async () => {
     ctx.mock.enqueue(
-      { data: null, error: null },        // 1. existing timesheet lookup (none yet)
-      { data: FINISHED_SHIFT_ROW, error: null }, // 2. shift lookup
+      { data: DRAFT_EXISTING, error: null },     // 1. existing billables lookup
+      { data: FINISHED_SHIFT_ROW, error: null }, // 2. shift + timesheets lookup
     );
 
     const result = await updateTimesheetEntry('shift-1', { status: 'approved', notes: 'bulk approve' });
@@ -57,12 +78,11 @@ describe('updateTimesheetEntry — approval completeness guard', () => {
 
   it('allows approval once the manager supplies the missing side in the same call', async () => {
     ctx.mock.enqueue(
-      { data: null, error: null },                // 1. existing timesheet lookup
-      { data: FINISHED_SHIFT_ROW, error: null },  // 2. shift lookup
-      { data: { ...FINISHED_SHIFT_ROW, assigned_employee_id: 'emp-1' }, error: null }, // 3. shift refetch for insert
-      { error: null },                             // 4. timesheets insert
-      { data: { lifecycle_status: 'Published' }, error: null }, // 5. lifecycle check
-      { error: null },                             // 6. shift → Completed update
+      { data: DRAFT_EXISTING, error: null },      // 1. existing billables lookup
+      { data: FINISHED_SHIFT_ROW, error: null },  // 2. shift + timesheets lookup
+      { data: [{ id: 'bil-1' }], error: null },   // 3. billables update
+      { data: { lifecycle_status: 'Published' }, error: null }, // 4. lifecycle check
+      { error: null },                             // 5. shift → Completed update
     );
 
     const result = await updateTimesheetEntry('shift-1', { status: 'approved', adjustedEnd: '17:00' });
@@ -72,8 +92,14 @@ describe('updateTimesheetEntry — approval completeness guard', () => {
 
   it('refuses to approve when the clock-IN is the missing side', async () => {
     ctx.mock.enqueue(
-      { data: null, error: null },
-      { data: { ...FINISHED_SHIFT_ROW, actual_start: null, actual_end: '2024-01-01T17:05:00Z' }, error: null },
+      { data: DRAFT_EXISTING, error: null },
+      {
+        data: {
+          ...FINISHED_SHIFT_ROW,
+          timesheets: { id: 'ts-raw-1', clock_in: null, clock_out: '2024-01-01T17:05:00Z', arrival_track: 'missing', departure_track: 'on_time', is_no_show: false },
+        },
+        error: null,
+      },
     );
 
     const result = await updateTimesheetEntry('shift-1', { status: 'approved' });
@@ -83,10 +109,9 @@ describe('updateTimesheetEntry — approval completeness guard', () => {
 
   it('does not block approval for a shift with both sides resolved from real clock data', async () => {
     ctx.mock.enqueue(
-      { data: null, error: null },
-      { data: { ...FINISHED_SHIFT_ROW, actual_end: '2024-01-01T17:05:00Z' }, error: null },
-      { data: { ...FINISHED_SHIFT_ROW, assigned_employee_id: 'emp-1' }, error: null },
-      { error: null },
+      { data: DRAFT_EXISTING, error: null },
+      { data: RESOLVED_SHIFT_ROW, error: null },
+      { data: [{ id: 'bil-1' }], error: null },
       { data: { lifecycle_status: 'Published' }, error: null },
       { error: null },
     );
@@ -98,14 +123,14 @@ describe('updateTimesheetEntry — approval completeness guard', () => {
 });
 
 describe('updateTimesheetEntry — metadata edits on a finalized timesheet (audit H-12)', () => {
-  const APPROVED_EXISTING = { id: 'ts-1', status: 'approved', start_time: null, end_time: null };
-  const RESOLVED_SHIFT = { ...FINISHED_SHIFT_ROW, actual_end: '2024-01-01T17:05:00Z' };
+  const APPROVED_EXISTING = { id: 'bil-1', status: 'approved', billable_start: null, billable_end: null, payroll_exported: false };
+  const RESOLVED_SHIFT = RESOLVED_SHIFT_ROW;
 
   it('persists a notes-only edit on an already-approved timesheet instead of silently no-opping', async () => {
     ctx.mock.enqueue(
-      { data: APPROVED_EXISTING, error: null },     // 1. existing timesheet lookup
-      { data: RESOLVED_SHIFT, error: null },        // 2. shift lookup
-      { data: [{ id: 'ts-1' }], error: null },       // 3. the notes UPDATE actually fires
+      { data: APPROVED_EXISTING, error: null },     // 1. existing billables lookup
+      { data: RESOLVED_SHIFT, error: null },        // 2. shift + timesheets lookup
+      { data: [{ id: 'bil-1' }], error: null },      // 3. the notes UPDATE actually fires
     );
 
     const result = await updateTimesheetEntry('shift-1', { notes: 'Corrected a typo in my earlier note' });
@@ -119,7 +144,7 @@ describe('updateTimesheetEntry — metadata edits on a finalized timesheet (audi
     ctx.mock.enqueue(
       { data: { ...APPROVED_EXISTING, status: 'rejected' }, error: null },
       { data: RESOLVED_SHIFT, error: null },
-      { data: [{ id: 'ts-1' }], error: null },
+      { data: [{ id: 'bil-1' }], error: null },
     );
 
     const result = await updateTimesheetEntry('shift-1', { rejectedReason: 'Updated: wrong break duration logged' });
@@ -155,12 +180,18 @@ describe('updateTimesheetEntry — metadata edits on a finalized timesheet (audi
 });
 
 describe('updateTimesheetEntry — payroll-exported terminal lock (audit H-13)', () => {
-  const EXPORTED_SHIFT_ROW = { ...FINISHED_SHIFT_ROW, actual_end: '2024-01-01T17:05:00Z', payroll_exported: true };
+  const EXPORTED_BILLABLE = {
+    id: 'bil-1',
+    status: 'approved',
+    billable_start: null,
+    billable_end: null,
+    payroll_exported: true,
+  };
 
   it('refuses even a notes-only edit once the shift has been exported to payroll', async () => {
     ctx.mock.enqueue(
-      { data: { id: 'ts-1', status: 'approved', start_time: null, end_time: null }, error: null }, // 1. existing timesheet
-      { data: EXPORTED_SHIFT_ROW, error: null }, // 2. shift lookup — payroll_exported: true
+      { data: EXPORTED_BILLABLE, error: null }, // 1. existing billables — payroll_exported: true
+      { data: RESOLVED_SHIFT_ROW, error: null }, // 2. shift lookup
     );
 
     const result = await updateTimesheetEntry('shift-1', { notes: 'trying to annotate a paid record' });
@@ -172,8 +203,8 @@ describe('updateTimesheetEntry — payroll-exported terminal lock (audit H-13)',
 
   it('refuses a metrics edit (adjustedStart) once exported — stricter than the ordinary approved-record guard', async () => {
     ctx.mock.enqueue(
-      { data: { id: 'ts-1', status: 'approved', start_time: null, end_time: null }, error: null },
-      { data: EXPORTED_SHIFT_ROW, error: null },
+      { data: EXPORTED_BILLABLE, error: null },
+      { data: RESOLVED_SHIFT_ROW, error: null },
     );
 
     const result = await updateTimesheetEntry('shift-1', { adjustedStart: '09:15' });
@@ -184,9 +215,9 @@ describe('updateTimesheetEntry — payroll-exported terminal lock (audit H-13)',
 
   it('does not block a not-yet-exported shift (payroll_exported: false/undefined) — regression guard', async () => {
     ctx.mock.enqueue(
-      { data: { id: 'ts-1', status: 'approved', start_time: null, end_time: null }, error: null },
-      { data: { ...EXPORTED_SHIFT_ROW, payroll_exported: false }, error: null },
-      { data: [{ id: 'ts-1' }], error: null },
+      { data: { ...EXPORTED_BILLABLE, payroll_exported: false }, error: null },
+      { data: RESOLVED_SHIFT_ROW, error: null },
+      { data: [{ id: 'bil-1' }], error: null },
     );
 
     const result = await updateTimesheetEntry('shift-1', { notes: 'still editable' });
@@ -196,15 +227,15 @@ describe('updateTimesheetEntry — payroll-exported terminal lock (audit H-13)',
 });
 
 describe('bulkUpdateTimesheetStatus — optimistic-lock CAS per row (audit M-14)', () => {
-  const SUBMITTED = (version: number) => ({ id: 'ts-x', status: 'submitted', start_time: null, end_time: null, version });
-  const RESOLVED_SHIFT = { ...FINISHED_SHIFT_ROW, actual_end: '2024-01-01T17:05:00Z' };
+  const SUBMITTED = (version: number) => ({ id: 'bil-x', status: 'submitted', billable_start: null, billable_end: null, payroll_exported: false, version });
+  const RESOLVED_SHIFT = RESOLVED_SHIFT_ROW;
 
   it('rejects the whole batch call gracefully when one row has a stale version, counting it as conflicted (not failed)', async () => {
     ctx.mock.enqueue(
       // shift-1: existing version 3, caller supplies matching expectedVersion 3.
       { data: SUBMITTED(3), error: null },
       { data: RESOLVED_SHIFT, error: null },
-      { data: [{ id: 'ts-x' }], error: null }, // UPDATE ... WHERE version = 3 → 1 row
+      { data: [{ id: 'bil-x' }], error: null }, // UPDATE ... WHERE version = 3 → 1 row
       // shift-2: existing version 3, caller supplies a STALE expectedVersion 1.
       { data: SUBMITTED(3), error: null },
       { data: RESOLVED_SHIFT, error: null },
@@ -227,7 +258,7 @@ describe('bulkUpdateTimesheetStatus — optimistic-lock CAS per row (audit M-14)
     ctx.mock.enqueue(
       { data: SUBMITTED(3), error: null },
       { data: RESOLVED_SHIFT, error: null },
-      { data: [{ id: 'ts-x' }], error: null },
+      { data: [{ id: 'bil-x' }], error: null },
     );
 
     const result = await bulkUpdateTimesheetStatus(['shift-1'], 'manager-1', 'rejected');
@@ -237,8 +268,8 @@ describe('bulkUpdateTimesheetStatus — optimistic-lock CAS per row (audit M-14)
 });
 
 describe('updateTimesheetEntry — optimistic concurrency (F18)', () => {
-  const EXISTING = { id: 'ts-1', status: 'submitted', start_time: null, end_time: null, version: 3 };
-  const RESOLVED_SHIFT = { ...FINISHED_SHIFT_ROW, actual_end: '2024-01-01T17:05:00Z' };
+  const EXISTING = { id: 'bil-1', status: 'submitted', billable_start: null, billable_end: null, payroll_exported: false, version: 3 };
+  const RESOLVED_SHIFT = RESOLVED_SHIFT_ROW;
 
   it('throws TimesheetConflictError when the CAS matches zero rows (stale version)', async () => {
     ctx.mock.enqueue(

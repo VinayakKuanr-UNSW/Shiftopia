@@ -24,8 +24,6 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     roster_id: 'roster-1',
     shift_date: '2025-03-15',
     template_id: null,
-    template_group: null,
-    template_sub_group: null,
     is_from_template: false,
     template_instance_id: null,
     group_type: null,
@@ -56,36 +54,23 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     is_draft: false,
     is_cancelled: false,
     cancelled_at: null,
-    cancelled_by_user_id: null,
-    cancellation_reason: null,
     bidding_status: 'not_on_bidding',
     bidding_priority_text: 'normal',
     trade_requested_at: null,
     required_skills: [],
     required_licenses: [],
-    eligibility_snapshot: null,
     event_ids: [],
     tags: [],
-    compliance_snapshot: null,
-    compliance_checked_at: null,
-    compliance_override: false,
-    compliance_override_reason: null,
     is_published: true,
     published_at: null,
-    published_by_user_id: null,
-    is_locked: false,
     lock_reason_text: null,
-    timesheet_id: null,
     actual_start: null,
     actual_end: null,
-    actual_net_minutes: null,
-    payroll_exported: false,
     last_modified_by: null,
     last_modified_reason: null,
     notes: null,
     is_recurring: false,
     recurrence_rule: null,
-    confirmed_at: null,
     roles: { id: 'role-1', name: 'V8Stage Hand' },
     ...overrides,
   } as unknown as Shift));
@@ -212,13 +197,13 @@ describe('projectGroup — stats', () => {
 });
 
 describe('projectGroup — projected shift fields', () => {
-  it('correctly maps isLocked from shift.is_locked', () => {
-    const shifts = [makeShift({ group_type: 'convention_centre', is_locked: true })];
+  it('maps default isLocked false', () => {
+    const shifts = [makeShift({ group_type: 'convention_centre' })];
     const result = projectGroup(shifts as unknown as WorkerShiftDTO[]);
     const cc = result.groups.find(g => g.type === 'convention_centre')!;
     const sg = cc.subGroups[0];
     const ps = Object.values(sg.shiftsByDate).flat()[0];
-    expect(ps.isLocked).toBe(true);
+    expect(ps.isLocked).toBe(false);
   });
 
   it('correctly maps isUrgent from bidding_status', () => {

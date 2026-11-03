@@ -239,7 +239,7 @@ export async function getLeaveShiftConflicts(
 ): Promise<LeaveShiftConflict[]> {
   const { data, error } = await (supabase as any)
     .from('shifts')
-    .select('id, shift_date, start_time, end_time, lifecycle_status, target_employment_type, actual_start')
+    .select('id, shift_date, start_time, end_time, lifecycle_status, target_employment_type, timesheets(clock_in)')
     .eq('assigned_employee_id', employeeId)
     .gte('shift_date', startDate)
     .lte('shift_date', endDate)
@@ -251,18 +251,23 @@ export async function getLeaveShiftConflicts(
     return [];
   }
 
-  return (data ?? []).map((row: any) => ({
-    shiftId: row.id,
-    shiftDate: row.shift_date?.split('T')[0] ?? '',
-    startTime: row.start_time ?? null,
-    endTime: row.end_time ?? null,
-    targetEmploymentType: row.target_employment_type ?? null,
-    lifecycleStatus: row.lifecycle_status ?? null,
-    worked: isWorkedShift({ actualStart: row.actual_start ?? null, lifecycleStatus: row.lifecycle_status ?? null }),
-    started: isWorkedShift({ actualStart: row.actual_start ?? null, lifecycleStatus: row.lifecycle_status ?? null })
-      || (Boolean(row.shift_date && row.start_time)
-        && parseZonedDateTime(String(row.shift_date).split('T')[0], row.start_time, SYDNEY_TZ).getTime() <= Date.now()),
-  }));
+  return (data ?? []).map((row: any) => {
+    const rawTs = row.timesheets;
+    const clockIn = (Array.isArray(rawTs) ? rawTs[0]?.clock_in : rawTs?.clock_in) ?? null;
+    const worked = isWorkedShift({ actualStart: clockIn, lifecycleStatus: row.lifecycle_status ?? null });
+    return {
+      shiftId: row.id,
+      shiftDate: row.shift_date?.split('T')[0] ?? '',
+      startTime: row.start_time ?? null,
+      endTime: row.end_time ?? null,
+      targetEmploymentType: row.target_employment_type ?? null,
+      lifecycleStatus: row.lifecycle_status ?? null,
+      worked,
+      started: worked
+        || (Boolean(row.shift_date && row.start_time)
+          && parseZonedDateTime(String(row.shift_date).split('T')[0], row.start_time, SYDNEY_TZ).getTime() <= Date.now()),
+    };
+  });
 }
 
 // ── Mutations ────────────────────────────────────────────────────────────────

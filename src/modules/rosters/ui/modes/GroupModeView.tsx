@@ -1810,8 +1810,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         const isPublished = ['Published', 'InProgress', 'Completed'].includes(shift.lifecycle_status || '');
         const isDraft = shift.lifecycle_status === 'Draft';
 
-        // Lock calculation: Check if shift start time is in the past OR explicitly locked in DB
-        const isLocked = shift.is_locked || isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
+        // Lock calculation: Check if shift start time is in the past
+        const isLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
 
         sgEntry.shifts[dateKey].push({
           id: shift.id,

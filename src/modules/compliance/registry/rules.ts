@@ -1,7 +1,7 @@
 /**
  * Compliance Rule Registry — the table.
  *
- * 36 rules: 14 shape, 22 labour. See `./types.ts` for why this exists and which
+ * 37 rules: 15 shape, 22 labour. See `./types.ts` for why this exists and which
  * fields are machine-verified.
  *
  * REGISTERED AS IMPLEMENTED, NOT AS PROPOSED. Several rules diverge from the
@@ -226,6 +226,20 @@ export const RULE_REGISTRY: Readonly<Record<string, RuleSpec>> = Object.freeze({
         description:
             'A security shift may not carry an unpaid meal break — Schedule 3 makes it paid, on ' +
             'the basis the member stays available to respond.',
+    },
+
+    SHAPE_REST_PAUSE_INCREMENT: {
+        id: 'SHAPE_REST_PAUSE_INCREMENT',
+        name: 'Rest Pause Increment',
+        tier: 'BLOCKING',
+        layer: 'SHAPE',
+        category: 'TIME',
+        employment: 'ALL',
+        authority: eba('cl 37.1', 'cl 37.2'),
+        engines: { shape: true, v8: false, solver: null },
+        description:
+            'Paid rest pauses must be allotted in 15-minute increments (0m, 15m, 30m, 45m…); ' +
+            'paid pauses do not require attendance punches and do not shorten net shift hours.',
     },
 
     SHAPE_REST_PAUSE_1: {
