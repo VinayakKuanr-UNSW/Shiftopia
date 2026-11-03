@@ -26,7 +26,7 @@ run). Its text is not kept in the repo.
 
 ## Migrations — repo file = recorded version
 
-All 18 files are named by the version Supabase recorded. The five marked *backfilled* ran ad hoc
+All 19 files are named by the version Supabase recorded. The five marked *backfilled* ran ad hoc
 on 2026-11-02 and were never recorded; their ledger rows were added on 2026-11-04 (version and
 name only, `statements` NULL), with versions chosen so filename order reproduces the order they ran.
 
@@ -50,6 +50,7 @@ name only, `statements` NULL), with versions chosen so filename order reproduces
 | 20261103223351 | close_anon_definers_and_invoker_views | 2026-11-04 — CI: views lost `security_invoker`; 9 definers anon-executable |
 | 20261103223805 | gateway_and_kpi_runtime_errors | 2026-11-04 — CI: gateway + marketplace KPIs failed at run time |
 | 20261103224126 | billables_drop_pay_columns | 2026-11-04 — CI: Team Leads could read pay through billables |
+| 20261103230428 | template_apply_subgroup_merge | 2026-11-04 — CI: template apply lost its case-insensitive sub-group merge |
 
 **Found by CI on PR #47 and fixed (all were live):**
 - Publishing an open shift, unpublishing, accepting / rejecting / expiring an offer and dropping a
@@ -60,6 +61,11 @@ name only, `statements` NULL), with versions chosen so filename order reproduces
   SQL functions re-validate.
 - `v_shift_assignment_episodes` and `v_template_full` had lost `security_invoker` (CREATE OR
   REPLACE VIEW drops it); nine new SECURITY DEFINER functions were executable by anon.
+- `apply_template_to_date_range_v2` matched sub-groups by exact name, so applying "am base" onto a day
+  with "AM Base" hit the case-insensitive unique index and the whole apply failed; it also stopped
+  copying `sort_order` to new roster groups. Both restored from main. A sweep of all 49 functions this
+  branch rewrote (main vs live, comments stripped) found no other lost behaviour: every other removal
+  is a dropped column moved to `timesheets` / `billables`, or labour cost removed by design.
 - `billables` carried the retired payroll tables' pay columns under a `timesheet.view` policy, so
   Team Leads could read pay. The columns were never written; they are dropped.
 
