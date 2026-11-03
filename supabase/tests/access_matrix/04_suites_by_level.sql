@@ -101,7 +101,7 @@ BEGIN
         END;
         r := r || res;
 
-        -- payroll / billables
+        -- billables (hours and review state, no money since 20261103224126): timesheet.view or own row
         r := r || ' pay=' || CASE WHEN EXISTS (SELECT 1 FROM public.billables WHERE shift_id = 'b1000000-0000-4000-8000-000000000001') THEN 'y' ELSE '.' END;
 
         -- templates

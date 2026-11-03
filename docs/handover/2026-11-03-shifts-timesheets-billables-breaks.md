@@ -26,7 +26,7 @@ run). Its text is not kept in the repo.
 
 ## Migrations — repo file = recorded version
 
-All 15 files are named by the version Supabase recorded. The five marked *backfilled* ran ad hoc
+All 18 files are named by the version Supabase recorded. The five marked *backfilled* ran ad hoc
 on 2026-11-02 and were never recorded; their ledger rows were added on 2026-11-04 (version and
 name only, `statements` NULL), with versions chosen so filename order reproduces the order they ran.
 
@@ -47,6 +47,21 @@ name only, `statements` NULL), with versions chosen so filename order reproduces
 | 20261103214719 | reconcile_live_function_drift | 2026-11-04 |
 | 20261103220444 | paid_break_15_minute_increment | 2026-11-04 — CHECK on `shifts` + `template_shifts` |
 | 20261103220652 | role_name_is_security_single_owner | 2026-11-04 — one SQL owner for "is Security" |
+| 20261103223351 | close_anon_definers_and_invoker_views | 2026-11-04 — CI: views lost `security_invoker`; 9 definers anon-executable |
+| 20261103223805 | gateway_and_kpi_runtime_errors | 2026-11-04 — CI: gateway + marketplace KPIs failed at run time |
+| 20261103224126 | billables_drop_pay_columns | 2026-11-04 — CI: Team Leads could read pay through billables |
+
+**Found by CI on PR #47 and fixed (all were live):**
+- Publishing an open shift, unpublishing, accepting / rejecting / expiring an offer and dropping a
+  shift all failed in `_apply_shift_op_write`: enum values that do not exist (`'unfilled'`,
+  bidding `'open'`, swap `'PENDING'`) and two dropped columns still assigned (`offer_sent_at`,
+  `confirmed_at`). `get_marketplace_kpis` read `sm.` for `spm.`. Confirmed with `plpgsql_check`
+  (installed in a rolled-back transaction): no other PL/pgSQL function has an error, and all 76
+  SQL functions re-validate.
+- `v_shift_assignment_episodes` and `v_template_full` had lost `security_invoker` (CREATE OR
+  REPLACE VIEW drops it); nine new SECURITY DEFINER functions were executable by anon.
+- `billables` carried the retired payroll tables' pay columns under a `timesheet.view` policy, so
+  Team Leads could read pay. The columns were never written; they are dropped.
 
 **Files were extended after `apply_migration`.** Several files are much larger than what was
 recorded (tier 4: 62 KB on disk, 1.7 KB recorded); the rest ran through `execute_sql`. So the
@@ -68,7 +83,7 @@ Still on `shifts` despite the 11-03 handover saying otherwise: `template_id`, `t
 `manager_override`), `worker_notes`.
 `is_no_show` is a **generated** column: both tracks `missing`.
 
-**`billables`** (40 cols) — manager verification and pay inputs.
+**`billables`** (31 cols) — manager verification and hours (no money since 20261103224126).
 `shift_id` (unique), `timesheet_id` (unique, ON DELETE SET NULL), `employee_id`, `organization_id`.
 `billable_start`, `billable_end`, `break_start`, `break_end` are **`time without time zone`**
 (midnight crossing is resolved by `shift_minutes_after_start`, never by a stored flag).
@@ -76,7 +91,7 @@ Still on `shifts` despite the 11-03 handover saying otherwise: `template_id`, `t
 `unpaid_break_minutes` nullable; `unpaid_break_is_manual` boolean default false;
 `paid_break_minutes` not null default 0; `gross_length_minutes`, `net_length_minutes`,
 `hours_source` are computed by `fn_billable_defaults_and_lengths` and stay NULL until the shift
-has finished. Plus pay fields, `version` (CAS), `edit_count`, `payroll_exported*`.
+has finished. Plus `version` (CAS), `edit_count`, `payroll_exported*`.
 
 **`timesheet_breaks`** — one row per punched unpaid break.
 `timesheet_id`, `shift_id`, `break_seq` (unique per timesheet), `break_start`, `break_end`,

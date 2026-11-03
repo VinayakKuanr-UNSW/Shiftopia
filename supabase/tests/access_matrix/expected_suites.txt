@@ -1,5 +1,5 @@
 A  av=.. bud=.. kpi=.F pay=. tpl=... adm=.... clk=F bids=- pt=. fair=F grp=.
-B  av=.. bud=.. kpi=.F pay=. tpl=... adm=.... clk=F bids=5 pt=. fair=F grp=m
+B  av=.. bud=.. kpi=.F pay=y tpl=... adm=.... clk=F bids=5 pt=. fair=F grp=m
 D  av=y. bud=y. kpi=yy pay=y tpl=y.. adm=.... clk=F bids=25 pt=y fair=F grp=.
 DD av=.. bud=.. kpi=.F pay=. tpl=... adm=.... clk=F bids=- pt=. fair=F grp=m
 E  av=y. bud=y. kpi=yy pay=y tpl=y.. adm=.... clk=F bids=25 pt=y fair=F grp=.

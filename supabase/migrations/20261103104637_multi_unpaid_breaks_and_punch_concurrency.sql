@@ -327,9 +327,6 @@ BEGIN
       RETURN 'Invalid break time format.';
     END;
 
-    -- Overnight-aware span and shift-relative offsets:
-    -- e.g. Shift 22:00..06:00 (gross=480), Break 23:45..00:15:
-    --   v_dur = 30, v_from = 105, v_to = 135, v_from + v_dur = 135 < 480.
     v_dur  := public.shift_minutes_after_start(v_b_start, v_b_end);
     v_from := public.shift_minutes_after_start(p_start_time, v_b_start);
     v_to   := public.shift_minutes_after_start(p_start_time, v_b_end);

@@ -799,11 +799,9 @@ export type Database = {
       }
       billables: {
         Row: {
-          allowance_amount: number | null
           approved_at: string | null
           approved_by: string | null
           arrival_variance_reason: string | null
-          base_rate: number | null
           billable_end: string | null
           billable_start: string | null
           break_end: string | null
@@ -812,24 +810,17 @@ export type Database = {
           departure_variance_reason: string | null
           edit_count: number
           employee_id: string
-          employment_basis: string | null
           gross_length_minutes: number | null
-          gross_pay: number | null
           hours_source: string | null
           id: string
-          lines: Json
           net_length_minutes: number | null
           notes: string | null
-          ordinary_hours: number | null
           organization_id: string
-          overtime_hours: number | null
           paid_break_minutes: number
           pay_period_id: string | null
           payroll_exported: boolean
           payroll_exported_at: string | null
           payroll_exported_by: string | null
-          penalty_amount: number | null
-          rate_level: number | null
           rejected_reason: string | null
           shift_id: string
           status: Database["public"]["Enums"]["timesheet_status"]
@@ -841,11 +832,9 @@ export type Database = {
           version: number
         }
         Insert: {
-          allowance_amount?: number | null
           approved_at?: string | null
           approved_by?: string | null
           arrival_variance_reason?: string | null
-          base_rate?: number | null
           billable_end?: string | null
           billable_start?: string | null
           break_end?: string | null
@@ -854,24 +843,17 @@ export type Database = {
           departure_variance_reason?: string | null
           edit_count?: number
           employee_id: string
-          employment_basis?: string | null
           gross_length_minutes?: number | null
-          gross_pay?: number | null
           hours_source?: string | null
           id?: string
-          lines?: Json
           net_length_minutes?: number | null
           notes?: string | null
-          ordinary_hours?: number | null
           organization_id: string
-          overtime_hours?: number | null
           paid_break_minutes?: number
           pay_period_id?: string | null
           payroll_exported?: boolean
           payroll_exported_at?: string | null
           payroll_exported_by?: string | null
-          penalty_amount?: number | null
-          rate_level?: number | null
           rejected_reason?: string | null
           shift_id: string
           status?: Database["public"]["Enums"]["timesheet_status"]
@@ -883,11 +865,9 @@ export type Database = {
           version?: number
         }
         Update: {
-          allowance_amount?: number | null
           approved_at?: string | null
           approved_by?: string | null
           arrival_variance_reason?: string | null
-          base_rate?: number | null
           billable_end?: string | null
           billable_start?: string | null
           break_end?: string | null
@@ -896,24 +876,17 @@ export type Database = {
           departure_variance_reason?: string | null
           edit_count?: number
           employee_id?: string
-          employment_basis?: string | null
           gross_length_minutes?: number | null
-          gross_pay?: number | null
           hours_source?: string | null
           id?: string
-          lines?: Json
           net_length_minutes?: number | null
           notes?: string | null
-          ordinary_hours?: number | null
           organization_id?: string
-          overtime_hours?: number | null
           paid_break_minutes?: number
           pay_period_id?: string | null
           payroll_exported?: boolean
           payroll_exported_at?: string | null
           payroll_exported_by?: string | null
-          penalty_amount?: number | null
-          rate_level?: number | null
           rejected_reason?: string | null
           shift_id?: string
           status?: Database["public"]["Enums"]["timesheet_status"]

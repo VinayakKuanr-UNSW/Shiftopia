@@ -2,7 +2,7 @@
 -- Comprehensive Verification Suite: 3-Table Separation
 --   1. public.shifts     (58 cols — pure roster planning & lifecycle)
 --   2. public.timesheets (13 cols — ground-truth attendance actuals & tracks)
---   3. public.billables  (40 cols — manager verification, breaks, lengths & pay)
+--   3. public.billables  (31 cols — manager verification, breaks and lengths)
 --
 -- Runs live against PostgreSQL and rolls back cleanly at the end via RAISE.
 -- =============================================================================
@@ -37,7 +37,7 @@ BEGIN
   SELECT count(*) INTO v_bil_cols
     FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'billables';
-  ASSERT v_bil_cols = 40, format('Expected 40 columns on public.billables, got %s', v_bil_cols);
+  ASSERT v_bil_cols = 31, format('Expected 31 columns on public.billables, got %s', v_bil_cols);
 
   SELECT count(*) INTO v_retired_count
     FROM pg_class c
