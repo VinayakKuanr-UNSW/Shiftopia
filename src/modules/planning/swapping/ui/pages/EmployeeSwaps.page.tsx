@@ -217,6 +217,11 @@ export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, st
     return `Expires in ${minutes}m`;
 };
 
+/** B may withdraw while the trade is open (S6) or in manager review (S7). */
+const isWithdrawable = (offerStatus: string, swapStatus: string): boolean =>
+    (offerStatus === 'SUBMITTED' && swapStatus === 'OPEN')
+    || (offerStatus === 'SELECTED' && swapStatus === 'MANAGER_PENDING');
+
 /**
  * Resolve the true offer-close moment for a swap card: shift START.
  * Timezone-correct: naive shift_date/start_time is interpreted in the shift's tz (Sydney by default)
@@ -491,6 +496,7 @@ const EmployeeSwapsPage: React.FC = () => {
         const deriveOfferStatus = () => {
             if (isExpired) return { label: 'Expired', color: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40' };
             if (myOffer?.status === 'WITHDRAWN') return { label: 'Withdrawn', color: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40' };
+            if (myOffer?.status === 'CANCELLED') return { label: 'Cancelled', color: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40' };
             if (myOffer?.status === 'REJECTED') return { label: 'Peer Rejected', color: 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' };
             if (swap.status === 'APPROVED') return { label: 'Accepted', color: 'bg-emerald-50 dark:bg-emerald-500/15 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400' };
             if (swap.status === 'REJECTED') return { label: 'Rejected', color: 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' };
@@ -618,6 +624,14 @@ const EmployeeSwapsPage: React.FC = () => {
                                     onClick={() => setViewOffersSwapId(swap.id)}
                                 >
                                     <Eye className="mr-1.5 h-4 w-4" /> Details
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="w-full border-border/10 hover:bg-rose-500/10 hover:text-rose-400 h-9"
+                                    onClick={() => setConfirmDialog({ isOpen: true, swap })}
+                                    disabled={isCancelling}
+                                >
+                                    <X className="mr-1.5 h-4 w-4" /> Cancel
                                 </Button>
                             </>
                         ) : (
@@ -1195,6 +1209,7 @@ const EmployeeSwapsPage: React.FC = () => {
                                         const deriveOfferStatus = () => {
                                             if (isExpired) return { label: 'Expired', color: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40' };
                                             if (myOffer?.status === 'WITHDRAWN') return { label: 'Withdrawn', color: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40' };
+                                            if (myOffer?.status === 'CANCELLED') return { label: 'Cancelled', color: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40' };
                                             if (myOffer?.status === 'REJECTED') return { label: 'Peer Rejected', color: 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' };
                                             if (swap.status === 'APPROVED') return { label: 'Accepted', color: 'bg-emerald-50 dark:bg-emerald-500/15 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400' };
                                             if (swap.status === 'REJECTED') return { label: 'Rejected', color: 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400' };
@@ -1252,7 +1267,7 @@ const EmployeeSwapsPage: React.FC = () => {
                                                         <span className={cn("px-2 py-1 rounded text-[11px] font-semibold border", status.color)}>
                                                             {status.label}
                                                         </span>
-                                                        {myOffer && myOffer.status === 'SUBMITTED' && swap.status === 'OPEN' && !isExpired && (
+                                                        {myOffer && isWithdrawable(myOffer.status, swap.status) && !isExpired && (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
@@ -1437,6 +1452,15 @@ const EmployeeSwapsPage: React.FC = () => {
                                                                 >
                                                                     <Eye className="mr-1.5 h-3.5 w-3.5" /> Details
                                                                 </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-8 border-border/10 hover:bg-rose-500/10 hover:text-rose-400"
+                                                                    onClick={() => setConfirmDialog({ isOpen: true, swap })}
+                                                                    disabled={isCancelling}
+                                                                >
+                                                                    <X className="mr-1.5 h-3.5 w-3.5" /> Cancel
+                                                                </Button>
                                                             </>
                                                         ) : (
                                                             /* OPEN State */
@@ -1578,7 +1602,7 @@ const EmployeeSwapsPage: React.FC = () => {
                                         )
                                     )}
                                     {tab === 'my-offers' && myOffer && (
-                                        myOffer.status === 'SUBMITTED' && !isExpired ? (
+                                        isWithdrawable(myOffer.status, swap.status) && !isExpired ? (
                                             <Button
                                                 variant="outline"
                                                 className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl"
@@ -1595,14 +1619,16 @@ const EmployeeSwapsPage: React.FC = () => {
                                         )
                                     )}
                                     {tab === 'my-swaps' && (
-                                        swap.status === 'OPEN' && !isExpired ? (
+                                        (swap.status === 'OPEN' || swap.status === 'MANAGER_PENDING') && !isExpired ? (
                                             <>
+                                                {swap.status === 'OPEN' && (
                                                 <Button
                                                     className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[14px] uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
                                                     onClick={() => { setViewOffersSwapId(swap.id); setDrawerSwap(null); }}
                                                 >
                                                     <Eye className="mr-3 h-5 w-5" /> View Offers
                                                 </Button>
+                                                )}
                                                 <Button
                                                     variant="outline"
                                                     className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl"

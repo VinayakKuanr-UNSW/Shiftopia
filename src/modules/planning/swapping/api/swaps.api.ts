@@ -203,7 +203,7 @@ export interface SwapOffer {
     swap_request_id: string;
     offerer_id: string;
     offered_shift_id?: string;
-    status: 'SUBMITTED' | 'SELECTED' | 'REJECTED' | 'WITHDRAWN' | 'EXPIRED';
+    status: 'SUBMITTED' | 'SELECTED' | 'REJECTED' | 'WITHDRAWN' | 'EXPIRED' | 'ACCEPTED' | 'CANCELLED';
     compliance_snapshot?: any;
     created_at: string;
     offerer?: any; // Profile relation
@@ -812,9 +812,9 @@ export const swapsApi = {
         console.log('[API] Cancelling swap:', swapId);
 
         // §4 T7: atomic cancel via the definer RPC — flips the swap to CANCELLED
-        // and reverts the shift to NoTrade (S6 → S4) in one transaction, with the
-        // OPEN-only state guard (returns "Must be OPEN") and requester/manager
-        // authorization enforced server-side.
+        // and reverts every shift in the trade to NoTrade (S6/S7 → S4) in one
+        // transaction; state guard and requester/manager authorization are
+        // enforced server-side.
         const { data: rpcResult, error } = await db.rpc('sm_cancel_swap_request', {
             p_swap_id: swapId,
         });

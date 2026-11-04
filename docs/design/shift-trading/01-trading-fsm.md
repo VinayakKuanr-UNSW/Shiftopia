@@ -1,6 +1,6 @@
 # Shift Trading — FSM Specification
 
-**Status:** decided by the product owner 2026-11-04; **not yet implemented**. §9 lists what differs from live.
+**Status:** decided by the product owner 2026-11-04. **T1** (offer integrity), **T2** (lifecycle) and **T3** (cascades) are live; T4 (no edits while published) remains. §9 tracks each item.
 **Numbering:** the gapless S1–S10 model (`20261104061628_fsm_ids_s1_s10`).
 
 A trade is a one-for-one swap of two confirmed shifts between two employees, approved by a manager. Employee **A** posts a shift; peers (**B**, **C**, …) offer one of their own shifts in exchange; A picks one; a manager approves or rejects.
@@ -50,13 +50,14 @@ A trade is a one-for-one swap of two confirmed shifts between two employees, app
 | Status | Holds B's shift? | Meaning |
 |---|---|---|
 | `SUBMITTED` | yes | Waiting for A |
-| `SELECTED` | yes (shift is S7) | A accepted it |
+| `SELECTED` | yes (shift is S7) | A accepted it; manager reviewing |
+| `ACCEPTED` *(new)* | no | The manager approved the trade |
 | `REJECTED` | no | A declined it, or another offer was accepted |
 | `WITHDRAWN` | no | B took it back |
 | `EXPIRED` | no | A start time was reached |
 | `CANCELLED` *(new)* | no | Ended by the request ending, or a manager action on B's shift |
 
-**Hold** = an offer in `SUBMITTED` or `SELECTED` naming the shift. It is derived, not a stored flag.
+**Hold** = an offer in `SUBMITTED` or `SELECTED` naming the shift. It is derived, not a stored flag. An offer is in those two statuses **only while its request is live**: every way a request ends moves its offers to a terminal status, so no hold outlives its request.
 
 ## 4. Invariants
 
@@ -84,12 +85,13 @@ All run as one transaction. Each locks the request row (`FOR UPDATE`); two-emplo
 | `withdraw_offer` | B | Offer `SELECTED` (request `MANAGER_PENDING`) | Offer `WITHDRAWN`; request `CANCELLED`; **both shifts S7 → S4** |
 | `accept_offer` | A | Request `OPEN`; offer `SUBMITTED`; both shifts TTS > 0; compliance feasible for **both** employees (snapshot stored) | Request `MANAGER_PENDING`; offer `SELECTED`; other offers `REJECTED` (holds released); **A's and B's shifts → S7**; `expires_at = LEAST(start A, start B)` |
 | `cancel_trade` | A | Request `OPEN` or `MANAGER_PENDING` | Request `CANCELLED`; live offers `CANCELLED`; every involved shift → **S4** |
-| `approve_trade` | Manager | Request `MANAGER_PENDING` (shifts **S7**); compliance **re-run** and feasible | Assignees swapped; both shifts **S7 → S4**, `assignment_outcome = confirmed`; request `APPROVED`; offer stays `SELECTED` |
+| `approve_trade` | Manager | Request `MANAGER_PENDING` (shifts **S7**); compliance **re-run** and feasible | Assignees swapped; both shifts **S7 → S4**, `assignment_outcome = confirmed`; request `APPROVED`; offer `ACCEPTED` |
 | `reject_trade` | Manager | Request `MANAGER_PENDING` | Request `REJECTED`; offer `REJECTED`; **both shifts S7 → S4**, original owners (D5) |
 
 Notes:
 - `reject_trade` is **manager-only and S7-only**. A declining one peer is `decline_offer`, which leaves the request open.
-- If the compliance re-run fails at approval, the approval is refused and the trade stays S7. The manager can then reject it.
+- The compliance re-run at approval is the deferred `trg_shift_eba_compliance`, which checks both employees' post-swap rosters at commit. A blocking breach rolls the approval back and the trade stays S7. The manager can then reject it.
+- `accept_offer` reads B's shift from the offer row and never trusts a shift id from the client.
 - AutoPilot auto-approve (`auto_decision_id`, `review_flag`) must call the same `approve_trade` / `reject_trade`. It gets no separate path.
 
 ## 6. System events
@@ -102,7 +104,7 @@ Notes:
 | Manager unpublishes / cancels / deletes **A's** shift | any live request | Request `CANCELLED`; live offers `CANCELLED`; partner shift (if S7) → S4; A's shift follows the manager's action |
 | Manager unpublishes / cancels / deletes **B's** shift | while offered (`SUBMITTED`) | That offer `CANCELLED`; request stays `OPEN` |
 | | while `SELECTED` | Request `CANCELLED`; A's shift **S7 → S4**; B's shift follows the manager's action |
-| Approved leave for A or B covering their shift's date | any live request | Request `CANCELLED`; everything → S4 *(recommended default; not yet confirmed)* |
+| Approved leave for A or B covering their shift's date | any live request | Request `CANCELLED`; everything → S4 *(decided 2026-11-04)* |
 
 The expiry sweep runs in `process_shift_timers` before the auto-start step, so a reverted shift then starts normally from S4.
 
@@ -131,19 +133,19 @@ Earliest start    in S7: first start → both S4, request EXPIRED
 
 ## 9. Delta from live (implementation scope)
 
-| # | Live today | Change |
-|---|---|---|
-| L1 | No uniqueness on offers per peer or per shift | Add I2, I3, I5 indexes (tables are empty on live, so no cleanup) |
-| L2 | `offered_shift_id` nullable (giveaways) | NOT NULL; remove giveaway code paths in `swaps.api` / UI |
-| L3 | Offers inserted/updated directly from the client | `submit_offer`, `decline_offer`, `withdraw_offer` as guarded RPCs |
-| L4 | B's shift not held: can be dropped or re-offered | Hold guards in drop / post / offer (I7) |
-| L5 | B cannot withdraw once `SELECTED` | `withdraw_offer` from S7 |
-| L6 | Review expiry uses A's start only (`fn_set_swap_expires_at`) | `expires_at = LEAST(start A, start B)` at `accept_offer`; offer lapse on B's start |
-| L7 | `fsm_op_is_legal`: `reject_trade` in S6+S7; `edit` in S1–S7 | `reject_trade` → S7 only; `edit` → S1, S2 only (D8, affects all published shifts) |
-| L8 | No offer `CANCELLED` status | Add the enum value |
-| L9 | `sm_unpublish_shift` also updates the empty legacy `swap_requests` table | Remove the dead branch |
-| L10 | Approval does not re-run compliance | Re-run at `approve_trade` |
-| L11 | Leave approval does not touch trades | Cancel (pending confirmation) |
+| # | Live today | Change | Done |
+|---|---|---|---|
+| L1 | No uniqueness on offers per peer or per shift | Add I2, I3, I5 indexes (tables are empty on live, so no cleanup) | T1 |
+| L2 | `offered_shift_id` nullable (giveaways) | NOT NULL; remove giveaway code paths in `swaps.api` / UI | T1 |
+| L3 | Offers inserted/updated directly from the client | `submit_offer`, `decline_offer`, `withdraw_offer` as guarded RPCs | T1 |
+| L4 | B's shift not held: can be dropped or re-offered | Hold guards in drop / post / offer (I7) | T1 |
+| L5 | B cannot withdraw once `SELECTED` | `withdraw_offer` from S7 | T2 |
+| L6 | Review expiry uses A's start only (`fn_set_swap_expires_at`) | `expires_at = LEAST(start A, start B)` at `accept_offer`; offer lapse on B's start | T2 |
+| L7 | `fsm_op_is_legal`: `reject_trade` in S6+S7; `edit` in S1–S7 | `reject_trade` → S7 only; `edit` → S1, S2 only (D8, affects all published shifts) | T2 (reject); T4 (edit) |
+| L8 | No offer `CANCELLED` status | Add the enum value | T2 |
+| L9 | `sm_unpublish_shift` also updates the empty legacy `swap_requests` table | Remove the dead branch | T3 |
+| L10 | Approval does not re-run compliance | Re-run at `approve_trade` | T2 (already the deferred EBA trigger) |
+| L11 | Leave approval does not touch trades | Cancel | T3 |
 
 ## 10. Acceptance tests
 
