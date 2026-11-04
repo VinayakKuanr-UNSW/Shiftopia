@@ -118,8 +118,6 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
     state.type === 'confirming' || state.type === 'executing' ? state.plan : null;
   const assignedCount = plan?.assignedIds.length ?? 0;
   const unassignedCount = plan?.unassignedIds.length ?? 0;
-  const emergentAssignedCount = plan?.emergentAssignedIds.length ?? 0;
-  const emergentUnassignedCount = plan?.emergentUnassignedIds.length ?? 0;
   const deadCount = plan?.deadIds.length ?? 0;
   const fullTimeCount = plan?.fullTimeIds.length ?? 0;
   const fullTimeUnassignedCount = plan?.fullTimeUnassignedIds.length ?? 0;
@@ -128,14 +126,13 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
   const noPermissionCount = plan?.noPermissionIds?.length ?? 0;
   const alreadyPublishedCount = plan?.alreadyPublishedCount ?? 0;
 
-  // What the Confirm button will actually change: publishes (X + Y + A).
-  // Emergent-unassigned (B), started-unstaffed (W) and already-published (Z)
-  // are skips.
+  // What the Confirm button will actually change: publishes (X + Y + F).
+  // Started-unstaffed (W) and already-published (Z) are skips.
   const actionableCount =
-    assignedCount + unassignedCount + emergentAssignedCount + fullTimeCount;
+    assignedCount + unassignedCount + fullTimeCount;
   // The plan considered no shifts at all → nothing to show.
   const consideredCount =
-    actionableCount + emergentUnassignedCount + alreadyPublishedCount + deadCount + fullTimeUnassignedCount
+    actionableCount + alreadyPublishedCount + deadCount + fullTimeUnassignedCount
     + onLeaveCount + pastCount + noPermissionCount;
   const nothingToDo = plan !== null && consideredCount === 0;
   // Drafts exist, but every one is a skip: Confirm would change nothing.
@@ -189,18 +186,6 @@ export const PublishRosterButton: React.FC<PublishRosterButtonProps> = ({
       title: `${pastCount} Already started or finished`,
       desc: 'Too late to publish — skipped',
       tone: 'muted',
-    },
-    {
-      count: emergentAssignedCount,
-      title: `${emergentAssignedCount} Assigned · starts < 4h`,
-      desc: 'Emergency-assigned to the scheduled employee',
-      tone: 'info',
-    },
-    {
-      count: emergentUnassignedCount,
-      title: `${emergentUnassignedCount} Unassigned · starts < 4h`,
-      desc: 'Can’t open bidding — assign these manually (skipped)',
-      tone: 'warning',
     },
     {
       count: alreadyPublishedCount,

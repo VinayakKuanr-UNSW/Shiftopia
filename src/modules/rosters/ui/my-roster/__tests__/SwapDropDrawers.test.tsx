@@ -77,7 +77,6 @@ describe('Swap and Drop Bottom Sheet Drawers', () => {
           shiftDate={new Date('2026-08-20')}
           groupName="Theatre"
           groupColor="red"
-          isWithinLockoutPeriod={false}
           onConfirmDrop={onConfirmDrop}
           isDropping={false}
           {...overrides}
@@ -186,7 +185,7 @@ describe('Swap and Drop Bottom Sheet Drawers', () => {
 
       // Rules section
       expect(screen.getByText('Swap Rules & Guidelines')).toBeInTheDocument();
-      expect(screen.getByText(/Must be requested at least 4 hours before the shift start/)).toBeInTheDocument();
+      expect(screen.getByText(/Must be requested before the shift starts/)).toBeInTheDocument();
 
       // Reason input
       const reasonInput = screen.getByLabelText(/Reason for Swap/);

@@ -9,7 +9,6 @@ import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/
 import { fetchV8EmployeeContext, fetchEmployeeShiftsV2 } from '@/modules/compliance/employee-context';
 import type { V8ContractType } from '@/modules/compliance/v8/types';
 import type { V8OrchestratorShift } from '@/modules/compliance/v8/orchestrator/types';
-import { differenceInHours } from 'date-fns';
 
 // Embedded profile columns for swap participants. Never `*`: contact and
 // personal columns (phone, date of birth, emergency contacts) are not
@@ -58,23 +57,14 @@ const toSwapEngineContractType = (
 // Type assertion helper for Supabase queries with tables not in generated types
 const db = supabase as any;
 
-// §9 Time Lock: Swap actions are forbidden if shift starts within 4 hours
-const TIME_LOCK_HOURS = 4;
+// §9 Time Lock: Swap actions are forbidden once the shift has started
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 const assertNotTimeLocked = (shiftDate: string, startTime: string): Date => {
     // Use centralized date utilities to handle timezone parsing correctly
     const shiftStart = parseZonedDateTime(shiftDate, startTime);
-    const now = new Date();
 
-    // Calculate absolute difference in hours
-    const hoursUntilStart = differenceInHours(shiftStart, now);
-
-    if (hoursUntilStart < TIME_LOCK_HOURS) {
-        throw new Error(`Time locked: shift starts in ${hoursUntilStart}h (< ${TIME_LOCK_HOURS}h). Swap actions are forbidden.`);
-    }
-    // Also block if shift is in the past
-    if (hoursUntilStart < 0) {
+    if (shiftStart.getTime() <= Date.now()) {
         throw new Error(`Time locked: shift has already started. Swap actions are forbidden.`);
     }
     return shiftStart;
@@ -500,7 +490,7 @@ export const swapsApi = {
 
         // Self-offer guard: prevent a user from offering on their own swap request.
         // Also fetch the REQUESTER's shift so we can enforce §9 on the request
-        // itself — an offer must never be lodged against a shift already < 4h out,
+        // itself — an offer must never be lodged against a shift that has already started,
         // even for a giveaway offer (no offered shift).
         const { data: swapMeta, error: swapMetaErr } = await db
             .from('shift_swaps')
@@ -528,7 +518,7 @@ export const swapsApi = {
             status: 'SUBMITTED',
         };
 
-        // §9 Time Lock Check: Prevent offering a shift that starts within 4 hours
+        // §9 Time Lock Check: Prevent offering a shift that has already started
         if (targetV8ShiftId) {
             const { data: shift, error: shiftErr } = await supabase
                 .from('shifts').select('shift_date, start_time').eq('id', targetV8ShiftId).single();
@@ -764,7 +754,7 @@ export const swapsApi = {
             offeredShiftData = shiftRow;
         }
 
-        // §9 Time Lock: also guard the offered shift — both shifts must be > 4h away
+        // §9 Time Lock: also guard the offered shift — neither shift may have started
         if (offeredShiftData?.shift_date && offeredShiftData?.start_time) {
             assertNotTimeLocked(offeredShiftData.shift_date, offeredShiftData.start_time);
         }

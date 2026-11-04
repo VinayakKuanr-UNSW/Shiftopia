@@ -151,20 +151,10 @@ export function preflightDelete(shifts: Shift[]): BulkPreflightSummary {
  * a publishable shift is future-start.
  */
 export interface PublishRosterPlan {
-    /** X — future assigned drafts (TTS > 4h): sent to the assignee as Offers. */
+    /** X — future assigned drafts: sent to the assignee as Offers. */
     assignedIds: string[];
-    /** Y — future unassigned drafts (TTS > 4h): opened for Open Bidding. */
+    /** Y — future unassigned drafts: opened for Open Bidding. */
     unassignedIds: string[];
-    /**
-     * A — assigned drafts inside the 4h window (TTS ≤ 4h): emergency-assigned
-     * (published straight to Confirmed, bypassing the offer step).
-     */
-    emergentAssignedIds: string[];
-    /**
-     * B — unassigned drafts inside the 4h window (TTS ≤ 4h): CANNOT be opened for
-     * bidding (it would immediately expire) — must be assigned manually. Skipped.
-     */
-    emergentUnassignedIds: string[];
     /** W — unassigned drafts already "Live" (started, unstaffed): skipped, never deleted. */
     deadIds: string[];
     /**
@@ -197,13 +187,6 @@ export interface PublishRosterPlan {
 }
 
 /**
- * Emergency window — a shift that starts within this horizon is "emergent".
- * Inclusive (TTS ≤ 4h), matching SQL `get_time_category` (`<= 4` → EMERGENCY)
- * and shifts.commands' emergency routing.
- */
-export const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
-
-/**
  * Compute the {@link PublishRosterPlan} from a set of shifts (typically the
  * loaded roster for the current org + date range + scope filter). Pure/sync —
  * no network. Only DRAFT shifts participate; published, in-progress, completed,
@@ -211,7 +194,7 @@ export const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
  *
  * Every draft shift falls into exactly one bucket:
  *   no permission (P) · dead unassigned-live (W) · too late (T) · on leave (L) ·
- *   full-time (F / F0) · emergent assigned (A) · emergent unassigned (B) ·
+ *   full-time (F / F0) ·
  *   assigned future (X) · unassigned future (Y). Already-published shifts are
  *   only counted (Z).
  */
@@ -224,8 +207,6 @@ export function planPublishRoster(
 ): PublishRosterPlan {
     const assignedIds: string[] = [];
     const unassignedIds: string[] = [];
-    const emergentAssignedIds: string[] = [];
-    const emergentUnassignedIds: string[] = [];
     const deadIds: string[] = [];
     const fullTimeIds: string[] = [];
     const fullTimeUnassignedIds: string[] = [];
@@ -296,14 +277,8 @@ export function planPublishRoster(
             continue;
         }
 
-        const isEmergent = startMs - nowMs <= EMERGENT_WINDOW_MS;
-
-        if (isEmergent) {
-            // Inside the 4h lock: assigned → emergency-assign; unassigned → can't
-            // open bidding (would immediately expire), needs manual assignment.
-            if (isUnassigned) emergentUnassignedIds.push(s.id);
-            else emergentAssignedIds.push(s.id);
-        } else if (isUnassigned) {
+        // Pre-start agility: all pre-start drafts are eligible to publish (assigned -> S3 offers, unassigned -> S5 bidding)
+        if (isUnassigned) {
             unassignedIds.push(s.id);
         } else {
             assignedIds.push(s.id);
@@ -313,8 +288,6 @@ export function planPublishRoster(
     return {
         assignedIds,
         unassignedIds,
-        emergentAssignedIds,
-        emergentUnassignedIds,
         deadIds,
         fullTimeIds,
         fullTimeUnassignedIds,

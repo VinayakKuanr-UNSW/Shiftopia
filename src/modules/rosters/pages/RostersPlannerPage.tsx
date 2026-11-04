@@ -93,7 +93,7 @@ import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkA
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
 import { describeShiftMutationError } from '@/modules/rosters/domain/shiftMutationError';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { computeTTS } from '@/modules/rosters/domain/bidding-urgency';
 import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 
@@ -743,13 +743,10 @@ const NewRostersPage: React.FC = () => {
   const executePublishRoster = React.useCallback(
     async (plan: PublishRosterPlan): Promise<PublishRosterResult> => {
       // Publish future assigned (→ offers) + future unassigned (→ bidding) +
-      // emergent assigned (→ emergency-assigned). Emergent UNASSIGNED shifts are
-      // intentionally excluded — bidding would immediately expire, so they need
-      // manual assignment (surfaced in the confirm dialog).
+      // full-time (→ confirmed).
       const publishIds = [
         ...plan.assignedIds,
         ...plan.unassignedIds,
-        ...plan.emergentAssignedIds,
         ...plan.fullTimeIds,
       ];
       let published = 0;
@@ -1087,14 +1084,13 @@ const NewRostersPage: React.FC = () => {
   // Auto-Scheduler inputs, memoised: built inline in JSX they were re-derived
   // (one urgency computation per shift) on every page render.
   const autoSchedulerShifts = useMemo(() => shifts
-      /* Autoscheduler scope: DRAFT + unassigned, outside the emergent
-         (TTS ≤ 4h) window — published shifts belong to bidding/offers,
-         emergent ones to the emergency-assignment flow. Must stay in
-         sync with the filter in AutoSchedulerModal.tsx. */
+      /* Autoscheduler scope: DRAFT + unassigned shifts that have not
+         started — published shifts belong to bidding/offers. Must stay in
+         sync with the filter in useAutoScheduler.ts. */
       .filter((s) =>
         !s.assigned_employee_id && !s.is_cancelled
         && (s.is_draft ?? true)
-        && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
+        && computeTTS(s.shift_date, s.start_time) > 0)
       .map((s) => ({
         id: s.id,
         shift_date: s.shift_date,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addHours, format } from 'date-fns';
+import { addHours } from 'date-fns';
 import {
     windowPresetRange,
     summariseScope,
@@ -11,12 +11,16 @@ import {
 /** A Wednesday, so week boundaries are visible in both directions. */
 const WED_12_AUG_2026 = new Date(2026, 7, 12);
 
-const iso = (d: Date) => format(d, 'yyyy-MM-dd');
-const soon = () => {
-    // Inside the 4-hour emergent window, whatever "now" is when the suite runs.
-    const t = addHours(new Date(), 1);
-    return { shift_date: iso(t), start_time: format(t, 'HH:mm') };
+/** Sydney wall-clock `hoursFromNow` ahead, whatever the runner's timezone. */
+const sydneyIn = (hoursFromNow: number) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(addHours(new Date(), hoursFromNow));
+    const p = (type: string) => parts.find((x) => x.type === type)?.value ?? '';
+    return { shift_date: `${p('year')}-${p('month')}-${p('day')}`, start_time: `${p('hour')}:${p('minute')}` };
 };
+const started = { shift_date: '2000-01-01', start_time: '09:00' };
 const farFuture = { shift_date: '2099-01-01', start_time: '09:00' };
 
 describe('windowPresetRange', () => {
@@ -60,8 +64,12 @@ describe('windowPresetRange', () => {
 describe('summariseScope', () => {
     it('counts an unassigned future draft as eligible', () => {
         expect(summariseScope([{ ...farFuture, is_draft: true }])).toEqual({
-            total: 1, eligible: 1, assigned: 0, published: 0, startingSoon: 0,
+            total: 1, eligible: 1, assigned: 0, published: 0, alreadyStarted: 0,
         });
+    });
+
+    it('counts a draft starting within 4 hours as eligible — no emergent lane', () => {
+        expect(summariseScope([{ ...sydneyIn(1), is_draft: true }]).eligible).toBe(1);
     });
 
     it('treats a missing is_draft as draft, matching the run filter', () => {
@@ -73,15 +81,15 @@ describe('summariseScope', () => {
             { ...farFuture, is_draft: true },
             { ...farFuture, is_draft: true, assigned_employee_id: 'e1' },
             { ...farFuture, is_draft: false },
-            { ...soon(), is_draft: true },
+            { ...started, is_draft: true },
         ]);
 
         expect(breakdown).toEqual({
-            total: 4, eligible: 1, assigned: 1, published: 1, startingSoon: 1,
+            total: 4, eligible: 1, assigned: 1, published: 1, alreadyStarted: 1,
         });
         // Categories must partition the total, or the "why" list misleads.
         expect(
-            breakdown.eligible + breakdown.assigned + breakdown.published + breakdown.startingSoon,
+            breakdown.eligible + breakdown.assigned + breakdown.published + breakdown.alreadyStarted,
         ).toBe(breakdown.total);
     });
 

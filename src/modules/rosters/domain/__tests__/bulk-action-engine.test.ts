@@ -27,8 +27,6 @@ describe('planPublishRoster', () => {
     const empty = {
         assignedIds: [],
         unassignedIds: [],
-        emergentAssignedIds: [],
-        emergentUnassignedIds: [],
         deadIds: [],
         fullTimeIds: [],
         fullTimeUnassignedIds: [],
@@ -142,17 +140,16 @@ describe('planPublishRoster', () => {
         expect(plan).toEqual({ ...empty, alreadyPublishedCount: 1 });
     });
 
-    it('splits emergent drafts (TTS ≤ 4h) into assigned (→ emergency) vs unassigned (→ manual)', () => {
+    it('routes short-notice drafts (TTS ≤ 4h) through standard pre-start agility (assigned → S3 offers, unassigned → S5 bidding)', () => {
         const plan = planPublishRoster([
-            mk('ea', { assigned_employee_id: 'e1', start_at: iso(+2 * HOUR) }),   // emergent assigned → A
-            mk('eu', { assigned_employee_id: null, start_at: iso(+3.5 * HOUR) }), // emergent unassigned → B
-            mk('normal', { assigned_employee_id: 'e2', start_at: iso(+5 * HOUR) }), // normal future draft → X
+            mk('ea', { assigned_employee_id: 'e1', start_at: iso(+2 * HOUR) }),   // short notice assigned → assignedIds
+            mk('eu', { assigned_employee_id: null, start_at: iso(+3.5 * HOUR) }), // short notice unassigned → unassignedIds
+            mk('normal', { assigned_employee_id: 'e2', start_at: iso(+5 * HOUR) }), // normal future draft → assignedIds
         ]);
         expect(plan).toEqual({
             ...empty,
-            assignedIds: ['normal'],
-            emergentAssignedIds: ['ea'],
-            emergentUnassignedIds: ['eu'],
+            assignedIds: ['ea', 'normal'],
+            unassignedIds: ['eu'],
         });
     });
 
@@ -166,10 +163,8 @@ describe('planPublishRoster', () => {
             mk('dead1', { assigned_employee_id: null, start_at: iso(-1 * HOUR), end_at: iso(+3 * HOUR) }),
             mk('pub', { lifecycle_status: 'Published' }),
         ]);
-        expect(plan.assignedIds.sort()).toEqual(['a1', 'a2']);
-        expect(plan.unassignedIds).toEqual(['u1']);
-        expect(plan.emergentAssignedIds).toEqual(['ea']);
-        expect(plan.emergentUnassignedIds).toEqual(['eu']);
+        expect(plan.assignedIds.sort()).toEqual(['a1', 'a2', 'ea']);
+        expect(plan.unassignedIds.sort()).toEqual(['eu', 'u1']);
         expect(plan.deadIds).toEqual(['dead1']);
         expect(plan.alreadyPublishedCount).toBe(1);
     });

@@ -994,7 +994,7 @@ export function useDropShift() {
 
 /**
  * Immediately expire a shift offer (S3 → S2).
- * Call when the client detects countdown = 0 or shift is within 4h lockout.
+ * Call when the client detects countdown = 0 or the shift has started.
  * Invalidates offers + roster lists so the UI reflects the new Draft state.
  */
 export function useExpireOffer() {

@@ -24,7 +24,6 @@ interface DropShiftDrawerProps {
   groupName?: string;
   subGroupName?: string;
   groupColor?: string;
-  isWithinLockoutPeriod?: boolean;
   /**
    * `reasonCode` is the structured pick; `note` is the free text. The note is
    * mandatory only when the chosen reason says so (currently "Other"), and the
@@ -41,7 +40,6 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
   groupName = '',
   subGroupName,
   groupColor = 'blue',
-  isWithinLockoutPeriod = false,
   onConfirmDrop,
   isDropping,
 }) => {
@@ -109,15 +107,9 @@ export const DropShiftDrawer: React.FC<DropShiftDrawerProps> = ({
             <ul className="text-[11px] space-y-1 text-amber-700/90 dark:text-amber-300/90 pl-1 list-disc list-inside">
               <li>Dropped shifts return to the open marketplace pool for replacement.</li>
               <li>Dropping with 24 hours notice or less counts as a <strong>critical</strong> cancellation on your record.</li>
-              <li>Dropping shifts within 4 hours of start time enters an emergent state and requires supervisor escalation.</li>
+              <li>Dropped shifts immediately return to open bidding so teammates can pick them up.</li>
               <li>Repeated unworked drops may impact scheduling reliability scores.</li>
             </ul>
-            {isWithinLockoutPeriod && (
-              <div className="mt-2 p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-[11px] font-semibold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-500" aria-hidden="true" />
-                <span>Emergent Notice: This shift starts within 4 hours.</span>
-              </div>
-            )}
           </div>
 
           {/* 3. Reason for Drop — a pick, then an optional note */}

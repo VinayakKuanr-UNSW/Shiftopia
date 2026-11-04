@@ -654,10 +654,10 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
                                                     label="published — out for bidding"
                                                 />
                                             )}
-                                            {scopeBreakdown.startingSoon > 0 && (
+                                            {scopeBreakdown.alreadyStarted > 0 && (
                                                 <ExclusionRow
-                                                    count={scopeBreakdown.startingSoon}
-                                                    label="starting within 4 hours"
+                                                    count={scopeBreakdown.alreadyStarted}
+                                                    label="already started"
                                                 />
                                             )}
                                         </ul>
@@ -718,12 +718,12 @@ export const AutoSchedulerMobileFlow: React.FC<AutoSchedulerMobileFlowProps> = (
                                         {[
                                             scopeBreakdown.assigned > 0 && `${scopeBreakdown.assigned} assigned`,
                                             scopeBreakdown.published > 0 && `${scopeBreakdown.published} published`,
-                                            scopeBreakdown.startingSoon > 0 && `${scopeBreakdown.startingSoon} starting soon`,
+                                            scopeBreakdown.alreadyStarted > 0 && `${scopeBreakdown.alreadyStarted} already started`,
                                         ].filter(Boolean).length > 0
                                             ? ` (${[
                                                   scopeBreakdown.assigned > 0 && `${scopeBreakdown.assigned} assigned`,
                                                   scopeBreakdown.published > 0 && `${scopeBreakdown.published} published`,
-                                                  scopeBreakdown.startingSoon > 0 && `${scopeBreakdown.startingSoon} starting soon`,
+                                                  scopeBreakdown.alreadyStarted > 0 && `${scopeBreakdown.alreadyStarted} already started`,
                                               ].filter(Boolean).join(' · ')}).`
                                             : '.'}
                                     </p>

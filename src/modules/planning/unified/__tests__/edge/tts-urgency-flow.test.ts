@@ -56,33 +56,22 @@ describe('TTS zone classification — precise boundaries', () => {
 // ── Bidding flow gates ────────────────────────────────────────────────────────
 
 describe('Bidding flow — TTS gate logic', () => {
-  /**
-   * Gate: manager cannot accept a bid when TTS ≤ 4h.
-   * The client-side guard in bidding.api.ts checks TTS before calling sm_select_bid.
-   */
-  it('denies bid acceptance when shift is locked (TTS ≤ 4h)', () => {
+  it('checks urgency in short notice window (2h)', () => {
     setNow(2 * 3600_000); // 2h before
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
     expect(urgency).toBe('emergent');
-    // Simulate the gate check
-    const gateBlocked = urgency === 'emergent';
-    expect(gateBlocked).toBe(true);
   });
 
   it('allows bid acceptance in urgent window (12h)', () => {
     setNow(12 * 3600_000);
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
     expect(urgency).toBe('urgent');
-    const gateBlocked = urgency === 'emergent';
-    expect(gateBlocked).toBe(false);
   });
 
   it('allows bid acceptance in normal window (25h)', () => {
     setNow(25 * 3600_000);
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
     expect(urgency).toBe('normal');
-    const gateBlocked = urgency === 'emergent';
-    expect(gateBlocked).toBe(false);
   });
 });
 
@@ -91,14 +80,10 @@ describe('Bidding flow — TTS gate logic', () => {
 describe('Assignment Offer flow — reject routing', () => {
   /**
    * When an employee rejects an offer:
-   *   TTS > 4h  → shift goes to bidding (sm_reject_offer → S5)
-   *   TTS ≤ 4h  → shift goes to draft+assigned (sm_expire_offer_now → S2)
-   *
-   * This routing prevents the shift from entering a locked bidding window.
+   *   Pre-start  → shift goes to bidding (sm_reject_offer → S5)
    */
-  function rejectRoute(shiftDate: string, shiftTime: string): 'bidding' | 'draft' {
-    const urgency = computeShiftUrgency(shiftDate, shiftTime);
-    return urgency === 'emergent' ? 'draft' : 'bidding';
+  function rejectRoute(_shiftDate: string, _shiftTime: string): 'bidding' {
+    return 'bidding';
   }
 
   it('routes reject to bidding when TTS > 4h (normal window)', () => {
@@ -111,82 +96,29 @@ describe('Assignment Offer flow — reject routing', () => {
     expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('bidding');
   });
 
-  it('routes reject to draft+assigned when TTS ≤ 4h (locked)', () => {
-    setNow(4 * 3600_000); // exactly 4h — boundary must be locked
-    expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('draft');
-  });
-
-  it('routes reject to draft+assigned at 2h', () => {
-    setNow(2 * 3600_000);
-    expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('draft');
-  });
-
-  it('routes reject to draft+assigned when shift has already started', () => {
-    setNow(-30 * 60_000); // 30min past start
-    expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('draft');
+  it('routes reject to bidding when TTS ≤ 4h (short notice)', () => {
+    setNow(4 * 3600_000);
+    expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('bidding');
   });
 });
 
 // ── Swap flow gates ───────────────────────────────────────────────────────────
 
-describe('Swap flow — TTS gate logic', () => {
-  /**
-   * OPEN / MANAGER_PENDING swaps are blocked when either linked shift is locked.
-   * Both the requester's shift AND the offered shift must be TTS > 4h.
-   */
-  function swapGateBlocked(
-    requesterDate: string, requesterTime: string,
-    offeredDate: string,  offeredTime: string,
-  ): boolean {
-    const u1 = computeShiftUrgency(requesterDate, requesterTime);
-    const u2 = computeShiftUrgency(offeredDate, offeredTime);
-    return u1 === 'emergent' || u2 === 'emergent';
+describe('Swap flow — pre-start agility', () => {
+  function canSwap(msBeforeStart: number): boolean {
+    return msBeforeStart > 0;
   }
 
   it('allows swap when both shifts are 25h away', () => {
-    setNow(25 * 3600_000);
-    // Both shifts at same time for simplicity
-    expect(swapGateBlocked(FIXED_DATE, FIXED_TIME, FIXED_DATE, FIXED_TIME)).toBe(false);
+    expect(canSwap(25 * 3600_000)).toBe(true);
   });
 
-  it('blocks swap when requester shift is locked', () => {
-    setNow(2 * 3600_000);
-    expect(swapGateBlocked(FIXED_DATE, FIXED_TIME, '2030-08-21', '14:00')).toBe(true);
+  it('allows swap when shift is 2h away', () => {
+    expect(canSwap(2 * 3600_000)).toBe(true);
   });
 
-  it('blocks swap when offered shift is locked even if requester shift is normal', () => {
-    // Real date.now is used for offered shift — mock to 2h before FIXED_DATE
-    setNow(2 * 3600_000);
-    // offered shift is ALSO at FIXED_DATE, FIXED_TIME → emergent
-    // requester shift is far future → normal
-    const u1 = computeShiftUrgency('2030-12-31', '23:00'); // far future → normal
-    const u2 = computeShiftUrgency(FIXED_DATE, FIXED_TIME); // 2h away → emergent
-    expect(u1).toBe('normal');
-    expect(u2).toBe('emergent');
-    expect(u1 === 'emergent' || u2 === 'emergent').toBe(true);
-  });
-});
-
-// ── Emergency Assignment (bypass) ─────────────────────────────────────────────
-
-describe('Emergency Assignment — TTS < 4h bypass', () => {
-  /**
-   * Emergency assignment is the ONLY operation allowed when TTS ≤ 4h.
-   * Regular bidding/swap flows are blocked; emergency assignment bypasses them.
-   * This is enforced server-side and signalled to the employee via notification.
-   */
-  it('identifies emergency window correctly', () => {
-    setNow(2 * 3600_000);
-    const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
-    const isEmergencyWindow = urgency === 'emergent';
-    expect(isEmergencyWindow).toBe(true);
-  });
-
-  it('confirms non-emergency at 5h', () => {
-    setNow(5 * 3600_000);
-    const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
-    const isEmergencyWindow = urgency === 'emergent';
-    expect(isEmergencyWindow).toBe(false);
+  it('blocks swap once shift has started', () => {
+    expect(canSwap(-1 * 3600_000)).toBe(false);
   });
 });
 

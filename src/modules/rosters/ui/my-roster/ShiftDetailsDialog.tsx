@@ -92,7 +92,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   );
   const isPast = useClockValue(isPastSelector);
 
-  const isWithinLockoutPeriod = React.useMemo(() => 
+  const isShiftStarted = React.useMemo(() => 
     shiftData ? isShiftLocked(shiftData.shift.shift_date, shiftData.shift.start_time, 'my_roster') : false
   , [shiftData]);
 
@@ -120,7 +120,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
 
   // Offline the dialog may be showing a saved copy; swap/drop need the server.
   const isOnline = useOnlineStatus();
-  const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast || !isOnline;
+  const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isShiftStarted || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast || !isOnline;
   // Full-time hours are fixed: an FT shift is never swapped or dropped to
   // Bidding (the database refuses both). Changes go through leave or the manager.
   const isFullTimeShift = (shiftData?.shift as any)?.target_employment_type === 'FT';
@@ -228,8 +228,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
       toast({ title: 'Reason Required', description: 'Please choose a reason for dropping this shift.', variant: 'destructive' });
       return;
     }
-    if (isWithinLockoutPeriod) {
-      toast({ title: 'Drop Not Allowed', description: 'Cannot drop shift within 4 hours of start time.', variant: 'destructive' });
+    if (isShiftStarted) {
+      toast({ title: 'Drop Not Allowed', description: 'Cannot drop a shift that has already started.', variant: 'destructive' });
       return;
     }
     dropShiftMutation.mutate(
@@ -359,14 +359,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                   {!shift.is_cancelled && !isPast && (
                     <AddToCalendar shift={shift} groupName={groupName} subGroupName={subGroupName} />
                   )}
-                  {isWithinLockoutPeriod && !isPast && !isActiveOrCommenced && (
-                    <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3">
-                      <div className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-                      <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">
-                        {"Emergent State: Lockout Active (<4h)"}
-                      </span>
-                    </div>
-                  )}
                 </div>
               }
             />
@@ -394,7 +386,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
         groupName={groupName}
         subGroupName={subGroupName}
         groupColor={groupColor}
-        isWithinLockoutPeriod={isWithinLockoutPeriod}
         onConfirmDrop={confirmDrop}
         isDropping={isDropping}
       />

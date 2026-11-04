@@ -357,10 +357,10 @@ describe('getBadges', () => {
         expect(labels).not.toContain('Urgent');
     });
 
-    it('S5 + urgency=emergent → includes "Emergent" badge', () => {
-        const badges = getBadges(ctx({ state: 'S5', urgency: 'emergent' }));
+    it('S5 + urgency=urgent → includes "Urgent" badge', () => {
+        const badges = getBadges(ctx({ state: 'S5', urgency: 'urgent' }));
         const labels = badges.map(b => b.label);
-        expect(labels).toContain('Emergent');
+        expect(labels).toContain('Urgent');
     });
 
     it('state badge tone is always "info"', () => {

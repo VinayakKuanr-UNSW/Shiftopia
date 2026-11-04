@@ -57,25 +57,25 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
         const shiftStart = s.start_at
           ? new Date(s.start_at)
           : parseZonedDateTime(s.shift_date, s.start_time || '00:00', s.tz_identifier || SYDNEY_TZ);
-        const biddingDeadline = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000).toISOString();
+        const biddingDeadline = shiftStart.toISOString();
 
         const stateId = determineShiftState(s);
 
         // Determine toggle category. Four terminal/active buckets:
         //   resolved → a winner was assigned (assigned_employee_id set)
-        //   expired  → went unfilled: bidding closed with no winner, OR the 4h
-        //              bidding window elapsed (urgency 'emergent') with nobody assigned
+        //   expired  → went unfilled: cancelled / past start with nobody assigned
         //   urgent   → still open for bidding, TTS ≤ 24h
         //   standard → still open for bidding, plenty of lead time
         let toggle: BidToggle;
         if (s.assigned_employee_id) {
           toggle = 'resolved';
         } else {
-          const urgency = computeShiftUrgency(s.shift_date, s.start_time, s.start_at);
+          const isPastStart = shiftStart.getTime() <= Date.now();
           const onBidding = isOnBidding(s.bidding_status);
-          if (s.bidding_status === 'bidding_closed_no_winner' || (onBidding && urgency === 'emergent')) {
+          const urgency = computeShiftUrgency(s.shift_date, s.start_time, s.start_at);
+          if (s.bidding_status === 'bidding_closed_no_winner' || s.is_cancelled || isPastStart) {
             toggle = 'expired';
-          } else if (onBidding && urgency === 'urgent') {
+          } else if (onBidding && (urgency === 'urgent' || urgency === 'emergent')) {
             toggle = 'urgent';
           } else {
             toggle = 'standard';
