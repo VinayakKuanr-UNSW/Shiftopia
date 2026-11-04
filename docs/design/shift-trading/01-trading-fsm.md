@@ -1,6 +1,6 @@
 # Shift Trading — FSM Specification
 
-**Status:** decided by the product owner 2026-11-04. **T1** (offer integrity), **T2** (lifecycle) and **T3** (cascades) are live; T4 (no edits while published) remains. §9 tracks each item.
+**Status:** decided by the product owner 2026-11-04. All four phases are live: **T1** offer integrity, **T2** lifecycle, **T3** cascades, **T4** no edits or reassignment while published. §9 tracks each item.
 **Numbering:** the gapless S1–S10 model (`20261104061628_fsm_ids_s1_s10`).
 
 A trade is a one-for-one swap of two confirmed shifts between two employees, approved by a manager. Employee **A** posts a shift; peers (**B**, **C**, …) offer one of their own shifts in exchange; A picks one; a manager approves or rejects.
@@ -16,7 +16,7 @@ A trade is a one-for-one swap of two confirmed shifts between two employees, app
 | D5 | A manager rejection **ends** the trade (no reopen). A may post again. |
 | D6 | A may retract from S6 or S7; B may withdraw from S6 or S7. Either returns everything to S4. |
 | D7 | In S7, the trade expires when **either** shift starts — whichever is first. |
-| D8 | No edits while published (S3–S7). A manager unpublishes first, which cancels any trade (§6). No "small edit" exception. |
+| D8 | No edits while published (S3–S7) — every field, notes and display order included — and no reassignment. A manager unpublishes first, which cancels any trade (§6). No "small edit" exception. Filling, emptying and trade approval still change the assignee. |
 | D9 | **No giveaways.** Every offer names a shift. |
 | D10 | Full-time shifts are confirmed directly (never S3); they trade like any other S4 shift. |
 

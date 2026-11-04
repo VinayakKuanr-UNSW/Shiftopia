@@ -715,17 +715,16 @@ export function isTimesheetReviewable(shift: ShiftDotInput): boolean {
 /**
  * Available FSM actions for a given state.
  * This is the single source of truth for action menus.
- * 
- * NOTE: As of 2026-04-02, S1 (Draft-Unassigned) publication is restricted 
- * to non-emergent shifts only. Emergent S1 shifts must be assigned (to S2) 
- * before they can be published (triggers direct-to-confirmed).
+ *
+ * Published shifts (S3-S7) are never edited or reassigned in place — unpublish
+ * first (docs/design/shift-trading/01-trading-fsm.md D8).
  */
 export function getAvailableActions(state: ShiftStateID | string, _urgency?: ShiftUrgency): ShiftAction[] {
     switch (state) {
         case 'S1':  return ['ASSIGN', 'PUBLISH', 'DELETE'];
         case 'S2':  return ['UNASSIGN', 'PUBLISH', 'DELETE'];
         case 'S3':  return ['ACCEPT', 'REJECT', 'UNPUBLISH', 'CANCEL'];
-        case 'S4':  return ['SWAP_REQUEST', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CLOCK_IN', 'CANCEL'];
+        case 'S4':  return ['SWAP_REQUEST', 'UNPUBLISH', 'CLOCK_IN', 'CANCEL'];
         case 'S5':  return ['SELECT_BID_WINNER', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CANCEL'];
         case 'S6':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'UNPUBLISH'];
         case 'S7': return ['APPROVE_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
