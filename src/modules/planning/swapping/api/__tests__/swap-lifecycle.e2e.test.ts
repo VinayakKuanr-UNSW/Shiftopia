@@ -168,86 +168,33 @@ describe('initiate swap — createSwapRequest', () => {
 // 2. PEER OFFER — makeOffer (swap_offers SUBMITTED)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('peer offers a swap — makeOffer', () => {
-    it('submits an offer with the peer shift attached', async () => {
-        h.enqueue(
-            // self-offer guard + requester-shift time-lock fetch (requester shift is > 4h out)
-            { data: { requester_id: EMP_A, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null },
-            { data: { shift_date: FUTURE_DATE, start_time: '10:00' }, error: null }, // time-lock on offered shift
-            { error: null },                                                         // swap_offers insert
-        );
+describe('peer offers a swap — makeOffer / withdrawOffer', () => {
+    // The server owns every offer rule (one per peer, the hold, S4 + pre-start);
+    // the client only calls the RPC and surfaces a refusal. Covered end to end by
+    // supabase/tests/trading_t1_offer_integrity.sql.
+    it('submits through sm_submit_swap_offer — never a direct swap_offers write', async () => {
+        h.rpc.fn = vi.fn(async () => ({ data: { success: true, offer_id: OFFER_ID }, error: null }));
 
-        await swapsApi.makeOffer(SWAP_ID, SHIFT_B, EMP_B);
+        await swapsApi.makeOffer(SWAP_ID, SHIFT_B);
 
-        const insert = opsFor('swap_offers', 'insert')[0];
-        expect(insert.args[0]).toMatchObject({
-            swap_request_id: SWAP_ID,
-            offerer_id: EMP_B,
-            status: 'SUBMITTED',
-            offered_shift_id: SHIFT_B,
-        });
-    });
-
-    it('giveaway offer (no shift) skips the offered-shift time lock but still guards the requester shift', async () => {
-        h.enqueue(
-            // requester shift is > 4h out — giveaway offer is allowed
-            { data: { requester_id: EMP_A, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null },
-            { error: null }, // insert
-        );
-
-        await swapsApi.makeOffer(SWAP_ID, undefined, EMP_B);
-
-        const payload = opsFor('swap_offers', 'insert')[0].args[0] as Record<string, unknown>;
-        expect(payload.status).toBe('SUBMITTED');
-        expect('offered_shift_id' in payload).toBe(false);
-    });
-
-    it('blocks offering on your own swap request', async () => {
-        // requester == offerer (requester shift is future, but the self-offer guard fires first)
-        h.enqueue({ data: { requester_id: EMP_B, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null });
-
-        await expect(swapsApi.makeOffer(SWAP_ID, SHIFT_B, EMP_B))
-            .rejects.toThrow(/your own swap request/);
+        expect(h.rpc.fn).toHaveBeenCalledWith('sm_submit_swap_offer', { p_swap_id: SWAP_ID, p_offered_shift_id: SHIFT_B });
         expect(opsFor('swap_offers', 'insert')).toHaveLength(0);
     });
 
-    it('§9 time lock: refuses an offered shift starting < 4h away', async () => {
-        h.enqueue(
-            { data: { requester_id: EMP_A, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null },
-            { data: { shift_date: PAST_DATE, start_time: '10:00' }, error: null },
-        );
+    it("surfaces the server's refusal as the error message", async () => {
+        h.rpc.fn = vi.fn(async () => ({
+            data: { success: false, code: 'OFFER_EXISTS', error: 'You already have an offer on this trade' }, error: null,
+        }));
 
-        await expect(swapsApi.makeOffer(SWAP_ID, SHIFT_B, EMP_B)).rejects.toThrow(/Time locked/);
-        expect(opsFor('swap_offers', 'insert')).toHaveLength(0);
+        await expect(swapsApi.makeOffer(SWAP_ID, SHIFT_B)).rejects.toThrow('You already have an offer on this trade');
     });
 
-    it('§9 time lock: refuses ANY offer (even giveaway) when the REQUESTER shift starts < 4h away', async () => {
-        // requester shift is already inside the 4h lock — Fix 4: the offer must be rejected
-        // regardless of whether an offered shift is attached.
-        h.enqueue({ data: { requester_id: EMP_A, requester_shift: { shift_date: PAST_DATE, start_time: '10:00' } }, error: null });
+    it('withdraws through sm_withdraw_swap_offer — not the requester\'s decline', async () => {
+        h.rpc.fn = vi.fn(async () => ({ data: { success: true }, error: null }));
 
-        await expect(swapsApi.makeOffer(SWAP_ID, undefined, EMP_B)).rejects.toThrow(/Time locked/);
-        expect(opsFor('swap_offers', 'insert')).toHaveLength(0);
-    });
+        await swapsApi.withdrawOffer(OFFER_ID);
 
-    it('handles the requester-shift join arriving as an array', async () => {
-        // PostgREST embeds can surface as arrays; the guard must unwrap [0].
-        h.enqueue(
-            { data: { requester_id: EMP_A, requester_shift: [{ shift_date: FUTURE_DATE, start_time: '09:00' }] }, error: null },
-            { error: null }, // insert
-        );
-
-        await swapsApi.makeOffer(SWAP_ID, undefined, EMP_B);
-
-        expect(opsFor('swap_offers', 'insert')).toHaveLength(1);
-    });
-
-    it('fails closed when the requester shift date/time is missing', async () => {
-        h.enqueue({ data: { requester_id: EMP_A, requester_shift: null }, error: null });
-
-        await expect(swapsApi.makeOffer(SWAP_ID, undefined, EMP_B))
-            .rejects.toThrow(/requester shift date\/time is missing/);
-        expect(opsFor('swap_offers', 'insert')).toHaveLength(0);
+        expect(h.rpc.fn).toHaveBeenCalledWith('sm_withdraw_swap_offer', { p_offer_id: OFFER_ID });
     });
 });
 
@@ -481,12 +428,13 @@ describe('requester cancels — cancelSwapRequest', () => {
     });
 });
 
-describe('requester rejects an offer — rejectTrade', () => {
-    it('marks the offer REJECTED (swap stays OPEN for other offers)', async () => {
-        h.enqueue({ error: null });
+describe('requester declines an offer — declineOffer', () => {
+    it('declines through sm_decline_swap_offer (swap stays OPEN for other offers)', async () => {
+        h.rpc.fn = vi.fn(async () => ({ data: { success: true }, error: null }));
 
-        await swapsApi.rejectTrade(OFFER_ID);
+        await swapsApi.declineOffer(OFFER_ID);
 
-        expect(opsFor('swap_offers', 'update')[0].args[0]).toMatchObject({ status: 'REJECTED' });
+        expect(h.rpc.fn).toHaveBeenCalledWith('sm_decline_swap_offer', { p_offer_id: OFFER_ID });
+        expect(opsFor('swap_offers', 'update')).toHaveLength(0);
     });
 });

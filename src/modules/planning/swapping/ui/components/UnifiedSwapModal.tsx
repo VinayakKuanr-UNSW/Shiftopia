@@ -57,7 +57,7 @@ import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCar
 interface UnifiedSwapModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirmOffer: (shiftId: string | undefined) => void;
+    onConfirmOffer: (shiftId: string) => void;
     isSubmitting: boolean;
     swapId: string;
 }
@@ -266,7 +266,8 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
 
     // ── Event handlers
     const handleConfirmOffer = () => {
-        onConfirmOffer(selectedV8ShiftId || undefined);
+        if (!selectedV8ShiftId) return;
+        onConfirmOffer(selectedV8ShiftId);
         handleClose();
     };
 

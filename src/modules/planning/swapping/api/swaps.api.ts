@@ -1,5 +1,4 @@
 import { supabase } from '@/platform/supabase/client';
-import { assertWrote } from '@/platform/supabase/writes';
 import { SwapRequestWithDetails } from '../model/swap.types';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
@@ -482,61 +481,17 @@ export const swapsApi = {
      * TODO: Implement actual DB fetch when swap_offers table exists.
      */
     /**
-     * Make an offer on a swap request (1-to-many model).
-     * Inserts a new row into swap_offers.
+     * Offer one of my shifts on a swap request. The server owns every rule:
+     * one active offer per peer, the offered shift held to one trade, both
+     * shifts confirmed and not started (docs/design/shift-trading §5).
      */
-    async makeOffer(swapId: string, targetV8ShiftId: string | undefined, targetId: string): Promise<void> {
-        console.log('[API] Making offer on swap:', { swapId, targetV8ShiftId, targetId });
+    async makeOffer(swapId: string, offeredShiftId: string): Promise<void> {
+        await callOfferRpc('sm_submit_swap_offer', { p_swap_id: swapId, p_offered_shift_id: offeredShiftId });
+    },
 
-        // Self-offer guard: prevent a user from offering on their own swap request.
-        // Also fetch the REQUESTER's shift so we can enforce §9 on the request
-        // itself — an offer must never be lodged against a shift that has already started,
-        // even for a giveaway offer (no offered shift).
-        const { data: swapMeta, error: swapMetaErr } = await db
-            .from('shift_swaps')
-            .select('requester_id, requester_shift:shifts!requester_shift_id(shift_date, start_time)')
-            .eq('id', swapId)
-            .single();
-        if (swapMetaErr || !swapMeta) throw swapMetaErr || new Error('Swap request not found');
-        if (swapMeta.requester_id === targetId) {
-            throw new Error('You cannot make an offer on your own swap request.');
-        }
-
-        // §9 Time Lock Check (requester shift): ALWAYS guard the shift being
-        // offered on — including giveaway offers with no offered_shift_id.
-        const requesterShift = Array.isArray(swapMeta.requester_shift)
-            ? swapMeta.requester_shift[0]
-            : swapMeta.requester_shift;
-        if (!requesterShift?.shift_date || !requesterShift?.start_time) {
-            throw new Error('Cannot make an offer: requester shift date/time is missing.');
-        }
-        assertNotTimeLocked(requesterShift.shift_date, requesterShift.start_time);
-
-        const offerData: any = {
-            swap_request_id: swapId,
-            offerer_id: targetId,
-            status: 'SUBMITTED',
-        };
-
-        // §9 Time Lock Check: Prevent offering a shift that has already started
-        if (targetV8ShiftId) {
-            const { data: shift, error: shiftErr } = await supabase
-                .from('shifts').select('shift_date, start_time').eq('id', targetV8ShiftId).single();
-            if (shiftErr || !shift) throw shiftErr || new Error('Shift not found');
-            assertNotTimeLocked(shift.shift_date, shift.start_time);
-            
-            offerData.offered_shift_id = targetV8ShiftId;
-        }
-
-        const { error } = await db
-            .from('swap_offers')
-            .insert(offerData);
-
-        if (error) {
-            console.error('[API] Error making offer:', error);
-            throw error;
-        }
-
+    /** Take back my pending offer; the offered shift is released. */
+    async withdrawOffer(offerId: string): Promise<void> {
+        await callOfferRpc('sm_withdraw_swap_offer', { p_offer_id: offerId });
     },
 
     /**
@@ -931,21 +886,18 @@ export const swapsApi = {
 
     },
 
-    /**
-     * Reject a trade offer (Requester rejects an offer).
-     */
-    async rejectTrade(offerId: string): Promise<void> {
-        console.log('[API] Rejecting trade offer:', offerId);
-
-        const rejected = await db
-            .from('swap_offers')
-            .update({ status: 'REJECTED' }, { count: 'exact' })
-            .eq('id', offerId);
-
-        if (rejected.error) throw rejected.error;
-        assertWrote(rejected, 'decline this offer');
+    /** The request owner declines one offer; the request stays open. */
+    async declineOffer(offerId: string): Promise<void> {
+        await callOfferRpc('sm_decline_swap_offer', { p_offer_id: offerId });
     }
 };
+
+/** Offer RPCs report refusals as { success: false, error } rather than raising. */
+async function callOfferRpc(fn: string, args: Record<string, string>): Promise<void> {
+    const { data, error } = await db.rpc(fn, args);
+    if (error) throw error;
+    if (!data?.success) throw new Error(data?.error ?? 'The offer could not be updated');
+}
 
 // Helper to map DB columns to Frontend Model
 function mapDbToSwapRequest(row: any): SwapRequestWithDetails {
