@@ -727,7 +727,7 @@ export function getAvailableActions(state: ShiftStateID | string, _urgency?: Shi
         case 'S3':  return ['ACCEPT', 'REJECT', 'UNPUBLISH', 'CANCEL'];
         case 'S4':  return ['SWAP_REQUEST', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CLOCK_IN', 'CANCEL'];
         case 'S5':  return ['SELECT_BID_WINNER', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CANCEL'];
-        case 'S6':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
+        case 'S6':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'UNPUBLISH'];
         case 'S7': return ['APPROVE_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
         case 'S8': return ['CLOCK_OUT', 'MARK_NO_SHOW', 'CANCEL'];
         case 'S9': return [];

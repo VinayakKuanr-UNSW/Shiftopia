@@ -262,11 +262,11 @@ describe('getAvailableActions', () => {
         expect(actions).not.toContain('ASSIGN');
     });
 
-    it('S6 → includes CANCEL_REQUEST, ACCEPT_TRADE, REJECT_TRADE, UNPUBLISH', () => {
+    it('S6 → includes CANCEL_REQUEST, ACCEPT_TRADE, UNPUBLISH; REJECT_TRADE is manager review (S7) only', () => {
         const actions = getAvailableActions('S6');
         expect(actions).toContain('CANCEL_REQUEST');
         expect(actions).toContain('ACCEPT_TRADE');
-        expect(actions).toContain('REJECT_TRADE');
+        expect(actions).not.toContain('REJECT_TRADE');
         expect(actions).toContain('UNPUBLISH');
     });
 

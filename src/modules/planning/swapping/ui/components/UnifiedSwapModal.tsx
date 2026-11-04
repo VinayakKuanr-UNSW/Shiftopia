@@ -150,7 +150,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
 
     const alreadyOfferedForThisSwapIds = new Set(
         existingOffers
-            ?.filter(o => o.offerer_id === user?.id && o.status !== 'REJECTED' && o.status !== 'WITHDRAWN')
+            ?.filter(o => o.offerer_id === user?.id && (o.status === 'SUBMITTED' || o.status === 'SELECTED'))
             .map(o => o.offered_shift_id).filter(Boolean) as string[]
     );
 
