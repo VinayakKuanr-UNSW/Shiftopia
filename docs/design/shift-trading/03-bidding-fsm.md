@@ -18,7 +18,8 @@ Bidding fills an **S5** shift: a published shift with nobody on it. Employees bi
 | B-D7 | A manager may fill an S5 shift with someone who did not bid; it goes straight to **S4**. |
 | B-D8 | Bids end in a terminal status that says why (§3). No pending bid outlives the S5 state. |
 | B-D9 | **Offer expiry**: an offer (S3) not answered within `LEAST(published + 48h, start)` goes to **S5** like a rejection. If it is still pending at start, the shift goes to **S10** with reason **A**. |
-| B-D10 | **Cancellation reasons** at start (TTS = 0): **A** offer ignored · **B** bidding found no winner · **C** draft never assigned (S1) · **D** assigned draft never published (S2). Reasons do not feed reliability or fairness scoring. |
+| B-D10 | **Cancellation reasons** at start (TTS = 0), stored in `shifts.kickoff_cancel_code`: **A** offer ignored · **B** bidding found no winner · **C** draft never assigned (S1) · **D** assigned draft never published (S2). NULL for a manager's cancellation. Codes do not feed reliability or fairness scoring: a coded cancellation is logged as one `OP_APPLIED` `cancel` event carrying the code, never as `CANCELLED`/`LATE_CANCELLED` against the employee. A and D keep the assignee on the record (a started shift cannot change hands). |
+| B-D11 | Drafts that started before the C/D rule went live (2026-11-04 10:00 UTC) are left alone. |
 
 ## 2. States involved
 
@@ -84,8 +85,8 @@ A deleted shift takes its bids with it (FK cascade). Each bidder is notified by 
 
 | Phase | Scope | Status |
 |---|---|---|
-| **B1** | `sm_place_bid`; bid statuses `expired`/`cancelled`; `trg_shift_close_bids`; leave cancels bids; 4h lock removed; app places bids through the RPC | built |
-| **B2** | Revoke client writes on `shift_bids`; `shifts.cancellation_reason`; offer expiry → S5 / reason A; S5 → S10 reason B; drafts → S10 reasons C/D | — |
-| **B3** | Urgent lane in the database (on bid and at the 24h crossover) | — |
+| **B1** | `sm_place_bid`; bid statuses `expired`/`cancelled`; `trg_shift_close_bids`; leave cancels bids; 4h lock removed; app places bids through the RPC | built (#56) |
+| **B2** | Revoke client writes on `shift_bids`; `shifts.kickoff_cancel_code`; offer expiry → S5 / code A; S5 → S10 code B; drafts → S10 codes C/D | built |
+| **B3** | Urgent lane in the database (on bid and at the 24h crossover) | deferred |
 | **B4** | App: reason codes shown; client auto-assign loop removed | — |
 | **B5** | Scenario matrix + hardening | — |
