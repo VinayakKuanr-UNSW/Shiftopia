@@ -5,7 +5,6 @@
  *   - getShiftFSMState      (all 10 valid states + edge cases)
  *   - getLockState
  *   - getAvailableActions
- *   - getBadges
  *
  * All tests are pure — no mocking, no network calls.
  */
@@ -14,16 +13,14 @@ import { describe, it, expect } from 'vitest';
 
 import {
     getShiftFSMState,
-    FSM_STATE_META,
+    describeKickoffCancel,
     type ShiftFSMInput,
     type ShiftStateID,
 } from '../shift-fsm';
 
 import {
-    getBadges,
     getLockState,
     getAvailableActions,
-    type ShiftUIContext,
 } from '../shift-ui';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -288,86 +285,20 @@ describe('getAvailableActions', () => {
     });
 });
 
-// ─── 6. getBadges ─────────────────────────────────────────────────────────────
 
-/** Build a ShiftUIContext directly without calling getShiftFSMState inside a test. */
-function ctx(overrides: Partial<ShiftUIContext> & { state: ShiftStateID }): ShiftUIContext {
-    return {
-        ttsSec:         0,
-        isUrgent:       false,
-        isEmergency:    false,
-        urgency:        'normal',
-        ringColor:      'none',
-        ...overrides,
-    } as ShiftUIContext;
-}
+// ─── 6. describeKickoffCancel ────────────────────────────────────────────────
 
-describe('getBadges', () => {
-
-    it('S5 + urgency=urgent → includes badge with label "Urgent"', () => {
-        const badges = getBadges(ctx({ state: 'S5', isUrgent: true, urgency: 'urgent' }));
-        const labels = badges.map(b => b.label);
-        expect(labels).toContain('Urgent');
+describe('describeKickoffCancel (03-bidding-fsm.md B-D10)', () => {
+    it.each([
+        ['A', 'A — Offer ignored until the shift started'],
+        ['B', 'B — Bidding found no winner'],
+        ['C', 'C — Never assigned'],
+        ['D', 'D — Assigned but never published'],
+    ])('code %s → %s', (code, label) => {
+        expect(describeKickoffCancel(code)).toBe(label);
     });
 
-    it('S4 + urgency=urgent → includes "Urgent" badge (urgency is pure TTS, no emergency suppression)', () => {
-        const badges = getBadges(ctx({ state: 'S4', isUrgent: true, urgency: 'urgent' }));
-        const labels = badges.map(b => b.label);
-        expect(labels).toContain('Urgent');
-    });
-
-    it('S6 → state badge reads "Trade Requested (Pending Peer)"', () => {
-        const badges = getBadges(ctx({ state: 'S6' }));
-        const labels = badges.map(b => b.label);
-        expect(labels).toContain('Trade Requested (Pending Peer)');
-    });
-
-    it('S9 → includes "Completed" success badge', () => {
-        const badges = getBadges(ctx({ state: 'S9' }));
-        // The state badge (tone='info') and the terminal badge (tone='success') both use the label
-        // from FSM_STATE_META['S9'].label === 'Completed'. We check that a success-tone one exists.
-        const successBadge = badges.find(b => b.tone === 'success');
-        expect(successBadge).toBeDefined();
-        expect(successBadge!.label).toBe('Completed');
-    });
-
-    it('S10 → includes "Cancelled" neutral badge', () => {
-        const badges = getBadges(ctx({ state: 'S10' }));
-        // Same situation: 'Cancelled' appears as both state badge (info) and terminal badge (neutral).
-        const neutralBadge = badges.find(b => b.tone === 'neutral');
-        expect(neutralBadge).toBeDefined();
-        expect(neutralBadge!.label).toBe('Cancelled');
-    });
-
-    it('always starts with a state badge matching FSM_STATE_META label', () => {
-        const stateId: ShiftStateID = 'S4';
-        const badges = getBadges(ctx({ state: stateId }));
-        expect(badges[0].label).toBe(FSM_STATE_META[stateId].label);
-    });
-
-    it('S7 → state badge reads "Trade Requested (Pending Manager)"', () => {
-        const badges = getBadges(ctx({ state: 'S7' }));
-        const labels = badges.map(b => b.label);
-        expect(labels).toContain('Trade Requested (Pending Manager)');
-    });
-
-    it('S5 + isUrgent=false → does NOT include "Urgent" badge', () => {
-        const badges = getBadges(ctx({ state: 'S5', isUrgent: false }));
-        const labels = badges.map(b => b.label);
-        expect(labels).not.toContain('Urgent');
-    });
-
-    it('S5 + urgency=urgent → includes "Urgent" badge', () => {
-        const badges = getBadges(ctx({ state: 'S5', urgency: 'urgent' }));
-        const labels = badges.map(b => b.label);
-        expect(labels).toContain('Urgent');
-    });
-
-    it('state badge tone is always "info"', () => {
-        const stateIds: ShiftStateID[] = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'];
-        for (const stateId of stateIds) {
-            const badges = getBadges(ctx({ state: stateId }));
-            expect(badges[0].tone).toBe('info');
-        }
+    it.each([null, undefined, '', 'Z'])('%s → null (manual cancellation or unknown code)', code => {
+        expect(describeKickoffCancel(code)).toBeNull();
     });
 });

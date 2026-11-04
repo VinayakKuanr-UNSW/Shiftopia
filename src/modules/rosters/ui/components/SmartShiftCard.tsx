@@ -41,7 +41,7 @@ import {
 import { EditingPresenceBadge } from './EditingPresenceBadge';
 import { useShiftPresence } from '../presence/ShiftEditingPresenceProvider';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
-import { getShiftStateDisplay } from '../../domain/shift-fsm';
+import { describeKickoffCancel, getShiftStateDisplay } from '../../domain/shift-fsm';
 import { ShiftStateCircleBadge } from './ShiftStateCircleBadge';
 import { SharedShiftCard, type ShiftIdentityField } from '@/modules/planning/ui/components/SharedShiftCard';
 import {
@@ -311,7 +311,10 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
             >
                 {/* 1. Badge + Role */}
                 <div className="flex items-center gap-2 min-w-0">
-                    <ShiftStateCircleBadge stateId={ctx.state} />
+                    <ShiftStateCircleBadge
+                        stateId={ctx.state}
+                        detail={ctx.state === 'S10' ? describeKickoffCancel(shift.kickoff_cancel_code) : null}
+                    />
                     <span
                         className={cn('font-medium truncate min-w-0 text-[11px] sm:text-[13px]', tone.primary)}
                         title={roleDisplay}

@@ -14,7 +14,6 @@
 
 import {
     getShiftFSMState,
-    FSM_STATE_META,
     type ShiftStateID,
     type ShiftFSMInput,
 } from './shift-fsm';
@@ -26,10 +25,6 @@ import {
 } from 'lucide-react';
 import { type Shift } from './shift.entity';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
-
-// ─── Tone ────────────────────────────────────────────────────────────────────
-
-type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
 
 /**
  * Priority-ordered ring color for shift cards across all views.
@@ -65,11 +60,6 @@ export interface ShiftUIContext {
     urgency: ShiftUrgency;
     /** Priority-ordered ring color for card borders/glows across all views */
     ringColor: RingColor;
-}
-
-interface ShiftBadge {
-    label: string;
-    tone: BadgeTone;
 }
 
 interface ShiftLockState {
@@ -149,34 +139,6 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
     })();
 
     return { state, ttsSec, isUrgent, isEmergency, urgency, ringColor };
-}
-
-/**
- * Build ordered badge list for a shift card.
- *
- * Order: State → Trade → Urgency (runtime TTS) → Terminal
- */
-export function getBadges(ctx: ShiftUIContext): ShiftBadge[] {
-    const badges: ShiftBadge[] = [];
-
-    // State badge (always present). meta.label now fully describes the trade
-    // sub-states (Pending Peer / Pending Manager), so no extra trade badge needed.
-    const meta = FSM_STATE_META[ctx.state];
-    badges.push({ label: meta.label, tone: 'info' });
-
-    // Urgency (runtime TTS — suppressed in terminal states)
-    const terminalStates = ['S9', 'S10'];
-    if (!terminalStates.includes(ctx.state)) {
-        if (ctx.urgency === 'urgent') {
-            badges.push({ label: 'Urgent', tone: 'warning' });
-        }
-    }
-
-    // Terminal states
-    if (ctx.state === 'S9') badges.push({ label: 'Completed', tone: 'success' });
-    if (ctx.state === 'S10') badges.push({ label: 'Cancelled', tone: 'neutral'  });
-
-    return badges;
 }
 
 /**
