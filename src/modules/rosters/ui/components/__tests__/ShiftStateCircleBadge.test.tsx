@@ -10,11 +10,11 @@ describe('ShiftStateCircleBadge', () => {
     'S3',
     'S4',
     'S5',
+    'S6',
+    'S7',
+    'S8',
     'S9',
     'S10',
-    'S11',
-    'S13',
-    'S15',
   ];
 
   it.each(allStates)('renders state %s with expected icon, colors, and accessibility attributes', (stateId) => {

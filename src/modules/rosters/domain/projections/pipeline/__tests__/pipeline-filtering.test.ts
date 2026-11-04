@@ -124,14 +124,14 @@ describe('runProjectionPipeline - filter functionality', () => {
 
   const allMockShifts = [s1Draft, s2DraftAssigned, s4Confirmed, s15Cancelled];
 
-  it('filters shifts by stateId (e.g. S15 - Cancelled)', () => {
-    const req = makeRequest(allMockShifts, { stateId: 'S15' });
+  it('filters shifts by stateId (e.g. S10 - Cancelled)', () => {
+    const req = makeRequest(allMockShifts, { stateId: 'S10' });
     const res = runProjectionPipeline(req);
 
     expect(res).not.toBeNull();
     expect(res!.group).not.toBeNull();
 
-    // Verify projected group contains ONLY the S15 shift
+    // Verify projected group contains ONLY the S10 shift
     const conventionGroup = res!.group!.groups.find(g => g.type === 'convention_centre');
     expect(conventionGroup).toBeDefined();
 
@@ -141,7 +141,7 @@ describe('runProjectionPipeline - filter functionality', () => {
     const shiftsOnDate = amBase!.shiftsByDate['2026-10-23'] || [];
     expect(shiftsOnDate).toHaveLength(1);
     expect(shiftsOnDate[0].id).toBe('s15-cancelled');
-    expect(shiftsOnDate[0].stateId).toBe('S15');
+    expect(shiftsOnDate[0].stateId).toBe('S10');
   });
 
   it('filters shifts by stateId (S1 - Draft)', () => {

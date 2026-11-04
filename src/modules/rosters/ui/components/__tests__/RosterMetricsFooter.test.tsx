@@ -18,11 +18,11 @@ describe('RosterMetricsFooter', () => {
     S3: 5,
     S4: 35,
     S5: 2,
-    S9: 1,
+    S6: 1,
+    S7: 0,
+    S8: 4,
+    S9: 0,
     S10: 0,
-    S11: 4,
-    S13: 0,
-    S15: 0,
   };
 
   it('renders Total Shifts dropdown trigger with All States and companion View Count card', () => {

@@ -73,7 +73,7 @@ Both are exactly the kind of gap Phase 17 (Production Audit) is meant to surface
 - Unassigned (S1) → **S5**, opened for bidding (unless TTS<4h, which blocks publish entirely with `PUBLISH_TOO_LATE`).
 - Assigned, TTS≥4h (S2) → **S3**, a direct offer is created and the employee must accept.
 - Assigned, TTS<4h (S2) → **skips straight to S4** (emergency window — an offer would immediately expire under the 4h sweep rule, so the gateway confirms directly instead, stamping an emergency-assignment audit marker).
-**Alternative paths:** manager unpublishes (S3/S4/S5/S9/S10 → back to Draft) — cancels any in-flight swap and reverts the counter-shift too; no TTS guard on this manual action (only automatic publish has the 4h block).
+**Alternative paths:** manager unpublishes (S3/S4/S5/S6/S7 → back to Draft) — cancels any in-flight swap and reverts the counter-shift too; no TTS guard on this manual action (only automatic publish has the 4h block).
 **Full detail + full transition table:** Ch. 7 §1.2.
 
 ---
@@ -94,10 +94,10 @@ Both are exactly the kind of gap Phase 17 (Production Audit) is meant to surface
 
 **Actors:** Requesting employee; offering employee (peer); Manager (approves/rejects, or AutoPilot decides).
 **Preconditions:** shift is S4 (confirmed); requester is the shift's assignee; TTS≥4h; no other active swap on that shift.
-**Happy path:** requester opens a swap (S4→**S9**) → a peer submits an offer against it → requester accepts an offer (compliance snapshot required, must be `feasible`) → all competing offers on that swap auto-reject, shift moves to **S10** (manager-pending) → manager approves → the two shifts' assignments are swapped and both revert to no-trade-in-progress, back to **S4** each.
+**Happy path:** requester opens a swap (S4→**S6**) → a peer submits an offer against it → requester accepts an offer (compliance snapshot required, must be `feasible`) → all competing offers on that swap auto-reject, shift moves to **S7** (manager-pending) → manager approves → the two shifts' assignments are swapped and both revert to no-trade-in-progress, back to **S4** each.
 **⚠ This was broken end-to-end in production until fixed this session** — see Ch. 7's top callout. Manager approval now works correctly (fix verified against live DB).
 **Alternative paths:** manager rejects instead (always worked); requester cancels while still `OPEN`; AutoPilot auto-decides if enabled (same narrower compliance subset as bidding; shadow mode was removed 2026-07-23 so nothing silently goes live without an explicit policy flip — verify current `swap_approval_rules.enabled`/`shadow_mode` before assuming either subsystem is deciding anything today).
-**Failure/expiry:** TTS<4h sweep reverts S9/S10→S4 and cascades to expire child offers (this cleanup, unlike bidding's, was explicitly fixed).
+**Failure/expiry:** TTS<4h sweep reverts S6/S7→S4 and cascades to expire child offers (this cleanup, unlike bidding's, was explicitly fixed).
 **"Drops"**: `shift_swaps.swap_type` supports `'swap'` (two-way trade, both `sm_approve_peer_swap` UPDATE branches run) and `'giveaway'` (one-way — the requester's shift is reassigned to the accepting peer with no shift given back in return, the offered-shift branch is simply skipped). This is the mechanism behind an employee "dropping" a shift onto a willing peer rather than trading for one — same approval/manager-pending pipeline, not a separate workflow.
 **Full detail:** Ch. 7 §3.
 

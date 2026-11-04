@@ -18,7 +18,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -27,7 +27,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -54,7 +54,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -63,7 +63,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -90,7 +90,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -99,7 +99,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -126,7 +126,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -135,7 +135,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -162,7 +162,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -171,7 +171,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -198,7 +198,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -207,7 +207,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -234,7 +234,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -243,7 +243,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -270,7 +270,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -279,7 +279,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -306,7 +306,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -315,7 +315,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -342,7 +342,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -351,7 +351,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -378,7 +378,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -387,7 +387,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -414,7 +414,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -423,7 +423,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -450,7 +450,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -459,7 +459,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -486,7 +486,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -495,7 +495,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -522,7 +522,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -531,7 +531,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -558,7 +558,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -567,7 +567,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -576,7 +576,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -585,7 +585,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -594,7 +594,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -603,7 +603,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -612,7 +612,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -621,7 +621,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -630,7 +630,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -639,7 +639,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -648,7 +648,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -657,7 +657,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -666,7 +666,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -675,7 +675,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -684,7 +684,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -693,7 +693,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -702,7 +702,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -711,7 +711,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -738,7 +738,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -747,7 +747,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -756,7 +756,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S9",
+        "state": "S6",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -765,7 +765,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S9",
+        "state": "S6",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -774,17 +774,8 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
-        "outcome": null,
-        "trading": "TradeRequested",
-        "cancelled": true,
-        "lifecycle": "Published",
-        "assignment": "assigned"
-    },
-    {
-        "state": "S15",
-        "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
         "cancelled": true,
@@ -793,6 +784,15 @@
     },
     {
         "state": "S10",
+        "bidding": "on_bidding",
+        "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S7",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -801,7 +801,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S10",
+        "state": "S7",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -810,7 +810,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -819,7 +819,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -846,7 +846,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -855,7 +855,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -882,7 +882,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -891,7 +891,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -900,7 +900,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S9",
+        "state": "S6",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -909,7 +909,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S9",
+        "state": "S6",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -918,17 +918,8 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
-        "outcome": "confirmed",
-        "trading": "TradeRequested",
-        "cancelled": true,
-        "lifecycle": "Published",
-        "assignment": "assigned"
-    },
-    {
-        "state": "S15",
-        "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
         "cancelled": true,
@@ -937,6 +928,15 @@
     },
     {
         "state": "S10",
+        "bidding": "on_bidding",
+        "outcome": "confirmed",
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "assigned"
+    },
+    {
+        "state": "S7",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -945,7 +945,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S10",
+        "state": "S7",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -954,7 +954,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -963,7 +963,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -990,7 +990,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -999,7 +999,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1008,7 +1008,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1017,7 +1017,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1026,7 +1026,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1035,7 +1035,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1044,7 +1044,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1053,7 +1053,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1062,7 +1062,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1071,7 +1071,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1089,7 +1089,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1098,7 +1098,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1107,7 +1107,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S9",
+        "state": "S6",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -1116,17 +1116,8 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
-        "outcome": null,
-        "trading": "TradeRequested",
-        "cancelled": true,
-        "lifecycle": "Published",
-        "assignment": "unassigned"
-    },
-    {
-        "state": "S15",
-        "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
         "cancelled": true,
@@ -1137,13 +1128,22 @@
         "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
+        "trading": "TradeRequested",
+        "cancelled": true,
+        "lifecycle": "Published",
+        "assignment": "unassigned"
+    },
+    {
+        "state": "S7",
+        "bidding": "on_bidding",
+        "outcome": null,
         "trading": "TradeAccepted",
         "cancelled": false,
         "lifecycle": "Published",
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1152,7 +1152,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1170,7 +1170,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1179,7 +1179,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1188,7 +1188,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1197,7 +1197,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1206,7 +1206,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1215,7 +1215,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1224,7 +1224,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1233,7 +1233,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1242,7 +1242,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1251,7 +1251,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1260,7 +1260,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1269,7 +1269,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1278,7 +1278,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1287,7 +1287,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1296,7 +1296,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1305,7 +1305,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1314,7 +1314,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1323,7 +1323,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1332,7 +1332,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1341,7 +1341,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1350,7 +1350,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1359,7 +1359,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1368,7 +1368,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -1377,7 +1377,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -1386,7 +1386,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -1395,7 +1395,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -1404,7 +1404,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1413,7 +1413,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1422,7 +1422,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1431,7 +1431,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1440,7 +1440,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1449,7 +1449,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1458,7 +1458,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1467,7 +1467,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1476,7 +1476,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1485,7 +1485,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1494,7 +1494,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1503,7 +1503,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1512,7 +1512,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1521,7 +1521,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1530,7 +1530,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1539,7 +1539,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1548,7 +1548,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1557,7 +1557,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1566,7 +1566,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1575,7 +1575,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1584,7 +1584,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1593,7 +1593,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1602,7 +1602,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1611,7 +1611,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1620,7 +1620,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1629,7 +1629,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1638,7 +1638,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1647,7 +1647,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1656,7 +1656,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1665,7 +1665,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1674,7 +1674,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1683,7 +1683,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1692,7 +1692,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1701,7 +1701,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1710,7 +1710,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1719,7 +1719,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1728,7 +1728,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1737,7 +1737,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S11",
+        "state": "S8",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1746,7 +1746,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1755,7 +1755,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1764,7 +1764,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1773,7 +1773,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1782,7 +1782,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -1791,7 +1791,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -1800,7 +1800,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1809,7 +1809,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -1818,7 +1818,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1827,7 +1827,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -1836,7 +1836,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1845,7 +1845,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -1854,7 +1854,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1863,7 +1863,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -1872,7 +1872,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1881,7 +1881,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -1890,7 +1890,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1899,7 +1899,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -1908,7 +1908,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1917,7 +1917,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -1926,7 +1926,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1935,7 +1935,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -1944,7 +1944,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1953,7 +1953,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -1962,7 +1962,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1971,7 +1971,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -1980,7 +1980,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1989,7 +1989,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -1998,7 +1998,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2007,7 +2007,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2016,7 +2016,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2025,7 +2025,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2034,7 +2034,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2043,7 +2043,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2052,7 +2052,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2061,7 +2061,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2070,7 +2070,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2079,7 +2079,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2088,7 +2088,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2097,7 +2097,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2106,7 +2106,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2115,7 +2115,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2124,7 +2124,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2133,7 +2133,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2142,7 +2142,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2151,7 +2151,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2160,7 +2160,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2169,7 +2169,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2178,7 +2178,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2187,7 +2187,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2196,7 +2196,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2205,7 +2205,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2214,7 +2214,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2223,7 +2223,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2232,7 +2232,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2241,7 +2241,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2250,7 +2250,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2259,7 +2259,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2268,7 +2268,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2277,7 +2277,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2286,7 +2286,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2295,7 +2295,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2304,7 +2304,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2313,7 +2313,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2322,7 +2322,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2331,7 +2331,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2340,7 +2340,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -2349,7 +2349,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -2358,7 +2358,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -2367,7 +2367,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -2376,7 +2376,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -2385,7 +2385,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S13",
+        "state": "S9",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -2394,7 +2394,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -2403,7 +2403,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -2412,7 +2412,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2421,7 +2421,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2430,7 +2430,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2439,7 +2439,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2448,7 +2448,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2457,7 +2457,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2466,7 +2466,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2475,7 +2475,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2484,7 +2484,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2493,7 +2493,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2502,7 +2502,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2511,7 +2511,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2520,7 +2520,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2529,7 +2529,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2538,7 +2538,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2547,7 +2547,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2556,7 +2556,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2565,7 +2565,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2574,7 +2574,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2583,7 +2583,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2592,7 +2592,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -2601,7 +2601,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -2610,7 +2610,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -2619,7 +2619,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -2628,7 +2628,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2637,7 +2637,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2646,7 +2646,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2655,7 +2655,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -2664,7 +2664,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2673,7 +2673,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2682,7 +2682,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2691,7 +2691,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -2700,7 +2700,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2709,7 +2709,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2718,7 +2718,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2727,7 +2727,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -2736,7 +2736,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2745,7 +2745,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2754,7 +2754,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2763,7 +2763,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -2772,7 +2772,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2781,7 +2781,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2790,7 +2790,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2799,7 +2799,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -2808,7 +2808,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2817,7 +2817,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2826,7 +2826,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2835,7 +2835,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -2844,7 +2844,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2853,7 +2853,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2862,7 +2862,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2871,7 +2871,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -2880,7 +2880,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2889,7 +2889,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2898,7 +2898,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2907,7 +2907,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -2916,7 +2916,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2925,7 +2925,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2934,7 +2934,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2943,7 +2943,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -2952,7 +2952,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2961,7 +2961,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2970,7 +2970,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2979,7 +2979,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -2988,7 +2988,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -2997,7 +2997,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -3006,7 +3006,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -3015,7 +3015,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -3024,7 +3024,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -3033,7 +3033,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -3042,7 +3042,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -3051,7 +3051,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -3060,7 +3060,7 @@
         "assignment": "assigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -3069,7 +3069,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -3078,7 +3078,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -3087,7 +3087,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "NoTrade",
@@ -3096,7 +3096,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -3105,7 +3105,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -3114,7 +3114,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -3123,7 +3123,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeRequested",
@@ -3132,7 +3132,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -3141,7 +3141,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -3150,7 +3150,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -3159,7 +3159,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeAccepted",
@@ -3168,7 +3168,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -3177,7 +3177,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -3186,7 +3186,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -3195,7 +3195,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": null,
         "trading": "TradeApproved",
@@ -3204,7 +3204,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -3213,7 +3213,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "NoTrade",
@@ -3222,7 +3222,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -3231,7 +3231,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeRequested",
@@ -3240,7 +3240,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -3249,7 +3249,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeAccepted",
@@ -3258,7 +3258,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -3267,7 +3267,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "confirmed",
         "trading": "TradeApproved",
@@ -3276,7 +3276,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -3285,7 +3285,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "NoTrade",
@@ -3294,7 +3294,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -3303,7 +3303,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeRequested",
@@ -3312,7 +3312,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -3321,7 +3321,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeAccepted",
@@ -3330,7 +3330,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "not_on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",
@@ -3339,7 +3339,7 @@
         "assignment": "unassigned"
     },
     {
-        "state": "S15",
+        "state": "S10",
         "bidding": "on_bidding",
         "outcome": "no_show",
         "trading": "TradeApproved",

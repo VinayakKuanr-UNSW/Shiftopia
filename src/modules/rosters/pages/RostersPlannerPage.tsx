@@ -1024,11 +1024,11 @@ const NewRostersPage: React.FC = () => {
       S3: 0,
       S4: 0,
       S5: 0,
+      S6: 0,
+      S7: 0,
+      S8: 0,
       S9: 0,
       S10: 0,
-      S11: 0,
-      S13: 0,
-      S15: 0,
     };
     for (const shift of shiftsForStateInspection) {
       const stateId = determineShiftState(shift);

@@ -2,11 +2,11 @@
  * Swap Lifecycle E2E — the authoritative shift_swaps flow, end to end:
  *
  *   INITIATE      swapsApi.createSwapRequest  — employee puts a shift up for
- *                 trade (shift_swaps OPEN, shift S4 → S9 TradeRequested)
+ *                 trade (shift_swaps OPEN, shift S4 → S6 TradeRequested)
  *   PEER OFFER    swapsApi.makeOffer          — a peer offers their shift
  *                 (swap_offers SUBMITTED)
  *   PEER SELECT   swapsApi.acceptTrade        — requester selects an offer
- *                 (sm_accept_trade → MANAGER_PENDING, shift S9 → S10)
+ *                 (sm_accept_trade → MANAGER_PENDING, shift S6 → S7)
  *   MANAGER       swapsApi.approveSwapRequest — gateway op `approve_trade`
  *                 swapsApi.rejectSwapRequest  — gateway op `reject_trade`
  *   PLUS          cancel (requester), reject offer (requester), §9 time-lock
@@ -131,7 +131,7 @@ beforeEach(() => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 1. INITIATE — createSwapRequest (S4 → S9, shift_swaps OPEN)
+// 1. INITIATE — createSwapRequest (S4 → S6, shift_swaps OPEN)
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('initiate swap — createSwapRequest', () => {
@@ -147,7 +147,7 @@ describe('initiate swap — createSwapRequest', () => {
         expect(result.status).toBe('OPEN');
 
         // The insert (shift_swaps OPEN + expires_at trigger) and the shift flip to
-        // TradeRequested (S4 → S9) now happen server-side in ONE transaction — the
+        // TradeRequested (S4 → S6) now happen server-side in ONE transaction — the
         // API delegates to the definer RPC rather than doing a two-step client write.
         expect(h.rpc.fn).toHaveBeenCalledWith('sm_create_swap_request', expect.objectContaining({
             p_requester_shift_id: SHIFT_A,
@@ -252,7 +252,7 @@ describe('peer offers a swap — makeOffer', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 3. PEER SELECT — acceptTrade (S9 → S10, MANAGER_PENDING via sm_accept_trade)
+// 3. PEER SELECT — acceptTrade (S6 → S7, MANAGER_PENDING via sm_accept_trade)
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('requester accepts a peer offer — acceptTrade', () => {
@@ -384,7 +384,7 @@ describe('manager approves — approveSwapRequest', () => {
         // Compliance re-verified at approval time (not just at accept time)
         expect(h.evaluate.fn).toHaveBeenCalledTimes(1);
 
-        // Gateway invocation: S10-guarded approve_trade on the requester shift,
+        // Gateway invocation: S7-guarded approve_trade on the requester shift,
         // version-chained off the fetched row.
         expect(h.applyShiftOp.fn).toHaveBeenCalledWith({
             shiftId: SHIFT_A,

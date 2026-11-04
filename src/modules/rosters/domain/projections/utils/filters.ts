@@ -93,7 +93,7 @@ export function applyAdvancedFilters(
       if (tradingStatus === 'none'      &&  isTrade) return false;
     }
 
-    // ── State machine ID (S1-S15) ──────────────────────────────────────
+    // ── State machine ID (S1-S10) ──────────────────────────────────────
     if (stateId && stateId !== 'all') {
       if (determineShiftState(shift) !== stateId) return false;
     }

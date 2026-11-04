@@ -79,47 +79,47 @@ describe('getShiftFSMState — 10 canonical states', () => {
         }, 'S5');
     });
 
-    it('S9  — Published + assigned + confirmed + TradeRequested', () => {
+    it('S6  — Published + assigned + confirmed + TradeRequested', () => {
         assertState({
             lifecycle_status:   'Published',
             assignment_status:  'assigned',
             assignment_outcome: 'confirmed',
             trading_status:     'TradeRequested',
-        }, 'S9');
+        }, 'S6');
     });
 
-    it('S10 — Published + assigned + confirmed + TradeAccepted', () => {
+    it('S7 — Published + assigned + confirmed + TradeAccepted', () => {
         assertState({
             lifecycle_status:   'Published',
             assignment_status:  'assigned',
             assignment_outcome: 'confirmed',
             trading_status:     'TradeAccepted',
-        }, 'S10');
+        }, 'S7');
     });
 
-    it('S11 — InProgress + assigned + confirmed', () => {
+    it('S8 — InProgress + assigned + confirmed', () => {
         assertState({
             lifecycle_status:   'InProgress',
             assignment_status:  'assigned',
             assignment_outcome: 'confirmed',
-        }, 'S11');
+        }, 'S8');
     });
 
-    it('S13 — Completed + assigned + confirmed', () => {
+    it('S9 — Completed + assigned + confirmed', () => {
         assertState({
             lifecycle_status:   'Completed',
             assignment_status:  'assigned',
             assignment_outcome: 'confirmed',
-        }, 'S13');
+        }, 'S9');
     });
 
-    it('S15 — is_cancelled=true (any other fields)', () => {
+    it('S10 — is_cancelled=true (any other fields)', () => {
         assertState({
             lifecycle_status:   'Draft',
             assignment_status:  'assigned',
             assignment_outcome: 'confirmed',
             is_cancelled:       true,
-        }, 'S15');
+        }, 'S10');
     });
 });
 
@@ -127,14 +127,14 @@ describe('getShiftFSMState — 10 canonical states', () => {
 
 describe('getShiftFSMState — edge cases', () => {
 
-    it('assignment_outcome=no_show + InProgress → S11 (lifecycle wins)', () => {
-        // The FSM returns S11 for any InProgress shift regardless of outcome value;
+    it('assignment_outcome=no_show + InProgress → S8 (lifecycle wins)', () => {
+        // The FSM returns S8 for any InProgress shift regardless of outcome value;
         // no_show does not route to a different state here.
         assertState({
             lifecycle_status:   'InProgress',
             assignment_status:  'assigned',
             assignment_outcome: 'no_show',
-        }, 'S11');
+        }, 'S8');
     });
 
     it('emergency_source present → does NOT affect derived state (S4 still S4)', () => {
@@ -156,24 +156,24 @@ describe('getShiftFSMState — edge cases', () => {
         }, 'S5');
     });
 
-    it('is_cancelled=true + lifecycle_status=Completed → S15 (cancelled overrides everything)', () => {
+    it('is_cancelled=true + lifecycle_status=Completed → S10 (cancelled overrides everything)', () => {
         assertState({
             lifecycle_status:   'Completed',
             assignment_status:  'assigned',
             assignment_outcome: 'confirmed',
             is_cancelled:       true,
-        }, 'S15');
+        }, 'S10');
     });
 
-    it('S9 takes precedence over S4 (trade overrides assignment outcome)', () => {
-        // Even though assignment_outcome=confirmed, trading_status=TradeRequested → S9
+    it('S6 takes precedence over S4 (trade overrides assignment outcome)', () => {
+        // Even though assignment_outcome=confirmed, trading_status=TradeRequested → S6
         const result = getShiftFSMState(fsmInput({
             lifecycle_status:   'Published',
             assignment_status:  'assigned',
             assignment_outcome: 'confirmed',
             trading_status:     'TradeRequested',
         }));
-        expect(result).toBe('S9');
+        expect(result).toBe('S6');
         expect(result).not.toBe('S4');
     });
 
@@ -204,28 +204,28 @@ describe('getLockState', () => {
         expect(getLockState('S5')).toEqual({ fullyLocked: false, partialLock: true });
     });
 
-    it('S9 → { fullyLocked: false, partialLock: true }', () => {
-        expect(getLockState('S9')).toEqual({ fullyLocked: false, partialLock: true });
+    it('S6 → { fullyLocked: false, partialLock: true }', () => {
+        expect(getLockState('S6')).toEqual({ fullyLocked: false, partialLock: true });
     });
 
-    it('S10 → { fullyLocked: false, partialLock: true }', () => {
-        expect(getLockState('S10')).toEqual({ fullyLocked: false, partialLock: true });
+    it('S7 → { fullyLocked: false, partialLock: true }', () => {
+        expect(getLockState('S7')).toEqual({ fullyLocked: false, partialLock: true });
     });
 
     it('S3  → { fullyLocked: false, partialLock: true } (published, schedule-locked but notes editable)', () => {
         expect(getLockState('S3')).toEqual({ fullyLocked: false, partialLock: true });
     });
 
-    it('S11 → { fullyLocked: true, partialLock: false }', () => {
-        expect(getLockState('S11')).toEqual({ fullyLocked: true, partialLock: false });
+    it('S8 → { fullyLocked: true, partialLock: false }', () => {
+        expect(getLockState('S8')).toEqual({ fullyLocked: true, partialLock: false });
     });
 
-    it('S13 → { fullyLocked: true, partialLock: false }', () => {
-        expect(getLockState('S13')).toEqual({ fullyLocked: true, partialLock: false });
+    it('S9 → { fullyLocked: true, partialLock: false }', () => {
+        expect(getLockState('S9')).toEqual({ fullyLocked: true, partialLock: false });
     });
 
-    it('S15 → { fullyLocked: true, partialLock: false }', () => {
-        expect(getLockState('S15')).toEqual({ fullyLocked: true, partialLock: false });
+    it('S10 → { fullyLocked: true, partialLock: false }', () => {
+        expect(getLockState('S10')).toEqual({ fullyLocked: true, partialLock: false });
     });
 });
 
@@ -246,12 +246,12 @@ describe('getAvailableActions', () => {
         expect(actions).toContain('SELECT_BID_WINNER');
     });
 
-    it('S13 → empty array', () => {
-        expect(getAvailableActions('S13')).toEqual([]);
+    it('S9 → empty array', () => {
+        expect(getAvailableActions('S9')).toEqual([]);
     });
 
-    it('S15 → empty array', () => {
-        expect(getAvailableActions('S15')).toEqual([]);
+    it('S10 → empty array', () => {
+        expect(getAvailableActions('S10')).toEqual([]);
     });
 
     it('S2 → includes UNASSIGN, PUBLISH, DELETE (not ASSIGN)', () => {
@@ -262,23 +262,23 @@ describe('getAvailableActions', () => {
         expect(actions).not.toContain('ASSIGN');
     });
 
-    it('S9 → includes CANCEL_REQUEST, ACCEPT_TRADE, REJECT_TRADE, UNPUBLISH', () => {
-        const actions = getAvailableActions('S9');
+    it('S6 → includes CANCEL_REQUEST, ACCEPT_TRADE, REJECT_TRADE, UNPUBLISH', () => {
+        const actions = getAvailableActions('S6');
         expect(actions).toContain('CANCEL_REQUEST');
         expect(actions).toContain('ACCEPT_TRADE');
         expect(actions).toContain('REJECT_TRADE');
         expect(actions).toContain('UNPUBLISH');
     });
 
-    it('S10 → includes APPROVE_TRADE, REJECT_TRADE, UNPUBLISH', () => {
-        const actions = getAvailableActions('S10');
+    it('S7 → includes APPROVE_TRADE, REJECT_TRADE, UNPUBLISH', () => {
+        const actions = getAvailableActions('S7');
         expect(actions).toContain('APPROVE_TRADE');
         expect(actions).toContain('REJECT_TRADE');
         expect(actions).toContain('UNPUBLISH');
     });
 
-    it('S11 → includes CLOCK_OUT, MARK_NO_SHOW', () => {
-        const actions = getAvailableActions('S11');
+    it('S8 → includes CLOCK_OUT, MARK_NO_SHOW', () => {
+        const actions = getAvailableActions('S8');
         expect(actions).toContain('CLOCK_OUT');
         expect(actions).toContain('MARK_NO_SHOW');
     });
@@ -316,23 +316,23 @@ describe('getBadges', () => {
         expect(labels).toContain('Urgent');
     });
 
-    it('S9 → state badge reads "Trade Requested (Pending Peer)"', () => {
-        const badges = getBadges(ctx({ state: 'S9' }));
+    it('S6 → state badge reads "Trade Requested (Pending Peer)"', () => {
+        const badges = getBadges(ctx({ state: 'S6' }));
         const labels = badges.map(b => b.label);
         expect(labels).toContain('Trade Requested (Pending Peer)');
     });
 
-    it('S13 → includes "Completed" success badge', () => {
-        const badges = getBadges(ctx({ state: 'S13' }));
+    it('S9 → includes "Completed" success badge', () => {
+        const badges = getBadges(ctx({ state: 'S9' }));
         // The state badge (tone='info') and the terminal badge (tone='success') both use the label
-        // from FSM_STATE_META['S13'].label === 'Completed'. We check that a success-tone one exists.
+        // from FSM_STATE_META['S9'].label === 'Completed'. We check that a success-tone one exists.
         const successBadge = badges.find(b => b.tone === 'success');
         expect(successBadge).toBeDefined();
         expect(successBadge!.label).toBe('Completed');
     });
 
-    it('S15 → includes "Cancelled" neutral badge', () => {
-        const badges = getBadges(ctx({ state: 'S15' }));
+    it('S10 → includes "Cancelled" neutral badge', () => {
+        const badges = getBadges(ctx({ state: 'S10' }));
         // Same situation: 'Cancelled' appears as both state badge (info) and terminal badge (neutral).
         const neutralBadge = badges.find(b => b.tone === 'neutral');
         expect(neutralBadge).toBeDefined();
@@ -345,8 +345,8 @@ describe('getBadges', () => {
         expect(badges[0].label).toBe(FSM_STATE_META[stateId].label);
     });
 
-    it('S10 → state badge reads "Trade Requested (Pending Manager)"', () => {
-        const badges = getBadges(ctx({ state: 'S10' }));
+    it('S7 → state badge reads "Trade Requested (Pending Manager)"', () => {
+        const badges = getBadges(ctx({ state: 'S7' }));
         const labels = badges.map(b => b.label);
         expect(labels).toContain('Trade Requested (Pending Manager)');
     });
@@ -364,7 +364,7 @@ describe('getBadges', () => {
     });
 
     it('state badge tone is always "info"', () => {
-        const stateIds: ShiftStateID[] = ['S1', 'S2', 'S3', 'S4', 'S5', 'S9', 'S10', 'S11', 'S13', 'S15'];
+        const stateIds: ShiftStateID[] = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10'];
         for (const stateId of stateIds) {
             const badges = getBadges(ctx({ state: stateId }));
             expect(badges[0].tone).toBe('info');

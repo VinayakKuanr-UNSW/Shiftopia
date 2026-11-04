@@ -419,8 +419,8 @@ export const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManage
 
 const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId: string } => {
     switch (status) {
-        case 'OPEN': return { shiftStateId: 'S9', combinedStateId: 'C2' };
-        case 'MANAGER_PENDING': return { shiftStateId: 'S10', combinedStateId: 'C3' };
+        case 'OPEN': return { shiftStateId: 'S6', combinedStateId: 'C2' };
+        case 'MANAGER_PENDING': return { shiftStateId: 'S7', combinedStateId: 'C3' };
         case 'APPROVED': return { shiftStateId: 'S4', combinedStateId: 'C4' };
         case 'REJECTED': return { shiftStateId: 'S4', combinedStateId: 'C5' };
         case 'CANCELLED': return { shiftStateId: 'S4', combinedStateId: 'C6' };
