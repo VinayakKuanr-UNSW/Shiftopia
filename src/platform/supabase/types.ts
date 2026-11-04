@@ -1,13 +1,3 @@
-// =============================================================================
-// GENERATED FILE — DO NOT EDIT BY HAND.
-//
-// Regenerate with:  npm run db:types
-//
-// Every edit made here is silently reverted by the next regeneration, and in
-// the meantime the type checker is asserting things about the database that
-// are not true. If a type here is wrong, the schema is what needs changing.
-// =============================================================================
-
 export type Json =
   | string
   | number
@@ -271,63 +261,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "assignment_snapshots_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      attendance_records: {
-        Row: {
-          actual_end: string | null
-          actual_start: string | null
-          created_at: string | null
-          employee_id: string
-          id: string
-          minutes_late: number | null
-          notes: string | null
-          scheduled_end: string
-          scheduled_start: string
-          shift_id: string
-          status: string | null
-        }
-        Insert: {
-          actual_end?: string | null
-          actual_start?: string | null
-          created_at?: string | null
-          employee_id: string
-          id?: string
-          minutes_late?: number | null
-          notes?: string | null
-          scheduled_end: string
-          scheduled_start: string
-          shift_id: string
-          status?: string | null
-        }
-        Update: {
-          actual_end?: string | null
-          actual_start?: string | null
-          created_at?: string | null
-          employee_id?: string
-          id?: string
-          minutes_late?: number | null
-          notes?: string | null
-          scheduled_end?: string
-          scheduled_start?: string
-          shift_id?: string
-          status?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "attendance_records_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "attendance_records_shift_id_fkey"
             columns: ["shift_id"]
             isOneToOne: false
             referencedRelation: "shifts"
@@ -863,6 +796,158 @@ export type Database = {
           sub_department_id?: string | null
         }
         Relationships: []
+      }
+      billables: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          arrival_variance_reason: string | null
+          billable_end: string | null
+          billable_start: string | null
+          break_end: string | null
+          break_start: string | null
+          created_at: string
+          departure_variance_reason: string | null
+          edit_count: number
+          employee_id: string
+          gross_length_minutes: number | null
+          hours_source: string | null
+          id: string
+          net_length_minutes: number | null
+          notes: string | null
+          organization_id: string
+          paid_break_minutes: number
+          pay_period_id: string | null
+          payroll_exported: boolean
+          payroll_exported_at: string | null
+          payroll_exported_by: string | null
+          rejected_reason: string | null
+          shift_id: string
+          status: Database["public"]["Enums"]["timesheet_status"]
+          submitted_at: string | null
+          timesheet_id: string | null
+          unpaid_break_is_manual: boolean
+          unpaid_break_minutes: number | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          arrival_variance_reason?: string | null
+          billable_end?: string | null
+          billable_start?: string | null
+          break_end?: string | null
+          break_start?: string | null
+          created_at?: string
+          departure_variance_reason?: string | null
+          edit_count?: number
+          employee_id: string
+          gross_length_minutes?: number | null
+          hours_source?: string | null
+          id?: string
+          net_length_minutes?: number | null
+          notes?: string | null
+          organization_id: string
+          paid_break_minutes?: number
+          pay_period_id?: string | null
+          payroll_exported?: boolean
+          payroll_exported_at?: string | null
+          payroll_exported_by?: string | null
+          rejected_reason?: string | null
+          shift_id: string
+          status?: Database["public"]["Enums"]["timesheet_status"]
+          submitted_at?: string | null
+          timesheet_id?: string | null
+          unpaid_break_is_manual?: boolean
+          unpaid_break_minutes?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          arrival_variance_reason?: string | null
+          billable_end?: string | null
+          billable_start?: string | null
+          break_end?: string | null
+          break_start?: string | null
+          created_at?: string
+          departure_variance_reason?: string | null
+          edit_count?: number
+          employee_id?: string
+          gross_length_minutes?: number | null
+          hours_source?: string | null
+          id?: string
+          net_length_minutes?: number | null
+          notes?: string | null
+          organization_id?: string
+          paid_break_minutes?: number
+          pay_period_id?: string | null
+          payroll_exported?: boolean
+          payroll_exported_at?: string | null
+          payroll_exported_by?: string | null
+          rejected_reason?: string | null
+          shift_id?: string
+          status?: Database["public"]["Enums"]["timesheet_status"]
+          submitted_at?: string | null
+          timesheet_id?: string | null
+          unpaid_break_is_manual?: boolean
+          unpaid_break_minutes?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billables_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billables_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billables_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billables_pay_period_id_fkey"
+            columns: ["pay_period_id"]
+            isOneToOne: false
+            referencedRelation: "pay_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billables_payroll_exported_by_fkey"
+            columns: ["payroll_exported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billables_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: true
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billables_timesheet_id_fkey"
+            columns: ["timesheet_id"]
+            isOneToOne: true
+            referencedRelation: "timesheets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       broadcast_acknowledgements: {
         Row: {
@@ -2418,85 +2503,6 @@ export type Database = {
           },
         ]
       }
-      gross_pay_records: {
-        Row: {
-          computed_at: string
-          computed_by: string | null
-          created_at: string
-          employee_id: string
-          gross_pay: number
-          id: string
-          lines: Json
-          paid_hours: number
-          pay_period_id: string
-          period_end_date: string
-          period_start_date: string
-          shift_count: number
-          source: string
-          source_shift_payroll_record_ids: string[]
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          computed_at?: string
-          computed_by?: string | null
-          created_at?: string
-          employee_id: string
-          gross_pay?: number
-          id?: string
-          lines?: Json
-          paid_hours?: number
-          pay_period_id: string
-          period_end_date: string
-          period_start_date: string
-          shift_count?: number
-          source?: string
-          source_shift_payroll_record_ids?: string[]
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          computed_at?: string
-          computed_by?: string | null
-          created_at?: string
-          employee_id?: string
-          gross_pay?: number
-          id?: string
-          lines?: Json
-          paid_hours?: number
-          pay_period_id?: string
-          period_end_date?: string
-          period_start_date?: string
-          shift_count?: number
-          source?: string
-          source_shift_payroll_record_ids?: string[]
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gross_pay_records_computed_by_fkey"
-            columns: ["computed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gross_pay_records_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gross_pay_records_pay_period_id_fkey"
-            columns: ["pay_period_id"]
-            isOneToOne: false
-            referencedRelation: "pay_periods"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       group_participants: {
         Row: {
           employee_id: string
@@ -4023,70 +4029,6 @@ export type Database = {
           },
         ]
       }
-      shift_payroll_records: {
-        Row: {
-          actual_end: string | null
-          actual_net_minutes: number | null
-          actual_start: string | null
-          created_at: string
-          id: string
-          payroll_exported: boolean
-          payroll_exported_at: string | null
-          payroll_exported_by: string | null
-          shift_id: string
-          timesheet_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          actual_end?: string | null
-          actual_net_minutes?: number | null
-          actual_start?: string | null
-          created_at?: string
-          id?: string
-          payroll_exported?: boolean
-          payroll_exported_at?: string | null
-          payroll_exported_by?: string | null
-          shift_id: string
-          timesheet_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          actual_end?: string | null
-          actual_net_minutes?: number | null
-          actual_start?: string | null
-          created_at?: string
-          id?: string
-          payroll_exported?: boolean
-          payroll_exported_at?: string | null
-          payroll_exported_by?: string | null
-          shift_id?: string
-          timesheet_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shift_payroll_records_payroll_exported_by_fkey"
-            columns: ["payroll_exported_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_payroll_records_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: true
-            referencedRelation: "shifts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shift_payroll_records_timesheet_id_fkey"
-            columns: ["timesheet_id"]
-            isOneToOne: false
-            referencedRelation: "timesheets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       shift_skills: {
         Row: {
           created_at: string | null
@@ -4230,74 +4172,40 @@ export type Database = {
       }
       shifts: {
         Row: {
-          actual_end: string | null
-          actual_net_minutes: number | null
-          actual_start: string | null
           assigned_at: string | null
           assigned_employee_id: string | null
           assignment_outcome:
             | Database["public"]["Enums"]["shift_assignment_outcome"]
             | null
-          assignment_source: string | null
           assignment_status: Database["public"]["Enums"]["shift_assignment_status"]
-          attendance_note: string | null
-          attendance_status: Database["public"]["Enums"]["shift_attendance_status"]
-          bidding_close_at: string | null
-          bidding_open_at: string | null
           bidding_status: Database["public"]["Enums"]["shift_bidding_status"]
           break_end: string | null
-          break_minutes: number | null
           break_start: string | null
-          cancellation_reason: string | null
           cancelled_at: string | null
-          cancelled_by_user_id: string | null
-          compliance_checked_at: string | null
-          compliance_override: boolean | null
-          compliance_override_reason: string | null
-          compliance_snapshot: Json | null
-          confirmed_at: string | null
           created_at: string | null
           created_by_user_id: string | null
           creation_source: string | null
-          demand_group_id: string | null
-          demand_source: string | null
           department_id: string
           display_order: number | null
-          dropped_by_id: string | null
-          eligibility_snapshot: Json | null
-          emergency_assigned_at: string | null
-          emergency_assigned_by: string | null
           end_at: string | null
           end_time: string
           event_ids: Json | null
-          event_tags: Json | null
           fulfillment_status: Database["public"]["Enums"]["shift_fulfillment_status"]
-          group_type: Database["public"]["Enums"]["template_group_type"] | null
           id: string
           is_cancelled: boolean
-          is_draft: boolean | null
           is_from_template: boolean
-          is_locked: boolean | null
-          is_on_bidding: boolean | null
-          is_overnight: boolean
-          is_published: boolean | null
           is_training: boolean | null
           last_dropped_by: string | null
           last_modified_by: string | null
           last_modified_reason: string | null
           last_rejected_by: string | null
           lifecycle_status: Database["public"]["Enums"]["shift_lifecycle"]
-          locked_at: string | null
           net_length_minutes: number | null
           notes: string | null
           offer_expires_at: string | null
-          offer_sent_at: string | null
           organization_id: string
           paid_break_minutes: number | null
-          payroll_exported: boolean | null
           published_at: string | null
-          published_by_user_id: string | null
-          remuneration_level: number | null
           required_licenses: Json | null
           required_skills: Json | null
           role_id: string | null
@@ -4309,98 +4217,57 @@ export type Database = {
           start_at: string | null
           start_time: string
           sub_department_id: string | null
-          sub_group_name: string | null
           synthesis_run_id: string | null
           tags: Json | null
           target_employment_type: string
           target_requires_flexible: boolean
           template_batch_id: string | null
-          template_group:
-            | Database["public"]["Enums"]["template_group_type"]
-            | null
           template_id: string | null
           template_instance_id: string | null
-          template_sub_group: string | null
-          timesheet_id: string | null
           timezone: string | null
-          total_hours: number | null
           trade_requested_at: string | null
           trading_status: Database["public"]["Enums"]["shift_trading"]
-          tz_identifier: string | null
           unpaid_break_minutes: number | null
+          unpaid_breaks: Json
           updated_at: string | null
           user_contract_id: string | null
           version: number
         }
         Insert: {
-          actual_end?: string | null
-          actual_net_minutes?: number | null
-          actual_start?: string | null
           assigned_at?: string | null
           assigned_employee_id?: string | null
           assignment_outcome?:
             | Database["public"]["Enums"]["shift_assignment_outcome"]
             | null
-          assignment_source?: string | null
           assignment_status?: Database["public"]["Enums"]["shift_assignment_status"]
-          attendance_note?: string | null
-          attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
-          bidding_close_at?: string | null
-          bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
           break_end?: string | null
-          break_minutes?: number | null
           break_start?: string | null
-          cancellation_reason?: string | null
           cancelled_at?: string | null
-          cancelled_by_user_id?: string | null
-          compliance_checked_at?: string | null
-          compliance_override?: boolean | null
-          compliance_override_reason?: string | null
-          compliance_snapshot?: Json | null
-          confirmed_at?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           creation_source?: string | null
-          demand_group_id?: string | null
-          demand_source?: string | null
           department_id: string
           display_order?: number | null
-          dropped_by_id?: string | null
-          eligibility_snapshot?: Json | null
-          emergency_assigned_at?: string | null
-          emergency_assigned_by?: string | null
           end_at?: string | null
           end_time: string
           event_ids?: Json | null
-          event_tags?: Json | null
           fulfillment_status?: Database["public"]["Enums"]["shift_fulfillment_status"]
-          group_type?: Database["public"]["Enums"]["template_group_type"] | null
           id?: string
           is_cancelled?: boolean
-          is_draft?: boolean | null
           is_from_template?: boolean
-          is_locked?: boolean | null
-          is_on_bidding?: boolean | null
-          is_overnight?: boolean
-          is_published?: boolean | null
           is_training?: boolean | null
           last_dropped_by?: string | null
           last_modified_by?: string | null
           last_modified_reason?: string | null
           last_rejected_by?: string | null
           lifecycle_status?: Database["public"]["Enums"]["shift_lifecycle"]
-          locked_at?: string | null
           net_length_minutes?: number | null
           notes?: string | null
           offer_expires_at?: string | null
-          offer_sent_at?: string | null
           organization_id: string
           paid_break_minutes?: number | null
-          payroll_exported?: boolean | null
           published_at?: string | null
-          published_by_user_id?: string | null
-          remuneration_level?: number | null
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
@@ -4412,98 +4279,57 @@ export type Database = {
           start_at?: string | null
           start_time: string
           sub_department_id?: string | null
-          sub_group_name?: string | null
           synthesis_run_id?: string | null
           tags?: Json | null
           target_employment_type: string
           target_requires_flexible?: boolean
           template_batch_id?: string | null
-          template_group?:
-            | Database["public"]["Enums"]["template_group_type"]
-            | null
           template_id?: string | null
           template_instance_id?: string | null
-          template_sub_group?: string | null
-          timesheet_id?: string | null
           timezone?: string | null
-          total_hours?: number | null
           trade_requested_at?: string | null
           trading_status?: Database["public"]["Enums"]["shift_trading"]
-          tz_identifier?: string | null
           unpaid_break_minutes?: number | null
+          unpaid_breaks?: Json
           updated_at?: string | null
           user_contract_id?: string | null
           version?: number
         }
         Update: {
-          actual_end?: string | null
-          actual_net_minutes?: number | null
-          actual_start?: string | null
           assigned_at?: string | null
           assigned_employee_id?: string | null
           assignment_outcome?:
             | Database["public"]["Enums"]["shift_assignment_outcome"]
             | null
-          assignment_source?: string | null
           assignment_status?: Database["public"]["Enums"]["shift_assignment_status"]
-          attendance_note?: string | null
-          attendance_status?: Database["public"]["Enums"]["shift_attendance_status"]
-          bidding_close_at?: string | null
-          bidding_open_at?: string | null
           bidding_status?: Database["public"]["Enums"]["shift_bidding_status"]
           break_end?: string | null
-          break_minutes?: number | null
           break_start?: string | null
-          cancellation_reason?: string | null
           cancelled_at?: string | null
-          cancelled_by_user_id?: string | null
-          compliance_checked_at?: string | null
-          compliance_override?: boolean | null
-          compliance_override_reason?: string | null
-          compliance_snapshot?: Json | null
-          confirmed_at?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           creation_source?: string | null
-          demand_group_id?: string | null
-          demand_source?: string | null
           department_id?: string
           display_order?: number | null
-          dropped_by_id?: string | null
-          eligibility_snapshot?: Json | null
-          emergency_assigned_at?: string | null
-          emergency_assigned_by?: string | null
           end_at?: string | null
           end_time?: string
           event_ids?: Json | null
-          event_tags?: Json | null
           fulfillment_status?: Database["public"]["Enums"]["shift_fulfillment_status"]
-          group_type?: Database["public"]["Enums"]["template_group_type"] | null
           id?: string
           is_cancelled?: boolean
-          is_draft?: boolean | null
           is_from_template?: boolean
-          is_locked?: boolean | null
-          is_on_bidding?: boolean | null
-          is_overnight?: boolean
-          is_published?: boolean | null
           is_training?: boolean | null
           last_dropped_by?: string | null
           last_modified_by?: string | null
           last_modified_reason?: string | null
           last_rejected_by?: string | null
           lifecycle_status?: Database["public"]["Enums"]["shift_lifecycle"]
-          locked_at?: string | null
           net_length_minutes?: number | null
           notes?: string | null
           offer_expires_at?: string | null
-          offer_sent_at?: string | null
           organization_id?: string
           paid_break_minutes?: number | null
-          payroll_exported?: boolean | null
           published_at?: string | null
-          published_by_user_id?: string | null
-          remuneration_level?: number | null
           required_licenses?: Json | null
           required_skills?: Json | null
           role_id?: string | null
@@ -4515,25 +4341,18 @@ export type Database = {
           start_at?: string | null
           start_time?: string
           sub_department_id?: string | null
-          sub_group_name?: string | null
           synthesis_run_id?: string | null
           tags?: Json | null
           target_employment_type?: string
           target_requires_flexible?: boolean
           template_batch_id?: string | null
-          template_group?:
-            | Database["public"]["Enums"]["template_group_type"]
-            | null
           template_id?: string | null
           template_instance_id?: string | null
-          template_sub_group?: string | null
-          timesheet_id?: string | null
           timezone?: string | null
-          total_hours?: number | null
           trade_requested_at?: string | null
           trading_status?: Database["public"]["Enums"]["shift_trading"]
-          tz_identifier?: string | null
           unpaid_break_minutes?: number | null
+          unpaid_breaks?: Json
           updated_at?: string | null
           user_contract_id?: string | null
           version?: number
@@ -4561,13 +4380,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "shifts_dropped_by_id_fkey"
-            columns: ["dropped_by_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "shifts_last_dropped_by_fkey"
             columns: ["last_dropped_by"]
             isOneToOne: false
@@ -4580,13 +4392,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "shifts_remuneration_level_fkey"
-            columns: ["remuneration_level"]
-            isOneToOne: false
-            referencedRelation: "remuneration_levels"
-            referencedColumns: ["level_number"]
           },
           {
             foreignKeyName: "shifts_role_id_fkey"
@@ -5101,6 +4906,7 @@ export type Database = {
           target_employment_type: string
           target_requires_flexible: boolean
           unpaid_break_minutes: number | null
+          unpaid_breaks: Json
           updated_at: string | null
         }
         Insert: {
@@ -5128,6 +4934,7 @@ export type Database = {
           target_employment_type: string
           target_requires_flexible?: boolean
           unpaid_break_minutes?: number | null
+          unpaid_breaks?: Json
           updated_at?: string | null
         }
         Update: {
@@ -5155,6 +4962,7 @@ export type Database = {
           target_employment_type?: string
           target_requires_flexible?: boolean
           unpaid_break_minutes?: number | null
+          unpaid_breaks?: Json
           updated_at?: string | null
         }
         Relationships: [
@@ -5219,113 +5027,128 @@ export type Database = {
           },
         ]
       }
-      timesheets: {
+      timesheet_breaks: {
         Row: {
-          actual_break_end: string | null
-          actual_break_start: string | null
-          approved_at: string | null
-          approved_by: string | null
-          arrival_variance_reason: string | null
-          assignment_id: string | null
-          break_minutes: number | null
-          clock_in: string
-          clock_out: string | null
-          created_at: string | null
-          departure_variance_reason: string | null
-          edit_count: number
-          employee_id: string | null
-          end_time: string | null
+          break_end: string | null
+          break_seq: number
+          break_start: string
+          created_at: string
+          duration_minutes: number | null
           id: string
-          net_hours: number | null
-          notes: string | null
-          paid_break_minutes: number | null
-          profile_id: string
-          rejected_reason: string | null
-          shift_id: string | null
-          start_time: string | null
-          status: Database["public"]["Enums"]["timesheet_status"] | null
-          submitted_at: string | null
-          total_hours: number | null
-          unpaid_break_minutes: number | null
-          updated_at: string | null
-          version: number
-          work_date: string
+          shift_id: string
+          timesheet_id: string
+          updated_at: string
         }
         Insert: {
-          actual_break_end?: string | null
-          actual_break_start?: string | null
-          approved_at?: string | null
-          approved_by?: string | null
-          arrival_variance_reason?: string | null
-          assignment_id?: string | null
-          break_minutes?: number | null
-          clock_in?: string
-          clock_out?: string | null
-          created_at?: string | null
-          departure_variance_reason?: string | null
-          edit_count?: number
-          employee_id?: string | null
-          end_time?: string | null
+          break_end?: string | null
+          break_seq: number
+          break_start: string
+          created_at?: string
+          duration_minutes?: number | null
           id?: string
-          net_hours?: number | null
-          notes?: string | null
-          paid_break_minutes?: number | null
-          profile_id: string
-          rejected_reason?: string | null
-          shift_id?: string | null
-          start_time?: string | null
-          status?: Database["public"]["Enums"]["timesheet_status"] | null
-          submitted_at?: string | null
-          total_hours?: number | null
-          unpaid_break_minutes?: number | null
-          updated_at?: string | null
-          version?: number
-          work_date: string
+          shift_id: string
+          timesheet_id: string
+          updated_at?: string
         }
         Update: {
-          actual_break_end?: string | null
-          actual_break_start?: string | null
-          approved_at?: string | null
-          approved_by?: string | null
-          arrival_variance_reason?: string | null
-          assignment_id?: string | null
-          break_minutes?: number | null
-          clock_in?: string
-          clock_out?: string | null
-          created_at?: string | null
-          departure_variance_reason?: string | null
-          edit_count?: number
-          employee_id?: string | null
-          end_time?: string | null
+          break_end?: string | null
+          break_seq?: number
+          break_start?: string
+          created_at?: string
+          duration_minutes?: number | null
           id?: string
-          net_hours?: number | null
-          notes?: string | null
-          paid_break_minutes?: number | null
-          profile_id?: string
-          rejected_reason?: string | null
-          shift_id?: string | null
-          start_time?: string | null
-          status?: Database["public"]["Enums"]["timesheet_status"] | null
-          submitted_at?: string | null
-          total_hours?: number | null
-          unpaid_break_minutes?: number | null
-          updated_at?: string | null
-          version?: number
-          work_date?: string
+          shift_id?: string
+          timesheet_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "timesheets_approved_by_fkey"
-            columns: ["approved_by"]
+            foreignKeyName: "timesheet_breaks_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_breaks_timesheet_id_fkey"
+            columns: ["timesheet_id"]
+            isOneToOne: false
+            referencedRelation: "timesheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timesheets: {
+        Row: {
+          arrival_track:
+            | Database["public"]["Enums"]["attendance_arrival_track"]
+            | null
+          clock_in: string | null
+          clock_out: string | null
+          created_at: string | null
+          departure_track:
+            | Database["public"]["Enums"]["attendance_departure_track"]
+            | null
+          employee_id: string
+          id: string
+          is_no_show: boolean
+          organization_id: string
+          shift_id: string
+          source: string
+          updated_at: string | null
+          worker_notes: string | null
+        }
+        Insert: {
+          arrival_track?:
+            | Database["public"]["Enums"]["attendance_arrival_track"]
+            | null
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string | null
+          departure_track?:
+            | Database["public"]["Enums"]["attendance_departure_track"]
+            | null
+          employee_id: string
+          id?: string
+          is_no_show?: boolean
+          organization_id: string
+          shift_id: string
+          source?: string
+          updated_at?: string | null
+          worker_notes?: string | null
+        }
+        Update: {
+          arrival_track?:
+            | Database["public"]["Enums"]["attendance_arrival_track"]
+            | null
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string | null
+          departure_track?:
+            | Database["public"]["Enums"]["attendance_departure_track"]
+            | null
+          employee_id?: string
+          id?: string
+          is_no_show?: boolean
+          organization_id?: string
+          shift_id?: string
+          source?: string
+          updated_at?: string | null
+          worker_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheets_employee_id_fkey"
+            columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "timesheets_profile_id_fkey"
-            columns: ["profile_id"]
+            foreignKeyName: "timesheets_organization_id_fkey"
+            columns: ["organization_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
           {
@@ -6720,6 +6543,11 @@ export type Database = {
         Args: { p_date: string; p_employee_id: string }
         Returns: boolean
       }
+      end_break_shift: {
+        Args: { p_lat?: number; p_lon?: number; p_shift_id: string }
+        Returns: Json
+      }
+      fn_canonicalize_unpaid_breaks: { Args: { p_breaks: Json }; Returns: Json }
       fn_eba_estimate_shift_cost: {
         Args: {
           p_base_rate: number
@@ -7429,15 +7257,36 @@ export type Database = {
         }[]
       }
       shares_organisation_with: { Args: { p_other: string }; Returns: boolean }
-      shift_break_window_breach: {
+      shift_break_window_breach:
+        | {
+            Args: {
+              p_break_end: string
+              p_break_start: string
+              p_end_time: string
+              p_start_time: string
+              p_unpaid_break: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_break_end: string
+              p_break_start: string
+              p_end_time: string
+              p_start_time: string
+              p_unpaid_break: number
+              p_unpaid_breaks: Json
+            }
+            Returns: string
+          }
+      shift_breaks_total_minutes: {
         Args: {
           p_break_end: string
           p_break_start: string
-          p_end_time: string
-          p_start_time: string
-          p_unpaid_break: number
+          p_fallback?: number
+          p_unpaid_breaks: Json
         }
-        Returns: string
+        Returns: number
       }
       shift_day_typed_shortfall: {
         Args: {
@@ -7593,13 +7442,6 @@ export type Database = {
         Returns: Json
       }
       sm_expire_offer_now: { Args: { p_shift_id: string }; Returns: Json }
-      sm_handle_auto_clock_out: {
-        Args: never
-        Returns: {
-          affected_shift_id: string
-          previous_status: string
-        }[]
-      }
       sm_holds_active_contract_in: {
         Args: { p_profile_id: string; p_sub_department_id: string }
         Returns: boolean
@@ -7693,6 +7535,10 @@ export type Database = {
         Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
+      start_break_shift: {
+        Args: { p_lat?: number; p_lon?: number; p_shift_id: string }
+        Returns: Json
+      }
       toil_adjust: {
         Args: { p_employee: string; p_minutes: number; p_reason: string }
         Returns: string
@@ -7753,6 +7599,12 @@ export type Database = {
         | "swapped"
         | "dropped"
         | "no_show"
+      attendance_arrival_track: "early_in" | "on_time" | "late_in" | "missing"
+      attendance_departure_track:
+        | "early_out"
+        | "on_time"
+        | "late_out"
+        | "missing"
       availability_type: "available" | "unavailable" | "preferred" | "limited"
       bid_status: "pending" | "accepted" | "rejected" | "withdrawn"
       bidding_priority: "normal" | "urgent" | "critical"
@@ -7815,13 +7667,6 @@ export type Database = {
         | "emergency_assigned"
         | "no_show"
       shift_assignment_status: "assigned" | "unassigned"
-      shift_attendance_status:
-        | "unknown"
-        | "checked_in"
-        | "no_show"
-        | "late"
-        | "excused"
-        | "auto_clock_out"
       shift_bidding_status:
         | "not_on_bidding"
         | "on_bidding_normal"
@@ -8057,6 +7902,13 @@ export const Constants = {
         "dropped",
         "no_show",
       ],
+      attendance_arrival_track: ["early_in", "on_time", "late_in", "missing"],
+      attendance_departure_track: [
+        "early_out",
+        "on_time",
+        "late_out",
+        "missing",
+      ],
       availability_type: ["available", "unavailable", "preferred", "limited"],
       bid_status: ["pending", "accepted", "rejected", "withdrawn"],
       bidding_priority: ["normal", "urgent", "critical"],
@@ -8125,14 +7977,6 @@ export const Constants = {
         "no_show",
       ],
       shift_assignment_status: ["assigned", "unassigned"],
-      shift_attendance_status: [
-        "unknown",
-        "checked_in",
-        "no_show",
-        "late",
-        "excused",
-        "auto_clock_out",
-      ],
       shift_bidding_status: [
         "not_on_bidding",
         "on_bidding_normal",

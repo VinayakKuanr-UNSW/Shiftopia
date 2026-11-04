@@ -27,8 +27,8 @@ INSERT INTO public.department_budgets (id, dept_id, period_start, period_end, bu
 VALUES ('bd000000-0000-4000-8000-000000000001', '54c4c466-8d56-41c1-bf36-98ee4d7364f3', '2026-12-01', '2026-12-31', 100);
 INSERT INTO public.employee_performance_metrics (id, employee_id, period_start, period_end, quarter_year)
 VALUES ('9e000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000006', '2026-10-01', '2026-12-31', '2026-Q4');
-INSERT INTO public.shift_payroll_records (id, shift_id)
-VALUES ('9a000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001')
+INSERT INTO public.billables (id, shift_id, employee_id, organization_id, status)
+VALUES ('9a000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000006', '00000000-0000-0000-0000-000000000001', 'draft')
 ON CONFLICT (shift_id) DO NOTHING;  -- the integration suite's clock-out flow may have left one
 INSERT INTO public.roster_templates (id, name, status, organization_id, department_id, sub_department_id)
 VALUES ('7e000000-0000-4000-8000-000000000001', 'Probe draft', 'draft',
@@ -101,8 +101,8 @@ BEGIN
         END;
         r := r || res;
 
-        -- payroll
-        r := r || ' pay=' || CASE WHEN EXISTS (SELECT 1 FROM public.shift_payroll_records WHERE shift_id = 'b1000000-0000-4000-8000-000000000001') THEN 'y' ELSE '.' END;
+        -- billables (hours and review state, no money since 20261103224126): timesheet.view or own row
+        r := r || ' pay=' || CASE WHEN EXISTS (SELECT 1 FROM public.billables WHERE shift_id = 'b1000000-0000-4000-8000-000000000001') THEN 'y' ELSE '.' END;
 
         -- templates
         r := r || ' tpl=' || CASE WHEN EXISTS (SELECT 1 FROM public.roster_templates WHERE id = '7e000000-0000-4000-8000-000000000001') THEN 'y' ELSE '.' END;

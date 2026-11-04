@@ -160,7 +160,7 @@ describe('renaming a roster sub-group', () => {
             ...scope('theatre', F, F2), p_old_name: 'AM Base', p_new_name: 'pm base',
         });
         expect(real.error?.code).toBe('23505');
-        expect(db(`SELECT sub_group_name FROM public.shifts WHERE id = '${SH_TH_F}'`)[0][0]).toBe('AM Base');
+        expect(db(`SELECT rs.name FROM public.shifts s JOIN public.roster_subgroups rs ON rs.id = s.roster_subgroup_id WHERE s.id = '${SH_TH_F}'`)[0][0]).toBe('AM Base');
     });
 
     it('renames from today on and moves the shifts with it', async () => {
@@ -168,8 +168,8 @@ describe('renaming a roster sub-group', () => {
             ...scope('theatre'), p_old_name: 'AM Base', p_new_name: 'Morning',
         });
         expect(r.error).toBeNull();
-        expect(db(`SELECT sub_group_name FROM public.shifts WHERE id = '${SH_TH_F}'`)[0][0]).toBe('Morning');
-        expect(db(`SELECT sub_group_name FROM public.shifts WHERE id = '${SH_TH_P}'`)[0][0]).toBe('AM Base');
+        expect(db(`SELECT rs.name FROM public.shifts s JOIN public.roster_subgroups rs ON rs.id = s.roster_subgroup_id WHERE s.id = '${SH_TH_F}'`)[0][0]).toBe('Morning');
+        expect(db(`SELECT rs.name FROM public.shifts s JOIN public.roster_subgroups rs ON rs.id = s.roster_subgroup_id WHERE s.id = '${SH_TH_P}'`)[0][0]).toBe('AM Base');
     });
 });
 
@@ -229,6 +229,7 @@ describe('a second template adds on top', () => {
 
         expect((await preview(T1)).data).toMatchObject({ would_create: 1, already_applied: 0, duplicates: 0 });
         const a1 = await apply(T1);
+        expect(a1.error).toBeNull();
         expect(a1.data).toMatchObject({ shifts_created: 1 });
         expect(amBaseOnF2()).toEqual(['1', '1']); // into the existing "AM Base", no second sub-group
 

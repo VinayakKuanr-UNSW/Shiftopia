@@ -202,8 +202,8 @@ describe('approveLeaveRequest — clearing the roster underneath', () => {
       { data: [{ id: 'r1' }], error: null },
       {
         data: [
-          { ...conflictRow('ft-worked', 'FT'), lifecycle_status: 'Completed', actual_start: '2026-08-03T08:01:00+10:00' },
-          { ...conflictRow('cas-clocked', 'Casual'), lifecycle_status: 'Published', actual_start: '2026-08-03T08:02:00+10:00' },
+          { ...conflictRow('ft-worked', 'FT'), lifecycle_status: 'Completed', timesheets: { clock_in: '2026-08-03T08:01:00+10:00' } },
+          { ...conflictRow('cas-clocked', 'Casual'), lifecycle_status: 'Published', timesheets: { clock_in: '2026-08-03T08:02:00+10:00' } },
           conflictRow('ft-future', 'FT'),
         ],
         error: null,

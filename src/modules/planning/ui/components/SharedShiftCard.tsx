@@ -957,14 +957,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                             +{fmtToil(toilMinutes ?? 0)} TOIL
                                         </div>
                                     )}
-                                    {(arrivalVarianceReason || departureVarianceReason || shiftData?.notes || shiftData?.attendance_note) && (
+                                    {(arrivalVarianceReason || departureVarianceReason || shiftData?.notes) && (
                                         <div className="text-[11px] font-medium text-muted-foreground/90 italic pt-1 border-t border-border/20 font-mono flex items-start gap-1 flex-wrap">
                                             <span className="font-bold text-amber-500/90 not-italic uppercase tracking-wider text-[11px] shrink-0">NOTE:</span>
                                             <span className="text-foreground/80">
                                                 {[
                                                     arrivalVarianceReason ? `Arrival: "${arrivalVarianceReason}"` : null,
                                                     departureVarianceReason ? `Departure: "${departureVarianceReason}"` : null,
-                                                    shiftData?.notes || shiftData?.attendance_note ? `"${shiftData?.notes || shiftData?.attendance_note}"` : null,
+                                                    shiftData?.notes ? `"${shiftData?.notes}"` : null,
                                                 ].filter(Boolean).join(' · ')}
                                             </span>
                                         </div>

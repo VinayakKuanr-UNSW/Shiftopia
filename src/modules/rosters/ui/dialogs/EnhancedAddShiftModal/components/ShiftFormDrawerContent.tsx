@@ -28,8 +28,6 @@ import {
     AlertTriangle,
     Shield,
     GraduationCap,
-    Coffee,
-    Utensils,
     UserCircle,
     Loader2,
     CheckCircle2,
@@ -50,6 +48,8 @@ import { TemplateDaySelect, firstTemplateDay } from './TemplateDaySelect';
 import { FIELD_CARD, FIELD_INPUT, FIELD_LABEL } from '@/modules/core/ui/components/PickerField';
 import { SingleSelect } from './SingleSelect';
 import { EmployeeSelect } from './EmployeeSelect';
+import { BreaksEditor } from './BreaksEditor';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import type { ShiftFormDrawerContentProps } from '../types';
 import { formatHours } from '../utils';
 import {
@@ -926,66 +926,14 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                 ))}
                             </div>
 
-                            {/* Breaks. The meal break is WHEN, not just how long: pay
-                                follows the hours worked either side of it (cl 41, cl 43).
-                                Rest pauses are paid, so only their length matters. */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                {(['break_start', 'break_end'] as const).map((name) => (
-                                    <FormField
-                                        key={name}
-                                        control={form.control}
-                                        name={name}
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FieldLabel htmlFor={`time-${name}`}>
-                                                    <Coffee className="inline h-3 w-3 mr-1 text-muted-foreground/70" />
-                                                    {name === 'break_start' ? 'Meal Break Start' : 'Meal Break End'}
-                                                </FieldLabel>
-                                                <FormControl>
-                                                    <div className="relative">
-                                                        <Input
-                                                            id={`time-${name}`}
-                                                            type="time"
-                                                            value={field.value ?? ''}
-                                                            onChange={(e) => field.onChange(e.target.value || null)}
-                                                            onBlur={field.onBlur}
-                                                            disabled={isReadOnly}
-                                                            className={cn(FIELD_INPUT, 'h-14 pl-10 font-mono font-semibold tracking-wider')}
-                                                        />
-                                                        <Clock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" aria-hidden="true" />
-                                                    </div>
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                ))}
-                                <FormField
-                                    control={form.control}
-                                    name="paid_break_minutes"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FieldLabel htmlFor="paid-break-input">
-                                                <Utensils className="inline h-3 w-3 mr-1 text-muted-foreground/70" />
-                                                Rest Pauses (Paid, Min)
-                                            </FieldLabel>
-                                            <FormControl>
-                                                <Input
-                                                    id="paid-break-input"
-                                                    type="number"
-                                                    min={0}
-                                                    value={field.value === undefined ? '' : field.value}
-                                                    onChange={(e) =>
-                                                        field.onChange(e.target.value === '' ? undefined : Number(e.target.value))
-                                                    }
-                                                    disabled={isReadOnly}
-                                                    placeholder="0"
-                                                    className={cn(FIELD_INPUT, 'h-14 font-mono font-medium')}
-                                                />
-                                            </FormControl>
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
+                            {/* Breaks. Unpaid breaks are WHEN, not just how long: pay
+                                follows the hours worked either side of them (cl 41, cl 43).
+                                Paid rest pauses only need a length (15m steps). */}
+                            <BreaksEditor
+                                form={form}
+                                isReadOnly={isReadOnly}
+                                isSecurity={isSecurityRoleName(roles.find((r: any) => r.id === form.watch('role_id'))?.name)}
+                            />
 
                             {/* Duration & Net Paid Live Stats */}
                             <div className="flex gap-3">

@@ -446,11 +446,7 @@ function buildOptimisticShift(
     assignment_outcome: null,
     fulfillment_status: 'none',
     lifecycle_status: 'Draft',
-    is_draft: true,
-    is_published: false,
     is_cancelled: false,
-    is_locked: false,
-    is_on_bidding: false,
     bidding_status: 'not_on_bidding',
     trading_status: 'NoTrade',
     trade_requested_at: null,
@@ -735,8 +731,6 @@ export function useUnpublishShift() {
               ? {
                   ...s,
                   lifecycle_status: 'Draft' as const,
-                  is_published: false,
-                  is_draft: true,
                   assignment_outcome: null,
                   assignment_status: s.assigned_employee_id ? 'assigned' : 'unassigned',
                 }
@@ -797,8 +791,6 @@ export function useBulkUnpublishShifts() {
             ? {
                 ...s,
                 lifecycle_status: 'Draft' as const,
-                is_published: false,
-                is_draft: true,
                 assignment_outcome: null,
                 assignment_status: s.assigned_employee_id ? 'assigned' : 'unassigned',
               }
@@ -817,7 +809,7 @@ export function useBulkUnpublishShifts() {
         patchLists(queryClient, (old) =>
           old.map(s =>
             failed.has(s.id)
-              ? { ...s, lifecycle_status: 'Published' as const, is_published: true, is_draft: false }
+              ? { ...s, lifecycle_status: 'Published' as const }
               : s,
           ),
         );

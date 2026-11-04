@@ -215,7 +215,13 @@ export function mapShiftRowToGrossPayInput(
   const employeeId = row.assigned_employee_id;
   if (!employeeId) return null; // unassigned shift — nobody to pay.
 
-  const ts = row._timesheet ?? null;
+  const ts = row._billable ?? row._timesheet ?? null;
+  const att = row._attendance ?? null;
+  const actualStart = att?.clock_in ?? row.actual_start ?? null;
+  const actualEnd = att?.clock_out ?? row.actual_end ?? null;
+  const manualStart = ts?.billable_start ?? ts?.start_time ?? null;
+  const manualEnd = ts?.billable_end ?? ts?.end_time ?? null;
+  const manualBreakStart = ts?.break_start ?? ts?.actual_break_start ?? null;
   const role = firstEmbed<GrossPayRoleEmbed>(row.roles);
   const remLevel = firstEmbed<GrossPayRemLevelEmbed>(row.remuneration_levels);
   
@@ -257,8 +263,14 @@ export function mapShiftRowToGrossPayInput(
   // ── not-worked flags ─────────────────────────────────────────────────────
   const tsStatus = (ts?.status ?? '').toLowerCase();
   const attStatus = (row.attendance_status ?? '').toLowerCase();
+  const assignOutcome = (row.assignment_outcome ?? '').toLowerCase();
   const isNoShow = !window?.ignoreNoShow
-    && (attStatus === ATTENDANCE_NO_SHOW || tsStatus === ATTENDANCE_NO_SHOW);
+    && (
+      att?.is_no_show === true ||
+      assignOutcome === ATTENDANCE_NO_SHOW ||
+      attStatus === ATTENDANCE_NO_SHOW ||
+      tsStatus === ATTENDANCE_NO_SHOW
+    );
 
   const assignStatus = (row.assignment_status ?? '').toLowerCase();
   const isCancelled =
@@ -285,13 +297,13 @@ export function mapShiftRowToGrossPayInput(
       row.shift_date,
       row.start_time ?? '',
       row.end_time ?? '',
-      row.actual_end,
+      actualEnd,
     );
 
-    const managerEdited = !!ts?.start_time || !!ts?.end_time;
+    const managerEdited = !!manualStart || !!manualEnd;
 
-    const resolvedStart = resolveBillableSide(ts?.start_time, row.actual_start, finished);
-    const resolvedEnd = resolveBillableSide(ts?.end_time, row.actual_end, finished);
+    const resolvedStart = resolveBillableSide(manualStart, actualStart, finished);
+    const resolvedEnd = resolveBillableSide(manualEnd, actualEnd, finished);
 
     // A resolver 'missing' (finished, no edit, no actual — e.g. forgot to clock
     // out) still gets a SCHEDULED estimate here for preview/estimate mode, but
@@ -309,7 +321,7 @@ export function mapShiftRowToGrossPayInput(
     unpaidBreak =
       ts?.unpaid_break_minutes != null
         ? ts.unpaid_break_minutes
-        : (row.unpaid_break_minutes ?? 0);
+        : (row._actualUnpaidBreakMinutes ?? 0);
 
     // Overnight rollover is a pure sign check on these RESOLVED times inside
     // calculateNetMinutes — it deliberately ignores row.is_overnight (the
@@ -393,10 +405,10 @@ export function mapShiftRowToGrossPayInput(
     netMinutes,
     startTime,
     endTime,
-    isOvernight: !!row.is_overnight,
+    isOvernight: !!(row.is_overnight ?? (row.start_time && row.end_time ? row.end_time < row.start_time : false)),
     scheduledLengthMinutes: row.scheduled_length_minutes ?? undefined,
     hoursSource,
-    breakStart: ts?.actual_break_start ?? row.break_start ?? null,
+    breakStart: manualBreakStart ?? row.break_start ?? null,
     unpaidBreakMinutes: unpaidBreak,
 
     isCancelled,
@@ -453,16 +465,19 @@ export function mapShiftRowToGrossPayInput(
     lifecycleStatus: row.lifecycle_status ?? null,
     rawShift: {
       lifecycle_status: row.lifecycle_status,
-      attendance_status: row.attendance_status,
-      actual_start: row.actual_start,
-      actual_end: row.actual_end,
-      adjusted_start: ts?.start_time ?? null,
-      adjusted_end: ts?.end_time ?? null,
-      adjusted_start_source: ts?.start_time ? 'manual' : null,
-      adjusted_end_source: ts?.end_time ? 'manual' : null,
-      adjusted_start_is_manual: !!ts?.start_time,
-      adjusted_end_is_manual: !!ts?.end_time,
-      adjusted_is_manual: !!(ts?.start_time || ts?.end_time),
+      attendance_status: row.attendance_status ?? (isNoShow ? 'no_show' : (att?.arrival_track === 'late_in' ? 'late' : (actualStart ? 'checked_in' : null))),
+      arrival_track: att?.arrival_track ?? null,
+      departure_track: att?.departure_track ?? null,
+      is_no_show: att?.is_no_show ?? isNoShow,
+      actual_start: actualStart,
+      actual_end: actualEnd,
+      adjusted_start: manualStart,
+      adjusted_end: manualEnd,
+      adjusted_start_source: manualStart ? 'manual' : null,
+      adjusted_end_source: manualEnd ? 'manual' : null,
+      adjusted_start_is_manual: !!manualStart,
+      adjusted_end_is_manual: !!manualEnd,
+      adjusted_is_manual: !!(manualStart || manualEnd),
       start_at: row.start_at,
       end_at: row.end_at,
       shift_date: row.shift_date,
@@ -470,7 +485,7 @@ export function mapShiftRowToGrossPayInput(
       end_time: row.end_time,
       assigned_employee_id: row.assigned_employee_id,
       assignment_status: row.assignment_status,
-      assignment_outcome: (row as any).assignment_outcome,
+      assignment_outcome: row.assignment_outcome,
       trading_status: (row as any).trading_status,
       is_cancelled: !!(row as any).is_cancelled,
     },
@@ -479,9 +494,12 @@ export function mapShiftRowToGrossPayInput(
 
 /** Build the provenance record that pairs with a mapped input. */
 function provenanceFor(row: GrossPayShiftRow): GrossPayInputProvenance {
+  const bil = row._billable ?? row._timesheet ?? null;
+  const manualStart = bil?.billable_start ?? bil?.start_time ?? null;
+  const manualEnd = bil?.billable_end ?? bil?.end_time ?? null;
   return {
-    timesheetStatus: row._timesheet?.status ?? null,
-    managerEdited: !!(row._timesheet?.start_time || row._timesheet?.end_time),
+    timesheetStatus: bil?.status ?? null,
+    managerEdited: !!(manualStart || manualEnd),
     employmentTypeMissing: resolveRowEmploymentType(row) === undefined,
   };
 }
@@ -583,18 +601,13 @@ export async function fetchHydratedShiftRows(
         end_time,
         start_at,
         end_at,
-        is_overnight,
         lifecycle_status,
         assignment_status,
-        attendance_status,
-        actual_start,
-        actual_end,
         paid_break_minutes,
         unpaid_break_minutes,
         break_start,
         net_length_minutes,
         scheduled_length_minutes,
-        remuneration_level,
         target_employment_type,
         user_contract_id,
         assigned_employee_id,
@@ -607,8 +620,7 @@ export async function fetchHydratedShiftRows(
         organization_id,
         department_id,
         sub_department_id,
-        roles(id, name),
-        remuneration_levels(level_number, level_name),
+        roles(id, name, remuneration_level),
         assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
         roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
       `)
@@ -643,17 +655,30 @@ export async function fetchHydratedShiftRows(
   const rows = shifts as unknown as GrossPayShiftRow[];
   if (rows.length === 0) return [];
 
-  // Attach timesheet overlays (by shift_id).
+  // Attach ground-truth attendance actuals (timesheets) and manager verification/payroll (billables) by shift_id.
   const shiftIds = rows.map((r) => r.id);
-  const { data: timesheets, error: tsErr } = await selectInChunks(shiftIds, (ids) => supabase
-    .from('timesheets')
-    .select('id, shift_id, start_time, end_time, unpaid_break_minutes, actual_break_start, status')
-    .in('shift_id', ids));
-  if (tsErr) console.error('[grossPay.read] timesheets query error:', tsErr);
-  const tsByShift = new Map(
-    (timesheets ?? [])
+  const [attRes, bilRes] = await Promise.all([
+    selectInChunks(shiftIds, (ids) => supabase
+      .from('timesheets')
+      .select('id, shift_id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)')
+      .in('shift_id', ids)),
+    selectInChunks(shiftIds, (ids) => supabase
+      .from('billables')
+      .select('id, shift_id, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, break_start, break_end, status, payroll_exported')
+      .in('shift_id', ids)),
+  ]);
+  if (attRes.error) console.error('[grossPay.read] timesheets query error:', attRes.error);
+  if (bilRes.error) console.error('[grossPay.read] billables query error:', bilRes.error);
+
+  const attByShift = new Map(
+    (attRes.data ?? [])
       .filter((t: any) => !!t.shift_id)
       .map((t: any) => [t.shift_id as string, t]),
+  );
+  const bilByShift = new Map(
+    (bilRes.data ?? [])
+      .filter((b: any) => !!b.shift_id)
+      .map((b: any) => [b.shift_id as string, b]),
   );
 
   // Attach employment_type (by assigned_employee_id, from profiles).
@@ -713,7 +738,40 @@ export async function fetchHydratedShiftRows(
   }
 
   for (const r of rows) {
-    r._timesheet = (tsByShift.get(r.id) as any) ?? null;
+    const att = (attByShift.get(r.id) as any) ?? null;
+    const bil = (bilByShift.get(r.id) as any) ?? null;
+    r._attendance = att;
+    r._billable = bil;
+    const rawBreaks = Array.isArray(att?.timesheet_breaks) ? att.timesheet_breaks : [];
+    const completedBreaks = rawBreaks.filter((b: any) => b.break_end && b.duration_minutes !== null);
+    r._actualUnpaidBreakMinutes = completedBreaks.length > 0
+      ? completedBreaks.reduce((acc: number, b: any) => acc + (b.duration_minutes ?? 0), 0)
+      : null;
+    r._unpaidBreakIsManual = bil?.unpaid_break_is_manual ?? false;
+    r._timesheet = bil
+      ? {
+          ...bil,
+          start_time: bil.billable_start ?? null,
+          end_time: bil.billable_end ?? null,
+          actual_break_start: bil.break_start ?? null,
+        }
+      : null;
+    r.actual_start = att?.clock_in ?? null;
+    r.actual_end = att?.clock_out ?? null;
+    const physicalNoShow = att?.is_no_show === true || r.assignment_outcome === 'no_show';
+    const managerOverrodeNoShow = !!(
+      bil &&
+      bil.status !== 'no_show' &&
+      (bil.billable_start || bil.billable_end)
+    );
+    r.attendance_status =
+      (physicalNoShow || bil?.status === 'no_show') && !managerOverrodeNoShow
+        ? 'no_show'
+        : att?.arrival_track === 'late_in'
+          ? 'late'
+          : att?.clock_in
+            ? 'checked_in'
+            : null;
     r._employmentType = r.assigned_employee_id
       ? (empTypeById.get(r.assigned_employee_id) ?? null)
       : null;
@@ -754,7 +812,8 @@ export async function fetchHydratedShiftRows(
  */
 function passesApprovalGate(row: GrossPayShiftRow, approvedOnly: boolean): boolean {
   if (!approvedOnly) return true;
-  const status = (row._timesheet?.status ?? '').toLowerCase();
+  const bil = row._billable ?? row._timesheet ?? null;
+  const status = (bil?.status ?? '').toLowerCase();
   if (!status) return false;
   return APPROVED_STATUSES.has(status) || status === ATTENDANCE_NO_SHOW;
 }

@@ -1,3 +1,6 @@
+import type { ScheduledBreakItem } from '@/modules/compliance/shape/types';
+import type { TimesheetBreakItem } from '@/modules/rosters/domain/shift.entity';
+
 /**
  * Timesheet Status State Machine
  * 
@@ -60,6 +63,11 @@ export interface TimesheetRow {
     length: string; // Auto-calculated
     paidBreak: string;
     unpaidBreak: string;
+    unpaidBreakIsManual?: boolean;
+    actualUnpaidBreakMinutes?: number | null;
+    hasOpenBreak?: boolean;
+    timesheetBreaks?: TimesheetBreakItem[];
+    unpaidBreaks?: ScheduledBreakItem[] | null;
     rosteredBreakStart?: string | null;
     rosteredBreakEnd?: string | null;
     actualBreakStart?: string | null;
@@ -74,8 +82,13 @@ export interface TimesheetRow {
     // Statuses
     liveStatus: 'Completed' | 'Cancelled' | 'Active' | 'No-Show' | 'Swapped' | string;
     timesheetStatus: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | string;
-    // Attendance (from shifts.attendance_status)
+    // Attendance (derived from public.timesheets tracks + public.billables status)
     attendanceStatus?: string | null;
+    arrivalTrack?: 'early_in' | 'on_time' | 'late_in' | 'missing' | string | null;
+    departureTrack?: 'early_out' | 'on_time' | 'late_out' | 'missing' | string | null;
+    isNoShow?: boolean;
+    billableId?: string | null;
+    payrollExported?: boolean;
     attendanceNote?: string | null;
     varianceMinutes?: number | null;
     clockInVarianceMinutes?: number | null;

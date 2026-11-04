@@ -38,6 +38,13 @@ describe('isSecurityRoleName', () => {
         }
     });
 
+    it('does not match an assistant to the security directors, but keeps security assistants', () => {
+        // User, 2026-11-04: the executive assistant is not Schedule 3 staff.
+        expect(isSecurityRoleName('Executive Assistant to the Directors of Building Services & Security')).toBe(false);
+        expect(isSecurityRoleName('Security Assistant')).toBe(true);
+        expect(isSecurityRoleName('Assistant Building Security Manager')).toBe(true);
+    });
+
     it('is case-insensitive', () => {
         expect(isSecurityRoleName('SECURITY OFFICER')).toBe(true);
         expect(isSecurityRoleName('security')).toBe(true);

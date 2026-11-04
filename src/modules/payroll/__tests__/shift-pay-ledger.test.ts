@@ -30,6 +30,7 @@ const row = (o: Partial<GrossPayShiftRow> = {}): GrossPayShiftRow => ({
   actual_start: null,
   actual_end: null,
   unpaid_break_minutes: 30,
+  _actualUnpaidBreakMinutes: 30,
   scheduled_length_minutes: 480,
   remuneration_level: 3,
   target_employment_type: 'Casual',
@@ -133,6 +134,20 @@ describe('the three windows', () => {
     expect(only(buildShiftPayLedger([edited('approved')], WEEK)).billableFinal).toBe(true);
   });
 
+  it('honors zero-fallback: unpunched break leaves actual and billable unpaid break as 0', () => {
+    const unpunched = row({
+      actual_start: at('2026-07-06', '09:00'),
+      actual_end: at('2026-07-06', '17:00'),
+      unpaid_break_minutes: 30, // scheduled break 30m
+      _actualUnpaidBreakMinutes: null, // no punch
+      _billable: null,
+    });
+    const out = only(buildShiftPayLedger([unpunched], WEEK));
+    expect(priced(out.scheduled).hours).toBe(7.5); // 8h - 30m scheduled break
+    expect(priced(out.actual).hours).toBe(8);     // 8h - 0m actual break
+    expect(priced(out.billable).hours).toBe(8);   // 8h - 0m billable break
+  });
+
   it('not started: Scheduled priced, the rest not worked yet', () => {
     vi.setSystemTime(new Date(at('2026-07-06', '07:00')));
     const out = only(buildShiftPayLedger([row({ lifecycle_status: 'Published' })], WEEK));
@@ -225,5 +240,36 @@ describe('summary', () => {
     expect(s.payable).toBe(priced(byId.get('w')!.billable).amount);
     expect(s.unverified).toBe(priced(byId.get('u')!.billable).amount);
     expect(s.billable.total).toBe(Math.round((s.payable + s.unverified) * 100) / 100);
+  });
+
+  it('prices Scheduled, Actual (_attendance), and Billable (_billable) across the 3-table split', () => {
+    const splitWorked = row({
+      id: 'split-1',
+      attendance_status: null,
+      actual_start: null,
+      actual_end: null,
+      _attendance: {
+        id: 'att-1',
+        shift_id: 'split-1',
+        clock_in: at('2026-07-06', '08:53'),
+        clock_out: at('2026-07-06', '17:07'),
+        arrival_track: 'on_time',
+        departure_track: 'on_time',
+        is_no_show: false,
+      },
+      _billable: {
+        id: 'bil-1',
+        shift_id: 'split-1',
+        billable_start: '10:00',
+        billable_end: '14:00',
+        unpaid_break_minutes: 0,
+        status: 'approved',
+      },
+    });
+    const out = only(buildShiftPayLedger([splitWorked], WEEK));
+    expect(priced(out.scheduled).amount).toBe(direct(splitWorked, '09:00', '17:00', 450));
+    expect(priced(out.actual).amount).toBe(direct({ ...splitWorked, unpaid_break_minutes: 0 }, '08:53', '17:07', 494));
+    expect(priced(out.billable).amount).toBe(direct({ ...splitWorked, unpaid_break_minutes: 0 }, '10:00', '14:00', 240));
+    expect(out.billableFinal).toBe(true);
   });
 });

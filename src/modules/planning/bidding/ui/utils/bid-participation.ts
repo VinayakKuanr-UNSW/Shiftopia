@@ -8,7 +8,6 @@ type ShiftLike = {
     startAt?: string | null;
     last_rejected_by?: string | null;
     last_dropped_by?: string | null;
-    droppedById?: string | null;
 };
 
 type BidLike = {
@@ -23,7 +22,7 @@ export function getParticipationStatus(
 ): ParticipationStatus {
     // Permanent lockout if user dropped or rejected
     if (shift.last_rejected_by === userId) return 'rejected_offer';
-    if (shift.last_dropped_by === userId || shift.droppedById === userId) return 'dropped';
+    if (shift.last_dropped_by === userId) return 'dropped';
 
     // Find user's bid (only one active bid per shift now)
     const currentBid = allMyBids.find(b =>

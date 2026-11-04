@@ -57,7 +57,6 @@ export const biddingApi = {
             .from('shifts')
             .select(`
                 *,
-                dropped_by_id,
                 last_dropped_by,
                 organizations(id, name),
                 departments(id, name),

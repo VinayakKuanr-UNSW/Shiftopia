@@ -58,7 +58,7 @@ describe('trg_shift_notifications — confirmed is not an offer', () => {
     it('a shift published straight to Confirmed tells the employee it is confirmed', () => {
         db(`UPDATE public.shifts
                SET lifecycle_status = 'Published', assignment_outcome = 'confirmed',
-                   fulfillment_status = 'scheduled', confirmed_at = now(), published_at = now()
+                   fulfillment_status = 'scheduled', published_at = now()
              WHERE id = '${S1}'`);
 
         const [[title, message]] = notice(S1);
@@ -69,7 +69,7 @@ describe('trg_shift_notifications — confirmed is not an offer', () => {
     it('a shift published as an offer still asks the employee to accept or decline', () => {
         db(`UPDATE public.shifts
                SET lifecycle_status = 'Published', assignment_outcome = NULL,
-                   fulfillment_status = 'offered', offer_sent_at = now(), published_at = now()
+                   fulfillment_status = 'offered', published_at = now()
              WHERE id = '${S1}'`);
 
         const [[title, message]] = notice(S1);

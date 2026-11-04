@@ -333,10 +333,9 @@ export const swapsApi = {
                 ),
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
-                    scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
-                    target_employment_type, remuneration_level,
-                    roles(name),
-                    remuneration_levels(level_number, level_name),
+                    scheduled_length_minutes, is_training, sub_group_name, lifecycle_status, group_type,
+                    target_employment_type,
+                    roles(name, remuneration_level),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
@@ -606,10 +605,9 @@ export const swapsApi = {
                 offerer:profiles!offerer_id(${SWAP_PROFILE_COLUMNS}),
                 offered_shift:shifts!offered_shift_id(
                     id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes, net_length_minutes,
-                    scheduled_length_minutes, is_overnight, is_training, sub_group_name, lifecycle_status, group_type,
-                    target_employment_type, remuneration_level,
-                    roles(name),
-                    remuneration_levels(level_number, level_name),
+                    scheduled_length_minutes, is_training, sub_group_name, lifecycle_status, group_type,
+                    target_employment_type,
+                    roles(name, remuneration_level),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
@@ -654,16 +652,14 @@ export const swapsApi = {
                 *,
                 requester_shift:shifts!requester_shift_id${shiftJoinType}(
                     *,
-                    roles(name),
-                    remuneration_levels(level_number, level_name),
+                    roles(name, remuneration_level),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
                 ),
                 target_shift:shifts!target_shift_id(
                     *,
-                    roles(name),
-                    remuneration_levels(level_number, level_name),
+                    roles(name, remuneration_level),
                     departments(name),
                     sub_departments(name),
                     organizations(name)
@@ -678,11 +674,11 @@ export const swapsApi = {
                     offerer_id,
                     offered_shift:shifts!offered_shift_id(
                         id, shift_date, start_time, end_time, paid_break_minutes, unpaid_break_minutes,
-                        net_length_minutes, scheduled_length_minutes, is_overnight, is_training, sub_group_name,
+                        net_length_minutes, scheduled_length_minutes, is_training, sub_group_name,
                         lifecycle_status, group_type,
-                        target_employment_type, remuneration_level,
+                        target_employment_type,
                         user_contract_id, assigned_employee_id,
-                        roles(name),
+                        roles(name, remuneration_level),
                         departments(name),
                         sub_departments(name),
                         organizations(name)

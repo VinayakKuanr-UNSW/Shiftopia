@@ -17,16 +17,16 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Fingerprint, MapPin, Loader2, UserX, LogIn, LogOut,
   CheckCircle, Timer,
-  BarChart3,
+  BarChart3, Coffee, AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { page, surface } from '@/modules/core/ui/layout/pageTokens';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, formatClockTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { useClockIn, useClockOut } from '@/modules/rosters/state/useClockInOut';
+import { useClockIn, useClockOut, useStartBreak, useEndBreak } from '@/modules/rosters/state/useClockInOut';
 import { TimesheetMobileCard } from '@/modules/timesheets/ui/components/TimesheetMobileCard';
 import type { TimesheetRow } from '@/modules/timesheets/model/timesheet.types';
 import {
@@ -178,7 +178,10 @@ function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null)
   );
   const resolvedStart = resolveBillableSide(shift.adjusted_start ?? null, shift.actual_start ?? null, finished);
   const resolvedEnd = resolveBillableSide(shift.adjusted_end ?? null, shift.actual_end ?? null, finished);
-  const rawNetMins = calculateNetMinutes(resolvedStart, resolvedEnd, shift.unpaid_break_minutes || 0);
+  const unpaidBreakForNet = shift.billable_unpaid_break_minutes != null
+    ? shift.billable_unpaid_break_minutes
+    : (shift.actual_unpaid_break_minutes ?? 0);
+  const rawNetMins = calculateNetMinutes(resolvedStart, resolvedEnd, unpaidBreakForNet);
   const isSecurityRoleForFloor = isSecurityRoleName(shift.roles?.name);
   const floored = rawNetMins !== null
     ? applyMinEngagementFloor(rawNetMins, {
@@ -215,7 +218,12 @@ function shiftToTimesheetRow(shift: Shift, profileEmploymentType: string | null)
     rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
     length: String(shift.scheduled_length_minutes || 0),
     paidBreak: String(shift.paid_break_minutes || 0),
-    unpaidBreak: String(shift.unpaid_break_minutes || 0),
+    unpaidBreak: String(unpaidBreakForNet),
+    unpaidBreakIsManual: shift.billable_unpaid_break_is_manual,
+    actualUnpaidBreakMinutes: shift.actual_unpaid_break_minutes,
+    hasOpenBreak: shift.has_open_break,
+    timesheetBreaks: shift.timesheet_breaks,
+    unpaidBreaks: shift.unpaid_breaks,
     netLength: String(shift.net_length_minutes || 0),
     netLengthMinutes: floored?.netMinutes ?? undefined,
     wasToppedUpToMinEngagement: floored?.wasToppedUp,
@@ -244,12 +252,16 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
   const { user } = useAuth();
   const clockIn  = useClockIn();
   const clockOut = useClockOut();
+  const startBreak = useStartBreak();
+  const endBreak   = useEndBreak();
 
   const timing   = getShiftTiming(shift, now);
   const status   = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
 
-  const canClockIn  = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
-  const canClockOut = (status === 'checked_in' || status === 'late') && !shift.actual_end && timing !== 'before_window';
+  const canClockIn   = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
+  const isClockedIn  = (status === 'checked_in' || status === 'late') && !shift.actual_end;
+  const canClockOut  = isClockedIn && timing !== 'before_window';
+  const hasOpenBreak = shift.has_open_break === true;
 
   // ── GPS pre-capture ────────────────────────────────────────────────────────
   const [gpsCapture, setGpsCapture]   = useState<GPSCapture | null>(null);
@@ -342,36 +354,140 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
     'dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white text-[13px] font-bold ' +
     'disabled:opacity-60 transition-colors';
 
-  const footerActions = (canClockIn || canClockOut) ? (
-    <div className="px-4 pb-4 pt-1 flex items-stretch gap-2 w-full">
-      {canClockIn && (
-        <Button
-          onClick={() => clockIn.mutate({ shiftId: shift.id, preCapture: gpsCapture })}
-          disabled={clockIn.isPending || gpsCapturing || !gpsCapture}
-          title={!gpsCapture && !gpsCapturing ? 'Waiting for GPS fix…' : undefined}
-          aria-label={gpsCapturing ? 'Waiting for GPS fix before clocking in' : 'Clock in'}
-          className={actionButtonCls}>
-          {clockIn.isPending
-            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Clocking In…</>
-            : gpsCapturing
-            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Locating…</>
-            : <><LogIn className="h-4 w-4 mr-2" aria-hidden="true" />Clock In</>}
-        </Button>
+  const footerActions = (
+    <div className="px-4 pb-4 pt-1 w-full flex flex-col gap-2.5">
+      {/* ── Breaks Sub-Section ─────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-border/50 bg-muted/20 p-3 space-y-2 text-left">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Coffee className="h-3.5 w-3.5 text-amber-500" />
+            Unpaid Breaks
+          </span>
+          <span className="text-[11px] font-mono font-semibold text-foreground">
+            {shift.actual_unpaid_break_minutes !== null && shift.actual_unpaid_break_minutes !== undefined
+              ? `${shift.actual_unpaid_break_minutes}m taken`
+              : 'None taken (—)'}
+          </span>
+        </div>
+
+        {/* Scheduled breaks target */}
+        {shift.unpaid_breaks && shift.unpaid_breaks.length > 0 && (
+          <div className="text-[11px] font-mono text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="text-[11px] uppercase tracking-wide opacity-70">Scheduled:</span>
+            {shift.unpaid_breaks.map((b) => (
+              <span key={b.sno} className="bg-background/60 px-1.5 py-0.5 rounded border border-border/40">
+                #{b.sno} {b.start}–{b.end}{b.duration ? ` (${b.duration}m)` : ''}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Paid rest pause notice (if configured) */}
+        {Boolean(shift.paid_break_minutes) && (
+          <div className="text-[11px] text-muted-foreground/80 font-mono">
+            Paid rest pause: {shift.paid_break_minutes}m (included in shift duration, no punch needed)
+          </div>
+        )}
+
+        {/* Actual punch history */}
+        {shift.timesheet_breaks && shift.timesheet_breaks.length > 0 && (
+          <div className="space-y-1 pt-1.5 border-t border-border/30">
+            {shift.timesheet_breaks.map((b) => (
+              <div
+                key={b.id || b.break_seq}
+                className="flex items-center justify-between text-[11px] font-mono px-2.5 py-1 rounded-lg bg-background/50 border border-border/30"
+              >
+                <span className="font-semibold text-foreground/90">Break #{b.break_seq}</span>
+                <span className="text-muted-foreground">
+                  {formatClockTime(b.break_start, 'h:mm a')} –{' '}
+                  {b.break_end ? (
+                    formatClockTime(b.break_end, 'h:mm a')
+                  ) : (
+                    <span className="inline-flex items-center gap-1 font-bold text-amber-500 animate-pulse">
+                      In Progress
+                    </span>
+                  )}
+                </span>
+                <span className="font-semibold text-foreground">
+                  {b.duration_minutes !== null ? `${b.duration_minutes}m` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Active break blocking alert */}
+        {hasOpenBreak && isClockedIn && (
+          <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-[11px] font-medium">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>Active break in progress. End break before clocking out.</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Clock In / Out & Break Action Buttons ─────────────────────────── */}
+      {(canClockIn || canClockOut) && (
+        <div className="flex items-stretch gap-2 w-full pt-0.5">
+          {canClockIn && (
+            <Button
+              onClick={() => clockIn.mutate({ shiftId: shift.id, preCapture: gpsCapture })}
+              disabled={clockIn.isPending || gpsCapturing || !gpsCapture}
+              title={!gpsCapture && !gpsCapturing ? 'Waiting for GPS fix…' : undefined}
+              aria-label={gpsCapturing ? 'Waiting for GPS fix before clocking in' : 'Clock in'}
+              className={actionButtonCls}>
+              {clockIn.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Clocking In…</>
+                : gpsCapturing
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Locating…</>
+                : <><LogIn className="h-4 w-4 mr-2" aria-hidden="true" />Clock In</>}
+            </Button>
+          )}
+
+          {/* Break controls (while clocked in) */}
+          {isClockedIn && hasOpenBreak && (
+            <Button
+              onClick={() => endBreak.mutate({ shiftId: shift.id })}
+              disabled={endBreak.isPending}
+              aria-label="End active unpaid break"
+              className="flex-1 h-12 rounded-xl border-0 shadow-none bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-600 dark:hover:bg-amber-700 dark:text-white text-[13px] font-bold disabled:opacity-60 transition-colors">
+              {endBreak.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Ending…</>
+                : <><Coffee className="h-4 w-4 mr-2" aria-hidden="true" />End Break</>}
+            </Button>
+          )}
+
+          {isClockedIn && !hasOpenBreak && (
+            <Button
+              onClick={() => startBreak.mutate({ shiftId: shift.id })}
+              disabled={startBreak.isPending}
+              aria-label="Start unpaid break"
+              className="h-12 px-4 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/50 text-foreground text-[13px] font-semibold transition-colors flex items-center">
+              {startBreak.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Starting…</>
+                : <><Coffee className="h-4 w-4 mr-2" aria-hidden="true" />Start Break</>}
+            </Button>
+          )}
+
+          {canClockOut && (
+            <Button
+              onClick={() => clockOut.mutate({ shiftId: shift.id })}
+              disabled={clockOut.isPending || hasOpenBreak}
+              title={hasOpenBreak ? 'End your active unpaid break before clocking out' : undefined}
+              aria-label={hasOpenBreak ? 'Clock out is disabled while an unpaid break is active' : 'Clock out'}
+              className={cn(
+                actionButtonCls,
+                hasOpenBreak && 'opacity-40 cursor-not-allowed hover:bg-purple-600'
+              )}>
+              {clockOut.isPending
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Clocking Out…</>
+                : <><LogOut className="h-4 w-4 mr-2" aria-hidden="true" />Clock Out</>}
+            </Button>
+          )}
+          {gpsIndicator}
+        </div>
       )}
-      {canClockOut && (
-        <Button
-          onClick={() => clockOut.mutate({ shiftId: shift.id })}
-          disabled={clockOut.isPending}
-          aria-label="Clock out"
-          className={actionButtonCls}>
-          {clockOut.isPending
-            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" />Clocking Out…</>
-            : <><LogOut className="h-4 w-4 mr-2" aria-hidden="true" />Clock Out</>}
-        </Button>
-      )}
-      {gpsIndicator}
     </div>
-  ) : null;
+  );
 
   // Map to TimesheetRow structure for the shared card component — hoisted to
   // module scope (see shiftToTimesheetRow below) so the page-level filter/
@@ -465,7 +581,7 @@ const AttendancePage: React.FC = () => {
     refetchInterval: isViewingToday ? 60 * 1000 : false,
   });
 
-  // Listen to timesheet updates in real-time
+  // Listen to attendance actuals (timesheets) + manager verification (billables) updates in real-time
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
@@ -477,6 +593,29 @@ const AttendancePage: React.FC = () => {
           schema: 'public',
           table: 'timesheets',
           filter: `employee_id=eq.${user.id}`,
+        },
+        () => {
+          refetch();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'billables',
+          filter: `employee_id=eq.${user.id}`,
+        },
+        () => {
+          refetch();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'timesheet_breaks',
         },
         () => {
           refetch();

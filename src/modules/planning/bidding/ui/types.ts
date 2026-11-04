@@ -39,7 +39,6 @@ export interface ShiftData {
     subGroupColor?: string;
     last_dropped_by?: string | null;
     last_rejected_by?: string | null;
-    droppedById?: string | null;
 }
 
 export interface BidData {

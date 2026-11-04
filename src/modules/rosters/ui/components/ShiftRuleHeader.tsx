@@ -81,7 +81,7 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
     ]);
     const live = useMemo(() => getLiveRuleBadges(shift), [
         shift.start_at, shift.end_at, shift.start_time, shift.end_time, shift.shift_date,
-        shift.actual_start, shift.actual_end, shift.attendance_status, shift.attendance_note,
+        shift.actual_start, shift.actual_end, shift.attendance_status,
         shift.adjusted_start, shift.adjusted_end,
     ]);
     const payroll = useMemo(

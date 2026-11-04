@@ -208,6 +208,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
       unpaidBreakDuration: shiftData.unpaid_break_minutes || shiftData.unpaidBreakDuration || 0,
       breakStart: shiftData.break_start ?? shiftData.breakStart ?? null,
       breakEnd: shiftData.break_end ?? shiftData.breakEnd ?? null,
+      unpaidBreaks: shiftData.unpaid_breaks ?? shiftData.unpaidBreaks ?? null,
       skills: shiftData.skills || [],
       licenses: shiftData.licenses || [],
       siteTags: shiftData.siteTags || [],

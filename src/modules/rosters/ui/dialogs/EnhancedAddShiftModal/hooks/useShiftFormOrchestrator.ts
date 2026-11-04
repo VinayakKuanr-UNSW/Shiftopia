@@ -41,7 +41,7 @@ import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
 import { useComplianceRunner } from './useComplianceRunner';
 import type { V8OrchestratorInput } from '@/modules/compliance/v8/orchestrator/types';
-import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG, mealBreakWindow } from '@/modules/compliance/shape';
+import { evaluateShiftShape, requiredMinEngagementMinutes, DEFAULT_SHAPE_CONFIG, breakSpanMinutes } from '@/modules/compliance/shape';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { initialTargetEmploymentType } from '@/modules/core/model/employment.types';
 import { daysFromTemplateDay } from '../components/TemplateDaySelect';
@@ -105,6 +105,7 @@ export function useShiftFormOrchestrator({
             paid_break_minutes: undefined,
             break_start: undefined,
             break_end: undefined,
+            unpaid_breaks: [],
             timezone: SYDNEY_TZ,
             assigned_employee_id: safeContext.employeeId || null,
             required_skills: [],
@@ -133,6 +134,7 @@ export function useShiftFormOrchestrator({
     const watchEnd = form.watch('end_time');
     const watchBreakStart = form.watch('break_start');
     const watchBreakEnd = form.watch('break_end');
+    const watchUnpaidBreaks = form.watch('unpaid_breaks');
     const watchPaidBreak = form.watch('paid_break_minutes');
     const watchV8RoleId = form.watch('role_id');
     const watchDayOfWeek = form.watch('day_of_week');
@@ -266,45 +268,56 @@ export function useShiftFormOrchestrator({
         [watchStart, watchEnd],
     );
 
-    // The unpaid minutes are DERIVED, never typed: the meal-break window's
-    // length, or nothing where Schedule 3 makes the meal break paid (security).
-    // A typed total could disagree with the window it is meant to measure.
+    // The unpaid minutes are DERIVED, never typed: the sum of scheduled break
+    // windows across midnight, or 0 where Schedule 3 makes meal breaks paid (security).
+    // Paid rest pauses do NOT shorten the shift.
     const isSecurityShift = isSecurityRoleName(roles.find(r => r.id === watchV8RoleId)?.name);
-    const mealWindow = mealBreakWindow(watchStart, watchBreakStart, watchBreakEnd);
-    const unpaidBreak = isSecurityShift || !mealWindow || mealWindow.minutes <= 0 ? 0 : mealWindow.minutes;
+    const resolvedBreaks = useMemo(() => {
+        if (Array.isArray(watchUnpaidBreaks) && watchUnpaidBreaks.length > 0) {
+            return watchUnpaidBreaks.map((b, i) => ({
+                sno: i + 1,
+                start: b.start || '',
+                end: b.end || '',
+                duration: breakSpanMinutes(b.start, b.end) ?? 0,
+            }));
+        }
+        if ((watchBreakStart && watchBreakStart.trim() !== '') || (watchBreakEnd && watchBreakEnd.trim() !== '')) {
+            return [{
+                sno: 1,
+                start: watchBreakStart ?? '',
+                end: watchBreakEnd ?? '',
+                duration: breakSpanMinutes(watchBreakStart, watchBreakEnd) ?? 0,
+            }];
+        }
+        return [];
+    }, [watchUnpaidBreaks, watchBreakStart, watchBreakEnd]);
+
+    const totalScheduledBreakMinutes = useMemo(
+        () => resolvedBreaks.reduce((acc, b) => acc + (b.duration ?? 0), 0),
+        [resolvedBreaks],
+    );
+    const unpaidBreak = isSecurityShift ? 0 : totalScheduledBreakMinutes;
 
     const netLength = Math.max(0, shiftLength - unpaidBreak / 60);
 
     const selectedRemLevel = remunerationLevels.find(r => r.level_number === watchRemLevel);
 
     // ── Shift shape compliance ───────────────────────────────────────────────
-    // Employee-free EBA checks decided from the shift alone: minimum engagement
-    // (or the full-time 7.6h floor), maximum duration, meal break, rest pauses.
-    // Replaces the tier table that used to be inlined here and drifted from the
-    // engine's copy — `@/modules/compliance/shape` is now the only owner, and it
-    // measures NET length throughout. Runs regardless of whether an employee is
-    // assigned, which is the whole point: an unassigned shift used to skip these
-    // entirely.
     const shape = useMemo(() => evaluateShiftShape({
         shift_date: watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : todayISO(),
         start_time: watchStart || '',
         end_time:   watchEnd || '',
         unpaid_break_minutes: unpaidBreak,
         paid_break_minutes:   Number(watchPaidBreak) || 0,
-        break_start: watchBreakStart ?? null,
-        break_end:   watchBreakEnd ?? null,
+        break_start: resolvedBreaks[0]?.start || null,
+        break_end:   resolvedBreaks[0]?.end || null,
+        unpaid_breaks: resolvedBreaks,
         is_training: watchIsTraining || false,
         target_employment_type: watchTargetEmploymentType || 'Casual',
-        // The second employment axis. Without it the layer cannot tell plain
-        // part-time from flexible part-time, and grants PT the cl 12.4(c)
-        // training and Sunday concessions that only FPT and casual are owed.
         target_requires_flexible: watchTargetRequiresFlexible ?? false,
-        // EBA Schedule 3. Security meal breaks are PAID (§3.2(a), §5.3(a),(c)),
-        // so a compliant security shift has its window and deducts nothing.
-        // The role is the only signal the schema carries for it.
         is_security: isSecurityShift,
     }), [
-        watchShiftDate, watchStart, watchEnd, watchBreakStart, watchBreakEnd, isSecurityShift,
+        watchShiftDate, watchStart, watchEnd, resolvedBreaks, isSecurityShift,
         unpaidBreak, watchPaidBreak, watchIsTraining,
         watchTargetEmploymentType, watchTargetRequiresFlexible,
         watchV8RoleId, roles,
@@ -442,6 +455,8 @@ export function useShiftFormOrchestrator({
         unpaidBreak, watchPaidBreak,
         watchIsTraining,
         // stringify to avoid object identity issues
+        // (moving a break without changing its length keeps unpaidBreak equal)
+        JSON.stringify(resolvedBreaks.map(b => [b.start, b.end])),
         JSON.stringify(watchSkills),
         JSON.stringify(watchLicenses),
     ]);
@@ -485,6 +500,19 @@ export function useShiftFormOrchestrator({
                     : existingShift.dayOfWeek !== undefined
                         ? existingShift.dayOfWeek
                         : undefined;
+            const rawExistingBreaks = existingShift.unpaid_breaks ?? existingShift.unpaidBreaks;
+            const legacyStart = (existingShift.break_start ?? existingShift.breakStart)?.slice(0, 5) || '';
+            const legacyEnd = (existingShift.break_end ?? existingShift.breakEnd)?.slice(0, 5) || '';
+            const initialUnpaidBreaks = Array.isArray(rawExistingBreaks) && rawExistingBreaks.length > 0
+                ? rawExistingBreaks.map((b: any, i: number) => {
+                    const s = (b?.start || '').slice(0, 5);
+                    const e = (b?.end || '').slice(0, 5);
+                    return { sno: i + 1, start: s, end: e, duration: breakSpanMinutes(s, e) ?? 0 };
+                })
+                : (legacyStart || legacyEnd)
+                    ? [{ sno: 1, start: legacyStart, end: legacyEnd, duration: breakSpanMinutes(legacyStart, legacyEnd) ?? 0 }]
+                    : [];
+
             form.reset({
                 group_type: (existingShift.group_type || existingShift.groupName?.toLowerCase().replace(/\s+/g, '_') || safeContext.group_type || safeContext.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'] || undefined,
                 sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || safeContext.sub_group_name || safeContext.subGroupName || '',
@@ -496,8 +524,9 @@ export function useShiftFormOrchestrator({
                 paid_break_minutes: existingShift.paid_break_minutes ?? existingShift.paidBreakDuration ?? undefined,
                 // Roster rows carry `HH:mm:ss`; the time input wants `HH:mm`.
                 // Template rows arrive camelCased, like everything else here.
-                break_start: (existingShift.break_start ?? existingShift.breakStart)?.slice(0, 5) || undefined,
-                break_end: (existingShift.break_end ?? existingShift.breakEnd)?.slice(0, 5) || undefined,
+                break_start: initialUnpaidBreaks[0]?.start || undefined,
+                break_end: initialUnpaidBreaks[0]?.end || undefined,
+                unpaid_breaks: initialUnpaidBreaks,
                 timezone: existingShift.timezone || SYDNEY_TZ,
                 assigned_employee_id: existingShift.assigned_employee_id || existingShift.assignedEmployeeId || null,
                 required_skills: (existingShift.required_skills || existingShift.skills || []).map((s: any) => typeof s === 'object' && s ? s.id : s),
@@ -539,6 +568,7 @@ export function useShiftFormOrchestrator({
                 paid_break_minutes: undefined,
                 break_start: undefined,
                 break_end: undefined,
+                unpaid_breaks: [],
                 timezone: SYDNEY_TZ,
                 assigned_employee_id: isTemplateMode ? null : (context?.employeeId || null),
                 required_skills: [],
@@ -565,6 +595,9 @@ export function useShiftFormOrchestrator({
                 : (watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : formatInTimezone(new Date(), watchTimezone, 'yyyy-MM-dd')),
             unpaid_break_minutes: unpaidBreak || 0,
             paid_break_minutes: watchPaidBreak || 0,
+            break_start: resolvedBreaks[0]?.start || null,
+            break_end: resolvedBreaks[0]?.end || null,
+            unpaid_breaks: resolvedBreaks,
         },
         existing_shifts: employeeExistingShifts,
         exclude_shift_id: existingShift?.id || undefined,
@@ -577,7 +610,7 @@ export function useShiftFormOrchestrator({
         rest_gap_hours: restGapAgreement8h ? 8 : 10,
         // Contract type hydrates split-shift (PT/flexi) + ord-hours rules.
         employee_context: { contract_type: contractType },
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, unpaidBreak, watchPaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement, restGapAgreement8h, contractType]);
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, unpaidBreak, watchPaidBreak, resolvedBreaks, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement, restGapAgreement8h, contractType]);
 
     const {
         runChecks,
@@ -977,6 +1010,22 @@ export function useShiftFormOrchestrator({
                 const role = roles.find(r => r.id === values.role_id);
                 const remLevel = remunerationLevels.find(r => r.level_number === values.remuneration_level);
 
+                const submittedBreaks = Array.isArray(values.unpaid_breaks) && values.unpaid_breaks.length > 0
+                    ? values.unpaid_breaks.map((b, i) => ({
+                        sno: i + 1,
+                        start: b.start,
+                        end: b.end,
+                        duration: breakSpanMinutes(b.start, b.end) ?? 0,
+                    }))
+                    : (values.break_start && values.break_end)
+                        ? [{
+                            sno: 1,
+                            start: values.break_start,
+                            end: values.break_end,
+                            duration: breakSpanMinutes(values.break_start, values.break_end) ?? 0,
+                        }]
+                        : [];
+
                 const templateShift = {
                     name: role?.name || 'Shift',
                     role_id: values.role_id,
@@ -994,10 +1043,12 @@ export function useShiftFormOrchestrator({
                     paidBreakDuration: values.paid_break_minutes || 0,
                     unpaid_break_minutes: unpaidBreak,
                     unpaidBreakDuration: unpaidBreak,
-                    break_start: values.break_start || null,
-                    breakStart: values.break_start || null,
-                    break_end: values.break_end || null,
-                    breakEnd: values.break_end || null,
+                    break_start: submittedBreaks[0]?.start || null,
+                    breakStart: submittedBreaks[0]?.start || null,
+                    break_end: submittedBreaks[0]?.end || null,
+                    breakEnd: submittedBreaks[0]?.end || null,
+                    unpaid_breaks: submittedBreaks,
+                    unpaidBreaks: submittedBreaks,
                     skills: values.required_skills || [],
                     licenses: values.required_licenses || [],
                     notes: values.notes,
@@ -1044,6 +1095,22 @@ export function useShiftFormOrchestrator({
                 form.reset();
                 onClose();
             } else {
+                const submittedBreaks = Array.isArray(values.unpaid_breaks) && values.unpaid_breaks.length > 0
+                    ? values.unpaid_breaks.map((b, i) => ({
+                        sno: i + 1,
+                        start: b.start,
+                        end: b.end,
+                        duration: breakSpanMinutes(b.start, b.end) ?? 0,
+                    }))
+                    : (values.break_start && values.break_end)
+                        ? [{
+                            sno: 1,
+                            start: values.break_start,
+                            end: values.break_end,
+                            duration: breakSpanMinutes(values.break_start, values.break_end) ?? 0,
+                        }]
+                        : [];
+
                 const basePayload = {
                     roster_id: rosterId,
                     shift_date: format(values.shift_date!, 'yyyy-MM-dd'),
@@ -1061,8 +1128,9 @@ export function useShiftFormOrchestrator({
                     paid_break_minutes: values.paid_break_minutes || 0,
                     unpaid_break_minutes: unpaidBreak,
                     // null, not '', so an edit that removes the break clears it.
-                    break_start: values.break_start || null,
-                    break_end: values.break_end || null,
+                    break_start: submittedBreaks[0]?.start || null,
+                    break_end: submittedBreaks[0]?.end || null,
+                    unpaid_breaks: submittedBreaks,
                     timezone: values.timezone,
                     assigned_employee_id: values.assigned_employee_id || null,
                     required_skills: values.required_skills || [],
@@ -1076,9 +1144,6 @@ export function useShiftFormOrchestrator({
                     // failed save on the Office grid rather than a mislabelled row.
                     creation_source: context?.creationSource
                         ?? (isTemplateMode ? 'template' : 'manual'),
-                    assignment_source: values.assigned_employee_id
-                        ? (editMode ? 'manual' : 'direct')
-                        : null,
                     // Assigned-on-create → 'pending' (becomes an offer on publish).
                     // Emergency is no longer a distinct outcome; urgency/emergency is
                     // derived from time-to-start at read time.
@@ -1140,6 +1205,7 @@ export function useShiftFormOrchestrator({
                             unpaid_break_minutes: basePayloadWithUtc.unpaid_break_minutes,
                             break_start: basePayloadWithUtc.break_start,
                             break_end: basePayloadWithUtc.break_end,
+                            unpaid_breaks: basePayloadWithUtc.unpaid_breaks,
                             // References
                             role_id: basePayloadWithUtc.role_id || '',
                             sub_department_id: basePayloadWithUtc.sub_department_id || '',

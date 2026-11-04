@@ -1,5 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
-import { Shift, ShiftStatus, TemplateGroupType, isValidUuid } from '../domain/shift.entity';
+import { Shift, ShiftStatus, TemplateGroupType, TimesheetBreakItem, isValidUuid } from '../domain/shift.entity';
 import { getTodayInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 /**
@@ -65,17 +65,16 @@ interface RosterSlot { groupType: string; subGroupName: string }
 const SHIFT_DETAIL_SELECT = `
   *,
   assignment_outcome,
-  attendance_status,
   offer_expires_at,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
-  roles(id, name),
-  remuneration_levels(level_number, level_name),
+  roles(id, name, remuneration_level),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
-  timesheets(status, start_time, end_time)
+  timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
+  billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
 ` as const;
 
 /**
@@ -83,7 +82,7 @@ const SHIFT_DETAIL_SELECT = `
  *
  * Explicitly enumerates the ~40 columns the grid, projection worker, and
  * GroupModeView actually read. Excludes heavy/unused columns like
- * compliance_snapshot, eligibility_snapshot, payroll metadata, and
+ * compliance_snapshot, payroll metadata, and
  * recurrence fields — cutting payload by ~60% at 5k+ shifts.
  *
  * The JOINs are kept since the worker mapper reads role/level/profile data.
@@ -106,28 +105,21 @@ const SHIFT_SELECT = `
   roster_id,
   shift_date,
   template_id,
-  template_group,
-  template_sub_group,
   is_from_template,
   template_instance_id,
-  group_type,
-  sub_group_name,
   display_order,
   shift_group_id,
   roster_subgroup_id,
   role_id,
-  remuneration_level,
   start_time,
   end_time,
-  is_overnight,
   scheduled_length_minutes,
-  break_minutes,
   paid_break_minutes,
   unpaid_break_minutes,
   break_start,
   break_end,
+  unpaid_breaks,
   net_length_minutes,
-  total_hours,
   timezone,
   start_at,
   end_at,
@@ -137,18 +129,10 @@ const SHIFT_SELECT = `
   assignment_status,
   assignment_outcome,
   fulfillment_status,
-  is_draft,
   is_cancelled,
-  is_on_bidding,
-  is_published,
-  is_locked,
   bidding_status,
   trade_requested_at,
   trading_status,
-  attendance_status,
-  attendance_note,
-  actual_start,
-  actual_end,
   offer_expires_at,
   event_ids,
   tags,
@@ -166,12 +150,12 @@ const SHIFT_SELECT = `
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
-  roles(id, name),
-  remuneration_levels(level_number, level_name),
+  roles(id, name, remuneration_level),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
-  timesheets(status, start_time, end_time)
+  timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
+  billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
 ` as const;
 
 // ── Pagination ────────────────────────────────────────────────────────────────
@@ -286,19 +270,86 @@ export function normalizeShiftRow(row: Record<string, any>): Shift {
             !!row['trade_requested_at'] || row['trading_status'] === 'TradeRequested',
     } as unknown as Shift;
 
-    // Canonical timesheet → shift mapping. Every query that joins `timesheets`
-    // flows through here so Live Rules derive identically on all surfaces.
+    if (Array.isArray(row.unpaid_breaks)) {
+        shift.unpaid_breaks = row.unpaid_breaks.map((b: any, i: number) => ({
+            sno: typeof b?.sno === 'number' ? b.sno : i + 1,
+            start: typeof b?.start === 'string' ? b.start.slice(0, 5) : '',
+            end: typeof b?.end === 'string' ? b.end.slice(0, 5) : '',
+            ...(typeof b?.duration === 'number' ? { duration: b.duration } : {}),
+        }));
+    }
+
+    // 1. Hydrate ground-truth attendance actuals from public.timesheets (1:1 embed)
     const ts = Array.isArray(row.timesheets) ? row.timesheets[0] : (row.timesheets || null);
+    // 2. Hydrate manager verification & billable overrides from public.billables (1:1 embed)
+    const bill = Array.isArray(row.billables) ? row.billables[0] : (row.billables || null);
+
     if (ts && typeof ts === 'object') {
-        shift.timesheet_status = ts.status;
+        if ('id' in ts) shift.timesheet_id = ts.id ?? null;
+        if ('clock_in' in ts) shift.actual_start = ts.clock_in ?? null;
+        if ('clock_out' in ts) shift.actual_end = ts.clock_out ?? null;
+        if ('arrival_track' in ts) shift.arrival_track = ts.arrival_track ?? null;
+        if ('departure_track' in ts) shift.departure_track = ts.departure_track ?? null;
+        if ('is_no_show' in ts) shift.is_no_show = Boolean(ts.is_no_show);
+        if ('timesheet_breaks' in ts) {
+            const rawBreaks = Array.isArray(ts.timesheet_breaks) ? ts.timesheet_breaks : [];
+            const sortedBreaks: TimesheetBreakItem[] = [...rawBreaks]
+                .sort((a: any, b: any) => (a.break_seq ?? 0) - (b.break_seq ?? 0))
+                .map((b: any) => ({
+                    id: String(b.id),
+                    timesheet_id: String(b.timesheet_id),
+                    shift_id: String(b.shift_id),
+                    break_seq: Number(b.break_seq ?? 1),
+                    break_start: String(b.break_start),
+                    break_end: b.break_end ? String(b.break_end) : null,
+                    duration_minutes:
+                        b.duration_minutes !== undefined && b.duration_minutes !== null
+                            ? Number(b.duration_minutes)
+                            : null,
+                }));
+            shift.timesheet_breaks = sortedBreaks;
+            const openBreak = sortedBreaks.find(b => !b.break_end) ?? null;
+            shift.has_open_break = Boolean(openBreak);
+            shift.open_break = openBreak;
+            const completedBreaks = sortedBreaks.filter(b => b.break_end && b.duration_minutes !== null);
+            shift.actual_unpaid_break_minutes =
+                completedBreaks.length > 0
+                    ? completedBreaks.reduce((acc, b) => acc + (b.duration_minutes ?? 0), 0)
+                    : null;
+        }
+    }
+    if (shift.actual_start === undefined) shift.actual_start = null;
+    if (shift.actual_end === undefined) shift.actual_end = null;
+
+    if (bill && typeof bill === 'object') {
+        if ('id' in bill) shift.billable_id = bill.id ?? null;
+        shift.timesheet_status = bill.status ?? null;
+        if ('notes' in bill) shift.timesheet_notes = bill.notes ?? null;
+        if ('rejected_reason' in bill) shift.timesheet_rejected_reason = bill.rejected_reason ?? null;
+        if ('payroll_exported' in bill) shift.payroll_exported = Boolean(bill.payroll_exported);
+        if ('unpaid_break_minutes' in bill) shift.billable_unpaid_break_minutes = bill.unpaid_break_minutes ?? null;
+        if ('unpaid_break_is_manual' in bill) shift.billable_unpaid_break_is_manual = Boolean(bill.unpaid_break_is_manual);
+        if ('billable_start' in bill || 'billable_end' in bill) {
+            const bStart = bill.billable_start ?? null;
+            const bEnd = bill.billable_end ?? null;
+            shift.timesheet_start_time = bStart;
+            shift.timesheet_end_time = bEnd;
+            shift.adjusted_start = bStart;
+            shift.adjusted_end = bEnd;
+            shift.adjusted_start_is_manual = !!bStart;
+            shift.adjusted_end_is_manual = !!bEnd;
+            shift.adjusted_is_manual = !!(bStart || bEnd);
+            shift.adjusted_start_source = bStart ? 'manual' : null;
+            shift.adjusted_end_source = bEnd ? 'manual' : null;
+        }
+    } else if (ts && typeof ts === 'object' && ('status' in ts || 'start_time' in ts || 'end_time' in ts)) {
+        // Legacy fixture shape fallback
+        if ('status' in ts) shift.timesheet_status = ts.status;
         if ('notes' in ts) shift.timesheet_notes = ts.notes;
         if ('rejected_reason' in ts) shift.timesheet_rejected_reason = ts.rejected_reason;
         if ('start_time' in ts || 'end_time' in ts) {
             shift.timesheet_start_time = ts.start_time ?? null;
             shift.timesheet_end_time = ts.end_time ?? null;
-            // Billable times only live on the timesheet when a manager committed
-            // a manual override — auto/snapped billable is never persisted there.
-            // Overrides are PER-SIDE: only the edited side is manual/`*`.
             shift.adjusted_start = ts.start_time ?? null;
             shift.adjusted_end = ts.end_time ?? null;
             shift.adjusted_start_is_manual = !!ts.start_time;
@@ -309,8 +360,25 @@ export function normalizeShiftRow(row: Record<string, any>): Shift {
         }
     }
 
-    // Ensure attendance_status and assignment_outcome are preserved if they come from joined fields
-    if (!shift.attendance_status && row.attendance_status) shift.attendance_status = row.attendance_status;
+    const derivedNoShow = Boolean(
+        shift.is_no_show
+        || bill?.status === 'no_show'
+        || row.assignment_outcome === 'no_show'
+    );
+    if (derivedNoShow) {
+        shift.is_no_show = true;
+    }
+
+    if (derivedNoShow) {
+        shift.attendance_status = 'no_show';
+    } else if (shift.arrival_track === 'late_in') {
+        shift.attendance_status = 'late';
+    } else if (shift.actual_start) {
+        shift.attendance_status = 'checked_in';
+    } else {
+        shift.attendance_status = 'unknown';
+    }
+
     if (!shift.assignment_outcome && row.assignment_outcome) shift.assignment_outcome = row.assignment_outcome;
 
     return shift;
@@ -641,11 +709,11 @@ export const shiftsQueries = {
                   organizations(id, name),
                   departments(id, name),
                   sub_departments(id, name),
-                  roles(id, name),
-                  remuneration_levels(level_number, level_name),
+                  roles(id, name, remuneration_level),
                   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
-                  timesheets(status, start_time, end_time)
+                  timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
+                  billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
                 `)
                 .eq('assigned_employee_id', employeeId)
                 .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
@@ -688,11 +756,11 @@ export const shiftsQueries = {
                   organizations(id, name),
                   departments(id, name),
                   sub_departments(id, name),
-                  roles(id, name),
-                  remuneration_levels(level_number, level_name),
+                  roles(id, name, remuneration_level),
                   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
-                  timesheets(status, notes, rejected_reason, start_time, end_time)
+                  timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
+                  billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
                 `)
                 .eq('assigned_employee_id', employeeId)
                 .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
@@ -1157,17 +1225,13 @@ export const shiftsQueries = {
                 published_at,
                 paid_break_minutes,
                 unpaid_break_minutes,
-                break_minutes,
                 timezone,
                 offer_expires_at,
-                group_type,
-                sub_group_name,
-                roster_subgroup:roster_subgroups(name),
-                roles(name),
+                roster_subgroup:roster_subgroups(name, roster_groups(name, external_id)),
+                roles(name, remuneration_level),
                 departments(id, name),
                 sub_departments(name),
-                organizations(id, name),
-                remuneration_levels(level_number, level_name)
+                organizations(id, name)
             `)
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
@@ -1206,13 +1270,13 @@ export const shiftsQueries = {
                     sub_departments: shift.sub_departments,
                     organizations: shift.organizations,
                     notes: shift.notes,
-                    break_minutes: shift.break_minutes,
+                    break_minutes: (shift.paid_break_minutes || 0) + (shift.unpaid_break_minutes || 0),
                     paid_break_minutes: shift.paid_break_minutes,
                     unpaid_break_minutes: shift.unpaid_break_minutes,
                     offer_expires_at: (shift as any).offer_expires_at,
-                    remuneration_levels: shift.remuneration_levels,
-                    group_type: shift.group_type,
-                    sub_group_name: shift.sub_group_name || (shift as any).roster_subgroup?.name || null,
+                    remuneration_levels: (shift as any).remuneration_levels ?? null,
+                    group_type: ((shift as any).roster_subgroup?.roster_groups?.external_id as any) || null,
+                    sub_group_name: (shift as any).roster_subgroup?.name || null,
                 },
             }));
         } catch (error) {
@@ -1255,17 +1319,13 @@ export const shiftsQueries = {
                     published_at,
                     paid_break_minutes,
                     unpaid_break_minutes,
-                    break_minutes,
                     timezone,
                     offer_expires_at,
-                    group_type,
-                    sub_group_name,
-                    roster_subgroup:roster_subgroups(name),
-                    roles(name),
+                    roster_subgroup:roster_subgroups(name, roster_groups(name, external_id)),
+                    roles(name, remuneration_level),
                     departments(id, name),
                     sub_departments(name),
-                    organizations(id, name),
-                    remuneration_levels(level_number, level_name)
+                    organizations(id, name)
                 `);
 
             // 2. Apply identity filter based on events if available, otherwise fallback to column matching
@@ -1325,13 +1385,13 @@ export const shiftsQueries = {
                     sub_departments: shift.sub_departments,
                     organizations: shift.organizations,
                     notes: shift.notes,
-                    break_minutes: shift.break_minutes,
+                    break_minutes: (shift.paid_break_minutes || 0) + (shift.unpaid_break_minutes || 0),
                     paid_break_minutes: shift.paid_break_minutes,
                     unpaid_break_minutes: shift.unpaid_break_minutes,
                     offer_expires_at: (shift as any).offer_expires_at,
-                    remuneration_levels: shift.remuneration_levels,
-                    group_type: shift.group_type,
-                    sub_group_name: shift.sub_group_name || (shift as any).roster_subgroup?.name || null,
+                    remuneration_levels: (shift as any).remuneration_levels ?? null,
+                    group_type: ((shift as any).roster_subgroup?.roster_groups?.external_id as any) || null,
+                    sub_group_name: (shift as any).roster_subgroup?.name || null,
                 },
             }));
         } catch (error) {
@@ -1372,8 +1432,7 @@ export const shiftsQueries = {
                     organizations(name),
                     departments(name),
                     sub_departments(name),
-                    roles(name),
-                    remuneration_levels(level_name),
+                    roles(name, remuneration_level),
                     assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                     shift_bids(id, status)
                 `)

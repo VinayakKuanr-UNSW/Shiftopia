@@ -96,6 +96,22 @@ function isCompleteTime(t?: string | null): boolean {
 }
 
 /**
+ * Positive duration in minutes of a single break `breakStart`–`breakEnd`,
+ * wrapping cleanly across midnight (e.g. `23:45`–`00:15` → `30`).
+ * Returns `null` when either endpoint is missing or incomplete, or `0` when equal.
+ */
+export function breakSpanMinutes(
+    breakStart: string | null | undefined,
+    breakEnd: string | null | undefined,
+): number | null {
+    if (!isCompleteTime(breakStart) || !isCompleteTime(breakEnd)) return null;
+    const s = parseTimeToMinutes(breakStart as string);
+    const e = parseTimeToMinutes(breakEnd as string);
+    if (s === e) return 0;
+    return (((e - s) % 1440) + 1440) % 1440;
+}
+
+/**
  * The meal break as minutes after the shift's start, across midnight — the same
  * arithmetic as the database's `shift_minutes_after_start`, so the form, the pay
  * engines and the table agree on where a break sits. `null` until all three
@@ -182,11 +198,14 @@ export function evaluateShiftShape(
      */
     const isFtSecurity     = isSecurity && input.target_employment_type === 'FT';
     const mealBreakCap     = isFtSecurity ? config.meal_break_min_minutes : config.meal_break_max_minutes;
-    const breakStartSet    = isCompleteTime(input.break_start);
-    const breakEndSet      = isCompleteTime(input.break_end);
-    const meal             = mealBreakWindow(input.start_time, input.break_start, input.break_end);
-    const mealBreakMinutes = meal?.minutes ?? 0;
     const paidBreakForPauses = paidBreak;
+
+    const hasExplicitBreaks = Array.isArray(input.unpaid_breaks) && input.unpaid_breaks.length > 0;
+    const rawBreaks = hasExplicitBreaks
+        ? input.unpaid_breaks!
+        : ((input.break_start && input.break_start.trim() !== '') || (input.break_end && input.break_end.trim() !== ''))
+            ? [{ sno: 1, start: input.break_start ?? '', end: input.break_end ?? '' }]
+            : [];
 
     // ── SHAPE_VALID_RANGE ────────────────────────────────────────────────────
     // A zero-length shift is degenerate. `shiftDurationMinutes` deliberately
@@ -223,44 +242,109 @@ export function evaluateShiftShape(
             field:     'unpaid_break_minutes',
             calculation: { unpaid_break_minutes: unpaidBreak, gross_minutes: grossMinutes, net_minutes: netMinutes },
         });
+    } else if (paidBreak >= grossMinutes) {
+        hits.push({
+            rule_id:   'SHAPE_BREAK_EXCEEDS_SHIFT',
+            rule_name: 'Break Longer Than Shift',
+            status:    'BLOCKING',
+            summary:   `Paid rest pause (${paidBreak}m) is longer than the shift (${grossMinutes}m)`,
+            details:   `Paid rest pauses (${paidBreak}m) cannot equal or exceed the ${grossMinutes}-minute shift span.`,
+            blocking:  true,
+            field:     'paid_break_minutes',
+            calculation: { paid_break_minutes: paidBreak, gross_minutes: grossMinutes, net_minutes: netMinutes },
+        });
     }
 
     // ── SHAPE_BREAK_WINDOW ───────────────────────────────────────────────────
-    // The meal break has to be a real span inside the shift, and the minutes the
-    // shift deducts have to BE that span (none for security, whose meal break is
-    // paid). Same predicate as the database's `shift_break_window_breach`, so the
-    // form never offers to save a row the table will refuse. Stricter on one
-    // point only: the table cannot resolve a role, so it accepts an unpaid total
-    // of 0 against any window; here a non-security shift must deduct it.
-    const mealInside = !!meal && meal.from > 0 && meal.to > meal.from && meal.to < grossMinutes;
-    const windowProblem: { summary: string; details: string; field: 'break_start' | 'break_end' } | null =
-        breakStartSet !== breakEndSet
-            ? {
-                summary: 'Set both the meal break start and end',
-                details: 'A meal break needs both a start and an end time.',
-                field:   breakStartSet ? 'break_end' : 'break_start',
+    // Every scheduled break window must sit strictly inside the shift (resolving
+    // overnight shifts and overnight breaks cleanly across midnight), be ordered
+    // chronologically with working time between multiple breaks, be in 15-minute
+    // increments, and sum to `unpaid_break_minutes` (or 0 for Security).
+    const afterStart = (t: string) => (((parseTimeToMinutes(t) - startMinutes) % 1440) + 1440) % 1440;
+    const insideWindows: Array<{ idx: number; start: string; end: string; from: number; to: number; minutes: number }> = [];
+    let windowProblem: { summary: string; details: string; field: 'break_start' | 'break_end' } | null = null;
+    let totalWindowMinutes = 0;
+    let prevTo: number | null = null;
+
+    for (let idx = 0; idx < rawBreaks.length; idx++) {
+        const b = rawBreaks[idx];
+        const label = rawBreaks.length > 1 ? `Break #${idx + 1}` : 'Meal break';
+        const sOk = isCompleteTime(b.start);
+        const eOk = isCompleteTime(b.end);
+
+        if (!sOk || !eOk) {
+            if (!windowProblem) {
+                windowProblem = {
+                    summary: rawBreaks.length > 1
+                        ? `Set both start and end for ${label}`
+                        : 'Set both the meal break start and end',
+                    details: 'A meal break needs both a start and an end time.',
+                    field:   sOk ? 'break_end' : 'break_start',
+                };
             }
-        : meal && !mealInside
-            ? {
-                summary: 'Meal break must sit inside the shift',
-                details: `The meal break must start after the shift starts (${input.start_time}) and end before it finishes (${input.end_time}).`,
-                field:   'break_start',
+            continue;
+        }
+
+        const dur  = breakSpanMinutes(b.start, b.end) ?? 0;
+        const from = afterStart(b.start);
+        const to   = afterStart(b.end);
+        // Overnight-safe containment: both endpoints strictly inside (0, grossMinutes)
+        // AND the positive break span equals `to - from` (prevents wrap-around false positives).
+        const inside = dur > 0 && from > 0 && (from + dur) === to && to < grossMinutes;
+
+        if (!inside) {
+            if (!windowProblem) {
+                windowProblem = {
+                    summary: `${label} must sit inside the shift`,
+                    details: `${label} (${b.start}–${b.end}) must start after the shift starts (${input.start_time}) and end before it finishes (${input.end_time}).`,
+                    field:   'break_start',
+                };
             }
-        : !meal && unpaidBreak > 0
-            ? {
+            continue;
+        }
+
+        if (prevTo !== null && from <= prevTo) {
+            if (!windowProblem) {
+                windowProblem = {
+                    summary: `${label} overlaps or touches Break #${idx}`,
+                    details: 'Multiple unpaid breaks must be listed in chronological order within the shift with working time between them.',
+                    field:   'break_start',
+                };
+            }
+            continue;
+        }
+
+        prevTo = to;
+        totalWindowMinutes += dur;
+        insideWindows.push({ idx, start: b.start, end: b.end, from, to, minutes: dur });
+
+        if ((dur % 15) !== 0 && !windowProblem) {
+            windowProblem = {
+                summary: `${label} (${dur}m) must be in 15-minute increments`,
+                details: `${label} runs ${b.start}–${b.end} (${dur} minutes). Unpaid breaks must be rostered in 15-minute increments (e.g. 30m, 45m, 60m).`,
+                field:   'break_end',
+            };
+        }
+    }
+
+    if (!windowProblem) {
+        if (rawBreaks.length === 0 && unpaidBreak > 0) {
+            windowProblem = {
                 summary: 'Unpaid break needs a start and end time',
                 details: `This shift deducts ${unpaidBreak} unpaid minutes without saying when they are taken. Pay follows the hours actually worked — the night rate (EBA cl 43) and weekend and public-holiday loadings (cl 41) — so where the break sits changes what is owed.`,
                 field:   'break_start',
-            }
-        : meal && !isSecurity && unpaidBreak !== meal.minutes
-            ? {
-                summary: `Unpaid break (${unpaidBreak}m) does not match the meal break (${meal.minutes}m)`,
-                details: `The meal break runs ${input.break_start}–${input.break_end}, ${meal.minutes} minutes, but the shift deducts ${unpaidBreak}. The unpaid minutes are the meal break's length.`,
+            };
+        } else if (rawBreaks.length > 0 && !isSecurity && unpaidBreak !== totalWindowMinutes) {
+            windowProblem = {
+                summary: `Unpaid break (${unpaidBreak}m) does not match the meal break (${totalWindowMinutes}m)`,
+                details: `Scheduled break windows total ${totalWindowMinutes} minutes, but the shift deducts ${unpaidBreak} minutes. The unpaid break must equal the meal break window total, or be 0 where the meal break is paid.`,
                 field:   'break_start',
-            }
-        : null;
+            };
+        }
+    }
 
     if (windowProblem) {
+        const firstWin = insideWindows[0] ?? null;
         hits.push({
             rule_id:   'SHAPE_BREAK_WINDOW',
             rule_name: 'Meal Break Window',
@@ -270,10 +354,12 @@ export function evaluateShiftShape(
             blocking:  true,
             field:     windowProblem.field,
             calculation: {
-                break_start: input.break_start ?? null,
-                break_end:   input.break_end ?? null,
-                window_from_minutes: meal?.from ?? null,
-                window_to_minutes:   meal?.to ?? null,
+                break_start: rawBreaks[0]?.start ?? input.break_start ?? null,
+                break_end:   rawBreaks[0]?.end ?? input.break_end ?? null,
+                window_from_minutes: firstWin?.from ?? null,
+                window_to_minutes:   firstWin?.to ?? null,
+                total_window_minutes: totalWindowMinutes,
+                break_count: rawBreaks.length,
                 gross_minutes: grossMinutes,
                 unpaid_break_minutes: unpaidBreak,
             },
@@ -500,24 +586,26 @@ export function evaluateShiftShape(
         : `not less than ${config.meal_break_min_minutes} and not more than ${config.meal_break_max_minutes} minutes`;
     const mealKind = mealBreakIsPaid ? 'paid' : 'unpaid';
     const mealDue  = netMinutes > config.meal_break_threshold_minutes;
-    const mealMissing = mealDue && !breakStartSet && !breakEndSet;
-    const mealShort   = mealInside && mealBreakMinutes < config.meal_break_min_minutes;
+    const mealMissing = mealDue && rawBreaks.length === 0;
+    const shortWin    = insideWindows.find(w => w.minutes < config.meal_break_min_minutes);
 
-    if (mealMissing || mealShort) {
+    if (mealMissing || shortWin) {
+        const shortMins = shortWin?.minutes ?? 0;
+        const shortLabel = rawBreaks.length > 1 && shortWin ? `Break #${shortWin.idx + 1}` : 'Meal break';
         hits.push({
             rule_id:   'SHAPE_MEAL_BREAK',
             rule_name: 'Meal Break Requirement',
             status:    'BLOCKING',
             summary:   mealMissing
                 ? `${mealBreakIsPaid ? 'Paid' : 'Unpaid'} meal break required — set when it starts and ends`
-                : `Meal break of ${mealBreakMinutes}m is under the ${config.meal_break_min_minutes}m minimum`,
-            details:   `A Team Member who works more than ${hours(config.meal_break_threshold_minutes)} hours on any one day is entitled to a ${mealKind} meal break of ${mealEntitlement} (${mealClause}). ${mealMissing ? 'This shift has none — set its start and end time.' : `This shift's break is ${mealBreakMinutes} minutes.`}`,
+                : `${shortLabel} of ${shortMins}m is under the ${config.meal_break_min_minutes}m minimum`,
+            details:   `A Team Member who works more than ${hours(config.meal_break_threshold_minutes)} hours on any one day is entitled to a ${mealKind} meal break of ${mealEntitlement} (${mealClause}). ${mealMissing ? 'This shift has none — set its start and end time.' : `This shift's break is ${shortMins} minutes.`}`,
             blocking:  true,
             field:     'break_start',
             calculation: {
                 net_minutes: netMinutes,
                 threshold_minutes: config.meal_break_threshold_minutes,
-                meal_break_minutes: mealBreakMinutes,
+                meal_break_minutes: shortWin ? shortMins : totalWindowMinutes,
                 meal_break_is_paid: mealBreakIsPaid,
                 required_break_minutes: config.meal_break_min_minutes,
                 max_break_minutes: config.meal_break_max_minutes,
@@ -527,46 +615,47 @@ export function evaluateShiftShape(
     }
 
     // ── SHAPE_MEAL_BREAK_CEILING (cl 36.1; Sch 3 §3.2(a)) ────────────────────
-    // The other half of the same sentence: "not more than sixty (60) minutes".
-    // Full-time security's §3.2(a) break is a flat 30, so its ceiling is 30.
-    //
-    // Paid breaks are capped too now. While security's meal break shared one
-    // field with its rest pauses, an over-60 total said nothing about the meal
-    // break, and this rule had to exempt them. The window is the meal break
-    // alone, so it can be capped for everyone.
-    if (mealInside && mealBreakMinutes > mealBreakCap) {
+    // Each meal break window may not exceed 60 minutes; Full-Time Security's
+    // §3.2(a) entitlement is a flat 30 minutes total.
+    const longWin = insideWindows.find(w => w.minutes > mealBreakCap);
+    const ftSecurityOverTotal = isFtSecurity && insideWindows.length > 1 && totalWindowMinutes > mealBreakCap;
+    if (longWin || ftSecurityOverTotal) {
+        const offendingMins = longWin ? longWin.minutes : totalWindowMinutes;
+        const offendingSpan = longWin ? `${longWin.start}–${longWin.end}` : insideWindows.map(w => `${w.start}–${w.end}`).join(', ');
         hits.push({
             rule_id:   'SHAPE_MEAL_BREAK_CEILING',
             rule_name: 'Meal Break Ceiling',
             status:    'BLOCKING',
-            summary:   `Meal break of ${mealBreakMinutes}m exceeds the ${mealBreakCap}m maximum`,
-            details:   `A ${mealKind} meal break is ${mealEntitlement} (${mealClause}). This shift's break runs ${input.break_start}–${input.break_end}, ${mealBreakMinutes} minutes.`,
+            summary:   `Meal break of ${offendingMins}m exceeds the ${mealBreakCap}m maximum`,
+            details:   `A ${mealKind} meal break is ${mealEntitlement} (${mealClause}). This shift's break runs ${offendingSpan}, ${offendingMins} minutes.`,
             blocking:  true,
             field:     'break_end',
-            calculation: { meal_break_minutes: mealBreakMinutes, meal_break_is_paid: mealBreakIsPaid, max_break_minutes: mealBreakCap },
+            calculation: { meal_break_minutes: offendingMins, meal_break_is_paid: mealBreakIsPaid, max_break_minutes: mealBreakCap },
         });
     }
 
     // ── SHAPE_MEAL_BREAK_TIMING (cl 36.2; Sch 3 §3.2(b), §5.3(b)) ────────────
-    // "The Employer ... will endeavour to ensure all Team Members do not work in
-    // excess of five (5) hours without being provided with a meal break. However,
-    // the parties recognise that the operational requirements of the business may
-    // require meal breaks being taken after five (5) hours where necessary."
-    //
-    // WARNING, never blocking: the clause is an endeavour with an operational
-    // exception written into it. Both stretches are measured — before the break
-    // and after it — because the sentence is about working five hours without a
-    // meal break, and the agreement grants only one. So a shift of more than ten
-    // and a half hours always warns here: it cannot be split into two stretches
-    // of five, which is the truth about it rather than noise.
-    if (mealDue && mealInside) {
-        const before  = meal!.from;
-        const after   = grossMinutes - meal!.to;
-        const limit   = config.meal_break_latest_minutes;
-        const stretches = [
-            before > limit ? `${hours(before)}h before the break` : null,
-            after  > limit ? `${hours(after)}h after it` : null,
-        ].filter((s): s is string => s !== null);
+    // Evaluates all continuous working stretches around the scheduled break(s):
+    // [start..break1], [break1..break2], ..., [breakN..end]. Dispersing multiple
+    // breaks across a long shift keeps each continuous work stretch ≤ 5h.
+    if (mealDue && insideWindows.length > 0 && insideWindows.length === rawBreaks.length) {
+        const limit = config.meal_break_latest_minutes;
+        const firstBefore = insideWindows[0].from;
+        const lastAfter   = grossMinutes - insideWindows[insideWindows.length - 1].to;
+        const stretches: string[] = [];
+
+        if (insideWindows.length === 1) {
+            if (firstBefore > limit) stretches.push(`${hours(firstBefore)}h before the break`);
+            if (lastAfter > limit) stretches.push(`${hours(lastAfter)}h after it`);
+        } else {
+            if (firstBefore > limit) stretches.push(`${hours(firstBefore)}h before Break #1`);
+            for (let k = 1; k < insideWindows.length; k++) {
+                const mid = insideWindows[k].from - insideWindows[k - 1].to;
+                if (mid > limit) stretches.push(`${hours(mid)}h between Break #${k} and Break #${k + 1}`);
+            }
+            if (lastAfter > limit) stretches.push(`${hours(lastAfter)}h after Break #${insideWindows.length}`);
+        }
+
         if (stretches.length > 0) {
             const clause = isFtSecurity ? 'EBA Sch 3 §3.2(b)' : isSecurity ? 'EBA Sch 3 §5.3(b)' : 'ICC EBA cl 36.2';
             hits.push({
@@ -577,25 +666,34 @@ export function evaluateShiftShape(
                 details:   `The Employer will endeavour to ensure no Team Member works more than ${hours(limit)} hours without a meal break (${clause}). This shift works ${stretches.join(' and ')}. Operational requirements may justify a later break; this is advisory.`,
                 blocking:  false,
                 field:     'break_start',
-                calculation: { minutes_before_break: before, minutes_after_break: after, limit_minutes: limit },
+                calculation: { minutes_before_break: firstBefore, minutes_after_break: lastAfter, limit_minutes: limit },
             });
         }
     }
 
-    // ── SHAPE_REST_PAUSE_1 / _2 (cl 37.1, 37.2) ──────────────────────────────
-    // BLOCKING, per the principle that shift-shape breaches block.
-    //
-    // Caveat worth knowing: a rest pause is PAID time inside the shift, so
-    // unlike the meal break it does not shorten the shift, and no field in this
-    // system records whether one was actually TAKEN. `paid_break_minutes` is a
-    // rostering declaration, not evidence. Blocking therefore enforces "the
-    // roster allots the pause", not "the pause happened" — the strongest claim
-    // this data model supports.
-    // The two clauses are mutually exclusive by shift length, not cumulative.
-    // Past 8h the requirement simply IS 30 minutes, so raising cl 37.1's "15m
-    // required" alongside cl 37.2's "30m required" told the user two different
-    // numbers for one obligation. Only the applicable tier is reported.
+    // ── SHAPE_REST_PAUSE_INCREMENT / _1 / _2 (cl 37.1, 37.2) ─────────────────
+    // Paid rest pauses do not shorten the shift and do not require punches,
+    // and must be entered in 15-minute increments (cl 37).
     const restPause2Applies = netMinutes >= config.rest_pause_2_threshold_minutes;
+    if ((paidBreakForPauses % 15) !== 0) {
+        const minPauseFloor = restPause2Applies
+            ? config.rest_pause_minutes * 2
+            : netMinutes >= config.rest_pause_1_threshold_minutes
+                ? config.rest_pause_minutes
+                : 15;
+        const rounded = Math.max(Math.ceil(paidBreakForPauses / 15) * 15, minPauseFloor);
+        hits.push({
+            rule_id:   'SHAPE_REST_PAUSE_INCREMENT',
+            rule_name: 'Rest Pause Increment',
+            status:    'BLOCKING',
+            summary:   `Paid rest pause (${paidBreakForPauses}m) must be in 15-minute increments`,
+            details:   `Paid rest pauses are 15-minute entitlements under ICC EBA cl 37.1 / cl 37.2 and must be configured in multiples of 15 minutes (0m, 15m, 30m, 45m…).`,
+            blocking:  true,
+            field:     'paid_break_minutes',
+            fix: { field: 'paid_break_minutes', value: rounded, label: `Set ${rounded}m` },
+            calculation: { paid_break_minutes: paidBreakForPauses, suggested_minutes: rounded },
+        });
+    }
 
     if (!restPause2Applies
         && netMinutes >= config.rest_pause_1_threshold_minutes

@@ -13,6 +13,8 @@ export type ShiftStatus =
     | 'cancelled';
 
 export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | 'excused' | 'auto_clock_out';
+export type ArrivalTrack = 'early_in' | 'on_time' | 'late_in' | 'missing';
+export type DepartureTrack = 'early_out' | 'on_time' | 'late_out' | 'missing';
 
 export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre' | 'the_cutaway' | 'office';
 
@@ -26,6 +28,16 @@ type AssignmentStatusText =
    INTERFACES
    ============================================================ */
 
+export interface TimesheetBreakItem {
+    id: string;
+    timesheet_id: string;
+    shift_id: string;
+    break_seq: number;
+    break_start: string;
+    break_end: string | null;
+    duration_minutes: number | null;
+}
+
 export interface Shift {
     id: string;
     organization_id: string | null;
@@ -38,8 +50,6 @@ export interface Shift {
     roster_id: string;
     shift_date: string;
     template_id: string | null;
-    template_group: TemplateGroupType | null;
-    template_sub_group: string | null;
     is_from_template: boolean;
     template_instance_id: string | null;
     group_type: TemplateGroupType | null;
@@ -48,7 +58,7 @@ export interface Shift {
     shift_group_id: string | null;
     shift_subgroup_id: string | null;
     role_id: string | null;
-    remuneration_level: number | null;
+    remuneration_level?: number | null;
     /** The assignee's contract this shift is worked under (trg_shift_z_link_contract). */
     user_contract_id?: string | null;
     /**
@@ -61,9 +71,9 @@ export interface Shift {
     shift_pay_terms?: ShiftPayTermsField | null;
     start_time: string;
     end_time: string;
-    is_overnight: boolean;
+    is_overnight?: boolean;
     scheduled_length_minutes: number | null;
-    break_minutes: number;
+    break_minutes?: number | null;
     /** The paid rest pauses (cl 37) only. */
     paid_break_minutes: number;
     /** The meal-break window's length, or 0 where the meal break is paid (security). */
@@ -71,8 +81,10 @@ export interface Shift {
     /** Rostered meal-break start, `HH:mm:ss`, resolved against `start_time` across midnight. */
     break_start?: string | null;
     break_end?: string | null;
+    /** Ordered scheduled unpaid breaks (`[{ sno, start, end, duration }]`). */
+    unpaid_breaks?: Array<{ sno?: number; start: string; end: string; duration?: number }> | null;
     net_length_minutes: number | null;
-    total_hours: number | null;
+    total_hours?: number | null;
     timezone: string;
 
     // New UTC-at-Rest fields
@@ -88,12 +100,10 @@ export interface Shift {
     assignment_status?: AssignmentStatusText; // Made optional as sometimes missing from simple queries
     assignment_outcome?: 'confirmed' | 'no_show' | 'emergency_assigned' | 'pending' | null;
     fulfillment_status: 'scheduled' | 'bidding' | 'offered' | 'none';
-    is_draft: boolean;
+    is_draft?: boolean;
     is_cancelled: boolean;
-    is_on_bidding: boolean;
+    is_on_bidding?: boolean;
     cancelled_at: string | null;
-    cancelled_by_user_id: string | null;
-    cancellation_reason: string | null;
 
     offer_expires_at?: string | null; // Made optional as not in all views
     bidding_status: 'not_on_bidding' | 'on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';
@@ -102,33 +112,40 @@ export interface Shift {
     is_trade_requested?: boolean;
     trading_status?: 'NoTrade' | 'TradeRequested' | 'TradeAccepted';
 
-    // Attendance
+    // Attendance (hydrated from public.timesheets)
     attendance_status?: AttendanceStatus;
+    arrival_track?: ArrivalTrack | null;
+    departure_track?: DepartureTrack | null;
+    is_no_show?: boolean;
+    timesheet_id?: string | null;
+    /** Actual break punches hydrated from public.timesheet_breaks (ordered by break_seq). */
+    timesheet_breaks?: TimesheetBreakItem[];
+    /** Sum of completed actual break durations, or null when no breaks were punched. */
+    actual_unpaid_break_minutes?: number | null;
+    /** True when an unpaid break has been punched in (`break_end IS NULL`) and not yet ended. */
+    has_open_break?: boolean;
+    /** The active open break row, if any. */
+    open_break?: TimesheetBreakItem | null;
+    /** Billable unpaid break minutes (actuals or manager override; null if unpunched & not overridden). */
+    billable_unpaid_break_minutes?: number | null;
+    /** True when a manager explicitly overrode unpaid break minutes on billables. */
+    billable_unpaid_break_is_manual?: boolean;
     required_skills: string[];
     required_licenses: string[];
-    eligibility_snapshot: Record<string, any> | null;
     event_ids: string[];
     tags: string[];
 
-    compliance_snapshot: Record<string, any> | null;
-    compliance_checked_at: string | null;
-    compliance_override: boolean;
-    compliance_override_reason: string | null;
-    is_published: boolean;
+    is_published?: boolean;
     published_at: string | null;
-    published_by_user_id: string | null;
-    is_locked: boolean;
-    timesheet_id: string | null;
     actual_start: string | null;
     actual_end: string | null;
-    actual_net_minutes: number | null;
-    attendance_note: string | null;
-    payroll_exported: boolean;
     last_modified_by: string | null;
     last_modified_reason: string | null;
     notes: string | null;
     is_training: boolean;
-    // Joined Timesheet Data
+    // Joined Billable / Verification Data (hydrated from public.billables)
+    billable_id?: string | null;
+    payroll_exported?: boolean;
     timesheet_status?: string | null;
     timesheet_notes?: string | null;
     timesheet_rejected_reason?: string | null;
@@ -154,7 +171,6 @@ export interface Shift {
     adjusted_start_is_manual?: boolean;
     adjusted_end_is_manual?: boolean;
 
-    confirmed_at: string | null;
     organizations?: { id: string; name: string } | null;
     departments?: { id: string; name: string } | null;
     sub_departments?: { id: string; name: string } | null;

@@ -115,7 +115,7 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
 
     const { data, error } = await (supabase as any)
         .from('shifts')
-        .select('id, is_locked, trading_status, start_at')
+        .select('id, trading_status, start_at')
         .in('id', shiftIds);
 
     if (error || !data) return violations;
@@ -123,15 +123,6 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
     const now = new Date();
 
     for (const row of data) {
-        // Manual lock flag
-        if (row.is_locked) {
-            violations.push({
-                code: 'SHIFT_LOCKED',
-                message: `Shift on ${row.shift_date} is locked by a manager and cannot be swapped.`,
-                entity_id: row.id,
-            });
-            continue;
-        }
 
         // 4-hour time lock (#9 from spec)
         if (row.start_at) {

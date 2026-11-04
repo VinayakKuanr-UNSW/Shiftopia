@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateShiftShape, requiredMinEngagementMinutes } from '../evaluate';
+import { evaluateShiftShape, requiredMinEngagementMinutes, breakSpanMinutes } from '../evaluate';
 import type { ShapeInput } from '../types';
 
 /**
@@ -491,5 +491,103 @@ describe('salaried staff advisory gating', () => {
         const hit = r.hits.find(h => h.rule_id === 'SHAPE_MIN_ENGAGEMENT')!;
         expect(hit.status).toBe('WARNING');
         expect(hit.blocking).toBe(false);
+    });
+});
+
+describe('multi-unpaid breaks, overnight day-crossing spans & 15m increments', () => {
+    it('computes positive duration across midnight (23:45 to 00:15 = 30m)', () => {
+        expect(breakSpanMinutes('23:45', '00:15')).toBe(30);
+        expect(breakSpanMinutes('06:00', '06:30')).toBe(30);
+        expect(breakSpanMinutes('10:00', '10:00')).toBe(0);
+    });
+
+    it('accepts an overnight shift (22:00–06:00) with a midnight-crossing break (23:45–00:15)', () => {
+        const r = evaluateShiftShape(shift({
+            start_time: '22:00',
+            end_time: '06:00',
+            unpaid_breaks: [{ sno: 1, start: '23:45', end: '00:15', duration: 30 }],
+            unpaid_break_minutes: 30,
+            paid_break_minutes: 15,
+        }));
+        expect(has(r, 'SHAPE_BREAK_WINDOW')).toBe(false);
+        expect(has(r, 'SHAPE_MEAL_BREAK')).toBe(false);
+        expect(r.net_minutes).toBe(450);
+        expect(r.passed).toBe(true);
+    });
+
+    it('rejects overnight breaks that cross outside shift boundaries (21:45–22:15 or 05:45–06:15 on 22:00–06:00)', () => {
+        for (const [bStart, bEnd] of [['21:45', '22:15'], ['05:45', '06:15']] as const) {
+            const r = evaluateShiftShape(shift({
+                start_time: '22:00',
+                end_time: '06:00',
+                unpaid_breaks: [{ sno: 1, start: bStart, end: bEnd }],
+                unpaid_break_minutes: 30,
+                paid_break_minutes: 15,
+            }));
+            expect(has(r, 'SHAPE_BREAK_WINDOW'), `${bStart}-${bEnd}`).toBe(true);
+            expect(r.passed).toBe(false);
+        }
+    });
+
+    it('accepts multiple dispersed unpaid breaks on a long shift and clears timing warnings when stretches <= 5h', () => {
+        const r = evaluateShiftShape(shift({
+            start_time: '05:00',
+            end_time: '18:00',
+            unpaid_breaks: [
+                { sno: 1, start: '09:00', end: '09:30', duration: 30 },
+                { sno: 2, start: '13:30', end: '14:00', duration: 30 },
+            ],
+            unpaid_break_minutes: 60,
+            paid_break_minutes: 30,
+        }));
+        expect(r.net_minutes).toBe(720);
+        expect(has(r, 'SHAPE_BREAK_WINDOW')).toBe(false);
+        expect(has(r, 'SHAPE_MEAL_BREAK')).toBe(false);
+        expect(has(r, 'SHAPE_MEAL_BREAK_CEILING')).toBe(false);
+        expect(has(r, 'SHAPE_MEAL_BREAK_TIMING')).toBe(false);
+        expect(r.passed).toBe(true);
+    });
+
+    it('blocks overlapping, touching, or out-of-order unpaid breaks', () => {
+        const invalidLists = [
+            [{ sno: 1, start: '06:00', end: '06:45' }, { sno: 2, start: '06:30', end: '07:00' }], // overlap
+            [{ sno: 1, start: '06:00', end: '06:30' }, { sno: 2, start: '06:30', end: '07:00' }], // touching
+            [{ sno: 1, start: '13:00', end: '13:30' }, { sno: 2, start: '06:00', end: '06:30' }], // out of order
+        ];
+        for (const list of invalidLists) {
+            const r = evaluateShiftShape(shift({
+                start_time: '05:00',
+                end_time: '16:00',
+                unpaid_breaks: list,
+                unpaid_break_minutes: 60,
+                paid_break_minutes: 30,
+            }));
+            expect(has(r, 'SHAPE_BREAK_WINDOW')).toBe(true);
+            expect(r.passed).toBe(false);
+        }
+    });
+
+    it('enforces 15-minute increments on both unpaid breaks and paid rest pauses', () => {
+        const badUnpaid = evaluateShiftShape(shift({
+            start_time: '08:00',
+            end_time: '16:40',
+            unpaid_breaks: [{ sno: 1, start: '12:00', end: '12:40' }],
+            unpaid_break_minutes: 40,
+            paid_break_minutes: 30,
+        }));
+        expect(has(badUnpaid, 'SHAPE_BREAK_WINDOW')).toBe(true);
+        expect(badUnpaid.passed).toBe(false);
+
+        const badPaid = evaluateShiftShape(shift({
+            start_time: '09:00',
+            end_time: '13:00',
+            paid_break_minutes: 20,
+        }));
+        expect(has(badPaid, 'SHAPE_REST_PAUSE_INCREMENT')).toBe(true);
+        expect(badPaid.hits.find(h => h.rule_id === 'SHAPE_REST_PAUSE_INCREMENT')?.fix).toMatchObject({
+            field: 'paid_break_minutes',
+            value: 30,
+        });
+        expect(badPaid.passed).toBe(false);
     });
 });

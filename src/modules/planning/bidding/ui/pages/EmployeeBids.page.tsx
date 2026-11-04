@@ -291,7 +291,6 @@ const EmployeeBidsPage: React.FC = () => {
                 stateId: determineShiftState(s as any),
                 lifecycleStatus: s.lifecycle_status,
                 subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
-                droppedById: (s as any).dropped_by_id,
                 last_dropped_by: (s as any).last_dropped_by,
                 last_rejected_by: (s as any).last_rejected_by ?? null
             };

@@ -9,6 +9,8 @@ import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { getDailyToilByDay } from '@/modules/toil/api/toil.api';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
+import type { ScheduledBreakItem } from '@/modules/compliance/shape/types';
+import type { TimesheetBreakItem } from '@/modules/rosters/domain/shift.entity';
 import {
     snapToQuarterHour,
     isShiftFinished,
@@ -25,6 +27,7 @@ export interface TimesheetShiftRow {
     id: string;
     shiftId: string;
     timesheetId: string | null;
+    billableId: string | null;
 
     // Employee info
     employeeId: string | null;
@@ -71,6 +74,11 @@ export interface TimesheetShiftRow {
     unpaidBreakMinutes: number;
     paidBreak: string;
     unpaidBreak: string;
+    unpaidBreakIsManual?: boolean;
+    actualUnpaidBreakMinutes?: number | null;
+    hasOpenBreak?: boolean;
+    timesheetBreaks?: TimesheetBreakItem[];
+    unpaidBreaks?: ScheduledBreakItem[] | null;
     rosteredBreakStart: string | null;
     rosteredBreakEnd: string | null;
     actualBreakStart: string | null;
@@ -108,8 +116,12 @@ export interface TimesheetShiftRow {
     rawStartAt: string | null;
     rawEndAt: string | null;
 
-    // Attendance (from shifts table)
+    // Attendance (from public.timesheets tracks + public.billables)
     attendanceStatus: string | null;
+    arrivalTrack: string | null;
+    departureTrack: string | null;
+    isNoShow: boolean;
+    payrollExported: boolean;
     attendanceNote: string | null;
     // Minutes between actual times and scheduled times
     clockInVarianceMinutes: number | null;
@@ -171,18 +183,14 @@ export async function getShiftsForTimesheet(
                 start_at,
                 end_at,
                 assignment_status,
+                assignment_outcome,
                 lifecycle_status,
-                attendance_status,
-                actual_start,
-                actual_end,
-                attendance_note,
-                group_type,
-                sub_group_name,
                 roster_subgroup_id,
                 break_start,
                 break_end,
                 paid_break_minutes,
                 unpaid_break_minutes,
+                unpaid_breaks,
                 net_length_minutes,
                 scheduled_length_minutes,
                 is_training,
@@ -192,14 +200,13 @@ export async function getShiftsForTimesheet(
                 department_id,
                 sub_department_id,
                 role_id,
-                remuneration_level,
                 assigned_employee_id,
+                notes,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
-                roles(id, name),
-                remuneration_levels(level_number, level_name),
-                roster_subgroups!roster_subgroup_id(name, roster_groups(name))
+                roles(id, name, remuneration_level),
+                roster_subgroups!roster_subgroup_id(name, roster_groups(name, external_id))
             `)
             .gte('shift_date', startDate)
             .lte('shift_date', endDate || startDate)
@@ -219,9 +226,6 @@ export async function getShiftsForTimesheet(
         if (filters.shiftStatus) {
             query = query.eq('assignment_status', filters.shiftStatus as any);
         }
-        if (filters.groupType) {
-            query = query.eq('group_type', filters.groupType as any);
-        }
         if (filters.roleId) {
             query = query.eq('role_id', filters.roleId);
         }
@@ -237,8 +241,22 @@ export async function getShiftsForTimesheet(
             return [];
         }
 
+        let filteredShifts = shifts;
+        if (filters.groupType) {
+            filteredShifts = shifts.filter((s: any) => {
+                const rg = s.roster_subgroups?.roster_groups;
+                const extId = rg?.external_id;
+                const name = rg?.name?.toLowerCase().replace(/\s+/g, '_');
+                return extId === filters.groupType || name === filters.groupType || rg?.name === filters.groupType;
+            });
+        }
+
+        if (filteredShifts.length === 0) {
+            return [];
+        }
+
         // Fetch employees separately (no FK relationship in schema)
-        const employeeIds: string[] = Array.from(new Set(shifts.map(s => s.assigned_employee_id).filter((id): id is string => !!id)));
+        const employeeIds: string[] = Array.from(new Set(filteredShifts.map(s => s.assigned_employee_id).filter((id): id is string => !!id)));
         let employeeMap = new Map<string, { first_name: string; last_name: string; employment_type: string | null }>();
 
         if (employeeIds.length > 0) {
@@ -256,26 +274,36 @@ export async function getShiftsForTimesheet(
             }
         }
 
-        // Fetch timesheets for these shifts
-        const shiftIds: string[] = shifts.map(s => s.id);
-        const { data: timesheets } = await supabase
-            .from('timesheets')
-            .select('*')
-            .in('shift_id', shiftIds);
+        // Fetch ground-truth attendance actuals (timesheets) and manager verification/payroll (billables) in parallel
+        const shiftIds: string[] = filteredShifts.map(s => s.id);
+        const [{ data: timesheets }, { data: billables }] = await Promise.all([
+            supabase
+                .from('timesheets')
+                .select('id, shift_id, clock_in, clock_out, arrival_track, departure_track, is_no_show, worker_notes, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)')
+                .in('shift_id', shiftIds),
+            supabase
+                .from('billables')
+                .select('*')
+                .in('shift_id', shiftIds),
+        ]);
 
         const timesheetMap = new Map(
             (timesheets || []).map(t => [t.shift_id, t])
         );
+        const billableMap = new Map(
+            (billables || []).map(b => [b.shift_id, b])
+        );
 
         // Map to TimesheetShiftRow
-        const rows: TimesheetShiftRow[] = shifts.map((shift: any) => {
+        const rows: TimesheetShiftRow[] = filteredShifts.map((shift: any) => {
             const timesheet = timesheetMap.get(shift.id);
+            const billable = billableMap.get(shift.id);
             const employee = shift.assigned_employee_id ? employeeMap.get(shift.assigned_employee_id) : null;
             const org = shift.organizations;
             const dept = shift.departments;
             const subDept = shift.sub_departments;
             const role = shift.roles;
-            const remLevel = shift.remuneration_levels;
+            const remLevel = (shift as any).remuneration_levels;
 
             const employeeName = employee
                 ? `${employee.first_name || ''} ${employee.last_name || ''}`.trim()
@@ -284,14 +312,59 @@ export async function getShiftsForTimesheet(
             const scheduledMins = shift.scheduled_length_minutes ||
                 calculateMinutes(shift.start_time, shift.end_time);
 
+            const clockIn = timesheet?.clock_in ?? null;
+            const clockOut = timesheet?.clock_out ?? null;
+            const arrivalTrack = timesheet?.arrival_track ?? null;
+            const departureTrack = timesheet?.departure_track ?? null;
+            const physicalNoShow = timesheet?.is_no_show === true || shift.assignment_outcome === 'no_show';
+            const managerOverrodeNoShow = !!(
+                billable &&
+                billable.status !== 'no_show' &&
+                (billable.billable_start || billable.billable_end)
+            );
+            const effectiveNoShow = (physicalNoShow || billable?.status === 'no_show') && !managerOverrodeNoShow;
+            const derivedAttendanceStatus = effectiveNoShow
+                ? 'no_show'
+                : arrivalTrack === 'late_in'
+                ? 'late'
+                : clockIn
+                ? 'checked_in'
+                : null;
+
+            const rawBreaks = Array.isArray(timesheet?.timesheet_breaks) ? timesheet.timesheet_breaks : [];
+            const sortedBreaks: TimesheetBreakItem[] = [...rawBreaks]
+                .sort((a: any, b: any) => (a.break_seq ?? 0) - (b.break_seq ?? 0))
+                .map((b: any) => ({
+                    id: String(b.id),
+                    timesheet_id: String(b.timesheet_id),
+                    shift_id: String(b.shift_id),
+                    break_seq: Number(b.break_seq ?? 1),
+                    break_start: String(b.break_start),
+                    break_end: b.break_end ? String(b.break_end) : null,
+                    duration_minutes:
+                        b.duration_minutes !== undefined && b.duration_minutes !== null
+                            ? Number(b.duration_minutes)
+                            : null,
+                }));
+            const completedBreaks = sortedBreaks.filter(b => b.break_end && b.duration_minutes !== null);
+            const actualUnpaidBreakMinutes = completedBreaks.length > 0
+                ? completedBreaks.reduce((acc, b) => acc + (b.duration_minutes ?? 0), 0)
+                : null;
+            const hasOpenBreak = sortedBreaks.some(b => !b.break_end);
 
             // Resolve each side ONCE — every field below (net minutes, adjusted
             // start/end, and their source) derives from these two results so the
             // tier logic can't drift between them.
-            const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
-            const resolvedStart = resolveBillableSide(timesheet?.start_time, shift.actual_start, finished);
-            const resolvedEnd = resolveBillableSide(timesheet?.end_time, shift.actual_end, finished);
-            const unpaidBreakForNet = timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0);
+            const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, clockOut);
+            const resolvedStart = resolveBillableSide(billable?.billable_start, clockIn, finished);
+            const resolvedEnd = resolveBillableSide(billable?.billable_end, clockOut, finished);
+
+            // Zero-fallback rule: unpaid break derives from billables (if manager edited or DB synced)
+            // or from actual completed timesheet_breaks. NEVER falls back to shift.unpaid_break_minutes!
+            const unpaidBreakForNet = billable?.unpaid_break_minutes != null
+                ? billable.unpaid_break_minutes
+                : (actualUnpaidBreakMinutes ?? 0);
+            const paidBreakForNet = billable?.paid_break_minutes != null ? billable.paid_break_minutes : (shift.paid_break_minutes || 0);
             const rawNetMins = calculateNetMinutes(resolvedStart, resolvedEnd, unpaidBreakForNet);
 
             // EBA minimum-engagement floor (F-locked 2026-07-28): only applied
@@ -333,12 +406,12 @@ export async function getShiftsForTimesheet(
                       return ms <= scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
                   })();
             const clockInVariance = (() => {
-                const effectiveMs = shift.actual_start ? new Date(shift.actual_start).getTime() : null;
+                const effectiveMs = clockIn ? new Date(clockIn).getTime() : null;
                 if (effectiveMs === null) return null;
                 return Math.round((effectiveMs - scheduledStartMs) / 60000);
             })();
             const clockOutVariance = (() => {
-                const effectiveMs = shift.actual_end ? new Date(shift.actual_end).getTime() : null;
+                const effectiveMs = clockOut ? new Date(clockOut).getTime() : null;
                 if (effectiveMs === null) return null;
                 return Math.round((effectiveMs - scheduledEndMs) / 60000);
             })();
@@ -347,6 +420,7 @@ export async function getShiftsForTimesheet(
                 id: shift.id,
                 shiftId: shift.id,
                 timesheetId: timesheet?.id || null,
+                billableId: billable?.id || null,
 
                 employeeId: shift.assigned_employee_id,
                 employeeName,
@@ -358,30 +432,30 @@ export async function getShiftsForTimesheet(
                 subDepartmentId: shift.sub_department_id,
                 subDepartmentName: subDept?.name || '',
 
-                // Prefer normalized roster_subgroups join; fall back to legacy columns
-                groupType: shift.roster_subgroups?.roster_groups?.name ?? shift.group_type ?? null,
-                subGroupName: shift.roster_subgroups?.name ?? shift.sub_group_name ?? null,
+                // Prefer normalized roster_subgroups join
+                groupType: shift.roster_subgroups?.roster_groups?.name ?? null,
+                subGroupName: shift.roster_subgroups?.name ?? null,
 
                 roleId: shift.role_id,
                 roleName: role?.name || '',
-                remunerationLevelId: shift.remuneration_level != null ? shift.remuneration_level.toString() : null,
-                remunerationLevel: remLevel?.level_name || '',
-                remunerationLevelNumber: shift.remuneration_level ?? null,
+                remunerationLevelId: role?.remuneration_level != null ? role.remuneration_level.toString() : ((shift as any).remuneration_level != null ? (shift as any).remuneration_level.toString() : null),
+                remunerationLevel: remLevel?.level_name || (role?.remuneration_level != null ? `Level ${role.remuneration_level}` : ''),
+                remunerationLevelNumber: role?.remuneration_level ?? (shift as any).remuneration_level ?? null,
 
                 shiftDate: shift.shift_date,
                 scheduledStart: shift.start_time,
                 scheduledEnd: shift.end_time,
 
                 // Actual/Clock times
-                // Source of truth: ALWAYS shift.actual_start / actual_end (raw data)
-                // We deliberately do NOT fall back to timesheet adjustments here, as 
-                // the "Actual" column must preserve the true history record.
-                clockIn: shift.actual_start ?? null,
-                clockOut: shift.actual_end ?? null,
+                // Source of truth: ALWAYS public.timesheets.clock_in / clock_out (raw data)
+                // We deliberately do NOT fall back to billables adjustments here, as
+                // the "Actual" column must preserve the true ground-truth punch history.
+                clockIn,
+                clockOut,
 
                 // Adjusted times (billable) — resolved once above via resolveBillableSide:
-                //   1. Explicit manager edit → timesheet.start_time / end_time  (source = 'manual')
-                //   2. Snapped actual clock  → snap actual_start/end once finished (source = 'snapped')
+                //   1. Explicit manager edit → billable.billable_start / billable_end (source = 'manual')
+                //   2. Snapped actual clock  → snap clock_in/clock_out once finished (source = 'snapped')
                 //   3. 'missing' (rendered as null here) once finished with neither —
                 //      deliberately NOT filled from the schedule, so a blank cell
                 //      keeps signalling "needs manager attention" instead of hiding it.
@@ -389,23 +463,20 @@ export async function getShiftsForTimesheet(
                 adjustedEnd: resolvedEnd.hhmm,
                 // Whether the manager has explicitly saved a custom adjusted time
                 adjustedStartSource: resolvedStart.source === 'missing' ? null : resolvedStart.source,
-                // An auto clock-out owns the OUT side (unless a manager overrode it):
-                // mark it 'auto' so the billable end carries the 🤖 marker instead of
-                // a bare '-'. The IN side is a real clock-in, so it's left as-is.
                 adjustedEndSource: resolvedEnd.source === 'manual'
                     ? 'manual'
                     : (resolvedEnd.source === 'missing' ? null : resolvedEnd.source),
-                isAdjustedManual: !!(timesheet?.start_time || timesheet?.end_time),
-                editCount: (timesheet as any)?.edit_count ?? 0,
-                version: (timesheet as any)?.version ?? null,
-                arrivalVarianceReason: (timesheet as any)?.arrival_variance_reason ?? null,
-                departureVarianceReason: (timesheet as any)?.departure_variance_reason ?? null,
+                isAdjustedManual: !!(billable?.billable_start || billable?.billable_end),
+                editCount: billable?.edit_count ?? 0,
+                version: billable?.version ?? null,
+                arrivalVarianceReason: billable?.arrival_variance_reason ?? null,
+                departureVarianceReason: billable?.departure_variance_reason ?? null,
 
                 ...(() => {
                     let breakVarianceMinutes: number | null = null;
                     let hasBreakVarianceFlag = false;
-                    if (timesheet?.actual_break_start && shift.break_start) {
-                        const aTime = timesheet.actual_break_start.slice(0, 5);
+                    if (billable?.break_start && shift.break_start) {
+                        const aTime = billable.break_start.slice(0, 5);
                         const rTime = shift.break_start.slice(0, 5);
                         const [aH, aM] = aTime.split(':').map(Number);
                         const [rH, rM] = rTime.split(':').map(Number);
@@ -419,17 +490,22 @@ export async function getShiftsForTimesheet(
                     return {
                         rosteredBreakStart: shift.break_start || null,
                         rosteredBreakEnd: shift.break_end || null,
-                        actualBreakStart: timesheet?.actual_break_start || null,
-                        actualBreakEnd: timesheet?.actual_break_end || null,
+                        actualBreakStart: billable?.break_start || null,
+                        actualBreakEnd: billable?.break_end || null,
                         breakVarianceMinutes,
                         hasBreakVarianceFlag,
                     };
                 })(),
 
-                paidBreakMinutes: timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0),
-                unpaidBreakMinutes: timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0),
-                paidBreak: String(timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0)),
-                unpaidBreak: String(timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0)),
+                paidBreakMinutes: paidBreakForNet,
+                unpaidBreakMinutes: unpaidBreakForNet,
+                paidBreak: String(paidBreakForNet),
+                unpaidBreak: String(unpaidBreakForNet),
+                unpaidBreakIsManual: billable?.unpaid_break_is_manual ?? false,
+                actualUnpaidBreakMinutes,
+                hasOpenBreak,
+                timesheetBreaks: sortedBreaks,
+                unpaidBreaks: shift.unpaid_breaks ?? null,
                 scheduledLengthMinutes: scheduledMins,
                 netLengthMinutes: calculatedNetMins,
                 // EBA minimum-engagement top-up (F-locked 2026-07-28): true when
@@ -444,18 +520,22 @@ export async function getShiftsForTimesheet(
                 shiftStatus: shift.assignment_status || 'open',
                 lifecycleStatus: shift.lifecycle_status || 'scheduled',
                 liveStatus: shift.lifecycle_status || 'Scheduled',
-                timesheetStatus: timesheet?.status || null,
+                timesheetStatus: billable?.status || (effectiveNoShow ? 'no_show' : null),
                 rawStartAt: shift.start_at || null,
                 rawEndAt: shift.end_at || null,
 
-                attendanceStatus: shift.attendance_status || null,
-                attendanceNote: shift.attendance_note || null,
+                attendanceStatus: derivedAttendanceStatus,
+                arrivalTrack,
+                departureTrack,
+                isNoShow: timesheet?.is_no_show === true,
+                payrollExported: billable?.payroll_exported === true,
+                attendanceNote: shift.notes || timesheet?.worker_notes || null,
                 clockInVarianceMinutes: clockInVariance,
                 clockOutVarianceMinutes: clockOutVariance,
                 varianceMinutes: clockInVariance, // legacy alias for clock-in variance
 
-                notes: timesheet?.notes || null,
-                rejectedReason: timesheet?.rejected_reason || null,
+                notes: billable?.notes || null,
+                rejectedReason: billable?.rejected_reason || null,
                 toilMinutes: 0,
             };
         });
@@ -463,14 +543,17 @@ export async function getShiftsForTimesheet(
         // Time in lieu booked by the database for these days (best-effort: a
         // failed read only hides the badge).
         try {
-            const approved = rows.filter(r => r.timesheetStatus === 'approved' && r.timesheetId && r.employeeId);
+            const approved = rows.filter(r => r.timesheetStatus === 'approved' && (r.billableId || r.timesheetId) && r.employeeId);
             if (approved.length > 0) {
                 const dates = approved.map(r => r.shiftDate).sort();
                 const toil = await getDailyToilByDay(
                     approved.map(r => r.employeeId!), dates[0], dates[dates.length - 1]);
                 for (const r of approved) {
                     const day = toil.get(`${r.employeeId}:${r.shiftDate}`);
-                    if (day && day.minutes > 0 && day.timesheetIds.includes(r.timesheetId!)) r.toilMinutes = day.minutes;
+                    const matchedId =
+                        (r.billableId && day?.timesheetIds.includes(r.billableId)) ||
+                        (r.timesheetId && day?.timesheetIds.includes(r.timesheetId));
+                    if (day && day.minutes > 0 && matchedId) r.toilMinutes = day.minutes;
                 }
             }
         } catch (e) {
@@ -560,38 +643,53 @@ export async function updateTimesheetEntry(
     opts?: { expectedVersion?: number | null; actorId?: string | null }
 ): Promise<boolean> {
     try {
-        // 1. Check if timesheet exists
+        // 1. Check if billables row exists for this shift
         const { data: existing } = await (supabase
-            .from('timesheets')
-            .select('id, status, start_time, end_time')
+            .from('billables')
+            .select('id, status, billable_start, billable_end, payroll_exported, version, timesheet_id, unpaid_break_minutes')
             .eq('shift_id', shiftId) as any)
             .maybeSingle();
 
-        // Always get shift details to determine default snapped/scheduled times and handle no_show status
+        // Always get shift + ground-truth timesheets details to determine default snapped/scheduled times and no_show status
         const { data: shift } = await supabase
             .from('shifts')
-            .select('attendance_status, start_time, end_time, actual_start, actual_end, shift_date, payroll_exported')
+            .select('assignment_outcome, start_time, end_time, shift_date, timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show)')
             .eq('id', shiftId)
             .single();
 
+        const rawTs = (shift as any)?.timesheets;
+        const tsRow = Array.isArray(rawTs) ? rawTs[0] ?? null : rawTs ?? null;
+        const actualClockIn: string | null = tsRow?.clock_in ?? null;
+        const actualClockOut: string | null = tsRow?.clock_out ?? null;
+        const isShiftNoShow =
+            tsRow?.is_no_show === true ||
+            (shift as any)?.assignment_outcome === 'no_show';
+
+        // Every live shift (assigned, not Draft, not cancelled) carries a billable
+        // created by trg_sync_timesheets_on_shift_change. No row means the shift
+        // is not live, so there is nothing to review.
+        if (!existing) {
+            console.warn(`[updateTimesheetEntry] No billable for shift ${shiftId} — it is draft, unassigned or cancelled.`);
+            return false;
+        }
+
         // Audit H-13: once this shift's payroll has been EXPORTED
-        // (shifts.payroll_exported), the record is truly terminal — this is the
-        // real mechanism the vestigial in-memory API's 'LOCKED' status was
-        // standing in for, now backed by the live schema (shifts.payroll_exported
-        // → synced to shift_payroll_records by the DB trigger
-        // _sync_payroll_record). Nothing is allowed through here — not even a
-        // notes/reason annotation — because those numbers were already paid
-        // out; a later clarification belongs in the NEXT pay run, not a silent
-        // edit to history.
-        if (shift?.payroll_exported) {
+        // (billables.payroll_exported), the record is truly terminal —
+        // nothing is allowed through here, not even a notes/reason annotation,
+        // because those numbers were already paid out; a later clarification
+        // belongs in the NEXT pay run, not a silent edit to history.
+        const isExported = existing.payroll_exported === true;
+
+        if (isExported) {
             console.warn(`[updateTimesheetEntry] Blocking update for shift ${shiftId} — already exported to payroll.`);
             return false;
         }
 
         // 2. Safety Guard: If it's already Approved, Rejected, or No-Show
         // Block updates to finalized records, UNLESS manager is editing metrics.
-        let currentStatus = (existing?.status || '').toLowerCase();
-        if (!currentStatus && shift?.attendance_status === 'no_show') {
+        // A no-show's billable is still the untouched 'draft' row created with the shift.
+        let currentStatus = (existing.status || '').toLowerCase();
+        if ((!currentStatus || currentStatus === 'draft') && isShiftNoShow) {
             currentStatus = 'no_show';
         }
 
@@ -636,33 +734,34 @@ export async function updateTimesheetEntry(
             }
         }
 
-        // If transitioning from a no_show state by editing metrics, clear the shift no_show status
-        if (isEditingMetrics && currentStatus === 'no_show') {
+        // If transitioning from a no_show state by editing metrics, clear shift assignment_outcome if set
+        if (isEditingMetrics && currentStatus === 'no_show' && (shift as any)?.assignment_outcome === 'no_show') {
             const { error: shiftUpdateErr } = await supabase
                 .from('shifts')
                 .update({
-                    attendance_status: null as any,
-                    attendance_note: 'No-Show overridden by manager',
+                    assignment_outcome: null,
+                    notes: 'No-Show overridden by manager',
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', shiftId);
 
             if (shiftUpdateErr) {
-                console.error('[updateTimesheetEntry] Shift attendance status clearance error:', shiftUpdateErr);
+                console.error('[updateTimesheetEntry] Shift assignment_outcome clearance error:', shiftUpdateErr);
             }
         }
 
-        // 3. Build payload
+        // 3. Build payload for public.billables (and optional raw punch overrides for public.timesheets)
         const payload: any = {
             updated_at: new Date().toISOString()
         };
+        const rawClockPayload: { clock_in?: string; clock_out?: string } = {};
 
-        // clock_in/clock_out are timestamptz — only set if value is a proper ISO timestamp
+        // clock_in/clock_out are timestamptz on public.timesheets — only set if value is a proper ISO timestamp
         if (updates.clockIn !== undefined && updates.clockIn && isIsoTimestamp(updates.clockIn)) {
-            payload.clock_in = updates.clockIn;
+            rawClockPayload.clock_in = updates.clockIn;
         }
         if (updates.clockOut !== undefined && updates.clockOut && isIsoTimestamp(updates.clockOut)) {
-            payload.clock_out = updates.clockOut;
+            rawClockPayload.clock_out = updates.clockOut;
         }
 
         const validTime = (val: string | undefined): string | null | undefined => {
@@ -681,31 +780,34 @@ export async function updateTimesheetEntry(
             return null;
         };
 
+        const effectiveClockIn = rawClockPayload.clock_in ?? actualClockIn;
+        const effectiveClockOut = rawClockPayload.clock_out ?? actualClockOut;
+
         if (updates.adjustedStart !== undefined) {
             const adjStart = validTime(updates.adjustedStart);
             const normAdjStart = normalizeToHHMM(adjStart);
-            const defaultStart = shift ? normalizeToHHMM(snapToQuarterHour(shift.actual_start)) : null;
+            const defaultStart = shift ? normalizeToHHMM(snapToQuarterHour(effectiveClockIn)) : null;
 
             if (normAdjStart && normAdjStart !== defaultStart) {
-                payload.start_time = adjStart;
+                payload.billable_start = adjStart;
             } else {
-                payload.start_time = null;
+                payload.billable_start = null;
             }
         }
 
         if (updates.adjustedEnd !== undefined) {
             const adjEnd = validTime(updates.adjustedEnd);
             const normAdjEnd = normalizeToHHMM(adjEnd);
-            const defaultEnd = shift ? normalizeToHHMM(snapToQuarterHour(shift.actual_end)) : null;
+            const defaultEnd = shift ? normalizeToHHMM(snapToQuarterHour(effectiveClockOut)) : null;
 
             if (normAdjEnd && normAdjEnd !== defaultEnd) {
-                payload.end_time = adjEnd;
+                payload.billable_end = adjEnd;
             } else {
-                payload.end_time = null;
+                payload.billable_end = null;
             }
         }
 
-        // Reset status to submitted if editing metrics on a finalized timesheet
+        // Reset status to submitted if editing metrics on a finalized billable record
         if (isEditingMetrics && ['approved', 'rejected', 'no_show'].includes(currentStatus)) {
             payload.status = (updates.status || 'submitted').toLowerCase();
         } else if (updates.status !== undefined) {
@@ -719,16 +821,24 @@ export async function updateTimesheetEntry(
         if (updates.arrivalVarianceReason !== undefined) payload.arrival_variance_reason = updates.arrivalVarianceReason || null;
         if (updates.departureVarianceReason !== undefined) payload.departure_variance_reason = updates.departureVarianceReason || null;
 
-        // Breaks (minutes and window)
+        // Breaks (minutes and window on public.billables)
         if (updates.paidBreak !== undefined) payload.paid_break_minutes = parseInt(updates.paidBreak, 10) || 0;
-        if (updates.unpaidBreak !== undefined) payload.unpaid_break_minutes = parseInt(updates.unpaidBreak, 10) || 0;
-        if (updates.actualBreakStart !== undefined) payload.actual_break_start = updates.actualBreakStart || null;
-        if (updates.actualBreakEnd !== undefined) payload.actual_break_end = updates.actualBreakEnd || null;
-        
-        // NOTE: Length / Net are DERIVED on read (billable minutes); the
-        // `timesheets` table has NO length/net_length columns, so writing them
-        // 400s (PGRST204) and fails the whole save. updates.length/netLength
-        // are intentionally ignored. Pay is shown in Gross Pay alone.
+        // The editor always sends the break it displayed (billable value, else 0).
+        // Only a CHANGED value is a manager override; re-sending the displayed
+        // one must not freeze the break against later timesheet_breaks syncs.
+        if (updates.unpaidBreak !== undefined) {
+            const unpaidBreakMinutes = parseInt(updates.unpaidBreak, 10) || 0;
+            if (unpaidBreakMinutes !== (existing.unpaid_break_minutes ?? 0)) {
+                payload.unpaid_break_minutes = unpaidBreakMinutes;
+                payload.unpaid_break_is_manual = true;
+            }
+        }
+        if (updates.actualBreakStart !== undefined) payload.break_start = updates.actualBreakStart || null;
+        if (updates.actualBreakEnd !== undefined) payload.break_end = updates.actualBreakEnd || null;
+
+        // NOTE: gross_length_minutes / net_length_minutes on public.billables are
+        // maintained automatically by the DB BEFORE trigger fn_billable_defaults_and_lengths().
+        // updates.length / updates.netLength from the UI form are intentionally ignored.
 
         // 4. Completeness guard: refuse to move a FINISHED shift to 'approved'
         // while either side of the billable window is still unresolved (no
@@ -739,12 +849,14 @@ export async function updateTimesheetEntry(
         // downstream pricing trusts an 'approved' status to mean real hours.
         if (payload.status === 'approved') {
             const finishedForApproval = isShiftFinished(
-                shift?.shift_date ?? '', shift?.start_time ?? '', shift?.end_time ?? '', shift?.actual_end,
+                shift?.shift_date ?? '', shift?.start_time ?? '', shift?.end_time ?? '', effectiveClockOut,
             );
-            const effectiveManualStart = payload.start_time !== undefined ? payload.start_time : (existing?.start_time ?? null);
-            const effectiveManualEnd = payload.end_time !== undefined ? payload.end_time : (existing?.end_time ?? null);
-            const approvalStart = resolveBillableSide(effectiveManualStart, shift?.actual_start, finishedForApproval);
-            const approvalEnd = resolveBillableSide(effectiveManualEnd, shift?.actual_end, finishedForApproval);
+            const existingManualStart = existing?.billable_start ?? (existing as any)?.start_time ?? null;
+            const existingManualEnd = existing?.billable_end ?? (existing as any)?.end_time ?? null;
+            const effectiveManualStart = payload.billable_start !== undefined ? payload.billable_start : existingManualStart;
+            const effectiveManualEnd = payload.billable_end !== undefined ? payload.billable_end : existingManualEnd;
+            const approvalStart = resolveBillableSide(effectiveManualStart, effectiveClockIn, finishedForApproval);
+            const approvalEnd = resolveBillableSide(effectiveManualEnd, effectiveClockOut, finishedForApproval);
 
             if (approvalStart.source === 'missing' || approvalEnd.source === 'missing') {
                 console.error(
@@ -768,112 +880,59 @@ export async function updateTimesheetEntry(
             payload.approved_by = null;
         }
 
-        if (existing) {
-            // App-level optimistic-lock bump: prod has the `version` column but no
-            // bump trigger, so increment it here alongside the CAS guard below.
-            // Forward-compatible with a future trigger (both land on
-            // expectedVersion+1). Only the guarded path bumps; bulk/legacy writes
-            // stay last-write-wins by design.
-            if (opts?.expectedVersion != null) {
-                payload.version = opts.expectedVersion + 1;
-            }
-            // Update existing — with an optimistic-lock CAS when the caller passed
-            // the version it loaded. A stale version matches zero rows (no error),
-            // which we surface as a conflict instead of clobbering the newer row.
-            let updateQuery = supabase
-                .from('timesheets')
-                .update(payload)
-                .eq('id', existing.id);
-            if (opts?.expectedVersion != null) {
-                updateQuery = updateQuery.eq('version', opts.expectedVersion);
-            }
-            let { data: updatedRows, error } = await updateQuery.select('id');
-
-            // Graceful fallback if variance columns are unmapped in PostgREST schema cache
-            if (error?.code === 'PGRST204' && (payload.arrival_variance_reason !== undefined || payload.departure_variance_reason !== undefined)) {
-                const fallbackPayload = { ...payload };
-                delete fallbackPayload.arrival_variance_reason;
-                delete fallbackPayload.departure_variance_reason;
-                let retryQuery = supabase
-                    .from('timesheets')
-                    .update(fallbackPayload)
-                    .eq('id', existing.id);
-                if (opts?.expectedVersion != null) {
-                    retryQuery = retryQuery.eq('version', opts.expectedVersion);
-                }
-                const retryRes = await retryQuery.select('id');
-                updatedRows = retryRes.data;
-                error = retryRes.error;
-            }
-
-            if (error) throw error;
-            if (opts?.expectedVersion != null && (!updatedRows || updatedRows.length === 0)) {
-                throw new TimesheetConflictError(shiftId);
-            }
-            // Without a version, zero rows means row-level security refused the
-            // caller (timesheet.approve where the shift sits) — it must not read
-            // as saved. The catch below turns it into the honest `false`.
-            assertWrote({ error, data: updatedRows }, 'change this timesheet');
-        } else {
-            // Get shift details for new timesheet
-            const { data: shift } = await supabase
+        // If raw ISO punch edits were explicitly passed, persist them to public.timesheets
+        if (rawClockPayload.clock_in || rawClockPayload.clock_out) {
+            const { data: shiftMeta } = await supabase
                 .from('shifts')
-                .select('assigned_employee_id, shift_date, start_time, end_time, start_at, end_at, actual_start, actual_end, unpaid_break_minutes')
+                .select('assigned_employee_id, organization_id')
                 .eq('id', shiftId)
                 .single();
-
-            if (!shift) throw new Error('Shift not found');
-            if (!shift.assigned_employee_id) throw new Error('Cannot create timesheet for unassigned shift');
-
-            const clockInTs: string = updates.clockIn
-                ? (isIsoTimestamp(updates.clockIn) ? updates.clockIn : `${shift.shift_date}T${shift.start_time}`)
-                : (shift.actual_start ?? shift.start_at ?? `${shift.shift_date}T${shift.start_time}`);
-
-            const clockOutTs: string | null = updates.clockOut
-                ? (isIsoTimestamp(updates.clockOut) ? updates.clockOut : null)
-                : (shift.actual_end ?? shift.end_at ?? null);
-
-            // The new row starts with the SHIFT'S unpaid break. Left out, the
-            // column defaults to 0 and every reader (this page, Gross Pay, TOIL)
-            // takes the timesheet's 0 over the shift's break — a row created by
-            // a plain "Approve" was billed with no unpaid break at all.
-            if (payload.unpaid_break_minutes === undefined && shift.unpaid_break_minutes != null) {
-                payload.unpaid_break_minutes = shift.unpaid_break_minutes;
-            }
-
-            let insertRes = await supabase
-                .from('timesheets')
-                .insert({
-                    shift_id: shiftId,
-                    employee_id: shift.assigned_employee_id,
-                    profile_id: shift.assigned_employee_id,
-                    work_date: shift.shift_date,
-                    clock_in: clockInTs,
-                    ...(clockOutTs ? { clock_out: clockOutTs } : {}),
-                    status: (updates.status || 'draft').toLowerCase(),
-                    ...payload,
-                });
-
-            if (insertRes.error?.code === 'PGRST204' && (payload.arrival_variance_reason !== undefined || payload.departure_variance_reason !== undefined)) {
-                const fallbackPayload = { ...payload };
-                delete fallbackPayload.arrival_variance_reason;
-                delete fallbackPayload.departure_variance_reason;
-                insertRes = await supabase
+            if (shiftMeta?.assigned_employee_id && shiftMeta?.organization_id) {
+                const { data: upsertedTs } = await supabase
                     .from('timesheets')
-                    .insert({
+                    .upsert({
                         shift_id: shiftId,
-                        employee_id: shift.assigned_employee_id,
-                        profile_id: shift.assigned_employee_id,
-                        work_date: shift.shift_date,
-                        clock_in: clockInTs,
-                        ...(clockOutTs ? { clock_out: clockOutTs } : {}),
-                        status: (updates.status || 'draft').toLowerCase(),
-                        ...fallbackPayload,
-                    });
+                        employee_id: shiftMeta.assigned_employee_id,
+                        organization_id: shiftMeta.organization_id,
+                        ...rawClockPayload,
+                        source: 'manager_override',
+                        updated_at: new Date().toISOString(),
+                    }, { onConflict: 'shift_id' })
+                    .select('id')
+                    .single();
+                if (upsertedTs?.id && !existing.timesheet_id) {
+                    payload.timesheet_id = upsertedTs.id;
+                }
             }
-
-            if (insertRes.error) throw insertRes.error;
         }
+
+        // Optimistic-lock bump alongside the CAS guard below.
+        // fn_billable_defaults_and_lengths() only auto-increments when
+        // NEW.version IS NOT DISTINCT FROM OLD.version, so setting
+        // expectedVersion + 1 here lands cleanly on expectedVersion + 1.
+        if (opts?.expectedVersion != null) {
+            payload.version = opts.expectedVersion + 1;
+        }
+        // Update existing billables row — with an optimistic-lock CAS when the caller passed
+        // the version it loaded. A stale version matches zero rows (no error),
+        // which we surface as a conflict instead of clobbering the newer row.
+        let updateQuery = supabase
+            .from('billables')
+            .update(payload)
+            .eq('id', existing.id);
+        if (opts?.expectedVersion != null) {
+            updateQuery = updateQuery.eq('version', opts.expectedVersion);
+        }
+        const { data: updatedRows, error } = await updateQuery.select('id');
+
+        if (error) throw error;
+        if (opts?.expectedVersion != null && (!updatedRows || updatedRows.length === 0)) {
+            throw new TimesheetConflictError(shiftId);
+        }
+        // Without a version, zero rows means row-level security refused the
+        // caller (timesheet.approve where the shift sits) — it must not read
+        // as saved. The catch below turns it into the honest `false`.
+        assertWrote({ error, data: updatedRows }, 'change this timesheet');
 
         // Cleanup: If approved, mark shift as Completed
         if (updates.status === 'approved') {
@@ -957,35 +1016,60 @@ export async function markShiftAsNoShow(
     userId: string
 ): Promise<boolean> {
     try {
-        // Update shift status
-        const { error: shiftError, count: shiftsMarked } = await supabase
+        const nowIso = new Date().toISOString();
+
+        // Update shift assignment_outcome + lifecycle_status
+        const { data: updatedShifts, error: shiftError } = await supabase
             .from('shifts')
             .update({
-                attendance_status: 'no_show',
+                assignment_outcome: 'no_show',
                 lifecycle_status: 'Completed',
-                updated_at: new Date().toISOString(),
+                updated_at: nowIso,
                 last_modified_by: userId
-            }, { count: 'exact' })
-            .eq('id', shiftId);
+            })
+            .eq('id', shiftId)
+            .select('id, assigned_employee_id, organization_id');
 
         if (shiftError) {
             console.error('[markShiftAsNoShow] Shift error:', shiftError);
             return false;
         }
         // Zero rows: row-level security refused the caller. Not a no-show.
-        if (shiftsMarked === 0) {
+        if (!updatedShifts || updatedShifts.length === 0) {
             console.error('[markShiftAsNoShow] Refused: no shift updated (outside the caller\'s access?)', shiftId);
             return false;
         }
 
-        // Ensure a timesheet row exists at status 'no_show'. Zero hours/pay is
-        // derived on read — there are no length/net/pay columns to write.
-        const tsOk = await updateTimesheetEntry(shiftId, {
+        const markedShift = updatedShifts[0];
+        if (markedShift.assigned_employee_id && markedShift.organization_id) {
+            const { data: existingTs } = await supabase
+                .from('timesheets')
+                .select('id, clock_in, clock_out')
+                .eq('shift_id', shiftId)
+                .maybeSingle();
+
+            if (!existingTs || (!existingTs.clock_in && !existingTs.clock_out)) {
+                await supabase
+                    .from('timesheets')
+                    .upsert({
+                        shift_id: shiftId,
+                        employee_id: markedShift.assigned_employee_id,
+                        organization_id: markedShift.organization_id,
+                        arrival_track: 'missing',
+                        departure_track: 'missing',
+                        source: 'manager_no_show',
+                        updated_at: nowIso,
+                    }, { onConflict: 'shift_id' });
+            }
+        }
+
+        // Ensure a billables row exists at status 'no_show'.
+        const billableOk = await updateTimesheetEntry(shiftId, {
             status: 'no_show',
             notes: 'Marked as No-Show by manager',
         }, { actorId: userId });
-        if (!tsOk) {
-            console.warn(`[markShiftAsNoShow] shift ${shiftId} marked no-show, but its timesheet row could not be written.`);
+        if (!billableOk) {
+            console.warn(`[markShiftAsNoShow] shift ${shiftId} marked no-show, but its billables row could not be written.`);
         }
 
         return true;

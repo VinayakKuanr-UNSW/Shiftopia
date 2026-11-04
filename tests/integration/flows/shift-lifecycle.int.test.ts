@@ -204,9 +204,16 @@ describe('clock in / clock out', () => {
 });
 
 describe('timesheet approval', () => {
-    const status = () => db(`SELECT status FROM public.timesheets WHERE id = '${TIMESHEET_S1}'`)[0][0];
+    // Approval lives on public.billables. Publishing S1 makes it live, so
+    // trg_sync_timesheets_on_shift_change gives it its billable, linked to the
+    // fixture's timesheet; a Draft shift has nothing to review.
+    beforeEach(() => {
+        db(`UPDATE public.shifts SET lifecycle_status = 'Published' WHERE id = '${S1}'`);
+    });
+
+    const status = () => db(`SELECT status FROM public.billables WHERE shift_id = '${S1}'`)[0][0];
     const approve = (p: Persona) =>
-        personaClient(p).from('timesheets').update({ status: 'approved' }, { count: 'exact' }).eq('id', TIMESHEET_S1);
+        personaClient(p).from('billables').update({ status: 'approved' }, { count: 'exact' }).eq('shift_id', S1);
 
     it('refuses to approve a timesheet before its shift reaches a final attendance state', async () => {
         const r = await approve('G');
@@ -223,8 +230,10 @@ describe('timesheet approval', () => {
         });
 
         it('an employee cannot approve their own timesheet', async () => {
+            // billables has no employee write policy: RLS filters the update to nothing.
             const r = await approve('X');
-            expect(r.error?.code).toBe('42501');
+            expect(r.error).toBeNull();
+            expect(r.count).toBe(0);
             expect(status()).toBe('draft');
         });
 

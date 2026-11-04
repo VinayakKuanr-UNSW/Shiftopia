@@ -43,12 +43,9 @@ export interface Shift {
     shiftGroupId?: string;
     shiftSubgroupId?: string;
     isDraft: boolean;
-    biddingEnabled: boolean;
     biddingOpenAt?: string;
     biddingCloseAt?: string;
     cancelledAt?: string;
-    cancelledBy?: string;
-    cancellationReason?: string;
     createdAt: string;
     updatedAt: string;
     role?: string;

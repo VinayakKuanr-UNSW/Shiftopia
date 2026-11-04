@@ -58,6 +58,8 @@ import { MultiSelect } from './MultiSelect';
 import { ShiftBottomSheet } from './ShiftBottomSheet';
 import { TemplateDaySelect, firstTemplateDay } from './TemplateDaySelect';
 import { SingleSelect } from './SingleSelect';
+import { BreaksEditor } from './BreaksEditor';
+import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import { FIELD_CARD, FIELD_INPUT, FIELD_LABEL } from '@/modules/core/ui/components/PickerField';
 import { formatHours } from '../utils';
 import type { ShiftFormSheetProps } from '../types';
@@ -842,62 +844,14 @@ export const ShiftFormSheet: React.FC<ShiftFormSheetProps> = ({
                             ))}
                         </div>
 
-                        {/* The meal break is WHEN, not just how long: pay follows the
-                            hours worked either side of it (cl 41, cl 43). */}
-                        <div className="grid grid-cols-2 gap-2">
-                            {(['break_start', 'break_end'] as const).map((name) => (
-                                <FormField
-                                    key={name}
-                                    control={form.control}
-                                    name={name}
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FieldLabel>
-                                                {name === 'break_start' ? 'Meal break start' : 'Meal break end'}
-                                            </FieldLabel>
-                                            <FormControl>
-                                                <Input
-                                                    type="time"
-                                                    value={field.value ?? ''}
-                                                    onChange={(e) => field.onChange(e.target.value || null)}
-                                                    onBlur={field.onBlur}
-                                                    disabled={isReadOnly}
-                                                    className={cn(INPUT_CLS, 'font-mono font-semibold')}
-                                                />
-                                            </FormControl>
-                                        </FormItem>
-                                    )}
-                                />
-                            ))}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                            <FormField
-                                control={form.control}
-                                name="paid_break_minutes"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FieldLabel>Rest pauses (paid, min)</FieldLabel>
-                                        <FormControl>
-                                            <Input
-                                                type="number"
-                                                inputMode="numeric"
-                                                min={0}
-                                                value={field.value === undefined ? '' : field.value}
-                                                onChange={(e) =>
-                                                    field.onChange(
-                                                        e.target.value === '' ? undefined : Number(e.target.value),
-                                                    )
-                                                }
-                                                disabled={isReadOnly}
-                                                placeholder="0"
-                                                className={cn(INPUT_CLS, 'font-mono')}
-                                            />
-                                        </FormControl>
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
+                        {/* Unpaid breaks are WHEN, not just how long: pay follows the
+                            hours worked either side of them (cl 41, cl 43). */}
+                        <BreaksEditor
+                            form={form}
+                            isReadOnly={isReadOnly}
+                            compact
+                            isSecurity={isSecurityRoleName(roles.find((r: any) => r.id === form.watch('role_id'))?.name)}
+                        />
 
                         {shiftLength > 0 && (
                             <div className="flex items-center gap-2">

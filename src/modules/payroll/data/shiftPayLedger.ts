@@ -44,9 +44,24 @@ function firstEmbed<T>(v: T | T[] | null | undefined): T | null {
   return v ?? null;
 }
 
+function resolveBillable(row: GrossPayShiftRow) {
+  return row._billable ?? row._timesheet ?? null;
+}
+
+function resolveActualStart(row: GrossPayShiftRow): string | null {
+  return row._attendance?.clock_in ?? row.actual_start ?? null;
+}
+
+function resolveActualEnd(row: GrossPayShiftRow): string | null {
+  return row._attendance?.clock_out ?? row.actual_end ?? null;
+}
+
 function isNoShow(row: GrossPayShiftRow): boolean {
-  return (row.attendance_status ?? '').toLowerCase() === 'no_show'
-    || (row._timesheet?.status ?? '').toLowerCase() === 'no_show';
+  const bil = resolveBillable(row);
+  return row._attendance?.is_no_show === true
+    || (row.assignment_outcome ?? '').toLowerCase() === 'no_show'
+    || (row.attendance_status ?? '').toLowerCase() === 'no_show'
+    || (bil?.status ?? '').toLowerCase() === 'no_show';
 }
 
 /** Cancelled before anything else: assigning a cancelled shift is not the fix. */
@@ -78,16 +93,17 @@ function windowFrom(
 }
 
 function isFinished(row: GrossPayShiftRow): boolean {
-  return isShiftFinished(row.shift_date, row.start_time ?? '', row.end_time ?? '', row.actual_end);
+  return isShiftFinished(row.shift_date, row.start_time ?? '', row.end_time ?? '', resolveActualEnd(row));
 }
 
 /** Actual: the raw clock window, or why there isn't one. */
 function actualWindow(row: GrossPayShiftRow): PricingWindow | LedgerCell {
   if (isNoShow(row)) return { kind: 'no_show' };
-  const start = clockToWallTime(row.actual_start);
-  const end = clockToWallTime(row.actual_end);
-  // The break taken is recorded on the timesheet; absent that, the rostered one.
-  const unpaidBreak = row._timesheet?.unpaid_break_minutes ?? row.unpaid_break_minutes ?? 0;
+  const start = clockToWallTime(resolveActualStart(row));
+  const end = clockToWallTime(resolveActualEnd(row));
+  // The break taken is recorded on billables; absent that, from actual break punches (never rostered).
+  const bil = resolveBillable(row);
+  const unpaidBreak = bil?.unpaid_break_minutes ?? row._actualUnpaidBreakMinutes ?? 0;
   const window = windowFrom(start, end, unpaidBreak, 'actual');
   if (window) return window;
   if (isFinished(row)) return { kind: 'no_clock' };
@@ -97,13 +113,17 @@ function actualWindow(row: GrossPayShiftRow): PricingWindow | LedgerCell {
 /** Billable: priced by the mapper's own resolution, or why it can't be yet. */
 function billableOutcome(row: GrossPayShiftRow): 'price' | LedgerCell {
   if (isNoShow(row)) return { kind: 'no_show' };
-  const ts = row._timesheet ?? null;
+  const bil = resolveBillable(row);
+  const manualStart = bil?.billable_start ?? bil?.start_time ?? null;
+  const manualEnd = bil?.billable_end ?? bil?.end_time ?? null;
+  const actualStart = resolveActualStart(row);
+  const actualEnd = resolveActualEnd(row);
   const finished = isFinished(row);
-  const start = resolveBillableSide(ts?.start_time, row.actual_start, finished);
-  const end = resolveBillableSide(ts?.end_time, row.actual_end, finished);
+  const start = resolveBillableSide(manualStart, actualStart, finished);
+  const end = resolveBillableSide(manualEnd, actualEnd, finished);
   if (start.hhmm && end.hhmm) return 'price';
   if (start.source === 'missing' || end.source === 'missing') return { kind: 'no_clock' };
-  return row.actual_start ? { kind: 'in_progress' } : { kind: 'not_worked_yet' };
+  return actualStart ? { kind: 'in_progress' } : { kind: 'not_worked_yet' };
 }
 
 function cellFrom(result: ShiftGrossPay | undefined): LedgerCell {
@@ -171,7 +191,7 @@ export function buildShiftPayLedger(
     const role = firstEmbed(row.roles);
     const profile = firstEmbed<any>((row as any).assigned_profiles);
     const subgroup = firstEmbed<any>((row as any).roster_subgroup);
-    const tsStatus = row._timesheet?.status ?? null;
+    const tsStatus = resolveBillable(row)?.status ?? null;
     ledger.push({
       shiftId: row.id,
       shiftDate: row.shift_date,

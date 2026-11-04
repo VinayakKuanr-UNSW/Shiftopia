@@ -282,7 +282,6 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 timesheet_status: entry.timesheetStatus,
                 assignment_outcome: entry.attendanceStatus,
                 attendance_status: entry.attendanceStatus,
-                attendance_note: entry.attendanceNote,
                 actual_start: cleanTime(entry.rawActualStart) ?? cleanTime(entry.clockIn),
                 actual_end: cleanTime(entry.rawActualEnd) ?? cleanTime(entry.clockOut),
                 adjusted_start: entry.adjustedStart,
