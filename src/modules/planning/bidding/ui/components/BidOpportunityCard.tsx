@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { XCircle, Ban, CheckCircle, Clock, ThumbsUp, Loader2 } from 'lucide-react';
-import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { getBiddingClosesAt } from '../utils/bid-participation';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
@@ -35,10 +35,7 @@ export const BidOpportunityCard: React.FC<Props> = ({
 }) => {
     const { participationStatus, currentBid } = opp;
 
-    const shiftStart = opp.startAt
-        ? new Date(opp.startAt)
-        : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
-    const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+    const biddingCloses = getBiddingClosesAt(opp);
     const tr = calculateTimeRemaining(biddingCloses.toISOString());
 
     const isTerminal = participationStatus === 'selected' ||
@@ -161,7 +158,7 @@ export const BidOpportunityCard: React.FC<Props> = ({
         </div>
     ) : undefined;
 
-    const isPast = shiftStart.getTime() < Date.now();
+    const isPast = biddingCloses.getTime() < Date.now();
 
 
     return (

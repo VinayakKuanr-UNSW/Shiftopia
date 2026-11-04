@@ -1082,7 +1082,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     let assigned = 0, skipped = 0, failed = 0;
     let wasCancelled = false;
     // Per-reason breakdown for shifts the hardened RPC rejected (returns a row,
-    // not a thrown error): SHIFT_TIME_LOCKED / WINNER_NOT_PENDING / ILLEGAL_STATE /
+    // not a thrown error): BIDDING_CLOSED / WINNER_NOT_PENDING / ILLEGAL_STATE /
     // SHIFT_GONE / … . These are skipped-with-reason, NOT generic failures.
     const rpcRejections = new Map<string, number>();
     const userId = (await supabase.auth.getUser()).data.user?.id;
@@ -1355,7 +1355,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
     // Human-readable breakdown of guarded RPC rejections, appended to the toast.
     const REJECTION_LABELS: Record<string, string> = {
-      SHIFT_TIME_LOCKED:  'time-locked',
+      BIDDING_CLOSED:     'shift already started',
       WINNER_NOT_PENDING: 'bid no longer pending',
       ILLEGAL_STATE:      'not open for selection',
       SHIFT_GONE:         'shift removed',

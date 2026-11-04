@@ -127,48 +127,27 @@ export const biddingApi = {
     },
 
     /**
-     * Place a bid on a shift (EMPLOYEE ACTION)
+     * Place a bid on a shift as the signed-in employee (EMPLOYEE ACTION).
+     * sm_place_bid owns every rule: open for bidding, before start, not the
+     * person who dropped/declined it, no leave/overlap/qualification block.
+     * Resolves to the bid id; rejects with the database's reason.
      */
-    async placeBid(shiftId: string, userId: string, notes?: string): Promise<Bid> {
-        // Check for decliner exclusion: if this employee dropped or rejected the offer,
-        // they are barred from re-bidding on this specific shift.
-        const { data: shiftExclusion, error: shiftError } = await supabase
-            .from('shifts')
-            .select('last_dropped_by, last_rejected_by')
-            .eq('id', shiftId)
-            .single();
-
-        if (shiftError) {
-            console.error('[bidding] Error checking exclusion:', shiftError);
-        }
-
-        if (shiftExclusion) {
-            const ex = shiftExclusion as any;
-            if (ex.last_dropped_by === userId || ex.last_rejected_by === userId) {
-                throw new Error(
-                    'You dropped or rejected this shift. Re-bidding is not permitted.'
-                );
-            }
-        }
-
-        const { data, error } = await supabase
-            .from('shift_bids')
-            .upsert({
-                shift_id: shiftId,
-                employee_id: userId,
-                status: 'pending',
-                notes: notes,
-                created_at: new Date().toISOString()
-            } as any, { onConflict: 'shift_id, employee_id' })
-            .select()
-            .single();
+    async placeBid(shiftId: string, notes?: string): Promise<string> {
+        const { data, error } = await supabase.rpc('sm_place_bid' as any, {
+            p_shift_id: shiftId,
+            p_notes: notes ?? null,
+        });
 
         if (error) {
             console.error('Error placing bid:', error);
             throw error;
         }
 
-        return data as Bid;
+        const result = data as { success: boolean; bid_id?: string; error?: string; code?: string } | null;
+        if (!result?.success || !result.bid_id) {
+            throw new Error(result?.error || 'Failed to place bid.');
+        }
+        return result.bid_id;
     },
 
     /**

@@ -82,9 +82,9 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           }
         }
 
-        // Bid count excludes withdrawn bids, matching the bidder list
+        // Bid count = live bids, matching the bidder list
         const bidCount = Array.isArray(s.shift_bids)
-          ? s.shift_bids.filter((b: { status?: string }) => b.status !== 'withdrawn').length
+          ? s.shift_bids.filter((b: { status?: string }) => b.status === 'pending').length
           : 0;
 
         const assignedProfile = s.assigned_profiles;

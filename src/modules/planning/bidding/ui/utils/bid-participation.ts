@@ -1,5 +1,5 @@
 import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
-import type { ParticipationStatus } from '../../model/bid.types';
+import type { BidStatus, ParticipationStatus } from '../../model/bid.types';
 
 type ShiftLike = {
     id: unknown;
@@ -12,8 +12,18 @@ type ShiftLike = {
 
 type BidLike = {
     shiftId: unknown;
-    status: 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'selected';
+    status: BidStatus;
 };
+
+// Bids that ended without an outcome for the bidder; they may bid again.
+const CLOSED_WITHOUT_OUTCOME: ReadonlySet<BidStatus> = new Set(['withdrawn', 'expired', 'cancelled']);
+
+/** Bidding stays open until the shift starts (TTS > 0); there is no earlier lock. */
+export function getBiddingClosesAt(shift: Pick<ShiftLike, 'date' | 'startTime' | 'startAt'>): Date {
+    return shift.startAt
+        ? new Date(shift.startAt)
+        : parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
+}
 
 export function getParticipationStatus(
     shift: ShiftLike,
@@ -27,17 +37,13 @@ export function getParticipationStatus(
     // Find user's bid (only one active bid per shift now)
     const currentBid = allMyBids.find(b =>
         String(b.shiftId) === String(shift.id) &&
-        b.status !== 'withdrawn'
+        !CLOSED_WITHOUT_OUTCOME.has(b.status)
     );
 
-    const shiftStart = shift.startAt
-        ? new Date(shift.startAt)
-        : parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
+    const shiftStart = getBiddingClosesAt(shift);
 
     if (!currentBid) {
-        // Check if bidding window has closed
-        const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
-        if (new Date() >= biddingCloses) return 'expired';
+        if (new Date() >= shiftStart) return 'expired';
         return 'not_participated';
     }
 

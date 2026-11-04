@@ -11,6 +11,8 @@ const tables: Record<string, Array<Record<string, unknown>>> = {
     shift_bids: [
         { id: 'b1', shift_id: 's1', employee_id: 'e1', status: 'pending', created_at: '2026-10-27T01:00:00Z', profiles: { first_name: 'Ada', last_name: 'Lee' } },
         { id: 'b2', shift_id: 's1', employee_id: 'e2', status: 'withdrawn', created_at: '2026-10-27T00:00:00Z', profiles: { first_name: 'Ben', last_name: 'Ng' } },
+        // closed in an earlier bidding round of the same shift (it was unpublished, then re-opened)
+        { id: 'b3', shift_id: 's1', employee_id: 'e3', status: 'cancelled', created_at: '2026-10-26T00:00:00Z', profiles: { first_name: 'Cy', last_name: 'Ho' } },
     ],
 };
 
@@ -36,7 +38,7 @@ vi.mock('@/platform/supabase/client', () => {
 import { useShiftBids } from '../useShiftBids';
 
 describe('useShiftBids', () => {
-    it('leaves withdrawn bids out of the bidder list', async () => {
+    it('lists only live (pending) bids', async () => {
         const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         const wrapper = ({ children }: { children: React.ReactNode }) => (
             <QueryClientProvider client={client}>{children}</QueryClientProvider>
