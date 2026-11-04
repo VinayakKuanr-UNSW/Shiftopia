@@ -168,20 +168,22 @@ describe('emergency assignment (sm_emergency_assign)', () => {
 });
 
 describe('clock in / clock out', () => {
-    // Put X's shift inside the clock-in window [start − 1 h, start + 12.5 h]:
-    // 00:00–03:00 before Sydney noon, 12:00–15:00 after. No geofence is
-    // configured in the seed, so any location is accepted.
-    beforeEach(() => {
+    // Put X's shift around "now" (started 30 min ago, ends in 3 h): inside
+    // the clock-in window and before the scheduled end, after which punches
+    // are refused. No geofence is configured in the seed, so any location is
+    // accepted.
+    const placeShift = (startOffset: string, length: string) =>
         db(`SET session_replication_role = replica;
             UPDATE public.shifts
-               SET shift_date = (now() AT TIME ZONE 'Australia/Sydney')::date,
-                   start_time = CASE WHEN (now() AT TIME ZONE 'Australia/Sydney')::time < '12:00' THEN '00:00' ELSE '12:00' END::time,
-                   end_time   = CASE WHEN (now() AT TIME ZONE 'Australia/Sydney')::time < '12:00' THEN '03:00' ELSE '15:00' END::time,
+               SET shift_date = ((now() + interval '${startOffset}') AT TIME ZONE 'Australia/Sydney')::date,
+                   start_time = date_trunc('minute', (now() + interval '${startOffset}') AT TIME ZONE 'Australia/Sydney')::time,
+                   end_time   = date_trunc('minute', (now() + interval '${startOffset}' + interval '${length}') AT TIME ZONE 'Australia/Sydney')::time,
                    lifecycle_status = 'Published', start_at = NULL, end_at = NULL
              WHERE id = '${S1}';
             DELETE FROM public.timesheets WHERE shift_id = '${S1}';
             RESET session_replication_role;`);
-    });
+
+    beforeEach(() => placeShift('-30 minutes', '3 hours'));
 
     const at = { p_lat: -33.87, p_lon: 151.2 };
 
@@ -200,6 +202,12 @@ describe('clock in / clock out', () => {
 
         const out = await x.rpc('sm_clock_out_shift', { p_shift_id: S1, p_user_id: personaId('X'), ...at });
         expect(out.data).toMatchObject({ success: true });
+    });
+
+    it('refuses a clock-in once the shift has ended', async () => {
+        placeShift('-4 hours', '3 hours');
+        const r = await personaClient('X').rpc('check_in_shift', { p_shift_id: S1, ...at });
+        expect(r.data).toMatchObject({ success: false, code: 'SHIFT_CLOSED_NO_SHOW' });
     });
 });
 
