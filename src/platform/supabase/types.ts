@@ -4195,6 +4195,7 @@ export type Database = {
           is_cancelled: boolean
           is_from_template: boolean
           is_training: boolean | null
+          kickoff_cancel_code: string | null
           last_dropped_by: string | null
           last_modified_by: string | null
           last_modified_reason: string | null
@@ -4257,6 +4258,7 @@ export type Database = {
           is_cancelled?: boolean
           is_from_template?: boolean
           is_training?: boolean | null
+          kickoff_cancel_code?: string | null
           last_dropped_by?: string | null
           last_modified_by?: string | null
           last_modified_reason?: string | null
@@ -4319,6 +4321,7 @@ export type Database = {
           is_cancelled?: boolean
           is_from_template?: boolean
           is_training?: boolean | null
+          kickoff_cancel_code?: string | null
           last_dropped_by?: string | null
           last_modified_by?: string | null
           last_modified_reason?: string | null

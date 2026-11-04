@@ -144,6 +144,7 @@ const SHIFT_SELECT = `
   is_first_aid_duty,
   published_at,
   cancelled_at,
+  kickoff_cancel_code,
   last_modified_by,
   target_employment_type,
   target_requires_flexible,

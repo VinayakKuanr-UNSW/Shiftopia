@@ -67,6 +67,26 @@ export const FSM_STATE_META: Record<ShiftStateID, ShiftFSMStateInfo> = {
     UNKNOWN: { id: 'UNKNOWN', label: 'Unknown',            description: 'Unrecognized shift state — stale DB data',  color: 'gray'    },
 };
 
+/**
+ * Why the system cancelled a shift when it reached its start
+ * (shifts.kickoff_cancel_code; docs/design/shift-trading/03-bidding-fsm.md B-D10).
+ * NULL for a manager's cancellation.
+ */
+export type KickoffCancelCode = 'A' | 'B' | 'C' | 'D';
+
+export const KICKOFF_CANCEL_REASONS: Record<KickoffCancelCode, string> = {
+    A: 'Offer ignored until the shift started',
+    B: 'Bidding found no winner',
+    C: 'Never assigned',
+    D: 'Assigned but never published',
+};
+
+/** "B — Bidding found no winner", or null when the code is absent or unknown. */
+export function describeKickoffCancel(code: string | null | undefined): string | null {
+    if (!code || !(code in KICKOFF_CANCEL_REASONS)) return null;
+    return `${code} — ${KICKOFF_CANCEL_REASONS[code as KickoffCancelCode]}`;
+}
+
 /** Hex colours for the Tailwind tokens above — for inline-styled badges/rows. */
 const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
     slate:   '#64748B',

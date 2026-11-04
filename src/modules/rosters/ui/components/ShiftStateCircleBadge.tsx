@@ -20,6 +20,8 @@ interface ShiftStateCircleBadgeProps {
   stateId: ShiftStateID | string;
   className?: string;
   title?: string;
+  /** Extra context after the state name, e.g. why a cancelled shift was cancelled. */
+  detail?: string | null;
 }
 
 const STATE_ICONS: Record<ShiftStateID, LucideIcon> = {
@@ -54,6 +56,7 @@ export const ShiftStateCircleBadge: React.FC<ShiftStateCircleBadgeProps> = ({
   stateId,
   className,
   title,
+  detail,
 }) => {
   const canonicalId = (stateId as ShiftStateID) in SHIFT_STATE_BADGE_TOKENS
     ? (stateId as ShiftStateID)
@@ -74,8 +77,8 @@ export const ShiftStateCircleBadge: React.FC<ShiftStateCircleBadgeProps> = ({
         color: token.text,
         borderColor: token.border || 'transparent',
       }}
-      title={title || `${canonicalId} — ${token.label}`}
-      aria-label={`Shift state: ${canonicalId} (${token.label})`}
+      title={title || `${canonicalId} — ${token.label}${detail ? ` (${detail})` : ''}`}
+      aria-label={`Shift state: ${canonicalId} (${token.label}${detail ? `: ${detail}` : ''})`}
     >
       <IconComponent
         className={cn(

@@ -2,6 +2,7 @@
    ENUMS & TYPES - Must match database
    ============================================================ */
 
+import type { KickoffCancelCode } from './shift-fsm';
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
 import type { ShiftPayTermsField } from './projections/utils/cost/types';
 
@@ -104,6 +105,7 @@ export interface Shift {
     is_cancelled: boolean;
     is_on_bidding?: boolean;
     cancelled_at: string | null;
+    kickoff_cancel_code?: KickoffCancelCode | null;
 
     offer_expires_at?: string | null; // Made optional as not in all views
     bidding_status: 'not_on_bidding' | 'on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';

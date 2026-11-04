@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ShiftStateCircleBadge } from '../ShiftStateCircleBadge';
-import { SHIFT_STATE_BADGE_TOKENS, type ShiftStateID } from '../../../domain/shift-fsm';
+import { SHIFT_STATE_BADGE_TOKENS, describeKickoffCancel, type ShiftStateID } from '../../../domain/shift-fsm';
 
 describe('ShiftStateCircleBadge', () => {
   const allStates: ShiftStateID[] = [
@@ -44,6 +44,12 @@ describe('ShiftStateCircleBadge', () => {
 
     const svg = container.querySelector('svg');
     expect(svg).toBeInTheDocument();
+  });
+
+  it('names why a cancelled shift was cancelled (kickoff code)', () => {
+    render(<ShiftStateCircleBadge stateId="S10" detail={describeKickoffCancel('B')} />);
+    const badge = screen.getByLabelText('Shift state: S10 (Cancelled: B — Bidding found no winner)');
+    expect(badge).toHaveAttribute('title', 'S10 — Cancelled (B — Bidding found no winner)');
   });
 
   it('falls back gracefully on unknown state', () => {
