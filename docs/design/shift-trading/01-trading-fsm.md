@@ -1,6 +1,6 @@
 # Shift Trading — FSM Specification
 
-**Status:** decided by the product owner 2026-11-04. **T1** (offer integrity) and **T2** (lifecycle) are live; T3 (cascades) and T4 (no edits while published) remain. §9 tracks each item.
+**Status:** decided by the product owner 2026-11-04. **T1** (offer integrity), **T2** (lifecycle) and **T3** (cascades) are live; T4 (no edits while published) remains. §9 tracks each item.
 **Numbering:** the gapless S1–S10 model (`20261104061628_fsm_ids_s1_s10`).
 
 A trade is a one-for-one swap of two confirmed shifts between two employees, approved by a manager. Employee **A** posts a shift; peers (**B**, **C**, …) offer one of their own shifts in exchange; A picks one; a manager approves or rejects.
