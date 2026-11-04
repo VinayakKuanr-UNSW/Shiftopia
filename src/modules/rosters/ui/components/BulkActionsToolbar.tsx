@@ -52,7 +52,7 @@ export type BulkPublishValidationResult = {
 export interface ToolbarPreflightData {
   publish:   { eligible: number; blocked: number; warned: number };
   unpublish: { eligible: number; blocked: number; warned: number };
-  delete:    { eligible: number; warned: number };
+  delete:    { eligible: number; blocked: number };
 }
 
 // =============================================================================
@@ -270,9 +270,9 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
       type: 'confirming',
       action: 'delete',
       preview: {
-        eligible: selectedCount,
-        blocked:  0,
-        warned:   preflightData?.delete.warned ?? (stateCounts?.publishedCount ?? 0),
+        eligible: preflightData?.delete.eligible ?? selectedCount,
+        blocked:  preflightData?.delete.blocked  ?? (stateCounts?.publishedCount ?? 0),
+        warned:   0,
       },
     });
   };
@@ -642,14 +642,14 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
       <AlertDialog open={showDeleteDialog} onOpenChange={(open) => !open && setActionState(IDLE)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedCount} Shift{selectedCount > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {preview?.eligible ?? selectedCount} Shift{(preview?.eligible ?? selectedCount) !== 1 ? 's' : ''}?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-[13px] text-muted-foreground">
                 <p>This action cannot be undone.</p>
-                {preview && preview.warned > 0 && (
+                {preview && preview.blocked > 0 && (
                   <p className="text-amber-400 font-medium">
-                    ⚠ {preview.warned} shift{preview.warned !== 1 ? 's are' : ' is'} published —
-                    {stateCounts && stateCounts.assignedCount > 0 ? ' employees will be notified.' : ' removed from employee view.'}
+                    ⚠ {preview.blocked} shift{preview.blocked !== 1 ? 's are' : ' is'} published and will be skipped —
+                    published shifts are cancelled from their menu, not deleted.
                   </p>
                 )}
               </div>
@@ -657,8 +657,12 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete {selectedCount} Shift{selectedCount > 1 ? 's' : ''}
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={(preview?.eligible ?? selectedCount) === 0}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete {preview?.eligible ?? selectedCount} Shift{(preview?.eligible ?? selectedCount) !== 1 ? 's' : ''}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

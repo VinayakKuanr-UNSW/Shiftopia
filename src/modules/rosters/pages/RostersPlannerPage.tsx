@@ -640,7 +640,7 @@ const NewRostersPage: React.FC = () => {
     return {
       publish:   { eligible: pub.eligibleIds.length,     blocked: pub.blocked.length,     warned: pub.warned.length },
       unpublish: { eligible: unpub.eligibleIds.length,   blocked: unpub.blocked.length,   warned: unpub.warned.length },
-      delete:    { eligible: del.eligibleIds.length,     warned: del.warned.length },
+      delete:    { eligible: del.eligibleIds.length,     blocked: del.blocked.length },
     };
   }, [selectedShiftsData]);
 

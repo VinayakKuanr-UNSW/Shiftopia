@@ -16,6 +16,7 @@ import {
     BulkAssignAtomicResponseSchema,
     BulkDeleteResponseSchema,
     DeleteShiftResponseSchema,
+    CancelShiftResponseSchema,
     OfferActionResponseSchema,
     EmployeeDropResponseSchema,
     ApplyShiftOpResponseSchema,
@@ -63,26 +64,6 @@ async function readPublishedIds(ids: string[]): Promise<Set<string>> {
         }
     }
     return published;
-}
-
-/** Why the gateway refused an emergency publish, in words a manager can act on. */
-function emergencyPublishRefusal(envelope: {
-    code: string; note?: string | null; details?: string | null; error?: string | null; current_state?: string | null;
-}): string {
-    switch (envelope.code) {
-        case 'VERSION_CONFLICT':
-            return CHANGED_SINCE_CHECK;
-        case 'ILLEGAL_TRANSITION':
-            return `Publishing is not allowed in the shift's current state (${envelope.current_state ?? 'unknown'}).`;
-        case 'FORBIDDEN':
-            return 'You do not have permission to publish this shift.';
-        case 'GONE':
-            return 'Shift not found or has been deleted.';
-        case 'WRITE_REJECTED':
-            return `Emergency publish was rejected: ${envelope.details ?? envelope.note ?? 'unknown reason'}`;
-        default:
-            return envelope.note ?? envelope.error ?? envelope.code;
-    }
 }
 
 /** Why a shift failed its compliance check: the rules it broke, or that it was never checked. */
@@ -741,9 +722,8 @@ export const shiftsCommands = {
             return { publishedIds: [], complianceFailed, dbFailed: [] };
         }
 
-        // All pre-start shifts follow standard publish via sm_bulk_publish_shifts (S3 offers / S5 bidding).
+        // Every pre-start shift publishes through sm_bulk_publish_shifts (S3 offer / S4 FT / S5 bidding).
         const normalIds    = passIds;
-        const emergencyIds: string[] = [];
 
         const publishedIds: string[] = [];
         const dbFailed: Array<{ id: string; reason: string }> = [];
@@ -854,47 +834,6 @@ export const shiftsCommands = {
             }
         }
 
-        // Emergency path — publish + confirm atomically (S2 → S4) via the audited
-        // gateway. sm_apply_shift_op('publish') detects the TTS<4h + assigned case
-        // and does the emergency-confirm write server-side (migration 20260721013000),
-        // with a real row lock + version CAS. This used to be a direct, unprotected
-        // `supabase.from('shifts').update()` here — the exact gap
-        // docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §6 flagged as
-        // needing to close before Reserve List's own writes could rely on the same
-        // pattern. One RPC call per shift, since
-        // the gateway is single-shift by design.
-        //
-        // The expected version is the one read alongside the compliance check, so
-        // a shift reassigned after its check is refused (VERSION_CONFLICT) rather
-        // than confirmed onto someone nobody checked. It used to be re-read here,
-        // after the check, and a failed re-read reported "Shift not found".
-        if (emergencyIds.length > 0) {
-            await Promise.all(
-                emergencyIds.map(async (id) => {
-                    try {
-                        const envelope = await callRpc(
-                            'sm_apply_shift_op',
-                            {
-                                p_shift_id: id,
-                                p_expected_version: shiftById.get(id)!.version,
-                                p_op: 'publish',
-                                p_payload: { reason: 'Emergency publish' },
-                                p_idempotency_key: null,
-                            },
-                            ApplyShiftOpResponseSchema,
-                        );
-                        if (envelope.code === 'APPLIED' || envelope.code === 'IDEMPOTENT_REPLAY') {
-                            publishedIds.push(id);
-                        } else {
-                            dbFailed.push({ id, reason: emergencyPublishRefusal(envelope) });
-                        }
-                    } catch (e: any) {
-                        dbFailed.push({ id, reason: e?.message ?? 'Emergency publish failed' });
-                    }
-                }),
-            );
-        }
-
         return { publishedIds, complianceFailed, dbFailed };
     },
 
@@ -974,6 +913,35 @@ export const shiftsCommands = {
 
         if (!result.success) {
             throw Object.assign(new Error(result.error ?? 'Failed to delete shift on the server.'), { code: result.code });
+        }
+
+        return true;
+    },
+
+    /* ============================================================
+       CANCEL SHIFT
+       ============================================================ */
+
+    /**
+     * Cancel a published shift (S3–S7, or S8 before clock-in). Requires a note
+     * explaining why the shift is cancelled. The database notifies assignees and
+     * trade partners, expires pending offers, and closes bids and trades.
+     */
+    async cancelShift(shiftId: string, reason: string, expectedVersion?: number): Promise<boolean> {
+        if (!shiftId || !isValidUuid(shiftId)) return false;
+
+        const result = await callAuthenticatedRpc(
+            'sm_cancel_shift',
+            () => ({
+                p_shift_id: shiftId,
+                p_reason: reason,
+                p_expected_version: expectedVersion ?? null,
+            }),
+            CancelShiftResponseSchema,
+        );
+
+        if (!result.success) {
+            throw Object.assign(new Error(result.error ?? 'Failed to cancel shift on the server.'), { code: result.code });
         }
 
         return true;
@@ -1148,12 +1116,7 @@ export const shiftsCommands = {
     },
 
     /**
-     * Employee drops an assigned shift (pushes to bidding based on time-to-start rules)
-     * - >24h before start: on_bidding_normal (S5)
-     * - 4-24h before start: on_bidding_urgent (S6)
-     * - <4h before start: Blocked (RPC returns success=false with error message)
-     */
-    /**
+     * Employee drops a confirmed shift (S4) before it starts; it goes to bidding (S5).
      * `reasonCode` is a code from `cancellation_reasons`; `reason` is the
      * optional free-text note. Both are persisted onto the CANCELLED /
      * LATE_CANCELLED shift_event the RPC writes — before migration

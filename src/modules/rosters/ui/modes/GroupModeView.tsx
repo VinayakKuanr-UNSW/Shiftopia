@@ -115,6 +115,8 @@ import { ToastAction } from '@/modules/core/ui/primitives/toast';
 import { ALL_GROUP_TYPES } from '@/modules/rosters/domain/projections/constants';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
+import { CancelShiftDialog, type CancelShiftTarget } from '@/modules/rosters/ui/dialogs/CancelShiftDialog';
+import { getShiftRemoval } from '@/modules/rosters/domain/shift-removal';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
 
 // ============================================================================
@@ -1502,6 +1504,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // ==================== DELETE CONFIRMATION ====================
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [shiftToCancel, setShiftToCancel] = useState<CancelShiftTarget | null>(null);
   const [shiftToDelete, setShiftToDelete] = useState<ShiftDisplay | null>(null);
   /** A full-time shift shown expanded: Scheduled · Actual · Payroll · Variance. */
   const [expandedShift, setExpandedShift] = useState<Shift | null>(null);
@@ -2268,18 +2271,37 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
                 <DropdownMenuSeparator className="bg-border" />
 
-                {/* 4. Delete */}
-                <DropdownMenuItem
-                  disabled={hasStarted || !canEdit}
-                  onClick={() => handleDeleteShift(shift)}
-                  className={cn(
-                    "text-destructive hover:bg-destructive/10 cursor-pointer",
-                    (hasStarted || !canEdit) && "text-muted-foreground/50 cursor-not-allowed"
-                  )}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
-                </DropdownMenuItem>
+                {/* 4. Delete a draft; cancel a published shift (B-D13) */}
+                {getShiftRemoval(shift.rawShift) === 'delete' && (
+                  <DropdownMenuItem
+                    disabled={hasStarted || !canEdit}
+                    onClick={() => handleDeleteShift(shift)}
+                    className={cn(
+                      "text-destructive hover:bg-destructive/10 cursor-pointer",
+                      (hasStarted || !canEdit) && "text-muted-foreground/50 cursor-not-allowed"
+                    )}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
+                  </DropdownMenuItem>
+                )}
+                {getShiftRemoval(shift.rawShift) === 'cancel' && (
+                  <DropdownMenuItem
+                    disabled={!canEdit}
+                    onClick={() => setShiftToCancel({
+                      id: shift.rawShift.id,
+                      version: shift.rawShift.version,
+                      label: `${shift.role} · ${shift.rawShift.shift_date} ${shift.startTime}–${shift.endTime}`,
+                    })}
+                    className={cn(
+                      "text-destructive hover:bg-destructive/10 cursor-pointer",
+                      !canEdit && "text-muted-foreground/50 cursor-not-allowed"
+                    )}
+                  >
+                    <Ban className="h-4 w-4 mr-2" />
+                    Cancel Shift {!canEdit ? '(View Only)' : ''}
+                  </DropdownMenuItem>
+                )}
               </>
             );
           })()}
@@ -2450,6 +2472,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <CancelShiftDialog shift={shiftToCancel} onClose={() => setShiftToCancel(null)} />
 
 
 
