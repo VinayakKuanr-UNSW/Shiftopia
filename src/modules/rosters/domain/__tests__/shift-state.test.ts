@@ -5,8 +5,6 @@
  *   - State derivation reads { lifecycle_status, assignment_status,
  *     assignment_outcome, trading_status, is_cancelled } only.
  *   - Legacy bidding_status and trade_requested_at columns are NOT FSM inputs.
- *   - S6, S7, S8, S12, S14 are never returned (kept in the union for
- *     backward-compatible type-checks only).
  *   - Unrecognized combinations resolve to 'UNKNOWN' (not 'Unknown').
  *
  * State reference (active):
@@ -15,11 +13,11 @@
  *   S3  Published + assigned + outcome IS NULL
  *   S4  Published + assigned + outcome='confirmed'
  *   S5  Published + unassigned
- *   S9  Published + assigned + confirmed + trading_status='TradeRequested'
- *   S10 Published + assigned + confirmed + trading_status='TradeAccepted'
- *   S11 InProgress + assigned + confirmed
- *   S13 Completed + assigned + confirmed
- *   S15 is_cancelled=true (overrides everything)
+ *   S6  Published + assigned + confirmed + trading_status='TradeRequested'
+ *   S7 Published + assigned + confirmed + trading_status='TradeAccepted'
+ *   S8 InProgress + assigned + confirmed
+ *   S9 Completed + assigned + confirmed
+ *   S10 is_cancelled=true (overrides everything)
  */
 
 import { describe, it, expect } from 'vitest';
@@ -33,14 +31,14 @@ function assertState(s: Parameters<typeof determineShiftState>[0], expected: Shi
     expect(determineShiftState(s)).toBe(expected);
 }
 
-// ── S15: Cancelled (highest priority) ────────────────────────────────────────
+// ── S10: Cancelled (highest priority) ────────────────────────────────────────
 
-describe('S15 — Cancelled', () => {
+describe('S10 — Cancelled', () => {
     it('matches when is_cancelled is true', () => {
-        assertState(shift({ is_cancelled: true }), 'S15');
-        assertState(shift({ is_cancelled: true, lifecycle_status: 'Draft' }), 'S15');
-        assertState(shift({ is_cancelled: true, lifecycle_status: 'Published' }), 'S15');
-        assertState(shift({ is_cancelled: true, lifecycle_status: 'Completed' }), 'S15');
+        assertState(shift({ is_cancelled: true }), 'S10');
+        assertState(shift({ is_cancelled: true, lifecycle_status: 'Draft' }), 'S10');
+        assertState(shift({ is_cancelled: true, lifecycle_status: 'Published' }), 'S10');
+        assertState(shift({ is_cancelled: true, lifecycle_status: 'Completed' }), 'S10');
     });
 
     it('takes priority over all other field combinations', () => {
@@ -51,7 +49,7 @@ describe('S15 — Cancelled', () => {
                 assignment_status:  'assigned',
                 assignment_outcome: 'confirmed',
             }),
-            'S15',
+            'S10',
         );
     });
 });
@@ -128,7 +126,7 @@ describe('S4 — Published assigned confirmed', () => {
         );
     });
 
-    it('does NOT match when trading_status=TradeRequested (that is S9)', () => {
+    it('does NOT match when trading_status=TradeRequested (that is S6)', () => {
         expect(
             determineShiftState(shift({
                 lifecycle_status:   'Published',
@@ -140,9 +138,9 @@ describe('S4 — Published assigned confirmed', () => {
     });
 });
 
-// ── S9: Published + assigned + confirmed + trading_status='TradeRequested' ────
+// ── S6: Published + assigned + confirmed + trading_status='TradeRequested' ────
 
-describe('S9 — Published assigned confirmed with trade request', () => {
+describe('S6 — Published assigned confirmed with trade request', () => {
     it('matches when trading_status is TradeRequested', () => {
         assertState(
             shift({
@@ -151,29 +149,29 @@ describe('S9 — Published assigned confirmed with trade request', () => {
                 assignment_outcome: 'confirmed',
                 trading_status:     'TradeRequested',
             }),
-            'S9',
+            'S6',
         );
     });
 });
 
-// ── S11: InProgress + assigned + confirmed ───────────────────────────────────
+// ── S8: InProgress + assigned + confirmed ───────────────────────────────────
 
-describe('S11 — InProgress assigned confirmed', () => {
+describe('S8 — InProgress assigned confirmed', () => {
     it('matches', () => {
         assertState(
             shift({ lifecycle_status: 'InProgress', assignment_status: 'assigned', assignment_outcome: 'confirmed' }),
-            'S11',
+            'S8',
         );
     });
 });
 
-// ── S13: Completed + assigned + confirmed ────────────────────────────────────
+// ── S9: Completed + assigned + confirmed ────────────────────────────────────
 
-describe('S13 — Completed assigned confirmed', () => {
+describe('S9 — Completed assigned confirmed', () => {
     it('matches', () => {
         assertState(
             shift({ lifecycle_status: 'Completed', assignment_status: 'assigned', assignment_outcome: 'confirmed' }),
-            'S13',
+            'S9',
         );
     });
 });
@@ -185,19 +183,19 @@ describe('UNKNOWN — unrecognised combinations', () => {
         assertState(shift({}), 'UNKNOWN');
     });
 
-    it('returns S11 for InProgress + unassigned (lifecycle wins, FSM does not branch on assignment here)', () => {
-        // The FSM resolves any InProgress shift to S11. The unassigned-but-in-progress
-        // combination is rare/invalid in practice, but the FSM returns S11 not UNKNOWN.
+    it('returns S8 for InProgress + unassigned (lifecycle wins, FSM does not branch on assignment here)', () => {
+        // The FSM resolves any InProgress shift to S8. The unassigned-but-in-progress
+        // combination is rare/invalid in practice, but the FSM returns S8 not UNKNOWN.
         assertState(
             shift({ lifecycle_status: 'InProgress', assignment_status: 'unassigned' }),
-            'S11',
+            'S8',
         );
     });
 
-    it('returns S13 for Completed + unassigned (same — lifecycle wins)', () => {
+    it('returns S9 for Completed + unassigned (same — lifecycle wins)', () => {
         assertState(
             shift({ lifecycle_status: 'Completed', assignment_status: 'unassigned' }),
-            'S13',
+            'S9',
         );
     });
 
@@ -212,7 +210,7 @@ describe('UNKNOWN — unrecognised combinations', () => {
 // ── Priority rules ───────────────────────────────────────────────────────────
 
 describe('Priority rules', () => {
-    it('S15 beats InProgress + confirmed', () => {
+    it('S10 beats InProgress + confirmed', () => {
         assertState(
             shift({
                 lifecycle_status:   'InProgress',
@@ -220,11 +218,11 @@ describe('Priority rules', () => {
                 assignment_outcome: 'confirmed',
                 is_cancelled:       true,
             }),
-            'S15',
+            'S10',
         );
     });
 
-    it('S9 takes precedence over S4 when trading_status=TradeRequested', () => {
+    it('S6 takes precedence over S4 when trading_status=TradeRequested', () => {
         assertState(
             shift({
                 lifecycle_status:   'Published',
@@ -232,11 +230,11 @@ describe('Priority rules', () => {
                 assignment_outcome: 'confirmed',
                 trading_status:     'TradeRequested',
             }),
-            'S9',
+            'S6',
         );
     });
 
-    it('S10 takes precedence over S4 when trading_status=TradeAccepted', () => {
+    it('S7 takes precedence over S4 when trading_status=TradeAccepted', () => {
         assertState(
             shift({
                 lifecycle_status:   'Published',
@@ -244,7 +242,7 @@ describe('Priority rules', () => {
                 assignment_outcome: 'confirmed',
                 trading_status:     'TradeAccepted',
             }),
-            'S10',
+            'S7',
         );
     });
 });
@@ -258,11 +256,11 @@ describe('Full state coverage — one canonical fixture per active FSM state', (
         ['S3',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: null },                                                                  'S3'],
         ['S4',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                           'S4'],
         ['S5',  { lifecycle_status: 'Published',  assignment_status: 'unassigned' },                                                                                            'S5'],
-        ['S9',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'confirmed', trading_status: 'TradeRequested' },                         'S9'],
-        ['S10', { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'confirmed', trading_status: 'TradeAccepted'  },                         'S10'],
-        ['S11', { lifecycle_status: 'InProgress', assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                           'S11'],
-        ['S13', { lifecycle_status: 'Completed',  assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                           'S13'],
-        ['S15', { is_cancelled: true },                                                                                                                                          'S15'],
+        ['S6',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'confirmed', trading_status: 'TradeRequested' },                         'S6'],
+        ['S7', { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'confirmed', trading_status: 'TradeAccepted'  },                         'S7'],
+        ['S8', { lifecycle_status: 'InProgress', assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                           'S8'],
+        ['S9', { lifecycle_status: 'Completed',  assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                           'S9'],
+        ['S10', { is_cancelled: true },                                                                                                                                          'S10'],
     ];
 
     it.each(cases)('%s is correctly identified', (_label, input, expected) => {

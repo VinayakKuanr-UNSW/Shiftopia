@@ -26,7 +26,6 @@ interface RosterMetricsFooterProps {
 
 interface ShiftStateMetaItem {
   id: string;
-  displayId?: string;
   label: string;
   fullLabel?: string;
   badgeClass: string;
@@ -36,72 +35,62 @@ interface ShiftStateMetaItem {
 const ALL_FSM_STATES: ShiftStateMetaItem[] = [
   {
     id: 'S1',
-    displayId: 'S1',
     label: 'Draft',
     badgeClass: 'bg-slate-500/10 border-slate-500/30 text-slate-700 dark:text-slate-300',
     activeTextClass: 'text-slate-900 dark:text-slate-100',
   },
   {
     id: 'S2',
-    displayId: 'S2',
     label: 'Draft (Assigned)',
     badgeClass: 'bg-slate-500/10 border-slate-500/30 text-slate-700 dark:text-slate-300',
     activeTextClass: 'text-slate-900 dark:text-slate-100',
   },
   {
     id: 'S3',
-    displayId: 'S3',
     label: 'Offered',
     badgeClass: 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300',
     activeTextClass: 'text-blue-600 dark:text-blue-400',
   },
   {
     id: 'S4',
-    displayId: 'S4',
     label: 'Confirmed',
     badgeClass: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
     activeTextClass: 'text-emerald-600 dark:text-emerald-400',
   },
   {
     id: 'S5',
-    displayId: 'S5',
     label: 'Bidding',
     badgeClass: 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300',
     activeTextClass: 'text-purple-600 dark:text-purple-400',
   },
   {
-    id: 'S9',
-    displayId: 'S6',
+    id: 'S6',
     label: 'Trade (Peer)',
     fullLabel: 'Trade Requested (Pending Peer)',
     badgeClass: 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300',
     activeTextClass: 'text-amber-600 dark:text-amber-400',
   },
   {
-    id: 'S10',
-    displayId: 'S7',
+    id: 'S7',
     label: 'Trade (Mgr)',
     fullLabel: 'Trade Requested (Pending Manager)',
     badgeClass: 'bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-300',
     activeTextClass: 'text-orange-600 dark:text-orange-400',
   },
   {
-    id: 'S11',
-    displayId: 'S8',
+    id: 'S8',
     label: 'In Progress',
     badgeClass: 'bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300',
     activeTextClass: 'text-sky-600 dark:text-sky-400',
   },
   {
-    id: 'S13',
-    displayId: 'S9',
+    id: 'S9',
     label: 'Completed',
     badgeClass: 'bg-slate-500/10 border-slate-500/30 text-slate-600 dark:text-slate-400',
     activeTextClass: 'text-slate-700 dark:text-slate-300',
   },
   {
-    id: 'S15',
-    displayId: 'S10',
+    id: 'S10',
     label: 'Cancelled',
     badgeClass: 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300',
     activeTextClass: 'text-rose-600 dark:text-rose-400',

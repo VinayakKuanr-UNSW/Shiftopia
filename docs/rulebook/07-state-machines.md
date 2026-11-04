@@ -12,6 +12,8 @@ This is the second live production bug found and fixed while building this ruleb
 
 ## 1. Shift lifecycle FSM
 
+> **Renumbered 2026-11-04 — this chapter predates it.** State IDs are now one gapless S1–S10 model, identical on screen and in the DB (`get_shift_fsm_state`, `fsm_op_is_legal`). Old → new: S9→**S6** (trade, peer) · S10→**S7** (trade, manager) · S11→**S8** (in progress) · S13→**S9** (completed) · S15→**S10** (cancelled). S1–S5 unchanged. The dead lineage below (old S6/S7/S8/S12/S14) was removed from the DB function. The emergent lane (TTS ≤ 4h) described in this chapter was removed the same day.
+
 The shift is the central entity; every other lifecycle in this chapter (bids, swaps, timesheets) ultimately reads or writes shift state. All shift-state changes governed by this FSM go through one gateway, `sm_apply_shift_op(shift_id, expected_version, op, payload, idempotency_key)`, which does: row lock → idempotency replay check → optimistic-concurrency version CAS → `fsm_op_is_legal(state, op)` guard → `_apply_shift_op_write()` → unconditional `shift_events` audit insert.
 
 ### 1.1 Canonical states

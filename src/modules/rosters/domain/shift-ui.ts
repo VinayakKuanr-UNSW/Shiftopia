@@ -34,8 +34,8 @@ type BadgeTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
 /**
  * Priority-ordered ring color for shift cards across all views.
  *
- * purple  — Completed (S13)
- * emerald — In Progress / clocked in (S11)
+ * purple  — Completed (S9)
+ * emerald — In Progress / clocked in (S8)
  * yellow  — Late: Published, past start time, no actual_start (clock-in missing)
  * red     — Emergent: TTS ≤ 4h
  * orange  — Urgent: TTS ≤ 24h
@@ -128,8 +128,8 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
         // Special case: Draft shifts past start_time should have NO strip
         if (shift.lifecycle_status === 'Draft' && isPastStart) return null;
 
-        if (state === 'S13') return 'purple';                          // Completed
-        if (state === 'S11') return 'emerald';                         // In Progress
+        if (state === 'S9') return 'purple';                          // Completed
+        if (state === 'S8') return 'emerald';                         // In Progress
         
         // Late / No Show detection logic
         const hasActualStart = shift.actual_start && shift.actual_start !== '-' && shift.actual_start !== '—';
@@ -165,7 +165,7 @@ export function getBadges(ctx: ShiftUIContext): ShiftBadge[] {
     badges.push({ label: meta.label, tone: 'info' });
 
     // Urgency (runtime TTS — suppressed in terminal states)
-    const terminalStates = ['S13', 'S15'];
+    const terminalStates = ['S9', 'S10'];
     if (!terminalStates.includes(ctx.state)) {
         if (ctx.urgency === 'urgent') {
             badges.push({ label: 'Urgent', tone: 'warning' });
@@ -173,8 +173,8 @@ export function getBadges(ctx: ShiftUIContext): ShiftBadge[] {
     }
 
     // Terminal states
-    if (ctx.state === 'S13') badges.push({ label: 'Completed', tone: 'success' });
-    if (ctx.state === 'S15') badges.push({ label: 'Cancelled', tone: 'neutral'  });
+    if (ctx.state === 'S9') badges.push({ label: 'Completed', tone: 'success' });
+    if (ctx.state === 'S10') badges.push({ label: 'Cancelled', tone: 'neutral'  });
 
     return badges;
 }
@@ -183,18 +183,18 @@ export function getBadges(ctx: ShiftUIContext): ShiftBadge[] {
  * Field-level lock state for a shift.
  *
  * S1/S2 (draft) → nothing locked
- * S4/S5/S9/S10 (published, active) → schedule locked, notes editable
- * S3/S11/S13/S15 → fully locked
+ * S4/S5/S6/S7 (published, active) → schedule locked, notes editable
+ * S3/S8/S9/S10 → fully locked
  */
 export function getLockState(state: ShiftStateID | string): ShiftLockState {
     if (state === 'S1' || state === 'S2') {
         return { fullyLocked: false, partialLock: false };
     }
-    // S3, S4, S5, S9, S10 (published, active) — schedule locked, notes editable
-    if (state === 'S3' || state === 'S4' || state === 'S5' || state === 'S9' || state === 'S10') {
+    // S3, S4, S5, S6, S7 (published, active) — schedule locked, notes editable
+    if (state === 'S3' || state === 'S4' || state === 'S5' || state === 'S6' || state === 'S7') {
         return { fullyLocked: false, partialLock: true };
     }
-    // S11, S13, S15 — fully locked
+    // S8, S9, S10 — fully locked
     return { fullyLocked: true, partialLock: false };
 }
 
@@ -727,11 +727,11 @@ export function getAvailableActions(state: ShiftStateID | string, _urgency?: Shi
         case 'S3':  return ['ACCEPT', 'REJECT', 'UNPUBLISH', 'CANCEL'];
         case 'S4':  return ['SWAP_REQUEST', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CLOCK_IN', 'CANCEL'];
         case 'S5':  return ['SELECT_BID_WINNER', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CANCEL'];
-        case 'S9':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
-        case 'S10': return ['APPROVE_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
-        case 'S11': return ['CLOCK_OUT', 'MARK_NO_SHOW', 'CANCEL'];
-        case 'S13': return [];
-        case 'S15': return [];
+        case 'S6':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
+        case 'S7': return ['APPROVE_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
+        case 'S8': return ['CLOCK_OUT', 'MARK_NO_SHOW', 'CANCEL'];
+        case 'S9': return [];
+        case 'S10': return [];
         default:    return [];
     }
 }

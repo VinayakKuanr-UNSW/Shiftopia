@@ -3,19 +3,19 @@
  *
  * Two layers, all network-free:
  *
- *  1. STATE DERIVATION  — every canonical state (S1…S15 slim lineage + UNKNOWN)
+ *  1. STATE DERIVATION  — every canonical state (S1…S10 slim lineage + UNKNOWN)
  *     derived from its 5-column DB combination, plus the gapless display-ID map.
  *
  *  2. LIFECYCLE WALKS  — real multi-step paths through the machine, mutating
  *     the 5 columns exactly the way the documented ops do and asserting the
  *     derived state at every step:
- *       • direct-assignment happy path  S1→S2→S3→S4→S11→S13
+ *       • direct-assignment happy path  S1→S2→S3→S4→S8→S9
  *       • bidding path                  S1→S5→(select winner: direct-to-S4)
- *       • swap path                     S4→S9 (initiate) →S10 (peer accepts)
+ *       • swap path                     S4→S6 (initiate) →S7 (peer accepts)
  *                                          →S4' (manager approves, shift reassigned)
- *       • swap rejection / expiry       S9/S10 → S4 (revert, cron `process_shift_timers`)
+ *       • swap rejection / expiry       S6/S7 → S4 (revert, cron `process_shift_timers`)
  *       • TTS=4h offer/bidding expiry   S3→S2, S5→S1
- *       • cancellation                  any live state → S15
+ *       • cancellation                  any live state → S10
  */
 
 import { describe, it, expect } from 'vitest';
@@ -47,11 +47,11 @@ const STATE_COMBOS: Record<Exclude<ShiftStateID, 'UNKNOWN'>, ShiftFSMInput> = {
     S3:  shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: null }),
     S4:  shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: 'confirmed' }),
     S5:  shift({ lifecycle_status: 'Published', assignment_status: 'unassigned' }),
-    S9:  shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: 'confirmed', trading_status: 'TradeRequested' }),
-    S10: shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: 'confirmed', trading_status: 'TradeAccepted' }),
-    S11: shift({ lifecycle_status: 'InProgress', assignment_status: 'assigned', assignment_outcome: 'confirmed' }),
-    S13: shift({ lifecycle_status: 'Completed', assignment_status: 'assigned', assignment_outcome: 'confirmed' }),
-    S15: shift({ lifecycle_status: 'Published', assignment_status: 'assigned', is_cancelled: true }),
+    S6:  shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: 'confirmed', trading_status: 'TradeRequested' }),
+    S7: shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: 'confirmed', trading_status: 'TradeAccepted' }),
+    S8: shift({ lifecycle_status: 'InProgress', assignment_status: 'assigned', assignment_outcome: 'confirmed' }),
+    S9: shift({ lifecycle_status: 'Completed', assignment_status: 'assigned', assignment_outcome: 'confirmed' }),
+    S10: shift({ lifecycle_status: 'Published', assignment_status: 'assigned', is_cancelled: true }),
 };
 
 const ALL_STATES = Object.keys(STATE_COMBOS) as Array<keyof typeof STATE_COMBOS>;
@@ -70,13 +70,13 @@ describe('FSM state derivation — every canonical state', () => {
             lifecycle_status: 'Completed',
             trading_status: 'TradeAccepted',
             is_cancelled: true,
-        }))).toBe('S15');
+        }))).toBe('S10');
     });
 
     it('trade status overrides assignment outcome while Published', () => {
-        // Confirmed shift with a trade in flight is S9/S10, not S4
-        expect(getShiftFSMState(STATE_COMBOS.S9)).toBe('S9');
-        expect(getShiftFSMState(STATE_COMBOS.S10)).toBe('S10');
+        // Confirmed shift with a trade in flight is S6/S7, not S4
+        expect(getShiftFSMState(STATE_COMBOS.S6)).toBe('S6');
+        expect(getShiftFSMState(STATE_COMBOS.S7)).toBe('S7');
     });
 
     it('legacy assignment_outcome values (pending/offered) still derive S3', () => {
@@ -96,21 +96,13 @@ describe('FSM state derivation — every canonical state', () => {
     });
 });
 
-describe('Display-ID mapping — gapless card IDs', () => {
-    // Canonical → display (tombstones S6/S7/S8/S12/S14 collapsed)
-    const EXPECTED_DISPLAY: Record<string, string> = {
-        S1: 'S1', S2: 'S2', S3: 'S3', S4: 'S4', S5: 'S5',
-        S9: 'S6', S10: 'S7', S11: 'S8', S13: 'S9', S15: 'S10',
-    };
-
-    it.each(ALL_STATES)('%s renders as its gapless display ID', (state) => {
-        expect(getShiftStateDisplay(state).id).toBe(EXPECTED_DISPLAY[state]);
+describe('State IDs — one gapless S1…S10 model', () => {
+    it.each(ALL_STATES)('%s renders as its own id', (state) => {
+        expect(getShiftStateDisplay(state).id).toBe(state);
     });
 
-    it('display IDs S1…S10 are gapless and unique', () => {
-        const ids = ALL_STATES.map(s => getShiftStateDisplay(s).id);
-        expect(new Set(ids).size).toBe(ids.length);
-        expect([...ids].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))))
+    it('state IDs are exactly S1…S10', () => {
+        expect([...ALL_STATES].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))))
             .toEqual(['S1','S2','S3','S4','S5','S6','S7','S8','S9','S10']);
     });
 
@@ -159,13 +151,13 @@ function walk(start: ShiftFSMInput, steps: Array<[keyof typeof apply, ShiftState
 }
 
 describe('Lifecycle walks', () => {
-    it('direct-assignment happy path: S1 → S2 → S3 → S4 → S11 → S13', () => {
+    it('direct-assignment happy path: S1 → S2 → S3 → S4 → S8 → S9', () => {
         walk(STATE_COMBOS.S1, [
             ['assign',   'S2'],
             ['publish',  'S3'],
             ['confirm',  'S4'],
-            ['start',    'S11'],
-            ['complete', 'S13'],
+            ['start',    'S8'],
+            ['complete', 'S9'],
         ]);
     });
 
@@ -180,14 +172,14 @@ describe('Lifecycle walks', () => {
         // Start from a confirmed published shift (only S4 shifts are tradeable)
         const s4 = STATE_COMBOS.S4;
 
-        // T1 — employee initiates a swap (shift_swaps OPEN): S4 → S9
+        // T1 — employee initiates a swap (shift_swaps OPEN): S4 → S6
         const s9 = apply.initiateSwap(s4);
-        expect(getShiftFSMState(s9)).toBe('S9');
+        expect(getShiftFSMState(s9)).toBe('S6');
 
         // T2 — a peer's offer is accepted by the requester (sm_accept_trade,
-        // shift_swaps → MANAGER_PENDING): S9 → S10
+        // shift_swaps → MANAGER_PENDING): S6 → S7
         const s10 = apply.peerAccept(s9);
-        expect(getShiftFSMState(s10)).toBe('S10');
+        expect(getShiftFSMState(s10)).toBe('S7');
 
         // T5 — manager approves (sm_approve_peer_swap): assignees swapped,
         // both shifts revert to NoTrade → S4 (with the new assignee)
@@ -195,13 +187,13 @@ describe('Lifecycle walks', () => {
         expect(getShiftFSMState(s4After)).toBe('S4');
     });
 
-    it('swap rejection walk: S10 → (manager rejects) → S4', () => {
+    it('swap rejection walk: S7 → (manager rejects) → S4', () => {
         const s10 = apply.peerAccept(apply.initiateSwap(STATE_COMBOS.S4));
-        expect(getShiftFSMState(s10)).toBe('S10');
+        expect(getShiftFSMState(s10)).toBe('S7');
         expect(getShiftFSMState(apply.resolveTrade(s10))).toBe('S4');
     });
 
-    it('trade expiry (cron @ TTS=4h): S9 → S4 and S10 → S4', () => {
+    it('trade expiry (cron @ TTS=4h): S6 → S4 and S7 → S4', () => {
         const s9 = apply.initiateSwap(STATE_COMBOS.S4);
         expect(getShiftFSMState(apply.resolveTrade(s9))).toBe('S4');
         const s10 = apply.peerAccept(s9);
@@ -213,11 +205,11 @@ describe('Lifecycle walks', () => {
         expect(getShiftFSMState(apply.biddingExpire(STATE_COMBOS.S5))).toBe('S1');
     });
 
-    it('unpublish reverts published states to draft: S3→S2, S5→S1, S10→S2', () => {
+    it('unpublish reverts published states to draft: S3→S2, S5→S1, S7→S2', () => {
         expect(getShiftFSMState(apply.unpublish(STATE_COMBOS.S3))).toBe('S2');
         expect(getShiftFSMState(apply.unpublish(STATE_COMBOS.S5))).toBe('S1');
         // Unpublishing a trade-pending shift cancels the trade and keeps the assignee
-        expect(getShiftFSMState(apply.unpublish(STATE_COMBOS.S10))).toBe('S2');
+        expect(getShiftFSMState(apply.unpublish(STATE_COMBOS.S7))).toBe('S2');
     });
 
     it('unassign: S2 → S1', () => {
@@ -225,8 +217,8 @@ describe('Lifecycle walks', () => {
     });
 
     it('cancellation terminates from every live state', () => {
-        for (const s of ['S1', 'S2', 'S3', 'S4', 'S5', 'S9', 'S10', 'S11'] as const) {
-            expect(getShiftFSMState(apply.cancel(STATE_COMBOS[s]))).toBe('S15');
+        for (const s of ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'] as const) {
+            expect(getShiftFSMState(apply.cancel(STATE_COMBOS[s]))).toBe('S10');
         }
     });
 });

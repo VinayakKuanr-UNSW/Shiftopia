@@ -7,7 +7,7 @@
  *
  * Inputs:  lifecycle_status, assignment_status, assignment_outcome,
  *          trading_status, is_cancelled
- * Output:  ShiftStateID  ('S1' … 'S15')
+ * Output:  ShiftStateID  ('S1' … 'S10')
  *
  * Priority order (hard-coded, must not change):
  *   Cancelled > Completed > InProgress > Published > Draft
@@ -21,11 +21,11 @@ export type ShiftStateID =
     | 'S3'      // Published – Offered   (assigned + outcome = null)
     | 'S4'      // Published – Confirmed
     | 'S5'      // Published – Bidding   (unassigned)
-    | 'S9'      // Published – Trade Requested (Pending Peer)   — display: S6
-    | 'S10'     // Published – Trade Requested (Pending Manager) — display: S7
-    | 'S11'     // In Progress
-    | 'S13'     // Completed
-    | 'S15'     // Cancelled
+    | 'S6'      // Published – Trade Requested (Pending Peer)
+    | 'S7'      // Published – Trade Requested (Pending Manager)
+    | 'S8'      // In Progress
+    | 'S9'      // Completed
+    | 'S10'     // Cancelled
     | 'UNKNOWN'; // Stale/unrecognized DB combination — renders as neutral fallback
 
 // ─── Input shape ─────────────────────────────────────────────────────────────
@@ -42,19 +42,11 @@ export interface ShiftFSMInput {
 
 interface ShiftFSMStateInfo {
     /**
-     * Canonical state ID. This is a stable TS↔PL/pgSQL contract — DB transition
-     * guards (`sm_*`, `publish_shift`) branch on these exact strings returned by
-     * `get_shift_fsm_state()`. NEVER renumber it. For the user-facing badge use
-     * {@link ShiftFSMStateInfo.displayId} instead.
+     * State ID (S1…S10) — shown on cards AND a TS↔PL/pgSQL contract: DB
+     * transition guards (`sm_*`, `fsm_op_is_legal`) branch on these exact
+     * strings returned by `get_shift_fsm_state()`. Renumbering needs a migration.
      */
     id: ShiftStateID;
-    /**
-     * Gapless, user-facing ID shown on cards (S1…S10). The deprecated tombstone
-     * states (old S6/S7/S8/S12/S14) left holes in the canonical numbering, so the
-     * UI collapses the survivors back to a clean sequence. Display-only — keep all
-     * logic, tests, and DB on `id`.
-     */
-    displayId: string;
     label: string;
     description: string;
     /** Tailwind colour token — use with bg-/text-/border- prefixes */
@@ -62,17 +54,17 @@ interface ShiftFSMStateInfo {
 }
 
 export const FSM_STATE_META: Record<ShiftStateID, ShiftFSMStateInfo> = {
-    S1:  { id: 'S1',  displayId: 'S1',  label: 'Draft',             description: 'Created, not yet assigned or published',    color: 'slate'   },
-    S2:  { id: 'S2',  displayId: 'S2',  label: 'Draft (Assigned)',   description: 'Assigned in draft — not yet published',     color: 'slate'   },
-    S3:  { id: 'S3',  displayId: 'S3',  label: 'Offered',            description: 'Published and offered to an employee',      color: 'blue'    },
-    S4:  { id: 'S4',  displayId: 'S4',  label: 'Confirmed',          description: 'Assignment accepted and confirmed',         color: 'emerald' },
-    S5:  { id: 'S5',  displayId: 'S5',  label: 'Bidding',            description: 'Open for employee bids',                    color: 'violet'  },
-    S9:  { id: 'S9',  displayId: 'S6',  label: 'Trade Requested (Pending Peer)',    description: 'Employee has requested a trade — awaiting a peer to accept',  color: 'amber'   },
-    S10: { id: 'S10', displayId: 'S7',  label: 'Trade Requested (Pending Manager)', description: 'Trade accepted by a peer — awaiting manager approval',        color: 'orange'  },
-    S11: { id: 'S11', displayId: 'S8',  label: 'In Progress',        description: 'Shift has started',                         color: 'blue'    },
-    S13:     { id: 'S13',     displayId: 'S9',  label: 'Completed',          description: 'Shift has ended',                           color: 'gray'    },
-    S15:     { id: 'S15',     displayId: 'S10', label: 'Cancelled',          description: 'Shift has been cancelled',                  color: 'red'     },
-    UNKNOWN: { id: 'UNKNOWN', displayId: '—',   label: 'Unknown',            description: 'Unrecognized shift state — stale DB data',  color: 'gray'    },
+    S1:      { id: 'S1',      label: 'Draft',             description: 'Created, not yet assigned or published',    color: 'slate'   },
+    S2:      { id: 'S2',      label: 'Draft (Assigned)',   description: 'Assigned in draft — not yet published',     color: 'slate'   },
+    S3:      { id: 'S3',      label: 'Offered',            description: 'Published and offered to an employee',      color: 'blue'    },
+    S4:      { id: 'S4',      label: 'Confirmed',          description: 'Assignment accepted and confirmed',         color: 'emerald' },
+    S5:      { id: 'S5',      label: 'Bidding',            description: 'Open for employee bids',                    color: 'violet'  },
+    S6:      { id: 'S6',      label: 'Trade Requested (Pending Peer)',    description: 'Employee has requested a trade — awaiting a peer to accept',  color: 'amber'   },
+    S7:      { id: 'S7',      label: 'Trade Requested (Pending Manager)', description: 'Trade accepted by a peer — awaiting manager approval',        color: 'orange'  },
+    S8:      { id: 'S8',      label: 'In Progress',        description: 'Shift has started',                         color: 'blue'    },
+    S9:      { id: 'S9',      label: 'Completed',          description: 'Shift has ended',                           color: 'gray'    },
+    S10:     { id: 'S10',     label: 'Cancelled',          description: 'Shift has been cancelled',                  color: 'red'     },
+    UNKNOWN: { id: 'UNKNOWN', label: 'Unknown',            description: 'Unrecognized shift state — stale DB data',  color: 'gray'    },
 };
 
 /** Hex colours for the Tailwind tokens above — for inline-styled badges/rows. */
@@ -88,7 +80,7 @@ const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
 };
 
 /**
- * Semantic state color palette tokens for circular shift state badges (canonical S1...S15).
+ * Semantic state color palette tokens for circular shift state badges (canonical S1...S10).
  * Features dark tinted backgrounds with high-contrast text derived from the corresponding state palette.
  */
 interface ShiftStateBadgeToken {
@@ -104,17 +96,17 @@ export const SHIFT_STATE_BADGE_TOKENS: Record<ShiftStateID, ShiftStateBadgeToken
     S3:      { bg: '#075985', text: '#BAE6FD', border: 'rgba(186, 230, 253, 0.25)', label: 'Offered' },
     S4:      { bg: '#166534', text: '#BBF7D0', border: 'rgba(187, 247, 208, 0.25)', label: 'Confirmed' },
     S5:      { bg: '#854D0E', text: '#FDE68A', border: 'rgba(253, 230, 138, 0.25)', label: 'Bidding' },
-    S9:      { bg: '#9A3412', text: '#FED7AA', border: 'rgba(254, 215, 170, 0.25)', label: 'Trade (Peer)' },
-    S10:     { bg: '#6B21A8', text: '#E9D5FF', border: 'rgba(233, 213, 255, 0.25)', label: 'Trade (Mgr)' },
-    S11:     { bg: '#1D4ED8', text: '#BFDBFE', border: 'rgba(191, 219, 254, 0.25)', label: 'In Progress' },
-    S13:     { bg: '#115E59', text: '#99F6E4', border: 'rgba(153, 246, 228, 0.25)', label: 'Completed' },
-    S15:     { bg: '#991B1B', text: '#FECACA', border: 'rgba(254, 202, 202, 0.25)', label: 'Cancelled' },
+    S6:      { bg: '#9A3412', text: '#FED7AA', border: 'rgba(254, 215, 170, 0.25)', label: 'Trade (Peer)' },
+    S7:      { bg: '#6B21A8', text: '#E9D5FF', border: 'rgba(233, 213, 255, 0.25)', label: 'Trade (Mgr)' },
+    S8:      { bg: '#1D4ED8', text: '#BFDBFE', border: 'rgba(191, 219, 254, 0.25)', label: 'In Progress' },
+    S9:      { bg: '#115E59', text: '#99F6E4', border: 'rgba(153, 246, 228, 0.25)', label: 'Completed' },
+    S10:     { bg: '#991B1B', text: '#FECACA', border: 'rgba(254, 202, 202, 0.25)', label: 'Cancelled' },
     UNKNOWN: { bg: '#334155', text: '#E2E8F0', border: 'rgba(226, 232, 240, 0.15)', label: 'Unknown' },
 };
 
 /** Display descriptor for a shift's State badge/row. */
 export interface ShiftStateDisplay {
-    /** Gapless UI id (S1…S10). */
+    /** State id (S1…S10). */
     id: string;
     label: string;
     /** Hex colour for inline styling, matching the card's Time/Live rule rows. */
@@ -122,18 +114,13 @@ export interface ShiftStateDisplay {
 }
 
 /**
- * Resolve the user-facing State descriptor for a card. Uses the gapless
- * {@link ShiftFSMStateInfo.displayId} and maps the colour token to a hex value so
- * it can sit alongside the Time Rules / Live Rules rows.
- *
- * There is no emergent `*` suffix: S3 (Offered) and S5 (Bidding) auto-expire at
- * TTS = 4h (S3 → S2, S5 → S1) before they can enter the emergent window, so an
- * emergent S3/S5 is not a representable state.
+ * Resolve the user-facing State descriptor for a card, mapping the colour token
+ * to a hex value so it can sit alongside the Time Rules / Live Rules rows.
  */
 export function getShiftStateDisplay(state: ShiftStateID): ShiftStateDisplay {
     const meta = FSM_STATE_META[state];
     return {
-        id: meta.displayId,
+        id: state === 'UNKNOWN' ? '—' : meta.id,
         label: meta.label,
         color: FSM_COLOR_HEX[meta.color],
     };
@@ -150,19 +137,19 @@ export function getShiftStateDisplay(state: ShiftStateID): ShiftStateDisplay {
 export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
     // 1. Cancelled — highest priority, short-circuits everything. Either signal
     //    counts, as in get_shift_fsm_state().
-    if (shift.is_cancelled || shift.lifecycle_status === 'Cancelled') return 'S15';
+    if (shift.is_cancelled || shift.lifecycle_status === 'Cancelled') return 'S10';
 
     // 2. Completed
-    if (shift.lifecycle_status === 'Completed') return 'S13';
+    if (shift.lifecycle_status === 'Completed') return 'S9';
 
     // 3. In Progress
-    if (shift.lifecycle_status === 'InProgress') return 'S11';
+    if (shift.lifecycle_status === 'InProgress') return 'S8';
 
     // 4. Published — sub-states resolved by assignment + trade fields
     if (shift.lifecycle_status === 'Published') {
         // Trade overrides assignment outcome
-        if (shift.trading_status === 'TradeRequested') return 'S9';
-        if (shift.trading_status === 'TradeAccepted')  return 'S10';
+        if (shift.trading_status === 'TradeRequested') return 'S6';
+        if (shift.trading_status === 'TradeAccepted')  return 'S7';
 
         if (shift.assignment_status === 'assigned') {
             // Confirmed → S4

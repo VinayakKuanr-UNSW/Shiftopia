@@ -28,11 +28,11 @@ const STATE_ICONS: Record<ShiftStateID, LucideIcon> = {
   S3: Send,               // Offered: paper airplane
   S4: Calendar,           // Confirmed: calendar with grid
   S5: Gavel,              // Bidding: gavel
-  S9: Users,              // Trade (Peer): peer employees
-  S10: ArrowLeftRight,    // Trade (Mgr): swap / manager arrows
-  S11: Play,              // In Progress: play triangle
-  S13: Check,             // Completed: checkmark
-  S15: X,                 // Cancelled: cross
+  S6: Users,              // Trade (Peer): peer employees
+  S7: ArrowLeftRight,    // Trade (Mgr): swap / manager arrows
+  S8: Play,              // In Progress: play triangle
+  S9: Check,             // Completed: checkmark
+  S10: X,                 // Cancelled: cross
   UNKNOWN: HelpCircle,    // Unknown fallback
 };
 
@@ -44,11 +44,11 @@ const STATE_ICONS: Record<ShiftStateID, LucideIcon> = {
  * - Offered (S3): Send (paper airplane)
  * - Confirmed (S4): Calendar
  * - Bidding (S5): Gavel
- * - Trade Peer (S9): Users
- * - Trade Mgr (S10): ArrowLeftRight
- * - In Progress (S11): Play
- * - Completed (S13): Check
- * - Cancelled (S15): X
+ * - Trade Peer (S6): Users
+ * - Trade Mgr (S7): ArrowLeftRight
+ * - In Progress (S8): Play
+ * - Completed (S9): Check
+ * - Cancelled (S10): X
  */
 export const ShiftStateCircleBadge: React.FC<ShiftStateCircleBadgeProps> = ({
   stateId,
@@ -80,9 +80,9 @@ export const ShiftStateCircleBadge: React.FC<ShiftStateCircleBadgeProps> = ({
       <IconComponent
         className={cn(
           "w-3 h-3 shrink-0",
-          canonicalId === 'S11' && "translate-x-[0.5px]"
+          canonicalId === 'S8' && "translate-x-[0.5px]"
         )}
-        strokeWidth={canonicalId === 'S13' || canonicalId === 'S15' ? 2.6 : 2.2}
+        strokeWidth={canonicalId === 'S9' || canonicalId === 'S10' ? 2.6 : 2.2}
         aria-hidden="true"
       />
     </span>

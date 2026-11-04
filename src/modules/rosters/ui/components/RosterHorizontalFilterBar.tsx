@@ -194,11 +194,11 @@ export const RosterHorizontalFilterBar: React.FC<RosterHorizontalFilterBarProps>
     { id: 'S3', name: 'S3 — Offered' },
     { id: 'S4', name: 'S4 — Confirmed' },
     { id: 'S5', name: 'S5 — Bidding' },
-    { id: 'S9', name: 'S9 — Trade (Peer)' },
-    { id: 'S10', name: 'S10 — Trade (Mgr)' },
-    { id: 'S11', name: 'S11 — In Progress' },
-    { id: 'S13', name: 'S13 — Completed' },
-    { id: 'S15', name: 'S15 — Cancelled' },
+    { id: 'S6', name: 'S6 — Trade (Peer)' },
+    { id: 'S7', name: 'S7 — Trade (Mgr)' },
+    { id: 'S8', name: 'S8 — In Progress' },
+    { id: 'S9', name: 'S9 — Completed' },
+    { id: 'S10', name: 'S10 — Cancelled' },
   ], []);
 
   const lifecycleOptions = useMemo<FilterOption[]>(() => [

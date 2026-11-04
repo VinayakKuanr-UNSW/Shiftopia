@@ -26,7 +26,7 @@ Each entry: **Trigger** (what invokes it) → **Condition** (the actual check) �
 | SCH-0001 | New shift starts Draft-unassigned | Shift row created | `lifecycle_status='Draft'`, no assignee | n/a (initial state) | Verified | Ch.7 §1.1 |
 | SCH-0002 | Publish blocked inside 4h of start (unassigned) | `publish` op, shift unassigned | TTS ≥ 4h | Rejected: `PUBLISH_TOO_LATE` | Verified | Ch.7 §1.2 |
 | SCH-0003 | Emergency-window direct confirm | `publish` op, shift assigned, TTS<4h | — | Skips the offer step, jumps straight to Confirmed, stamps `emergency_assigned_at/_by` | Verified | Ch.7 §1.2 |
-| SCH-0004 | Unpublish has no time lock | `unpublish` op | Shift in S3/S4/S5/S9/S10 | Cancels any in-flight swap + reverts counter-shift; **no TTS guard**, unlike publish | Verified | Ch.7 §1.2 |
+| SCH-0004 | Unpublish has no time lock | `unpublish` op | Shift in S3/S4/S5/S6/S7 | Cancels any in-flight swap + reverts counter-shift; **no TTS guard**, unlike publish | Verified | Ch.7 §1.2 |
 | SCH-0005 | Assign re-validates overlap at commit | `assign` op | `check_shift_overlap()` re-run server-side, not just at search time | Rejected: `CANDIDATE_OVERLAP` | Verified | Ch.7 §1.2 |
 | SCH-0006 | Unassign is Draft-only | `unassign` op | Shift must be S2 | Illegal from any Published state — must `unpublish` first | Verified | Ch.7 §1.2 |
 | SCH-0007 | Winner selection is atomic and exclusive | `select_winner` op | Shift S5/S6 | Winning bid → accepted, all other pending bids on that shift → rejected in the same transaction, shift jumps directly to Confirmed | Verified | Ch.7 §1.2 |

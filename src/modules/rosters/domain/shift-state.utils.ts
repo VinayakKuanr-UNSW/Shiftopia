@@ -5,7 +5,7 @@ import { getShiftFSMState, type ShiftStateID as FSMStateID } from './shift-fsm';
  * The canonical IDs from shift-fsm.ts, plus 'Unknown' for a row too partial to read.
  */
 export type ShiftStateID =
-    | FSMStateID          // S1 S2 S3 S4 S5 S9 S10 S11 S13 S15
+    | FSMStateID          // S1 S2 S3 S4 S5 S6 S7 S8 S9 S10
     | 'Unknown';
 
 /**

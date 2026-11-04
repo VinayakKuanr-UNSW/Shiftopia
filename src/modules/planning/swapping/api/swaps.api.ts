@@ -236,7 +236,7 @@ export const swapsApi = {
 
         // Atomic create via the definer RPC: inserts the OPEN request (the
         // trg_set_swap_expires_at trigger stamps expires_at) AND flips the shift
-        // to TradeRequested (S4 → S9) in a single transaction — closing the
+        // to TradeRequested (S4 → S6) in a single transaction — closing the
         // orphaned-state hole the old two-step client write had. The server
         // derives the requester from auth.uid() and verifies shift ownership,
         // so requestedByEmployeeId is no longer trusted from the client.
@@ -798,7 +798,7 @@ export const swapsApi = {
         // giveaway) reassignment to sm_approve_peer_swap using the row's own ids,
         // marks the swap APPROVED, and version-guards the requester shift — closing
         // the concurrent double-approve hole the old direct update had (it lacked a
-        // status guard). S10 ↔ MANAGER_PENDING is kept in sync by sm_accept_trade.
+        // status guard). S7 ↔ MANAGER_PENDING is kept in sync by sm_accept_trade.
         // Optimistic-concurrency basis must be the version the view was loaded at
         // (a stale view should correctly conflict). Never silently fall back to 0
         // — that forces a confusing VERSION_CONFLICT since versions start at 1.
@@ -833,8 +833,8 @@ export const swapsApi = {
 
         // Execute via the shift-mutation gateway: it flips the shift_swaps row to
         // REJECTED and reverts BOTH shifts to NoTrade, with version-CAS + an
-        // actor-stamped audit event. (S10 ↔ MANAGER_PENDING is kept in sync by
-        // sm_accept_trade, so the gateway's S10 FSM guard is satisfied.)
+        // actor-stamped audit event. (S7 ↔ MANAGER_PENDING is kept in sync by
+        // sm_accept_trade, so the gateway's S7 FSM guard is satisfied.)
         const requesterShift = Array.isArray(data.requester_shift)
             ? data.requester_shift[0]
             : data.requester_shift;
@@ -857,7 +857,7 @@ export const swapsApi = {
         console.log('[API] Cancelling swap:', swapId);
 
         // §4 T7: atomic cancel via the definer RPC — flips the swap to CANCELLED
-        // and reverts the shift to NoTrade (S9 → S4) in one transaction, with the
+        // and reverts the shift to NoTrade (S6 → S4) in one transaction, with the
         // OPEN-only state guard (returns "Must be OPEN") and requester/manager
         // authorization enforced server-side.
         const { data: rpcResult, error } = await db.rpc('sm_cancel_swap_request', {
