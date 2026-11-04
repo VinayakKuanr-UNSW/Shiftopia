@@ -296,23 +296,33 @@ describe('bulkPublishShifts — the connection drops during the publish call', (
     });
 });
 
-describe('bulkPublishShifts — emergency publish (starts within 4h)', () => {
+describe('bulkPublishShifts — short notice publish (starts within 4h)', () => {
     const IN_2_HOURS = new Date(Date.now() + 2 * 3_600_000).toISOString();
-    const gatewayCalls = () => h.rpcCalls.filter(c => c.fn === 'sm_apply_shift_op');
     beforeEach(() => {
         h.loadRows = async () => new Map([['a', { ...shift('a'), start_at: IN_2_HOURS, version: 7 }]]);
     });
 
-    it('sends the version its compliance check saw, with no second read', async () => {
+    it('routes through sm_bulk_publish_shifts with expected version and no gateway bypass', async () => {
         const res = await shiftsCommands.bulkPublishShifts(['a']);
 
-        expect(h.inCalls).toHaveLength(0);
-        expect(gatewayCalls()[0].args.p_expected_version).toBe(7);
+        expect(publishCalls()).toHaveLength(1);
+        expect(publishCalls()[0].args.p_expected_versions).toEqual({ a: 7 });
         expect(res.publishedIds).toEqual(['a']);
     });
 
-    it('says the shift changed after its check when the version no longer matches', async () => {
-        h.gatewayCode = 'VERSION_CONFLICT';
+    it('handles stale version conflict returned from bulk publish', async () => {
+        h.rpcResult = () => ({
+            success: true,
+            total_requested: 1,
+            success_count: 0,
+            failure_count: 1,
+            stale_ids: ['a'],
+            message: 'stale',
+        });
+        h.inResult = async (_col, vals) => ({
+            data: vals.map(id => ({ id, lifecycle_status: 'Draft' })),
+            error: null,
+        });
 
         const res = await shiftsCommands.bulkPublishShifts(['a']);
 

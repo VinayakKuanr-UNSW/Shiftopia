@@ -127,7 +127,7 @@ export const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
               <span>Swap Rules & Guidelines</span>
             </div>
             <ul className="text-[11px] space-y-1 text-indigo-700/90 dark:text-indigo-300/90 pl-1 list-disc list-inside">
-              <li>Must be requested at least 4 hours before the shift start.</li>
+              <li>Must be requested before the shift starts.</li>
               <li>Both employees must hold matching role qualifications and active licences.</li>
               <li>Swap requests are subject to manager final approval.</li>
             </ul>

@@ -48,7 +48,6 @@ import { swapsApi } from '../../api/swaps.api';
 import { shiftsApi } from '@/modules/rosters';
 import { validateCompliance, QualificationViolation } from '@/modules/rosters/services/compliance.service';
 import { getSwapTimer } from '../pages/EmployeeSwaps.page';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 
 // =============================================================================
@@ -328,8 +327,8 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                     const isOfferedHere = alreadyOfferedForThisSwapIds.has(shift.id);
                                     const isOfferedElsewhere = offeredElsewhereIds.has(shift.id);
 
-                                    const urgency = computeShiftUrgency(s.shift_date, s.start_time, s.start_at);
-                                    const isLocked = urgency === 'emergent';
+                                    const isPastStart = s.start_at ? new Date(s.start_at).getTime() <= Date.now() : false;
+                                    const isLocked = isPastStart;
 
                                     const elig = eligibilityMap.get(shift.id);
                                     const isIneligible = elig?.eligible === false;

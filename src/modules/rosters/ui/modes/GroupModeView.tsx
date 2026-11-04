@@ -29,7 +29,7 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, isToday, isBefore, startOfDay, differenceInHours, parse } from 'date-fns';
+import { format, addDays, isToday, isBefore, startOfDay, parse } from 'date-fns';
 import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import {
@@ -2102,23 +2102,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       return;
     }
 
-    // BUSINESS POLICY: prevent publishing unassigned shifts within 4h of start.
-    // Resolve the start as a real instant in Sydney (naive fallback would parse in
-    // the viewer's browser tz); compare against the real current instant.
-    const shiftStart = shift.rawShift.start_at
-      ? new Date(shift.rawShift.start_at)
-      : parseZonedDateTime(shift.rawShift.shift_date, shift.rawShift.start_time, SYDNEY_TZ);
-    const now = new Date();
-    const hoursToStart = differenceInHours(shiftStart, now);
-    if (hoursToStart < 4 && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')) {
-      toast({
-        title: 'Use Emergency Assignment',
-        description: 'This shift starts within 4 hours, so it can’t be opened for bidding — bids lock in the emergency window and it would immediately revert to Draft. Assign an employee to emergency-publish it instead.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     setPendingAction({ type: 'publish', shift });
     setConfirmActionOpen(true);
   };
@@ -2199,18 +2182,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     // Strict Locking Check (Includes past TIME on current day + 4h rule)
     const isLocked = shift.isLocked;
 
-    // Sydney (AEST/AEDT) start instant, independent of the viewer's browser tz.
-    const shiftStart = parseZonedDateTime(format(date, 'yyyy-MM-dd'), shift.startTime, SYDNEY_TZ);
-
-    const now = new Date();
-    const hoursToStart = differenceInHours(shiftStart, now);
-    const isEmergency = hoursToStart < 4;
-
-    // DEBUG: Log calculation for shifts starting soon
-    // if (hoursToStart < 6) {
-    //   console.log(`[ShiftCard] ${shift.id} Start:${shift.startTime} Now:${format(now, 'HH:mm')} Diff:${hoursToStart}h${minutesToStart % 60}m Emergency:${isEmergency} OnBidding:${shift.isOnBidding}`);
-    // }
-
     const groupConfig = GROUP_COLORS[shift.groupColor as TemplateGroupType] || GROUP_COLORS.convention_centre;
     const accentColor = groupConfig.accent === 'emerald' ? 'green' : groupConfig.accent;
 
@@ -2277,17 +2248,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                 {/* Publish / Unpublish where applicable */}
                 {!hasStarted && canEdit && shift.isDraft && !shift.isPublished && (
                   <DropdownMenuItem
-                    disabled={isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')}
                     onClick={() => handleRequestPublish(shift)}
-                    className={cn(
-                      "text-popover-foreground hover:bg-accent cursor-pointer",
-                      isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') && "opacity-50 cursor-not-allowed"
-                    )}
+                    className="text-popover-foreground hover:bg-accent cursor-pointer"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    {isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')
-                      ? 'Publish (Assign Required)'
-                      : 'Publish Shift'}
+                    Publish Shift
                   </DropdownMenuItem>
                 )}
 

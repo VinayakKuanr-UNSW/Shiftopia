@@ -69,7 +69,7 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     subDepartmentId: shift.sub_department_id,
     roleId: shift.role_id,
     roleName: shift.roles?.name ?? null,
-    remunerationLevel: (shift as any).remuneration_level ?? (shift.roles as any)?.remuneration_level ?? null,
+    remunerationLevel: (shift as any).remuneration_level ?? (shift.roles as { remuneration_level?: number | null } | null | undefined)?.remuneration_level ?? null,
 
     // Level info
     levelName: (shift as any).remuneration_levels?.level_name ?? null,

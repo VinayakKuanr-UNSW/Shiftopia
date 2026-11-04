@@ -41,8 +41,6 @@ const defaultDeps: LoadPublishPlanDeps = {
 const EMPTY_PUBLISH_PLAN: PublishRosterPlan = {
     assignedIds: [],
     unassignedIds: [],
-    emergentAssignedIds: [],
-    emergentUnassignedIds: [],
     deadIds: [],
     fullTimeIds: [],
     fullTimeUnassignedIds: [],

@@ -49,7 +49,7 @@ import { toolbar } from '@/modules/core/ui/components/Toolbar';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { soleOrgId, deptIds, subDeptIds } from '@/platform/auth/scope-narrowing';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
-import { computeShiftUrgency, ShiftUrgency, EMERGENT_WINDOW_MS } from '@/modules/rosters/domain/bidding-urgency';
+import { computeShiftUrgency, ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 import { calculateTimeRemaining, formatTimeRemaining } from '../../../../planning/bidding/ui/views/OpenBidsView/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -218,10 +218,10 @@ export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, st
 };
 
 /**
- * Resolve the true offer-close moment for a swap card: shift START − EMERGENT_WINDOW_MS (T−4h).
+ * Resolve the true offer-close moment for a swap card: shift START.
  * Timezone-correct: naive shift_date/start_time is interpreted in the shift's tz (Sydney by default)
  * via parseZonedDateTime — NEVER via `new Date(`${date}T${time}`)` which parses in the browser tz.
- * Returns isClosed (past the T−4h lockout) and the formatted countdown to close (null when closed/unknown).
+ * Returns isClosed (shift has started) and the formatted countdown to close (null when closed/unknown).
  */
 const getSwapClose = (
     shift: any,
@@ -237,7 +237,8 @@ const getSwapClose = (
         return { closeAt: null, isClosed: false, timerText: null };
     }
 
-    const closeAt = new Date(start.getTime() - EMERGENT_WINDOW_MS);
+    // Swap window stays active right up to scheduled start
+    const closeAt = start;
     const isClosed = now.getTime() >= closeAt.getTime();
     const timerText = isClosed ? null : formatTimeRemaining(calculateTimeRemaining(closeAt.toISOString()));
 
@@ -476,7 +477,7 @@ const EmployeeSwapsPage: React.FC = () => {
         const shift = (swap as any).requester_shift;
         const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
 
-        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        // Offer close = shift start, tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
         const isExpired = isClosed;
 
@@ -555,7 +556,7 @@ const EmployeeSwapsPage: React.FC = () => {
     const renderMySwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
         
-        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        // Offer close = shift start, tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
 
         const isExpired = isClosed;
@@ -658,7 +659,7 @@ const EmployeeSwapsPage: React.FC = () => {
     const renderAvailableSwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
         
-        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        // Offer close = shift start, tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
         const isExpired = isClosed;
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
@@ -728,7 +729,7 @@ const EmployeeSwapsPage: React.FC = () => {
         const shift = (swap as any).requester_shift;
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         
-        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        // Offer close = shift start, tz-correct.
         const { isClosed, timerText } = getSwapClose(shift, now);
         const isExpired = isClosed;
 
@@ -1015,7 +1016,7 @@ const EmployeeSwapsPage: React.FC = () => {
                                         const requesterName = swap.requested_by?.full_name || swap.requested_by?.email || 'Someone';
                                         const hasOffered = myActiveOfferSwapIds.has(swap.id);
 
-                                        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                                        // Offer close = shift start, tz-correct.
                                         const isExpired = getSwapClose(shift, now).isClosed;
 
                                         return (
@@ -1186,7 +1187,7 @@ const EmployeeSwapsPage: React.FC = () => {
                                         const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
                                         const ownerName = swap.requested_by?.full_name || swap.requested_by?.email || 'Someone';
 
-                                        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                                        // Offer close = shift start, tz-correct.
                                         const isExpired = getSwapClose(shift, now).isClosed;
 
                                         const deriveOfferStatus = () => {
@@ -1369,7 +1370,7 @@ const EmployeeSwapsPage: React.FC = () => {
                                     {filteredMySwaps.map(swap => {
                                         const shift = swap.requester_shift;
 
-                                        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                                        // Offer close = shift start, tz-correct.
                                         const isExpired = getSwapClose(shift, now).isClosed;
 
                                         return (
@@ -1549,7 +1550,7 @@ const EmployeeSwapsPage: React.FC = () => {
                             const statusCfg = STATUS_CONFIG[swap.status] ?? STATUS_CONFIG.EXPIRED;
                             const StatusIcon = statusCfg.icon;
 
-                            // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                            // Offer close = shift start, tz-correct.
                             const { isClosed, timerText } = getSwapClose(shift, now);
                             const timerStr = timerText ?? '';
                             const isExpired = isClosed;

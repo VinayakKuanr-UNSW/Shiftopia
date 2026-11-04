@@ -13,14 +13,11 @@ describe('getTimeRule - 5-state schedule lifecycle', () => {
             .toEqual({ label: 'Standard', color: '#3B82F6' });
     });
 
-    it('Urgent when start is between 4h and 24h away', () => {
+    it('Urgent when start is within 24h away', () => {
         expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(+10 * HOUR), end_at: iso(+18 * HOUR) })?.label)
             .toBe('Urgent');
-    });
-
-    it('Emergent when start is within 4h', () => {
         expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(+2 * HOUR), end_at: iso(+10 * HOUR) })?.label)
-            .toBe('Emergent');
+            .toBe('Urgent');
     });
 
     it('Live when now is between start and end', () => {

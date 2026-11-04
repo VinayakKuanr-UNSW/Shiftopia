@@ -71,7 +71,7 @@ function renderFlow(over: Partial<React.ComponentProps<typeof AutoSchedulerMobil
         isShiftsLoading: false,
         shiftsInScope: 12,
         staffCount: 8,
-        scopeBreakdown: { total: 12, eligible: 12, assigned: 0, published: 0, startingSoon: 0 },
+        scopeBreakdown: { total: 12, eligible: 12, assigned: 0, published: 0, alreadyStarted: 0 },
         preRunCapacity: null,
         canRun: true,
         runBlockedReason: null,
@@ -170,7 +170,7 @@ describe('AutoSchedulerMobileFlow', () => {
                     eligible: 0,
                     assigned: 8,
                     published: 3,
-                    startingSoon: 2,
+                    alreadyStarted: 2,
                 },
             });
 
@@ -178,7 +178,7 @@ describe('AutoSchedulerMobileFlow', () => {
             expect(screen.getByText(/all 13 shifts in this range are already handled/i)).toBeInTheDocument();
             expect(screen.getByText('already assigned')).toBeInTheDocument();
             expect(screen.getByText('published — out for bidding')).toBeInTheDocument();
-            expect(screen.getByText('starting within 4 hours')).toBeInTheDocument();
+            expect(screen.getByText('already started')).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /widen to this month/i })).toBeInTheDocument();
         });
 
@@ -193,7 +193,7 @@ describe('AutoSchedulerMobileFlow', () => {
             renderFlow({
                 shiftsInScope: 0,
                 canRun: false,
-                scopeBreakdown: { total: 0, eligible: 0, assigned: 0, published: 0, startingSoon: 0 },
+                scopeBreakdown: { total: 0, eligible: 0, assigned: 0, published: 0, alreadyStarted: 0 },
             });
 
             expect(screen.getByText(/no shifts at all in this date range/i)).toBeInTheDocument();

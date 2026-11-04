@@ -113,15 +113,14 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
     const ttsSec = (start > 0 && now < start) ? Math.floor((start - now) / 1000) : 0;
 
     const isUrgent    = ttsSec > 0 && ttsSec < 24 * 60 * 60;
-    const isEmergency = ttsSec > 0 && ttsSec < 4  * 60 * 60;
+    const isEmergency = false;
 
     const urgency: ShiftUrgency =
-        (ttsSec > 0 && ttsSec < 4 * 3600) ? 'emergent'
-        : (ttsSec > 0 && ttsSec < 24 * 3600) ? 'urgent'
+        (ttsSec > 0 && ttsSec < 24 * 3600) ? 'urgent'
         : 'normal';
 
     // ── Ring color — priority ordered ─────────────────────────────────────────
-    // Purple  > Emerald > Yellow > Red > Orange > Blue
+    // Purple  > Emerald > Yellow > Orange > Blue
     const isPastStart = start > 0 && now > start;
     const isPastEnd = endStr ? now > new Date(endStr).getTime() : false;
 
@@ -145,7 +144,6 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
             return 'yellow';
         }
 
-        if (urgency === 'emergent') return 'red';
         if (urgency === 'urgent')   return 'orange';
         return 'blue';
     })();
@@ -169,9 +167,7 @@ export function getBadges(ctx: ShiftUIContext): ShiftBadge[] {
     // Urgency (runtime TTS — suppressed in terminal states)
     const terminalStates = ['S13', 'S15'];
     if (!terminalStates.includes(ctx.state)) {
-        if (ctx.urgency === 'emergent') {
-            badges.push({ label: 'Emergent', tone: 'danger' });
-        } else if (ctx.urgency === 'urgent') {
+        if (ctx.urgency === 'urgent') {
             badges.push({ label: 'Urgent', tone: 'warning' });
         }
     }
@@ -432,7 +428,7 @@ function isShiftAttendanceFinished(shift: ShiftDotInput, start: number, end: num
     );
 }
 
-type TimeRule = 'Standard' | 'Urgent' | 'Emergent' | 'Live' | 'Closed';
+type TimeRule = 'Standard' | 'Urgent' | 'Live' | 'Closed';
 
 /** Arrival half of the two-badge Live Rules model. */
 type ArrivalRule =
@@ -520,7 +516,6 @@ export function getTimeRule(shift: ShiftDotInput): ShiftRuleBadge | null {
     }
 
     const tts = start - now;
-    if (tts <= 4 * 60 * 60 * 1000)  return { label: 'Emergent', color: '#EF4444' }; // red
     if (tts <= 24 * 60 * 60 * 1000) return { label: 'Urgent',   color: '#F59E0B' }; // amber
     return { label: 'Standard', color: '#3B82F6' };                                 // blue
 }
@@ -725,15 +720,9 @@ export function isTimesheetReviewable(shift: ShiftDotInput): boolean {
  * to non-emergent shifts only. Emergent S1 shifts must be assigned (to S2) 
  * before they can be published (triggers direct-to-confirmed).
  */
-export function getAvailableActions(state: ShiftStateID | string, urgency?: ShiftUrgency): ShiftAction[] {
+export function getAvailableActions(state: ShiftStateID | string, _urgency?: ShiftUrgency): ShiftAction[] {
     switch (state) {
-        case 'S1': {
-            const actions: ShiftAction[] = ['ASSIGN', 'DELETE'];
-            if (urgency !== 'emergent') {
-                actions.push('PUBLISH');
-            }
-            return actions;
-        }
+        case 'S1':  return ['ASSIGN', 'PUBLISH', 'DELETE'];
         case 'S2':  return ['UNASSIGN', 'PUBLISH', 'DELETE'];
         case 'S3':  return ['ACCEPT', 'REJECT', 'UNPUBLISH', 'CANCEL'];
         case 'S4':  return ['SWAP_REQUEST', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CLOCK_IN', 'CANCEL'];

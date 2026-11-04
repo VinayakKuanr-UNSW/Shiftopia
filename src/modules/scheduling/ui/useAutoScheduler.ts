@@ -14,7 +14,7 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { getSydneyToday } from '@/modules/core/lib/date.utils';
 import { endOfWeekAU, startOfWeekAU } from '@/modules/core/lib/date/week';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { computeTTS } from '@/modules/rosters/domain/bidding-urgency';
 import { useShiftsByDateRange, type ShiftFilters } from '@/modules/rosters/state/useRosterShifts';
 import {
     autoSchedulerController,
@@ -53,7 +53,7 @@ export interface ScopeBreakdown {
     eligible: number;
     assigned: number;
     published: number;
-    startingSoon: number;
+    alreadyStarted: number;
 }
 
 /** No 'cost': labour cost is shown in Gross Pay alone (decision 2026-10-09). */
@@ -131,10 +131,10 @@ export function summariseScope(shifts: readonly ScopeCandidate[]): ScopeBreakdow
         acc.total += 1;
         if (s.assigned_employee_id) acc.assigned += 1;
         else if (!(s.is_draft ?? true)) acc.published += 1;
-        else if (computeShiftUrgency(s.shift_date, s.start_time) === 'emergent') acc.startingSoon += 1;
+        else if (computeTTS(s.shift_date, s.start_time) <= 0) acc.alreadyStarted += 1;
         else acc.eligible += 1;
         return acc;
-    }, { total: 0, eligible: 0, assigned: 0, published: 0, startingSoon: 0 });
+    }, { total: 0, eligible: 0, assigned: 0, published: 0, alreadyStarted: 0 });
 }
 
 /** Pass-rate for one staff member's proposals, 0-1. Shared by both sort paths. */
@@ -244,15 +244,14 @@ export function useAutoScheduler({
 
     const filteredShifts = useMemo(() => {
         if (!startDate || !endDate || validationError) return [];
-        // Scope: DRAFT + unassigned only. Published shifts are in the bidding/
-        // offer pipeline; emergent shifts (TTS ≤ 4h, includes already-started)
-        // belong to the emergency-assignment flow. The controller re-checks
-        // the time window at run time in case a shift crosses into it.
+        // Scope: DRAFT + unassigned shifts that have not started. Published
+        // shifts are in the bidding/offer pipeline. The controller re-checks
+        // the start time at run time in case a shift starts meanwhile.
         return rawShifts
             .filter((s) =>
                 !s.assigned_employee_id && !s.is_cancelled
                 && (s.is_draft ?? true)
-                && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
+                && computeTTS(s.shift_date, s.start_time) > 0)
             .map((s) => ({
                 id: s.id,
                 shift_date: s.shift_date,
@@ -298,7 +297,7 @@ export function useAutoScheduler({
 
     const scopeBreakdown = useMemo<ScopeBreakdown>(() => {
         if (!startDate || !endDate || validationError) {
-            return { total: 0, eligible: 0, assigned: 0, published: 0, startingSoon: 0 };
+            return { total: 0, eligible: 0, assigned: 0, published: 0, alreadyStarted: 0 };
         }
         return summariseScope(rawShifts);
     }, [rawShifts, startDate, endDate, validationError]);

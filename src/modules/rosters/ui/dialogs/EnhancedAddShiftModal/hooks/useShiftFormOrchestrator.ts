@@ -48,6 +48,7 @@ import { daysFromTemplateDay } from '../components/TemplateDaySelect';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { getAvailabilityView } from '@/modules/availability/api/availability-view.api';
+import { parseScheduledBreaks } from '@/modules/rosters/domain/break-items';
 
 const SYDNEY_TZ = 'Australia/Sydney';
 
@@ -504,11 +505,9 @@ export function useShiftFormOrchestrator({
             const legacyStart = (existingShift.break_start ?? existingShift.breakStart)?.slice(0, 5) || '';
             const legacyEnd = (existingShift.break_end ?? existingShift.breakEnd)?.slice(0, 5) || '';
             const initialUnpaidBreaks = Array.isArray(rawExistingBreaks) && rawExistingBreaks.length > 0
-                ? rawExistingBreaks.map((b: any, i: number) => {
-                    const s = (b?.start || '').slice(0, 5);
-                    const e = (b?.end || '').slice(0, 5);
-                    return { sno: i + 1, start: s, end: e, duration: breakSpanMinutes(s, e) ?? 0 };
-                })
+                ? parseScheduledBreaks(rawExistingBreaks).map((b, i) => ({
+                    sno: i + 1, start: b.start, end: b.end, duration: breakSpanMinutes(b.start, b.end) ?? 0,
+                }))
                 : (legacyStart || legacyEnd)
                     ? [{ sno: 1, start: legacyStart, end: legacyEnd, duration: breakSpanMinutes(legacyStart, legacyEnd) ?? 0 }]
                     : [];

@@ -25,8 +25,6 @@ import type { PublishRosterPlan } from '@/modules/rosters/domain/bulk-action-eng
 const plan = (over: Partial<PublishRosterPlan> = {}): PublishRosterPlan => ({
     assignedIds: [],
     unassignedIds: [],
-    emergentAssignedIds: [],
-    emergentUnassignedIds: [],
     deadIds: [],
     fullTimeIds: [],
     fullTimeUnassignedIds: [],

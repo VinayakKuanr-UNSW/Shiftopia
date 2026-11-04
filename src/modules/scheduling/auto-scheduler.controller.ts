@@ -49,7 +49,6 @@ import {
     type ShiftForFairness,
 } from '@/modules/rosters/domain/fairness-ledger';
 import { getShiftDayType } from '@/modules/core/lib/holidays';
-import { EMERGENT_WINDOW_MS } from '@/modules/rosters/domain/bidding-urgency';
 import { isSecurityRoleName } from '@/modules/compliance/security-role';
 import type {
     OptimizeRequest,
@@ -1154,16 +1153,12 @@ export class AutoSchedulerController {
             );
         }
 
-        // ── Layer 0.5: Past + emergent shift identification ──────────────────
-        // Shifts that have already started can never be assigned. Shifts inside
-        // the emergent window (TTS ≤ 4h) are excluded too: bids and swaps are
-        // already locked server-side at that point, and last-minute coverage
-        // must go through the emergency-assignment flow, not a bulk optimize.
-        // Both buckets skip the solver AND the greedy fallback, and surface as
-        // blocking violations so the user sees why they were not assigned.
+        // ── Layer 0.5: Past shift identification ─────────────────────────────
+        // Shifts that have already started can never be assigned. They skip
+        // the solver AND the greedy fallback, and surface as blocking
+        // violations so the user sees why they were not assigned.
         const now = Date.now();
         const pastShifts: ShiftMeta[] = [];
-        const emergentShifts: ShiftMeta[] = [];
         const futureShifts: ShiftMeta[] = [];
 
         for (const s of input.shifts) {
@@ -1173,28 +1168,22 @@ export class AutoSchedulerController {
             const start = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
             if (start.getTime() <= now) {
                 pastShifts.push(s);
-            } else if (start.getTime() - now <= EMERGENT_WINDOW_MS) {
-                emergentShifts.push(s);
             } else {
                 futureShifts.push(s);
             }
         }
 
-        if (pastShifts.length > 0 || emergentShifts.length > 0) {
-            console.debug(
-                '[AutoScheduler] Excluding %d past and %d emergent (TTS ≤ 4h) shifts from optimizer',
-                pastShifts.length, emergentShifts.length,
-            );
+        if (pastShifts.length > 0) {
+            console.debug('[AutoScheduler] Excluding %d past shifts from optimizer', pastShifts.length);
         }
 
         // Failed-proposal stubs for the excluded shifts — appended to every
         // result path (optimizer and greedy) so UI accounting stays complete.
-        const UNSCHEDULABLE_LABEL: Record<'PAST_SHIFT' | 'EMERGENT_SHIFT', string> = {
-            PAST_SHIFT:     'Shift Already Started',
-            EMERGENT_SHIFT: 'Emergent Shift (TTS ≤ 4h)',
+        const UNSCHEDULABLE_LABEL: Record<'PAST_SHIFT', string> = {
+            PAST_SHIFT: 'Shift Already Started',
         };
 
-        const unschedulableProposal = (s: ShiftMeta, type: 'PAST_SHIFT' | 'EMERGENT_SHIFT', description: string): ValidatedProposal => ({
+        const unschedulableProposal = (s: ShiftMeta, type: 'PAST_SHIFT', description: string): ValidatedProposal => ({
             shiftId: s.id,
             employeeId: '',
             employeeName: '',
@@ -1209,7 +1198,6 @@ export class AutoSchedulerController {
         });
         const excludedProposals: ValidatedProposal[] = [
             ...pastShifts.map(s => unschedulableProposal(s, 'PAST_SHIFT', 'This shift has already started and cannot be assigned.')),
-            ...emergentShifts.map(s => unschedulableProposal(s, 'EMERGENT_SHIFT', 'This shift starts within 4 hours — use the emergency assignment flow instead of the autoscheduler.')),
         ];
         const excludedShiftIds = excludedProposals.map(p => p.shiftId);
 
@@ -1642,7 +1630,7 @@ export class AutoSchedulerController {
                 console.warn('[AutoScheduler] Optimizer returned %s — falling back to greedy engine', optimizerStatus);
                 usedFallback = true;
                 const validationStart = performance.now();
-                // Past/emergent shifts are excluded from greedy too — appended
+                // Past shifts are excluded from greedy too — appended
                 // back as failed proposals so they stay visible in the UI.
                 validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes);
                 validatedProposals.push(...excludedProposals);
@@ -1653,7 +1641,7 @@ export class AutoSchedulerController {
                 const { shiftMap, employeeMap } = solutionParser.buildMaps(input.shifts, input.employees);
                 const { groups, uncoveredV8ShiftIds: uncov } = solutionParser.parse(optimizeResponse, shiftMap, employeeMap);
                 
-                // Add back the past/emergent shifts as uncovered (optimizer never saw them)
+                // Add back the past shifts as uncovered (optimizer never saw them)
                 uncoveredV8ShiftIds = [...uncov, ...excludedShiftIds];
 
                 const validationStart = performance.now();
@@ -1664,7 +1652,7 @@ export class AutoSchedulerController {
                     employeeMap
                 );
 
-                // Add back the past/emergent shifts as explicitly failed proposals (for UI visibility)
+                // Add back the past shifts as explicitly failed proposals (for UI visibility)
                 validatedProposals.push(...excludedProposals);
 
                 validationTimeMs = Math.round(performance.now() - validationStart);
@@ -2166,10 +2154,10 @@ export class AutoSchedulerController {
         const { shiftMap, employeeMap } = solutionParser.buildMaps(inputShifts, inputEmployees);
 
         // Only retry genuine compliance failures with a known assignee — never a
-        // PAST_SHIFT / EMERGENT_SHIFT (unfixable) or a SYSTEM error, and never
+        // PAST_SHIFT (unfixable) or a SYSTEM error, and never
         // an empty employee.
         const isRepairable = (p: ValidatedProposal) =>
-            !!p.employeeId && !(p.violations ?? []).some(v => v.type === 'PAST_SHIFT' || v.type === 'EMERGENT_SHIFT' || v.type === 'SYSTEM');
+            !!p.employeeId && !(p.violations ?? []).some(v => v.type === 'PAST_SHIFT' || v.type === 'SYSTEM');
 
         let compliant = proposals.filter(p => p.passing);
         const failing = proposals.filter(p => !p.passing);

@@ -1,6 +1,6 @@
 import { supabase } from '@/platform/supabase/client';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { processInChunks, EMERGENT_WINDOW_MS, DEFAULT_CHUNK_CONCURRENCY } from '../domain/bulk-action-engine';
+import { processInChunks, DEFAULT_CHUNK_CONCURRENCY } from '../domain/bulk-action-engine';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
 import { complianceService } from '../services/compliance.service';
@@ -663,15 +663,12 @@ export const shiftsCommands = {
 
     async bulkPublishShifts(shiftIds: string[]): Promise<BulkPublishPartialResult> {
         // Per-shift compliance pre-check — does NOT block the whole batch on a single failure.
-        // Also identifies assigned shifts with TTS < 4h (emergency set) so they bypass the
-        // offer flow and land directly on S4 (Confirmed) rather than S3 (Offered).
         //
         // Fails CLOSED. A shift that cannot be read, or whose compliance the engine
         // never answered for, is not published. Both used to pass: each shift was
         // re-read with getShiftById, whose `null` on any error looked like "no
         // assignee", and an unreachable edge function fell back to a local check
         // that reports `passed`.
-        const emergencySet = new Set<string>();
 
         // One batched read for every shift, instead of one request per shift.
         let shiftById: Map<string, PublishCheckRow>;
@@ -697,19 +694,10 @@ export const shiftsCommands = {
                 if (ttsMs <= 0) {
                     return { id, pass: false as const, reason: 'Already started — too late to publish' };
                 }
-                // Unassigned shifts: no compliance needed. BUT inside the 4h emergency
-                // window, opening bidding (S5) auto-expires back to Draft (S1) — so skip
-                // the no-op and surface the emergency-assignment hint instead of passing.
+                // Unassigned shifts: pre-start shifts publish into bidding (S5).
                 if (!shift.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) {
                     if (shift.target_employment_type === 'FT') {
                         return { id, pass: false as const, reason: FT_UNASSIGNED };
-                    }
-                    if (ttsMs <= EMERGENT_WINDOW_MS) {
-                        return {
-                            id,
-                            pass: false as const,
-                            reason: 'Starts within 4h — assign an employee to emergency-publish (bidding would expire)',
-                        };
                     }
                     return { id, pass: true as const, reason: '' };
                 }
@@ -729,10 +717,6 @@ export const shiftsCommands = {
                 }
                 if (!validation.engineReached) {
                     return { id, pass: false as const, reason: COMPLIANCE_NOT_CHECKED };
-                }
-                // Flag assigned shifts within the 4h lock window for emergency publish
-                if (ttsMs <= EMERGENT_WINDOW_MS) {
-                    emergencySet.add(id);
                 }
                 return { id, pass: true as const, reason: '' };
             },
@@ -757,9 +741,9 @@ export const shiftsCommands = {
             return { publishedIds: [], complianceFailed, dbFailed: [] };
         }
 
-        // Split: normal publish via RPC; emergency publish via direct update (S2 → S4, no offer).
-        const normalIds    = passIds.filter(id => !emergencySet.has(id));
-        const emergencyIds = passIds.filter(id =>  emergencySet.has(id));
+        // All pre-start shifts follow standard publish via sm_bulk_publish_shifts (S3 offers / S5 bidding).
+        const normalIds    = passIds;
+        const emergencyIds: string[] = [];
 
         const publishedIds: string[] = [];
         const dbFailed: Array<{ id: string; reason: string }> = [];

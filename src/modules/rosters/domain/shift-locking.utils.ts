@@ -10,9 +10,7 @@ export type LockContext = 'my_roster' | 'roster_management';
 /**
  * Checks if a shift is locked based on the page context.
  * 
- * Rules:
- * - 'my_roster': Locked if shift starts within 4 hours (ALL users).
- * - 'roster_management': Locked if shift has ALREADY started (Managers).
+ * Rule (both contexts): locked once the shift has started.
  * 
  * @param shiftDateStr The date string from database (YYYY-MM-DD)
  * @param startTimeStr The time string from database (HH:MM or HH:MM:SS)
@@ -23,7 +21,7 @@ export type LockContext = 'my_roster' | 'roster_management';
 export const isShiftLocked = (
     shiftDateStr: string,
     startTimeStr: string,
-    context: LockContext = 'my_roster',
+    _context: LockContext = 'my_roster',
     timezone: string = SYDNEY_TZ
 ): boolean => {
     try {
@@ -35,22 +33,9 @@ export const isShiftLocked = (
         // Get absolute current time (UTC)
         const now = new Date();
 
-        // ROSTER MANAGEMENT (Manager View): Locked if start time is in the past
-        if (context === 'roster_management') {
-            return now >= shiftStartAt;
-        }
-
-        // MY ROSTER (Employee Self-Service): Locked if within 4 hours
-        // This applies to ALL access levels on this page
-        // Difference in hours (Shift Start - Now)
-        const diffHours = (shiftStartAt.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-        // DEBUG: Temporary logging to diagnose locking issue
-        if (Math.abs(diffHours) < 24) {
-            console.log(`[isShiftLocked] Context: ${context} | Shift: ${shiftStartAt.toISOString()} | Now: ${now.toISOString()} | Diff: ${diffHours.toFixed(2)}h | Locked: ${diffHours < 4}`);
-        }
-
-        return diffHours < 4;
+        // ROSTER MANAGEMENT & MY ROSTER:
+        // Locked if shift has ALREADY started. Pre-start agility allows operations right up to start time.
+        return now >= shiftStartAt;
 
     } catch (e) {
         console.error('Error checking shift lock status', e);
