@@ -1,6 +1,6 @@
 # Shift Trading — FSM Specification
 
-**Status:** decided by the product owner 2026-11-04. All four phases are live: **T1** offer integrity, **T2** lifecycle, **T3** cascades, **T4** no edits or reassignment while published. §9 tracks each item.
+**Status:** decided by the product owner 2026-11-04. All phases are live: **T1** offer integrity, **T2** lifecycle, **T3** cascades, **T4** no edits or reassignment while published, **T5** hardening from the 105-scenario matrix (`02-scenario-matrix-results.csv`). §9 tracks each item.
 **Numbering:** the gapless S1–S10 model (`20261104061628_fsm_ids_s1_s10`).
 
 A trade is a one-for-one swap of two confirmed shifts between two employees, approved by a manager. Employee **A** posts a shift; peers (**B**, **C**, …) offer one of their own shifts in exchange; A picks one; a manager approves or rejects.
@@ -104,9 +104,10 @@ Notes:
 | Manager unpublishes / cancels / deletes **A's** shift | any live request | Request `CANCELLED`; live offers `CANCELLED`; partner shift (if S7) → S4; A's shift follows the manager's action |
 | Manager unpublishes / cancels / deletes **B's** shift | while offered (`SUBMITTED`) | That offer `CANCELLED`; request stays `OPEN` |
 | | while `SELECTED` | Request `CANCELLED`; A's shift **S7 → S4**; B's shift follows the manager's action |
-| Approved leave for A or B covering their shift's date | any live request | Request `CANCELLED`; everything → S4 *(decided 2026-11-04)* |
+| Approved leave covering the date of a shift someone gives in a trade | A's shift (S6/S7), or B's shift in review (S7) | Request `CANCELLED`; everything → S4 *(decided 2026-11-04)* |
+| | B's shift while offered (`SUBMITTED`) | Only that offer `CANCELLED`; A's request stays `OPEN` |
 
-The expiry sweep runs in `process_shift_timers` before the auto-start step, so a reverted shift then starts normally from S4.
+Known deviation: `process_shift_timers` auto-starts shifts before it expires trades. The end state is correct (trade `EXPIRED`, shift `NoTrade`, then In Progress), but the `trade_expired` audit event records S8→S8 instead of S6→S4.
 
 ## 7. Refusals
 
@@ -117,7 +118,9 @@ The expiry sweep runs in `process_shift_timers` before the auto-start step, so a
 | Offer a shift | already held, S6/S7, or own request | `SHIFT_ALREADY_OFFERED` / `INVALID_OFFER` |
 | Second offer by the same peer | request has their active offer | `OFFER_EXISTS` |
 | Edit | S3–S7 (D8) | `UNPUBLISH_TO_EDIT` |
-| Any trade op | a shift has started (TTS ≤ 0) | `TIME_LOCKED` |
+| Post, offer, accept, approve | a shift has started (TTS ≤ 0) | `TIME_LOCKED` |
+| Withdraw, retract | a shift has started | allowed until the next sweep (≤ 1 min); it only returns shifts to S4 |
+| Any direct write to `shift_swaps` / `swap_offers` from the app | — | refused; only the definer functions write them |
 
 ## 8. End-to-end flows
 

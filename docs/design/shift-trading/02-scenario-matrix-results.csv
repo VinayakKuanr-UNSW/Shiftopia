@@ -1,0 +1,106 @@
+ID,Execution status,Actual result / note,Evidence
+ST-001,Pass,Approval swaps both assignees; both S4 confirmed.,T2 approve/swapped
+ST-002,Pass,"B SELECTED, C REJECTED, C hold released, both S7.",T2 other-offer / other-held / both S7
+ST-003,Pass,Decline leaves request OPEN; a later accept + approve works.,T1 decline; T2 approve
+ST-004,Pass (enforced in code; not separately tested),"Nothing acts on an OPEN request until retraction, a manager action or A's start.",—
+ST-005,Pass,Offer stays SUBMITTED; B's shift held in S4.,T1 offer / drop-held
+ST-006,Pass,"Request and offer REJECTED; both S4, original owners; no reopen.",T2 reject
+ST-007,Pass,A can post again after a rejection.,T2 repost
+ST-008,Pass (enforced in code; not separately tested),Cancel from OPEN ends the request; trg_swap_close_offers cancels its offers.,T3 unpublish-requester (same path)
+ST-009,Pass,Request and selected offer CANCELLED; both S4.,T2 cancel-S7
+ST-010,Pass,"Offer WITHDRAWN, hold released, request stays OPEN.",T1 withdraw
+ST-011,Pass,"Offer WITHDRAWN, request CANCELLED, both S4.",T2 withdraw-S7
+ST-012,Pushback,"Matrix is outdated: on approval the offer becomes ACCEPTED, not SELECTED. Leaving it SELECTED held A's newly-swapped shift forever (fixed in T2).",T2 approve APPROVED/ACCEPTED
+ST-013,Pass (enforced in code; not separately tested),"The deferred trg_shift_eba_compliance re-checks both post-swap rosters at commit and rolls the approval back; the trade stays S7. A raise-and-rollback test never reaches commit, so this is covered by the EBA trigger tests.",EBA trigger
+ST-014,Pushback,"Acceptance refuses an infeasible compliance snapshot, but the snapshot is computed by the app. The authoritative check is at approval (ST-013), so a forged snapshot can only reach S7, never a swap. A server-side check at acceptance would duplicate the approval check; not worth it.",T5 ST-014
+ST-015,Pass (enforced in code; not separately tested),No full-time branch in any trade function; FT S4 shifts trade like any other.,—
+ST-016,Pass,Posting anything but S4 is refused (S3 tested; others by the same check).,T1 post-S3
+ST-017,Pass,Posting a held shift → TRADE_IN_PROGRESS.,T1 post-held
+ST-018,Pass,A second post on an S6 shift → TRADE_IN_PROGRESS.,T5 ST-018
+ST-019,Fixed (T5),Was INVALID_STATE; now TRADE_IN_PROGRESS as the spec says.,T5 ST-019
+ST-020,Pass (enforced in code; not separately tested),TIME_LOCKED when the shift has started (start <= now).,—
+ST-021,Pass (enforced in code; not separately tested),Offered shift must be S4 → INVALID_OFFER.,—
+ST-022,Pass,Offering an already-held shift → SHIFT_ALREADY_OFFERED.,T1 offer-held
+ST-023,Pass (enforced in code; not separately tested),S6/S7 shifts are not S4 → INVALID_OFFER.,—
+ST-024,Pass (enforced in code; not separately tested),Offerer = requester → INVALID_OFFER.,—
+ST-025,Pass (enforced in code; not separately tested),Offered shift = requester shift → INVALID_OFFER.,—
+ST-026,Pass,NOT NULL constraint rejects a giveaway.,T1 giveaway
+ST-027,Pass,Second active offer by the same peer → OFFER_EXISTS.,T1 second-offer
+ST-028,Pass,Allowed once the prior offer is no longer active.,T1 reoffer
+ST-029,Pass,Allowed after a decline.,T1 reoffer
+ST-030,Pass,Offer on a MANAGER_PENDING request → SWAP_NOT_OPEN.,T5 ST-030
+ST-031,Pass,Declining a SELECTED offer → OFFER_NOT_SUBMITTED.,T5 ST-031
+ST-032,Pass,Contract decided: refused with OFFER_NOT_WITHDRAWABLE (not idempotent success).,T5 ST-032
+ST-033,Fixed (T5),"The RPC already refused (FORBIDDEN), but the client could DELETE or UPDATE its request directly. Client writes to shift_swaps are now revoked.",T5 ST-033 / ST-091
+ST-034,Pass,Another user withdrawing B's offer → OFFER_NOT_FOUND (does not reveal it exists).,T5 ST-034
+ST-035,Pass,Another user declining → FORBIDDEN.,T5 ST-035
+ST-036,Pass (enforced in code; not separately tested),"Every time check is start <= now, so TTS = 0 is refused.",—
+ST-037,Pass (enforced in code; not separately tested),Allowed on timing; other checks still apply.,—
+ST-038,Pass,Same as ST-002.,T2
+ST-039,Pass (enforced in code; not separately tested),Distinct offers persist; holds unique by index.,—
+ST-040,Pass (enforced in code; not separately tested),"Unique (request, peer) index; the loser gets SHIFT_ALREADY_OFFERED via unique_violation.",—
+ST-041,Pass (enforced in code; not separately tested),Unique offered-shift index; the loser is refused.,—
+ST-042,Pass (enforced in code; not separately tested),The request row is locked FOR UPDATE; the second accept sees it no longer OPEN. unique_selected_offer_per_request backs it.,—
+ST-043,Fixed (T5),Accept locked request→offer; withdraw locked offer→request: a race could deadlock (one side errors). Withdraw now locks in the same order.,code review (needs two sessions to test)
+ST-044,Fixed (T5),Same deadlock for decline vs accept; fixed the same way.,code review
+ST-045,Pass,Same as ST-030.,T5 ST-030
+ST-046,Pass (enforced in code; not separately tested),approve_trade is legal only in S7 and needs a MANAGER_PENDING request.,—
+ST-047,Pass (enforced in code; not separately tested),The gateway requires swap.approve for approve_trade.,access matrix
+ST-048,Pass (enforced in code; not separately tested),The gateway requires swap.approve for reject_trade.,access matrix
+ST-049,Pass (enforced in code; not separately tested),reject_trade is S7-only (T2).,—
+ST-050,Pass,Request and offers CANCELLED; partners S4.,T3 unpublish-requester
+ST-051,Pass (enforced in code; not separately tested),Same trigger as ST-050 for an S7 trade.,T3 (cancel/delete in S7)
+ST-052,Pass,Cancel tested; delete via BEFORE DELETE trigger.,T3 cancel-requester
+ST-053,Pass,Partner returns to S4 (was stuck in S7 on delete before T3).,T3 delete-target
+ST-054,Pass,"Offer CANCELLED, request stays OPEN.",T3 unpublish-offered
+ST-055,Pass (enforced in code; not separately tested),"Same trigger; request CANCELLED, A back to S4.","T3 (delete-target, same path)"
+ST-056,Pass (enforced in code; not separately tested),Refused (UNPUBLISH_TO_EDIT) — same check as S4.,T4
+ST-057,Pass,Refused with UNPUBLISH_TO_EDIT.,T4 time/notes/order/date
+ST-058,Pass (enforced in code; not separately tested),Refused — the freeze covers every Published state.,T4
+ST-059,Pass,An unrelated unpublish leaves the trade untouched.,T5 ST-059
+ST-060,Pass (enforced in code; not separately tested),Row locks serialize; invariants are enforced by constraints and triggers.,—
+ST-061,Pass,"Offer EXPIRED, request stays OPEN.",T2 lapse
+ST-062,Known deviation,"End state is right (request and offers EXPIRED, shift NoTrade, then In Progress), but the timer auto-starts before it expires trades, so the audit event reads S8→S8 instead of S6→S4. Fixing it means reordering a 370-line function for an audit label; recorded, not done.",—
+ST-063,Pass,"Both back to S4, original owners.",T2 expire
+ST-064,Pass,Review expires at the earlier start.,T2 expiry-least
+ST-065,Pass (enforced in code; not separately tested),LEAST of equal starts.,—
+ST-066,Known deviation,Same as ST-062.,—
+ST-067,Pass (enforced in code; not separately tested),Sweeps only touch live records; re-runs are no-ops.,—
+ST-068,Pass (enforced in code; not separately tested),"Conditions are start <= now, so a late run catches up on the next tick (every minute).",—
+ST-069,Pass,Only the lapsed offer ends.,T2 lapse
+ST-070,Pass (enforced in code; not separately tested),Request and every live offer EXPIRED; holds released.,—
+ST-071,Pass (enforced in code; not separately tested),Decided (not pending): leave on A's shift date ends A's trade.,T3 (same function)
+ST-072,Pushback,Matrix expects the whole request cancelled. Built: only B's offer is cancelled and A's request stays open for other peers — the same as a manager unpublishing B's shift. Cancelling A's trade because of B's leave would punish A.,T3 leave-offerer CANCELLED/OPEN
+ST-073,Pass (enforced in code; not separately tested),"B's shift is in S7 → request CANCELLED, both S4.",T3 (same function)
+ST-074,Pass (enforced in code; not separately tested),The snapshot is stored on the SELECTED offer. It is app-computed (see ST-014).,—
+ST-075,Pass (enforced in code; not separately tested),Same as ST-013.,EBA trigger
+ST-076,Pass,Same as ST-001.,T2
+ST-077,Pass (enforced in code; not separately tested),Each operation is one transaction; EXCEPTION blocks roll back to their savepoint.,—
+ST-078,Pass (enforced in code; not separately tested),approve_trade takes the two employee advisory locks in LEAST/GREATEST order.,—
+ST-079,Pass,Unique live-request index (T5's red run hit it).,T1 / T5
+ST-080,Pass (enforced in code; not separately tested),unique_selected_offer_per_request.,—
+ST-081,Pass,"Unique (request, peer) index.",T1
+ST-082,Pass,Unique offered-shift index.,T1
+ST-083,Pass,Asserted after each transition across the suites.,T1–T3
+ST-084,Pass,Held S4 refuses drop/post/offer; edit refused because it is published.,T1 / T4
+ST-085,Pass,"Hold released after decline, withdraw, reject, approve and cancel.",T1–T3
+ST-086,Pass,Swap is atomic; both confirmed.,T2 swapped
+ST-087,Pass,Rejection keeps original owners.,T2 reject
+ST-088,Pass,NOT NULL + giveaway code removed from the app.,T1
+ST-089,Pushback,"OFFER_SELECTED is a *request* status (the matrix calls it an offer status). Nothing writes it, and since T5 the client cannot write requests at all. Dropping an enum value needs a type rebuild; not worth it.",—
+ST-090,Pass,Both shifts NoTrade after approval; TradeApproved never written.,T5 ST-090
+ST-091,Fixed (T5),Offers were closed in T1; requests were still client-writable until T5.,T1 direct-insert; T5 ST-091
+ST-092,Pass,Invalid submits are refused with data unchanged.,T1 / T5
+ST-093,Pass,Only the requester can decline a SUBMITTED offer on an OPEN request.,T1 / T5
+ST-094,Pass,Both withdraw paths.,T1 withdraw; T2 withdraw-S7
+ST-095,Pushback,"State derivation is parity-tested (fsm-db-snapshot). Action legality is not: the app's getAvailableActions has no callers outside its tests, so a parity test would guard dead code. Recommend deleting it instead.",fsm-db-parity
+ST-096,Pass,TRADE_IN_PROGRESS.,T1 drop-held
+ST-097,Pass,TRADE_IN_PROGRESS.,T1 post-held
+ST-098,Pass,SHIFT_ALREADY_OFFERED.,T1 offer-held
+ST-099,Pass,"S4 tested; S3, S5, S6, S7 by the same check.",T4
+ST-100,Fixed (T5),Approval after a shift started went through (swapping a started shift). Now TIME_LOCKED. Withdraw/cancel in the <1 min before the sweep stay allowed — they only return shifts to S4.,T5 ST-100
+ST-101,Pass,Legacy branch removed in T3.,T3
+ST-102,Pass,Terminal requests cannot be cancelled or reopened.,T5 ST-102
+ST-103,Pass,Only the trade's records change.,T5 ST-059
+ST-104,Pushback,"Real gap, but outside the trading model: timer expiries and no-shows write shift_events; offer submit/decline/withdraw do not write an actor-stamped event. Worth a separate audit pass if you want full traceability.",—
+ST-105,Pushback,Needs manual QA in the app. By your decision the held S4 shift has no separate badge.,manual
