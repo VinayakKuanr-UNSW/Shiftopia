@@ -11,6 +11,7 @@
  */
 
 import type { Shift } from './shift.entity';
+import { getShiftRemoval } from './shift-removal';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 // ============================================================
@@ -113,20 +114,20 @@ export function preflightUnpublish(shifts: Shift[]): BulkPreflightSummary {
  * All shifts are eligible (with confirmation).
  * Warned     — published or assigned (has side effects for employees).
  */
+/** Only drafts are deleted; a published shift is cancelled instead (03-bidding-fsm.md B-D13). */
 export function preflightDelete(shifts: Shift[]): BulkPreflightSummary {
     const eligibleIds: string[] = [];
-    const warned: Array<{ id: string; reason: string }> = [];
+    const blocked: Array<{ id: string; reason: string }> = [];
 
     for (const s of shifts) {
-        eligibleIds.push(s.id);
-        if (s.lifecycle_status === 'Published' && s.assigned_employee_id) {
-            warned.push({ id: s.id, reason: 'Published + assigned — employee offer cancelled' });
-        } else if (s.lifecycle_status === 'Published') {
-            warned.push({ id: s.id, reason: 'Published — removed from employee view' });
+        if (getShiftRemoval(s) === 'delete') {
+            eligibleIds.push(s.id);
+        } else {
+            blocked.push({ id: s.id, reason: 'Published — cancel it instead' });
         }
     }
 
-    return { eligibleIds, blocked: [], warned };
+    return { eligibleIds, blocked, warned: [] };
 }
 
 

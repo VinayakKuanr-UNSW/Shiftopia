@@ -93,6 +93,15 @@ export const DeleteShiftResponseSchema = z.object({
   code: z.string().optional(),
 });
 
+export const CancelShiftResponseSchema = z.object({
+  success: z.boolean(),
+  error: z.string().optional(),
+  code: z.string().optional(),
+  from_state: z.string().optional(),
+  to_state: z.string().optional(),
+});
+export type CancelShiftResponse = z.infer<typeof CancelShiftResponseSchema>;
+
 // sm_accept_offer / sm_reject_offer
 export const OfferActionResponseSchema = z.object({
   success: z.boolean(),

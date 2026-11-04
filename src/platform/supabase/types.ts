@@ -7383,6 +7383,14 @@ export type Database = {
         }
         Returns: Json
       }
+      sm_cancel_shift: {
+        Args: {
+          p_expected_version?: number
+          p_reason: string
+          p_shift_id: string
+        }
+        Returns: Json
+      }
       sm_cancel_swap_request: { Args: { p_swap_id: string }; Returns: Json }
       sm_cert_at_least: {
         Args: {

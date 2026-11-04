@@ -12,7 +12,9 @@ import {
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { applyAdvancedFilters } from '@/modules/rosters/domain/projections/utils/filters';
-import { X, Loader2, Edit2, Trash2, Send, Undo2, Lock } from 'lucide-react';
+import { X, Loader2, Edit2, Trash2, Send, Undo2, Lock, Ban } from 'lucide-react';
+import { CancelShiftDialog, type CancelShiftTarget } from '../dialogs/CancelShiftDialog';
+import { getShiftRemoval } from '../../domain/shift-removal';
 import { isSydneyPast, isSydneyStarted, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -76,6 +78,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   // State for Delete Dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [shiftToDelete, setShiftToDelete] = useState<Shift | null>(null);
+  const [shiftToCancel, setShiftToCancel] = useState<CancelShiftTarget | null>(null);
 
   // Mutations
   const deleteMutation = useDeleteShift();
@@ -603,14 +606,31 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                           <Send className="h-4 w-4" />
                         </button>
                       )}
-                      <button
-                        type="button"
-                        title="Delete shift"
-                        onClick={() => { setShiftToDelete(shift); setDeleteDialogOpen(true); }}
-                        className={cn(iconBtn, 'hover:text-rose-400')}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {getShiftRemoval(shift) === 'delete' && (
+                        <button
+                          type="button"
+                          title="Delete shift"
+                          onClick={() => { setShiftToDelete(shift); setDeleteDialogOpen(true); }}
+                          className={cn(iconBtn, 'hover:text-rose-400')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                      {getShiftRemoval(shift) === 'cancel' && (
+                        <button
+                          type="button"
+                          title="Cancel shift"
+                          aria-label="Cancel shift"
+                          onClick={() => setShiftToCancel({
+                            id: shift.id,
+                            version: shift.version,
+                            label: `${shift.roles?.name ?? 'Shift'} · ${shift.shift_date} ${shift.start_time?.slice(0, 5)}–${shift.end_time?.slice(0, 5)}`,
+                          })}
+                          className={cn(iconBtn, 'hover:text-rose-400')}
+                        >
+                          <Ban className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   );
 
@@ -758,6 +778,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CancelShiftDialog shift={shiftToCancel} onClose={() => setShiftToCancel(null)} />
 
     </>
   );

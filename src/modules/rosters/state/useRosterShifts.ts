@@ -648,6 +648,31 @@ export function useDeleteShift() {
   });
 }
 
+/** Cancel a published shift (S3-S7, S8 unworked). Refetches queries on settlement. */
+export function useCancelShift() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ shiftId, reason, expectedVersion }: { shiftId: string; reason: string; expectedVersion?: number }) => {
+      try {
+        await shiftsCommands.cancelShift(shiftId, reason, expectedVersion);
+      } catch (e) {
+        const code = (e as { code?: string }).code;
+        throw Object.assign(e as Error, {
+          shiftOpResult: { code: code === 'SHIFT_NOT_FOUND' ? 'GONE' : code },
+        });
+      }
+    },
+
+    // Refetch on failure too: a VERSION_CONFLICT / GONE means our cache was stale.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
+    },
+  });
+}
+
 
 
 

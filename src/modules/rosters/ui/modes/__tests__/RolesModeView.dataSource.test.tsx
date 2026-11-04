@@ -22,6 +22,7 @@ vi.mock('@/modules/rosters/state/useRosterShifts', () => ({
     useUnpublishShift: noopMutation,
     useCreateShift: noopMutation,
     useDeleteShift: noopMutation,
+    useCancelShift: noopMutation,
 }));
 
 vi.mock('@/modules/rosters/hooks/useShiftFormNav', () => ({

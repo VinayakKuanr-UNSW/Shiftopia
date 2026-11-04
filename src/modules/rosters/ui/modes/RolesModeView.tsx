@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
+  Ban,
   ShieldCheck,
   Layers,
 } from 'lucide-react';
@@ -25,6 +26,8 @@ import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellA
 import { useRemunerationLevels, useRoles, useUnpublishShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
+import { CancelShiftDialog, type CancelShiftTarget } from '@/modules/rosters/ui/dialogs/CancelShiftDialog';
+import { getShiftRemoval } from '@/modules/rosters/domain/shift-removal';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
@@ -359,6 +362,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const [auditedShift, setAuditedShift] = useState<Shift | null>(null);
   const [shiftToDelete, setShiftToDelete] = useState<Shift | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [shiftToCancel, setShiftToCancel] = useState<CancelShiftTarget | null>(null);
   const deleteShiftMutation = useDeleteShift();
   const [collapsedLevels, setCollapsedLevels] = useState<Set<number>>(new Set());
 
@@ -445,21 +449,36 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
 
           <DropdownMenuSeparator className="bg-border" />
 
-          {/* 4. Delete */}
-          <DropdownMenuItem
-            disabled={isPast}
-            onClick={() => {
-              setShiftToDelete(shift);
-              setIsDeleteDialogOpen(true);
-            }}
-            className={cn(
-              "text-destructive hover:bg-destructive/10 cursor-pointer",
-              isPast && "text-muted-foreground/50 cursor-not-allowed"
-            )}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete Shift {isPast && '(Locked)'}
-          </DropdownMenuItem>
+          {/* 4. Delete a draft; cancel a published shift (B-D13) */}
+          {getShiftRemoval(shift) === 'delete' && (
+            <DropdownMenuItem
+              disabled={isPast}
+              onClick={() => {
+                setShiftToDelete(shift);
+                setIsDeleteDialogOpen(true);
+              }}
+              className={cn(
+                "text-destructive hover:bg-destructive/10 cursor-pointer",
+                isPast && "text-muted-foreground/50 cursor-not-allowed"
+              )}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Shift {isPast && '(Locked)'}
+            </DropdownMenuItem>
+          )}
+          {getShiftRemoval(shift) === 'cancel' && (
+            <DropdownMenuItem
+              onClick={() => setShiftToCancel({
+                id: shift.id,
+                version: shift.version,
+                label: `${shift.roles?.name ?? 'Shift'} · ${shift.shift_date} ${shift.start_time?.slice(0, 5)}–${shift.end_time?.slice(0, 5)}`,
+              })}
+              className="text-destructive hover:bg-destructive/10 cursor-pointer"
+            >
+              <Ban className="h-4 w-4 mr-2" />
+              Cancel Shift
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -709,6 +728,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CancelShiftDialog shift={shiftToCancel} onClose={() => setShiftToCancel(null)} />
 
       <ShiftExpandDialog shift={expandedShift} onOpenChange={(o) => { if (!o) setExpandedShift(null); }} />
       <ShiftAuditDialog shift={auditedShift} onOpenChange={(o) => { if (!o) setAuditedShift(null); }} />
