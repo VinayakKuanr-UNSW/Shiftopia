@@ -262,11 +262,13 @@ const EmployeeSwapsPage: React.FC = () => {
         makeOffer,
         acceptOffer,
         declineOffer,
+        withdrawOffer,
         cancelSwap,
         refetchMySwaps,
         isMakingOffer,
         isAccepting,
         isDeclining,
+        isWithdrawing,
         isCancelling,
         userId,
     } = useSwaps({
@@ -314,9 +316,9 @@ const EmployeeSwapsPage: React.FC = () => {
     const mySwapsSort = useTableSorting(mySwapRequests.filter(s => s.requester_id === userId), { key: 'created_at', direction: 'desc' });
 
     // Handle Make Offer Confirmation
-    const handleMakeOffer = (targetV8ShiftId: string | undefined) => {
+    const handleMakeOffer = (offeredShiftId: string) => {
         if (offerSwapTarget) {
-            makeOffer({ swapId: offerSwapTarget.id, targetV8ShiftId });
+            makeOffer({ swapId: offerSwapTarget.id, offeredShiftId });
             setOfferSwapTarget(null);
         }
     };
@@ -449,7 +451,7 @@ const EmployeeSwapsPage: React.FC = () => {
                 const swap = mySwapRequests.find(s => s.id === id);
                 const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
                 if (myOffer) {
-                    return declineOffer(myOffer.id); 
+                    return withdrawOffer(myOffer.id);
                 }
                 return Promise.resolve();
             })
@@ -846,7 +848,7 @@ const EmployeeSwapsPage: React.FC = () => {
                             activeTab === 'available-swaps' ? 'none' :
                             activeTab === 'my-offers' ? 'withdraw' : 'cancel'
                         }
-                        isPending={activeTab === 'my-offers' ? isDeclining : isCancelling}
+                        isPending={activeTab === 'my-offers' ? isWithdrawing : isCancelling}
                         isBulkModeActive={isBulkModeActive}
                         onCloseBulkMode={() => {
                             setIsBulkModeActive(false);
@@ -1255,8 +1257,8 @@ const EmployeeSwapsPage: React.FC = () => {
                                                                 size="sm"
                                                                 variant="outline"
                                                                 className="h-7 text-[11px] font-black uppercase tracking-widest border-border/40 hover:bg-red-500/10 hover:text-red-400"
-                                                                onClick={() => declineOffer(myOffer.id)}
-                                                                disabled={isDeclining}
+                                                                onClick={() => withdrawOffer(myOffer.id)}
+                                                                disabled={isWithdrawing}
                                                             >
                                                                 Withdraw
                                                             </Button>
@@ -1580,10 +1582,10 @@ const EmployeeSwapsPage: React.FC = () => {
                                             <Button
                                                 variant="outline"
                                                 className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[11px] font-black uppercase tracking-[0.2em] rounded-2xl"
-                                                onClick={() => { declineOffer(myOffer.id); setDrawerSwap(null); }}
-                                                disabled={isDeclining}
+                                                onClick={() => { withdrawOffer(myOffer.id); setDrawerSwap(null); }}
+                                                disabled={isWithdrawing}
                                             >
-                                                {isDeclining ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
+                                                {isWithdrawing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
                                                 Withdraw Offer
                                             </Button>
                                         ) : (

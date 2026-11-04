@@ -114,10 +114,8 @@ export const useSwaps = (
 
     // Mutation: Make an offer on a swap
     const makeOfferMutation = useMutation({
-        mutationFn: ({ swapId, targetV8ShiftId }: { swapId: string; targetV8ShiftId?: string }) => {
-            if (!userId) throw new Error("User ID required to make an offer");
-            return swapsApi.makeOffer(swapId, targetV8ShiftId, userId);
-        },
+        mutationFn: ({ swapId, offeredShiftId }: { swapId: string; offeredShiftId: string }) =>
+            swapsApi.makeOffer(swapId, offeredShiftId),
         onSuccess: async (_, variables) => {
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['availableSwaps'] }),
@@ -135,7 +133,7 @@ export const useSwaps = (
         onError: (error) => {
             toast({
                 title: 'Error',
-                description: 'Failed to send offer.',
+                description: error instanceof Error ? error.message : 'Failed to send offer.',
                 variant: 'destructive',
             });
             console.error('Make offer error:', error);
@@ -171,7 +169,7 @@ export const useSwaps = (
 
     // Mutation: Decline an offer
     const declineOfferMutation = useMutation({
-        mutationFn: (offerId: string) => swapsApi.rejectTrade(offerId), // Updated to rejectTrade
+        mutationFn: (offerId: string) => swapsApi.declineOffer(offerId),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ['swapOffers'] });
             toast({
@@ -182,10 +180,35 @@ export const useSwaps = (
         onError: (error) => {
             toast({
                 title: 'Error',
-                description: 'Failed to decline offer.',
+                description: error instanceof Error ? error.message : 'Failed to decline offer.',
                 variant: 'destructive',
             });
             console.error('Decline offer error:', error);
+        },
+    });
+
+    // Mutation: Withdraw my offer
+    const withdrawOfferMutation = useMutation({
+        mutationFn: (offerId: string) => swapsApi.withdrawOffer(offerId),
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['mySwapRequests'] }),
+                queryClient.invalidateQueries({ queryKey: ['myActiveOffers'] }),
+                queryClient.invalidateQueries({ queryKey: ['myActiveOfferDetails'] }),
+                queryClient.invalidateQueries({ queryKey: ['swapOffers'] }),
+            ]);
+            toast({
+                title: 'Offer Withdrawn',
+                description: 'Your shift is free to trade or drop again.',
+            });
+        },
+        onError: (error) => {
+            toast({
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'Failed to withdraw offer.',
+                variant: 'destructive',
+            });
+            console.error('Withdraw offer error:', error);
         },
     });
 
@@ -244,10 +267,12 @@ export const useSwaps = (
         makeOffer: makeOfferMutation.mutate,
         acceptOffer: acceptOfferMutation.mutate,
         declineOffer: declineOfferMutation.mutate,
+        withdrawOffer: withdrawOfferMutation.mutate,
         cancelSwap: cancelSwapMutation.mutate,
         isMakingOffer: makeOfferMutation.isPending,
         isAccepting: acceptOfferMutation.isPending,
         isDeclining: declineOfferMutation.isPending,
+        isWithdrawing: withdrawOfferMutation.isPending,
         isCancelling: cancelSwapMutation.isPending,
         refetchMySwaps: mySwapRequestsQuery.refetch,
         userId,
