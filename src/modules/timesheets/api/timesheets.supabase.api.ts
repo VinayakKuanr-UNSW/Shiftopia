@@ -18,6 +18,7 @@ import {
     calculateNetMinutes,
     applyMinEngagementFloor,
 } from '../domain/billable-time';
+import { completedBreakMinutes, parseTimesheetBreaks } from '@/modules/rosters/domain/break-items';
 
 // Re-exported for existing external consumers (AttendancePage.tsx et al.) —
 // the canonical implementation now lives in ../domain/billable-time.
@@ -331,25 +332,8 @@ export async function getShiftsForTimesheet(
                 ? 'checked_in'
                 : null;
 
-            const rawBreaks = Array.isArray(timesheet?.timesheet_breaks) ? timesheet.timesheet_breaks : [];
-            const sortedBreaks: TimesheetBreakItem[] = [...rawBreaks]
-                .sort((a: any, b: any) => (a.break_seq ?? 0) - (b.break_seq ?? 0))
-                .map((b: any) => ({
-                    id: String(b.id),
-                    timesheet_id: String(b.timesheet_id),
-                    shift_id: String(b.shift_id),
-                    break_seq: Number(b.break_seq ?? 1),
-                    break_start: String(b.break_start),
-                    break_end: b.break_end ? String(b.break_end) : null,
-                    duration_minutes:
-                        b.duration_minutes !== undefined && b.duration_minutes !== null
-                            ? Number(b.duration_minutes)
-                            : null,
-                }));
-            const completedBreaks = sortedBreaks.filter(b => b.break_end && b.duration_minutes !== null);
-            const actualUnpaidBreakMinutes = completedBreaks.length > 0
-                ? completedBreaks.reduce((acc, b) => acc + (b.duration_minutes ?? 0), 0)
-                : null;
+            const sortedBreaks = parseTimesheetBreaks(timesheet?.timesheet_breaks);
+            const actualUnpaidBreakMinutes = completedBreakMinutes(sortedBreaks);
             const hasOpenBreak = sortedBreaks.some(b => !b.break_end);
 
             // Resolve each side ONCE — every field below (net minutes, adjusted

@@ -2,6 +2,7 @@
 // Complete TypeScript types for Templates module - Production Ready
 
 import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
+import { parseScheduledBreaks } from '@/modules/rosters/domain/break-items';
 
 /* ============================================================
    BASE TYPES
@@ -223,12 +224,7 @@ export function dbShiftToFrontend(dbShift: any): TemplateShift {
     breakStart: dbShift.breakStart ?? dbShift.break_start ?? null,
     breakEnd: dbShift.breakEnd ?? dbShift.break_end ?? null,
     unpaidBreaks: Array.isArray(dbShift.unpaidBreaks ?? dbShift.unpaid_breaks)
-      ? (dbShift.unpaidBreaks ?? dbShift.unpaid_breaks).map((b: any, i: number) => ({
-          sno: typeof b?.sno === 'number' ? b.sno : i + 1,
-          start: typeof b?.start === 'string' ? b.start.slice(0, 5) : '',
-          end: typeof b?.end === 'string' ? b.end.slice(0, 5) : '',
-          ...(typeof b?.duration === 'number' ? { duration: b.duration } : {}),
-        }))
+      ? parseScheduledBreaks(dbShift.unpaidBreaks ?? dbShift.unpaid_breaks)
       : null,
     // `?? null`, never `?? 0` — 0 is Sunday, not "unset". Coercing here made
     // every weekday-less shift claim to be a Sunday shift.

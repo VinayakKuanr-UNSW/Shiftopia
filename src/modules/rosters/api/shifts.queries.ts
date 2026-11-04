@@ -1,6 +1,7 @@
 import { supabase } from '@/platform/supabase/client';
-import { Shift, ShiftStatus, TemplateGroupType, TimesheetBreakItem, isValidUuid } from '../domain/shift.entity';
+import { Shift, isValidUuid } from '../domain/shift.entity';
 import { getTodayInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { completedBreakMinutes, parseScheduledBreaks, parseTimesheetBreaks } from '@/modules/rosters/domain/break-items';
 
 /**
  * Sydney's `YYYY-MM-DD`, as the floor for "still-actionable offer" queries.
@@ -72,7 +73,7 @@ const SHIFT_DETAIL_SELECT = `
   roles(id, name, remuneration_level),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
-  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
+  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
   timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
   billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
 ` as const;
@@ -153,7 +154,7 @@ const SHIFT_SELECT = `
   roles(id, name, remuneration_level),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
-  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
+  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
   timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
   billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
 ` as const;
@@ -233,8 +234,6 @@ interface DateRangeFilters {
     subDepartmentId?: string;
     departmentIds?: string[];
     subDepartmentIds?: string[];
-    groupType?: TemplateGroupType;
-    status?: ShiftStatus;
     rowCap?: number;
 }
 
@@ -253,12 +252,6 @@ function applyRangeFilters<Q extends { eq: any; in: any }>(q: Q, filters?: DateR
     } else if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
         q = q.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
     }
-    if (filters?.groupType) {
-        q = q.eq('group_type', filters.groupType);
-    }
-    if (filters?.status) {
-        q = q.eq('status', filters.status);
-    }
     return q;
 }
 
@@ -271,12 +264,18 @@ export function normalizeShiftRow(row: Record<string, any>): Shift {
     } as unknown as Shift;
 
     if (Array.isArray(row.unpaid_breaks)) {
-        shift.unpaid_breaks = row.unpaid_breaks.map((b: any, i: number) => ({
-            sno: typeof b?.sno === 'number' ? b.sno : i + 1,
-            start: typeof b?.start === 'string' ? b.start.slice(0, 5) : '',
-            end: typeof b?.end === 'string' ? b.end.slice(0, 5) : '',
-            ...(typeof b?.duration === 'number' ? { duration: b.duration } : {}),
-        }));
+        shift.unpaid_breaks = parseScheduledBreaks(row.unpaid_breaks);
+    }
+
+    // group_type / sub_group_name stopped being columns (20261102103000); every
+    // reader (Group mode buckets on them) gets them from the embedded sub-group.
+    const sub = row.roster_subgroup as
+        | { name?: string | null; roster_group?: { external_id?: string | null } | null; roster_groups?: { external_id?: string | null } | null }
+        | null
+        | undefined;
+    if (sub) {
+        shift.sub_group_name = sub.name ?? null;
+        shift.group_type = ((sub.roster_group ?? sub.roster_groups)?.external_id ?? null) as Shift['group_type'];
     }
 
     // 1. Hydrate ground-truth attendance actuals from public.timesheets (1:1 embed)
@@ -292,30 +291,12 @@ export function normalizeShiftRow(row: Record<string, any>): Shift {
         if ('departure_track' in ts) shift.departure_track = ts.departure_track ?? null;
         if ('is_no_show' in ts) shift.is_no_show = Boolean(ts.is_no_show);
         if ('timesheet_breaks' in ts) {
-            const rawBreaks = Array.isArray(ts.timesheet_breaks) ? ts.timesheet_breaks : [];
-            const sortedBreaks: TimesheetBreakItem[] = [...rawBreaks]
-                .sort((a: any, b: any) => (a.break_seq ?? 0) - (b.break_seq ?? 0))
-                .map((b: any) => ({
-                    id: String(b.id),
-                    timesheet_id: String(b.timesheet_id),
-                    shift_id: String(b.shift_id),
-                    break_seq: Number(b.break_seq ?? 1),
-                    break_start: String(b.break_start),
-                    break_end: b.break_end ? String(b.break_end) : null,
-                    duration_minutes:
-                        b.duration_minutes !== undefined && b.duration_minutes !== null
-                            ? Number(b.duration_minutes)
-                            : null,
-                }));
+            const sortedBreaks = parseTimesheetBreaks(ts.timesheet_breaks);
             shift.timesheet_breaks = sortedBreaks;
             const openBreak = sortedBreaks.find(b => !b.break_end) ?? null;
             shift.has_open_break = Boolean(openBreak);
             shift.open_break = openBreak;
-            const completedBreaks = sortedBreaks.filter(b => b.break_end && b.duration_minutes !== null);
-            shift.actual_unpaid_break_minutes =
-                completedBreaks.length > 0
-                    ? completedBreaks.reduce((acc, b) => acc + (b.duration_minutes ?? 0), 0)
-                    : null;
+            shift.actual_unpaid_break_minutes = completedBreakMinutes(sortedBreaks);
         }
     }
     if (shift.actual_start === undefined) shift.actual_start = null;
@@ -452,8 +433,6 @@ export const shiftsQueries = {
             subDepartmentId?: string;
             departmentIds?: string[];
             subDepartmentIds?: string[];
-            groupType?: TemplateGroupType;
-            status?: ShiftStatus;
         }
     ): Promise<Shift[]> {
         if (!isValidUuid(organizationId)) {
@@ -479,12 +458,6 @@ export const shiftsQueries = {
                 q = q.eq('sub_department_id', filters.subDepartmentId);
             } else if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
                 q = q.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
-            }
-            if (filters?.groupType) {
-                q = q.eq('group_type', filters.groupType);
-            }
-            if (filters?.status) {
-                q = q.eq('status', filters.status);
             }
             return q.order('display_order').order('start_time');
         };

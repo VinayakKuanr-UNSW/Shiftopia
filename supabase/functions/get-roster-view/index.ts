@@ -151,7 +151,7 @@ const SHIFT_SELECT = `
   roles!shifts_role_id_fkey(id, name, remuneration_level),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   templates:roster_templates!template_id(id, name),
-  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
+  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
   timesheets(id, clock_in, clock_out, arrival_track, departure_track, is_no_show, timesheet_breaks(id, timesheet_id, shift_id, break_seq, break_start, break_end, duration_minutes)),
   billables(id, status, billable_start, billable_end, unpaid_break_minutes, unpaid_break_is_manual, paid_break_minutes, notes, rejected_reason, payroll_exported)
 `;
