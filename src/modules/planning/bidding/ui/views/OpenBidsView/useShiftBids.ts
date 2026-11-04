@@ -68,8 +68,9 @@ export function useShiftBids(shiftId: string | null): UseShiftBidsReturn {
           )
         `)
         .eq('shift_id', shiftId)
-        // A withdrawn bid can't be assigned (WINNER_NOT_PENDING); don't offer it.
-        .neq('status', 'withdrawn')
+        // Only live bids can win (WINNER_NOT_PENDING); a re-opened shift keeps
+        // last round's closed rows, so don't offer those.
+        .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (error) {

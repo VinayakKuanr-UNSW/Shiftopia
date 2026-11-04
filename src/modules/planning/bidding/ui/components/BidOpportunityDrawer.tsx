@@ -1,6 +1,6 @@
 import React from 'react';
 import { XCircle, Ban, CheckCircle, Clock, ThumbsUp, Loader2 } from 'lucide-react';
-import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { getBiddingClosesAt } from '../utils/bid-participation';
 import { Drawer, DrawerContent, DrawerTitle } from '@/modules/core/ui/primitives/drawer';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
@@ -32,10 +32,7 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                 <div className="flex-1 px-4 pb-8 pt-6">
                     {opp && (() => {
                         const { participationStatus, currentBid } = opp;
-                        const shiftStart = opp.startAt
-                            ? new Date(opp.startAt)
-                            : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
-                        const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+                        const biddingCloses = getBiddingClosesAt(opp);
                         const tr = calculateTimeRemaining(biddingCloses.toISOString());
                         const isExpired = tr.isExpired;
                         const timerStr = formatTimeRemaining(tr);
@@ -124,7 +121,7 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                             </div>
                         );
 
-                        const isPast = shiftStart.getTime() < Date.now();
+                        const isPast = biddingCloses.getTime() < Date.now();
 
                         return (
                             <div className="space-y-6">

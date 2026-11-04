@@ -45,7 +45,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primi
 import { Check } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { getDeptColor, getRowClass } from '../utils/bid-dept-styles';
-import { getParticipationStatus } from '../utils/bid-participation';
+import { getBiddingClosesAt, getParticipationStatus } from '../utils/bid-participation';
 import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 import type { ShiftData, BidData, ShiftOpportunity } from '../types';
 import { Table, tableTokens, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
@@ -201,7 +201,7 @@ const EmployeeBidsPage: React.FC = () => {
     // MUTATIONS
     // ========================================================================
     const placeBidMutation = useMutation({
-        mutationFn: (shiftId: string) => biddingApi.placeBid(shiftId, user!.id),
+        mutationFn: (shiftId: string) => biddingApi.placeBid(shiftId),
         onSuccess: () => {
             toast({ title: 'Bid Submitted', description: 'Your bid has been placed successfully.' });
             queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
@@ -371,7 +371,7 @@ const EmployeeBidsPage: React.FC = () => {
         return shiftsTableSort.sortedData.map(shift => {
             const currentBid = myBids.find(b =>
                 String(b.shiftId) === String(shift.id) &&
-                b.status !== 'withdrawn'
+                b.status !== 'withdrawn' && b.status !== 'expired' && b.status !== 'cancelled'
             ) || null;
 
             const participationStatus = getParticipationStatus(shift, myBids, user?.id || '');
@@ -394,11 +394,7 @@ const EmployeeBidsPage: React.FC = () => {
         return bidOpportunities.filter(opp => {
             if (opp.date < startStr || opp.date > endStr) return false;
 
-            const shiftStart = opp.startAt
-                ? new Date(opp.startAt).getTime()
-                : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ).getTime();
-            const biddingCloses = new Date(shiftStart - 4 * 60 * 60 * 1000);
-            const isExpired = now >= biddingCloses.getTime();
+            const isExpired = now >= getBiddingClosesAt(opp).getTime();
 
             // Ineligible check: if not eligible and showIneligible is false, filter out
             if (!opp.isEligible && !showIneligible) {
@@ -531,7 +527,7 @@ const EmployeeBidsPage: React.FC = () => {
     // Bulk bid on the provided ids (the toolbar pre-filters to bidable opps).
     const handleBulkBidForIds = async (ids: any[]) => {
         if (!user || ids.length === 0) return;
-        const results = await Promise.allSettled(ids.map(id => biddingApi.placeBid(id, user.id)));
+        const results = await Promise.allSettled(ids.map(id => biddingApi.placeBid(id)));
         const succeeded = results.filter(r => r.status === 'fulfilled').length;
         const failed    = results.filter(r => r.status === 'rejected').length;
         toast({
@@ -818,10 +814,7 @@ const EmployeeBidsPage: React.FC = () => {
                                     )}
                                     {g.items.map(opp => {
                                         const { participationStatus, currentBid } = opp;
-                                        const shiftStart = opp.startAt
-                                            ? new Date(opp.startAt)
-                                            : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
-                                        const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+                                        const biddingCloses = getBiddingClosesAt(opp);
                                         const isExpired = new Date() >= biddingCloses;
                                         const canSelect = (participationStatus === 'not_participated' && opp.isEligible) ||
                                                           (participationStatus === 'pending' && !!currentBid);
@@ -876,7 +869,8 @@ const EmployeeBidsPage: React.FC = () => {
                                                         const tr = calculateTimeRemaining(biddingCloses.toISOString());
                                                         if (tr.isExpired) return <span className="text-muted-foreground/50 italic">Closed</span>;
                                                         const totalMs = biddingCloses.getTime() - Date.now();
-                                                        const urgent = totalMs < 4 * 60 * 60 * 1000;
+                                                        // urgent lane: TTS <= 24h (03-bidding-fsm.md B-D3)
+                                                        const urgent = totalMs <= 24 * 60 * 60 * 1000;
                                                         return (
                                                             <span className={cn(urgent ? 'text-amber-500 font-bold' : 'text-foreground/70')}>
                                                                 {formatTimeRemaining(tr)}

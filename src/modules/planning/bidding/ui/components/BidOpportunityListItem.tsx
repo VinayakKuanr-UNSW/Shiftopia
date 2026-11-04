@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Check, X, Ban, CheckCircle, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { getBiddingClosesAt } from '../utils/bid-participation';
 import { cn } from '@/modules/core/lib/utils';
 import { calculateTimeRemaining } from '../views/OpenBidsView/utils';
 import { getDeptAccent } from '../utils/bid-dept-styles';
@@ -27,10 +27,7 @@ export const BidOpportunityListItem: React.FC<Props> = ({
     isBulkModeActive = false,
 }) => {
     const { participationStatus, currentBid } = opp;
-    const shiftStart = opp.startAt
-        ? new Date(opp.startAt)
-        : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
-    const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+    const biddingCloses = getBiddingClosesAt(opp);
     const tr = calculateTimeRemaining(biddingCloses.toISOString());
     const isExpired = tr.isExpired;
     const accent = getDeptAccent(opp.groupType, opp.department);

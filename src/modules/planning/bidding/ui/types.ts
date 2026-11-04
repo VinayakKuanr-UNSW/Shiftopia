@@ -62,7 +62,7 @@ export interface BidData {
     unpaidBreak: number;
     netLength: number;
     remunerationLevel: string;
-    status: 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'selected';
+    status: 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'expired' | 'cancelled' | 'selected';
     bidTime: string;
     notes: string | null;
     groupType?: string | null;

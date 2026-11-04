@@ -2,7 +2,7 @@
 import { Shift } from '@/modules/rosters';
 
 // --- Types ---
-export type BidStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'selected';
+export type BidStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'expired' | 'cancelled' | 'selected';
 
 /**
  * Per-shift participation status.
