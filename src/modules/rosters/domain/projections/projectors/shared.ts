@@ -12,7 +12,7 @@ import type { Shift } from '../../shift.entity';
 import type { ProjectionStats } from '../types';
 import { netMinutesFromShift } from '../utils/duration';
 import type { WorkerShiftDTO, ProjectedShiftResult } from '../worker/protocol';
-import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
+import { computeShiftUrgency, isOnBidding } from '../../bidding-urgency';
 import { minutesToHours } from '../utils/duration';
 import { determineShiftState } from '../../shift-state.utils';
 
@@ -80,7 +80,7 @@ export function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
     employeeName: resolveEmployeeName(shift),
     employeeId: shift.assignedEmployeeId,
     isLocked: shift.isLocked,
-    isUrgent: isOnBidding(shift.biddingStatus) && computeBiddingUrgency(shift.shiftDate, shift.startTime) === 'urgent',
+    isUrgent: isOnBidding(shift.biddingStatus) && computeShiftUrgency(shift.shiftDate, shift.startTime) === 'urgent',
     isOnBidding: isOnBidding(shift.biddingStatus),
     isTrading: !!shift.tradeRequestedAt,
     isCancelled: shift.isCancelled,

@@ -313,7 +313,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 <div className="flex items-center gap-2 min-w-0">
                     <ShiftStateCircleBadge
                         stateId={ctx.state}
-                        detail={ctx.state === 'S10' ? describeKickoffCancel(shift.kickoff_cancel_code) : null}
+                        detail={ctx.state === 'S10' ? describeKickoffCancel(shift.kickoff_cancel_code, shift.last_modified_reason) : null}
                     />
                     <span
                         className={cn('font-medium truncate min-w-0 text-[11px] sm:text-[13px]', tone.primary)}
@@ -423,7 +423,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const isBiddingActive = !!(shift.bidding_status && shift.bidding_status !== 'not_on_bidding');
     const biddingUrgency = useMemo(() => {
         if (!isBiddingActive) return null;
-        if (ctx.urgency === 'urgent' || ctx.urgency === 'emergent') return 'urgent';
+        if (ctx.urgency === 'urgent') return 'urgent';
         return 'standard';
     }, [ctx.urgency, isBiddingActive]);
 

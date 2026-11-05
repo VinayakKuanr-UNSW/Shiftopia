@@ -81,10 +81,14 @@ export const KICKOFF_CANCEL_REASONS: Record<KickoffCancelCode, string> = {
     E: 'Published shift manually cancelled',
 };
 
-/** "B — Bidding found no winner", or null when the code is absent or unknown. */
-export function describeKickoffCancel(code: string | null | undefined): string | null {
+/**
+ * "B — Bidding found no winner", or null when the code is absent or unknown.
+ * For E the manager's required note follows: "E — Published shift manually cancelled: <note>".
+ */
+export function describeKickoffCancel(code: string | null | undefined, note?: string | null): string | null {
     if (!code || !(code in KICKOFF_CANCEL_REASONS)) return null;
-    return `${code} — ${KICKOFF_CANCEL_REASONS[code as KickoffCancelCode]}`;
+    const label = `${code} — ${KICKOFF_CANCEL_REASONS[code as KickoffCancelCode]}`;
+    return code === 'E' && note?.trim() ? `${label}: ${note.trim()}` : label;
 }
 
 /** Hex colours for the Tailwind tokens above — for inline-styled badges/rows. */

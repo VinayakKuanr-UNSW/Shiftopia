@@ -2,10 +2,9 @@
  * TTS (Time-To-Start) urgency unit tests
  *
  * Covers: computeShiftUrgency, computeTTS, isOnBidding, isBiddingUrgent
- * Three urgency windows:
- *   TTS > 24h         → 'normal'
- *   4h < TTS ≤ 24h    → 'urgent'
- *   TTS ≤ 4h          → 'emergent'  (all exchange ops blocked)
+ * Two urgency windows (there is no 4h tier; nothing locks before the start):
+ *   TTS > 24h  → 'normal'
+ *   TTS ≤ 24h  → 'urgent'
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -101,19 +100,19 @@ describe('computeShiftUrgency — TTS boundary', () => {
     expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('urgent');
   });
 
-  it('returns locked at exactly 4h (NOT ALLOWED boundary)', () => {
+  it('stays urgent at exactly 4h (no emergent tier)', () => {
     mockNowBefore(SHIFT_DATE, START_TIME, 4 * 60 * 60 * 1000);
-    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('emergent');
+    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('urgent');
   });
 
-  it('returns locked at 2h', () => {
+  it('stays urgent at 2h', () => {
     mockNowBefore(SHIFT_DATE, START_TIME, 2 * 60 * 60 * 1000);
-    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('emergent');
+    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('urgent');
   });
 
-  it('returns locked when shift has already started', () => {
+  it('stays urgent once the shift has started', () => {
     mockNowBefore(SHIFT_DATE, START_TIME, -30 * 60 * 1000); // 30 min after start
-    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('emergent');
+    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('urgent');
   });
 });
 
@@ -130,9 +129,9 @@ describe('computeShiftUrgency — startAtIso overload', () => {
     expect(computeShiftUrgency('', '', startAt)).toBe('urgent');
   });
 
-  it('uses startAtIso when provided (locked)', () => {
+  it('uses startAtIso when provided (2h out is urgent)', () => {
     const startAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-    expect(computeShiftUrgency('', '', startAt)).toBe('emergent');
+    expect(computeShiftUrgency('', '', startAt)).toBe('urgent');
   });
 });
 

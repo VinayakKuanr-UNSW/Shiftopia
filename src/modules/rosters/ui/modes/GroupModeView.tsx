@@ -78,7 +78,7 @@ import {
   useDeleteSubGroup,
   useRenameSubGroup,
 } from '@/modules/rosters/state/useRosterMutations';
-import { computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
+import { computeShiftUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import {
@@ -1822,7 +1822,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           isPublished,
           isDraft: isPublished ? false : isDraft,
           isOnBidding: isOnBidding(shift.bidding_status),
-          isUrgent: isOnBidding(shift.bidding_status) && computeBiddingUrgency(shift.shift_date, shift.start_time) === 'urgent',
+          isUrgent: isOnBidding(shift.bidding_status) && computeShiftUrgency(shift.shift_date, shift.start_time) === 'urgent',
           isTrading: !!shift.trade_requested_at,
           isCancelled: shift.is_cancelled,
           groupColor: groupDef.type,
@@ -2035,7 +2035,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     if (new Date() >= shiftStart && shift.rawShift.lifecycle_status !== 'Published') {
       toast({
         title: 'Shift Locked',
-        description: 'This shift has already started and cannot be edited. You can only delete it from the menu.',
+        description: 'This shift has already started and is locked.',
         variant: 'default',
       });
       return;
@@ -2216,7 +2216,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           if (hasStarted) {
             toast({
               title: 'Shift Locked',
-              description: 'This shift has already started and cannot be edited. You can only delete it from the menu.',
+              description: 'This shift has already started and is locked.',
               variant: 'default',
             });
             return;

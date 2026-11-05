@@ -145,6 +145,7 @@ const SHIFT_SELECT = `
   published_at,
   cancelled_at,
   kickoff_cancel_code,
+  last_modified_reason,
   last_modified_by,
   target_employment_type,
   target_requires_flexible,
