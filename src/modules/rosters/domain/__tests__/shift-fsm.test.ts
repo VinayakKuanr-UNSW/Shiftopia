@@ -292,13 +292,14 @@ describe('describeKickoffCancel (03-bidding-fsm.md B-D10)', () => {
     it.each([
         ['A', 'A — Offer ignored until the shift started'],
         ['B', 'B — Bidding found no winner'],
-        ['C', 'C — Never assigned'],
-        ['D', 'D — Assigned but never published'],
+        ['C', 'C — Draft+Unassigned never published'],
+        ['D', 'D — Draft+Assigned never published'],
+        ['E', 'E — Published shift manually cancelled'],
     ])('code %s → %s', (code, label) => {
         expect(describeKickoffCancel(code)).toBe(label);
     });
 
-    it.each([null, undefined, '', 'Z'])('%s → null (manual cancellation or unknown code)', code => {
+    it.each([null, undefined, '', 'Z'])('%s → null (unknown code or absent)', code => {
         expect(describeKickoffCancel(code)).toBeNull();
     });
 });

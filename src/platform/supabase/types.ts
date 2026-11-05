@@ -7452,7 +7452,6 @@ export type Database = {
         }
         Returns: Json
       }
-      sm_expire_offer_now: { Args: { p_shift_id: string }; Returns: Json }
       sm_holds_active_contract_in: {
         Args: { p_profile_id: string; p_sub_department_id: string }
         Returns: boolean
@@ -7490,12 +7489,10 @@ export type Database = {
         Args: { p_shift_id: string }
         Returns: undefined
       }
-      sm_reject_offer:
-        | { Args: { p_shift_id: string; p_user_id: string }; Returns: Json }
-        | {
-            Args: { p_reason: string; p_shift_id: string; p_user_id: string }
-            Returns: Json
-          }
+      sm_reject_offer: {
+        Args: { p_reason: string; p_shift_id: string; p_user_id: string }
+        Returns: Json
+      }
       sm_request_is_system: { Args: never; Returns: boolean }
       sm_require_assignee_or: {
         Args: { p_actor: string; p_manager_action: string; p_shift_id: string }

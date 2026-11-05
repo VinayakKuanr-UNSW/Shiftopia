@@ -71,19 +71,25 @@ describe('ShiftExpandDialog', () => {
     });
 });
 
-describe('the roster menus offer Expand on full-time shifts', () => {
+describe('the roster menus offer Details on shifts', () => {
     const strip = (c: string) => c.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
     it('Group mode', () => {
         const src = strip(readFileSync(resolve(process.cwd(), 'src/modules/rosters/ui/modes/GroupModeView.tsx'), 'utf-8'));
-        expect(src).toMatch(/target_employment_type === 'FT' && \(\s*<DropdownMenuItem\s*onClick=\{\(\) => setExpandedShift\(shift\.rawShift\)\}/);
+        expect(src).toMatch(/onDetails=\{\(\) => setExpandedShift\(shift\.rawShift\)\}/);
         expect(src).toMatch(/<ShiftExpandDialog shift=\{expandedShift\}/);
     });
 
     it('People mode', () => {
         const src = strip(readFileSync(resolve(process.cwd(), 'src/modules/rosters/ui/modes/PeopleModeGrid.tsx'), 'utf-8'));
-        expect(src).toMatch(/onExpand && shift\.rawShift\?\.target_employment_type === 'FT'/);
+        expect(src).toMatch(/onDetails=\{onExpand \? \(\) => onExpand\(shift\) : undefined\}/);
         expect(src).toMatch(/onExpand=\{onExpandShift\}/);
         expect(src).toMatch(/<ShiftExpandDialog shift=\{expandedShift\}/);
+    });
+
+    it('ShiftCardOverflowMenu component provides Details', () => {
+        const src = strip(readFileSync(resolve(process.cwd(), 'src/modules/rosters/ui/components/ShiftCardOverflowMenu.tsx'), 'utf-8'));
+        expect(src).toMatch(/onDetails && \(/);
+        expect(src).toMatch(/<span>Details<\/span>/);
     });
 });

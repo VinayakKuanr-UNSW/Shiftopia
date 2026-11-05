@@ -7,9 +7,8 @@
  * Rules:
  *  - State  → from getShiftFSMState() (canonical, never re-derived here)
  *  - Urgency → runtime TTS calculation (visual only, never affects actions)
- *  - Emergency label → runtime TTS calculation (TTS < 4h); there is no persisted
- *    emergency_source/is_urgent column — urgency & emergency are pure time facts.
- *  - Actions → from FSM state + Emergent policy (S1 restricted if TTS < 4h)
+ *    There is no persisted is_urgent column — urgency is a pure time fact.
+ *  - Actions → from FSM state
  */
 
 import {
@@ -54,8 +53,6 @@ export interface ShiftUIContext {
     ttsSec: number;
     /** TTS < 24h — visual indicator only */
     isUrgent: boolean;
-    /** TTS < 4h — visual indicator only */
-    isEmergency: boolean;
     /** TTS-based urgency — visual only, never gates actions */
     urgency: ShiftUrgency;
     /** Priority-ordered ring color for card borders/glows across all views */
@@ -103,7 +100,6 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
     const ttsSec = (start > 0 && now < start) ? Math.floor((start - now) / 1000) : 0;
 
     const isUrgent    = ttsSec > 0 && ttsSec < 24 * 60 * 60;
-    const isEmergency = false;
 
     const urgency: ShiftUrgency =
         (ttsSec > 0 && ttsSec < 24 * 3600) ? 'urgent'
@@ -138,7 +134,7 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
         return 'blue';
     })();
 
-    return { state, ttsSec, isUrgent, isEmergency, urgency, ringColor };
+    return { state, ttsSec, isUrgent, urgency, ringColor };
 }
 
 /**

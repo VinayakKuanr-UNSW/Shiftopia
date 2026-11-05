@@ -45,8 +45,10 @@ DECLARE
   t record;
   e uuid[];
   ignored uuid; offer_a uuid; bid_b uuid; draft_c uuid; draft_d uuid; old_d uuid;
-  d1 date := (now() AT TIME ZONE 'Australia/Sydney')::date + 30;
-  d2 date := (now() AT TIME ZONE 'Australia/Sydney')::date + 31;
+  -- a Monday ~30 days out, so d1..d1+2 are weekdays (weekend shifts have longer minimums)
+  d1 date := (now() AT TIME ZONE 'Australia/Sydney')::date + 30
+             + ((8 - extract(isodow FROM (now() AT TIME ZONE 'Australia/Sydney')::date + 30)::int) % 7);
+  d2 date := d1 + 1;
   res text := '';
   denied text := 'allowed';
 BEGIN

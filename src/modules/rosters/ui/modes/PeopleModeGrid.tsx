@@ -4,21 +4,17 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import {
-  MoreHorizontal,
-  Undo2,
-  Edit2,
   Zap,
   Flame,
   Users,
   Search,
   X,
-  ShieldCheck,
-  Layers,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
+import { ShiftCardOverflowMenu } from '@/modules/rosters/ui/components/ShiftCardOverflowMenu';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDateCell';
 import { useApprovedLeaveDays } from '@/modules/rosters/hooks/useApprovedLeaveDays';
@@ -43,12 +39,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import { useDrag } from 'react-dnd';
 import { canDragShift } from '@/modules/rosters/utils/dnd.utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/modules/core/ui/primitives/dropdown-menu';
 import { getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 
@@ -195,74 +185,15 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onUnpublish
   const { isPast } = resolveShiftStatus(shift);
 
   return (
-    // modal={false}: skip Radix focus trap + body lock. A 3-item menu over a
-    // shift card doesn't need either; the trap traversal showed up as the
-    // FocusOnMount span in the INP trace.
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
-        {/* 1. Edit */}
-        <DropdownMenuItem
-          disabled={isPast}
-          onClick={() => onEdit(shift)}
-          className={cn(
-            "text-popover-foreground hover:bg-accent cursor-pointer",
-            isPast && "text-muted-foreground/50 cursor-not-allowed"
-          )}
-        >
-          <Edit2 className="h-4 w-4 mr-2" />
-          Edit Shift {isPast && '(Locked)'}
-        </DropdownMenuItem>
-
-        {/* 2. Audit */}
-        {onAudit && (
-          <DropdownMenuItem
-            onClick={() => onAudit(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
-            Audit Compliance
-          </DropdownMenuItem>
-        )}
-
-        {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
-        {onExpand && shift.rawShift?.target_employment_type === 'FT' && (
-          <DropdownMenuItem
-            onClick={() => onExpand(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
-            More (Variance & Pay)
-          </DropdownMenuItem>
-        )}
-        {onExpand && shift.rawShift?.target_employment_type !== 'FT' && (
-          <DropdownMenuItem
-            onClick={() => onExpand(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
-            More (Variance & Pay)
-          </DropdownMenuItem>
-        )}
-
-        {canUnpublish(shift) && !isPast && onUnpublish && (
-          <DropdownMenuItem
-            onClick={() => onUnpublish(shift.id)}
-            className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-          >
-            <Undo2 className="h-4 w-4 mr-2" />
-            Unpublish Shift
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <ShiftCardOverflowMenu
+      shift={shift.rawShift || (shift as any)}
+      canEdit={true}
+      isPast={isPast}
+      onEdit={() => onEdit(shift)}
+      onAudit={onAudit ? () => onAudit(shift) : undefined}
+      onDetails={onExpand ? () => onExpand(shift) : undefined}
+      onUnpublish={canUnpublish(shift) && !isPast && onUnpublish ? () => onUnpublish(shift.id) : undefined}
+    />
   );
 });
 ShiftRowMenu.displayName = 'ShiftRowMenu';

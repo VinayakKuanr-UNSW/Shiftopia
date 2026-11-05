@@ -4,18 +4,14 @@ import { isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/
 import {
   Loader2,
   MoreHorizontal,
-  MoreVertical,
   Edit2,
   Trash2,
-  Send,
-  Undo2,
   Ban,
   ChevronDown,
   ChevronRight,
   Zap,
   Users,
   Layers,
-  ShieldCheck,
 } from 'lucide-react';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -54,6 +50,7 @@ import {
 } from '@/modules/rosters/api/rosterSubgroups.api';
 import { hasFixedSubgroup } from '@/modules/rosters/domain/subgroupRules';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
+import { ShiftCardOverflowMenu } from '@/modules/rosters/ui/components/ShiftCardOverflowMenu';
 // Named import, not `import * as`: react-refresh cannot reliably re-bind a
 // React.memo() const through a namespace object, so on hot update the member
 // read back as undefined and React threw "type is invalid ... got: undefined"
@@ -116,7 +113,6 @@ import { ALL_GROUP_TYPES } from '@/modules/rosters/domain/projections/constants'
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import { CancelShiftDialog, type CancelShiftTarget } from '@/modules/rosters/ui/dialogs/CancelShiftDialog';
-import { getShiftRemoval } from '@/modules/rosters/domain/shift-removal';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
 
 // ============================================================================
@@ -2189,124 +2185,25 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const accentColor = groupConfig.accent === 'emerald' ? 'green' : groupConfig.accent;
 
 
+    const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
+
     const menu = (
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
-            onClick={(e) => e.stopPropagation()}
-            disabled={isLocked && false}
-          >
-            <MoreVertical className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
-          {(() => {
-            const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
-
-            return (
-              <>
-                {/* 1. Edit */}
-                <DropdownMenuItem
-                  disabled={hasStarted || !canEdit}
-                  onClick={() => handleEditShift(shift, group, subGroup, date)}
-                  className={cn(
-                    "text-popover-foreground hover:bg-accent cursor-pointer",
-                    (hasStarted || !canEdit) && "text-muted-foreground/50 cursor-not-allowed"
-                  )}
-                >
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Edit Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
-                </DropdownMenuItem>
-
-                {/* 2. Audit */}
-                <DropdownMenuItem
-                  onClick={() => setAuditedShift(shift.rawShift)}
-                  className="text-popover-foreground hover:bg-accent cursor-pointer"
-                >
-                  <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
-                  Audit Compliance
-                </DropdownMenuItem>
-
-                {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
-                {shift.rawShift.target_employment_type === 'FT' && (
-                  <DropdownMenuItem
-                    onClick={() => setExpandedShift(shift.rawShift)}
-                    className="text-popover-foreground hover:bg-accent cursor-pointer"
-                  >
-                    <Layers className="h-4 w-4 mr-2 text-cyan-500" />
-                    More (Variance & Pay)
-                  </DropdownMenuItem>
-                )}
-                {shift.rawShift.target_employment_type !== 'FT' && (
-                  <DropdownMenuItem
-                    onClick={() => setExpandedShift(shift.rawShift)}
-                    className="text-popover-foreground hover:bg-accent cursor-pointer"
-                  >
-                    <Layers className="h-4 w-4 mr-2 text-cyan-500" />
-                    More (Variance & Pay)
-                  </DropdownMenuItem>
-                )}
-
-                {/* Publish / Unpublish where applicable */}
-                {!hasStarted && canEdit && shift.isDraft && !shift.isPublished && (
-                  <DropdownMenuItem
-                    onClick={() => handleRequestPublish(shift)}
-                    className="text-popover-foreground hover:bg-accent cursor-pointer"
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    Publish Shift
-                  </DropdownMenuItem>
-                )}
-
-                {!hasStarted && canEdit && shift.rawShift.lifecycle_status === 'Published' && (
-                  <DropdownMenuItem
-                    onClick={() => handleRequestUnpublish(shift)}
-                    className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-                  >
-                    <Undo2 className="h-4 w-4 mr-2" />
-                    Unpublish Shift
-                  </DropdownMenuItem>
-                )}
-
-                <DropdownMenuSeparator className="bg-border" />
-
-                {/* 4. Delete a draft; cancel a published shift (B-D13) */}
-                {getShiftRemoval(shift.rawShift) === 'delete' && (
-                  <DropdownMenuItem
-                    disabled={hasStarted || !canEdit}
-                    onClick={() => handleDeleteShift(shift)}
-                    className={cn(
-                      "text-destructive hover:bg-destructive/10 cursor-pointer",
-                      (hasStarted || !canEdit) && "text-muted-foreground/50 cursor-not-allowed"
-                    )}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Shift {hasStarted ? '(Started)' : !canEdit ? '(View Only)' : ''}
-                  </DropdownMenuItem>
-                )}
-                {getShiftRemoval(shift.rawShift) === 'cancel' && (
-                  <DropdownMenuItem
-                    disabled={!canEdit}
-                    onClick={() => setShiftToCancel({
-                      id: shift.rawShift.id,
-                      version: shift.rawShift.version,
-                      label: `${shift.role} · ${shift.rawShift.shift_date} ${shift.startTime}–${shift.endTime}`,
-                    })}
-                    className={cn(
-                      "text-destructive hover:bg-destructive/10 cursor-pointer",
-                      !canEdit && "text-muted-foreground/50 cursor-not-allowed"
-                    )}
-                  >
-                    <Ban className="h-4 w-4 mr-2" />
-                    Cancel Shift {!canEdit ? '(View Only)' : ''}
-                  </DropdownMenuItem>
-                )}
-              </>
-            );
-          })()}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ShiftCardOverflowMenu
+        shift={shift.rawShift}
+        canEdit={canEdit}
+        isPast={hasStarted}
+        onEdit={() => handleEditShift(shift, group, subGroup, date)}
+        onAudit={() => setAuditedShift(shift.rawShift)}
+        onDetails={() => setExpandedShift(shift.rawShift)}
+        onPublish={shift.isDraft && !shift.isPublished ? () => handleRequestPublish(shift) : undefined}
+        onUnpublish={shift.rawShift.lifecycle_status === 'Published' ? () => handleRequestUnpublish(shift) : undefined}
+        onDelete={() => handleDeleteShift(shift)}
+        onCancel={() => setShiftToCancel({
+          id: shift.rawShift.id,
+          version: shift.rawShift.version,
+          label: `${shift.role} · ${shift.rawShift.shift_date} ${shift.startTime}–${shift.endTime}`,
+        })}
+      />
     );
 
     return (

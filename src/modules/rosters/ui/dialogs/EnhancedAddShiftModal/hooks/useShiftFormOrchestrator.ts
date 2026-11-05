@@ -23,7 +23,6 @@ import isEqual from 'lodash/isEqual';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, startOfDay, parse } from 'date-fns';
-import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useQueryClient } from '@tanstack/react-query';
@@ -358,19 +357,6 @@ export function useShiftFormOrchestrator({
     // Hard read-only ONLY for existing shifts or published shifts.
     // For NEW shifts, we allow the fields to be editable even if "past" so the user can fix their inputs.
     const isReadOnly = (editMode && (isPast || isStarted)) || isPublished;
-
-    // ── Emergency assignment detection ───────────────────────────────────────
-    // True when TTS ≤ 4h — assigning in this state bypasses standard bidding and
-    // writes 'emergency_assigned' as outcome.
-    const isEmergencyAssignment = useMemo(() => {
-        if (!editMode || !existingShift) return false;
-        if (watchShiftDate && watchStart) {
-            const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
-            const urgency = computeShiftUrgency(shiftDateStr, watchStart, existingShift.start_at ?? undefined);
-            if (urgency === 'emergent') return true;
-        }
-        return false;
-    }, [editMode, existingShift, watchShiftDate, watchStart]);
 
     // ── Unpublish eligibility (state-machine.md §8.1) ───────────────────────
     // Unpublish is allowed from: S3 (Offered), S5/S6 (OnBidding)
@@ -1358,7 +1344,7 @@ export function useShiftFormOrchestrator({
         resolvedContext, selectedRosterId, isTemplateMode, editMode, watchTimezone,
         onShiftCreated, roles, remunerationLevels, employees, netLength,
         onSuccess, form, onClose, createShiftMutation, updateShiftMutation,
-        existingShift, toast, complianceHasRun, isEmergencyAssignment, queryClient,
+        existingShift, toast, complianceHasRun, queryClient,
         watchEmployeeId,
     ]);
 
@@ -1439,7 +1425,6 @@ export function useShiftFormOrchestrator({
         watchEmployeeId,
         watchTimezone,
 
-        isEmergencyAssignment,
         isScheduleDefined,
     };
 

@@ -184,9 +184,7 @@ const listItemSpring = {
 };
 
 // =============================================================================
-// Calculate countdown to shift close (4h before start) in Sydney timezone
-
-// Helper to check if a swap is expired (4h before start)
+// Countdown to the trade closing: it expires at shift start (fn_set_swap_expires_at), in Sydney time
 export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string) => {
     if (!startAt && (!shiftDate || !startTime)) return null;
 
@@ -202,8 +200,7 @@ export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, st
         return null;
     }
 
-    const closeTime = new Date(shiftStartUtc.getTime() - 4 * 60 * 60 * 1000); // 4 hours before
-    const diffMs = closeTime.getTime() - now.getTime();
+    const diffMs = shiftStartUtc.getTime() - now.getTime();
 
     if (diffMs <= 0) return 'Expired';
 
