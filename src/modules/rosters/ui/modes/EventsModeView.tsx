@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Users, AlertTriangle, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2, ShieldCheck, Layers } from 'lucide-react';
+import { Calendar, Users, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Card } from '@/modules/core/ui/primitives/card';
@@ -7,6 +7,7 @@ import { format, parseISO } from 'date-fns';
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { useEvents, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
 import { SmartShiftCard, ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
+import { ShiftCardOverflowMenu } from '@/modules/rosters/ui/components/ShiftCardOverflowMenu';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
@@ -14,13 +15,6 @@ import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/ro
 import { cn } from '@/modules/core/lib/utils';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import type { EventsProjection } from '@/modules/rosters/domain/projections/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/modules/core/ui/primitives/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -159,65 +153,15 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     const { isPast } = resolveShiftStatus(shift);
 
     return (
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
-          {canEdit && (
-            <>
-              {/* 1. Edit */}
-              <DropdownMenuItem
-                disabled={isPast}
-                onClick={() => onEditShift?.(shift)}
-                className={cn(
-                  "text-popover-foreground hover:bg-accent cursor-pointer",
-                  isPast && "text-muted-foreground/50 cursor-not-allowed"
-                )}
-              >
-                <Edit2 className="h-4 w-4 mr-2" />
-                Edit Shift {isPast && '(Locked)'}
-              </DropdownMenuItem>
-            </>
-          )}
-
-          {/* 2. Audit */}
-          <DropdownMenuItem
-            onClick={() => setAuditedShift(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
-            Audit Compliance
-          </DropdownMenuItem>
-
-          {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
-          <DropdownMenuItem
-            onClick={() => setExpandedShift(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
-            More (Variance & Pay)
-          </DropdownMenuItem>
-
-          {canEdit && canUnpublish(shift) && !isPast && (
-            <>
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem
-                onClick={() => handleRequestUnpublish(shift.id)}
-                className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-              >
-                <Undo2 className="h-4 w-4 mr-2" />
-                Unpublish Shift
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ShiftCardOverflowMenu
+        shift={shift}
+        canEdit={canEdit}
+        isPast={isPast}
+        onEdit={onEditShift ? () => onEditShift(shift) : undefined}
+        onAudit={() => setAuditedShift(shift)}
+        onDetails={() => setExpandedShift(shift)}
+        onUnpublish={canEdit && canUnpublish(shift) && !isPast ? () => handleRequestUnpublish(shift.id) : undefined}
+      />
     );
   };
 

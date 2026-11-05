@@ -68,17 +68,17 @@ export const FSM_STATE_META: Record<ShiftStateID, ShiftFSMStateInfo> = {
 };
 
 /**
- * Why the system cancelled a shift when it reached its start
- * (shifts.kickoff_cancel_code; docs/design/shift-trading/03-bidding-fsm.md B-D10).
- * NULL for a manager's cancellation.
+ * Why a shift was cancelled (shifts.kickoff_cancel_code; docs/design/shift-trading/03-bidding-fsm.md B-D10).
+ * System-coded cancellations at kickoff (A, B, C, D) or manager manual cancellation (E).
  */
-export type KickoffCancelCode = 'A' | 'B' | 'C' | 'D';
+export type KickoffCancelCode = 'A' | 'B' | 'C' | 'D' | 'E';
 
 export const KICKOFF_CANCEL_REASONS: Record<KickoffCancelCode, string> = {
     A: 'Offer ignored until the shift started',
     B: 'Bidding found no winner',
-    C: 'Never assigned',
-    D: 'Assigned but never published',
+    C: 'Draft+Unassigned never published',
+    D: 'Draft+Assigned never published',
+    E: 'Published shift manually cancelled',
 };
 
 /** "B — Bidding found no winner", or null when the code is absent or unknown. */

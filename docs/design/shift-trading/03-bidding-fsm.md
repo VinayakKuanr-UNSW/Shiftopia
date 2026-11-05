@@ -17,10 +17,10 @@ Bidding fills an **S5** shift: a published shift with nobody on it. Employees bi
 | B-D6 | Approved leave cancels the employee's pending bids on shifts dated inside the leave. |
 | B-D7 | A manager may fill an S5 shift with someone who did not bid; it goes straight to **S4**. |
 | B-D8 | Bids end in a terminal status that says why (§3). No pending bid outlives the S5 state. |
-| B-D9 | **Offer expiry**: an offer (S3) not answered within `LEAST(published + 48h, start)` goes to **S5** like a rejection. If it is still pending at start, the shift goes to **S10** with reason **A**. |
-| B-D10 | **Cancellation reasons** at start (TTS = 0), stored in `shifts.kickoff_cancel_code`: **A** offer ignored · **B** bidding found no winner · **C** draft never assigned (S1) · **D** assigned draft never published (S2). NULL for a manager's cancellation. Codes do not feed reliability or fairness scoring: a coded cancellation is logged as one `OP_APPLIED` `cancel` event carrying the code, never as `CANCELLED`/`LATE_CANCELLED` against the employee. A and D keep the assignee on the record (a started shift cannot change hands). |
+| B-D9 | **Offer expiry (Tiered Formula B)**: an offer (S3) expires according to lead-time tiers reserving bidding recovery time: Tier 1 (TTS > 36h) max 24h response (≥ 12h reserve); Tier 2 (12h < TTS ≤ 36h) max 8h response (≥ 4h reserve); Tier 3 (TTS ≤ 12h) max 2h response (clamped at start). An expired offer with TTS > 0 goes to **S5** like a rejection. If still pending at start (TTS = 0), the shift goes to **S10** with reason **A**. |
+| B-D10 | **Cancellation reasons**, stored in `shifts.kickoff_cancel_code`: **A** offer ignored until shift started · **B** bidding found no winner · **C** Draft+Unassigned never published (S1) · **D** Draft+Assigned never published (S2) · **E** Published shift manually cancelled (requires explicit `p_reason`). Codes do not feed reliability or fairness scoring: a coded cancellation is logged as one `OP_APPLIED` `cancel` event carrying the code and note, never as `CANCELLED`/`LATE_CANCELLED` against the employee. A and D keep the assignee on the record (a started shift cannot change hands). |
 | B-D11 | Drafts that started before the C/D rule went live (2026-11-04 10:00 UTC) are left alone. |
-| B-D12 | Once a shift has started, nothing unpublishes or drops it (`SHIFT_STARTED`), even before the minute timer has swept it: an unpublished S5 would be swept as a draft (C) instead of B. Drop is S4-only — an unanswered offer (S3) is rejected, which costs the employee nothing. |
+| B-D12 | Once a shift has started, nothing unpublishes or drops it (`SHIFT_STARTED`), even before the minute timer has swept it: an unpublished S5 would be swept as a draft (C) instead of B. Drop is S4-only — an unanswered offer (S3) is rejected, which costs the employee nothing. Declining an offer is refused after the start too; the timer cancels it (A). Offer expiry is the timer's alone: the app never expires an offer itself. |
 | B-D13 | **Delete is for drafts (S1/S2) only** (`fsm_op_is_legal`, `_shift_delete_refusal`, `shifts_delete_rbac`). Published shifts are cancelled instead (`SHIFT_PUBLISHED`), which preserves their history and audit trail. Singly and in bulk. |
 | B-D14 | **`sm_cancel_shift`** cancels published shifts (S3–S7) and in-progress shifts before clock-in (S8 with no punch; punched shifts return `SHIFT_WORKED`). A non-empty reason note is required (`REASON_REQUIRED`). Assignees and trade partners are notified via `notify_user` (`shift_cancelled`). Pending offers expire, and bids/trades close via existing triggers. |
 | B-D15 | A manager's cancellation is logged in `shift_events` as an `OP_APPLIED` `cancel` event carrying the note, never as `CANCELLED`/`LATE_CANCELLED` against the employee (no reliability impact). |
@@ -80,7 +80,7 @@ A deleted shift takes its bids with it (FK cascade). Each bidder is notified by 
 
 | When | Shift | Result |
 |---|---|---|
-| offer deadline (48h) passed, TTS > 0 | S3 | → S5 (B-D9) |
+| offer deadline passed, TTS > 0 | S3 | → S5 (B-D9, Tiered Formula B) |
 | TTS ≤ 24h, compliant pending bid | S5 | → S4, earliest bid wins (B-D3) |
 | TTS = 0 | S3 | → S10, reason A |
 | TTS = 0 | S5 | → S10, reason B |

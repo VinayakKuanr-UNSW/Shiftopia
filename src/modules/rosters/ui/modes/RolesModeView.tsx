@@ -4,30 +4,23 @@ import { format, addDays, parse, isToday } from 'date-fns';
 import { startOfWeekAU } from '@/modules/core/lib/date/week';
 import { useDrag, useDrop } from 'react-dnd';
 import { 
-  MoreHorizontal,
-  Edit2,
-  Undo2,
   Briefcase,
   Zap,
   ChevronDown,
   ChevronRight,
-  Trash2,
-  Ban,
-  ShieldCheck,
-  Layers,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
+import { ShiftCardOverflowMenu } from '@/modules/rosters/ui/components/ShiftCardOverflowMenu';
 import { RosterEmptyState } from '@/modules/rosters/ui/components/RosterEmptyState';
 import { RosterCellAddButton } from '@/modules/rosters/ui/components/RosterCellAddButton';
 import { useRemunerationLevels, useRoles, useUnpublishShift, useDeleteShift } from '@/modules/rosters/state/useRosterShifts';
 import { ShiftExpandDialog } from '@/modules/rosters/ui/dialogs/ShiftExpandDialog';
 import { ShiftAuditDialog } from '@/modules/rosters/ui/dialogs/ShiftAuditDialog';
 import { CancelShiftDialog, type CancelShiftTarget } from '@/modules/rosters/ui/dialogs/CancelShiftDialog';
-import { getShiftRemoval } from '@/modules/rosters/domain/shift-removal';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
@@ -44,13 +37,6 @@ import { UnfilledShift } from './UnfilledShiftsPanel';
 import type { RolesProjection } from '@/modules/rosters/domain/projections/types';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/modules/core/ui/primitives/dropdown-menu';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -393,94 +379,27 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     const { isPast } = resolveShiftStatus(shift);
 
     return (
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="h-6 w-6 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 rounded transition-colors text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="h-3.5 w-3.5" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[200px] z-50 shadow-lg">
-          {/* 1. Edit */}
-          <DropdownMenuItem
-            disabled={isPast}
-            onClick={() => onEditShift?.(shift)}
-            className={cn(
-              "text-popover-foreground hover:bg-accent cursor-pointer",
-              isPast && "text-muted-foreground/50 cursor-not-allowed"
-            )}
-          >
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit Shift {isPast && '(Locked)'}
-          </DropdownMenuItem>
-
-          {/* 2. Audit */}
-          <DropdownMenuItem
-            onClick={() => setAuditedShift(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />
-            Audit Compliance
-          </DropdownMenuItem>
-
-          {/* 3. More: Scheduled vs Actual vs Billable & Variance */}
-          <DropdownMenuItem
-            onClick={() => setExpandedShift(shift)}
-            className="text-popover-foreground hover:bg-accent cursor-pointer"
-          >
-            <Layers className="h-4 w-4 mr-2 text-cyan-500" />
-            More (Variance & Pay)
-          </DropdownMenuItem>
-
-          {shift.lifecycle_status === 'Published' && !isPast && (
-            <DropdownMenuItem
-              onClick={() => {
-                setConfirmV8ShiftId(shift.id);
-                setIsConfirmOpen(true);
-              }}
-              className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-            >
-              <Undo2 className="h-4 w-4 mr-2" />
-              Unpublish Shift
-            </DropdownMenuItem>
-          )}
-
-          <DropdownMenuSeparator className="bg-border" />
-
-          {/* 4. Delete a draft; cancel a published shift (B-D13) */}
-          {getShiftRemoval(shift) === 'delete' && (
-            <DropdownMenuItem
-              disabled={isPast}
-              onClick={() => {
-                setShiftToDelete(shift);
-                setIsDeleteDialogOpen(true);
-              }}
-              className={cn(
-                "text-destructive hover:bg-destructive/10 cursor-pointer",
-                isPast && "text-muted-foreground/50 cursor-not-allowed"
-              )}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Shift {isPast && '(Locked)'}
-            </DropdownMenuItem>
-          )}
-          {getShiftRemoval(shift) === 'cancel' && (
-            <DropdownMenuItem
-              onClick={() => setShiftToCancel({
-                id: shift.id,
-                version: shift.version,
-                label: `${shift.roles?.name ?? 'Shift'} · ${shift.shift_date} ${shift.start_time?.slice(0, 5)}–${shift.end_time?.slice(0, 5)}`,
-              })}
-              className="text-destructive hover:bg-destructive/10 cursor-pointer"
-            >
-              <Ban className="h-4 w-4 mr-2" />
-              Cancel Shift
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ShiftCardOverflowMenu
+        shift={shift}
+        canEdit={true}
+        isPast={isPast}
+        onEdit={onEditShift ? () => onEditShift(shift) : undefined}
+        onAudit={() => setAuditedShift(shift)}
+        onDetails={() => setExpandedShift(shift)}
+        onUnpublish={shift.lifecycle_status === 'Published' && !isPast ? () => {
+          setConfirmV8ShiftId(shift.id);
+          setIsConfirmOpen(true);
+        } : undefined}
+        onDelete={() => {
+          setShiftToDelete(shift);
+          setIsDeleteDialogOpen(true);
+        }}
+        onCancel={() => setShiftToCancel({
+          id: shift.id,
+          version: shift.version,
+          label: `${shift.roles?.name ?? 'Shift'} · ${shift.shift_date} ${shift.start_time?.slice(0, 5)}–${shift.end_time?.slice(0, 5)}`,
+        })}
+      />
     );
   };
 

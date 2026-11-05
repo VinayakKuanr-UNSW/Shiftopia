@@ -31,7 +31,6 @@ vi.mock('@/modules/rosters/state/useRosterShifts', () => ({
   useMyOffersHistory: () => history,
   useAcceptOffer: () => mutation,
   useDeclineOffer: () => mutation,
-  useExpireOffer: () => mutation,
 }));
 
 // The card is exercised for real elsewhere; here we only need to see which
@@ -61,7 +60,7 @@ function offer(overrides: Record<string, unknown> = {}) {
     offered_by_name: 'Admin',
     shift: {
       id: 'shift-1',
-      // 05:30 Sydney on the 20th; the TTS deadline is 4h before that.
+      // 05:30 Sydney on the 20th = 19:30 UTC on the 19th.
       shift_date: '2026-08-20',
       start_time: '05:30:00',
       end_time: '16:30:00',
@@ -132,29 +131,40 @@ describe('MyOffersModal', () => {
     expect(screen.getByText('No offers waiting')).toBeInTheDocument();
   });
 
-  it('closes the 4h window on Sydney wall-clock, not on the naive string read as UTC', () => {
-    // 05:30 Sydney on 2026-08-20 is 19:30 UTC on the 19th, so the TTS deadline
-    // — four hours before the start — is 15:30 UTC. At 18:00 UTC the window has
-    // been shut for two and a half hours and the offer must be gone.
-    //
-    // The old code built `shift_date + 'T' + start_time` and handed it to
-    // `new Date`. It meant to append a 'Z' first, but its guard regex
-    // (/Z|[+-]\d{2}/) matches the hyphens inside the DATE — "2026-08-20" looks
-    // like it already carries an offset — so nothing was appended and the
-    // string was parsed in the VIEWER's zone instead. In Sydney that lands on
-    // the right instant by luck, which is why the countdown looked correct on a
-    // Sydney desktop; from anywhere else the whole 4h window moved by the
-    // offset. Under TZ=UTC the old parse puts the deadline at 01:30 on the
-    // 20th and still shows this offer as live with 7.5 hours left.
-    // `isShiftLocked`, called from the same card, always resolved the instant
-    // properly — only this file's private parser disagreed.
+  it('without a stated deadline an offer stays open until the shift starts (no 4h cut-off)', () => {
+    // 05:30 Sydney on 2026-08-20 is 19:30 UTC on the 19th. At 18:00 UTC the
+    // shift is 1.5h away: the offer is still answerable (B-D9). The old code
+    // closed it four hours before the start.
     vi.setSystemTime(new Date('2026-08-19T18:00:00Z'));
+    pending.data = [offer()];
+
+    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByTestId('shift-card')).toBeInTheDocument();
+  });
+
+  it('closes at the start on Sydney wall-clock, not on the naive string read as UTC', () => {
+    // At 19:45 UTC the shift (19:30 UTC) has started and the offer must be gone.
+    // Reading "2026-08-20T05:30" in the viewer's zone instead would put the
+    // start at 05:30 UTC on the 20th under TZ=UTC and keep the offer live.
+    vi.setSystemTime(new Date('2026-08-19T19:45:00Z'));
     pending.data = [offer()];
 
     render(<MyOffersModal isOpen onClose={vi.fn()} />);
 
     expect(screen.queryByTestId('shift-card')).not.toBeInTheDocument();
     expect(screen.getByText('No offers waiting')).toBeInTheDocument();
+  });
+
+  it('honours the database offer_expires_at when it is stated', () => {
+    // Shift starts at 19:30 UTC. At 18:00 UTC (1.5h to start), an urgent offer with
+    // offer_expires_at set to 19:00 UTC remains active until its stated expiry.
+    vi.setSystemTime(new Date('2026-08-19T18:00:00Z'));
+    pending.data = [offer({ offer_expires_at: '2026-08-19T19:00:00Z' })];
+
+    render(<MyOffersModal isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByTestId('shift-card')).toBeInTheDocument();
   });
 
   it('exposes the status filters as a tablist', () => {

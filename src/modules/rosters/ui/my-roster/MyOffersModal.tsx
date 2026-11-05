@@ -19,7 +19,6 @@ import {
     useMyOffersHistory,
     useAcceptOffer,
     useDeclineOffer,
-    useExpireOffer,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -132,15 +131,11 @@ function parseExpiry(raw: unknown): number | null {
 /** The instant an offer stops being actionable, or null when it never does. */
 function resolveOfferDeadline(offer: OfferData): number | null {
     const stated = parseExpiry(offer.offer_expires_at ?? offer.shift.offer_expires_at);
+    if (stated != null) return stated;
 
-    // TTS rule: an offer must close at least 4h before the shift starts,
-    // whatever the stated expiry says.
+    // No stated deadline: the offer stays open until the shift starts (B-D9).
     const start = getShiftInstant(offer.shift, 'start');
-    const ttsDeadline = start ? start.getTime() - 4 * 60 * 60 * 1000 : null;
-
-    if (stated == null) return ttsDeadline;
-    if (ttsDeadline == null) return stated;
-    return Math.min(stated, ttsDeadline);
+    return start ? start.getTime() : null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -154,11 +149,9 @@ const OfferItem: React.FC<{
     processingId: string | null;
     onAccept: (shiftId: string) => void;
     onDeclineRequest: (shiftId: string) => void;
-    onExpire: (shiftId: string) => void;
-}> = ({ offer, recipientName, showActions, processingId, onAccept, onDeclineRequest, onExpire }) => {
+}> = ({ offer, recipientName, showActions, processingId, onAccept, onDeclineRequest }) => {
     const [timerText, setTimerText] = useState<string | null>(null);
     const [isExpired, setIsExpired] = useState(false);
-    const expiredRef = React.useRef(false);
 
     const deadlineMs = resolveOfferDeadline(offer);
 
@@ -168,12 +161,9 @@ const OfferItem: React.FC<{
         const tick = () => {
             const diff = Math.max(0, Math.floor((deadlineMs - Date.now()) / 1000));
             if (diff === 0) {
+                // The minute timer moves the shift on (S5, or S10 at start); the card only stops accepting answers.
                 setIsExpired(true);
                 setTimerText(null);
-                if (!expiredRef.current) {
-                    expiredRef.current = true;
-                    onExpire(offer.shift_id);
-                }
                 return;
             }
             const h = Math.floor(diff / 3600);
@@ -184,7 +174,7 @@ const OfferItem: React.FC<{
         tick();
         const id = setInterval(tick, 30_000);
         return () => clearInterval(id);
-    }, [deadlineMs, offer.shift_id, onExpire]);
+    }, [deadlineMs]);
 
     const isLocked = isShiftLocked(offer.shift.shift_date, offer.shift.start_time);
     const isActionDisabled = !!processingId || isLocked || isExpired;
@@ -324,7 +314,6 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
 
     const acceptOfferMutation = useAcceptOffer();
     const declineOfferMutation = useDeclineOffer();
-    const expireOfferMutation = useExpireOffer();
 
     // Silently exclude expired pending offers from the list
     const activePending = ((pendingQuery.data ?? []) as OfferData[]).filter((o) => {
@@ -395,15 +384,6 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
             setProcessingId(null);
         }
     };
-
-    const handleExpire = React.useCallback(
-        (shiftId: string) => {
-            if (!expireOfferMutation.isPending) {
-                expireOfferMutation.mutate(shiftId);
-            }
-        },
-        [expireOfferMutation],
-    );
 
     const tabs: { label: OfferStatus; count: number }[] = [
         { label: 'Pending', count: activePending.length },
@@ -549,7 +529,6 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                     processingId={processingId}
                                     onAccept={handleAccept}
                                     onDeclineRequest={(id) => setShowDeclineConfirm(id)}
-                                    onExpire={handleExpire}
                                 />
                             ))
                         )}

@@ -1074,45 +1074,12 @@ export const shiftsCommands = {
     },
 
     async rejectOffer(shiftId: string, reason: string) {
-        // TTS-aware routing:
-        //   TTS > 4h → sm_reject_offer → bidding (S5) — peers can still bid
-        //   TTS ≤ 4h → sm_expire_offer_now → draft+assigned (S2) — bidding window closed,
-        //              manager must use emergency assignment
-        const { data: shift } = await (supabase as any)
-            .from('shifts')
-            .select('shift_date, start_time, start_at')
-            .eq('id', shiftId)
-            .single();
-
-        if (shift) {
-            const tts = shift.start_at
-                ? new Date(shift.start_at).getTime() - Date.now()
-                : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now();
-
-            if (tts <= 4 * 60 * 60 * 1000) {
-                // Window closed — expire the offer, notify manager for emergency assignment
-                return this.expireOfferNow(shiftId);
-            }
-        }
-
+        // A declined offer goes to bidding (S5) until the shift starts (B-D9).
         return callAuthenticatedRpc(
             'sm_reject_offer',
             (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: reason }),
             OfferActionResponseSchema,
         );
-    },
-
-    /**
-     * Immediately expire a shift offer. Called client-side the moment the
-     * countdown hits zero or isShiftLocked fires, so the DB transitions
-     * S3 → S2 (Draft+Assigned) instantly without waiting for the cron.
-     */
-    async expireOfferNow(shiftId: string) {
-        const { data, error } = await supabase.rpc('sm_expire_offer_now', {
-            p_shift_id: shiftId,
-        });
-        if (error) throw error;
-        return data as { success: boolean; error?: string; from_state?: string; to_state?: string };
     },
 
     /**

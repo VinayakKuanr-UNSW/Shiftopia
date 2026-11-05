@@ -1017,25 +1017,6 @@ export function useDropShift() {
   });
 }
 
-/**
- * Immediately expire a shift offer (S3 → S2).
- * Call when the client detects countdown = 0 or the shift has started.
- * Invalidates offers + roster lists so the UI reflects the new Draft state.
- */
-export function useExpireOffer() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (shiftId: string) => shiftsCommands.expireOfferNow(shiftId),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
-      queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
-      queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
-
-    },
-  });
-}
-
 /** Accept a shift offer. Updates assignment_outcome to 'confirmed'. */
 export function useAcceptOffer() {
   const queryClient = useQueryClient();

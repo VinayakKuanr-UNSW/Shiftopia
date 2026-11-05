@@ -42,7 +42,9 @@ DECLARE
   t record;
   e uuid;
   bid_started uuid; bid_started2 uuid; conf_started uuid; offered uuid; conf_ok uuid;
-  d1 date := (now() AT TIME ZONE 'Australia/Sydney')::date + 30;
+  -- a Monday ~30 days out, so d1..d1+2 are weekdays (weekend shifts have longer minimums)
+  d1 date := (now() AT TIME ZONE 'Australia/Sydney')::date + 30
+             + ((8 - extract(isodow FROM (now() AT TIME ZONE 'Australia/Sydney')::date + 30)::int) % 7);
   r jsonb;
   res text := '';
 BEGIN

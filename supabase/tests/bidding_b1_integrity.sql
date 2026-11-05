@@ -42,7 +42,9 @@ DECLARE
   t record;
   e uuid[];
   f1 uuid; f2 uuid; f3 uuid;
-  d1 date := (now() AT TIME ZONE 'Australia/Sydney')::date + 30;
+  -- a Monday ~30 days out, so d1..d1+2 are weekdays (weekend shifts have longer minimums)
+  d1 date := (now() AT TIME ZONE 'Australia/Sydney')::date + 30
+             + ((8 - extract(isodow FROM (now() AT TIME ZONE 'Australia/Sydney')::date + 30)::int) % 7);
   soon timestamp := date_trunc('hour', now() AT TIME ZONE 'Australia/Sydney') + interval '3 hours';
   r jsonb;
   res text := '';
