@@ -21,7 +21,6 @@ import {
     AlertTriangle,
     Zap,
     Signal,
-    Flame,
     UserCheck as LucideUserCheck,
     Ban,
     ThumbsUp,
@@ -142,13 +141,6 @@ export const PRIORITY_CONFIG: Record<SwapPriority, {
     chipActiveCls: string;
     color: string;
 }> = {
-    emergent: {
-        label: 'Emergent',
-        badgeCls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-        icon: Flame,
-        chipActiveCls: 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400',
-        color: 'text-rose-500',
-    },
     urgent: {
         label: 'Urgent',
         badgeCls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',

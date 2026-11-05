@@ -4,7 +4,6 @@
  * Unit tests for:
  *   - getShiftFSMState      (all 10 valid states + edge cases)
  *   - getLockState
- *   - getAvailableActions
  *
  * All tests are pure — no mocking, no network calls.
  */
@@ -20,7 +19,6 @@ import {
 
 import {
     getLockState,
-    getAvailableActions,
 } from '../shift-ui';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -226,66 +224,6 @@ describe('getLockState', () => {
     });
 });
 
-// ─── 5. getAvailableActions ───────────────────────────────────────────────────
-
-describe('getAvailableActions', () => {
-
-    it('S1 → includes PUBLISH, ASSIGN, DELETE', () => {
-        const actions = getAvailableActions('S1');
-        expect(actions).toContain('PUBLISH');
-        expect(actions).toContain('ASSIGN');
-        expect(actions).toContain('DELETE');
-    });
-
-    it('S5 → includes EMERGENCY_ASSIGN, SELECT_BID_WINNER', () => {
-        const actions = getAvailableActions('S5');
-        expect(actions).toContain('EMERGENCY_ASSIGN');
-        expect(actions).toContain('SELECT_BID_WINNER');
-    });
-
-    it('S9 → empty array', () => {
-        expect(getAvailableActions('S9')).toEqual([]);
-    });
-
-    it('S10 → empty array', () => {
-        expect(getAvailableActions('S10')).toEqual([]);
-    });
-
-    it('S2 → includes UNASSIGN, PUBLISH, DELETE (not ASSIGN)', () => {
-        const actions = getAvailableActions('S2');
-        expect(actions).toContain('UNASSIGN');
-        expect(actions).toContain('PUBLISH');
-        expect(actions).toContain('DELETE');
-        expect(actions).not.toContain('ASSIGN');
-    });
-
-    it('S6 → includes CANCEL_REQUEST, ACCEPT_TRADE, UNPUBLISH; REJECT_TRADE is manager review (S7) only', () => {
-        const actions = getAvailableActions('S6');
-        expect(actions).toContain('CANCEL_REQUEST');
-        expect(actions).toContain('ACCEPT_TRADE');
-        expect(actions).not.toContain('REJECT_TRADE');
-        expect(actions).toContain('UNPUBLISH');
-    });
-
-    it('S7 → includes APPROVE_TRADE, REJECT_TRADE, UNPUBLISH', () => {
-        const actions = getAvailableActions('S7');
-        expect(actions).toContain('APPROVE_TRADE');
-        expect(actions).toContain('REJECT_TRADE');
-        expect(actions).toContain('UNPUBLISH');
-    });
-
-    it('S8 → includes CLOCK_OUT, MARK_NO_SHOW', () => {
-        const actions = getAvailableActions('S8');
-        expect(actions).toContain('CLOCK_OUT');
-        expect(actions).toContain('MARK_NO_SHOW');
-    });
-
-    it('unknown state → empty array (safe fallback)', () => {
-        expect(getAvailableActions('S99')).toEqual([]);
-    });
-});
-
-
 // ─── 6. describeKickoffCancel ────────────────────────────────────────────────
 
 describe('describeKickoffCancel (03-bidding-fsm.md B-D10)', () => {
@@ -297,6 +235,15 @@ describe('describeKickoffCancel (03-bidding-fsm.md B-D10)', () => {
         ['E', 'E — Published shift manually cancelled'],
     ])('code %s → %s', (code, label) => {
         expect(describeKickoffCancel(code)).toBe(label);
+    });
+
+    it('E carries the manager\'s note', () => {
+        expect(describeKickoffCancel('E', 'Event cancelled by the client'))
+            .toBe('E — Published shift manually cancelled: Event cancelled by the client');
+    });
+
+    it('a system code ignores the note', () => {
+        expect(describeKickoffCancel('B', 'anything')).toBe('B — Bidding found no winner');
     });
 
     it.each([null, undefined, '', 'Z'])('%s → null (unknown code or absent)', code => {

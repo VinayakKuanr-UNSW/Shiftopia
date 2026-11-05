@@ -64,8 +64,10 @@ export const biddingApi = {
                 roles(id, name),
                 remuneration_levels(level_number, level_name)
             `)
-            .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
-            .is('assigned_employee_id', null);
+            // S5 exactly as get_shift_fsm_state defines it: published, unassigned, not cancelled
+            .eq('lifecycle_status', 'Published')
+            .eq('assignment_status', 'unassigned')
+            .eq('is_cancelled', false);
 
         if (filters?.organizationId) {
             query = query.eq('organization_id', filters.organizationId);

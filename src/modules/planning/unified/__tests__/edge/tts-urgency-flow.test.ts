@@ -41,10 +41,10 @@ describe('TTS zone classification — precise boundaries', () => {
     ['24h exact   → urgent',        24 * 3600_000,  'urgent'],
     ['12h before  → urgent',        12 * 3600_000,  'urgent'],
     [' 4h + 1ms   → urgent',  4 * 3600_000 + 1,  'urgent'],
-    [' 4h exact   → emergent',         4 * 3600_000,  'emergent'],
-    [' 2h before  → emergent',         2 * 3600_000,  'emergent'],
-    [' 0h (start) → emergent',                  0,  'emergent'],
-    ['-1h (past)  → emergent',        -1 * 3600_000,  'emergent'],
+    [' 4h exact   → urgent',           4 * 3600_000,  'urgent'],
+    [' 2h before  → urgent',           2 * 3600_000,  'urgent'],
+    [' 0h (start) → urgent',                    0,  'urgent'],
+    ['-1h (past)  → urgent',          -1 * 3600_000,  'urgent'],
   ];
 
   it.each(cases)('%s', (_, msBeforeStart, expected) => {
@@ -59,7 +59,7 @@ describe('Bidding flow — TTS gate logic', () => {
   it('checks urgency in short notice window (2h)', () => {
     setNow(2 * 3600_000); // 2h before
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
-    expect(urgency).toBe('emergent');
+    expect(urgency).toBe('urgent');
   });
 
   it('allows bid acceptance in urgent window (12h)', () => {

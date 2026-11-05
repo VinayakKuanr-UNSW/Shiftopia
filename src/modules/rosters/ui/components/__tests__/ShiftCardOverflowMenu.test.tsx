@@ -29,6 +29,26 @@ function mockShift(overrides: Partial<Shift> = {}): Shift {
 }
 
 describe('ShiftCardOverflowMenu', () => {
+  it('disables Edit on a published shift (published shifts are not edited in place)', async () => {
+    const user = userEvent.setup();
+    render(<ShiftCardOverflowMenu shift={mockShift({ lifecycle_status: 'Published' })} onEdit={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Stagehand' }));
+
+    const edit = await screen.findByRole('menuitem', { name: /Edit/ });
+    expect(edit).toHaveAttribute('data-disabled');
+    expect(edit).toHaveTextContent('Unpublish to edit');
+  });
+
+  it('keeps Edit enabled on a draft', async () => {
+    const user = userEvent.setup();
+    render(<ShiftCardOverflowMenu shift={mockShift()} onEdit={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Stagehand' }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Edit' })).not.toHaveAttribute('data-disabled');
+  });
+
   it('gives every item and the trigger a 44px touch target', async () => {
     const user = userEvent.setup();
     render(

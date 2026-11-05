@@ -31,7 +31,7 @@ import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
  * purple  — Completed (S9)
  * emerald — In Progress / clocked in (S8)
  * yellow  — Late: Published, past start time, no actual_start (clock-in missing)
- * red     — Emergent: TTS ≤ 4h
+ * red     — No Show: Published, past end, never clocked in
  * orange  — Urgent: TTS ≤ 24h
  * blue    — Normal: everything else
  */
@@ -65,16 +65,6 @@ interface ShiftLockState {
     /** Schedule locked but notes/comments still editable */
     partialLock: boolean;
 }
-
-type ShiftAction =
-    | 'PUBLISH' | 'UNPUBLISH' | 'DELETE'
-    | 'ASSIGN' | 'UNASSIGN'
-    | 'ACCEPT' | 'REJECT'
-    | 'SELECT_BID_WINNER' | 'EMERGENCY_ASSIGN'
-    | 'SWAP_REQUEST' | 'CANCEL_REQUEST' | 'ACCEPT_TRADE' | 'REJECT_TRADE' | 'APPROVE_TRADE'
-    | 'CLOCK_IN' | 'CLOCK_OUT' | 'MARK_NO_SHOW'
-    | 'CANCEL';
-
 
 interface ShiftStatusIcon {
     icon: React.ComponentType<{ className?: string; size?: string | number }>;
@@ -668,29 +658,6 @@ export function isTimesheetReviewable(shift: ShiftDotInput): boolean {
     if (departure && departure.label !== 'Working Overtime') return true;
 
     return false;
-}
-
-/**
- * Available FSM actions for a given state.
- * This is the single source of truth for action menus.
- *
- * Published shifts (S3-S7) are never edited or reassigned in place — unpublish
- * first (docs/design/shift-trading/01-trading-fsm.md D8).
- */
-export function getAvailableActions(state: ShiftStateID | string, _urgency?: ShiftUrgency): ShiftAction[] {
-    switch (state) {
-        case 'S1':  return ['ASSIGN', 'PUBLISH', 'DELETE'];
-        case 'S2':  return ['UNASSIGN', 'PUBLISH', 'DELETE'];
-        case 'S3':  return ['ACCEPT', 'REJECT', 'UNPUBLISH', 'CANCEL'];
-        case 'S4':  return ['SWAP_REQUEST', 'UNPUBLISH', 'CLOCK_IN', 'CANCEL'];
-        case 'S5':  return ['SELECT_BID_WINNER', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CANCEL'];
-        case 'S6':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'UNPUBLISH'];
-        case 'S7': return ['APPROVE_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
-        case 'S8': return ['CLOCK_OUT', 'MARK_NO_SHOW', 'CANCEL'];
-        case 'S9': return [];
-        case 'S10': return [];
-        default:    return [];
-    }
 }
 
 export type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'office' | 'default';

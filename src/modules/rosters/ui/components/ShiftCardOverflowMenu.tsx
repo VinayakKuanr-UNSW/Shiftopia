@@ -62,7 +62,10 @@ export const ShiftCardOverflowMenu: React.FC<ShiftCardOverflowMenuProps> = ({
   const roleName = shift.roles?.name || (shift as any).role || 'Shift';
   const removalType = getShiftRemoval(shift);
 
-  const canPublish = !isPast && canEdit && (shift.lifecycle_status === 'Draft' || !shift.lifecycle_status) && !!onPublish;
+  const isDraft = shift.lifecycle_status === 'Draft' || !shift.lifecycle_status;
+  // Published shifts are not edited in place: unpublish first (fsm_op_is_legal 'edit' = S1/S2)
+  const canEditShift = !isPast && canEdit && isDraft;
+  const canPublish = !isPast && canEdit && isDraft && !!onPublish;
   const canUnpublishShift = !isPast && canEdit && shift.lifecycle_status === 'Published' && !!onUnpublish;
 
   return (
@@ -98,7 +101,7 @@ export const ShiftCardOverflowMenu: React.FC<ShiftCardOverflowMenuProps> = ({
         {/* Section 1: Primary Actions */}
         {onEdit && (
           <DropdownMenuItem
-            disabled={isPast || !canEdit}
+            disabled={!canEditShift}
             onClick={(e) => {
               e.stopPropagation();
               onEdit();
@@ -106,11 +109,12 @@ export const ShiftCardOverflowMenu: React.FC<ShiftCardOverflowMenuProps> = ({
             className={cn(
               'min-h-[44px] px-3 py-2 rounded-xl text-[13px] font-medium flex items-center gap-2.5 cursor-pointer transition-colors duration-150',
               'text-popover-foreground focus:bg-accent focus:text-accent-foreground hover:bg-accent hover:text-accent-foreground',
-              (isPast || !canEdit) && 'opacity-40 cursor-not-allowed hover:bg-transparent focus:bg-transparent'
+              !canEditShift && 'opacity-40 cursor-not-allowed hover:bg-transparent focus:bg-transparent'
             )}
           >
             <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span>Edit</span>
+            {!isDraft && !isPast && <span className="ml-auto text-[11px] text-muted-foreground">Unpublish to edit</span>}
           </DropdownMenuItem>
         )}
 

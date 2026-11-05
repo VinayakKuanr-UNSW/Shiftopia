@@ -75,7 +75,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           const urgency = computeShiftUrgency(s.shift_date, s.start_time, s.start_at);
           if (s.bidding_status === 'bidding_closed_no_winner' || s.is_cancelled || isPastStart) {
             toggle = 'expired';
-          } else if (onBidding && (urgency === 'urgent' || urgency === 'emergent')) {
+          } else if (onBidding && urgency === 'urgent') {
             toggle = 'urgent';
           } else {
             toggle = 'standard';

@@ -2,20 +2,16 @@
  * Client-side shift urgency derivation — shared across bidding, swapping, and offers.
  *
  * Rules:
- *   TTS > 24h          → 'normal'
- *   4h < TTS ≤ 24h     → 'urgent'
- *   TTS ≤ 4h           → 'emergent'  (display tier only; bids, swaps and drops stay open until start)
+ *   TTS > 24h  → 'normal'
+ *   TTS ≤ 24h  → 'urgent'  (display only; bids, swaps and drops stay open until start)
  *
  * "On bidding" is any bidding_status other than 'not_on_bidding' and 'bidding_closed_no_winner'.
  */
 
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
-export type ShiftUrgency = 'normal' | 'urgent' | 'emergent';
+export type ShiftUrgency = 'normal' | 'urgent';
 
-/** TTS ≤ this = 'emergent' display tier. Nothing is locked by it. */
-export const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
-const FOUR_HOURS_MS    = EMERGENT_WINDOW_MS;
 const TWENTY_FOUR_H_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -49,14 +45,8 @@ export function computeShiftUrgency(
   const tts = startAtIso
     ? new Date(startAtIso).getTime() - Date.now()
     : computeTTS(shiftDate, startTime);
-  if (tts <= FOUR_HOURS_MS)    return 'emergent';
   if (tts <= TWENTY_FOUR_H_MS) return 'urgent';
   return 'normal';
-}
-
-/** @deprecated use computeShiftUrgency */
-export function computeBiddingUrgency(shiftDate: string, startTime: string): ShiftUrgency {
-  return computeShiftUrgency(shiftDate, startTime);
 }
 
 /**
